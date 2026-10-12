@@ -452,6 +452,46 @@ describe("customer account order reads (SQLite)", () => {
     ]);
   });
 
+  it.each(["unpaid", "failed"])("keeps an owned incomplete order visible after recipient edits (%s payment)", async (paymentStatus) => {
+    sqlite.prepare(`UPDATE orders SET status = 'incomplete', payment_method = 'stripe', payment_status = ?,
+      customer_name = 'Another Recipient', customer_phone = '+8801733333333', customer_email = 'recipient@example.com'
+      WHERE id = 'order_quiet'`).run(paymentStatus);
+
+    const page = await getCustomerOrders(db, "account_1");
+    expect(page.summary.totalOrders).toBe(2);
+    expect(page.orders.find((order) => order.id === "order_quiet")).toMatchObject({
+      status: "incomplete",
+      statusLabel: "Awaiting payment",
+      paymentStatus,
+      balanceDue: 500,
+    });
+    const detail = await getCustomerOrderDetail(db, "account_1", "order_quiet");
+    expect(detail.order).toMatchObject({
+      customerName: "Another Recipient",
+      customerPhone: "+8801733333333",
+      status: "incomplete",
+      statusLabel: "Awaiting payment",
+      paymentStatus,
+      balanceDue: 500,
+    });
+  });
+
+  it.each([
+    { state: "archived", owner: "account_1", deletedAt: 1780000200, status: "cancelled" },
+    { state: "owned by another account", owner: "account_2", deletedAt: null, status: "incomplete" },
+    { state: "unclaimed guest", owner: null, deletedAt: null, status: "incomplete" },
+  ])("excludes a $state order from both history and detail despite matching contact and CRM customer", async ({ owner, deletedAt, status }) => {
+    await db.insert(customers).values({ id: "account_2", name: "Other Buyer", phone: "+8801744444444" });
+    sqlite.prepare(`UPDATE orders SET account_owner_customer_id = ?, deleted_at = ?, status = ?,
+      customer_id = 'account_1', customer_email = 'buyer@example.com', payment_method = 'stripe'
+      WHERE id = 'order_quiet'`).run(owner, deletedAt, status);
+
+    const page = await getCustomerOrders(db, "account_1");
+    expect(page.orders.map((order) => order.id)).toEqual(["order_open"]);
+    expect(page.summary.totalOrders).toBe(1);
+    await expect(getCustomerOrderDetail(db, "account_1", "order_quiet")).rejects.toThrow("Order not found");
+  });
+
   it("returns the recipient, the step tracker and status history without provider delivery receipts", async () => {
     const detail = await getCustomerOrderDetail(db, "account_1", "order_open");
     expect(detail.order).toMatchObject({

@@ -3,11 +3,11 @@ import {
   isBatchGuardError,
   type Database,
 } from "@scalius/database/client";
-import { checkoutAttempts, orderReceipts } from "@scalius/database/schema";
-import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { checkoutAttempts, orderReceipts, orders } from "@scalius/database/schema";
+import { and, eq, getTableColumns, isNull, lte, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { generateOrderId } from "@scalius/shared/order-utils";
-import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
+import { ConflictError, ForbiddenError, ServiceUnavailableError } from "@scalius/core/errors";
 import {
   createOrderReceiptToken,
   type CreateStorefrontOrderInput,
@@ -50,7 +50,40 @@ const CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX = "checkout_submit:v1:";
 const CHECKOUT_STATUS_TOKEN_PREFIX = "cst_";
 const CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT = "CHECKOUT_ATTEMPT_ATOMIC_COMMIT_CONFLICT";
 
-export type CheckoutAttemptRow = typeof checkoutAttempts.$inferSelect;
+export type CheckoutAttemptRow = typeof checkoutAttempts.$inferSelect & {
+  linkedOrderId: string | null;
+  linkedOrderStatus: string | null;
+  linkedOrderDeletedAt: number | null;
+  linkedOrderPaymentStatus: string | null;
+  linkedOrderPaidAmountMinor: number | null;
+  linkedOrderPaymentMethod: string | null;
+  linkedOrderAccountOwnerCustomerId: string | null;
+};
+
+/** A missing order is not proof that another order can safely be placed. */
+export function isEndedCheckoutOrder(order: {
+  id: string | null;
+  status: string | null;
+  deletedAt: Date | number | null;
+  paymentStatus: string | null;
+  paidAmountMinor: number | null;
+}): boolean {
+  return order.id !== null
+    && order.status === "cancelled"
+    && order.deletedAt !== null
+    && order.paidAmountMinor === 0
+    && (order.paymentStatus === "unpaid" || order.paymentStatus === "failed" || order.paymentStatus === "refunded");
+}
+
+class CheckoutAttemptError extends ConflictError {
+  constructor(
+    public override readonly code: "CHECKOUT_ATTEMPT_EXPIRED" | "CHECKOUT_ATTEMPT_CONFLICT",
+    message: string,
+    public override readonly details?: { orderId: string; paymentMethod: string | null },
+  ) {
+    super(message);
+  }
+}
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
 export interface PreparedAtomicCheckoutAttemptCommit {
@@ -110,11 +143,14 @@ export async function resolveExistingCheckoutAttempt<TResponse>(
   db: Database,
   identity: CheckoutAttemptIdentity,
   nowSeconds = Math.floor(Date.now() / 1000),
+  customerId?: string | null | PromiseLike<string | null>,
 ): Promise<ExistingCheckoutAttemptResult<TResponse> | null> {
+  const existing = await selectCheckoutAttemptByKey(db, identity.requestKey).get();
   return resolveCheckoutAttemptRow<TResponse>(
-    await selectCheckoutAttemptByKey(db, identity.requestKey).get(),
+    existing,
     identity,
     nowSeconds,
+    existing?.linkedOrderAccountOwnerCustomerId ? await customerId : undefined,
   );
 }
 
@@ -123,7 +159,23 @@ export function resolveCheckoutAttemptRow<TResponse>(
   existing: CheckoutAttemptRow | undefined,
   identity: CheckoutAttemptIdentity,
   nowSeconds = Math.floor(Date.now() / 1000),
+  customerId?: string | null,
 ): ExistingCheckoutAttemptResult<TResponse> | null {
+  if (existing?.linkedOrderAccountOwnerCustomerId && existing.linkedOrderAccountOwnerCustomerId !== customerId) {
+    throw new ForbiddenError("Sign in to the account that started this checkout to continue.");
+  }
+  if (existing && isEndedCheckoutOrder({
+    id: existing.linkedOrderId,
+    status: existing.linkedOrderStatus,
+    deletedAt: existing.linkedOrderDeletedAt,
+    paymentStatus: existing.linkedOrderPaymentStatus,
+    paidAmountMinor: existing.linkedOrderPaidAmountMinor,
+  })) {
+    throw new CheckoutAttemptError(
+      "CHECKOUT_ATTEMPT_EXPIRED",
+      "This checkout has ended. Return to your cart to review it and start a new checkout.",
+    );
+  }
   assertSameCheckoutRequest(existing, identity);
 
   const replay = replayCheckoutAttempt<TResponse>(existing);
@@ -257,8 +309,18 @@ export function isCheckoutAttemptCommitConflictError(error: unknown): boolean {
 /** The idempotency row for a request key; composable into a read batch. */
 export function selectCheckoutAttemptByKey(db: Database, requestKey: string) {
   return db
-    .select()
+    .select({
+      ...getTableColumns(checkoutAttempts),
+      linkedOrderId: sql<string | null>`${orders.id}`.as("linked_order_id"),
+      linkedOrderStatus: sql<string | null>`${orders.status}`.as("linked_order_status"),
+      linkedOrderDeletedAt: sql<number | null>`${orders.deletedAt}`.as("linked_order_deleted_at"),
+      linkedOrderPaymentStatus: sql<string | null>`${orders.paymentStatus}`.as("linked_order_payment_status"),
+      linkedOrderPaidAmountMinor: sql<number | null>`${orders.paidAmountMinor}`.as("linked_order_paid_amount_minor"),
+      linkedOrderPaymentMethod: sql<string | null>`${orders.paymentMethod}`.as("linked_order_payment_method"),
+      linkedOrderAccountOwnerCustomerId: sql<string | null>`${orders.accountOwnerCustomerId}`.as("linked_order_account_owner_customer_id"),
+    })
     .from(checkoutAttempts)
+    .leftJoin(orders, eq(orders.id, checkoutAttempts.orderId))
     .where(eq(checkoutAttempts.requestKey, requestKey));
 }
 
@@ -266,6 +328,9 @@ function replayCheckoutAttempt<TResponse>(
   row: CheckoutAttemptRow | undefined,
 ): CheckoutAttemptReplayResult<TResponse> | null {
   if (!row || row.status !== "committed") return null;
+  if (!row.linkedOrderId) {
+    throw new ServiceUnavailableError("Checkout order is unavailable. Please try again.");
+  }
   if (!row.responsePayload) {
     throw new ServiceUnavailableError("Checkout replay payload is unavailable. Please try again.");
   }
@@ -317,7 +382,11 @@ function assertSameCheckoutRequest(
 ): void {
   if (!row) return;
   if (row.requestHash !== identity.requestHash) {
-    throw new ConflictError("This checkout request was already used for different checkout details. Please refresh checkout and try again.");
+    throw new CheckoutAttemptError(
+      "CHECKOUT_ATTEMPT_CONFLICT",
+      "An earlier checkout already uses this request. Review that checkout before placing another order.",
+      row.linkedOrderId ? { orderId: row.linkedOrderId, paymentMethod: row.linkedOrderPaymentMethod } : undefined,
+    );
   }
 }
 

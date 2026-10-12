@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, formatCheckoutLanguageText } from "@scalius/shared/checkout-language";
 import { cartStore, createCartItemKey, type CartStore } from "../../store/cart";
 import type { DeliveryRate } from "../checkout/shipping-methods";
-import { readCheckoutFormDraft } from "../checkout/session-state";
-import { initCartFunctionality } from "./client";
+import { readCheckoutFormDraft, writeHostedPaymentRecoverySession } from "../checkout/session-state";
+import { initCartFunctionality, updateTotals } from "./client";
 import { runCartPageScript } from "./cart-page-harness";
 import type { CheckoutTaxQuote } from "../checkout/tax-quote-contract";
 
@@ -315,6 +315,41 @@ describe("cart discount checkout handoff", () => {
     expect(transferred).toMatchObject({ shippingMethodId: "standard", shippingCharge: "60" });
   });
 
+  it("keeps an app-quoted delivery charge for a free-delivery product in estimates and checkout handoff", async () => {
+    const freeCart = { ...CART_STATE, items: { [CART_LINE_KEY]: { ...CART_STATE.items[CART_LINE_KEY]!, freeDelivery: true } } };
+    localStorage.setItem("cart:v3", JSON.stringify(freeCart));
+    cartStore.set(freeCart);
+    vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({
+      success: true,
+      data: { valid: true, issues: [], items: [{ index: 0, cartKey: CART_LINE_KEY, productId: "prod_1", variantId: "var_1", quantity: 1,
+        unitPrice: 100, productName: "Rice", variantLabel: null, freeDelivery: true, inventoryTracked: false, availableQuantity: null }],
+      subtotal: 100, hasFreeDeliveryProduct: true },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const quoted = (): CheckoutTaxQuote => ({
+      ...taxQuote(), shippingMinor: 8000, shippingAmount: 80, totalMinor: 18000, totalAmount: 180,
+      shippingMethod: { id: "standard", name: "Standard", description: null, baseAmountMinor: 8000, feeWaived: false },
+      shippingRates: [{ id: "standard", name: "Standard", kind: "delivery", amount: 80, amountMinor: 8000 }],
+    });
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockImplementation(async () => quoted());
+    await startCartPage();
+    await settleCheckout();
+    expect(cartStore.get().items[CART_LINE_KEY]?.freeDelivery).toBe(true);
+    expect(window.lastShippingEventDetail).toMatchObject({ fee: 80, quoted: true });
+    expect(document.querySelector('[data-rate-id="standard"] [data-fee-label]')?.textContent).toBe("৳80");
+
+    let resolveQuote!: (quote: CheckoutTaxQuote) => void;
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockImplementationOnce(() => new Promise((resolve) => { resolveQuote = resolve; }));
+    const updating = updateTotals();
+    await Promise.resolve();
+    expect(document.getElementById("shippingCost")?.textContent).toBe("৳80");
+    resolveQuote(quoted());
+    await updating;
+    submitCheckout();
+    await settleCheckout();
+    const transferred = JSON.parse(sessionStorage.getItem("scalius_checkout_data")!);
+    expect(transferred).toMatchObject({ shippingMethodId: "standard", shippingCharge: "80" });
+  });
+
   it("stops Place order to say the delivery fee changed, never blaming the cart items", async () => {
     await startCartPage();
     await settleCheckout();
@@ -504,5 +539,26 @@ describe("cart discount checkout handoff", () => {
     expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
     // The exact submitted lines are kept for the receipt to take out of the cart.
     expect(sessionStorage.getItem("scalius_submitted_cart")).toContain(CART_LINE_KEY);
+  });
+
+  it.each([true, false])("blocks a pending COD submission only for its posted checkout identity (matching: %s)", async (matching) => {
+    document.getElementById("checkout-meta")!.setAttribute("data-cod-only", "true");
+    await startCartPage();
+    const checkoutId = (document.getElementById("checkoutIdInput") as HTMLInputElement).value;
+    writeHostedPaymentRecoverySession("/order-success?orderId=order_old&payment=stripe", {
+      checkoutId: matching ? checkoutId : "another_tabs_checkout", cartItems: {},
+    });
+    const submitEvents: boolean[] = [];
+    document.getElementById("checkoutForm")!.addEventListener("submit", (event) => submitEvents.push(event.defaultPrevented));
+
+    submitCheckout();
+    await settleCheckout();
+
+    expect(submitEvents.includes(false)).toBe(!matching);
+    expect(document.getElementById("checkoutFormMessage")?.textContent).toBe(
+      matching ? ENGLISH_CHECKOUT_LANGUAGE_DATA.reviewExistingCheckoutText : "",
+    );
+    expect(sessionStorage.getItem("checkoutId")).toBe(checkoutId);
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toContain("order_old");
   });
 });

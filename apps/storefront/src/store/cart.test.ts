@@ -114,6 +114,25 @@ describe("cart store", () => {
     expect(cartStore.get().items).toEqual({});
   });
 
+  it("refreshes a BFCache product page before Buy now so purchased lines never return", async () => {
+    const listen = vi.fn();
+    Object.assign(window, { addEventListener: listen });
+    localStorage.setItem("cart:v3", JSON.stringify(persistedCart));
+    const { startBuyNow, cartStore } = await importFreshCartModule();
+    const tee = { id: "tee", variantId: "tee_m", name: "Tee", price: 500 };
+    expect(await startBuyNow(tee)).toBe(true);
+    expect(cartStore.get().totalItems).toBe(3);
+    // The receipt consumes this order's items in another document, then Back
+    // restores this product document with its old in-memory three-item cart.
+    localStorage.setItem("cart:v3", JSON.stringify({ items: {}, discountCodes: [] }));
+    const onPageShow = listen.mock.calls.find(([type]) => type === "pageshow")?.[1] as (event: Event) => void;
+    expect(onPageShow).toBeTypeOf("function");
+    onPageShow(Object.assign(new Event("pageshow"), { persisted: true }));
+    expect(cartStore.get().totalItems).toBe(0);
+    expect(await startBuyNow(tee)).toBe(true);
+    expect(Object.values(cartStore.get().items).map(({ id, quantity }) => [id, quantity])).toEqual([["tee", 1]]);
+  });
+
   it("uses one shipping-fee authority for ordinary, waived, mixed, and invalid fees", async () => {
     const {
       cartHasFreeDeliveryItem,
@@ -142,6 +161,18 @@ describe("cart store", () => {
     expect(getEffectiveCartShippingFee(below, 150, 3000)).toBe(150);
     expect(getEffectiveCartShippingFee(exactly, 150, 3000)).toBe(0);
     expect(getEffectiveCartShippingFee(exactly, 150, null)).toBe(150);
+  });
+
+  it.each([
+    { free: false, threshold: null, quoted: false, expected: 80 },
+    { free: true, threshold: null, quoted: false, expected: 0 },
+    { free: false, threshold: 100, quoted: false, expected: 0 },
+    { free: false, threshold: 100, quoted: true, expected: 80 },
+    { free: true, threshold: null, quoted: true, expected: 80 },
+    { free: true, threshold: 100, quoted: true, expected: 80 },
+  ])("keeps quoted delivery authoritative ($free, $threshold, $quoted)", async ({ free, threshold, quoted, expected }) => {
+    const { getEffectiveCartShippingFee } = await importFreshCartModule();
+    expect(getEffectiveCartShippingFee({ line: { freeDelivery: free, price: 100, quantity: 1 } }, 80, threshold, quoted)).toBe(expected);
   });
 
   it("falls back to an empty cart when stored JSON is invalid", async () => {
@@ -435,37 +466,111 @@ describe("cart v3 line keys (buyer inputs)", () => {
     expect(cartNeedsDeliveryMethod({ a: {} })).toBe(true);
   });
 
-  it("Buy now checks out only its line and gives the buyer's own cart back untouched", async () => {
-    const {
-      addDiscountCode, addToCart, cartStore, clearCart, endBuyNow, hydrateCartFromStorage,
-      isBuyNowCheckoutPath, startBuyNow, BUY_NOW_STASH_KEY,
-    } = await importFreshCartModule();
-    hydrateCartFromStorage();
-    await addToCart({ id: "rice", variantId: "variant_rice", name: "Rice", price: 100, quantity: 2 });
-    addDiscountCode("SAVE10");
-    const own = structuredClone(cartStore.get());
+  it("Buy now keeps every existing line and discount, then adds the selected line", async () => {
+    localStorage.setItem("cart:v3", JSON.stringify({ ...persistedCart, discountCodes: ["SAVE10"] }));
+    const { startBuyNow, cartStore, syncCartFromStorage } = await importFreshCartModule();
 
     expect(await startBuyNow({ id: "tee", variantId: "variant_tee", name: "Tee", price: 500 })).toBe(true);
-    expect(Object.values(cartStore.get().items).map((item) => [item.id, item.quantity])).toEqual([["tee", 1]]);
-    expect(cartStore.get()).toMatchObject({ totalItems: 1, totalAmount: 500, discountCodes: [] });
-    // A second Buy now replaces the first; the own cart stays set aside.
-    expect(await startBuyNow({ id: "mug", variantId: "variant_mug", name: "Mug", price: 300 })).toBe(true);
-    expect(Object.values(cartStore.get().items).map((item) => item.id)).toEqual(["mug"]);
+    expect(Object.values(cartStore.get().items).map(({ id, quantity }) => [id, quantity]))
+      .toEqual([["drink", 2], ["tee", 1]]);
+    expect(cartStore.get()).toMatchObject({ totalItems: 3, totalAmount: 740, discountCodes: ["SAVE10"] });
+    expect(localStorage.getItem("cart:v3:buy-now")).toBeNull();
+    const after = structuredClone(cartStore.get());
+    expect(syncCartFromStorage()).toEqual(after);
+  });
 
-    endBuyNow();
-    expect(cartStore.get()).toEqual(own);
-    expect(localStorage.getItem(BUY_NOW_STASH_KEY)).toBeNull();
-    endBuyNow();
-    expect(cartStore.get()).toEqual(own);
+  it("Buy now merges the same SKU and inputs but keeps other options separate", async () => {
+    const { addToCart, startBuyNow, cartStore } = await importFreshCartModule();
+    const pen = { id: "pen", variantId: "pen_gold", name: "Pen", price: 450, properties: [engraving] };
+    await addToCart({ ...pen, quantity: 2 });
+    expect(await startBuyNow({ ...pen, quantity: 3 })).toBe(true);
+    expect(await startBuyNow({ ...pen, variantId: "pen_silver" })).toBe(true);
+    expect(await startBuyNow({ ...pen, properties: [{ ...engraving, value: "Rafi", displayValue: "Rafi" }] })).toBe(true);
+    expect(Object.values(cartStore.get().items).map(({ variantId, properties, quantity }) =>
+      [variantId, properties?.[0]?.value, quantity]))
+      .toEqual([["pen_gold", "Anika", 5], ["pen_silver", "Anika", 1], ["pen_gold", "Rafi", 1]]);
+  });
 
-    // Signing out (clearCart) also drops a cart set aside by Buy now.
-    await startBuyNow({ id: "tee", variantId: "variant_tee", name: "Tee", price: 500 });
-    clearCart();
-    expect(localStorage.getItem(BUY_NOW_STASH_KEY)).toBeNull();
-    endBuyNow();
-    expect(cartStore.get().items).toEqual({});
+  it("rejects an invalid Buy now or quantity overflow without changing the cart", async () => {
+    const { addToCart, startBuyNow, cartStore } = await importFreshCartModule();
+    const tee = { id: "tee", variantId: "tee_m", name: "Tee", price: 500 };
+    await addToCart({ ...tee, quantity: 99 });
+    const before = structuredClone(cartStore.get());
+    const onFailure = vi.fn();
+    for (const item of [tee, { ...tee, variantId: "default" }, { ...tee, variantId: "new", price: -1 }]) {
+      expect(await startBuyNow(item, { onFailure })).toBe(false);
+      expect(cartStore.get()).toEqual(before);
+      expect(JSON.parse(localStorage.getItem("cart:v3")!)).toEqual(before);
+    }
+    expect(onFailure.mock.calls).toEqual([["quantity_limit"], ["invalid_item"], ["invalid_item"]]);
+  });
 
-    expect(["/cart", "/checkout", "/checkout/quick", "/buy/tee", "/order-success", "/payment-recovery"].every(isBuyNowCheckoutPath)).toBe(true);
-    expect(["/", "/products/tee", "/account", "/cartoon", "/search"].some(isBuyNowCheckoutPath)).toBe(false);
+  it("Buy now refuses navigation when storage fails without adding a duplicate on retry", async () => {
+    const { addToCart, startBuyNow, cartStore } = await importFreshCartModule();
+    await addToCart({ id: "rice", variantId: "rice_1", name: "Rice", price: 100 });
+    const before = structuredClone(cartStore.get());
+    const tee = { id: "tee", variantId: "tee_m", name: "Tee", price: 500 };
+    const blocked = vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new Error("QuotaExceededError"); });
+    const onFailure = vi.fn();
+    expect(await startBuyNow(tee, { onFailure })).toBe(false);
+    expect(onFailure).toHaveBeenCalledWith("storage_unavailable");
+    expect(cartStore.get()).toEqual(before);
+    blocked.mockRestore();
+    expect(await startBuyNow(tee)).toBe(true);
+    expect(Object.values(cartStore.get().items).map(({ id, quantity }) => [id, quantity]))
+      .toEqual([["rice", 1], ["tee", 1]]);
+  });
+
+  it("concurrent Buy now additions use the latest cart after hashing inputs", async () => {
+    const { startBuyNow, cartStore } = await importFreshCartModule();
+    const pen = { id: "pen", variantId: "pen_gold", name: "Pen", price: 450, properties: [engraving] };
+    expect(await Promise.all([startBuyNow(pen), startBuyNow({ ...pen, quantity: 2 }),
+      startBuyNow({ id: "tee", variantId: "tee_m", name: "Tee", price: 500 })])).toEqual([true, true, true]);
+    expect(Object.values(cartStore.get().items).find(({ id }) => id === "pen")?.quantity).toBe(3);
+    expect(cartStore.get().totalItems).toBe(4);
+    expect(JSON.parse(localStorage.getItem("cart:v3")!)).toEqual(cartStore.get());
+  });
+
+  it("recovers an old hidden cart once and never restores lines removed afterward", async () => {
+    const { addToCart, cartStore, createCartItemKey, hydrateCartFromStorage, removeCartItemByKey, syncCartFromStorage } = await importFreshCartModule();
+    await addToCart({ id: "tee", variantId: "tee_m", name: "Tee", price: 500 });
+    localStorage.setItem("cart:v3:buy-now", JSON.stringify({ ...persistedCart, discountCodes: ["SAVE10"] }));
+    syncCartFromStorage();
+    expect(cartStore.get()).toMatchObject({ totalItems: 3, totalAmount: 740, discountCodes: ["SAVE10"] });
+    expect(localStorage.getItem("cart:v3:buy-now")).toBeNull();
+    const drinkKey = createCartItemKey(persistedCart.items.drink);
+    removeCartItemByKey(drinkKey);
+    syncCartFromStorage();
+    expect(hydrateCartFromStorage().items[drinkKey]).toBeUndefined();
+    expect(cartStore.get().totalItems).toBe(1);
+  });
+
+  it("merges hidden quantities only once and preserves the cart if the old stash is corrupt", async () => {
+    localStorage.setItem("cart:v3", JSON.stringify(persistedCart));
+    localStorage.setItem("cart:v3:buy-now", JSON.stringify(persistedCart));
+    const { hydrateCartFromStorage, syncCartFromStorage } = await importFreshCartModule();
+    expect(hydrateCartFromStorage().totalItems).toBe(4);
+    expect(syncCartFromStorage().totalItems).toBe(4);
+    localStorage.setItem("cart:v3:buy-now", "{invalid");
+    expect(syncCartFromStorage().totalItems).toBe(4);
+    expect(localStorage.getItem("cart:v3:buy-now")).toBeNull();
+  });
+
+  it("keeps the old stash recoverable when persisting its migration fails", async () => {
+    const { addToCart, cartStore, syncCartFromStorage } = await importFreshCartModule();
+    await addToCart({ id: "tee", variantId: "tee_m", name: "Tee", price: 500 });
+    const current = structuredClone(cartStore.get());
+    const stashed = JSON.stringify(persistedCart);
+    localStorage.setItem("cart:v3:buy-now", stashed);
+    const setItem = localStorage.setItem.bind(localStorage);
+    const blocked = vi.spyOn(localStorage, "setItem").mockImplementation((key, value) => {
+      if (key === "cart:v3") throw new Error("QuotaExceededError");
+      setItem(key, value);
+    });
+    expect(syncCartFromStorage()).toEqual(current);
+    expect(localStorage.getItem("cart:v3:buy-now")).toBe(stashed);
+    blocked.mockRestore();
+    expect(syncCartFromStorage().totalItems).toBe(3);
+    expect(localStorage.getItem("cart:v3:buy-now")).toBeNull();
   });
 });

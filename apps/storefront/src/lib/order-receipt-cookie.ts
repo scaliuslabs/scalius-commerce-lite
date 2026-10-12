@@ -55,23 +55,28 @@ export function createOrderReceiptCookieHeader(orderId: string, receiptToken: st
 
 export function createOrderReceiptFinalizeCookieHeader(
   orderId: string,
-  marker?: { checkoutId: string; cartFingerprintHash: string | null },
+  marker?: { checkoutId: string; cartFingerprintHash: string | null }
+    | { checkoutId: string; mode: "attempt-only" },
 ): string | null {
   const normalizedOrderId = orderId.trim();
   if (!normalizedOrderId) return null;
 
   const normalizedCheckoutId = marker?.checkoutId.trim() ?? "";
-  const normalizedCartHash = marker?.cartFingerprintHash?.trim() ?? "";
-  const value = marker
-    && CHECKOUT_ID_PATTERN.test(normalizedCheckoutId)
-    && CART_FINGERPRINT_HASH_PATTERN.test(normalizedCartHash)
-      ? `v1.${normalizedCheckoutId}.${normalizedCartHash}`
-      : "1";
+  let value = "1";
+  if (marker && "mode" in marker) {
+    if (!CHECKOUT_ID_PATTERN.test(normalizedCheckoutId)) return null;
+    value = `v2.${normalizedCheckoutId}`;
+  } else if (marker) {
+    const normalizedCartHash = marker.cartFingerprintHash?.trim() ?? "";
+    if (CHECKOUT_ID_PATTERN.test(normalizedCheckoutId) && CART_FINGERPRINT_HASH_PATTERN.test(normalizedCartHash)) {
+      value = `v1.${normalizedCheckoutId}.${normalizedCartHash}`;
+    }
+  }
 
   return [
     `${getOrderReceiptFinalizeCookieName(normalizedOrderId)}=${value}`,
     `Max-Age=${ORDER_RECEIPT_FINALIZE_COOKIE_MAX_AGE_SECONDS}`,
-    "Path=/order-success",
+    "Path=/",
     "HttpOnly",
     "Secure",
     "SameSite=Lax",
@@ -85,7 +90,7 @@ export function clearOrderReceiptFinalizeCookieHeader(orderId: string): string |
   return [
     `${getOrderReceiptFinalizeCookieName(normalizedOrderId)}=`,
     "Max-Age=0",
-    "Path=/order-success",
+    "Path=/",
     "HttpOnly",
     "Secure",
     "SameSite=Lax",
@@ -115,6 +120,9 @@ export function readOrderReceiptFinalizeCookie(
       return { checkoutId: null, cartFingerprintHash: null };
     }
     const [version, checkoutId, cartFingerprintHash, ...extra] = rawValue.split(".");
+    if (version === "v2" && CHECKOUT_ID_PATTERN.test(checkoutId ?? "") && cartFingerprintHash === undefined) {
+      return { checkoutId, cartFingerprintHash: null };
+    }
     if (
       version !== "v1"
       || extra.length > 0

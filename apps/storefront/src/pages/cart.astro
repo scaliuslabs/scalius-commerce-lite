@@ -22,6 +22,7 @@ import {
 } from "@/lib/checkout/shipping-country";
 import { marketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
 import { processOrder } from "@/lib/cart/server";
+import { checkoutAttemptRecoveryHref } from "@/lib/checkout/attempt-recovery";
 import {
   getCities,
   getShippingMethods,
@@ -141,6 +142,7 @@ const [existingCheckoutMessageBefore, existingCheckoutMessageAfter = ""] =
 // Initialize error message and success state
 let errorMessage = "";
 let isProcessing = false;
+let expiredCheckoutId: string | undefined;
 let codCartRepairState: {
   source: "cart";
   message: string;
@@ -227,6 +229,24 @@ if (Astro.request.method === "POST" && codOnly) {
         }
         return response;
       } else {
+        const errorCode = "errorCode" in result ? result.errorCode : undefined;
+        if (errorCode === "CHECKOUT_ATTEMPT_CONFLICT") {
+          const href = checkoutAttemptRecoveryHref("details" in result ? result.details : undefined);
+          if (href) {
+            const response = Astro.redirect(href, 303);
+            const existingOrderId = new URL(href, Astro.url).searchParams.get("orderId");
+            const checkoutId = formData.get("checkoutId");
+            if (existingOrderId && typeof checkoutId === "string") {
+              const marker = createOrderReceiptFinalizeCookieHeader(existingOrderId, { checkoutId, mode: "attempt-only" });
+              if (marker) response.headers.append("Set-Cookie", marker);
+            }
+            return response;
+          }
+        }
+        if (errorCode === "CHECKOUT_ATTEMPT_EXPIRED") {
+          const checkoutId = formData.get("checkoutId");
+          if (typeof checkoutId === "string") expiredCheckoutId = checkoutId.trim();
+        }
         console.error("Order processing failed:", result.error);
         const resultError = result.error;
         // A store app's rules: the page says them at their lines and above Place order.
@@ -237,13 +257,17 @@ if (Astro.request.method === "POST" && codOnly) {
           "errorCode" in result &&
           result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT";
         errorMessage =
-          (ruleErrors
-            ? copy.cartRulesBlockedText
-            : quoteConflict
-              ? copy.totalChangedReviewText
-              : typeof resultError === "string"
-                ? resultError
-                : resultError?.message) ||
+          (errorCode === "CHECKOUT_ATTEMPT_EXPIRED"
+            ? copy.checkoutAttemptExpiredText
+            : errorCode === "CHECKOUT_ATTEMPT_CONFLICT"
+              ? copy.checkoutAttemptConflictText
+              : ruleErrors
+                ? copy.cartRulesBlockedText
+                : quoteConflict
+                  ? copy.totalChangedReviewText
+                  : typeof resultError === "string"
+                    ? resultError
+                    : resultError?.message) ||
           copy.orderProcessingFailedText;
         const itemIssues = extractItemIssues(
           "details" in result ? result.details : undefined,
@@ -359,6 +383,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
   <div
     id="cartPageRoot"
+    data-expired-checkout-id={expiredCheckoutId}
     data-theme-section-id={cartRequestTheme.preview ? THEME_EDITOR_MARKS.cart : undefined}
     data-cart-ready="false"
     data-cart-has-items="false"
@@ -1522,6 +1547,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             JSON.parse(cartItems),
             window.lastShippingEventDetail.fee,
             window.lastShippingEventDetail.freeOver,
+            window.lastShippingEventDetail.quoted,
           ),
         );
       } catch {
@@ -1932,7 +1958,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         }
 
         const pendingCheckout = readHostedPaymentRecoverySession();
-        if (pendingCheckout) {
+        const checkoutId = form.querySelector<HTMLInputElement>('[name="checkoutId"]')?.value;
+        if (pendingCheckout?.checkoutId && pendingCheckout.checkoutId === checkoutId) {
           e.preventDefault();
           restoreSubmitButton();
           const recoveryLink = document.getElementById("checkoutRecoveryLink") as HTMLAnchorElement | null;
@@ -2122,7 +2149,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           else delete checkoutData.shippingLocation;
 
           checkoutData["shippingCharge"] = String(chosenMethod
-            ? getEffectiveCartShippingFee(JSON.parse(submittedCart), chosenMethod.fee, chosenMethod.freeOver)
+            ? getEffectiveCartShippingFee(JSON.parse(submittedCart), chosenMethod.fee, chosenMethod.freeOver, chosenMethod.quoted)
             : 0);
           if (chosenMethod) {
             checkoutData["shippingMethodId"] = chosenMethod.id;

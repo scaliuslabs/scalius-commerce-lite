@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const checkoutState = vi.hoisted(() => ({ reconcileCheckoutAfterSignIn: vi.fn() }));
+vi.mock("../checkout/session-state", () => checkoutState);
+
 import {
   createCustomerOrderPaymentSession,
   getCustomerOrderDetail,
@@ -13,6 +16,21 @@ import {
 describe("customer auth API helpers", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    checkoutState.reconcileCheckoutAfterSignIn.mockClear();
+  });
+
+  it("reconciles private checkout ownership only after a successful verified sign-in", async () => {
+    const input = { method: "email" as const, channel: "email" as const, identifier: "buyer@example.test", code: "123456" };
+    const customer = { customerId: "cust_b", name: "Buyer", email: input.identifier };
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(Response.json({ success: false, error: "Wrong code" }, { status: 400 }))
+      .mockResolvedValueOnce(Response.json({ success: true, data: { status: "needs_account_details" } }))
+      .mockResolvedValueOnce(Response.json({ success: true, data: { status: "signed_in", customer } })));
+    await verifyCustomerOtp(input);
+    await verifyCustomerOtp(input);
+    expect(checkoutState.reconcileCheckoutAfterSignIn).not.toHaveBeenCalled();
+    await verifyCustomerOtp(input);
+    expect(checkoutState.reconcileCheckoutAfterSignIn).toHaveBeenCalledExactlyOnceWith("cust_b", input.identifier);
   });
 
   it("passes a new buyer's latest-order suggestion through and sends only the save choice back", async () => {

@@ -9,6 +9,7 @@ import {
   clearHostedPaymentRecoverySession,
   clearCheckoutSession,
   clearCheckoutTransferSession,
+  discardCheckoutFormDraftOfOtherOwner,
   fingerprintCheckoutCart,
   hashCheckoutCartFingerprint,
   matchesCheckoutRecoveryCart,
@@ -16,6 +17,8 @@ import {
   readCheckoutFormDraft,
   readCheckoutPaymentSelection,
   readHostedPaymentRecoverySession,
+  reconcileCheckoutAfterSignIn,
+  setCheckoutFormDraftOwner,
   writeHostedPaymentRecoverySession,
   writeCheckoutFormDraft,
   writeCheckoutPaymentSelection,
@@ -85,6 +88,62 @@ describe("checkout session state", () => {
     installLocalStorage(browserLocalStorage);
     sessionStorage.clear();
     localStorage.clear();
+    setCheckoutFormDraftOwner("guest");
+  });
+
+  it("clears private checkout state on a verified account switch even after the old draft was discarded", () => {
+    setCheckoutFormDraftOwner("cust_a");
+    writeCheckoutFormDraft({ customerName: "Previous buyer", shippingAddress: "Previous address" });
+    // Existing checkouts have no owner marker yet: preserve the draft's identity before clearing it.
+    sessionStorage.setItem("checkoutId", "attempt_a");
+    sessionStorage.setItem("scalius_checkout_data", '{"customerName":"Previous buyer"}');
+    sessionStorage.setItem("scalius_submitted_cart", "submitted lines");
+    sessionStorage.setItem("scalius_last_order", "order_a");
+    const cart = '{"items":{"line_a":{"quantity":2}}}';
+    localStorage.setItem("cart:v3", cart);
+    writeHostedPaymentRecoverySession("/order-success?orderId=order_a&payment=stripe");
+    expect(discardCheckoutFormDraftOfOtherOwner("guest")).toBe(true);
+    expect(readCheckoutFormDraft()).toBeNull();
+
+    expect(reconcileCheckoutAfterSignIn("cust_b")).toBe(true);
+
+    for (const key of [...checkoutTransferKeys, "checkoutId", "scalius_submitted_cart", "scalius_last_order"]) {
+      expect(sessionStorage.getItem(key)).toBeNull();
+    }
+    expect(readHostedPaymentRecoverySession()).toBeNull();
+    expect(localStorage.getItem("cart:v3")).toBe(cart);
+    expect(sessionStorage.getItem("scalius_checkout_owner")).toBe("cust_b");
+  });
+
+  it.each(["cust_a", "guest", null])("preserves an uncertain checkout when signing in from %s", (previousOwner) => {
+    if (previousOwner) setCheckoutFormDraftOwner(previousOwner);
+    sessionStorage.setItem("checkoutId", "uncertain_attempt");
+    if (previousOwner) writeCheckoutFormDraft({ customerName: "Buyer" });
+    const transfer = { customerName: "Buyer", cartItems: "{}" };
+    writeCheckoutTransferSession(transfer, "[]");
+    if (!previousOwner) sessionStorage.removeItem("scalius_checkout_owner");
+    writeHostedPaymentRecoverySession("/order-success?orderId=order_a&payment=stripe");
+
+    expect(reconcileCheckoutAfterSignIn("cust_a")).toBe(false);
+    expect(sessionStorage.getItem("checkoutId")).toBe("uncertain_attempt");
+    expect(JSON.parse(sessionStorage.getItem("scalius_checkout_data")!)).toEqual(transfer);
+    expect(readHostedPaymentRecoverySession()?.orderId).toBe("order_a");
+  });
+
+  it("binds a transferred checkout to its account even when its form draft is gone", () => {
+    setCheckoutFormDraftOwner("cust_a");
+    writeCheckoutTransferSession({ customerName: "Previous buyer", cartItems: "{}" }, "[]");
+    clearCheckoutFormDraft();
+    expect(reconcileCheckoutAfterSignIn("cust_b")).toBe(true);
+    expect(sessionStorage.getItem("scalius_checkout_data")).toBeNull();
+  });
+
+  it("recognizes the same account's legacy email owner without rotating its attempt", () => {
+    setCheckoutFormDraftOwner("buyer@example.test");
+    writeCheckoutFormDraft({ customerName: "Buyer" });
+    sessionStorage.setItem("checkoutId", "uncertain_attempt");
+    expect(reconcileCheckoutAfterSignIn("cust_a", "buyer@example.test")).toBe(false);
+    expect(sessionStorage.getItem("checkoutId")).toBe("uncertain_attempt");
   });
 
   it("clears cart-to-checkout transfer state without rotating the active checkout id", () => {

@@ -349,6 +349,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   existingCheckoutMessage:
     "Order {orderId} is waiting for payment. Review it before starting another checkout.",
   reviewExistingCheckoutText: "Review existing checkout",
+  checkoutAttemptExpiredText: "This checkout has ended. Your cart is unchanged. Return to your cart to review it and place a new order.",
+  checkoutAttemptConflictText: "An order already exists for this checkout. Review that order before trying to place another.",
   signInToCheckoutText: "Sign in to checkout",
   signInPromptText: "Already have an account? Sign in for faster checkout",
   noScriptText: "JavaScript is required to update your cart before checkout.",
@@ -381,6 +383,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   cartAttentionText: "Some cart items need attention",
   cartEmptyErrorText: "Add items to your cart before placing an order.",
   quickBuyStorageBlockedText: "This browser blocked temporary cart storage, so the item could not be added. Allow site storage and add it again.",
+  quickBuyFailedText: "This item could not be added. Review your cart and browser site storage, then add it again.",
   orderProcessingFailedText: "Could not process the order. Try again.",
   unexpectedErrorText: "An unexpected error occurred.",
   cartItemsNeedAttentionText: "{count} cart items need attention before checkout.",
@@ -1066,6 +1069,8 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   existingCheckoutMessage:
     "{orderId} নম্বর অর্ডারটির পেমেন্ট বাকি আছে। নতুন চেকআউট শুরুর আগে এটি দেখুন।",
   reviewExistingCheckoutText: "চলমান চেকআউট দেখুন",
+  checkoutAttemptExpiredText: "এই চেকআউটের মেয়াদ শেষ হয়েছে। আপনার কার্ট অপরিবর্তিত আছে। কার্টে ফিরে দেখে নতুন অর্ডার দিন।",
+  checkoutAttemptConflictText: "এই চেকআউটের একটি অর্ডার ইতিমধ্যে আছে। আরেকটি অর্ডার দেওয়ার আগে সেটি দেখুন।",
   signInToCheckoutText: "সাইন ইন করে চেকআউট করুন",
   signInPromptText: "আগে থেকেই অ্যাকাউন্ট আছে? দ্রুত চেকআউট করতে সাইন ইন করুন",
   noScriptText: "চেকআউটের আগে কার্ট হালনাগাদ করতে JavaScript প্রয়োজন।",
@@ -1098,6 +1103,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   cartAttentionText: "কার্টের কিছু পণ্য যাচাই করা দরকার",
   cartEmptyErrorText: "অর্ডার করার আগে কার্টে পণ্য যোগ করুন।",
   quickBuyStorageBlockedText: "ব্রাউজারটি সাময়িক কার্ট স্টোরেজ বন্ধ রাখায় পণ্যটি যোগ করা যায়নি। সাইট স্টোরেজ চালু করে আবার যোগ করুন।",
+  quickBuyFailedText: "পণ্যটি যোগ করা যায়নি। কার্ট ও ব্রাউজারের সাইট স্টোরেজ দেখে আবার যোগ করুন।",
   orderProcessingFailedText: "অর্ডারটি প্রক্রিয়া করা যায়নি। আবার চেষ্টা করুন।",
   unexpectedErrorText: "একটি অপ্রত্যাশিত সমস্যা হয়েছে।",
   cartItemsNeedAttentionText: "চেকআউটের আগে কার্টের {count}টি পণ্য যাচাই করা দরকার।",
@@ -1439,6 +1445,7 @@ export const CHECKOUT_LANGUAGE_KEYS = /* @__PURE__ */ Object.freeze(
  */
 export const PRODUCT_PAGE_COPY_KEYS = [
   "addToCartText",
+  "quickBuyFailedText",
   "buyNowText",
   "unavailableText",
   "chooseOptionText",

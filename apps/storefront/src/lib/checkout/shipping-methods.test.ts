@@ -215,6 +215,29 @@ describe("delivery options follow the address", () => {
     await expect(methods.recheck()).resolves.toBe(false);
   });
 
+  it("does not block checkout or announce a price change when the waived base rate changes", async () => {
+    let offered = [rate("standard", 80)];
+    const { methods, options, events } = setup({ loadRates: async () => offered, waived: () => true });
+    await methods.setAddress(DHAKA);
+    offered = [rate("standard", 120)];
+    await expect(methods.recheck()).resolves.toBe(false);
+    expect(options()[0]).toMatchObject({ fee: "Free", note: "Normally ৳120; waived." });
+    expect(events.at(-1)).toMatchObject({ fee: 120 });
+    expect(document.querySelector("[data-shipping-notice]")!.textContent).toBe("");
+  });
+
+  it("compares what is paid when only a free-over threshold changes", async () => {
+    let offered = [rate("standard", 80, { freeOver: 3000 })];
+    const { methods } = setup({ loadRates: async () => offered, subtotal: () => 1000 });
+    await methods.setAddress(DHAKA);
+    offered = [rate("standard", 80, { freeOver: 2000 })];
+    await expect(methods.recheck()).resolves.toBe(false);
+    expect(document.querySelector("[data-shipping-notice]")!.textContent).toBe("");
+    offered = [rate("standard", 80, { freeOver: 1000 })];
+    await expect(methods.recheck()).resolves.toBe(true);
+    expect(document.querySelector("[data-shipping-notice]")!.textContent).toBe("Delivery fee changed from ৳80 to Free.");
+  });
+
   it("names the rate that replaced one the merchant removed", async () => {
     let offered = [rate("zone60", 60), rate("standard", 80)];
     const { methods, options } = setup({ loadRates: async () => offered });
@@ -350,6 +373,14 @@ describe("delivery options a store app changed for this cart", () => {
     methods.applyQuotedRates(null);
     expect(options().map(({ id, fee }) => [id, fee])).toEqual([["standard", "৳80"], ["express", "৳150"]]);
     expect(events.at(-1)).toEqual({ id: "standard", fee: 80, freeOver: null, name: "standard", kind: "delivery" });
+  });
+
+  it("honors an app's quoted charge even when a cart item normally waives delivery", async () => {
+    const { methods, options } = setup({ byCity: { dhaka: [standard] }, waived: () => true });
+    await methods.setAddress(DHAKA);
+    expect(options()[0]?.fee).toBe("Free");
+    methods.applyQuotedRates([{ id: "standard", name: "App delivery", kind: "delivery", amount: 80, amountMinor: 8000 }]);
+    expect(options()[0]).toMatchObject({ fee: "৳80", note: "" });
   });
 
   it("chooses the first option left when an app hides the chosen one", async () => {

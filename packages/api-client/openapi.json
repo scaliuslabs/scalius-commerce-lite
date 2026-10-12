@@ -1130,7 +1130,7 @@
                 }
               ]
             },
-            "maxItems": 8,
+            "maxItems": 24,
             "description": "The app sections to show, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add, or a component section's data. An app section missing here renders nothing."
           },
           "metaobjects": {
@@ -24490,6 +24490,9 @@
                             "addToCartText": {
                               "type": "string"
                             },
+                            "quickBuyFailedText": {
+                              "type": "string"
+                            },
                             "buyNowText": {
                               "type": "string"
                             },
@@ -24581,6 +24584,7 @@
                           "required": [
                             "languageCode",
                             "addToCartText",
+                            "quickBuyFailedText",
                             "buyNowText",
                             "unavailableText",
                             "chooseOptionText",
@@ -61733,6 +61737,16 @@
           },
           "401": {
             "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {

@@ -199,7 +199,10 @@ async function readCheckoutOnce<TResponse>(
         ReservationVariantState[],
         ActiveFunctionRegistrationRow[] | undefined,
     ];
-    const existingAttempt = resolveCheckoutAttemptRow<TResponse>(attemptRows[0], identity);
+    const existingAttempt = resolveCheckoutAttemptRow<TResponse>(
+        attemptRows[0], identity, undefined,
+        attemptRows[0]?.linkedOrderAccountOwnerCustomerId ? await authorityInput.customerId : undefined,
+    );
     const registrations = resolveActiveFunctionRegistrations(registrationRows ?? []);
     const paymentRegistrations = registrations.filter((registration) => registration.kind === "provider");
     const paymentProviders = paymentRegistrations.length > 0 && options.paymentProviders

@@ -1,4 +1,4 @@
-import { cartStore, endBuyNow, removeOrderedLines, syncCartFromStorage } from "@/store/cart";
+import { cartStore, removeOrderedLines, syncCartFromStorage } from "@/store/cart";
 import {
   clearCheckoutAttemptSession,
   clearCheckoutSession,
@@ -27,6 +27,8 @@ export function resolveCheckoutReceiptCleanup(options: {
   receiptState: CheckoutReceiptState;
   recoveryMatchesOrder: boolean;
   recoveryMatchesCheckout: boolean;
+  recoveryMatchesAttempt?: boolean;
+  directAttemptMatches?: boolean;
   directCheckoutMatches?: boolean;
   acceptedCheckout: boolean;
 }): CheckoutReceiptCleanupDecision {
@@ -42,7 +44,9 @@ export function resolveCheckoutReceiptCleanup(options: {
   return {
     clearCart: clearAcceptedCheckout,
     clearCheckoutSession: clearAcceptedCheckout,
-    clearCheckoutAttemptPreservingDraft: exactCheckout && !options.acceptedCheckout,
+    clearCheckoutAttemptPreservingDraft: settledReceipt && !clearAcceptedCheckout
+      && (exactCheckout || options.directAttemptMatches === true
+        || (options.recoveryMatchesOrder && options.recoveryMatchesAttempt === true)),
     clearRecoveryPointer: settledReceipt && options.recoveryMatchesOrder,
   };
 }
@@ -67,6 +71,21 @@ function readSessionValue(key: string): string | null {
   }
 }
 
+/** A later rejected submit may replace the snapshot; the committed recovery keeps its original quantities. */
+function cartFromRecoveryFingerprint(fingerprint: string | null): string | null {
+  if (!fingerprint) return null;
+  try {
+    const lines = JSON.parse(fingerprint) as Array<{ key: string; productId: string; variantId: string | null; quantity: number }>;
+    if (!Array.isArray(lines)) return null;
+    const cart = Object.fromEntries(lines.map((line) => [line.key, {
+      id: line.productId, variantId: line.variantId, quantity: line.quantity,
+    }]));
+    return fingerprintCheckoutCart(cart) === fingerprint ? JSON.stringify(cart) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The order this tab last placed, so a stale /checkout can point to it. */
 export function readLastPlacedOrderId(): string | null {
   const value = readSessionValue(LAST_ORDER_KEY);
@@ -85,10 +104,14 @@ export async function finalizeCheckoutReceipt(receiptElement: HTMLElement): Prom
 
   syncCartFromStorage();
   const submitted = readSessionValue(SUBMITTED_CART_KEY);
-  const ordered = submitted ?? JSON.stringify(cartStore.get().items);
   const activeCheckoutId = readSessionValue("checkoutId");
   const recovery = readHostedPaymentRecoverySession();
   const recoveryMatchesOrder = recovery?.orderId === orderId;
+  const recoveryMatchesAttempt = Boolean(recoveryMatchesOrder && recovery.checkoutId && recovery.checkoutId === activeCheckoutId);
+  const recoveredCart = recoveryMatchesAttempt && recovery
+    ? cartFromRecoveryFingerprint(recovery.cartFingerprint)
+    : null;
+  const ordered = recoveredCart ?? submitted ?? JSON.stringify(cartStore.get().items);
   const recoveryMatchesCheckout = Boolean(
     recoveryMatchesOrder
     && recovery.cartFingerprint
@@ -97,16 +120,18 @@ export async function finalizeCheckoutReceipt(receiptElement: HTMLElement): Prom
   );
   const directCheckoutId = receiptElement.dataset.checkoutFinalizeId;
   const directCartHash = receiptElement.dataset.checkoutFinalizeCartHash;
+  const directAttemptMatches = Boolean(activeCheckoutId && directCheckoutId === activeCheckoutId);
   const directCheckoutMatches = Boolean(
-    directCheckoutId
+    directAttemptMatches
     && directCartHash
-    && activeCheckoutId === directCheckoutId
     && await hashCheckoutCartFingerprint(ordered) === directCartHash,
   );
   const cleanup = resolveCheckoutReceiptCleanup({
     receiptState,
     recoveryMatchesOrder,
     recoveryMatchesCheckout,
+    recoveryMatchesAttempt,
+    directAttemptMatches,
     directCheckoutMatches,
     acceptedCheckout: receiptElement.dataset.checkoutCartFinalize === "true",
   });
@@ -116,8 +141,6 @@ export async function finalizeCheckoutReceipt(receiptElement: HTMLElement): Prom
     } catch {
       // A malformed snapshot leaves the cart as it is.
     }
-    // A Buy now order: the buyer's own cart comes back as it was.
-    endBuyNow();
   }
   if (cleanup.clearCheckoutSession) {
     clearCheckoutSession();

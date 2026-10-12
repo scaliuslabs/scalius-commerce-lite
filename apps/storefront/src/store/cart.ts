@@ -10,7 +10,6 @@ import {
   normalizeCartItemOptions,
   type CartItemOption,
 } from "@/lib/cart/item-options";
-import { logicalPathname } from "@/lib/presence-url";
 
 export type { CartItemOption } from "@/lib/cart/item-options";
 
@@ -21,6 +20,7 @@ export type { CartItemOption } from "@/lib/cart/item-options";
  */
 export const CART_STORAGE_KEY = "cart:v3";
 const RETIRED_CART_STORAGE_KEYS = ["cart"] as const;
+const RETIRED_BUY_NOW_STASH_KEY = "cart:v3:buy-now";
 
 /**
  * One buyer input on a cart line, in the product's schema order. `key` and
@@ -90,7 +90,8 @@ type CartLinePatchFailureCode =
   | "invalid_variant"
   | "invalid_quantity"
   | "item_not_allowed"
-  | "item_required";
+  | "item_required"
+  | "storage_unavailable";
 
 type CartLinePatchFailure = {
   ok: false;
@@ -171,10 +172,13 @@ export function getEffectiveCartShippingFee(
   items: Record<string, ShippingFeeCartItem>,
   methodFee: number,
   freeOver: number | null = null,
+  quoted = false,
 ): number {
   const normalizedMethodFee = Number.isFinite(methodFee)
     ? Math.max(0, methodFee)
     : 0;
+  // An app quote already includes its delivery rules and is the amount payable.
+  if (quoted) return normalizedMethodFee;
   if (cartHasFreeDeliveryItem(items)) return 0;
   if (freeOver !== null && Number.isFinite(freeOver) && cartItemsSubtotal(items) >= freeOver) return 0;
   return normalizedMethodFee;
@@ -210,10 +214,9 @@ if (typeof window !== "undefined") {
   window.addEventListener?.("storage", (event) => {
     if (event.key === CART_STORAGE_KEY && hasHydratedFromStorage) readCartFromStorage(true);
   });
-  // Leaving a Buy now checkout (including Back into a cached page) puts the
-  // buyer's own cart back.
-  window.addEventListener?.("pageshow", () => {
-    if (!isBuyNowCheckoutPath(logicalPathname(window.location.pathname))) endBuyNow();
+  // Back can restore a product page whose cart predates a completed checkout.
+  window.addEventListener?.("pageshow", (event) => {
+    if (event.persisted && hasHydratedFromStorage) readCartFromStorage(true);
   });
 }
 
@@ -440,7 +443,7 @@ function readCartFromStorage(resetWhenMissing: boolean): CartStore {
   try {
     const storedCart = localStorage.getItem(CART_STORAGE_KEY);
     if (storedCart) {
-      const normalized = normalizeStoredCart(JSON.parse(storedCart));
+      const normalized = recoverRetiredBuyNowCart(normalizeStoredCart(JSON.parse(storedCart)));
       if (JSON.stringify(normalized) !== JSON.stringify(cartStore.get())) cartStore.set(normalized);
       const normalizedJson = JSON.stringify(normalized);
       if (normalizedJson !== storedCart) {
@@ -450,8 +453,9 @@ function readCartFromStorage(resetWhenMissing: boolean): CartStore {
           console.warn("Could not persist migrated cart state.", error);
         }
       }
-    } else if (resetWhenMissing && Object.keys(cartStore.get().items).length > 0) {
-      cartStore.set({ ...EMPTY_CART_STATE });
+    } else {
+      const current = resetWhenMissing ? { ...EMPTY_CART_STATE } : cartStore.get();
+      cartStore.set(recoverRetiredBuyNowCart(current));
     }
   } catch (error) {
     console.warn("Could not hydrate cart state.", error);
@@ -520,11 +524,17 @@ function applyLocalLinePatch(
     string,
     Omit<CartItem, "quantity">
   >,
+  requirePersistence = false,
 ): CartLinePatchResult {
-  return applyLinePatchesToLiveStore(patches, trustedExistingItemReplacements);
+  return applyLinePatchesToLiveStore(patches, trustedExistingItemReplacements, requirePersistence);
 }
 
 type NewCartLine = Omit<CartItem, "quantity" | "propertiesHash"> & { quantity?: number };
+export type CartAddFailureReason = "quantity_limit" | "storage_unavailable" | "invalid_item";
+type CartAddOptions = {
+  requirePersistence?: boolean;
+  onFailure?: (reason: CartAddFailureReason) => void;
+};
 
 /** Normalizes a line to add and computes its inputs hash; null when it can't be a line. */
 async function prepareNewLine(
@@ -562,16 +572,22 @@ async function prepareNewLine(
  * Adds a line, or adds to the line with the same SKU and the same inputs.
  * The key uses the shared WebCrypto inputs hash, so this is async.
  */
-export async function addToCart(item: NewCartLine): Promise<boolean> {
+export async function addToCart(
+  item: NewCartLine,
+  options: CartAddOptions = {},
+): Promise<boolean> {
   ensureCartHydrated();
   const prepared = await prepareNewLine(item);
-  if (!prepared) return false;
+  if (!prepared) {
+    options.onFailure?.("invalid_item");
+    return false;
+  }
   const existingItem = cartStore.get().items[prepared.key];
   const quantity = existingItem
-    ? Math.min(MAX_CART_QUANTITY, existingItem.quantity + prepared.quantity)
+    ? existingItem.quantity + prepared.quantity
     : prepared.quantity;
 
-  return applyLocalLinePatch([
+  const result = applyLocalLinePatch([
     {
       lineKey: prepared.key,
       productId: item.id,
@@ -579,7 +595,12 @@ export async function addToCart(item: NewCartLine): Promise<boolean> {
       quantity,
       ...(!existingItem ? { item: prepared.line } : {}),
     },
-  ]).ok;
+  ], undefined, options.requirePersistence);
+  if (!result.ok) {
+    options.onFailure?.(result.code === "invalid_quantity" ? "quantity_limit"
+      : result.code === "storage_unavailable" ? "storage_unavailable" : "invalid_item");
+  }
+  return result.ok;
 }
 
 /**
@@ -810,81 +831,53 @@ export function removeOrderedLines(
   if (patches.length > 0) applyLocalLinePatch(patches);
 }
 
-/**
- * "Buy now" buys only that item: the buyer's cart is set aside here while the
- * checkout holds just the Buy now line, and comes back after the order or as
- * soon as the buyer leaves the checkout (the Buy now line is not added to it).
- * localStorage, so it survives the checkout's reloads and a hosted payment.
- */
-export const BUY_NOW_STASH_KEY = "cart:v3:buy-now";
-
-/** Pages that belong to a Buy now checkout; anywhere else the cart comes back. */
-export function isBuyNowCheckoutPath(pathname: string): boolean {
-  return pathname === "/cart"
-    || pathname === "/checkout"
-    || pathname.startsWith("/checkout/")
-    || pathname.startsWith("/buy/")
-    || pathname === "/order-success"
-    || pathname === "/payment-recovery";
+/** Buy now adds to the same cart, persisted before the caller navigates away. */
+export function startBuyNow(item: NewCartLine, options: Pick<CartAddOptions, "onFailure"> = {}): Promise<boolean> {
+  return addToCart(item, { ...options, requirePersistence: true });
 }
 
-/** Sets the cart aside and starts a checkout holding only this line. */
-export async function startBuyNow(item: NewCartLine): Promise<boolean> {
-  ensureCartHydrated();
-  const prepared = await prepareNewLine(item);
-  if (!prepared) return false;
+/** Recover carts hidden by the retired single-item Buy now flow, once. */
+function recoverRetiredBuyNowCart(current: CartStore): CartStore {
+  let stashed: string | null = null;
   try {
-    // A second Buy now replaces the first; the buyer's own cart stays set aside.
-    if (localStorage.getItem(BUY_NOW_STASH_KEY) === null) {
-      localStorage.setItem(BUY_NOW_STASH_KEY, JSON.stringify(cartStore.get()));
+    stashed = localStorage.getItem(RETIRED_BUY_NOW_STASH_KEY);
+    if (stashed === null) return current;
+    let saved: CartStore;
+    try {
+      saved = normalizeStoredCart(JSON.parse(stashed));
+    } catch {
+      localStorage.removeItem(RETIRED_BUY_NOW_STASH_KEY);
+      return current;
     }
+    const items = { ...current.items };
+    for (const [key, item] of Object.entries(saved.items)) {
+      const existing = items[key];
+      items[key] = existing
+        ? { ...existing, quantity: Math.min(MAX_CART_QUANTITY, existing.quantity + item.quantity) }
+        : item;
+    }
+    const merged = normalizeCartTotals({
+      ...current,
+      items,
+      discountCodes: normalizeDiscountCodes([...saved.discountCodes, ...current.discountCodes]),
+    });
+    // Remove before writing so a later read cannot re-add a line the buyer removed.
+    localStorage.removeItem(RETIRED_BUY_NOW_STASH_KEY);
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(merged));
+    return merged;
   } catch {
-    // Without storage nothing could be put back: add to the cart as before.
-    return addToCart(item);
-  }
-  commitNonLineCartState({ ...EMPTY_CART_STATE });
-  return applyLocalLinePatch([
-    {
-      lineKey: prepared.key,
-      productId: item.id,
-      variantId: prepared.line.variantId!,
-      quantity: prepared.quantity,
-      item: prepared.line,
-    },
-  ]).ok;
-}
-
-/** Puts back the cart a Buy now set aside, if any; the Buy now cart is dropped. */
-export function endBuyNow(): void {
-  if (typeof window === "undefined") return;
-  let stashed: string | null;
-  try {
-    stashed = localStorage.getItem(BUY_NOW_STASH_KEY);
-    if (stashed === null) return;
-    localStorage.removeItem(BUY_NOW_STASH_KEY);
-  } catch {
-    return;
-  }
-  ensureCartHydrated();
-  try {
-    commitNonLineCartState(normalizeStoredCart(JSON.parse(stashed)));
-  } catch {
-    // An unreadable stash leaves the current cart as it is.
-  }
-}
-
-function discardBuyNowStash(): void {
-  try {
-    localStorage.removeItem(BUY_NOW_STASH_KEY);
-  } catch {
-    // Nothing was kept.
+    // A quota/write failure leaves both original snapshots available for a retry.
+    if (stashed !== null) {
+      try { localStorage.setItem(RETIRED_BUY_NOW_STASH_KEY, stashed); } catch { /* Storage is unavailable. */ }
+    }
+    return current;
   }
 }
 
 export function clearCart(): void {
   ensureCartHydrated();
-  // Clearing (sign-out on a shared device) also drops a cart set aside by Buy now.
-  if (typeof window !== "undefined") discardBuyNowStash();
+  // Sign-out must not leave a hidden cart from the retired Buy now flow.
+  try { localStorage.removeItem(RETIRED_BUY_NOW_STASH_KEY); } catch { /* Storage is unavailable. */ }
   const current = cartStore.get();
   if (Object.keys(current.items).length === 0 && current.discountCodes.length === 0) return;
   const entries = Object.entries(current.items);
@@ -1114,6 +1107,7 @@ function applyLinePatchesToLiveStore(
     string,
     Omit<CartItem, "quantity">
   >,
+  requirePersistence = false,
 ): CartLinePatchResult {
   ensureCartHydrated();
   const result = planLinePatches(
@@ -1122,6 +1116,13 @@ function applyLinePatchesToLiveStore(
     trustedExistingItemReplacements,
   );
   if (!result.ok) return result;
+  if (requirePersistence) {
+    try {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(result.state));
+    } catch {
+      return patchFailure("storage_unavailable");
+    }
+  }
   cartStore.set(result.state);
   emitCartUpdated();
   return result;

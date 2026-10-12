@@ -63,14 +63,14 @@ export function reconcileValidatedCartSnapshot(
       validatedItem.propertiesHash !== (currentItem.propertiesHash ?? "none")
     ) {
       rekeys.push({ key, hash: validatedItem.propertiesHash, properties });
-      continue;
     }
 
     const nextImage = validatedItem.productImage ?? undefined;
     const nextImageMediaId = validatedItem.productImageMediaId ?? undefined;
     const nextKind = validatedItem.fulfillmentKind ?? currentItem.fulfillmentKind;
     // Labels only: the same keys and values (the line's identity).
-    const displayChanged = properties !== undefined &&
+    const displayChanged = (!validatedItem.propertiesHash || validatedItem.propertiesHash === (currentItem.propertiesHash ?? "none")) &&
+      properties !== undefined &&
       properties.length === (currentItem.properties?.length ?? 0) &&
       !sameDisplay(currentItem.properties, properties);
     if (

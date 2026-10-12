@@ -22,6 +22,7 @@ import { resolveCheckoutPaymentRequest, resolveExplicitCheckoutPaymentRequest } 
 import type { CheckoutConfig } from "./types";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
 import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "../cart/repair-state";
+import { writeHostedPaymentRecoverySession } from "./session-state";
 
 const baseConfig: CheckoutConfig = {
   gateways: [],
@@ -224,6 +225,152 @@ afterEach(() => {
   document.body.innerHTML = "";
   delete (window as unknown as { __CHECKOUT_CONFIG__?: CheckoutConfig }).__CHECKOUT_CONFIG__;
   delete window.__CURRENCY_CODE__;
+});
+
+describe("checkout attempt recovery", () => {
+  it.each(["CHECKOUT_ATTEMPT_EXPIRED", "CHECKOUT_ATTEMPT_CONFLICT"])(
+    "%s offers an explicit safe action without resubmitting or changing the cart", async (errorCode) => {
+      installStripePaymentFixture();
+      const config = (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__;
+      config.activeDefaultMethod = "cod";
+      const cart = '{"line_1":{"id":"prod_1","variantId":"var_1","quantity":1}}';
+      localStorage.setItem("cart:v3", cart);
+      sessionStorage.setItem("scalius_submitted_cart", "original-order-cart");
+      sessionStorage.setItem("scalius_checkout_form_draft", "preserved-draft");
+      const requests: string[] = [];
+      vi.stubGlobal("fetch", vi.fn(async (input) => {
+        const url = String(input);
+        requests.push(url);
+        return url === "/api/checkout/create-order"
+          ? new Response(JSON.stringify({ success: false, errorCode, error: "Old checkout", details: {
+            orderId: "existing_order", paymentMethod: "scalius.bkash:bkash",
+          } }), { status: 409 })
+          : new Response(JSON.stringify({ success: true, data: taxQuote() }));
+      }));
+      await initCheckoutPage();
+      document.getElementById("payButton")!.click();
+      await vi.waitFor(() => expect(document.getElementById("checkoutRecoveryAction")!.hidden).toBe(false));
+      const action = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement;
+      const expired = errorCode === "CHECKOUT_ATTEMPT_EXPIRED";
+      expect(action.getAttribute("href")).toBe(expired ? "/cart"
+        : "/order-success?orderId=existing_order&payment=scalius.bkash%3Abkash");
+      expect(action.textContent).toBe(expired ? "Return to cart" : "Review existing checkout");
+      expect(document.getElementById("paymentMethods")!.children).toHaveLength(0);
+      expect(sessionStorage.getItem("checkoutId")).toBe(expired ? null : "checkout_stripe_fixture_123456");
+      expect(sessionStorage.getItem("scalius_checkout_form_draft")).toBe("preserved-draft");
+      expect(sessionStorage.getItem("scalius_submitted_cart")).toBe("original-order-cart");
+      expect(localStorage.getItem("cart:v3")).toBe(cart);
+      const recovery = JSON.parse(localStorage.getItem("scalius_hosted_payment_recovery") ?? "null");
+      if (expired) expect(recovery).toBeNull();
+      else expect(recovery).toMatchObject({ orderId: "existing_order", checkoutId: "checkout_stripe_fixture_123456", cartFingerprint: null });
+      document.getElementById("payButton")!.click();
+      expect(requests.filter((url) => url === "/api/checkout/create-order")).toHaveLength(1);
+    },
+  );
+
+  it("ends an archived checkout before a stale recovery pointer can redirect back to it", async () => {
+    installStripePaymentFixture();
+    const checkout = JSON.parse(sessionStorage.getItem("scalius_checkout_data")!);
+    writeHostedPaymentRecoverySession("/order-success?orderId=ended_order&payment=stripe", checkout, "stripe");
+    const replace = vi.spyOn(window.location, "replace").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ success: true, data: { status: "expired", orderId: "ended_order" } }))));
+    await initCheckoutPage();
+    expect(replace).not.toHaveBeenCalled();
+    expect(document.getElementById("errorMsg")!.textContent).toContain("checkout has ended");
+    expect(sessionStorage.getItem("checkoutId")).toBeNull();
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toBeNull();
+    replace.mockRestore();
+  });
+
+  it.each(["checkout_another_tab", null])("does not block a new checkout with another recovery identity (%s)", async (checkoutId) => {
+    installStripePaymentFixture();
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__.activeDefaultMethod = "cod";
+    const checkout = JSON.parse(sessionStorage.getItem("scalius_checkout_data")!);
+    writeHostedPaymentRecoverySession("/order-success?orderId=other_order&payment=stripe", {
+      checkoutId, cartItems: checkout.cartItems,
+    }, "stripe");
+    const savedRecovery = localStorage.getItem("scalius_hosted_payment_recovery");
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input) => {
+      const url = String(input);
+      requests.push(url);
+      return url === "/api/checkout/create-order"
+        ? new Response(JSON.stringify({ error: "New checkout reached" }), { status: 400 })
+        : new Response(JSON.stringify({ success: true, data: taxQuote() }));
+    }));
+    const replace = vi.spyOn(window.location, "replace").mockImplementation(() => {});
+    try {
+      await initCheckoutPage();
+      expect(document.getElementById("checkoutRecoveryAction")!.hidden).toBe(true);
+      expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+      expect(localStorage.getItem("scalius_hosted_payment_recovery")).toBe(savedRecovery);
+
+      document.getElementById("payButton")!.click();
+      await vi.waitFor(() => expect(document.getElementById("errorMsg")!.textContent).toBe("New checkout reached"));
+
+      expect(requests.filter((url) => url === "/api/checkout/create-order")).toHaveLength(1);
+      expect(requests).not.toContain("/api/checkout/recovery-status");
+      expect(replace).not.toHaveBeenCalled();
+      expect(localStorage.getItem("scalius_hosted_payment_recovery")).toBe(savedRecovery);
+    } finally {
+      replace.mockRestore();
+    }
+  });
+
+  it.each(["created", "CHECKOUT_ATTEMPT_EXPIRED", "CHECKOUT_ATTEMPT_CONFLICT"])(
+    "ignores a late %s result from the previous checkout page", async (outcome) => {
+      installStripePaymentFixture();
+      (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__.activeDefaultMethod = "cod";
+      let finishOrder!: (response: Response) => void;
+      const pendingOrder = new Promise<Response>((resolve) => { finishOrder = resolve; });
+      const createRequests: Record<string, unknown>[] = [];
+      vi.stubGlobal("fetch", vi.fn(async (input, init) => {
+        if (String(input) === "/api/checkout/create-order") {
+          createRequests.push(JSON.parse(String(init?.body)));
+          return pendingOrder;
+        }
+        return new Response(JSON.stringify({ success: true, data: taxQuote() }));
+      }));
+      const replace = vi.spyOn(window.location, "replace").mockImplementation(() => {});
+      try {
+        await initCheckoutPage();
+        document.getElementById("payButton")!.click();
+        await vi.waitFor(() => expect(createRequests).toHaveLength(1));
+
+        const next = JSON.parse(sessionStorage.getItem("scalius_checkout_data")!);
+        next.checkoutId = "checkout_next_page_123456";
+        next.customerName = "Next buyer";
+        sessionStorage.setItem("checkoutId", next.checkoutId);
+        sessionStorage.setItem("scalius_checkout_data", JSON.stringify(next));
+        sessionStorage.setItem("scalius_submitted_cart", "next-checkout-snapshot");
+        await resumeCheckoutPageFromHistory();
+        const summary = document.getElementById("summaryDetails")!.textContent;
+        const selected = document.querySelector('[data-method="cod"] .payment-method-control')!.getAttribute("aria-checked");
+        const response = outcome === "created"
+          ? new Response(JSON.stringify({ data: { id: "old_order", totalAmount: 100, paymentMethod: "cod" } }))
+          : new Response(JSON.stringify({ errorCode: outcome, error: "Old checkout", details: {
+            orderId: "old_order", paymentMethod: "cod",
+          } }), { status: 409 });
+        const parsed = vi.spyOn(response, "json");
+        finishOrder(response);
+        await vi.waitFor(() => expect(parsed).toHaveBeenCalled());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(sessionStorage.getItem("checkoutId")).toBe(next.checkoutId);
+        expect(sessionStorage.getItem("scalius_submitted_cart")).toBe("next-checkout-snapshot");
+        expect(localStorage.getItem("scalius_hosted_payment_recovery")).toBeNull();
+        expect(document.getElementById("summaryDetails")!.textContent).toBe(summary);
+        expect(document.getElementById("errorMsg")!.classList.contains("hidden")).toBe(true);
+        expect(document.getElementById("checkoutRecoveryAction")!.hidden).toBe(true);
+        expect(document.querySelector('[data-method="cod"] .payment-method-control')!.getAttribute("aria-checked")).toBe(selected);
+        expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+        expect(replace).not.toHaveBeenCalled();
+        expect(createRequests).toHaveLength(1);
+      } finally {
+        replace.mockRestore();
+      }
+    },
+  );
 });
 
 describe("renderOrderSummaryDetails", () => {

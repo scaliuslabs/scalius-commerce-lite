@@ -298,6 +298,12 @@ export function enhanceShippingMethods(
     }
   };
 
+  const effectiveFee = (rate: DeliveryRate) => rate.quoted
+    ? rate.fee
+    : options.isFeeWaived() || (rate.freeOver !== null && options.readSubtotal() >= rate.freeOver)
+      ? 0
+      : rate.fee;
+
   const feeFacts = (rate: DeliveryRate) => {
     // The quote's fee is what the buyer pays: nothing left to explain.
     if (rate.quoted) {
@@ -434,16 +440,16 @@ export function enhanceShippingMethods(
 
   /** What changed between the rate the buyer chose and the rates now offered. */
   const describeChange = (previous: DeliveryRate): string => {
-    const money = (rate: DeliveryRate) => rate.fee === 0 ? copy.freeText : options.formatMoney(rate.fee);
+    const money = (rate: DeliveryRate) => effectiveFee(rate) === 0 ? copy.freeText : options.formatMoney(effectiveFee(rate));
     const now = shown().find((rate) => rate.id === previous.id);
     if (now) {
-      return now.fee === previous.fee
+      return effectiveFee(now) === effectiveFee(previous)
         ? ""
         : formatCheckoutLanguageText(copy.feeChangedText, { old: money(previous), new: money(now) });
     }
     const replacement = selectedRate();
     return replacement
-      ? replacement.fee === previous.fee
+      ? effectiveFee(replacement) === effectiveFee(previous)
         ? formatCheckoutLanguageText(copy.replacedSameFeeText, {
             old: previous.name,
             new: replacement.name,
@@ -606,13 +612,12 @@ export function enhanceShippingMethods(
       if (!loaded || current !== sequence) return false;
       const now = loaded.find((rate) => rate.id === previous.id);
       if (now && now.fee === previous.fee && now.freeOver === previous.freeOver) return false;
+      const priceChanged = !now || effectiveFee(now) !== effectiveFee(previous);
       applyLoaded(loaded);
       emit();
-      showNotice(describeChange(previous) || formatCheckoutLanguageText(copy.feeChangedText, {
-        old: options.formatMoney(previous.fee),
-        new: options.formatMoney(previous.fee),
-      }));
-      return true;
+      const change = describeChange(previous);
+      showNotice(change);
+      return priceChanged;
     },
   };
 }

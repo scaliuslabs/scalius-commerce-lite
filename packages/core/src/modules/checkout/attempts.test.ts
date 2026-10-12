@@ -10,13 +10,17 @@ import {
   buildCheckoutStatusTokenFromRequestKey,
   createAtomicCheckoutAttempt,
   getCheckoutAttemptRequestKeyFromStatusToken,
+  isEndedCheckoutOrder,
   prepareAtomicCheckoutAttemptCommit,
+  resolveCheckoutAttemptRow,
   resolveExistingCheckoutAttempt,
+  selectCheckoutAttemptByKey,
+  type CheckoutAttemptRow,
 } from "./attempts";
 import { hashOrderReceiptToken } from "../orders/receipts";
 import type { CreateStorefrontOrderInput } from "../orders/types";
 
-type AttemptRow = typeof schema.checkoutAttempts.$inferSelect;
+type AttemptRow = CheckoutAttemptRow;
 
 describe("atomic checkout attempts", () => {
   it("derives stable request and non-receipt status identities", async () => {
@@ -65,6 +69,7 @@ describe("atomic checkout attempts", () => {
     const identity = await buildCheckoutAttemptIdentity(buildInput());
     const committed = createAttemptRow(identity, {
       status: "committed",
+      linkedOrderId: "order_committed",
       responsePayload: JSON.stringify({ orderId: "order_committed" }),
     });
     await expect(resolveExistingCheckoutAttempt<{ orderId: string }>(
@@ -123,6 +128,187 @@ describe("atomic checkout attempts", () => {
       createResolverDb(row),
       changed,
     )).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it.each([
+    { paymentMethod: "scalius.bangladesh:bkash" },
+    { expectedQuoteFingerprint: "taxq_vutsrqponmlkjihgfedcba" },
+    { shippingCharge: 60 },
+    { notes: "Changed delivery instructions" },
+  ])("keeps a changed checkout bound to its live order: %j", async (change) => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    const changed = await buildCheckoutAttemptIdentity(buildInput(change));
+    const row = createAttemptRow(identity, {
+      status: "committed",
+      linkedOrderId: "order_existing",
+      linkedOrderPaymentMethod: "cod",
+      responsePayload: JSON.stringify({ receiptToken: "chk_existing_secret" }),
+    });
+
+    try {
+      resolveCheckoutAttemptRow(row, changed);
+      expect.fail("Changed checkout must not replay or start another order");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConflictError);
+      expect(error).toMatchObject({
+        status: 409,
+        code: "CHECKOUT_ATTEMPT_CONFLICT",
+        details: { orderId: "order_existing", paymentMethod: "cod" },
+      });
+      expect((error as ConflictError).details).toEqual({ orderId: "order_existing", paymentMethod: "cod" });
+      expect(JSON.stringify(error)).not.toContain("chk_existing_secret");
+      expect(JSON.stringify(error)).not.toContain(identity.statusToken);
+    }
+  });
+
+  it.each(["failed", "processing", "committed"])("does not reopen a mismatched %s attempt with a missing order", async (status) => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    const changed = await buildCheckoutAttemptIdentity(buildInput({ shippingCharge: 60 }));
+    const row = createAttemptRow(identity, { status, claimExpiresAt: 0 });
+
+    try {
+      resolveCheckoutAttemptRow(row, changed);
+      expect.fail("An unproven old attempt must remain sealed to its request");
+    } catch (error) {
+      expect(error).toMatchObject({ status: 409, code: "CHECKOUT_ATTEMPT_CONFLICT" });
+      expect((error as ConflictError).details).toBeUndefined();
+    }
+  });
+
+  it("does not replay a committed payload when its order is missing", async () => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    expect(() => resolveCheckoutAttemptRow(createAttemptRow(identity, {
+      status: "committed",
+      responsePayload: JSON.stringify({ receiptToken: "chk_existing_secret" }),
+    }), identity)).toThrow("Checkout order is unavailable");
+  });
+
+  it.each([null, "customer_other"])("does not reveal an account-owned attempt to customer %s", async (customerId) => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    const changed = await buildCheckoutAttemptIdentity(buildInput({ shippingCharge: 60 }));
+    for (const linkedOrderDeletedAt of [null, 1_700_000_000]) {
+      const row = createAttemptRow(identity, {
+        status: "committed", linkedOrderId: "order_existing", linkedOrderAccountOwnerCustomerId: "customer_owner",
+        linkedOrderStatus: "cancelled", linkedOrderDeletedAt, linkedOrderPaidAmountMinor: 0,
+        linkedOrderPaymentStatus: "unpaid", responsePayload: JSON.stringify({ receiptToken: "chk_existing_secret" }),
+      });
+      for (const request of [identity, changed]) {
+        try {
+          await resolveExistingCheckoutAttempt(createResolverDb(row), request, undefined, Promise.resolve(customerId));
+          expect.fail("A different account must not recover the checkout");
+        } catch (error) {
+          expect(error).toMatchObject({ status: 403, code: "FORBIDDEN", details: undefined });
+          expect(JSON.stringify(error)).not.toMatch(/order_existing|chk_existing_secret|customer_owner/);
+        }
+      }
+    }
+  });
+
+  it("replays an account-owned checkout only to its current owner", async () => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    const response = { orderId: "order_existing", receiptToken: "chk_existing_secret" };
+    const row = createAttemptRow(identity, {
+      status: "committed", linkedOrderId: "order_existing", linkedOrderAccountOwnerCustomerId: "customer_owner",
+      responsePayload: JSON.stringify(response),
+    });
+    await expect(resolveExistingCheckoutAttempt(createResolverDb(row), identity, undefined, Promise.resolve("customer_owner")))
+      .resolves.toEqual({ status: "replay", response });
+  });
+
+  it("does not resolve a customer session for a new or guest attempt", async () => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    const customerId = { then() { throw new Error("Guest replay must not add a session read"); } } as PromiseLike<string | null>;
+    const response = { orderId: "order_existing", receiptToken: "chk_existing_secret" };
+    const row = createAttemptRow(identity, {
+      status: "committed", linkedOrderId: "order_existing", responsePayload: JSON.stringify(response),
+    });
+    await expect(resolveExistingCheckoutAttempt(createResolverDb(undefined), identity, undefined, customerId)).resolves.toBeNull();
+    await expect(resolveExistingCheckoutAttempt(createResolverDb(row), identity, undefined, customerId))
+      .resolves.toEqual({ status: "replay", response });
+  });
+
+  it("requires every terminal order fact before allowing an expired checkout recovery", () => {
+    for (const id of [null, "order_existing"]) {
+      for (const status of [null, "incomplete", "pending", "cancelled", "refunded"]) {
+        for (const deletedAt of [null, 1_700_000_000]) {
+          for (const paymentStatus of [null, "unpaid", "failed", "refunded", "paid", "partial", "partially_refunded"]) {
+            for (const paidAmountMinor of [null, 0, 100]) {
+              const order = { id, status, deletedAt, paymentStatus, paidAmountMinor };
+              const ended = id === "order_existing" && status === "cancelled" && deletedAt !== null
+                && paidAmountMinor === 0 && ["unpaid", "failed", "refunded"].includes(paymentStatus ?? "");
+              expect(isEndedCheckoutOrder(order), JSON.stringify(order)).toBe(ended);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it.each(["unpaid", "failed", "refunded"])("reads %s ended orders in the attempt statement and refuses both exact and changed replays", async (paymentStatus) => {
+    const { sqlite, db } = createSqliteD1Database();
+    try {
+      const identity = await buildCheckoutAttemptIdentity(buildInput());
+      const changed = await buildCheckoutAttemptIdentity(buildInput({ paymentMethod: "scalius.bangladesh:bkash" }));
+      const attempt = {
+        id: "attempt_existing", orderId: "order_existing", checkoutToken: "chk_existing_secret",
+        requestKey: identity.requestKey, requestHash: identity.requestHash,
+        status: "committed",
+        responsePayload: JSON.stringify({ orderId: "order_existing", receiptToken: "chk_existing_secret" }),
+      };
+      await db.insert(schema.checkoutAttempts).values(attempt);
+      await db.insert(schema.orders).values({
+        id: attempt.orderId, customerName: "Buyer", customerPhone: "+8801712345678",
+        shippingAddress: "Address", city: "city_1", zone: "zone_1", totalAmountMinor: 12_500,
+        status: "cancelled", deletedAt: new Date(1_700_000_000_000),
+        paymentStatus, paidAmountMinor: 0, paymentMethod: "scalius.bangladesh:bkash",
+      });
+      const row = await selectCheckoutAttemptByKey(db, identity.requestKey).get();
+      expect(row).toMatchObject({
+        status: "committed", linkedOrderId: attempt.orderId, linkedOrderStatus: "cancelled",
+        linkedOrderDeletedAt: 1_700_000_000, linkedOrderPaymentStatus: paymentStatus,
+        linkedOrderPaidAmountMinor: 0, linkedOrderPaymentMethod: "scalius.bangladesh:bkash",
+      });
+      const [batched] = await db.batch([selectCheckoutAttemptByKey(db, identity.requestKey)]);
+      expect(batched).toEqual([row]);
+      for (const request of [identity, changed]) {
+        await expect(resolveExistingCheckoutAttempt(db, request)).rejects.toMatchObject({
+          status: 409, code: "CHECKOUT_ATTEMPT_EXPIRED", details: undefined,
+        });
+      }
+      expect(sqlite.prepare("SELECT count(*) AS count FROM orders").get()).toEqual({ count: 1 });
+      expect(sqlite.prepare("SELECT count(*) AS count FROM checkout_attempts").get()).toEqual({ count: 1 });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("enforces the joined account owner in direct and batched database recovery", async () => {
+    const { sqlite, db } = createSqliteD1Database();
+    try {
+      const identity = await buildCheckoutAttemptIdentity(buildInput());
+      const response = { orderId: "order_existing", receiptToken: "chk_existing_secret" };
+      await db.insert(schema.customers).values({ id: "customer_owner", name: "Buyer", phone: "+8801712345678" });
+      await db.insert(schema.orders).values({
+        id: response.orderId, customerName: "Buyer", customerPhone: "+8801712345678",
+        shippingAddress: "Address", city: "city_1", zone: "zone_1", totalAmountMinor: 12_500,
+        accountOwnerCustomerId: "customer_owner",
+      });
+      await db.insert(schema.checkoutAttempts).values({
+        id: "attempt_existing", orderId: response.orderId, checkoutToken: response.receiptToken,
+        requestKey: identity.requestKey, requestHash: identity.requestHash, status: "committed",
+        responsePayload: JSON.stringify(response),
+      });
+      await expect(resolveExistingCheckoutAttempt(db, identity)).rejects.toMatchObject({ status: 403 });
+      await expect(resolveExistingCheckoutAttempt(db, identity, undefined, "customer_other")).rejects.toMatchObject({ status: 403 });
+      await expect(resolveExistingCheckoutAttempt(db, identity, undefined, "customer_owner"))
+        .resolves.toEqual({ status: "replay", response });
+      const [rows] = await db.batch([selectCheckoutAttemptByKey(db, identity.requestKey)]);
+      expect(rows[0]?.linkedOrderAccountOwnerCustomerId).toBe("customer_owner");
+      expect(() => resolveCheckoutAttemptRow(rows[0], identity, undefined, "customer_other")).toThrow("Sign in to the account");
+      expect(resolveCheckoutAttemptRow(rows[0], identity, undefined, "customer_owner")).toEqual({ status: "replay", response });
+    } finally {
+      sqlite.close();
+    }
   });
 
   it("commits one attempt, order and hashed receipt; a losing duplicate or later failure rolls back", async () => {
@@ -192,6 +378,13 @@ function createAttemptRow(
     lastError: null,
     createdAt: 1_700_000_000,
     updatedAt: 1_700_000_000,
+    linkedOrderId: null,
+    linkedOrderStatus: null,
+    linkedOrderDeletedAt: null,
+    linkedOrderPaymentStatus: null,
+    linkedOrderPaidAmountMinor: null,
+    linkedOrderPaymentMethod: null,
+    linkedOrderAccountOwnerCustomerId: null,
     ...overrides,
   };
 }
@@ -200,7 +393,7 @@ function createResolverDb(row: AttemptRow | undefined): Database {
   return {
     select: () => ({
       from: () => ({
-        where: () => ({ get: async () => row }),
+        leftJoin: () => ({ where: () => ({ get: async () => row }) }),
       }),
     }),
   } as unknown as Database;

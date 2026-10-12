@@ -19,6 +19,7 @@ import type {
 } from "./types";
 import type { DeliveryMethodKind } from "@scalius/shared/fulfilment";
 import type { OrderLineExtras } from "../order-line-extras";
+import { reconcileCheckoutAfterSignIn } from "../checkout/session-state";
 
 // ---------------------------------------------------------------------------
 // Response shapes for customer auth API endpoints
@@ -333,6 +334,7 @@ export async function verifyCustomerOtp(input: VerifyCustomerOtpInput): Promise<
       return { success: true, status: data.status, suggestion: readSuggestion(data.suggestion) };
     }
     if (!data.customer) return { success: false, error: "Something went wrong. Please try again." };
+    if (data.customer.customerId) reconcileCheckoutAfterSignIn(data.customer.customerId, data.customer.email);
     clearInFlightCustomerSessionRead();
     return { success: true, status: "signed_in", customer: data.customer, isNewUser: data.isNewUser === true };
   } catch (error: unknown) {

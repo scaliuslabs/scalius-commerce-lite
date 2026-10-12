@@ -32,6 +32,9 @@ const analyticsMocks = vi.hoisted(() => ({
   trackFbAddToCart: vi.fn(),
   trackFbInitiateCheckout: vi.fn(),
 }));
+const recoveryMocks = vi.hoisted(() => ({ inspectCheckoutRecovery: vi.fn() }));
+
+vi.mock("../checkout/recovery-status", () => recoveryMocks);
 
 vi.mock("./browser-api", () => ({
   saveAbandonedCheckoutFromBrowser: apiMocks.saveAbandonedCheckout,
@@ -167,6 +170,9 @@ function moveTo(detail: Record<string, string>) {
 function renderCartDom() {
   document.body.innerHTML = `
     <div id="checkout-meta"></div>
+    <div id="checkoutRecoveryNotice" class="hidden" aria-hidden="true">
+      <span id="checkoutRecoveryReference"></span><a id="checkoutRecoveryLink"></a>
+    </div>
     <div id="cartPageRoot" data-cart-ready="false" data-cart-has-items="false">
       <div id="checkoutPanel" class="hidden">
         <form id="checkoutForm">
@@ -231,6 +237,7 @@ describe("initCartFunctionality", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    recoveryMocks.inspectCheckoutRecovery.mockReset().mockResolvedValue("unknown");
     taxQuoteMocks.fetchAuthoritativeTaxQuote.mockReset();
     apiMocks.previewCartDiscounts.mockReset();
     apiMocks.previewCartDiscounts.mockResolvedValue(NO_DISCOUNTS);
@@ -410,7 +417,7 @@ describe("initCartFunctionality", () => {
     );
   });
 
-  it("clears an old hosted-payment pointer after the buyer changes to a different cart", async () => {
+  it("keeps the old order's recovery notice after the buyer changes to a different cart", async () => {
     expect(
       writeHostedPaymentRecoverySession(
         "/order-success?orderId=order_old&payment=sslcommerz",
@@ -429,10 +436,66 @@ describe("initCartFunctionality", () => {
 
     await initCartFunctionality();
 
-    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toBeNull();
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toContain("order_old");
+    expect(document.getElementById("checkoutRecoveryNotice")?.getAttribute("aria-hidden")).toBe("false");
+    expect(document.getElementById("checkoutRecoveryReference")?.textContent).toBe("order_old");
   });
 
-  it("keeps the recovery pointer while the cart still matches the pending checkout", async () => {
+  it("clears only an authoritatively expired checkout, preserving the cart and form draft", async () => {
+    sessionStorage.setItem("checkoutId", "checkout_old");
+    sessionStorage.setItem("scalius_checkout_data", "old transfer");
+    sessionStorage.setItem("scalius_checkout_form_draft", "saved draft");
+    writeHostedPaymentRecoverySession("/order-success?orderId=order_old&payment=stripe", {
+      checkoutId: "checkout_old", cartItems: cartState.items,
+    });
+    recoveryMocks.inspectCheckoutRecovery.mockResolvedValue("expired");
+
+    await initCartFunctionality();
+
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toBeNull();
+    expect(sessionStorage.getItem("scalius_checkout_data")).toBeNull();
+    expect(sessionStorage.getItem("checkoutId")).not.toBe("checkout_old");
+    expect(sessionStorage.getItem("scalius_checkout_form_draft")).toBe("saved draft");
+    expect(cartStore.get().items).toEqual({
+      [CART_LINE_KEY]: { ...CART_ITEM, freeDelivery: false, propertiesHash: "none" },
+    });
+    expect(document.getElementById("checkoutRecoveryNotice")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("ignores a stale expiry response when another tab replaces the recovery pointer", async () => {
+    let answer!: (status: string) => void;
+    recoveryMocks.inspectCheckoutRecovery.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+    writeHostedPaymentRecoverySession("/order-success?orderId=order_old&payment=stripe", {
+      checkoutId: "checkout_old", cartItems: cartState.items,
+    });
+    const initializing = initCartFunctionality();
+    writeHostedPaymentRecoverySession("/order-success?orderId=order_new&payment=stripe", {
+      checkoutId: "checkout_new", cartItems: cartState.items,
+    });
+    sessionStorage.setItem("checkoutId", "checkout_new");
+    answer("expired");
+    await initializing;
+
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toContain("order_new");
+    expect(sessionStorage.getItem("checkoutId")).toBe("checkout_new");
+  });
+
+  it.each([true, false])("resets a returned expired COD attempt only when this tab still owns it (matching: %s)", async (matching) => {
+    document.getElementById("cartPageRoot")!.dataset.expiredCheckoutId = "checkout_old";
+    sessionStorage.setItem("checkoutId", matching ? "checkout_old" : "checkout_new");
+    sessionStorage.setItem("scalius_checkout_form_draft", "saved draft");
+    await initCartFunctionality();
+    expect(sessionStorage.getItem("checkoutId")).not.toBe("checkout_old");
+    if (!matching) expect(sessionStorage.getItem("checkoutId")).toBe("checkout_new");
+    expect(sessionStorage.getItem("scalius_checkout_form_draft")).toBe("saved draft");
+    expect(cartStore.get().items).toEqual({
+      [CART_LINE_KEY]: { ...CART_ITEM, freeDelivery: false, propertiesHash: "none" },
+    });
+  });
+
+  it.each([true, false])("blocks only this tab's pending checkout (matching identity: %s)", async (matching) => {
+    const checkoutId = matching ? "checkout_current" : "checkout_new";
+    sessionStorage.setItem("checkoutId", checkoutId);
     expect(
       writeHostedPaymentRecoverySession(
         "/order-success?orderId=order_current&payment=sslcommerz",
@@ -450,7 +513,33 @@ describe("initCartFunctionality", () => {
     );
     expect(
       (document.getElementById("submitButton") as HTMLButtonElement).disabled,
-    ).toBe(true);
+    ).toBe(matching);
+    expect(sessionStorage.getItem("checkoutId")).toBe(checkoutId);
+    expect(document.getElementById("checkoutRecoveryNotice")?.getAttribute("aria-hidden")).toBe("false");
+  });
+
+  it("keeps a changed cart blocked when its checkout identity is still pending", async () => {
+    sessionStorage.setItem("checkoutId", "checkout_current");
+    writeHostedPaymentRecoverySession("/order-success?orderId=order_current&payment=stripe", {
+      checkoutId: "checkout_current", cartItems: {},
+    });
+    await initCartFunctionality();
+    expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
+    expect(sessionStorage.getItem("checkoutId")).toBe("checkout_current");
+  });
+
+  it("shows a normal empty cart when a different tab has a pending order", async () => {
+    sessionStorage.setItem("checkoutId", "checkout_new");
+    const emptyCart = { items: {}, totalItems: 0, totalAmount: 0, discountCodes: [] };
+    cartStore.set(emptyCart);
+    localStorage.setItem("cart:v3", JSON.stringify(emptyCart));
+    writeHostedPaymentRecoverySession("/order-success?orderId=order_old&payment=stripe", {
+      checkoutId: "checkout_old", cartItems: cartState.items,
+    });
+    await initCartFunctionality();
+    expect(document.querySelector('#cartItems a[href*="order_old"]')).toBeNull();
+    expect(document.getElementById("cartItems")?.textContent).toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.emptyCartText);
+    expect(localStorage.getItem("scalius_hosted_payment_recovery")).toContain("order_old");
   });
 
   it("reveals truthful cart and checkout panels only after stored items hydrate", async () => {

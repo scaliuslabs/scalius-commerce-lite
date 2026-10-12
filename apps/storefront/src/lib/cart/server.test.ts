@@ -163,6 +163,17 @@ describe("cart server order processing", () => {
     );
   });
 
+  it.each(["CHECKOUT_ATTEMPT_EXPIRED", "CHECKOUT_ATTEMPT_CONFLICT"])("preserves %s for page recovery without treating it as a new order", async (errorCode) => {
+    const refusal = {
+      success: false, status: 409, errorCode, error: "Checkout needs review",
+      details: { orderId: "old_order", paymentMethod: "cod" },
+    };
+    mocks.createOrder.mockResolvedValueOnce(refusal);
+    expect(await processOrder(buildCodFormData())).toEqual(refusal);
+    expect(mocks.createOrder).toHaveBeenCalledOnce();
+    expect(mocks.deleteAbandonedCheckout).not.toHaveBeenCalled();
+  });
+
   it("preserves ordered merchant option labels during authoritative validation", async () => {
     const formData = buildCodFormData();
     formData.set("cartItems", JSON.stringify({

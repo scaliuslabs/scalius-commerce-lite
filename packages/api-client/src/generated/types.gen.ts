@@ -6342,6 +6342,7 @@ export type GetApiV1StorefrontLayoutResponses = {
             storefrontCopy: {
                 languageCode: string;
                 addToCartText: string;
+                quickBuyFailedText: string;
                 buyNowText: string;
                 unavailableText: string;
                 chooseOptionText: string;
@@ -17609,6 +17610,10 @@ export type PostApiV1OrdersErrors = {
      * Unauthorized
      */
     401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
     /**
      * Conflict
      */

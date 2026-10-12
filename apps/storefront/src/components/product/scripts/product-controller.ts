@@ -1,4 +1,4 @@
-import { addToCart, cartLineKeyFor, replaceCartLine, startBuyNow, type CartItemOption } from "@/store/cart";
+import { addToCart, cartLineKeyFor, replaceCartLine, startBuyNow, type CartAddFailureReason, type CartItemOption } from "@/store/cart";
 import { clearCartLineEdit, readCartLineEdit, type CartLineEdit } from "@/lib/cart/line-edit";
 import { getCurrencyCode } from "@/lib/currency";
 import {
@@ -609,7 +609,7 @@ async function add(redirect: boolean) {
   if (state.adding || state.customizationUnavailable) return;
   state.adding = true;
   // Busy while the line is added, so a slow phone shows the press took.
-  const button = redirect ? null : cache.addButton;
+  const button = redirect ? cache.buyButton : cache.addButton;
   button?.setAttribute("aria-busy", "true");
   button?.classList.add("opacity-70", "cursor-progress");
   try {
@@ -681,14 +681,23 @@ async function addSelected(redirect: boolean) {
     ...(validation.variant.fulfillmentKind ? { fulfillmentKind: validation.variant.fulfillmentKind } : {}),
   };
   const edit = state.edit;
-  // Buy now buys only this item; the buyer's cart is set aside, untouched.
+  // Buy now keeps the full cart and requires persistence before navigation.
+  let failureMessage = cache.actions?.dataset.cartAddFailedText ?? "";
+  const options = {
+    onFailure(reason: CartAddFailureReason) {
+      if (reason === "quantity_limit") {
+        failureMessage = formatCheckoutLanguageText(cache.actions?.dataset.quantityLimitText ?? "", {
+          count: QUANTITY_CONSTRAINTS.MAX,
+        });
+      }
+    },
+  };
   const added = edit
     ? await replaceCartLine(edit.lineKey, line)
     : redirect
-      ? await startBuyNow(line)
-      : await addToCart(line);
-  if (!added)
-    return showError("This product option could not be added. Please refresh and try again.");
+      ? await startBuyNow(line, options)
+      : await addToCart(line, options);
+  if (!added) return showError(failureMessage);
   if (edit) {
     clearCartLineEdit();
     window.location.href = pagePath("/cart");

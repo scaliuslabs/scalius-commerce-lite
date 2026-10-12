@@ -6,7 +6,7 @@ import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
 } from "@scalius/shared/checkout-language";
 
-import { cartStore, createCartItemKey } from "../../store/cart";
+import { cartStore, createCartItemKey, cartHasFreeDeliveryItem, getEffectiveCartShippingFee } from "../../store/cart";
 import type { CheckoutLanguageData } from "../api/types";
 import type { CartValidationIssue, CartValidationResult } from "../api/orders";
 import { applyCheckoutButtonState } from "./checkout-button-state";
@@ -406,6 +406,34 @@ describe("reconcileValidatedCartSnapshot", () => {
     expect(state.items[validatedLineKey]?.freeDelivery).toBe(true);
     expect(state.totalItems).toBe(2);
     expect(state.totalAmount).toBe(300);
+  });
+
+  it("refreshes delivery, fulfilment and media facts even when the server rekeys buyer inputs", () => {
+    const original = { key: "engraving", value: "Anika", label: "Engraving", displayValue: "Anika", priceMinor: 0 };
+    const beforeKey = createCartItemKey({ id: "prod_1", variantId: "variant_1", propertiesHash: "0123456789abcdef" });
+    const resolved = { ...original, value: "ANIKA", displayValue: "ANIKA" };
+    const afterHash = "fedcba9876543210";
+    const afterKey = createCartItemKey({ id: "prod_1", variantId: "variant_1", propertiesHash: afterHash });
+    cartStore.set({
+      items: { [beforeKey]: {
+        id: "prod_1", variantId: "variant_1", name: "Cotton Panjabi", price: 150, quantity: 2,
+        properties: [original], propertiesHash: "0123456789abcdef", freeDelivery: false, fulfillmentKind: "digital",
+      } },
+      totalItems: 2, totalAmount: 300, discountCodes: ["SAVE"],
+    });
+
+    expect(reconcileValidatedCartSnapshot(validationResult(true, {
+      cartKey: beforeKey, properties: [{ ...resolved, type: "text", price: 0 }], propertiesHash: afterHash,
+      fulfillmentKind: "physical", productImage: "https://media.example.test/current.webp", productImageMediaId: "med_current",
+    }))).toBe(true);
+    expect(cartStore.get().items[beforeKey]).toBeUndefined();
+    expect(cartStore.get().items[afterKey]).toMatchObject({
+      freeDelivery: true, fulfillmentKind: "physical", properties: [resolved],
+      image: "https://media.example.test/current.webp", imageMediaId: "med_current", quantity: 2, price: 150,
+    });
+    expect(cartHasFreeDeliveryItem(cartStore.get().items)).toBe(true);
+    expect(getEffectiveCartShippingFee(cartStore.get().items, 80)).toBe(0);
+    expect(cartStore.get().discountCodes).toEqual(["SAVE"]);
   });
 
   it("does not reconcile a stale explicit cart key onto another row by index", () => {

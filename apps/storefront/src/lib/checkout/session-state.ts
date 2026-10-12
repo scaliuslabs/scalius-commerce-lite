@@ -14,7 +14,8 @@ const CHECKOUT_TRANSFER_KEYS = [
   "scalius_checkout_gift_cards",
 ] as const;
 
-const CHECKOUT_RUNTIME_KEYS = ["checkoutId"] as const;
+const CHECKOUT_OWNER_KEY = "scalius_checkout_owner";
+const CHECKOUT_RUNTIME_KEYS = ["checkoutId", CHECKOUT_OWNER_KEY] as const;
 const CHECKOUT_FORM_DRAFT_KEY = "scalius_checkout_form_draft";
 const CHECKOUT_FORM_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 const CHECKOUT_FORM_DRAFT_FIELDS = [
@@ -204,8 +205,44 @@ export function discardCheckoutFormDraftOfOtherOwner(owner: string): boolean {
   setCheckoutFormDraftOwner(owner);
   const stored = readStoredDraft();
   if (!stored || (stored.owner ?? "guest") === owner) return false;
+  // Keep an existing account's identity when an expired session clears its draft.
+  try {
+    if (!sessionStorage.getItem(CHECKOUT_OWNER_KEY) && stored.owner && stored.owner !== "guest" && stored.owner !== "customer" && !stored.owner.includes("@")) {
+      sessionStorage.setItem(CHECKOUT_OWNER_KEY, stored.owner);
+    }
+  } catch {
+    // Storage may be unavailable.
+  }
   clearCheckoutFormDraft();
   return true;
+}
+
+/** A proven account switch ends private checkout state, while the product cart stays. */
+export function reconcileCheckoutAfterSignIn(customerId: string, email?: string): boolean {
+  let previousOwner: string | undefined | null;
+  try {
+    previousOwner = sessionStorage.getItem(CHECKOUT_OWNER_KEY) ?? readStoredDraft()?.owner;
+  } catch {
+    return false;
+  }
+  const changedAccount = Boolean(previousOwner && previousOwner !== "guest" && previousOwner !== "customer"
+    && previousOwner !== customerId && previousOwner !== email);
+  if (changedAccount) {
+    clearCheckoutAttemptSession();
+    clearHostedPaymentRecoverySession();
+    try {
+      removeSessionKeys(["scalius_submitted_cart", "scalius_last_order"]);
+    } catch {
+      // Storage may be unavailable.
+    }
+  }
+  setCheckoutFormDraftOwner(customerId);
+  try {
+    sessionStorage.setItem(CHECKOUT_OWNER_KEY, customerId);
+  } catch {
+    // Signing in remains available when checkout storage is blocked.
+  }
+  return changedAccount;
 }
 
 export function clearCheckoutFormDraft(): void {
@@ -268,6 +305,8 @@ export function writeCheckoutTransferSession(
     if (sessionStorage.getItem("scalius_checkout_data") !== checkoutDataJson) {
       throw new Error("Checkout transfer storage was not persisted.");
     }
+    const owner = currentDraftOwner ?? readStoredDraft()?.owner;
+    if (owner && owner !== "customer" && !owner.includes("@")) sessionStorage.setItem(CHECKOUT_OWNER_KEY, owner);
   } catch {
     try {
       removeSessionKeys(CHECKOUT_TRANSFER_KEYS);

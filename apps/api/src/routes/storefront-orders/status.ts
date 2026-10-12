@@ -1,45 +1,15 @@
 // Checkout status polling for in-flight and duplicate checkouts (derived cst_ tokens only).
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { orders, checkoutAttempts } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
-import { getCheckoutAttemptRequestKeyFromStatusToken } from "@scalius/core/modules/checkout";
+import { eq, sql } from "drizzle-orm";
+import { getCheckoutAttemptRequestKeyFromStatusToken, isEndedCheckoutOrder } from "@scalius/core/modules/checkout";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { ValidationError } from "../../utils/api-error";
-import { getCheckoutStatusKvKey } from "../../utils/order-receipt-token";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
-import { checkoutRecoveryHintsEnabled, scheduleCheckoutSuccessRecoveryHints, scheduleCheckoutFailureStatusHint } from "./shared";
+import { scheduleCheckoutSuccessRecoveryHints, scheduleCheckoutFailureStatusHint } from "./shared";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-
-type CheckoutStatusResponsePayload = {
-  status: string;
-  orderId?: string;
-  error?: string;
-  message?: string;
-};
-
-function sanitizeCheckoutStatusPayload(value: unknown): CheckoutStatusResponsePayload {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { status: "processing" };
-  }
-
-  const record = value as Record<string, unknown>;
-  const safePayload: CheckoutStatusResponsePayload = {
-    status: typeof record.status === "string" ? record.status : "processing",
-  };
-  if (typeof record.orderId === "string") {
-    safePayload.orderId = record.orderId;
-  }
-  if (typeof record.error === "string") {
-    safePayload.error = record.error;
-  }
-  if (typeof record.message === "string") {
-    safePayload.message = record.message;
-  }
-
-  return safePayload;
-}
 
 // ─── GET /status/:token ──────────────────────────────────────────────────────
 
@@ -89,28 +59,39 @@ app.openapi(getOrderStatusRoute, async (c) => {
     throw new ValidationError("Invalid checkout status token");
   }
 
-  // The KV status marker is an accelerator (see checkoutRecoveryHintsEnabled):
-  // without it a poll reads the checkout attempt in D1, which is the authority.
-  let statusStr: string | null = null;
-  if (checkoutRecoveryHintsEnabled(c.env)) {
-    const kvKey = await getCheckoutStatusKvKey(statusToken);
-    statusStr = await c.env.CACHE.get(kvKey);
-  }
+  // Hints can outlive an order's cancellation; read both durable facts atomically.
+  const attempt = await c.get("db")
+    .select({
+      status: checkoutAttempts.status,
+      orderId: checkoutAttempts.orderId,
+      checkoutToken: checkoutAttempts.checkoutToken,
+      persistedOrderId: orders.id,
+      orderStatus: sql<string | null>`${orders.status}`.as("order_status"),
+      deletedAt: orders.deletedAt,
+      paymentStatus: orders.paymentStatus,
+      paidAmountMinor: orders.paidAmountMinor,
+    })
+    .from(checkoutAttempts)
+    .leftJoin(orders, eq(orders.id, checkoutAttempts.orderId))
+    .where(eq(checkoutAttempts.requestKey, requestKey))
+    .get();
 
-  if (!statusStr) {
-    const db = c.get("db");
-    const attempt = await db
-      .select({
-        status: checkoutAttempts.status,
-        orderId: checkoutAttempts.orderId,
-        checkoutToken: checkoutAttempts.checkoutToken,
-        lastError: checkoutAttempts.lastError,
-      })
-      .from(checkoutAttempts)
-      .where(eq(checkoutAttempts.requestKey, requestKey))
-      .get();
+  if (attempt?.persistedOrderId) {
+    if (isEndedCheckoutOrder({
+      id: attempt.persistedOrderId,
+      status: attempt.orderStatus,
+      deletedAt: attempt.deletedAt,
+      paymentStatus: attempt.paymentStatus,
+      paidAmountMinor: attempt.paidAmountMinor,
+    })) {
+      return ok(c, {
+        status: "expired",
+        orderId: attempt.orderId,
+        error: "This unpaid checkout expired. Please review your cart and try again.",
+      });
+    }
 
-    if (attempt?.status === "committed") {
+    if (attempt.deletedAt === null) {
       scheduleCheckoutSuccessRecoveryHints(
         c.env,
         statusToken,
@@ -118,114 +99,29 @@ app.openapi(getOrderStatusRoute, async (c) => {
         attempt.orderId,
         getOptionalExecutionContext(c),
       );
-      return ok(c, {
-        status: "completed",
-        orderId: attempt.orderId,
-      });
+      return ok(c, { status: "completed", orderId: attempt.orderId });
     }
-
-    if (attempt?.status === "failed") {
-      scheduleCheckoutFailureStatusHint(
-        c.env,
-        statusToken,
-        attempt.orderId,
-        attempt.lastError || "Order creation failed. Please try again.",
-        getOptionalExecutionContext(c),
-      );
-      return ok(c, {
-        status: "failed",
-        orderId: attempt.orderId,
-        error: attempt.lastError || "Order creation failed. Please try again.",
-      });
-    }
-
-    if (attempt?.status === "processing") {
-      const orderExists = await db
-        .select({ id: orders.id })
-        .from(orders)
-        .where(eq(orders.id, attempt.orderId))
-        .get();
-
-      if (orderExists) {
-        scheduleCheckoutSuccessRecoveryHints(
-          c.env,
-          statusToken,
-          attempt.checkoutToken,
-          attempt.orderId,
-          getOptionalExecutionContext(c),
-        );
-        return ok(c, {
-          status: "completed",
-          orderId: attempt.orderId,
-        });
-      }
-
-      return c.json({
-        success: true,
-        data: {
-          status: "processing",
-          orderId: attempt.orderId,
-          message: "Order is processing.",
-        },
-      }, 202);
-    }
-
-    return c.json({ success: true, data: { status: "processing", message: "Order is waiting in queue." } }, 202);
+  } else if (attempt?.status === "failed") {
+    const error = "Order creation failed. Please review your checkout and try again.";
+    scheduleCheckoutFailureStatusHint(
+      c.env,
+      statusToken,
+      attempt.orderId,
+      error,
+      getOptionalExecutionContext(c),
+    );
+    return ok(c, { status: "failed", orderId: attempt.orderId, error });
   }
 
-  const statusData = JSON.parse(statusStr);
-
-  if (statusData.status === "processing" && statusData.orderId) {
-    const db = c.get("db");
-    const [attempt, orderExists] = await Promise.all([
-      db
-        .select({
-          status: checkoutAttempts.status,
-          orderId: checkoutAttempts.orderId,
-          checkoutToken: checkoutAttempts.checkoutToken,
-          lastError: checkoutAttempts.lastError,
-        })
-        .from(checkoutAttempts)
-        .where(eq(checkoutAttempts.requestKey, requestKey))
-        .get(),
-      db
-        .select({ id: orders.id })
-        .from(orders)
-        .where(eq(orders.id, statusData.orderId))
-        .limit(1),
-    ]);
-
-    if (attempt?.status === "failed") {
-      scheduleCheckoutFailureStatusHint(
-        c.env,
-        statusToken,
-        attempt.orderId,
-        attempt.lastError || "Order creation failed. Please try again.",
-        getOptionalExecutionContext(c),
-      );
-      return ok(c, {
-        status: "failed",
-        orderId: attempt.orderId,
-        error: attempt.lastError || "Order creation failed. Please try again.",
-      });
-    }
-
-    if (attempt && orderExists.length > 0) {
-      scheduleCheckoutSuccessRecoveryHints(
-        c.env,
-        statusToken,
-        attempt.checkoutToken,
-        attempt.orderId,
-        getOptionalExecutionContext(c),
-      );
-      return ok(c, {
-        status: "completed",
-        orderId: attempt.orderId,
-      });
-    }
-  }
-
-  return ok(c, sanitizeCheckoutStatusPayload(statusData));
+  // Missing rows and expired processing leases do not prove a commit failed.
+  return c.json({
+    success: true,
+    data: {
+      status: "processing",
+      ...(attempt ? { orderId: attempt.orderId } : {}),
+      message: "Order is processing.",
+    },
+  }, 202);
 });
 
 export { app as checkoutStatusRoutes };

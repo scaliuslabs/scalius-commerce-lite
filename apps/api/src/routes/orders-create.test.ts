@@ -493,11 +493,19 @@ function createStatusTestApp(options: {
           selectedTable = table;
           return query;
         }),
+        leftJoin: vi.fn(() => query),
         where: vi.fn(() => query),
         get: vi.fn(async () => {
           if (selectedTable === checkoutAttempts) {
             return options.attempt
-              ? { requestKey: DEFAULT_STATUS_REQUEST_KEY, ...options.attempt }
+              ? {
+                  requestKey: DEFAULT_STATUS_REQUEST_KEY, ...options.attempt,
+                  persistedOrderId: options.orderExists ? options.attempt.orderId : null,
+                  orderStatus: options.orderExists ? "pending" : null,
+                  deletedAt: null,
+                  paymentStatus: options.orderExists ? "unpaid" : null,
+                  paidAmountMinor: options.orderExists ? 0 : null,
+                }
               : null;
           }
           if (selectedTable === orders) {
@@ -1182,6 +1190,7 @@ describe("checkout status recovery hints", () => {
 
   it("repairs checkout status and receipt KV after a committed D1 fallback", async () => {
     const { app, kv, statusToken } = createStatusTestApp({
+      orderExists: true,
       attempt: {
         status: "committed",
         orderId: "order_1",
@@ -1324,6 +1333,8 @@ describe("checkout status recovery hints", () => {
 
   it("does not leak receipt proof from legacy checkout status KV rows", async () => {
     const { app, kv, statusToken } = createStatusTestApp({
+      attempt: { status: "committed", orderId: "order_1", checkoutToken: "chk_status" },
+      orderExists: true,
       kvStatus: {
         status: "completed",
         orderId: "order_1",
@@ -1377,7 +1388,7 @@ describe("checkout status recovery hints", () => {
       data: {
         status: "failed",
         orderId: "order_1",
-        error: "Discount code has reached its usage limit",
+        error: "Order creation failed. Please review your checkout and try again.",
       },
     });
     expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
@@ -1389,7 +1400,7 @@ describe("checkout status recovery hints", () => {
     expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
       status: "failed",
       orderId: "order_1",
-      error: "Discount code has reached its usage limit",
+      error: "Order creation failed. Please review your checkout and try again.",
     });
     expect(kv.put.mock.calls.some(([key]) => String(key).startsWith("order_receipt:"))).toBe(false);
   });
@@ -1491,6 +1502,7 @@ describe("checkout recovery hints on the Free profile", () => {
   it("answers a poll from D1 alone: no KV read, no KV write", async () => {
     const { app, kv, statusToken } = createStatusTestApp({
       attempt: { status: "committed", orderId: "order_1", checkoutToken: "chk_status" },
+      orderExists: true,
       // A hint that would say otherwise is never consulted.
       kvStatus: { status: "failed", orderId: "order_1", error: "stale" },
     });
@@ -1508,7 +1520,7 @@ describe("checkout recovery hints on the Free profile", () => {
   it("answers failed and processing attempts from D1 too, and works without a KV binding at all", async () => {
     const failed = createStatusTestApp({ attempt: { status: "failed", orderId: "order_1", checkoutToken: "chk_status", lastError: "Out of stock" } });
     const failedResponse = await failed.app.request(`/api/v1/orders/status/${failed.statusToken}`, {}, {} as never);
-    expect(await failedResponse.json()).toMatchObject({ data: { status: "failed", error: "Out of stock" } });
+    expect(await failedResponse.json()).toMatchObject({ data: { status: "failed", error: "Order creation failed. Please review your checkout and try again." } });
 
     const processing = createStatusTestApp({ attempt: { status: "processing", orderId: "order_1", checkoutToken: "chk_status" }, orderExists: false });
     const processingResponse = await processing.app.request(`/api/v1/orders/status/${processing.statusToken}`, {}, {} as never);

@@ -172,6 +172,49 @@ describe("storefront orders API client", () => {
     }
   });
 
+  it("stops polling an expired attempt without replaying or submitting a replacement", async () => {
+    const timers = mockImmediatePollingTimers();
+    mocks.apiFetch
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true, data: { statusToken: "cst_expired", orderId: "old_order" },
+      }), { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true, data: { status: "expired", orderId: "old_order" },
+      }), { status: 200 }));
+    try {
+      expect(await createOrder(buildOrderPayload())).toMatchObject({
+        success: false, status: 409, errorCode: "CHECKOUT_ATTEMPT_EXPIRED",
+      });
+      expect(mocks.apiFetch).toHaveBeenCalledTimes(2);
+      expect(mocks.apiFetch.mock.calls[1]?.[0]).toBe("/orders/status/cst_expired");
+    } finally {
+      timers.mockRestore();
+    }
+  });
+
+  it.each(["CHECKOUT_ATTEMPT_EXPIRED", "CHECKOUT_ATTEMPT_CONFLICT"])("preserves %s from a raced receipt replay", async (errorCode) => {
+    const timers = mockImmediatePollingTimers();
+    const details = { orderId: "old_order", paymentMethod: "cod" };
+    mocks.apiFetch
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true, data: { statusToken: "cst_race", orderId: "old_order" },
+      }), { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true, data: { status: "completed", orderId: "old_order" },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: false, error: { code: errorCode, message: "Checkout needs review", details },
+      }), { status: 409 }));
+    try {
+      const result = await createOrder(buildOrderPayload());
+      expect(result).toMatchObject({ success: false, status: 409, errorCode, details });
+      expect(result.receiptToken).toBeUndefined();
+      expect(mocks.apiFetch).toHaveBeenCalledTimes(3);
+    } finally {
+      timers.mockRestore();
+    }
+  });
+
   it("does not use the status token as receipt proof when private replay lacks a receipt token", async () => {
     const timers = mockImmediatePollingTimers();
     mocks.apiFetch

@@ -325,7 +325,24 @@ export async function createOrder(
               };
             }
 
+            if (!replayResponse.ok || !replayData.success) {
+              return {
+                success: false,
+                status: replayResponse.status,
+                error: getCheckoutErrorMessage(replayData),
+                errorCode: getApiErrorCode(replayData),
+                details: getApiErrorDetails(replayData),
+              };
+            }
+
             return { success: false, error: "Order completed but receipt proof is unavailable. Please check your order history." };
+          } else if (statusData.status === "expired") {
+            return {
+              success: false,
+              status: 409,
+              errorCode: "CHECKOUT_ATTEMPT_EXPIRED",
+              error: "This checkout has ended. Please review your cart before placing a new order.",
+            };
           } else if (statusData.status === "failed") {
             return { success: false, error: statusData.error || "Order ingestion failed during high traffic. Please try again." };
           }

@@ -27,6 +27,7 @@ export const codHandler: GatewayHandler = {
           success: false,
           error: err.message,
           errorCode: err.errorCode,
+          details: err.details,
           status: err.status,
           cartIssues: err.cartIssues,
           refusal: err.refusal,

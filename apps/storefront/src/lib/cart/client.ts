@@ -56,12 +56,13 @@ import {
   renderCartLineRuleErrors,
 } from "./rule-errors";
 import {
+  clearCheckoutAttemptSession,
   clearHostedPaymentRecoverySession,
-  matchesCheckoutRecoveryCart,
   readHostedPaymentRecoverySession,
   type HostedPaymentRecoverySession,
   writeReviewedCheckoutQuote,
 } from "../checkout/session-state";
+import { inspectCheckoutRecovery } from "../checkout/recovery-status";
 import {
   fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError,
@@ -192,18 +193,37 @@ let latestCheckoutLocation: {
 let hostedPaymentRecoverySession: HostedPaymentRecoverySession | null = null;
 let undoTimer: ReturnType<typeof setTimeout> | null = null;
 
-function reconcileHostedPaymentRecoveryWithCart(): void {
-  if (
-    hostedPaymentRecoverySession?.cartFingerprint &&
-    !matchesCheckoutRecoveryCart(
-      hostedPaymentRecoverySession,
-      cartStore.get().items,
-    )
-  ) {
-    clearHostedPaymentRecoverySession();
-    hostedPaymentRecoverySession = null;
-    renderCheckoutRecoveryNotice();
+function pendingCheckoutForThisTab(): HostedPaymentRecoverySession | null {
+  try {
+    const recovery = readHostedPaymentRecoverySession();
+    return recovery?.checkoutId && recovery.checkoutId === sessionStorage.getItem("checkoutId") ? recovery : null;
+  } catch {
+    return null;
   }
+}
+
+function clearExpiredCheckoutAttempt(checkoutId: string): void {
+  try {
+    if (sessionStorage.getItem("checkoutId") === checkoutId) {
+      clearCheckoutAttemptSession({ preserveFormDraft: true });
+    }
+  } catch {
+    // Blocked storage cannot establish which attempt this tab owns.
+  }
+}
+
+async function refreshCheckoutRecovery(signal: AbortSignal): Promise<void> {
+  const recovery = hostedPaymentRecoverySession;
+  if (!recovery) return;
+  const status = await inspectCheckoutRecovery(recovery);
+  if (signal.aborted || status !== "expired"
+    || JSON.stringify(readHostedPaymentRecoverySession()) !== JSON.stringify(recovery)) return;
+  clearHostedPaymentRecoverySession();
+  hostedPaymentRecoverySession = null;
+  if (recovery.checkoutId) clearExpiredCheckoutAttempt(recovery.checkoutId);
+  renderCheckoutRecoveryNotice();
+  syncCheckoutIdInput();
+  if (Object.keys(cartStore.get().items).length === 0) await renderCartItems();
 }
 
 function renderCheckoutRecoveryNotice(): void {
@@ -345,7 +365,7 @@ function getCheckoutFormData(): CheckoutFormData {
   data.shipping = selectedShipping
     ? {
         ...selectedShipping,
-        fee: getEffectiveCartShippingFee(items, selectedShipping.fee, selectedShipping.freeOver),
+        fee: getEffectiveCartShippingFee(items, selectedShipping.fee, selectedShipping.freeOver, selectedShipping.quoted),
       }
     : undefined;
 
@@ -421,8 +441,15 @@ async function processQuickBuy() {
       if (data.cartItem) {
         // Buyer inputs (from the product page's no-JS form) come with the
         // line; the analytics events below never carry them.
-        // Buy now buys only this item; the buyer's cart is set aside, untouched.
-        if (!(await startBuyNow(data.cartItem))) return;
+        // The quick-buy line joins the existing cart before checkout.
+        if (!(await startBuyNow(data.cartItem))) {
+          const notice = document.getElementById("quickBuyStorageNotice");
+          if (notice) {
+            notice.textContent = activeCheckoutCopy().quickBuyFailedText;
+            notice.hidden = false;
+          }
+          return;
+        }
 
         const dynamicCurrency = window.__CURRENCY_CODE__ || "BDT";
         if (data.addToCartEvent) {
@@ -1139,7 +1166,7 @@ export async function updateTotals() {
   const { items, totalAmount, discountCodes } = cartStore.get();
   const selectedMethod = window.lastShippingEventDetail;
   const shippingFee = selectedMethod
-    ? getEffectiveCartShippingFee(items, selectedMethod.fee, selectedMethod.freeOver)
+    ? getEffectiveCartShippingFee(items, selectedMethod.fee, selectedMethod.freeOver, selectedMethod.quoted)
     : 0;
 
   const subtotalEl = document.getElementById("subtotal");
@@ -1334,12 +1361,13 @@ export async function renderCartItems() {
     Object.keys(items).length > 0 ? JSON.stringify(items) : "{}";
 
   if (Object.keys(items).length === 0) {
+    const pendingCheckout = pendingCheckoutForThisTab();
     renderEmptyCartState(
       cartItemsContainer,
       lang,
-      hostedPaymentRecoverySession
+      pendingCheckout
         ? {
-            href: hostedPaymentRecoverySession.href,
+            href: pendingCheckout.href,
           }
         : null,
     );
@@ -1385,7 +1413,7 @@ export function updateCheckoutButtonState() {
     cartBlockedMessage: cartBlockedMessage(),
     cartRulesBlocked: hasCartRuleErrors(),
     cartRulesBlockedMessage: activeCheckoutCopy().cartRulesBlockedText,
-    checkoutPending: hostedPaymentRecoverySession !== null,
+    checkoutPending: pendingCheckoutForThisTab() !== null,
     discountValidationPending: isDiscountValidationPending(),
     discountValidationPendingMessage: activeCheckoutCopy().processingText,
   });
@@ -1476,6 +1504,7 @@ async function handleApplyDiscount() {
             items,
             window.lastShippingEventDetail.fee,
             window.lastShippingEventDetail.freeOver,
+            window.lastShippingEventDetail.quoted,
           )
         : undefined,
       formCanonicalPhoneValue() || undefined,
@@ -1555,8 +1584,16 @@ export async function initCartFunctionality() {
   quoteRefusalRecheckedLines = null;
   hydrateCartFromStorage();
   hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
-  reconcileHostedPaymentRecoveryWithCart();
+  const expiredCheckoutId = document.getElementById("cartPageRoot")?.dataset.expiredCheckoutId;
+  if (expiredCheckoutId) {
+    clearExpiredCheckoutAttempt(expiredCheckoutId);
+    if (hostedPaymentRecoverySession?.checkoutId === expiredCheckoutId) {
+      clearHostedPaymentRecoverySession();
+      hostedPaymentRecoverySession = null;
+    }
+  }
   renderCheckoutRecoveryNotice();
+  const recoveryCheck = refreshCheckoutRecovery(runtimeSignal);
 
   await processQuickBuy();
   syncCheckoutIdInput();
@@ -1674,7 +1711,6 @@ export async function initCartFunctionality() {
     const itemsJson = JSON.stringify(state.items);
     const itemsChanged = itemsJson !== lastItemsJson;
     lastItemsJson = itemsJson;
-    reconcileHostedPaymentRecoveryWithCart();
     void renderCartItems();
     updateCheckoutButtonState();
     handleAbandonedCheckout();
@@ -1772,6 +1808,7 @@ export async function initCartFunctionality() {
     await renderCartItems();
   }
   await validateCartSnapshot();
+  await recoveryCheck;
   updateCheckoutButtonState();
 }
 
@@ -1783,14 +1820,15 @@ export async function resumeCartPageFromHistory(): Promise<void> {
   } finally {
     isApplyingCartSnapshot = false;
   }
-  reconcileHostedPaymentRecoveryWithCart();
   renderCheckoutRecoveryNotice();
+  const recoveryCheck = refreshCheckoutRecovery(cartRuntimeAbortController?.signal ?? new AbortController().signal);
   syncCheckoutIdInput();
   if (Object.keys(cartStore.get().items).length > 0) {
     await validateCartSnapshot();
   } else {
     await renderCartItems();
   }
+  await recoveryCheck;
   updateCheckoutButtonState();
 }
 

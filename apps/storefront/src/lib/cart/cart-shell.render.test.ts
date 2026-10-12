@@ -20,6 +20,12 @@ import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ViteDevServer } from "vite";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
+import {
+  createOrderReceiptCookieHeader,
+  createOrderReceiptFinalizeCookieHeader,
+  readOrderReceiptCookie,
+  readOrderReceiptFinalizeCookie,
+} from "../order-receipt-cookie";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const VIRTUAL_MODULES: Record<string, string> = {
@@ -154,14 +160,16 @@ function stubApi(table: Reads) {
   return calls;
 }
 
-async function renderCart(request: Request, table: Reads = reads()) {
+async function renderPage(component: unknown, request: Request, table: Reads = reads()) {
   const calls = stubApi(table);
   const runtime = { PUBLIC_API_URL: API, PUBLIC_API_BASE_URL: "https://api.shop.test", inflightReads: new Map() };
   const response = await runtimeModule.requestRuntime.run(runtime, () =>
-    container.renderToResponse(CartPage, { request, locals: {} }),
+    container.renderToResponse(component, { request, locals: {} }),
   );
   return { response, html: await response.text(), calls };
 }
+
+const renderCart = (request: Request, table: Reads = reads()) => renderPage(CartPage, request, table);
 
 // A buyer's browser request: session, receipt and checkout cookies, a
 // tracking cookie, and the quick-buy notice in the query.
@@ -176,6 +184,25 @@ const buyerRequest = (cookies = BUYER_COOKIES, query = "?quickBuyStorage=blocked
   new Request(`https://shop.test/cart${query}`, {
     headers: { Cookie: cookies, "Accept-Language": "bn", "User-Agent": "buyer-agent" },
   });
+
+const checkoutPost = () => new Request("https://shop.test/cart", {
+  method: "POST",
+  body: new URLSearchParams({
+    formIntent: "checkout", checkoutId: "checkout_previous_123456", expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
+    customerName: "Buyer", customerPhone: "+8801712345678", shippingAddress: "House 1, Dhaka",
+    city: "city_dhaka", zone: "zone_mirpur", shippingLocation: "ship_std",
+    cartItems: JSON.stringify({ line_1: { id: "product_1", name: "Tee", price: 100, quantity: 1, variantId: "variant_1" } }),
+  }),
+});
+
+const checkoutRefusal = (code: string, details?: unknown) => reads({
+  "/api/v1/orders/cart-validation": { status: 200, body: envelope({
+    valid: true, issues: [], subtotal: 100, hasFreeDeliveryProduct: false,
+    items: [{ index: 0, cartKey: "line_1", productId: "product_1", variantId: "variant_1", quantity: 1, unitPrice: 100, productName: "Tee" }],
+    delivery: { kind: "delivery", shippingCharge: 60, cityName: "Dhaka", zoneName: "Mirpur" },
+  }) },
+  "/api/v1/orders": { status: 409, body: JSON.stringify({ success: false, error: { code, details, message: "Checkout needs review" } }) },
+});
 
 describe("the cart shell render", () => {
   it("carries no cookie, token, query value or buyer field, whatever the request holds", async () => {
@@ -305,5 +332,84 @@ describe("the cart shell render", () => {
     // The English fallback copy's empty-cart error, rendered server-side.
     expect(html).toMatch(/role="alert"[^>]*>\s*[^<\s][^<]*cart[^<]*</i);
     expect(html).not.toContain("cs_secret_session_token");
+  });
+
+  it("refers a conflicting COD checkout to its existing proof-gated receipt without attaching the submitted cart", async () => {
+    const { response, calls } = await renderCart(checkoutPost(), checkoutRefusal("CHECKOUT_ATTEMPT_CONFLICT", {
+      orderId: "old_order", paymentMethod: "cod", receiptToken: "chk_must_not_be_used",
+    }));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe("/order-success?orderId=old_order&payment=cod");
+    const cookies = response.headers.getSetCookie();
+    expect(cookies).toHaveLength(1);
+    expect(readOrderReceiptCookie(cookies[0], "old_order")).toBe("");
+    expect(readOrderReceiptFinalizeCookie(cookies[0], "old_order")).toEqual({
+      checkoutId: "checkout_previous_123456", cartFingerprintHash: null,
+    });
+    expect(cookies[0]).not.toContain("chk_must_not_be_used");
+    expect(cookies[0]).not.toContain("cartfp_");
+    expect(calls.filter((call) => call === "/api/v1/orders")).toHaveLength(1);
+  });
+
+  it("only marks the expired submitted checkout for client reset and keeps the cart form available", async () => {
+    const { response, html } = await renderCart(checkoutPost(), checkoutRefusal("CHECKOUT_ATTEMPT_EXPIRED"));
+    expect(response.status).toBe(200);
+    expect(response.headers.has("Set-Cookie")).toBe(false);
+    expect(html).toContain('data-expired-checkout-id="checkout_previous_123456"');
+    expect(html).toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.checkoutAttemptExpiredText);
+    expect(html).toContain('id="checkoutForm"');
+  });
+
+  it.each(["CHECKOUT_ATTEMPT_CONFLICT", "STOREFRONT_CHECKOUT_QUOTE_CONFLICT", "CHECKOUT_ATTEMPT_MISSING"])(
+    "does not rotate or redirect a %s refusal without a safe existing-order reference", async (code) => {
+      const { response, html } = await renderCart(checkoutPost(), checkoutRefusal(code, { orderId: "../../private?token=chk_secret" }));
+      expect(response.status).toBe(200);
+      expect(response.headers.has("Set-Cookie")).toBe(false);
+      expect(html).not.toContain("data-expired-checkout-id");
+      expect(html).not.toContain("chk_secret");
+      if (code === "CHECKOUT_ATTEMPT_CONFLICT") expect(html).toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.checkoutAttemptConflictText);
+    },
+  );
+});
+
+describe("conflict recovery receipt marker", () => {
+  const checkoutId = "checkout_previous_123456";
+  const marker = createOrderReceiptFinalizeCookieHeader("old_order", { checkoutId, mode: "attempt-only" })!.split(";")[0];
+  const proof = createOrderReceiptCookieHeader("old_order", "chk_private_proof")!.split(";")[0];
+  const request = (cookie: string, path = "/order-success") => new Request(`https://shop.test${path}?orderId=old_order&payment=cod`, { headers: { Cookie: cookie } });
+
+  it.each(["absent", "rejected"])("does not expose or consume the marker when receipt proof is %s", async (proofState) => {
+    const ReceiptPage = (await server.ssrLoadModule("/src/pages/order-success.astro")).default;
+    const { response, html, calls } = await renderPage(ReceiptPage, request(proofState === "absent" ? marker : `${marker}; ${proof}`), reads({
+      "/api/v1/orders/receipt/old_order": { status: 404, body: JSON.stringify({ success: false, error: { message: "Receipt unavailable" } }) },
+    }));
+    expect(response.status).toBe(404);
+    expect(response.headers.has("Set-Cookie")).toBe(false);
+    expect(html).not.toContain("data-checkout-finalize-id");
+    expect(html).not.toContain("data-checkout-finalize-cart-hash");
+    expect(html).not.toContain(checkoutId);
+    expect(html).not.toContain("chk_private_proof");
+    if (proofState === "absent") expect(calls.some((call) => call.includes("/orders/receipt/"))).toBe(false);
+  });
+
+  it.each(["/order-success", "/en-in/order-success"])("releases only the matching attempt marker after a real receipt loads at %s", async (path) => {
+    const ReceiptPage = (await server.ssrLoadModule("/src/pages/order-success.astro")).default;
+    const { response, html } = await renderPage(ReceiptPage, request(`${marker}; ${proof}`, path), reads({
+      "/api/v1/orders/receipt/old_order": { status: 200, body: envelope({ order: {
+        id: "old_order", orderNumber: 1010, customerName: "Buyer", customerPhone: "+8801712345678", customerEmail: null,
+        shippingAddress: "House 1, Dhaka", city: "city_dhaka", zone: "zone_mirpur", area: null,
+        totalAmount: 160, shippingCharge: 60, discountAmount: null, paymentMethod: "cod", paymentStatus: "unpaid",
+        status: "pending", paidAmount: 0, balanceDue: 160, accountLinked: false,
+        createdAt: "2026-10-12T12:00:00.000Z", updatedAt: "2026-10-12T12:00:00.000Z",
+        items: [], supportRequests: [], supportRequestActions: [], supportRequestIntro: "Contact the store for help.",
+      } }) },
+    }));
+    expect(response.status).toBe(200);
+    expect(html).toContain('data-order-id="old_order"');
+    expect(html).toContain(`data-checkout-finalize-id="${checkoutId}"`);
+    expect(html).not.toContain("data-checkout-finalize-cart-hash");
+    expect(html).not.toContain("chk_private_proof");
+    expect(response.headers.getSetCookie()).toEqual([expect.stringContaining("Max-Age=0")]);
+    expect(response.headers.getSetCookie()[0]).toContain("Path=/;");
   });
 });

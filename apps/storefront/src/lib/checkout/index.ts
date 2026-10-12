@@ -14,13 +14,18 @@ import {
 import type { PaymentResult } from "./types";
 import {
   clearCheckoutTransferSession,
+  clearCheckoutAttemptSession,
+  clearHostedPaymentRecoverySession,
   matchesCheckoutRecoverySession,
   readHostedPaymentRecoverySession,
   readCheckoutPaymentSelection,
   writeCheckoutPaymentSelection,
   writeHostedPaymentRecoverySession,
   readReviewedCheckoutQuote,
+  type HostedPaymentRecoverySession,
 } from "./session-state";
+import { checkoutAttemptRecoveryHref } from "./attempt-recovery";
+import { inspectCheckoutRecovery } from "./recovery-status";
 import {
   isDepositPaymentRequired,
   resolveCheckoutPaymentRequest,
@@ -160,7 +165,11 @@ function setPaymentControlsDisabled(disabled: boolean): void {
 
 function showReturnToCartAction(): void {
   const action = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement | null;
-  if (action) action.hidden = false;
+  if (action) {
+    action.href = pagePath("/cart");
+    action.textContent = checkoutCopy.returnToCartText;
+    action.hidden = false;
+  }
 }
 
 function hideReturnToCartAction(): void {
@@ -195,6 +204,61 @@ function clearCheckoutPresentation(): void {
 function checkoutRecoveryHref(orderId: string, gateway: string): string {
   const params = new URLSearchParams({ orderId, payment: gateway });
   return pagePath(`/order-success?${params.toString()}`);
+}
+
+function showExistingCheckout(href: string | null): void {
+  checkoutData = null;
+  clearCheckoutPresentation();
+  showError(checkoutCopy.checkoutAttemptConflictText);
+  showReturnToCartAction();
+  const action = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement | null;
+  if (action && href) {
+    action.href = href;
+    action.textContent = checkoutCopy.reviewExistingCheckoutText;
+  }
+}
+
+function endExpiredCheckout(): void {
+  const checkoutId = checkoutData?.checkoutRequestId ?? checkoutData?.checkoutId;
+  const recovery = readHostedPaymentRecoverySession();
+  if (recovery?.checkoutId && recovery.checkoutId === checkoutId) clearHostedPaymentRecoverySession();
+  clearCheckoutAttemptSession({ preserveFormDraft: true });
+  checkoutData = null;
+  clearCheckoutPresentation();
+  showError(checkoutCopy.checkoutAttemptExpiredText);
+  showReturnToCartAction();
+}
+
+/** Never send a new order while a previous commit still needs recovery. */
+async function recoverExistingCheckout(recovery: HostedPaymentRecoverySession): Promise<boolean> {
+  const checkoutId = checkoutData?.checkoutRequestId ?? checkoutData?.checkoutId;
+  if (!recovery.checkoutId || recovery.checkoutId !== checkoutId) return false;
+  const version = initVersion;
+  const status = await inspectCheckoutRecovery(recovery);
+  if (version !== initVersion) return true;
+  const current = readHostedPaymentRecoverySession();
+  if (JSON.stringify(current) !== JSON.stringify(recovery)) {
+    if (current?.checkoutId === checkoutId) {
+      showExistingCheckout(current.href);
+      return true;
+    }
+    return false;
+  }
+  if (status === "expired") {
+    clearHostedPaymentRecoverySession();
+    const checkoutId = checkoutData?.checkoutRequestId ?? checkoutData?.checkoutId;
+    if (checkoutId === recovery.checkoutId) {
+      endExpiredCheckout();
+      return true;
+    }
+    return false;
+  }
+  if (status === "active" && matchesCheckoutRecoverySession(recovery, checkoutData?.cartItems)) {
+    window.location.replace(recovery.href);
+  } else {
+    showExistingCheckout(recovery.href);
+  }
+  return true;
 }
 
 function applySelectedMethodStyles(methodId: string | null): void {
@@ -1114,17 +1178,20 @@ async function processPayment(): Promise<void> {
     samePageStripeRetry?.orderId === existingRecovery.orderId
       ? samePageStripeRetry
       : null;
-  if (recoveryMatches && !stripeRetry) {
-    window.location.replace(existingRecovery!.href);
-    return;
+  if (existingRecovery && !stripeRetry) {
+    isProcessing = true;
+    const recovered = await recoverExistingCheckout(existingRecovery);
+    isProcessing = false;
+    if (recovered) return;
   }
   if (giftCardBusy) return;
+  const submittedCheckoutData = checkoutData;
+  const submitInitVersion = initVersion;
   isProcessing = true;
   setGiftCardControlsDisabled(true);
   setPaymentControlsDisabled(true);
   hideError();
   setPayButton(checkoutCopy.processingText, true);
-  if (typeof checkoutData.cartItems === "string") rememberSubmittedCart(checkoutData.cartItems);
   trackAddPaymentInfoForSelection(processingMethod);
 
   showCheckoutLoadingOverlay(
@@ -1161,7 +1228,7 @@ async function processPayment(): Promise<void> {
     const giftCardsPaidPart = hasGiftCardTender(authoritativeTaxQuote);
 
     const ctx: PaymentContext = {
-      checkoutData,
+      checkoutData: submittedCheckoutData,
       config: checkoutConfig,
       orderId: stripeRetry?.orderId ?? "",
       totalAmount,
@@ -1174,12 +1241,14 @@ async function processPayment(): Promise<void> {
       replaceExistingAttempt: stripeRetry ? false : undefined,
       currencySymbol: (window as unknown as Record<string, string>).__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol,
       onOrderCreated: (orderId, gateway) => {
+        if (submitInitVersion !== initVersion) return;
+        if (typeof submittedCheckoutData.cartItems === "string") rememberSubmittedCart(submittedCheckoutData.cartItems);
         // The order holds the cards now; their handles are spent.
         if (giftCardsPaidPart) forgetAppliedGiftCards();
         if (gateway === "stripe") samePageStripeRetry = { orderId, paymentRequest };
         writeHostedPaymentRecoverySession(
           checkoutRecoveryHref(orderId, gateway),
-          checkoutData ?? undefined,
+          submittedCheckoutData,
           gateway,
         );
       },
@@ -1189,6 +1258,7 @@ async function processPayment(): Promise<void> {
     // the complete flow against a UI-only timer: an abandoned promise can
     // still create an order after the controls have been re-enabled.
     const result = await handler.processPayment(ctx);
+    if (submitInitVersion !== initVersion) return;
 
     if (result.success && result.redirectUrl) {
       const redirectUrl = normalizeCheckoutRedirectUrl(
@@ -1200,7 +1270,7 @@ async function processPayment(): Promise<void> {
       }
       writeHostedPaymentRecoverySession(
         result.hostedPaymentRecoveryUrl ?? redirectUrl,
-        checkoutData,
+        submittedCheckoutData,
         processingMethod,
       );
       navigationCommitted = true;
@@ -1209,6 +1279,25 @@ async function processPayment(): Promise<void> {
     }
 
     if (!result.success) {
+      if (result.errorCode === "CHECKOUT_ATTEMPT_EXPIRED") {
+        hideCheckoutLoadingOverlay();
+        endExpiredCheckout();
+        return;
+      }
+      if (result.errorCode === "CHECKOUT_ATTEMPT_CONFLICT") {
+        hideCheckoutLoadingOverlay();
+        // Do not associate the changed cart with the old order or overwrite its
+        // submitted snapshot. The receipt requires its own cookie or account.
+        const href = checkoutAttemptRecoveryHref(result.details);
+        if (href) {
+          const reference = result.details as { paymentMethod?: string | null };
+          writeHostedPaymentRecoverySession(href, {
+            checkoutId: submittedCheckoutData.checkoutRequestId ?? submittedCheckoutData.checkoutId,
+          }, reference.paymentMethod ?? processingMethod);
+        }
+        showExistingCheckout(href);
+        return;
+      }
       if (result.cartIssues && result.cartIssues.length > 0) {
         hideCheckoutLoadingOverlay({ restoreFocus: false });
         redirectToCartForRepair({
@@ -1279,6 +1368,7 @@ async function processPayment(): Promise<void> {
       throw new Error(getPaymentResultErrorMessage(result));
     }
   } catch (err: unknown) {
+    if (submitInitVersion !== initVersion) return;
     hideCheckoutLoadingOverlay();
     showError(err instanceof Error ? err.message : checkoutCopy.genericErrorText);
     isProcessing = false;
@@ -1288,10 +1378,10 @@ async function processPayment(): Promise<void> {
       handler.isReady ? !handler.isReady() : false,
     );
   } finally {
-    if (!navigationCommitted) {
+    if (!navigationCommitted && submitInitVersion === initVersion) {
       isProcessing = false;
-      setPaymentControlsDisabled(false);
-      setGiftCardControlsDisabled(false);
+      setPaymentControlsDisabled(!checkoutData);
+      setGiftCardControlsDisabled(!checkoutData);
     }
   }
 }
@@ -1563,10 +1653,7 @@ export async function initCheckoutPage(): Promise<void> {
   if (!loadCheckoutData()) return;
 
   const existingRecovery = readHostedPaymentRecoverySession();
-  if (matchesCheckoutRecoverySession(existingRecovery, checkoutData!.cartItems)) {
-    window.location.replace(existingRecovery!.href);
-    return;
-  }
+  if (existingRecovery && await recoverExistingCheckout(existingRecovery)) return;
   // The summary the buyer just reviewed, at once; the page's quote follows.
   renderSummary(readReviewedCheckoutQuote(checkoutData!.expectedQuoteFingerprint), true);
 

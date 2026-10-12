@@ -446,6 +446,7 @@ const createOrderRoute = createRoute({
     },
     400: errorResponses[400],
     401: errorResponses[401],
+    403: errorResponses[403],
     409: conflictResponse,
     429: errorResponses[429],
     500: errorResponses[500],
@@ -692,6 +693,8 @@ app.openapi(createOrderRoute, async (c) => {
       const recoveredAttempt = await resolveExistingCheckoutAttempt<typeof responsePayload>(
         db,
         attemptIdentity,
+        undefined,
+        sessionCustomerId,
       ).catch((recoveryError: unknown) => {
         console.warn("[Orders] Failed to resolve checkout after an uncertain commit:", recoveryError);
         return null;

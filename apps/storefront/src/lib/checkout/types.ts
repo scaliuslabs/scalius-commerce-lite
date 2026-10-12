@@ -27,6 +27,7 @@ export interface PaymentResult {
   redirectUrl?: string;
   error?: string;
   errorCode?: string;
+  details?: unknown;
   status?: number;
   cartIssues?: CartValidationIssue[];
   /** A refusal the checkout repairs itself (a store app's rule, method or delivery option). */
