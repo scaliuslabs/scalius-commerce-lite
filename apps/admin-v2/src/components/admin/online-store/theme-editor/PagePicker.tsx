@@ -6,7 +6,7 @@
  * CMS pages preview one of the store's own; the tree says which ("Previewing
  * …"), with a way to change it.
  */
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Check, ChevronDown, Plus } from "lucide-react";
 import {
@@ -29,8 +29,9 @@ import { STORE_PAGE_KINDS, samePage, type EditorPage, type ResourcePageKind } fr
 import { Field } from "~/components/ui/field";
 import { Badge } from "~/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { ProductSelect } from "../schema-form/resource-fields";
 import type { LandingPreset } from "./landing-presets";
+
+const ProductSelect = lazy(() => import("../schema-form/resource-fields").then((module) => ({ default: module.ProductSelect })));
 
 /** The "blank page" choice (preset keys always hold a slash). */
 const BLANK = "blank";
@@ -173,7 +174,7 @@ export function CreateLandingDialog({ open, onOpenChange, theme, presets = [], o
           {presets.length > 0 ? (
             <fieldset className="space-y-2">
               <legend className="text-body font-medium">{t("landingStart")}</legend>
-              <RadioGroup value={presetKey} onValueChange={setPresetKey} className="gap-1">
+              <RadioGroup value={presetKey} onValueChange={setPresetKey}>
                 {[
                   { value: BLANK, label: t("landingBlank"), help: t("landingBlankHelp"), app: null },
                   ...presets.map((each) => ({ value: each.key, label: each.name, help: each.description, app: each.appName })),
@@ -198,7 +199,9 @@ export function CreateLandingDialog({ open, onOpenChange, theme, presets = [], o
           ) : null}
           {preset?.needsProduct ? (
             <Field id="new-landing-product" label={t("landingProduct")}>
-              <ProductSelect id="new-landing-product" value={productId} onChange={setProductId} />
+              <Suspense fallback={<Input id="new-landing-product" disabled aria-busy="true" />}>
+                <ProductSelect id="new-landing-product" value={productId} onChange={setProductId} />
+              </Suspense>
               <p className="text-body text-muted-foreground">{t("landingProductHelp")}</p>
             </Field>
           ) : null}
