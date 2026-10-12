@@ -28,6 +28,11 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
     limits: { request: 16_384 },
     reason: "Rendering infrastructure: apps' sanitized checkout and account HTML, not structured agent data.",
   },
+  "storefront.extension_file.get": {
+    exposure: "excluded",
+    limits: { request: 16_384 },
+    reason: "Rendering infrastructure: an app's compiled storefront module, stylesheet, islands and fonts, not structured agent data.",
+  },
   "storefront.layout.get": { limits: { request: 16_384 } },
   "storefront.markets.get": { limits: { request: 16_384 } },
   "storefront.meta_events.events": {

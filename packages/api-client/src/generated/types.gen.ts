@@ -279,10 +279,31 @@ export type StorefrontHomepageSections = {
         slug: string;
     } | null;
     /**
-     * The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing.
+     * The app sections to show, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add, or a component section's data. An app section missing here renders nothing.
      */
     apps: Array<StorefrontAppSurface & {
         sectionId: string;
+        /**
+         * A component section (no `html`): the storefront draws it at the edge with the app's storefront module, from these resolved values, images and product cards.
+         */
+        component?: {
+            pluginId: string;
+            type: string;
+            values: {
+                [key: string]: unknown;
+            };
+            media: Array<{
+                id: string;
+                url: string;
+                alt: string;
+                width: number | null;
+                height: number | null;
+            }>;
+            lists: Array<{
+                source: string;
+                products: Array<unknown>;
+            }>;
+        };
     }>;
     /**
      * The Metaobjects sections' content types (only those with storefront access) and their published entries, by definition id.
@@ -600,7 +621,9 @@ export type StorefrontThemeDocument = {
                 id: string;
                 app: string;
                 values: {
-                    [key: string]: string | number | boolean | Array<string> | unknown;
+                    [key: string]: string | number | boolean | Array<string> | Array<{
+                        [key: string]: string | number | boolean | unknown;
+                    }> | unknown;
                 };
             }>;
             sticky: {
@@ -634,6 +657,33 @@ export type StorefrontThemeDocument = {
                 copyright: string;
             };
         };
+    };
+    apps?: {
+        header?: {
+            app: string;
+            values: {
+                [key: string]: string | number | boolean | Array<string> | Array<{
+                    [key: string]: string | number | boolean | unknown;
+                }> | unknown;
+            };
+        };
+        footer?: {
+            app: string;
+            values: {
+                [key: string]: string | number | boolean | Array<string> | Array<{
+                    [key: string]: string | number | boolean | unknown;
+                }> | unknown;
+            };
+        };
+        productCard?: {
+            app: string;
+            values: {
+                [key: string]: string | number | boolean | Array<string> | Array<{
+                    [key: string]: string | number | boolean | unknown;
+                }> | unknown;
+            };
+        };
+        template?: string;
     };
     pages: {
         home: StorefrontSectionList;
@@ -1030,7 +1080,9 @@ export type StorefrontSectionList = Array<{
     settings: {
         app: string;
         values: {
-            [key: string]: string | number | boolean | Array<string> | unknown;
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
         };
     };
 }>;
@@ -2156,6 +2208,24 @@ export type ThemeAppSurfaces = {
         name: string;
         description: string | null;
         settings: Array<AppSettingField>;
+        component: boolean;
+    }>;
+    slots: Array<{
+        key: string;
+        id: string;
+        slot: 'header' | 'footer' | 'product-card';
+        name: string;
+        description: string | null;
+        settings: Array<AppSettingField>;
+    }>;
+    templates: Array<{
+        key: string;
+        id: string;
+        name: string;
+        description: string | null;
+        theme: {
+            [key: string]: unknown;
+        };
     }>;
     productBlocks: Array<{
         key: string;
@@ -2170,13 +2240,15 @@ export type AppSettingField = {
     key: string;
     label: string;
     help: string | null;
-    type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'secret' | 'url' | 'email' | 'color';
+    type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'secret' | 'url' | 'email' | 'color' | 'image' | 'products' | 'link' | 'list';
     required: boolean;
     options: Array<{
         value: string;
         label: string;
     }> | null;
-    default: string | number | boolean | Array<string> | unknown;
+    default: string | number | boolean | Array<string> | Array<{
+        [key: string]: string | number | boolean | unknown;
+    }> | unknown;
     min: number | null;
     max: number | null;
     integer: boolean;
@@ -2185,6 +2257,35 @@ export type AppSettingField = {
      * The settings group or provider id the field shows with (absent: the app's general settings).
      */
     group?: string;
+    /**
+     * `products`: how many products the setting shows.
+     */
+    limit?: number;
+    /**
+     * `list`: the fields of each item.
+     */
+    fields?: Array<AppSettingItemField>;
+    /**
+     * `list`: what one item is called ("Slide").
+     */
+    itemLabel?: string;
+};
+
+export type AppSettingItemField = {
+    key: string;
+    label: string;
+    help: string | null;
+    type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'secret' | 'url' | 'email' | 'color' | 'image' | 'products' | 'link' | 'list';
+    required: boolean;
+    options: Array<{
+        value: string;
+        label: string;
+    }> | null;
+    default: string | number | boolean | unknown;
+    min: number | null;
+    max: number | null;
+    integer: boolean;
+    maxLength: number | null;
 };
 
 export type ThemeVersionSummary = {
@@ -2904,7 +3005,9 @@ export type AppDetail = AppSummary & {
     settings: {
         fields: Array<AppSettingField>;
         values: {
-            [key: string]: string | number | boolean | Array<string> | unknown;
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
         };
         /**
          * Whether each secret is set; secret values are never returned.
@@ -5870,6 +5973,42 @@ export type GetApiV1StorefrontProductAppsBySlugResponses = {
 
 export type GetApiV1StorefrontProductAppsBySlugResponse = GetApiV1StorefrontProductAppsBySlugResponses[keyof GetApiV1StorefrontProductAppsBySlugResponses];
 
+export type GetApiV1StorefrontExtensionsByPluginIdByReleaseData = {
+    body?: never;
+    path: {
+        pluginId: string;
+        /**
+         * The release's bundle SHA-256 (the layout's appExtensions[].release).
+         */
+        release: string;
+    };
+    query: {
+        /**
+         * storefront.js, styles.css, islands/<name>.js or public/<path>.
+         */
+        path: string;
+    };
+    url: '/api/v1/storefront/extensions/{pluginId}/{release}';
+};
+
+export type GetApiV1StorefrontExtensionsByPluginIdByReleaseErrors = {
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+};
+
+export type GetApiV1StorefrontExtensionsByPluginIdByReleaseError = GetApiV1StorefrontExtensionsByPluginIdByReleaseErrors[keyof GetApiV1StorefrontExtensionsByPluginIdByReleaseErrors];
+
+export type GetApiV1StorefrontExtensionsByPluginIdByReleaseResponses = {
+    /**
+     * The file
+     */
+    200: Blob | File;
+};
+
+export type GetApiV1StorefrontExtensionsByPluginIdByReleaseResponse = GetApiV1StorefrontExtensionsByPluginIdByReleaseResponses[keyof GetApiV1StorefrontExtensionsByPluginIdByReleaseResponses];
+
 export type GetApiV1StorefrontAppBlocksByPageData = {
     body?: never;
     path: {
@@ -6221,6 +6360,34 @@ export type GetApiV1StorefrontLayoutResponses = {
                 src: string;
                 placement: 'head' | 'body-end';
                 pages: Array<'all' | 'home' | 'product' | 'listing' | 'cart' | 'checkout' | 'order-success'>;
+            }>;
+            /**
+             * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections and slots their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
+             */
+            appExtensions: Array<{
+                pluginId: string;
+                version: string;
+                source: 'bundled' | 'registry' | 'upload';
+                /**
+                 * The release's bundle SHA-256: names its storefront files (/_x/<plugin id>/<release>/) and its isolate.
+                 */
+                release: string;
+                sections: Array<string>;
+                sectionSettings: {
+                    [key: string]: Array<{
+                        [key: string]: unknown;
+                    }>;
+                };
+                slots: Array<{
+                    id: string;
+                    slot: 'header' | 'footer' | 'product-card';
+                    settings: Array<{
+                        [key: string]: unknown;
+                    }>;
+                }>;
+                islands: Array<string>;
+                stylesheet: boolean;
+                connect: Array<string>;
             }>;
             /**
              * The page groups where an active app draws a checkout or customer-account block. Only these pages read /storefront/app-blocks/{page}.
@@ -58092,7 +58259,9 @@ export type PutApiV1AdminAppsByIdSettingsData = {
          */
         expectedRevision: number;
         values: {
-            [key: string]: string | number | boolean | Array<string> | unknown;
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
         };
     };
     path: {

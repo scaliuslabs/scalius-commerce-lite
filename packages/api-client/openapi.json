@@ -1048,6 +1048,80 @@
                   "properties": {
                     "sectionId": {
                       "type": "string"
+                    },
+                    "component": {
+                      "type": "object",
+                      "properties": {
+                        "pluginId": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "values": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "media": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "alt": {
+                                "type": "string"
+                              },
+                              "width": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "height": {
+                                "type": "number",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "url",
+                              "alt",
+                              "width",
+                              "height"
+                            ]
+                          }
+                        },
+                        "lists": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string"
+                              },
+                              "products": {
+                                "type": "array",
+                                "items": {}
+                              }
+                            },
+                            "required": [
+                              "source",
+                              "products"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "pluginId",
+                        "type",
+                        "values",
+                        "media",
+                        "lists"
+                      ],
+                      "description": "A component section (no `html`): the storefront draws it at the edge with the app's storefront module, from these resolved values, images and product cards."
                     }
                   },
                   "required": [
@@ -1057,7 +1131,7 @@
               ]
             },
             "maxItems": 8,
-            "description": "The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing."
+            "description": "The app sections to show, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add, or a component section's data. An app section missing here renders nothing."
           },
           "metaobjects": {
             "type": "array",
@@ -2660,6 +2734,28 @@
                                 },
                                 "maxItems": 50
                               },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "maxLength": 5000
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      },
+                                      {}
+                                    ]
+                                  }
+                                },
+                                "maxItems": 24
+                              },
                               {}
                             ]
                           }
@@ -2877,6 +2973,202 @@
               "product",
               "footer"
             ],
+            "additionalProperties": false
+          },
+          "apps": {
+            "type": "object",
+            "properties": {
+              "header": {
+                "type": "object",
+                "properties": {
+                  "app": {
+                    "type": "string",
+                    "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+                  },
+                  "values": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 5000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 64
+                          },
+                          "maxItems": 50
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "maxLength": 5000
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {}
+                              ]
+                            }
+                          },
+                          "maxItems": 24
+                        },
+                        {}
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "app",
+                  "values"
+                ],
+                "additionalProperties": false
+              },
+              "footer": {
+                "type": "object",
+                "properties": {
+                  "app": {
+                    "type": "string",
+                    "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+                  },
+                  "values": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 5000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 64
+                          },
+                          "maxItems": 50
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "maxLength": 5000
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {}
+                              ]
+                            }
+                          },
+                          "maxItems": 24
+                        },
+                        {}
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "app",
+                  "values"
+                ],
+                "additionalProperties": false
+              },
+              "productCard": {
+                "type": "object",
+                "properties": {
+                  "app": {
+                    "type": "string",
+                    "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+                  },
+                  "values": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 5000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 64
+                          },
+                          "maxItems": 50
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "maxLength": 5000
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {}
+                              ]
+                            }
+                          },
+                          "maxItems": 24
+                        },
+                        {}
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "app",
+                  "values"
+                ],
+                "additionalProperties": false
+              },
+              "template": {
+                "type": "string",
+                "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+              }
+            },
             "additionalProperties": false
           },
           "pages": {
@@ -5245,6 +5537,28 @@
                               "maxLength": 64
                             },
                             "maxItems": 50
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "maxLength": 5000
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  },
+                                  {}
+                                ]
+                              }
+                            },
+                            "maxItems": 24
                           },
                           {}
                         ]
@@ -10174,6 +10488,9 @@
                   "items": {
                     "$ref": "#/components/schemas/AppSettingField"
                   }
+                },
+                "component": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -10181,7 +10498,83 @@
                 "type",
                 "name",
                 "description",
+                "settings",
+                "component"
+              ]
+            }
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "slot": {
+                  "type": "string",
+                  "enum": [
+                    "header",
+                    "footer",
+                    "product-card"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "settings": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AppSettingField"
+                  }
+                }
+              },
+              "required": [
+                "key",
+                "id",
+                "slot",
+                "name",
+                "description",
                 "settings"
+              ]
+            }
+          },
+          "templates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "theme": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "key",
+                "id",
+                "name",
+                "description",
+                "theme"
               ]
             }
           },
@@ -10227,6 +10620,8 @@
           "id",
           "name",
           "sections",
+          "slots",
+          "templates",
           "productBlocks"
         ]
       },
@@ -10255,7 +10650,11 @@
               "secret",
               "url",
               "email",
-              "color"
+              "color",
+              "image",
+              "products",
+              "link",
+              "list"
             ]
           },
           "required": {
@@ -10297,6 +10696,26 @@
                   "type": "string"
                 }
               },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {}
+                    ]
+                  }
+                }
+              },
               {}
             ]
           },
@@ -10318,6 +10737,119 @@
           "group": {
             "type": "string",
             "description": "The settings group or provider id the field shows with (absent: the app's general settings)."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "`products`: how many products the setting shows."
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppSettingItemField"
+            },
+            "description": "`list`: the fields of each item."
+          },
+          "itemLabel": {
+            "type": "string",
+            "description": "`list`: what one item is called (\"Slide\")."
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "help",
+          "type",
+          "required",
+          "options",
+          "default",
+          "min",
+          "max",
+          "integer",
+          "maxLength"
+        ]
+      },
+      "AppSettingItemField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "help": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "textarea",
+              "number",
+              "boolean",
+              "select",
+              "multiselect",
+              "secret",
+              "url",
+              "email",
+              "color",
+              "image",
+              "products",
+              "link",
+              "list"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "label"
+              ]
+            }
+          },
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {}
+            ]
+          },
+          "min": {
+            "type": "number",
+            "nullable": true
+          },
+          "max": {
+            "type": "number",
+            "nullable": true
+          },
+          "integer": {
+            "type": "boolean"
+          },
+          "maxLength": {
+            "type": "integer",
+            "nullable": true
           }
         },
         "required": [
@@ -12836,6 +13368,26 @@
                           "type": "array",
                           "items": {
                             "type": "string"
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {}
+                              ]
+                            }
                           }
                         },
                         {}
@@ -22662,6 +23214,111 @@
         "security": []
       }
     },
+    "/api/v1/storefront/extensions/{pluginId}/{release}": {
+      "get": {
+        "operationId": "storefront.extension_file.get",
+        "tags": [
+          "Storefront"
+        ],
+        "summary": "Read one storefront file of an installed app's current release",
+        "description": "The storefront module, stylesheet, an island or a public file (font, image) of an app's current release, checked against the digests sealed into its signed bundle. Immutable: a release's file never changes, so it is cached for a year. The storefront serves it on its own origin at /_x/<plugin id>/<release>/<path>. Bundled apps' files are compiled into the storefront and are not served here.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "required": true,
+            "name": "pluginId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "The release's bundle SHA-256 (the layout's appExtensions[].release)."
+            },
+            "required": true,
+            "description": "The release's bundle SHA-256 (the layout's appExtensions[].release).",
+            "name": "release",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "storefront.js, styles.css, islands/<name>.js or public/<path>."
+            },
+            "required": true,
+            "description": "storefront.js, styles.css, islands/<name>.js or public/<path>.",
+            "name": "path",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file",
+            "content": {
+              "text/javascript": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/css": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "font/woff2": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Rendering infrastructure: an app's compiled storefront module, stylesheet, islands and fonts, not structured agent data."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/storefront/app-blocks/{page}": {
       "get": {
         "operationId": "storefront.app_blocks.get",
@@ -23945,6 +24602,107 @@
                             ]
                           }
                         },
+                        "appExtensions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "pluginId": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "bundled",
+                                  "registry",
+                                  "upload"
+                                ]
+                              },
+                              "release": {
+                                "type": "string",
+                                "description": "The release's bundle SHA-256: names its storefront files (/_x/<plugin id>/<release>/) and its isolate."
+                              },
+                              "sections": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "sectionSettings": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                  }
+                                }
+                              },
+                              "slots": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "slot": {
+                                      "type": "string",
+                                      "enum": [
+                                        "header",
+                                        "footer",
+                                        "product-card"
+                                      ]
+                                    },
+                                    "settings": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "additionalProperties": {}
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "slot",
+                                    "settings"
+                                  ]
+                                }
+                              },
+                              "islands": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "stylesheet": {
+                                "type": "boolean"
+                              },
+                              "connect": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "pluginId",
+                              "version",
+                              "source",
+                              "release",
+                              "sections",
+                              "sectionSettings",
+                              "slots",
+                              "islands",
+                              "stylesheet",
+                              "connect"
+                            ]
+                          },
+                          "description": "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections and slots their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts."
+                        },
                         "appBlockPages": {
                           "type": "array",
                           "items": {
@@ -24042,6 +24800,7 @@
                         "policies",
                         "storefrontCopy",
                         "appScripts",
+                        "appExtensions",
                         "appBlockPages",
                         "appServices"
                       ]
@@ -198062,6 +198821,26 @@
                           "type": "array",
                           "items": {
                             "type": "string"
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {}
+                              ]
+                            }
                           }
                         },
                         {}

@@ -1,5 +1,7 @@
 import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { STOREFRONT_COMPONENT_SLOTS } from "@scalius/shared/plugins/storefront-protocol";
+import { readStorefrontAppTemplateTheme } from "@scalius/shared/storefront-theme";
 import {
   THEME_VERSION_CHANGES_MAX,
   storefrontLandingSlugSchema,
@@ -229,6 +231,26 @@ const themeAppSurfacesSchema = z.object({
     name: z.string(),
     description: z.string().nullable(),
     settings: z.array(appSettingFieldSchema),
+    /** Drawn at the edge by the app's storefront module (it can use image, products, link and list settings). */
+    component: z.boolean(),
+  })),
+  /** Theme slots the app fills: the theme's header, footer or product card, with their settings. */
+  slots: z.array(z.object({
+    /** `<app id>/<slot id>`: what the theme's `apps.header`, `apps.footer` or `apps.productCard` names. */
+    key: z.string(),
+    id: z.string(),
+    slot: z.enum(STOREFRONT_COMPONENT_SLOTS),
+    name: z.string(),
+    description: z.string().nullable(),
+    settings: z.array(appSettingFieldSchema),
+  })),
+  /** Ready-made looks the template library applies (`applyStorefrontAppTemplate`); only ones this document version accepts. */
+  templates: z.array(z.object({
+    key: z.string(),
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    theme: z.record(z.string(), z.unknown()),
   })),
   productBlocks: z.array(z.object({
     key: z.string(),
@@ -246,16 +268,37 @@ async function readThemeAppSurfaces(db: Parameters<typeof listPluginInstallation
     .filter((installation) => installation.status === "active" && installation.grant?.storefrontSurfaces === true)
     .map((installation) => {
       const { storefront, name } = installation.manifest;
+      // Component sections and slots need the approved grant to cover storefront code.
+      const code = installation.grant?.storefrontCode === true;
       return {
         id: installation.pluginId,
         name,
-        sections: storefront.sections.map((section) => ({
+        sections: storefront.sections.filter((section) => section.route !== undefined || code).map((section) => ({
           key: pluginSurfaceKey(installation.pluginId, section.type),
           type: section.type,
           name: section.name,
           description: section.description ?? null,
           settings: section.settings.map(appSettingField),
+          component: section.route === undefined,
         })),
+        slots: code ? storefront.slots.map((slot) => ({
+          key: pluginSurfaceKey(installation.pluginId, slot.id),
+          id: slot.id,
+          slot: slot.slot,
+          name: slot.name,
+          description: slot.description ?? null,
+          settings: slot.settings.map(appSettingField),
+        })) : [],
+        templates: code ? storefront.templates.flatMap((template) => {
+          const theme = readStorefrontAppTemplateTheme(template.theme);
+          return theme ? [{
+            key: pluginSurfaceKey(installation.pluginId, template.id),
+            id: template.id,
+            name: template.name,
+            description: template.description ?? null,
+            theme: theme as Record<string, unknown>,
+          }] : [];
+        }) : [],
         productBlocks: storefront.productBlocks.map((block) => ({
           key: pluginSurfaceKey(installation.pluginId, block.type),
           type: block.type,
@@ -265,7 +308,7 @@ async function readThemeAppSurfaces(db: Parameters<typeof listPluginInstallation
         })),
       };
     })
-    .filter((surfaces) => surfaces.sections.length + surfaces.productBlocks.length > 0)
+    .filter((surfaces) => surfaces.sections.length + surfaces.productBlocks.length + surfaces.slots.length + surfaces.templates.length > 0)
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 }
 
