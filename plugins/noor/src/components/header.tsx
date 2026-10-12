@@ -140,15 +140,20 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
               <button type="button" class="noor-icon-btn noor-phone-only" popovertarget="noor-drawer" aria-label={t(context, { en: "Open menu", bn: "মেনু খুলুন" })}>
                 <Icon name="menu" size={22} />
               </button>
-              {layout === "start" ? logo : null}
-              <nav class="noor-nav noor-desk-only" aria-label={t(context, { en: "Main", bn: "প্রধান" })}>
-                <Menu items={data.menu} style={choice(settings.menu_style, ["mega", "simple"] as const, "mega")} />
-              </nav>
+              {layout === "center" && settings.show_search ? (
+                <button type="button" class="noor-search-trigger noor-desk-only" popovertarget="noor-search">
+                  <Icon name="search" size={18} /><span>{searchLabel}</span>
+                </button>
+              ) : null}
             </div>
-            {layout === "center" ? logo : null}
+            {logo}
+            {/* Centred logo: the menu has its own row on computers, so any menu fits. */}
+            <nav class="noor-nav noor-desk-only" aria-label={t(context, { en: "Main", bn: "প্রধান" })}>
+              <Menu items={data.menu} style={choice(settings.menu_style, ["mega", "simple"] as const, "mega")} />
+            </nav>
             <div class="noor-header-end">
               {settings.show_search ? (
-                <button type="button" class="noor-icon-btn" popovertarget="noor-search" aria-label={searchLabel}>
+                <button type="button" class={cx("noor-icon-btn", layout === "center" && "noor-phone-only")} popovertarget="noor-search" aria-label={searchLabel}>
                   <Icon name="search" size={21} />
                 </button>
               ) : null}
