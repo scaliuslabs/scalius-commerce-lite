@@ -14,20 +14,23 @@ interface Props {
   pluginId: string;
   /** `/_x/<plugin id>/<release>/`. */
   base: string;
+  /** The placement identity, when the caller has one (for repeated embeds). */
+  instanceId?: string;
   /** The theme editor's mark (preview only). */
   editorMark?: string | undefined;
   /** The theme editor's preview: embeds never post. */
   preview?: boolean;
 }
 
-const { html, pluginId, base, editorMark, preview = false } = Astro.props;
+const { html, pluginId, base, instanceId, editorMark, preview = false } = Astro.props;
 const parts = splitCoreEmbeds(html);
+const embedPrefix = parts.some((part) => part.kind === "checkout") ? encodeURIComponent(instanceId ?? crypto.randomUUID()) : "";
 ---
 
 <div class="contents" data-sx-app={pluginId} data-sx-base={base} data-theme-section-id={editorMark}>
-  {parts.map((part) => part.kind === "html"
+  {parts.map((part, index) => part.kind === "html"
     ? <Fragment set:html={part.html} />
-    : <OrderForm slug={part.slug} maxQuantity={part.maxQuantity} submitLabel={part.submitLabel ?? undefined} preview={preview} />)}
+    : <OrderForm slug={part.slug} idPrefix={`order-${embedPrefix}-${index}`} maxQuantity={part.maxQuantity} submitLabel={part.submitLabel ?? undefined} preview={preview} />)}
 </div>
 
 <script>

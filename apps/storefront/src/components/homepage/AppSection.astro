@@ -66,7 +66,7 @@ if (component) {
 ---
 
 {component
-  ? html !== null && html.trim() !== "" && <AppComponent html={html} pluginId={pluginId} base={base} preview={preview} />
+  ? html !== null && html.trim() !== "" && <AppComponent html={html} pluginId={pluginId} base={base} instanceId={section.id} preview={preview} />
   : (
     <section class="home-section w-full" data-app-section={section.settings.app}>
       <Container>

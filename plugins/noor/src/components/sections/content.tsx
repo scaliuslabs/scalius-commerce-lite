@@ -5,6 +5,7 @@
 
 import {
   Image,
+  Island,
   editable,
   raw,
   t,
@@ -273,13 +274,15 @@ export function VideoFeature({ settings, context }: SectionProps<VideoSettings>)
   const url = text(settings.video_url);
   if (!url && !settings.poster) return null;
   const layout = choice(settings.layout, ["wide", "split"] as const, "wide");
+  const video = url ? (
+    <video class="noor-cover" src={url} poster={settings.poster?.url} preload="none" playsinline
+      controls muted={settings.autoplay} loop={settings.autoplay}
+      aria-label={text(settings.heading) ?? t(context, { en: "Video", bn: "ভিডিও" })} />
+  ) : null;
   const frame = (
     <div class="noor-video-frame">
-      {url ? (
-        <video class="noor-cover" src={url} poster={settings.poster?.url} preload={settings.autoplay ? "metadata" : "none"} playsinline
-          controls={!settings.autoplay} autoplay={settings.autoplay} muted={settings.autoplay} loop={settings.autoplay}
-          aria-label={text(settings.heading) ?? t(context, { en: "Video", bn: "ভিডিও" })} />
-      ) : <Image image={settings.poster} sizes="100vw" class="noor-cover" />}
+      {video ? (settings.autoplay ? <Island name="video" hydrate="visible">{video}</Island> : video)
+        : <Image image={settings.poster} sizes="100vw" class="noor-cover" />}
     </div>
   );
   const copy = (

@@ -27,10 +27,10 @@ export interface HeroSettings {
 function Photo({ image, phone, eager, sizes }: { image: StorefrontImage | null; phone: StorefrontImage | null; eager: boolean; sizes: string }) {
   if (!image && !phone) return <span class="noor-hero-blank" />;
   return (
-    <>
-      {image ? <Image image={image} sizes={sizes} loading={eager ? "eager" : "lazy"} class={cx("noor-hero-img", phone && "is-wide")} alt={image.alt} /> : null}
-      {phone ? <Image image={phone} sizes="100vw" loading={eager ? "eager" : "lazy"} class={cx("noor-hero-img", image && "is-phone")} alt={phone.alt} /> : null}
-    </>
+    <picture>
+      {image && phone ? <source media="(max-width: 47.99rem)" srcset={phone.srcset ?? phone.url} sizes="100vw" width={phone.width} height={phone.height} /> : null}
+      <Image image={image ?? phone} sizes={sizes} loading={eager ? "eager" : "lazy"} class="noor-hero-img" />
+    </picture>
   );
 }
 
@@ -56,7 +56,7 @@ export function Hero({ settings, context }: SectionProps<HeroSettings>) {
   const layout = choice(settings.layout, ["overlay", "split"] as const, "overlay");
   const height = choice(settings.height, ["s", "m", "l", "screen"] as const, "l");
   if (!settings.image && !settings.phone_image && !text(settings.heading)) return null;
-  // The first section of a page is its largest paint: load it at once.
+  // Section placements do not expose their page position to the theme.
   const eager = true;
   if (layout === "split") {
     return (
@@ -139,6 +139,15 @@ export function Slideshow({ settings, context, instanceId }: SectionProps<Slides
                 ))}
               </ol>
               <button type="button" class="noor-round is-glass" data-next aria-label={t(context, { en: "Next slide", bn: "পরের স্লাইড" })}><Icon name="arrow" size={18} /></button>
+              {settings.autoplay ? (
+                <button type="button" class="noor-round is-glass" data-autoplay-toggle
+                  data-pause-label={t(context, { en: "Pause slideshow", bn: "স্লাইডশো থামান" })}
+                  data-play-label={t(context, { en: "Play slideshow", bn: "স্লাইডশো চালান" })}
+                  aria-label={t(context, { en: "Pause slideshow", bn: "স্লাইডশো থামান" })}>
+                  <span data-pause-icon><svg class="noor-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 5v14M15 5v14" /></svg></span>
+                  <span data-play-icon hidden><Icon name="play" size={18} /></span>
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>

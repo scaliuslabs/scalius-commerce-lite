@@ -5,7 +5,7 @@
 // and "Order now"; features or steps; and the order section with the
 // store's own order form (`<Checkout>`: name, phone, address, thana; the
 // store checks it, prices delivery and places the cash-on-delivery order).
-// Every "Order now" jumps to `#order`. On phones a bar with the price and
+// "Order now" jumps to an available order form for the product. On phones a bar with the price and
 // "Order now" stays at the bottom until the form is on screen.
 
 import {
@@ -22,9 +22,6 @@ import {
 import { ICON_NAMES, Icon, type IconName } from "../icons";
 import { Section, SectionHead, Stars, choice, cx, ratingLabel, text, type Context } from "../ui";
 import { Countdown, countdownEnd } from "./commerce";
-
-/** The order section's anchor: every "Order now" on a landing page jumps here. */
-export const ORDER_ANCHOR = "order";
 
 function iconOf(value: unknown): IconName {
   return typeof value === "string" && (ICON_NAMES as string[]).includes(value) ? value as IconName : "check";
@@ -128,7 +125,9 @@ export function LandingHero({ settings, context, instanceId }: SectionProps<Land
             <p class="noor-soldout">{t(context, { en: "Sold out for now", bn: "আপাতত স্টক শেষ" })}</p>
           ) : (
             <div class="noor-lhero-actions">
-              <a class="noor-btn is-solid is-xl" href={`#${ORDER_ANCHOR}`}><span {...editable(context, "cta_label")}>{cta}</span><Icon name="arrow" size={18} /></a>
+              <Island name="landing-link" hydrate="idle" props={{ productId: product.id }}>
+                <a class="noor-btn is-solid is-xl" href={product.url} data-noor-order-link><span {...editable(context, "cta_label")}>{cta}</span><Icon name="arrow" size={18} /></a>
+              </Island>
               {call || chat ? (
                 <div class="noor-contact-row">
                   {call ? <a class="noor-btn is-outline" href={call}><Icon name="phone" size={18} /><span>{t(context, { en: "Call to order", bn: "কল করে অর্ডার" })}</span></a> : null}
@@ -137,7 +136,7 @@ export function LandingHero({ settings, context, instanceId }: SectionProps<Land
               ) : null}
             </div>
           )}
-          <p class="noor-cod-line"><Icon name="cash" size={18} />{t(context, { en: "Cash on delivery · check the product before you pay", bn: "ক্যাশ অন ডেলিভারি · পণ্য দেখে মূল্য পরিশোধ" })}</p>
+          <p class="noor-cod-line"><Icon name="check" size={18} />{t(context, { en: "Review your order before placing it", bn: "অর্ডার দেওয়ার আগে বিস্তারিত দেখে নিন" })}</p>
         </div>
       </div>
     </Section>
@@ -192,9 +191,9 @@ export function LandingFeatures({ settings, context }: SectionProps<LandingFeatu
         </ol>
       )}
       {text(settings.cta_label) ? (
-        <div class="noor-actions-row is-center">
-          <a class="noor-btn is-solid is-large" href={`#${ORDER_ANCHOR}`}><span {...editable(context, "cta_label")}>{settings.cta_label}</span><Icon name="arrow" size={16} /></a>
-        </div>
+        <Island name="landing-link" hydrate="idle" class="noor-actions-row is-center">
+          <a class="noor-btn is-solid is-large" data-noor-order-link hidden><span {...editable(context, "cta_label")}>{settings.cta_label}</span><Icon name="arrow" size={16} /></a>
+        </Island>
       ) : null}
     </Section>
   );
@@ -216,20 +215,21 @@ export interface LandingOrderSettings {
   tone: string;
 }
 
-export function LandingOrder({ settings, context }: SectionProps<LandingOrderSettings>) {
+export function LandingOrder({ settings, context, instanceId }: SectionProps<LandingOrderSettings>) {
   const product = settings.product;
   if (!product) return <Empty context={context} words={{ en: "Choose the product to order in the section's settings.", bn: "সেকশনের সেটিংসে অর্ডারের প্রোডাক্টটি বাছুন।" }} />;
   const assurances = settings.assurances.filter((item) => text(item.text));
   const call = phoneHref(text(settings.phone));
   const barLabel = text(settings.bar_label) ?? t(context, { en: "Order now", bn: "অর্ডার করুন" });
+  const orderAnchor = `order-${instanceId}`;
   return (
-    <Section name="order" tone={settings.tone} space="m" id={ORDER_ANCHOR}>
+    <Section name="order" tone={settings.tone} space="m" id={orderAnchor}>
       <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading) ?? t(context, { en: "Place your order", bn: "অর্ডার করতে নিচের ফর্মটি পূরণ করুন" })}
         body={text(settings.text)} align="center" context={context} />
       {product.soldOut ? (
         <p class="noor-soldout is-center">{t(context, { en: "Sold out for now. Please check back soon.", bn: "আপাতত স্টক শেষ। শিগগিরই আবার দেখুন।" })}</p>
       ) : (
-        <div class="noor-order">
+        <div class="noor-order" data-noor-order-product={product.id}>
           <aside class="noor-order-summary" aria-label={t(context, { en: "Your order", bn: "আপনার অর্ডার" })}>
             <div class="noor-order-product">
               {product.image ? <Image image={product.image} sizes="96px" alt="" class="noor-order-thumb" /> : null}
@@ -259,12 +259,12 @@ export function LandingOrder({ settings, context }: SectionProps<LandingOrderSet
         </div>
       )}
       {settings.sticky_bar && !product.soldOut ? (
-        <Island name="landing-bar" hydrate="idle" props={{ target: ORDER_ANCHOR }} class="noor-bar">
+        <Island name="landing-bar" hydrate="idle" props={{ target: orderAnchor }} class="noor-bar">
           <div class="noor-bar-inner">
             <div class="noor-bar-price">
               <Price price={product.price} compareAt={product.compareAt} from={product.priceVaries} context={context} class="noor-price" />
             </div>
-            <a class="noor-btn is-solid" href={`#${ORDER_ANCHOR}`}>{barLabel}<Icon name="arrow" size={16} /></a>
+            <a class="noor-btn is-solid" href={`#${orderAnchor}`}>{barLabel}<Icon name="arrow" size={16} /></a>
           </div>
         </Island>
       ) : null}

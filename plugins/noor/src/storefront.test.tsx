@@ -11,6 +11,7 @@ import {
 } from "@scalius/shared/storefront-theme";
 import {
   fixtureProductCard,
+  fixtureContext,
   renderFooter,
   renderHeader,
   renderProductCard,
@@ -131,12 +132,26 @@ describe("Noor chrome", () => {
     expect(html).toContain("All Women");
   });
 
+  it("keeps deep merchant links reachable in the mobile drawer and both desktop menu styles", () => {
+    const menu = [{ title: "Women", url: "/women", children: [{ title: "Sarees", url: "/sarees", children: [
+      { title: "Jamdani", url: "/jamdani", children: [{ title: "Cotton", url: "/cotton-jamdani", children: [] }] },
+    ] }] }];
+    for (const menu_style of ["simple", "mega"]) {
+      const html = shown(renderHeader(storefront, "noor-header", slotSettings("noor-header", { menu_style }), { menu }));
+      const drawer = html.slice(html.indexOf('id="noor-drawer"'), html.indexOf('id="noor-search"'));
+      expect(drawer).toContain('href="/jamdani"');
+      expect(drawer).toContain('href="/cotton-jamdani"');
+      const desktop = html.slice(0, html.indexOf('id="noor-drawer"'));
+      expect(desktop).toContain('href="/cotton-jamdani"');
+    }
+  });
+
   it("rotates its own announcements, the first one showing", () => {
     const html = renderHeader(storefront, "noor-header", slotSettings("noor-header", {
       announcements: [{ text: "Eid delivery until the 28th", link: "/pages/eid" }, { text: "Cash on delivery everywhere", link: null }],
     }));
     expect(html).toContain('<li data-active=""><a href="/pages/eid">Eid delivery until the 28th');
-    expect(html).toContain('<li aria-hidden="true"><span>Cash on delivery everywhere</span></li>');
+    expect(html).toContain('<li aria-hidden="true" inert><span>Cash on delivery everywhere</span></li>');
   });
 
   it("sits over the hero only on the homepage", () => {
@@ -148,7 +163,10 @@ describe("Noor chrome", () => {
   it("turns into a campaign header and footer on landing pages, unless the merchant keeps the full ones", () => {
     const header = shown(renderHeader(storefront, "noor-header", slotSettings("noor-header"), {}, { context: LANDING }));
     expect(header).toContain("noor-header is-campaign");
-    expect(header).toContain('href="#order"');
+    expect(header).not.toContain('href="#order"');
+    expect(header).toContain('data-noor-order-link');
+    expect(header).toContain('href="/search"');
+    expect(header).toContain('data-order-label="Order now"');
     expect(header).not.toContain("noor-nav");
     expect(renderHeader(storefront, "noor-header", slotSettings("noor-header", { landing_header: "full" }), {}, { context: LANDING })).toContain("noor-nav");
     const footer = shown(renderFooter(storefront, "noor-footer", slotSettings("noor-footer"), {}, { context: LANDING }));
@@ -202,11 +220,12 @@ describe("Noor sections", () => {
     expect(renderSection(storefront, "image-text", settingsFor("image-text", { heading: "Our story", spacing: "huge" }))).toContain('data-space="m"');
   });
 
-  it("draws the hero with its image eager and a separate phone crop", () => {
+  it("draws one eager hero image with a responsive phone crop", () => {
     const html = shown(renderSection(storefront, "hero", settingsFor("hero", { image: "wide", phone_image: "tall" })));
     expect(html).toContain('loading="eager" fetchpriority="high"');
-    expect(html).toContain("noor-hero-img is-wide");
-    expect(html).toContain("noor-hero-img is-phone");
+    expect(html).toContain('<picture><source media="(max-width: 47.99rem)"');
+    expect(html).toContain('srcset="https://media.example.com/tall-600.webp 600w, https://media.example.com/tall-1200.webp 1200w"');
+    expect(html.match(/<img\b/g)).toHaveLength(1);
     expect(html).toContain('href="/search"');
     expect(shown(renderSection(storefront, "hero", settingsFor("hero", { image: "wide", layout: "split" })))).toContain("noor-hero is-split");
   });
@@ -266,29 +285,48 @@ describe("Noor landing kit", () => {
     }));
     expect(html).toContain('<h1 class="noor-h1">Linen shirt</h1>');
     expect(html).toContain("Save 20%");
-    expect(html).toContain('href="#order"');
+    expect(html).toContain('href="/products/linen-shirt" data-noor-order-link');
     expect(html).toContain('href="tel:+8801711000000"');
     expect(html).toContain('href="https://wa.me/8801711000000"');
     expect(html).toContain('data-island="countdown"');
     expect(html).toContain("Genuine");
+    expect(html).toContain("Review your order before placing it");
+    expect(html).not.toContain("check the product before you pay");
     // The merchant's photos first, then the product's own.
     expect(html.indexOf("front-1200")).toBeLessThan(html.indexOf("shirt-480"));
   });
 
-  it("places the store's order form at #order, with the phone order bar", () => {
+  it("places the store's order form at its instance anchor, with the phone order bar", () => {
     const html = shown(render("landing-order", { assurances: [{ icon: "truck", text: "2-day delivery" }], max_quantity: 3 }));
-    expect(html).toContain('id="order"');
+    expect(html).toContain('id="order-app-landing-order"');
     expect(html).toContain('<scalius-checkout data-product="linen-shirt" data-max-quantity="3"></scalius-checkout>');
     expect(html).toContain('data-island="landing-bar"');
     expect(html).toContain("2-day delivery");
     expect(html).toContain("Cash on delivery: pay when it arrives");
   });
 
+  it("keeps repeated order sections and their phone bars on distinct anchors", () => {
+    const reply = storefront.render({
+      abi: storefront.abi,
+      context: fixtureContext(LANDING),
+      jobs: ["first", "second"].map((instanceId) => ({
+        id: instanceId, kind: "section" as const, type: "landing-order", instanceId,
+        settings: settingsFor("landing-order", { product: "prod_1" }),
+      })),
+    });
+    for (const [index, result] of reply.results.entries()) {
+      if (!("html" in result)) throw new Error(result.error);
+      const id = index === 0 ? "first" : "second";
+      expect(shown(result.html)).toContain(`id="order-${id}"`);
+      expect(result.html).toContain(`href="#order-${id}"`);
+    }
+  });
+
   it("draws features as cards, photo rows or numbered steps", () => {
     const items = [{ title: "Fill in the form" }, { title: "We call to confirm" }];
     expect(shown(render("landing-features", { items, style: "steps" }))).toContain('<span class="noor-step" aria-hidden="true">2</span>');
     expect(shown(render("landing-features", { items, style: "rows" }))).toContain('class="noor-rows"');
-    expect(shown(render("landing-features", { items, cta_label: "Order now" }))).toContain('href="#order"');
+    expect(shown(render("landing-features", { items, cta_label: "Order now" }))).toContain('data-noor-order-link hidden');
   });
 
   it("keeps a sold-out product's order section without a form", () => {

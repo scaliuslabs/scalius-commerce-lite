@@ -36,7 +36,7 @@ function Announcements({ items, context }: { items: Array<{ text: string; link: 
     <div class="noor-announce" role="region" aria-label={t(context, { en: "Announcements", bn: "ঘোষণা" })}>
       <ul class="noor-announce-list" data-announce-list>
         {items.map((item, index) => (
-          <li data-active={index === 0 ? "" : undefined} aria-hidden={index === 0 ? undefined : "true"}>
+          <li data-active={index === 0 ? "" : undefined} aria-hidden={index === 0 ? undefined : "true"} inert={index !== 0}>
             {item.link ? <a href={item.link}>{item.text}<Icon name="arrow" size={13} /></a> : <span>{item.text}</span>}
           </li>
         ))}
@@ -64,7 +64,7 @@ function Menu({ items, style }: { items: StorefrontMenuItem[]; style: string }) 
                     {children.map((child) => (
                       <div class="noor-mega-col">
                         <a class="noor-mega-head" href={child.url}>{child.title}</a>
-                        {child.children.length > 0 ? <ul>{child.children.map((leaf) => <li><a href={leaf.url}>{leaf.title}</a></li>)}</ul> : null}
+                        {child.children.length > 0 ? <MenuLinks items={child.children} /> : null}
                       </div>
                     ))}
                     <a class="noor-mega-all" href={item.url}>{item.title}<Icon name="arrow" size={14} /></a>
@@ -72,7 +72,10 @@ function Menu({ items, style }: { items: StorefrontMenuItem[]; style: string }) 
                 </div>
               ) : (
                 <div class="noor-drop">
-                  <ul>{children.map((child) => <li><a href={child.url}>{child.title}</a></li>)}</ul>
+                  <ul>{children.map((child) => <li>
+                    <a href={child.url}>{child.title}</a>
+                    {child.children.length > 0 ? <MenuLinks items={child.children} /> : null}
+                  </li>)}</ul>
                 </div>
               )
             ) : null}
@@ -83,18 +86,24 @@ function Menu({ items, style }: { items: StorefrontMenuItem[]; style: string }) 
   );
 }
 
-function DrawerMenu({ items, context }: { items: StorefrontMenuItem[]; context: Context }) {
+/** Keep every merchant menu level reachable, including compact desktop menus. */
+function MenuLinks({ items }: { items: StorefrontMenuItem[] }) {
+  return <ul>{items.map((item) => <li>
+    <a href={item.url}>{item.title}</a>
+    {item.children.length > 0 ? <MenuLinks items={item.children} /> : null}
+  </li>)}</ul>;
+}
+
+function DrawerMenu({ items, context, nested = false }: { items: StorefrontMenuItem[]; context: Context; nested?: boolean }) {
   return (
-    <ul class="noor-drawer-list">
+    <ul class={nested ? undefined : "noor-drawer-list"}>
       {items.map((item) => (
         <li>
           {item.children.length > 0 ? (
             <details>
               <summary><span>{item.title}</span><Icon name="down" size={16} /></summary>
-              <ul>
-                <li><a href={item.url}>{t(context, { en: `All ${item.title}`, bn: `সব ${item.title}` })}</a></li>
-                {item.children.map((child) => <li><a href={child.url}>{child.title}</a></li>)}
-              </ul>
+              <ul><li><a href={item.url}>{t(context, { en: `All ${item.title}`, bn: `সব ${item.title}` })}</a></li></ul>
+              <DrawerMenu items={item.children} context={context} nested />
             </details>
           ) : <a href={item.url}>{item.title}</a>}
         </li>
@@ -122,7 +131,12 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
           <header class="noor-header is-campaign">
             <div class="noor-header-bar">
               {logo}
-              <a class="noor-btn is-solid is-small" href="#order">{text(settings.landing_label) ?? t(context, { en: "Order now", bn: "অর্ডার করুন" })}</a>
+              <Island name="landing-link" hydrate="idle">
+                <a class="noor-btn is-solid is-small" href={data.routes.search} data-noor-order-link
+                  data-order-label={text(settings.landing_label) ?? t(context, { en: "Order now", bn: "অর্ডার করুন" })}>
+                  {t(context, { en: "Shop", bn: "কেনাকাটা করুন" })}
+                </a>
+              </Island>
             </div>
           </header>
         </Island>

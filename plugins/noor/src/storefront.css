@@ -488,6 +488,7 @@
 }
 .noor-announce-list { position: relative; display: grid; block-size: 2.25rem; max-inline-size: var(--n-max); margin: 0 auto; padding: 0 var(--n-gutter); list-style: none; }
 .noor-announce-list > li { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; min-inline-size: 0; opacity: 0; transform: translateY(0.375rem); transition: opacity var(--n-base) var(--n-ease), transform var(--n-base) var(--n-ease); }
+.noor-announce-list > li:not([data-active]) { visibility: hidden; pointer-events: none; }
 .noor-announce-list > li[data-active] { opacity: 1; transform: none; }
 .noor-announce-list > li > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .noor-announce a { display: inline-flex; align-items: center; gap: 0.375rem; color: inherit; text-decoration: none; }
@@ -631,25 +632,29 @@
 .noor-drop ul { display: grid; margin: 0; padding: 0; list-style: none; }
 .noor-drop a { display: block; padding: 0.5rem 0.75rem; border-radius: var(--n-radius); }
 .noor-drop a:hover { background: var(--n-soft); }
+.noor-drop ul ul { margin-inline-start: 0.75rem; border-inline-start: 1px solid var(--n-line); }
 .noor-header-shell .noor-nav, .noor-header-shell .noor-nav-list { block-size: 100%; }
 .noor-header-shell .noor-nav-item.has-menu:has(.noor-mega) { display: flex; }
 
-/* Transparent over the hero on the homepage, solid once it scrolls or a menu opens. */
-@media (min-width: 0) {
+/* Reserve overlay geometry before hydration through the core's section
+   wrappers. JS readiness changes colour, never layout. */
+:root:has(
+  main > div > [data-home-render-unit]:first-child > [data-sx-app] > :is(.noor-s-hero, .noor-s-slideshow) .noor-hero.is-overlay .noor-hero-media img
+) {
   .noor-header-shell.is-transparent { margin-block-end: calc((3.5rem + 2.25rem) * -1); }
   .noor-header-shell.is-transparent:not(:has(.noor-announce)) { margin-block-end: -3.5rem; }
-  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within)) .noor-header {
+  .noor-header-shell.is-transparent[data-overlay-ready]:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within)) .noor-header {
     background: transparent;
     border-color: transparent;
     color: #fff;
   }
-  .noor-header-shell.is-transparent:not([data-scrolled]) .noor-header .noor-logo-img { filter: brightness(0) invert(1); }
-}
-@media (min-width: 64rem) {
-  .noor-header-shell.is-transparent { margin-block-end: calc((4.25rem + 2.25rem) * -1); }
-  .noor-header-shell.is-transparent:not(:has(.noor-announce)) { margin-block-end: -4.25rem; }
-  .noor-header-shell.is-transparent:has(.noor-header.is-center) { margin-block-end: calc((6.75rem + 2.25rem) * -1); }
-  .noor-header-shell.is-transparent:has(.noor-header.is-center):not(:has(.noor-announce)) { margin-block-end: -6.75rem; }
+  .noor-header-shell.is-transparent[data-overlay-ready]:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within)) .noor-header .noor-logo-img { filter: brightness(0) invert(1); }
+  @media (min-width: 64rem) {
+    .noor-header-shell.is-transparent { margin-block-end: calc((4.25rem + 2.25rem) * -1); }
+    .noor-header-shell.is-transparent:not(:has(.noor-announce)) { margin-block-end: -4.25rem; }
+    .noor-header-shell.is-transparent:has(.noor-header.is-center) { margin-block-end: calc((6.75rem + 2.25rem) * -1); }
+    .noor-header-shell.is-transparent:has(.noor-header.is-center):not(:has(.noor-announce)) { margin-block-end: -6.75rem; }
+  }
 }
 
 /* The campaign header on landing pages */
@@ -683,7 +688,7 @@
 .noor-drawer-list a, .noor-drawer-list summary { display: flex; align-items: center; justify-content: space-between; min-block-size: 3.25rem; color: inherit; font-size: 1rem; font-weight: 500; text-decoration: none; cursor: pointer; list-style: none; }
 .noor-drawer-list summary::-webkit-details-marker { display: none; }
 .noor-drawer-list details[open] > summary .noor-icon { transform: rotate(180deg); }
-.noor-drawer-list details ul { margin: 0 0 0.75rem; padding: 0 0 0 0.75rem; list-style: none; border-inline-start: 1px solid var(--n-line); }
+.noor-drawer-list details ul { margin: 0 0 0.75rem; padding: 0; padding-inline-start: 0.75rem; list-style: none; border-inline-start: 1px solid var(--n-line); }
 .noor-drawer-list details a { min-block-size: 2.5rem; color: var(--n-muted); font-size: 0.9375rem; font-weight: 400; }
 .noor-drawer-foot { padding: 1.25rem; }
 .noor-drawer-foot a { display: inline-flex; align-items: center; gap: 0.5rem; color: inherit; font-size: 0.9375rem; text-decoration: none; }
@@ -1155,6 +1160,7 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 .noor-features + .noor-actions-row, .noor-rows + .noor-actions-row { margin-block-start: 1.5rem; }
 
 /* The order: summary beside the store's form */
+.noor-s-order[id] { scroll-margin-block-start: calc(var(--noor-sticky, 0px) + 1rem); }
 .noor-order { display: grid; gap: 1rem; max-inline-size: 64rem; margin-inline: auto; }
 @media (min-width: 56rem) { .noor-order { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 1.5rem; align-items: start; } .noor-order-summary { position: sticky; inset-block-start: var(--noor-sticky); } }
 .noor-order-summary, .noor-order-form { padding: 1.25rem; border-radius: var(--n-radius-lg); background: var(--n-surface); }
@@ -1182,13 +1188,15 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 .noor-order-form .scalius-order-form-submit:hover { background: color-mix(in oklab, var(--n-brand) 86%, #000); }
 
 /* The phone order bar */
-.noor-bar { position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 35; display: block; padding: 0.625rem var(--n-gutter) calc(0.625rem + env(safe-area-inset-bottom)); background: color-mix(in oklab, var(--n-surface) 94%, transparent); border-block-start: 1px solid var(--n-line); box-shadow: 0 -8px 24px -16px rgb(20 16 12 / 0.4); backdrop-filter: blur(8px); transition: transform var(--n-base) var(--n-ease); }
+.noor-bar { position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 35; display: none; padding: 0.625rem var(--n-gutter) calc(0.625rem + env(safe-area-inset-bottom)); background: color-mix(in oklab, var(--n-surface) 94%, transparent); border-block-start: 1px solid var(--n-line); box-shadow: 0 -8px 24px -16px rgb(20 16 12 / 0.4); backdrop-filter: blur(8px); transition: transform var(--n-base) var(--n-ease); }
+.noor-bar[data-ready] { display: block; }
 .noor-bar[data-hidden] { transform: translateY(110%); }
+.noor-btn[data-noor-order-link][hidden] { display: none; }
 .noor-bar-inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; max-inline-size: 36rem; margin: 0 auto; }
 .noor-bar-price { font-size: 1.0625rem; }
 .noor-bar .noor-btn { flex: 1; max-inline-size: 14rem; min-block-size: 3rem; }
 body:has(.noor-bar) { padding-block-end: 4.5rem; }
-@media (min-width: 56rem) { .noor-bar { display: none; } body:has(.noor-bar) { padding-block-end: 0; } }
+@media (min-width: 56rem) { .noor-bar[data-ready] { display: none; } body:has(.noor-bar) { padding-block-end: 0; } }
 
 /* ── Motion: sections rise into view (no script) ────────────────────────── */
 

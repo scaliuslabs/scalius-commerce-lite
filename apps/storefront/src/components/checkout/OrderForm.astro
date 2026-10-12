@@ -21,6 +21,8 @@ import LocationFields from "./LocationFields.astro";
 interface Props {
   /** The product's handle (its URL's last segment). */
   slug: string;
+  /** Unique to this embedded form, even when another form sells the same product. */
+  idPrefix: string;
   /** The most the quantity picker offers (1 hides it). */
   maxQuantity?: number;
   /** The submit button's words; the checkout language's otherwise. */
@@ -29,7 +31,7 @@ interface Props {
   preview?: boolean;
 }
 
-const { slug, maxQuantity = 5, submitLabel, preview = false } = Astro.props;
+const { slug, idPrefix: id, maxQuantity = 5, submitLabel, preview = false } = Astro.props;
 const [data, layoutData, languageResponse, checkoutConfig, citiesResponse] = await Promise.all([
   getProductBySlug(slug),
   getLayoutData(),
@@ -47,7 +49,6 @@ const quantities = Array.from({ length: Math.max(1, Math.min(Math.trunc(maxQuant
 const money = (amount: number) => formatMoney(amount, currency);
 const productHref = data ? `/products/${data.product.slug}` : null;
 const showNotes = languageResponse?.fieldVisibility?.showOrderNotesField !== false;
-const id = `order-${slug.replace(/[^a-z0-9-]/gi, "").slice(0, 40)}`;
 const ready = checkoutConfig.checkoutReadiness?.status !== "incomplete";
 // One price for every option: say it once (in the product's own price), not on each.
 const samePrice = options.every((option) => option.price === options[0]?.price);
