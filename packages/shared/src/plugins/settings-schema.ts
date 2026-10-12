@@ -21,6 +21,7 @@ export const PLUGIN_SETTING_TYPES = [
   // module draws): the storefront resolves them before the component renders.
   "image",
   "products",
+  "product",
   "link",
   "list",
 ] as const;
@@ -32,7 +33,7 @@ export type PluginSettingType = (typeof PLUGIN_SETTING_TYPES)[number];
  * them resolved: an image as its URLs and size, a product source as its
  * products' cards, a link as a safe href, a list as its items.
  */
-export const PLUGIN_STOREFRONT_SETTING_TYPES = ["image", "products", "link", "list"] as const satisfies readonly PluginSettingType[];
+export const PLUGIN_STOREFRONT_SETTING_TYPES = ["image", "products", "product", "link", "list"] as const satisfies readonly PluginSettingType[];
 export type PluginStorefrontSettingType = (typeof PLUGIN_STOREFRONT_SETTING_TYPES)[number];
 
 /** The most items one `list` setting holds. */
@@ -42,6 +43,8 @@ export const PLUGIN_SETTING_PRODUCTS_MAX = 36;
 
 /** A media library id (an `image` setting's value). */
 export const PLUGIN_MEDIA_ID = /^[A-Za-z0-9_-]{1,64}$/;
+/** A product id (a `product` setting's value). */
+export const PLUGIN_PRODUCT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 /**
  * A product source (a `products` setting's value), as the theme names one:
  * `newest`, `on-sale`, `popular`, `collection:<id>` or `category:<id>`.
@@ -94,6 +97,8 @@ const urlField = z.object({ ...base, type: z.literal("url"), default: z.string()
 const colorField = z.object({ ...base, type: z.literal("color"), default: z.string().regex(/^#[0-9a-f]{6}$/).optional() }).strict();
 /** A media library image; the component gets its URLs, size and alt text. */
 const imageField = z.object({ ...base, type: z.literal("image") }).strict();
+/** One product the merchant picks; the component gets its card (null once it is gone or not public). */
+const productField = z.object({ ...base, type: z.literal("product") }).strict();
 /** A same-store path or an https link. */
 const linkField = z.object({ ...base, type: z.literal("link"), default: z.string().max(2048).regex(PLUGIN_LINK).optional() }).strict();
 /** Where products come from; the component gets up to `limit` product cards. */
@@ -150,6 +155,7 @@ export const pluginSettingFieldSchema = z.discriminatedUnion("type", [
   colorField,
   imageField,
   productsField,
+  productField,
   linkField,
   listField,
 ]);
@@ -223,6 +229,8 @@ function valueSchema(field: PluginSettingField | PluginSettingItemField): z.ZodT
       return z.string().regex(PLUGIN_MEDIA_ID);
     case "products":
       return z.string().regex(PLUGIN_PRODUCT_SOURCE);
+    case "product":
+      return z.string().regex(PLUGIN_PRODUCT_ID);
     case "link":
       return z.string().max(2048).regex(PLUGIN_LINK, "Use a store path (/…) or an https:// link.");
     case "list":

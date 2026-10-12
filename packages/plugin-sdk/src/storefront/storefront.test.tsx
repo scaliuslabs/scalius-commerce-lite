@@ -107,7 +107,7 @@ describe("primitives", () => {
   });
 
   it("prices in Bangla with a from-price and no struck price when not discounted", () => {
-    const out = Price({ price: { amount: 900, formatted: "৳900" }, compareAt: { amount: 900, formatted: "৳900" }, from: true, context: fixtureContext({ store: { name: "x", currency: "BDT", locale: "bn-BD", language: "bn" } }) }).value;
+    const out = Price({ price: { amount: 900, formatted: "৳900" }, compareAt: { amount: 900, formatted: "৳900" }, from: true, context: fixtureContext({ store: { name: "x", currency: "BDT", locale: "bn-BD", language: "bn", timeZone: "Asia/Dhaka" } }) }).value;
     expect(out).toContain("৳900 থেকে");
     expect(out).not.toContain("data-price-regular");
   });

@@ -20,6 +20,12 @@
       "version": "0.1.2",
       "source": "plugins/nagad",
       "sha256": "b4bef5f7f6dfc8119a4e964691b5dcf02849595fa8c551c2e778e608d2accea0"
+    },
+    {
+      "id": "scalius.noor",
+      "version": "1.0.0",
+      "source": "plugins/noor",
+      "sha256": "dc1c03cc60bed1670fa1f2de34868541a929165d937ecce51f0e1580f25c0434"
     }
   ]
 }

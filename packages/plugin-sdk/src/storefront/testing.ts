@@ -19,7 +19,7 @@ import {
 
 export function fixtureContext(overrides: Partial<StorefrontRenderContext> = {}): StorefrontRenderContext {
   return {
-    store: { name: "Acme Store", currency: "BDT", locale: "en-BD", language: "en" },
+    store: { name: "Acme Store", currency: "BDT", locale: "en-BD", language: "en", timeZone: "Asia/Dhaka" },
     page: { kind: "home", path: "/" },
     assets: "/_x/acme.theme/0123456789abcdef/",
     preview: false,
@@ -71,7 +71,7 @@ export function fixtureFooterData(overrides: Partial<StorefrontFooterData> = {})
     menus: [{ title: "Help", items: [{ title: "Shipping", url: "/pages/shipping", children: [] }] }],
     policies: [{ title: "Privacy", url: "/policies/privacy" }],
     newsletter: true,
-    routes: { home: "/", newsletter: "/api/newsletter" },
+    routes: { home: "/", newsletter: "/newsletter" },
     year: 2026,
     ...overrides,
   };

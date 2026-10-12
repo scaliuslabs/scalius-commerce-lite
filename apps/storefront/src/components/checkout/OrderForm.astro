@@ -1,0 +1,125 @@
+---
+// The store's order form, placed by an app component (`<scalius-checkout>`,
+// docs/STOREFRONT-COMPONENTS.md "Core embeds"): the single-page order of a
+// landing page. The buyer picks an option and a quantity and fills in name,
+// phone and delivery address here; the form posts to the quick checkout,
+// which checks everything, prices delivery, shows the total and places the
+// cash-on-delivery order with one more tap. It works without JavaScript
+// (native selects, plain POST); with it, the city and thana are searchable
+// and a city's thanas load in place. The app styles it through
+// `.scalius-order-form` and its parts; the words are the store's checkout
+// language. The page stays cacheable: nothing buyer-specific is in it.
+import { getActiveCheckoutLanguage, getCheckoutConfig, getCities, getLayoutData, getProductBySlug } from "@/lib/api";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
+import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { formatMoney } from "@/lib/currency";
+import { ORDER_FORM_MAX_QUANTITY, orderFormOptions } from "@/lib/checkout/order-form";
+import { QUICK_CHECKOUT_PATH } from "@/lib/checkout/quick-checkout";
+import LocationFields from "./LocationFields.astro";
+
+interface Props {
+  /** The product's handle (its URL's last segment). */
+  slug: string;
+  /** The most the quantity picker offers (1 hides it). */
+  maxQuantity?: number;
+  /** The submit button's words; the checkout language's otherwise. */
+  submitLabel?: string;
+  /** The theme editor's preview: the form shows but never posts. */
+  preview?: boolean;
+}
+
+const { slug, maxQuantity = 5, submitLabel, preview = false } = Astro.props;
+const [data, layoutData, languageResponse, checkoutConfig, citiesResponse] = await Promise.all([
+  getProductBySlug(slug),
+  getLayoutData(),
+  getActiveCheckoutLanguage(),
+  getCheckoutConfig(),
+  getCities(),
+]);
+const copy = languageResponse?.languageData ?? ENGLISH_CHECKOUT_LANGUAGE_DATA;
+const currency = { symbol: layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol, code: layoutData?.currency?.code ?? DEFAULT_CURRENCY.code };
+const options = data ? orderFormOptions(data, currency.code) : [];
+const cod = checkoutConfig.unavailable !== true && checkoutConfig.gateways.some((gateway) => gateway.flow === "cod" || gateway.id === "cod");
+const contact = checkoutContactFields(checkoutConfig.customerIdentity ?? DEFAULT_CUSTOMER_IDENTITY);
+const cities = citiesResponse ?? [];
+const quantities = Array.from({ length: Math.max(1, Math.min(Math.trunc(maxQuantity), ORDER_FORM_MAX_QUANTITY)) }, (_, index) => index + 1);
+const money = (amount: number) => formatMoney(amount, currency);
+const productHref = data ? `/products/${data.product.slug}` : null;
+const showNotes = languageResponse?.fieldVisibility?.showOrderNotesField !== false;
+const id = `order-${slug.replace(/[^a-z0-9-]/gi, "").slice(0, 40)}`;
+---
+
+{options.length > 0 && cod ? (
+  <form class="scalius-order-form" method="post" action={QUICK_CHECKOUT_PATH} data-order-form data-preview={preview ? "" : undefined} aria-labelledby={`${id}-title`}>
+    <h2 id={`${id}-title`} class="scalius-order-form-title">{copy.checkoutSectionTitle}</h2>
+    {options.length === 1 ? (
+      <input type="hidden" name="cartItems" value={options[0]!.cartItems} />
+    ) : (
+      <fieldset class="scalius-order-form-options">
+        <legend>{data!.product.name}</legend>
+        {options.map((option, index) => (
+          <label class="scalius-order-form-option">
+            <input type="radio" name="cartItems" value={option.cartItems} checked={index === 0} required />
+            <span class="scalius-order-form-option-label">{option.label}</span>
+            <span class="scalius-order-form-option-price">{money(option.price)}</span>
+          </label>
+        ))}
+      </fieldset>
+    )}
+    {quantities.length > 1 && (
+      <label class="scalius-order-form-field scalius-order-form-quantity">
+        <span>{copy.quantityLabelText}</span>
+        <select name="lineQuantity">
+          {quantities.map((quantity) => <option value={String(quantity)}>{quantity}</option>)}
+        </select>
+      </label>
+    )}
+    <label class="scalius-order-form-field">
+      <span>{copy.customerNameLabel}</span>
+      <input name="customerName" type="text" autocomplete="name" required maxlength="100" placeholder={copy.customerNamePlaceholder} />
+    </label>
+    <label class="scalius-order-form-field">
+      <span>{copy.customerPhoneLabel}</span>
+      <input name="customerPhone" type="tel" inputmode="tel" autocomplete="tel" required maxlength="20" placeholder={copy.customerPhonePlaceholder} />
+    </label>
+    {contact.email !== "hidden" && (
+      <label class="scalius-order-form-field">
+        <span>{contact.email === "required" ? copy.customerEmailRequiredLabel : copy.customerEmailLabel}</span>
+        <input name="customerEmail" type="email" autocomplete="email" maxlength="254" required={contact.email === "required"} placeholder={copy.customerEmailPlaceholder} />
+      </label>
+    )}
+    <label class="scalius-order-form-field">
+      <span>{copy.shippingAddressLabel}</span>
+      <textarea name="shippingAddress" rows="2" autocomplete="street-address" required maxlength="500" placeholder={copy.shippingAddressPlaceholder}></textarea>
+    </label>
+    {cities.length > 0 && (
+      <div class="scalius-order-form-location">
+        <LocationFields idPrefix={id} cities={cities} copy={copy} showAreaField={false} nativeRequired />
+      </div>
+    )}
+    {showNotes && (
+      <label class="scalius-order-form-field">
+        <span>{copy.orderNotesLabel}</span>
+        <textarea name="notes" rows="2" maxlength="500" placeholder={copy.orderNotesPlaceholder}></textarea>
+      </label>
+    )}
+    <input type="hidden" name="intent" value="review" />
+    <button type="submit" class="scalius-order-form-submit">{submitLabel?.trim() || copy.placeOrderText}</button>
+  </form>
+) : productHref ? (
+  <p class="scalius-order-form-unavailable"><a href={productHref}>{data!.product.name}</a></p>
+) : null}
+
+<script>
+  // With JavaScript the city and thana are searchable and a city's thanas
+  // load in place; a preview never posts.
+  import { browserApiUrl } from "@/lib/api/browser-url";
+  import { enhanceLocationSelects, fetchLocationOptions } from "@/lib/checkout/location-select";
+
+  for (const form of document.querySelectorAll<HTMLFormElement>("form[data-order-form]")) {
+    if (form.hasAttribute("data-preview")) form.addEventListener("submit", (event) => event.preventDefault());
+    const root = form.querySelector<HTMLElement>("[data-location-fields]");
+    if (root) enhanceLocationSelects(root, { load: (level, parentId) => fetchLocationOptions(browserApiUrl(""), level, parentId) });
+  }
+</script>

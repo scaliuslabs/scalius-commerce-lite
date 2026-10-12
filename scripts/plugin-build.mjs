@@ -236,6 +236,7 @@ function smokeSettings(contract, schema) {
     switch (field.type) {
       case "image": return "media_fixture";
       case "products": return "newest";
+      case "product": return "prod_fixture";
       case "link": return "/";
       case "url": return "https://example.com/";
       case "color": return "#112233";

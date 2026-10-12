@@ -4,7 +4,11 @@
 // app's storefront module and checked by the host (lib/extensions/host.ts).
 // The wrapper names the app and its file base for the client runtime and
 // adds no box (`display: contents`), so grids and sticky headers lay out
-// as the app wrote them.
+// as the app wrote them. Core embeds in it (`<scalius-checkout>`) render the
+// store's own surface in place (lib/extensions/embeds.ts).
+import OrderForm from "@/components/checkout/OrderForm.astro";
+import { splitCoreEmbeds } from "@/lib/extensions/embeds";
+
 interface Props {
   html: string;
   pluginId: string;
@@ -12,12 +16,19 @@ interface Props {
   base: string;
   /** The theme editor's mark (preview only). */
   editorMark?: string | undefined;
+  /** The theme editor's preview: embeds never post. */
+  preview?: boolean;
 }
 
-const { html, pluginId, base, editorMark } = Astro.props;
+const { html, pluginId, base, editorMark, preview = false } = Astro.props;
+const parts = splitCoreEmbeds(html);
 ---
 
-<div class="contents" data-sx-app={pluginId} data-sx-base={base} data-theme-section-id={editorMark} set:html={html} />
+<div class="contents" data-sx-app={pluginId} data-sx-base={base} data-theme-section-id={editorMark}>
+  {parts.map((part) => part.kind === "html"
+    ? <Fragment set:html={part.html} />
+    : <OrderForm slug={part.slug} maxQuantity={part.maxQuantity} submitLabel={part.submitLabel ?? undefined} preview={preview} />)}
+</div>
 
 <script>
   import { installAppComponents } from "@/scripts/app-components";

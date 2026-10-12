@@ -194,13 +194,15 @@ export type StorefrontResolvedValue =
   | boolean
   | string[]
   | StorefrontImage
+  | StorefrontProductCard
   | StorefrontProductCard[]
   | Array<Record<string, string | number | boolean | StorefrontImage | null>>
   | null;
 
 /** The page around a render. */
 export interface StorefrontRenderContext {
-  store: { name: string; currency: string; locale: string; language: "en" | "bn" };
+  /** `timeZone`: the store's IANA time zone (Settings -> Store details), for dates a merchant typed. */
+  store: { name: string; currency: string; locale: string; language: "en" | "bn"; timeZone: string };
   page: { kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "other"; path: string };
   /** The app's file base URL (`/_x/<plugin id>/<release>/`): its public files are under `public/`. */
   assets: string;

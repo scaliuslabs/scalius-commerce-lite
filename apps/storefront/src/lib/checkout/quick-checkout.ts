@@ -24,6 +24,8 @@ import {
 } from "./shipping-country";
 
 export const QUICK_CHECKOUT_PATH = "/checkout/quick";
+/** The most of one option an order form (`lineQuantity`) asks for. */
+export const QUICK_CHECKOUT_LINE_MAX_QUANTITY = 10;
 /** The form is small; anything larger is not it. */
 export const QUICK_CHECKOUT_MAX_BODY_BYTES = 32 * 1024;
 
@@ -97,7 +99,7 @@ export function readQuickCheckoutForm(form: FormData): QuickCheckoutForm {
   const checkoutId = text(form, "checkoutId", 80);
   const fingerprint = text(form, "expectedQuoteFingerprint", 40);
   return {
-    cartItems: text(form, "cartItems", 24 * 1024),
+    cartItems: withLineQuantity(text(form, "cartItems", 24 * 1024), form.get("lineQuantity")),
     checkoutId: CHECKOUT_ID_PATTERN.test(checkoutId) ? checkoutId : newQuickCheckoutId(),
     customerName: text(form, "customerName", 100),
     customerPhone: text(form, "customerPhone", 20),
@@ -121,6 +123,25 @@ export function readQuickCheckoutForm(form: FormData): QuickCheckoutForm {
     marketingConsent: text(form, "marketingConsent", 16),
     intent: form.get("intent") === "place" ? "place" : "review",
   };
+}
+
+/**
+ * The posted lines with a landing form's quantity (`lineQuantity`) applied:
+ * only to a single line, within 1 to `QUICK_CHECKOUT_LINE_MAX_QUANTITY`. Anything
+ * else leaves the lines as posted.
+ */
+export function withLineQuantity(cartItems: string, quantity: FormDataEntryValue | null): string {
+  if (typeof quantity !== "string" || !/^\d{1,2}$/.test(quantity)) return cartItems;
+  const value = Number(quantity);
+  if (value < 1 || value > QUICK_CHECKOUT_LINE_MAX_QUANTITY) return cartItems;
+  try {
+    const lines = JSON.parse(cartItems) as Record<string, Record<string, unknown>>;
+    const keys = Object.keys(lines);
+    if (keys.length !== 1 || typeof lines[keys[0]!] !== "object" || lines[keys[0]!] === null) return cartItems;
+    return JSON.stringify({ [keys[0]!]: { ...lines[keys[0]!], quantity: value } });
+  } catch {
+    return cartItems;
+  }
 }
 
 export interface QuickCheckoutLine {

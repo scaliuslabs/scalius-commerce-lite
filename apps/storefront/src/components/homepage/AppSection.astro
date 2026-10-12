@@ -29,12 +29,14 @@ const component = surface.component;
 let html: string | null = null;
 let base = "";
 let pluginId = "";
+let preview = false;
 if (component) {
   const { byId, host } = await requestExtensions(Astro.locals, Astro.url);
   const extension = byId.get(component.pluginId);
   const schema = extension?.sectionSettings[component.type];
   if (extension && schema && extension.sections.includes(component.type)) {
-    const [{ resolved, layout }, layoutData] = await Promise.all([currentRequestTheme(Astro.locals), getLayoutData()]);
+    const [{ resolved, layout, preview: themePreview }, layoutData] = await Promise.all([currentRequestTheme(Astro.locals), getLayoutData()]);
+    preview = themePreview !== null;
     const currency = { symbol: layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol, code: layoutData?.currency?.code ?? DEFAULT_CURRENCY.code };
     const media = new Map(component.media.flatMap((asset) => {
       const image = storefrontImageOf(asset);
@@ -63,7 +65,7 @@ if (component) {
 ---
 
 {component
-  ? html !== null && html.trim() !== "" && <AppComponent html={html} pluginId={pluginId} base={base} />
+  ? html !== null && html.trim() !== "" && <AppComponent html={html} pluginId={pluginId} base={base} preview={preview} />
   : (
     <section class="home-section w-full" data-app-section={section.settings.app}>
       <Container>

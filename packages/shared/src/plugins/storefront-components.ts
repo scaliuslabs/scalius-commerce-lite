@@ -23,6 +23,7 @@ import {
 } from "./storefront-protocol";
 import { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN } from "./manifest-patterns";
 import {
+  PLUGIN_PRODUCT_ID,
   PLUGIN_PRODUCT_SOURCE,
   pluginSettingsSchemaSchema,
   resolvePluginSettingValues,
@@ -86,6 +87,11 @@ export const storefrontComponentsManifestSchema = {
 
 // ── Resolving settings ────────────────────────────────────────────────────
 
+/** The list key of one picked product (a `product` setting): `product:<id>`. */
+export function storefrontProductKey(productId: string): string {
+  return `product:${productId}`;
+}
+
 /** What a component's settings need read before it renders: images by media id, product lists by source. */
 export interface StorefrontSettingNeeds {
   mediaIds: string[];
@@ -106,6 +112,8 @@ export function storefrontSettingNeeds(schema: PluginSettingsSchema, stored: unk
     if (field.type === "image" && typeof value === "string") mediaIds.add(value);
     else if (field.type === "products" && typeof value === "string" && PLUGIN_PRODUCT_SOURCE.test(value)) {
       products.set(value, Math.max(products.get(value) ?? 0, field.limit));
+    } else if (field.type === "product" && typeof value === "string" && PLUGIN_PRODUCT_ID.test(value)) {
+      products.set(storefrontProductKey(value), 1);
     } else if (field.type === "list" && Array.isArray(value)) {
       const imageKeys = field.fields.filter((item) => item.type === "image").map((item) => item.key);
       for (const item of value as PluginSettingItem[]) {
@@ -140,6 +148,9 @@ export function resolveStorefrontSettings(schema: PluginSettingsSchema, stored: 
         break;
       case "products":
         settings[field.key] = typeof value === "string" ? data.products(value).slice(0, field.limit) : [];
+        break;
+      case "product":
+        settings[field.key] = typeof value === "string" ? data.products(storefrontProductKey(value))[0] ?? null : null;
         break;
       case "list": {
         const items = Array.isArray(value) ? value as PluginSettingItem[] : [];

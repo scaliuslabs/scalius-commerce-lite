@@ -162,3 +162,34 @@ export function CartCount(props: { class?: string }): Html {
 export function editable(context: Pick<StorefrontRenderContext, "preview">, setting: string): Attributes {
   return context.preview ? { "data-theme-field": setting } : {};
 }
+
+// ── Core embeds ───────────────────────────────────────────────────────────
+
+export interface CheckoutProps {
+  /** The product to order: a card from a `product` or `products` setting. Nothing renders without one. */
+  product: Pick<StorefrontProductCard, "url"> | null | undefined;
+  /** The most the quantity picker offers (1 hides it; at most 10). */
+  maxQuantity?: number;
+  /** The submit button's words (the store's checkout language otherwise). */
+  submitLabel?: string;
+}
+
+/**
+ * The store's own order form, in place: the single-page order of a landing
+ * page. The buyer picks an option and a quantity and fills in name, phone
+ * and address here; the store checks it, prices delivery and places the
+ * cash-on-delivery order after one confirmation. Style it through
+ * `.scalius-order-form` and its parts.
+ *
+ *   <section id="order"><Checkout product={settings.product} maxQuantity={5} /></section>
+ */
+export function Checkout(props: CheckoutProps): Html {
+  const url = props.product?.url ?? "";
+  const slug = decodeURIComponent(url.split(/[?#]/, 1)[0]!.split("/").filter(Boolean).pop() ?? "");
+  if (!slug) return EMPTY_HTML;
+  return raw(`<scalius-checkout${attributes({
+    "data-product": slug,
+    "data-max-quantity": props.maxQuantity,
+    "data-submit-label": props.submitLabel,
+  })}></scalius-checkout>`);
+}

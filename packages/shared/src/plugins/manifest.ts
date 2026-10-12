@@ -607,7 +607,7 @@ export const pluginManifestSchema = z.object({
       if (field.type === "secret") context.addIssue({ code: "custom", path: [...path, "type"], message: "Storefront settings are public: keep secrets in the app's settings." });
       if (field.group !== undefined) context.addIssue({ code: "custom", path: [...path, "group"], message: "Groups are for the app's own settings." });
       // A slot draws from the layout read alone: its settings resolve at the edge, without a media or catalog read.
-      const needsRead = field.type === "image" || field.type === "products"
+      const needsRead = field.type === "image" || field.type === "products" || field.type === "product"
         || (field.type === "list" && field.fields.some((item) => item.type === "image"));
       if (needsRead) context.addIssue({ code: "custom", path: [...path, "type"], message: "A slot's settings cannot name images or products (ship images in the app's public files)." });
     });

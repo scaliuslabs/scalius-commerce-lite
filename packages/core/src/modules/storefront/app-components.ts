@@ -74,9 +74,15 @@ export async function readAppComponentData(
   for (const entry of resolved) {
     for (const { source, limit } of entry.needs.products) limits.set(source, Math.max(limits.get(source) ?? 0, limit));
   }
-  const lists: HomeProductListRequest[] = [...limits].slice(0, HOME_MAX_PRODUCT_LISTS).flatMap(([key, limit]) => {
+  const sources = [...limits].slice(0, HOME_MAX_PRODUCT_LISTS);
+  const lists: HomeProductListRequest[] = sources.flatMap(([key, limit]) => {
     const source = parseStorefrontProductSourceKey(key);
     return source ? [{ key, source, limit: Math.min(limit, 36) }] : [];
+  });
+  // Picked products (`product` settings): read by id as a manual collection of one.
+  const picked = sources.flatMap(([key]) => {
+    const id = /^product:([A-Za-z0-9_-]{1,64})$/.exec(key)?.[1];
+    return id ? [{ key, id }] : [];
   });
   const collectionLists = lists.filter((list) => list.source.kind === "collection");
   const otherLists = lists.filter((list) => list.source.kind !== "collection");
@@ -99,14 +105,22 @@ export async function readAppComponentData(
     listPlan.resolve(results, listOffset, marketShopAmounts(market)).map((list) => [list.key, list.products]),
   );
 
-  // Collection sources: their products by each collection's own rules, in a second batch.
-  if (collectionRead.length > 0) {
-    const rows = results[results.length - 1] as Array<{ id: string; config: unknown }>;
+  // Collection sources (their products by each collection's own rules) and
+  // picked products, in a second batch.
+  if (collectionRead.length > 0 || picked.length > 0) {
+    const rows = collectionRead.length > 0 ? results[results.length - 1] as Array<{ id: string; config: unknown }> : [];
     const configs = new Map(rows.map((row) => [row.id, normalizeCollectionConfig(row.config)]));
-    const requests = collectionLists.flatMap((list) => {
-      const config = configs.get((list.source as { collectionId: string }).collectionId);
-      return config ? [{ key: list.key, config, maxProducts: list.limit }] : [];
-    });
+    const requests = [
+      ...collectionLists.flatMap((list) => {
+        const config = configs.get((list.source as { collectionId: string }).collectionId);
+        return config ? [{ key: list.key, config, maxProducts: list.limit }] : [];
+      }),
+      ...picked.map(({ key, id }) => ({
+        key,
+        config: normalizeCollectionConfig({ source: "manual", productIds: [id], categoryIds: [], maxProducts: 1, title: "", subtitle: "" }),
+        maxProducts: 1,
+      })),
+    ];
     const plan = planCollectionProducts(db, requests, translation);
     if (plan.statements.length > 0) {
       const collectionResults = [...await safeBatch(db, plan.statements as Parameters<typeof safeBatch>[1])];

@@ -20,4 +20,9 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
     sha256: "b4bef5f7f6dfc8119a4e964691b5dcf02849595fa8c551c2e778e608d2accea0",
     load: () => import("../../../../plugins/nagad/src/index"),
   },
+  "scalius.noor": {
+    version: "1.0.0",
+    sha256: "dc1c03cc60bed1670fa1f2de34868541a929165d937ecce51f0e1580f25c0434",
+    load: () => import("../../../../plugins/noor/src/index"),
+  },
 };

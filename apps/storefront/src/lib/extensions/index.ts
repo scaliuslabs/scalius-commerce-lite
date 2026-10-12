@@ -58,6 +58,7 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
           currency: layout?.currency?.code ?? "BDT",
           locale: theme.language === "bn" ? "bn-BD" : "en-BD",
           language: theme.language,
+          timeZone: layout?.timeZone?.trim() || "Asia/Dhaka",
         },
         page: { kind: pageKind(url.pathname), path: url.pathname },
         assets: "",
