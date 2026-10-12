@@ -3,8 +3,7 @@
 // from the spec in header-variants.ts). The menu arrives in slot "menu" and
 // lands in the header's menu row or main row; phone extras (a shortcut row)
 // in slot "phone-extras". The behaviour every layout shares lives here: the
-// scroll state, the sticky height the page reads (--header-height), search
-// openers and the account link.
+// scroll state. Geometry and shared actions belong to the storefront host.
 import type { NavigationItem } from "@/lib/api";
 import type {
   StorefrontHeaderRenderer,
@@ -102,45 +101,9 @@ const {
 
 <script>
   import { shouldUseCompactHeader } from "./header-scroll-state";
-  import { pagePath } from "@/lib/presence-url";
 
   let isCompact = false;
   let scrollFrame: number | null = null;
-  let headerResizeObserver: ResizeObserver | null = null;
-
-  function setHeaderHeight(height: number) {
-    document.documentElement.style.setProperty("--header-height", `${height}px`);
-  }
-
-  /**
-   * The part of the header that sticks: #main-header, or its menu row when
-   * only that row stays (a `display: contents` header on computers).
-   */
-  function stickyPart(): HTMLElement | null {
-    const header = document.getElementById("main-header");
-    if (!header) return null;
-    if (getComputedStyle(header).display !== "contents") return header;
-    return header.querySelector<HTMLElement>(".hdr-menu-row") ?? header;
-  }
-
-  function updateHeaderHeight() {
-    const part = stickyPart();
-    if (part) setHeaderHeight(part.offsetHeight);
-  }
-
-  function observeHeaderHeight() {
-    headerResizeObserver?.disconnect();
-    const header = document.getElementById("main-header");
-    if (!header || typeof ResizeObserver === "undefined") {
-      updateHeaderHeight();
-      return;
-    }
-    headerResizeObserver = new ResizeObserver(() => updateHeaderHeight());
-    headerResizeObserver.observe(header);
-    const row = header.querySelector<HTMLElement>(".hdr-menu-row");
-    if (row) headerResizeObserver.observe(row);
-    updateHeaderHeight();
-  }
 
   function applyScrollState() {
     scrollFrame = null;
@@ -157,73 +120,11 @@ const {
     scrollFrame = window.requestAnimationFrame(applyScrollState);
   }
 
-  const triggerSearch = (event: Event) => {
-    event.preventDefault();
-    document.dispatchEvent(new CustomEvent("open-search-palette"));
-  };
-
-  function bindSearch() {
-    // The header search icons and the phone tab bar's Search tab.
-    document
-      .querySelectorAll<HTMLElement>("#mobile-search-toggle, #scrolled-search-trigger, [data-search-open]")
-      .forEach((opener) => {
-        if (opener.dataset.searchBound) return;
-        opener.dataset.searchBound = "";
-        opener.addEventListener("click", triggerSearch);
-      });
-    // Search fields: a pointer press opens the typeahead palette; keyboard
-    // users type in place and press Enter (a GET form to /search).
-    document.querySelectorAll<HTMLInputElement>("[data-search-inline]").forEach((input) => {
-      if (input.dataset.searchBound) return;
-      input.dataset.searchBound = "";
-      input.addEventListener("pointerdown", (event) => {
-        if (event.pointerType === "") return;
-        triggerSearch(event);
-      });
-    });
-    // A department scope searches that category's page instead (?q= there).
-    document.querySelectorAll<HTMLFormElement>("form[data-header-search]").forEach((form) => {
-      if (form.dataset.searchBound) return;
-      form.dataset.searchBound = "";
-      form.addEventListener("submit", (event) => {
-        const scope = form.querySelector<HTMLSelectElement>("[data-search-scope]")?.value ?? "";
-        if (!scope.startsWith("/categories/")) return;
-        event.preventDefault();
-        const query = (form.querySelector<HTMLInputElement>("input[name='q']")?.value ?? "").trim();
-        const target = new URL(scope, window.location.origin);
-        if (query) target.searchParams.set("q", query);
-        window.location.assign(pagePath(target.pathname + target.search));
-      });
-    });
-  }
-
   window.addEventListener("scroll", scheduleScrollState, { passive: true });
   applyScrollState();
-  observeHeaderHeight();
-  bindSearch();
 
   document.addEventListener("astro:page-load", () => {
     isCompact = false;
     applyScrollState();
-    observeHeaderHeight();
-    bindSearch();
   });
-
-  // Handle account icon click (check for cs_auth cookie)
-  function checkCustomerSession() {
-    const hasCookie = document.cookie.split(";").some((c) => c.trim().startsWith("cs_auth=1"));
-    // The header account icon, the top bar's and the phone tab bar's Account links.
-    document.querySelectorAll<HTMLElement>("#account-link, [data-account-link]").forEach((accountLink) => {
-      accountLink.onclick = (e) => {
-        if (!hasCookie) {
-          e.preventDefault();
-          window.dispatchEvent(new CustomEvent("open-auth-modal"));
-        }
-      };
-    });
-  }
-  checkCustomerSession();
-  window.addEventListener("customer-login", checkCustomerSession);
-  window.addEventListener("customer-logout", checkCustomerSession);
-  document.addEventListener("astro:page-load", checkCustomerSession);
 </script>

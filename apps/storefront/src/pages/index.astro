@@ -24,6 +24,7 @@ import {
   homepageContent,
   homepageHero,
   homepageLeadSection,
+  homepageLead,
   homepagePhoneSections,
   homepageSectionRenders,
 } from "@/lib/homepage-sections";
@@ -117,6 +118,7 @@ const leadSection = homepageLeadSection(homeSections, content);
 // The head tags of the app sections that drew something (meta and JSON-LD).
 const appHeads = homepageAppHeads(homeSections, content);
 const phoneSections = homepagePhoneSections(homeSections, content);
+const headerLead = homepageLead(homeSections, phoneSections, content);
 const phoneHeroMoved = phoneSections !== homeSections;
 const phoneLeadSection = phoneHeroMoved ? homepageLeadSection(phoneSections, content, true) : leadSection;
 // Preload the banner only when it is the first thing buyers see: the same
@@ -157,6 +159,7 @@ const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
   title={homepageTitle}
   description={homepageMetaDescription}
   layoutData={layoutData}
+  pageLead={headerLead}
   canonicalUrl={canonicalUrl ?? undefined}
   ogType="website"
   fallbackOgImage={
@@ -204,6 +207,7 @@ const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
     sections={homeSections}
     content={content}
     leadSectionId={leadSection?.id ?? null}
+    headerLeadSectionId={headerLead?.kind === "app" ? headerLead.instanceId : null}
     currencySymbol={currencySymbol}
     currencyCode={currencyCode}
     previewMarks={requestTheme.preview !== null}

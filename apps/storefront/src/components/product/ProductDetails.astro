@@ -39,7 +39,7 @@ const tabbed = tabs.length > 1;
       <div class="product-details-tabs" data-product-details-tabs>
         {!tabbed && <h2 id="details-tab-description" class="mb-2 mt-2 text-base font-semibold text-foreground">{tabs[0]!.label}</h2>}
         {tabbed && <div
-          class="product-details-tab-rail relative sticky z-40 border-b border-border bg-background"
+          class="product-details-tab-rail relative sticky z-[var(--scalius-z-content-bar,40)] border-b border-border bg-background"
         >
           {hasManyTabs && (
             <button
@@ -167,7 +167,7 @@ const tabbed = tabs.length > 1;
   /* Tab panel animation - GPU accelerated */
   .tab-panel {
     animation: fadeIn 0.2s ease-in-out;
-    scroll-margin-top: calc(var(--header-height, 3.5rem) + 3.25rem);
+    scroll-margin-top: 3.25rem;
   }
 
   @keyframes fadeIn {
@@ -188,7 +188,7 @@ const tabbed = tabs.length > 1;
   }
 
   .product-details-tab-rail {
-    top: calc(var(--header-height, 3.5rem) - 1px);
+    top: var(--header-height, 0px);
   }
 
   #tab-nav::-webkit-scrollbar {
@@ -226,5 +226,24 @@ const tabbed = tabs.length > 1;
       scroll-behavior: auto;
       transition-duration: 0.01ms;
     }
+  }
+</style>
+
+<style is:global>
+  /* One primary top bar at a time. Local detail tabs remain in their normal
+     flow when a product section bar or the desktop buy bar is active. */
+  @media (max-width: 63.999rem) {
+    #product-container:has([data-section-nav-phone]) .product-details-tab-rail {
+      position: relative;
+      top: auto;
+    }
+    #product-container:has([data-section-nav-phone]) .tab-panel { scroll-margin-top: 0.5rem; }
+  }
+  @media (min-width: 64rem) {
+    #product-container:has([data-section-nav-desktop], [data-sticky-buy-screens="desktop"]:not(.invisible), [data-sticky-buy-screens="all"]:not(.invisible)) .product-details-tab-rail {
+      position: relative;
+      top: auto;
+    }
+    #product-container:has([data-section-nav-desktop], [data-sticky-buy-screens="desktop"]:not(.invisible), [data-sticky-buy-screens="all"]:not(.invisible)) .tab-panel { scroll-margin-top: 0.5rem; }
   }
 </style>

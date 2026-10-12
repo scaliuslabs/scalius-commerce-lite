@@ -6,12 +6,15 @@ import {
   Image,
   Island,
   Price,
+  accountLink,
   asset,
   defineStorefront,
   editable,
   html,
   quickAdd,
   raw,
+  searchOpener,
+  stickyHeader,
   storefrontDefinitionOf,
   type HeaderProps,
   type ProductCardProps,
@@ -51,6 +54,16 @@ const storefront = defineStorefront({
 });
 
 describe("storefront JSX", () => {
+  it("keeps host action fallback routes and sticky geometry opt-in in rendered markup", () => {
+    const app = defineStorefront({ slots: { header: ({ data }: HeaderProps) => (
+      <header {...stickyHeader()}>
+        <a href={data.routes.search} {...searchOpener()}>Search</a>
+        <a href={data.routes.account} {...accountLink()}>Account</a>
+      </header>
+    ) } });
+    expect(renderHeader(app, "header", {})).toBe('<header data-sticky-header=""><a href="/search" data-search-open="">Search</a><a href="/account" data-account-link="">Account</a></header>');
+  });
+
   it("escapes text and attribute values", () => {
     const out = renderSection(storefront, "hero", { heading: `<script>alert("x")</script>`, text: `a & b "c"` });
     expect(out).toBe(`<section class="hero" data-kind="home"><h2>&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;</h2><p>a &amp; b &quot;c&quot;</p></section>`);

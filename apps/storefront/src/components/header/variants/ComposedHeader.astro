@@ -73,6 +73,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
 
 <div
   id="main-header"
+  data-sticky-header
   class="hdr group/header"
   data-header-style={headerStyle}
   data-header-variant={variantId}
@@ -213,7 +214,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
   }
 
   {menuRow && (
-    <div class="hdr-menu-row" data-tone="surface">
+    <div class="hdr-menu-row" data-tone="surface" data-sticky-header>
       <div class="hdr-inner hdr-menu-inner">
         <slot name="menu" />
       </div>
@@ -227,7 +228,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
   .hdr {
     position: sticky;
     top: 0;
-    z-index: 50;
+    z-index: var(--scalius-z-header, 50);
     width: 100%;
     background: var(--background);
     color: var(--foreground);
@@ -605,7 +606,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     .hdr[data-hdr-sticky="menu-row"] .hdr-menu-row {
       position: sticky;
       top: 0;
-      z-index: 50;
+      z-index: var(--scalius-z-header, 50);
     }
 
     .hdr[data-hdr-sticky="menu-row"].is-scrolled .hdr-menu-row {

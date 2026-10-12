@@ -10,7 +10,7 @@
  * need a browser.
  */
 import { fileURLToPath } from "node:url";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 import type { ViteDevServer } from "vite";
 import {
@@ -53,6 +53,8 @@ interface Container {
 let server: ViteDevServer;
 let container: Container;
 let HomepageSections: unknown;
+let requestRuntime: typeof import("@/lib/api/runtime").requestRuntime;
+let ExtensionHost: typeof import("@/lib/extensions/host").ExtensionHost;
 
 beforeAll(async () => {
   const { getViteConfig } = await import("astro/config");
@@ -83,6 +85,8 @@ beforeAll(async () => {
     renderer: reactRenderer,
   });
   HomepageSections = (await server.ssrLoadModule("/src/components/homepage/HomepageSections.astro")).default;
+  requestRuntime = (await server.ssrLoadModule("/src/lib/api/runtime.ts")).requestRuntime;
+  ExtensionHost = (await server.ssrLoadModule("/src/lib/extensions/host.ts")).ExtensionHost;
 }, 120_000);
 
 afterAll(async () => {
@@ -911,6 +915,49 @@ describe("app sections", () => {
     });
     return parse(html);
   }
+
+  it("marks an unavailable declared app lead without making another API read or marking later failures", async () => {
+    const sections = [app("lead"), app("later")];
+    const content: HomepageContent = {
+      ...store("tiny"),
+      apps: new Map(sections.map(({ id }) => [id, {
+        sectionId: id, html: "", head: { meta: [], jsonLd: [] },
+        component: { pluginId: "acme.hello", type: "greeting", values: {}, media: [], lists: [] },
+      }])),
+    };
+    // The layout has already been read; no extension is active anymore.
+    let apiReads = 0;
+    const page = await requestRuntime.run({
+      layout: Promise.resolve(null),
+      BACKEND_API: { fetch: () => { apiReads++; throw new Error("unexpected API read"); } } as unknown as Fetcher,
+    }, () => renderWith(sections, content, { headerLeadSectionId: "lead" }));
+    expect(apiReads).toBe(0);
+    expect(page.querySelectorAll("template[data-scalius-lead-empty]")).toHaveLength(1);
+    expect(page.querySelector('[data-section-id="lead"] template[data-scalius-lead-empty]')).not.toBeNull();
+    expect(page.querySelector('[data-section-id="later"] template')).toBeNull();
+  });
+
+  it.each([null, " ", "<section>Hero</section>"])("guards blank or failed component output, but not successful output: %s", async (html) => {
+    const sections = [app("lead")];
+    const content: HomepageContent = {
+      ...store("tiny"), apps: new Map([["lead", {
+        sectionId: "lead", html: "", head: { meta: [], jsonLd: [] },
+        component: { pluginId: "acme.hello", type: "greeting", values: {}, media: [], lists: [] },
+      }]]),
+    };
+    const draw = vi.spyOn(ExtensionHost.prototype, "render").mockResolvedValue(html);
+    try {
+      const page = await requestRuntime.run({ layout: Promise.resolve({ appExtensions: [{
+        pluginId: "acme.hello", version: "1.0.0", source: "bundled", release: "a".repeat(64),
+        sections: ["greeting"], sectionSettings: { greeting: [] }, slots: [], islands: [], stylesheet: false, connect: [],
+      }] } as unknown as import("@/lib/api/storefront").LayoutData) }, () => renderWith(sections, content, { headerLeadSectionId: "lead" }));
+      expect(draw).toHaveBeenCalledOnce();
+      expect(page.querySelector("template[data-scalius-lead-empty]") !== null).toBe(!html?.trim());
+      if (html?.trim()) expect(page.querySelector("section")?.textContent).toBe("Hero");
+    } finally {
+      draw.mockRestore();
+    }
+  });
 
   it("renders what the app drew in page order, and nothing (no box) for a section the app did not draw", async () => {
     const sections = [app("greeting"), section("product-rail", "rail", { source: { kind: "newest" } }), app("gone", "acme.gone/banner")];

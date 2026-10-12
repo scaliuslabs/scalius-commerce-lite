@@ -11,15 +11,7 @@
 /* ── Foundation ─────────────────────────────────────────────────────────── */
 
 /* Where sticky parts stop: below the sticky header the page shows (its rows and announcement). */
-:root { --noor-sticky: 1.5rem; }
-:root:has(.noor-header-shell.is-sticky) { --noor-sticky: 5rem; }
-:root:has(.noor-header-shell.is-sticky .noor-announce) { --noor-sticky: 7.25rem; }
-@media (min-width: 64rem) {
-  :root:has(.noor-header-shell.is-sticky) { --noor-sticky: 5.75rem; }
-  :root:has(.noor-header-shell.is-sticky .noor-announce) { --noor-sticky: 8rem; }
-  :root:has(.noor-header-shell.is-sticky .noor-header.is-center) { --noor-sticky: 8.25rem; }
-  :root:has(.noor-header-shell.is-sticky .noor-announce):has(.noor-header-shell .noor-header.is-center) { --noor-sticky: 10.5rem; }
-}
+:root { --noor-sticky: calc(var(--header-height, 0px) + 1.5rem); }
 
 .noor-s,
 .noor-header-shell,
@@ -475,7 +467,7 @@
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 
-.noor-header-shell { position: relative; z-index: 40; color: var(--theme-header-foreground, var(--n-ink)); }
+.noor-header-shell { position: relative; z-index: var(--scalius-z-header, 50); color: var(--theme-header-foreground, var(--n-ink)); }
 .noor-header-shell.is-sticky { position: sticky; inset-block-start: 0; }
 .noor-header-island { display: block; }
 
@@ -636,19 +628,19 @@
 .noor-header-shell .noor-nav, .noor-header-shell .noor-nav-list { block-size: 100%; }
 .noor-header-shell .noor-nav-item.has-menu:has(.noor-mega) { display: flex; }
 
-/* Reserve overlay geometry before hydration through the core's section
-   wrappers. JS readiness changes colour, never layout. */
-:root:has(
-  main > div > [data-home-render-unit]:first-child > [data-sx-app] > :is(.noor-s-hero, .noor-s-slideshow) .noor-hero.is-overlay .noor-hero-media img
-) {
+/* The server selects overlay chrome from the public lead-section fact. Its
+   layout reserve never depends on hydration or a measured CSS variable. A
+   failed lead render cancels it using the host's explicit failure marker. */
+:root:not(:has(main [data-scalius-lead-empty])) {
   .noor-header-shell.is-transparent { margin-block-end: calc((3.5rem + 2.25rem) * -1); }
   .noor-header-shell.is-transparent:not(:has(.noor-announce)) { margin-block-end: -3.5rem; }
-  .noor-header-shell.is-transparent[data-overlay-ready]:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within)) .noor-header {
+  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within)) .noor-header {
     background: transparent;
     border-color: transparent;
     color: #fff;
   }
-  .noor-header-shell.is-transparent[data-overlay-ready]:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within)) .noor-header .noor-logo-img { filter: brightness(0) invert(1); }
+  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within)) .noor-search-trigger { color: inherit; }
+  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within)) .noor-header .noor-logo-img { filter: brightness(0) invert(1); }
   @media (min-width: 64rem) {
     .noor-header-shell.is-transparent { margin-block-end: calc((4.25rem + 2.25rem) * -1); }
     .noor-header-shell.is-transparent:not(:has(.noor-announce)) { margin-block-end: -4.25rem; }
@@ -1160,7 +1152,7 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 .noor-features + .noor-actions-row, .noor-rows + .noor-actions-row { margin-block-start: 1.5rem; }
 
 /* The order: summary beside the store's form */
-.noor-s-order[id] { scroll-margin-block-start: calc(var(--noor-sticky, 0px) + 1rem); }
+.noor-s-order[id] { scroll-margin-block-start: 1rem; }
 .noor-order { display: grid; gap: 1rem; max-inline-size: 64rem; margin-inline: auto; }
 @media (min-width: 56rem) { .noor-order { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 1.5rem; align-items: start; } .noor-order-summary { position: sticky; inset-block-start: var(--noor-sticky); } }
 .noor-order-summary, .noor-order-form { padding: 1.25rem; border-radius: var(--n-radius-lg); background: var(--n-surface); }

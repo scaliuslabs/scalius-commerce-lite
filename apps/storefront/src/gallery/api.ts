@@ -35,6 +35,7 @@ import {
   productScenarioOf,
 } from "./fixtures";
 import { fixtureMetaobject, metaobjectMediaIds } from "./metaobjects";
+import { NOOR_EXTENSION, noorSectionSurfaces } from "./noor";
 
 /**
  * The fixture API lives on the gallery server under the entry's id, so the
@@ -61,6 +62,13 @@ export function entryTheme(entry: GalleryEntry): StorefrontThemeDocument {
   return { ...entry.theme, brand: { ...entry.theme.brand, logo: GALLERY_LOGO_ID } };
 }
 
+export function galleryNavigation(entry: GalleryEntry) {
+  const menu = fixtureMenu();
+  return entry.scenario.menu === "compact"
+    ? menu.slice(0, 5).map((item) => ({ ...item, subMenu: item.subMenu?.slice(0, 3).map((group) => ({ ...group, subMenu: group.subMenu?.slice(0, 3) })) }))
+    : menu;
+}
+
 export function galleryStoreShape(entry: GalleryEntry) {
   return storeShapeFromFacts({
     productCount: entry.scenario.catalogSize ?? 1240,
@@ -68,7 +76,7 @@ export function galleryStoreShape(entry: GalleryEntry) {
     topCategoryCount: 18,
     categoryDepth: 3,
     categoryGroups: 7,
-    menu: fixtureMenu(),
+    menu: galleryNavigation(entry),
     brandCount: 24,
     hasCollections: true,
     hasDeliveryMethods: true,
@@ -104,12 +112,13 @@ function layout(entry: GalleryEntry) {
   const business = fixtureBusiness();
   return {
     analytics: [],
-    navigation: fixtureMenu(),
+    navigation: galleryNavigation(entry),
     categoryTree: fixtureCategoryTree(),
     footerMenus: fixtureFooterMenus(),
     currency: { code: "BDT", symbol: "৳", decimalPlaces: 2, priceIncrementMinor: 100 },
     ...(markets(entry) ? { markets: markets(entry) } : {}),
     theme,
+    ...(entry.scenario.noor ? { appExtensions: entry.scenario.noor === "active" ? [NOOR_EXTENSION] : [] } : {}),
     brand: { logo: theme.brand.logo ? mediaAsset(GALLERY_LOGO_ID, `${STORE_NAME} logo`) : null, footerLogo: null, favicon: null },
     storeShape: galleryStoreShape(entry),
     business: entry.scenario.locale === "bn" ? { ...business, companyName: BANGLA_STORE_NAME } : business,
@@ -201,6 +210,7 @@ function sectionData(entry: GalleryEntry, sections: readonly StorefrontSection[]
           }))
         : [],
     }),
+    ...(entry.scenario.noor ? { apps: entry.scenario.noor === "active" ? noorSectionSurfaces(sections, entry.scenario.product) : [] } : {}),
   };
 }
 
@@ -309,7 +319,34 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   const product = /^\/api\/v1\/products\/([^/]+)$/.exec(path);
   if (product) {
     const scenario = productScenarioOf(decodeURIComponent(product[1]!));
-    return scenario ? productDetail(scenario) : undefined;
+    if (!scenario) return undefined;
+    const detail = productDetail(scenario);
+    if (!entry.scenario.productInfo) return detail;
+    const labels = entry.scenario.locale === "bn"
+      ? ["মাপ ও উপাদান", "যত্নের নির্দেশনা", "ডেলিভারি ও বিনিময়", "প্যাকেজে যা থাকছে", "হাতে তৈরির বিস্তারিত"]
+      : entry.scenario.locale === "ar"
+        ? ["المقاسات والخامات", "تعليمات العناية", "التوصيل والاستبدال", "محتويات العبوة", "تفاصيل الحرفة"]
+        : ["Size and materials", "Care instructions", "Delivery and exchanges", "What's in the package", "How it is made"];
+    const panels = [
+      ["sizing", "<p>Length: 5.5 metres. Width: 1.2 metres. The handwoven cotton-silk fabric may vary slightly between pieces.</p>"],
+      ["care", "<p>Dry clean only. Store folded in a breathable cotton bag, away from direct sunlight.</p>"],
+      ["delivery", "<p>Available delivery options and their charges are shown at checkout. Review the store's exchange policy before ordering.</p>"],
+      ["package", "<p>One saree and its matching unstitched blouse piece, protected in recyclable wrapping.</p>"],
+      ["craft", "<p>Woven on a pit loom in Narayanganj. Each motif is inserted by hand over several weeks.</p>"],
+    ].slice(0, entry.scenario.productInfo === "dense-tabs" ? 5 : 2)
+      .map(([id, content], index) => ({ id: id!, title: labels[index]!, content: content! }));
+    const description = entry.scenario.productInfo === "dense-tabs" ? [
+      "<p>This Jamdani saree is woven in Narayanganj using a cotton-silk blend chosen for its soft drape and subtle sheen. The weave feels light against the skin while holding enough structure to make clean pleats for a full day of wear.</p>",
+      "<p>The floral motifs are inserted by hand as the cloth grows on the loom. A weaver works each small group of threads into the ground fabric instead of printing or embroidering a pattern onto a finished length, giving the design its distinctive floating appearance.</p>",
+      "<p>Each piece takes several weeks to complete, with the pace depending on the density of the border and the larger motifs across the body. Small differences in spacing and texture are part of this process; the photographs show the overall design rather than an identical placement on every piece.</p>",
+      "<p>The saree measures approximately 5.5 metres long and 1.2 metres wide. It includes a matching unstitched blouse piece so you can choose your own neckline, sleeve length and fit with a local tailor. Please check the sizing panel before arranging alterations.</p>",
+      "<p>The bottle-green ground is paired with a restrained contrast border that can be dressed up with gold jewellery or worn with simple silver pieces. Indoor lighting and individual screens can change the appearance of the colour, so use both the close-up and full-length photographs when choosing.</p>",
+      "<p>For the first wear, gently air the saree in a shaded room and let any packing folds relax. Avoid pulling at a raised motif or loose end; a tailor familiar with handwoven cloth can secure a thread without disturbing the surrounding weave.</p>",
+      "<p>Dry cleaning is recommended to protect the silk content and the hand-inserted motifs. Tell your cleaner that the cloth is handwoven, and ask them to test any treatment on an inconspicuous area before applying it across the saree. Do not use bleach or a tumble dryer.</p>",
+      "<p>Store the clean, dry saree in a breathable cotton bag away from direct sunlight. Refold it occasionally along different lines to avoid leaving a permanent crease, and keep heavy jewellery or sharp accessories separate so they cannot catch on the fabric.</p>",
+      "<p>Before dispatch, the folded cloth is checked for visible damage and packed with its blouse piece. Delivery methods, current charges and the final payable amount are shown at checkout. Review the store's published exchange policy before removing labels or making alterations.</p>",
+    ].join("") : detail.product.description;
+    return { ...detail, product: { ...detail.product, description, additionalInfo: panels } };
   }
   const category = /^\/api\/v1\/categories\/([^/]+)\/products$/.exec(path);
   if (category) {

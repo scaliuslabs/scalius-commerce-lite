@@ -16,6 +16,15 @@ import {
   type StorefrontRenderJob,
   type StorefrontResolvedSettings,
 } from "@scalius/shared/plugins/storefront-protocol";
+import { checkStorefrontHeaderHtml, type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
+
+export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-html-check";
+
+/** Assert declared header capabilities without requiring search, nav or account. */
+export function assertHeaderContract(html: string, options: StorefrontHeaderCheckOptions = {}): void {
+  const issues = checkStorefrontHeaderHtml(html, options);
+  if (issues.length) throw new Error(`Invalid header markup: ${issues.join(" ")}`);
+}
 
 export function fixtureContext(overrides: Partial<StorefrontRenderContext> = {}): StorefrontRenderContext {
   return {
@@ -77,7 +86,7 @@ export function fixtureFooterData(overrides: Partial<StorefrontFooterData> = {})
   };
 }
 
-export interface RenderOptions {
+export interface RenderOptions extends StorefrontHeaderCheckOptions {
   context?: Partial<StorefrontRenderContext>;
 }
 
@@ -95,7 +104,13 @@ export function renderSection(module: StorefrontModule, type: string, settings: 
 }
 
 export function renderHeader(module: StorefrontModule, component: string, settings: StorefrontResolvedSettings = {}, data: Partial<StorefrontHeaderData> = {}, options: RenderOptions = {}): string {
-  return renderOne(module, { id: "job_1", kind: "slot", slot: "header", component, settings, data: fixtureHeaderData(data) }, options);
+  const html = renderOne(module, { id: "job_1", kind: "slot", slot: "header", component, settings, data: fixtureHeaderData(data) }, options);
+  try {
+    assertHeaderContract(html, options);
+  } catch (error) {
+    throw new Error(`Header ${JSON.stringify(component)}: ${(error as Error).message}`);
+  }
+  return html;
 }
 
 export function renderFooter(module: StorefrontModule, component: string, settings: StorefrontResolvedSettings = {}, data: Partial<StorefrontFooterData> = {}, options: RenderOptions = {}): string {

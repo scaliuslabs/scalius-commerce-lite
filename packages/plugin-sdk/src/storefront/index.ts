@@ -26,7 +26,7 @@ export type {
 } from "./define";
 export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
-export { CartCount, Checkout, Image, Island, Price, asset, editable, openCart, quickAdd, t } from "./components";
+export { CartCount, Checkout, Image, Island, Price, accountLink, asset, editable, openCart, quickAdd, searchOpener, stickyHeader, t } from "./components";
 export type { CheckoutProps, ImageProps, IslandProps, PriceProps } from "./components";
 export type {
   StorefrontFooterData,

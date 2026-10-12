@@ -61,6 +61,8 @@ interface Props {
   content: HomepageContent;
   /** `homepageLeadSection(...)`: the section whose photos lead the page. */
   leadSectionId: string | null;
+  /** The app placement declared to the header, for its empty-render guard. */
+  headerLeadSectionId?: string | null;
   currencySymbol: string;
   currencyCode: string;
   /** A theme editor preview: mark sections for the editor's bridge. */
@@ -73,7 +75,7 @@ interface Props {
   languageCode?: string | null;
 }
 
-const { sections, content: stored, leadSectionId, currencySymbol, currencyCode, previewMarks = false, region = "page", only, languageCode } = Astro.props;
+const { sections, content: stored, leadSectionId, headerLeadSectionId = null, currencySymbol, currencyCode, previewMarks = false, region = "page", only, languageCode } = Astro.props;
 const language = newsletterLanguage(languageCode);
 // The storefront's own words (default titles, "View more") follow the request's language.
 const { language: storeLanguage } = await currentRequestTheme(Astro.locals);
@@ -251,7 +253,7 @@ const root = only
 
         {section.type === "newsletter" && <NewsletterSection section={section} language={language} />}
 
-        {section.type === "app" && appSurface && <AppSection section={section} surface={appSurface} />}
+        {section.type === "app" && appSurface && <AppSection section={section} surface={appSurface} headerLead={section.id === headerLeadSectionId} />}
       </div>
     );
   })}

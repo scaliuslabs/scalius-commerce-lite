@@ -8,6 +8,7 @@ import {
   homepageCollectionsFallback,
   homepageContent,
   homepageLeadSection,
+  homepageLead,
   homepagePhoneSections,
   homepageRenderUnits,
   homepageSectionProducts,
@@ -89,6 +90,24 @@ describe("homepage section products", () => {
 });
 
 describe("homepage section rules", () => {
+  it("reports the actual lead including text and banner rows, skipping hidden or empty sections", () => {
+    const text = section("seo-text", "intro", { heading: "Welcome", body: "Shop here" });
+    const hidden = { ...section("banner", "hidden", { heading: "Hidden" }), hidden: true };
+    const missing = section("hero", "empty");
+    const sections = [hidden, missing, text, section("banner", "photo", { mediaId: "m1" })];
+    expect(homepageLead(sections, sections, content())).toEqual({ kind: "core", type: "seo-text" });
+    const banners = [section("banner", "a", { layout: "two-up", heading: "A" }), section("banner", "b", { layout: "two-up", heading: "B" })];
+    expect(homepageLead(banners, banners, content())).toEqual({ kind: "core", type: "banner" });
+    expect(homepageLead([], [], content())).toBeNull();
+  });
+
+  it("shares an app lead's values and media without its product lists", () => {
+    const app: StorefrontSection = { id: "lead", type: "app", version: 1, settings: { app: "acme.theme/hero", values: {} } };
+    const component = { pluginId: "acme.theme", type: "hero", values: { image: "m1" }, media: [{ id: "m1", url: "https://cdn.test/hero.jpg", alt: "Hero", width: 100, height: 80 }], lists: [{ source: "newest", products: [product("p")] }] };
+    const shown = content({ apps: new Map([[app.id, { sectionId: app.id, html: "", head: { meta: [], jsonLd: [] }, component }]]) });
+    expect(homepageLead([app], [app], shown)).toEqual({ kind: "app", pluginId: component.pluginId, type: "hero", instanceId: app.id, values: component.values, media: component.media });
+  });
+
   it("moves a visible banner after category tiles only for phones when the merchant chooses it", () => {
     const slides = [{ image: "m1", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: null }];
     const hero = section("hero", "hero", { phonePlacement: "after-categories", slides });
@@ -96,6 +115,7 @@ describe("homepage section rules", () => {
     const sections = [hero, section("usp-strip", "notice"), categories];
     const shown = content();
     expect(homepagePhoneSections(sections, shown).map((each) => each.id)).toEqual(["notice", "tiles", "hero"]);
+    expect(homepageLead(sections, homepagePhoneSections(sections, shown), shown)).toBeNull();
     expect(homepageLeadSection(homepagePhoneSections(sections, shown), shown, true)?.id).toBe("tiles");
     // Without a resolvable slide the hero shows nothing, so nothing moves.
     expect(homepagePhoneSections(sections, content({ media: new Map() }))).toBe(sections);

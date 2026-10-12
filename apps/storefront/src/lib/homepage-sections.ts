@@ -32,7 +32,7 @@ import type {
 } from "@/lib/api/storefront";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import { resolveHomepageHero, type ResolvedHomepageHero } from "@/lib/homepage-hero";
-import { readHomepageAppSurfaces, type HomepageAppSurface } from "@/lib/app-surfaces";
+import { readHomepageAppSurfaces, type HomepageAppComponent, type HomepageAppSurface } from "@/lib/app-surfaces";
 import { storefrontCopy, type StorefrontLanguage } from "@/lib/storefront-copy";
 import type { PluginHead } from "@scalius/shared/plugins/storefront";
 
@@ -488,6 +488,39 @@ export function bannerRowLayout(layout: "two-up" | "four-up", count: number): "f
 export type HomepageRenderUnit =
   | { kind: "section"; section: StorefrontSection }
   | { kind: "banners"; layout: "two-up" | "four-up"; sections: Array<StorefrontSectionOf<"banner">> };
+
+/** Internal lead data from the homepage read; headerPageData restricts it to the receiving app. */
+export type HomepageHeaderLead =
+  | { kind: "core"; type: string }
+  | {
+      kind: "app";
+      pluginId: string;
+      type: string;
+      instanceId: string;
+      values: HomepageAppComponent["values"];
+      media: HomepageAppComponent["media"];
+    }
+  | null;
+
+/** The actual first unit, including text. A viewport-dependent order has no shared lead. */
+export function homepageLead(
+  sections: readonly StorefrontSection[],
+  phoneSections: readonly StorefrontSection[],
+  content: HomepageContent,
+): HomepageHeaderLead {
+  const desktop = homepageRenderUnits(sections, content)[0];
+  const phone = homepageRenderUnits(phoneSections, content)[0];
+  const ids = (unit: HomepageRenderUnit) => unit.kind === "banners"
+    ? unit.sections.map((section) => section.id).join("\0")
+    : unit.section.id;
+  if (!desktop || !phone || desktop.kind !== phone.kind || ids(desktop) !== ids(phone)) return null;
+  if (desktop.kind === "banners") return { kind: "core", type: "banner" };
+  const section = desktop.section;
+  const component = homepageAppSurface(section, content)?.component;
+  return component
+    ? { kind: "app", pluginId: component.pluginId, type: component.type, instanceId: section.id, values: component.values, media: component.media }
+    : { kind: "core", type: section.type };
+}
 
 export function homepageRenderUnits(
   sections: readonly StorefrontSection[],

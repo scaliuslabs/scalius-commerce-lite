@@ -1,8 +1,8 @@
 # Storefront quality harness
 
-The harness renders registered core storefront variants and synthetic app cases,
-and measures those entries in a browser. It is not coverage of installed plugin
-themes or complete buyer/merchant journeys. Follow [UI verification](UI-VERIFICATION.md)
+The harness renders registered core storefront variants, synthetic app cases
+and the bundled Noor integration, and measures those entries in a browser.
+It is not coverage of every installed plugin or complete buyer/merchant journey. Follow [UI verification](UI-VERIFICATION.md)
 for composed pages, transitions, independent outcome checks and coverage claims.
 It has two parts:
 
@@ -69,9 +69,11 @@ The current runner resets storage at every navigation, uses Chromium with
 reduced motion, and captures at the top of the page. It cannot establish
 scroll-dependent positioning, session recovery, normal-motion behavior or
 cross-browser correctness. The gallery's one-setting-at-a-time generation is
-not pairwise coverage. Its synthetic app cases do not load Noor's packed
-module, CSS and islands together with the host. Keep these gaps explicit until
-the corresponding real integration journeys are executed.
+not pairwise coverage. The `integration:noor` family loads Noor's actual packed
+module, stylesheet and islands through the production host and asset handler.
+It covers core product tabs/navigation, listing, cart, landing checkout and
+header variants. Scroll, anchor, focus and recovery journeys still need explicit
+browser actions; a top-of-page screenshot does not prove them.
 
 ## How the gallery stays in sync
 

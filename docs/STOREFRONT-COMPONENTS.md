@@ -103,12 +103,50 @@ The SDK's primitives:
 - `Price`: the market's formatted price with an accessible compare-at (`from` for "From …").
 - `Island`: interactive markup (`hydrate`: `visible`, `idle`, `load`, `interaction`).
 - `quickAdd(product)`, `openCart()`, `CartCount`: the core cart behaviour, no app JavaScript.
+- `searchOpener()`, `accountLink()`: opt into the host's search and account actions; custom popovers remain valid.
+- `stickyHeader()`: declare the actual sticky header box so core navigation and anchors reserve its space.
 - `editable(context, key)`: marks the element that shows a text setting, so the editor edits it in place (preview only; the published page has no marks).
 - `asset(context, "public/font.woff2")`: a public file's URL.
 - `t(context, { en, bn })`: the store's language.
 - `Checkout`: the core order form (below).
 
 JSX escapes every string. `raw(...)` passes HTML through; the output check still runs. Event handler attributes and functions as attributes are refused at render time.
+
+### Shared header behavior
+
+Put `stickyHeader()` on the box with `position: sticky` or `fixed` and a top inset.
+The host publishes its stuck height plus that inset as `--header-height`.
+It selects the first visible eligible marker, so a responsive header can mark
+both its outer box and a menu row that sticks only on desktop. Normal-flow,
+hidden and `display: contents` boxes contribute nothing. Do not sum nested
+markers or copy core header selectors. Transforms do not change the reservation;
+keep visible header content within the declared box. Sliding it out may leave
+a reserved gap. Use `--scalius-z-header` for its layer and
+`--scalius-z-content-bar` for subordinate sticky content.
+
+Core product navigation reserves its own height separately and prevents the
+detail tab rail from stacking over it. A desktop buy bar reserves its height
+before scrolling reveals it, so direct links stay clear; a phone bottom bar
+never contributes to the top offset. Header geometry is observed on size,
+breakpoint and markup changes, without a geometry read on every scroll.
+
+Search/account helpers attach optional attributes to your controls. Use native
+buttons or links for keyboard behavior and supply a real link destination for
+navigation without JavaScript. Modified clicks and events your code already
+handled keep their native/custom behavior. Account authentication remains
+server-authoritative; the cookie only chooses which UI to open.
+Opening a host modal from a native popover closes that popover and restores
+focus to its visible opener when the modal closes.
+
+On the homepage, header jobs also receive `data.page.lead`: the first selected
+render unit when desktop and phone ordering agree, otherwise `null`. App leads
+include their identity; only a header from the same app receives normalized
+settings with resolved media and empty product lists. This uses the existing
+homepage read and affects only the header job's memo key. Other pages omit it.
+An empty or failed leading component emits `data-scalius-lead-empty` on an inert
+template. A header that overlays its lead must use this public marker to restore
+solid styling and normal spacing. Noor demonstrates this without inspecting
+private homepage wrappers or waiting for island hydration.
 
 ### Islands
 
@@ -125,6 +163,11 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 ```
 
 An island's module loads from `/_x/...` only when its moment comes, once per page however many times it appears. `context` carries the app's file base (`assets`), the store's `language` and `currency`, `formatMoney`, the cart (`openCart`, `quickAdd(url)`, `onCart(listener)`) and `fetchApp(path)`, which reaches the app's public routes through the storefront proxy (`/apps/<id>/...`, same origin, no CSP host needed).
+
+Return a cleanup for your listeners, timers and observers. The host cancels
+pending hydration on removal, ignores imports from an old connection and
+mounts again when the element reconnects. Host cart subscriptions are released
+on removal or mount failure; your other resources still need that cleanup.
 
 ## Core embeds: the single-page order
 
@@ -149,6 +192,13 @@ pnpm plugin add plugins/studio      # bundle into the fork (every plan)
 ```
 
 `@scalius/plugin-sdk/storefront/testing` renders any section or slot with fixtures (`renderSection`, `renderHeader`, `renderFooter`, `renderProductCard`, `fixtureProductCard`, `fixtureContext`). The output runs through the same check the storefront applies.
+
+`renderHeader` and the packer's header fixture render also check duplicate IDs,
+declared form targets, unsafe action links, inert sticky markers and island
+names/hydration. Pass `{ islands: ["menu"] }` to `renderHeader` to check names
+against your manifest. `assertHeaderContract(html, { islands })` checks your own
+rendered fixture. These are author diagnostics, not proof of visual correctness;
+exercise the composed page in the gallery/browser too.
 
 The packer (`packStorefront`):
 

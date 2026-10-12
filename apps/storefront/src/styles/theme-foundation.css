@@ -1,6 +1,9 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --product-sticky-height: 0px;
+  --scalius-z-header: 50;
+  --scalius-z-content-bar: 40;
   overscroll-behavior: none;
   --radius: 0.4rem;
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
@@ -303,7 +306,7 @@ html.dark {
 
 /* Focused targets scroll clear of the sticky header (WCAG 2.4.11). */
 html {
-  scroll-padding-top: calc(var(--header-height, 3.5rem) + 0.5rem);
+  scroll-padding-top: calc(var(--header-height, 3.5rem) + var(--product-sticky-height, 0px) + 0.5rem);
 }
 
 /* Fluid product grids (Theme -> Layout -> Density). The frame is an

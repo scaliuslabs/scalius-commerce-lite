@@ -22,9 +22,10 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 interface Props {
   section: StorefrontAppSection;
   surface: HomepageAppSurface;
+  headerLead?: boolean;
 }
 
-const { section, surface } = Astro.props;
+const { section, surface, headerLead = false } = Astro.props;
 const component = surface.component;
 let html: string | null = null;
 let base = "";
@@ -65,6 +66,8 @@ if (component) {
 }
 ---
 
+{/* Public guard for a header that used this declared lead before the app rendered. */}
+{headerLead && component && !html?.trim() && <template data-scalius-lead-empty></template>}
 {component
   ? html !== null && html.trim() !== "" && <AppComponent html={html} pluginId={pluginId} base={base} instanceId={section.id} preview={preview} />
   : (

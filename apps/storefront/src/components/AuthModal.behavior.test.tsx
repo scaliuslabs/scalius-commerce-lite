@@ -56,6 +56,7 @@ afterEach(async () => {
   delete window.__CHECKOUT_CONFIG__;
   delete window.__scaliusAuthModalOpenPending;
   delete window.__scaliusAuthModalDetailPending;
+  document.cookie = "cs_auth=; Max-Age=0; path=/";
   vi.useRealTimers();
 });
 
@@ -357,6 +358,14 @@ describe("sign-in dialog", () => {
     } finally {
       delete window.__SIGN_IN_APPS__;
     }
+  });
+
+  it("does not treat a cookie value that merely begins with 1 as an authenticated hint", async () => {
+    document.cookie = "cs_auth=10; path=/";
+    mocks.getCustomerSession.mockResolvedValue({ authenticated: true, customer });
+    await open();
+    expect(mocks.getCustomerSession).not.toHaveBeenCalled();
+    expect(title()).toBe("Sign in");
   });
 
   it("closes on Esc and the close button, and shows the signed-in state on reopen", async () => {

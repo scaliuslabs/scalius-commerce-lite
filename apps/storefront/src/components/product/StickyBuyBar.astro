@@ -19,10 +19,11 @@ const screens = phone && desktop ? "all" : desktop ? "desktop" : "phone";
 
 {(phone || desktop) && (
   <div
+    data-product-topbar="desktop"
     data-sticky-buy
     data-sticky-buy-screens={screens}
     class:list={[
-      "invisible fixed inset-x-0 z-40 translate-y-full bg-background/95 px-4 backdrop-blur transition-transform duration-200 motion-reduce:transition-none",
+      "invisible fixed inset-x-0 z-[var(--scalius-z-content-bar,40)] translate-y-full bg-background/95 px-4 backdrop-blur transition-transform duration-200 motion-reduce:transition-none",
       phone
         ? "bottom-0 border-t border-border pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-16px_rgb(0_0_0/0.4)]"
         : "max-lg:hidden",

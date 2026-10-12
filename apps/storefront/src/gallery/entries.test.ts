@@ -94,7 +94,7 @@ describe("the storefront gallery", () => {
   });
 
   it("audits the cart page with lines in it: 1, 3 and 10 lines, a sold-out line and a Bangla cart", () => {
-    const seeded = entries.filter((entry) => entry.page === "cart" && entry.scenario.cart);
+    const seeded = entries.filter((entry) => entry.family === "page:cart" && entry.scenario.cart);
     expect(seeded.map((entry) => entry.scenario.cart).sort()).toEqual(["bangla", "one", "sold-out", "ten", "three"]);
     const lines = (kind: Parameters<typeof galleryCartSeed>[0]) => Object.keys(galleryCartSeed(kind).items);
     expect([lines("one").length, lines("three").length, lines("ten").length]).toEqual([1, 3, 10]);

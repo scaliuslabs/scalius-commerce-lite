@@ -130,6 +130,21 @@ export function Island(props: IslandProps): Html {
 
 // ── Core behaviours (no app JavaScript) ───────────────────────────────────
 
+/** Mark the actual sticky header box. The host measures it only while CSS makes it sticky/fixed. */
+export function stickyHeader(): Attributes {
+  return { "data-sticky-header": "" };
+}
+
+/** Open the host search palette. Supply a native button or an anchor with a search-page fallback. */
+export function searchOpener(): Attributes {
+  return { "data-search-open": "" };
+}
+
+/** Use the host sign-in flow when logged out. Keep the account route as the anchor's href. */
+export function accountLink(): Attributes {
+  return { "data-account-link": "" };
+}
+
 /**
  * Attributes of a card's add link: an `<a>` to the product that adds it to
  * the cart in place and opens the cart (simple products), else opens its page.

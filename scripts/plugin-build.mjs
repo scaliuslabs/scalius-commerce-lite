@@ -130,7 +130,7 @@ export async function loadPluginContract() {
         'export * from "@scalius/shared/plugins";',
         'export { checkPluginAsset, checkStorefrontPublicFile } from "@scalius/shared/plugins/assets";',
         'export { storefrontDefinitionOf } from "./src/storefront/define";',
-        'export { fixtureContext, fixtureFooterData, fixtureHeaderData, fixtureProductCard } from "./src/storefront/testing";',
+        'export { checkStorefrontHeaderHtml, fixtureContext, fixtureFooterData, fixtureHeaderData, fixtureProductCard } from "./src/storefront/testing";',
       ].join("\n"),
       resolveDir: join(root, "packages/plugin-sdk"),
       loader: "ts",
@@ -344,6 +344,10 @@ export async function packStorefront(contract, manifest, source) {
     for (const result of reply.results) {
       if ("error" in result) fail(`${result.id} fails to render its defaults: ${result.error}`);
       if (Buffer.byteLength(result.html) > limits.htmlBytes) fail(`${result.id} renders ${Buffer.byteLength(result.html)} bytes of HTML; the limit is ${limits.htmlBytes}.`);
+      if (jobs.some((job) => job.id === result.id && job.kind === "slot" && job.slot === "header")) {
+        const issues = contract.checkStorefrontHeaderHtml(result.html, { islands: storefront.islands.map((island) => island.name) });
+        if (issues.length > 0) fail(`${result.id} has invalid header markup: ${issues.join(" ")}`);
+      }
     }
     files.push(storefrontFile(contract, contract.STOREFRONT_MODULE_FILE, Buffer.from(code)));
   }

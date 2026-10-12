@@ -156,8 +156,36 @@ describe("Noor chrome", () => {
 
   it("sits over the hero only on the homepage", () => {
     const settings = slotSettings("noor-header", { transparent_home: true });
-    expect(renderHeader(storefront, "noor-header", settings)).toContain("is-transparent");
+    const lead = { kind: "app" as const, pluginId: "scalius.noor", type: "hero", instanceId: "hero-first", settings: settingsFor("hero", { image: "hero" }) };
+    expect(renderHeader(storefront, "noor-header", settings, { page: { lead } })).toContain("is-transparent");
+    expect(renderHeader(storefront, "noor-header", settings)).not.toContain("is-transparent");
     expect(renderHeader(storefront, "noor-header", settings, {}, { context: { page: { kind: "product", path: "/products/x" } } })).not.toContain("is-transparent");
+  });
+
+  it("keeps solid chrome for non-overlay or unresolved leading sections", () => {
+    const settings = slotSettings("noor-header", { transparent_home: true });
+    const app = { kind: "app" as const, pluginId: "scalius.noor", type: "hero", instanceId: "first" };
+    const leads = [
+      null,
+      { kind: "core" as const, type: "product-grid" },
+      app,
+      { ...app, settings: settingsFor("hero") },
+      { ...app, settings: settingsFor("hero", { image: "hero", layout: "split" }) },
+      { ...app, pluginId: "another.theme", settings: settingsFor("hero", { image: "hero" }) },
+      { ...app, type: "slideshow", settings: settingsFor("slideshow", { slides: [] }) },
+    ];
+    for (const lead of leads) expect(renderHeader(storefront, "noor-header", settings, { page: { lead } })).not.toContain("is-transparent");
+  });
+
+  it("accepts an image-backed slideshow and declares the actual sticky box", () => {
+    const settings = slotSettings("noor-header", { transparent_home: true });
+    const lead = { kind: "app" as const, pluginId: "scalius.noor", type: "slideshow", instanceId: "first", settings: settingsFor("slideshow", { slides: [{ image: "wide", phone_image: "phone" }] }) };
+    expect(lead.settings.slides).toEqual([expect.objectContaining({ image: image("wide"), phone_image: image("phone") })]);
+    const header = renderHeader(storefront, "noor-header", settings, { page: { lead } });
+    expect(header).toContain("is-transparent");
+    expect(header).toContain('data-sticky-header=""');
+    expect(header).toContain('href="/account" data-account-link=""');
+    expect(renderHeader(storefront, "noor-header", slotSettings("noor-header", { sticky: false }))).not.toContain("data-sticky-header");
   });
 
   it("turns into a campaign header and footer on landing pages, unless the merchant keeps the full ones", () => {

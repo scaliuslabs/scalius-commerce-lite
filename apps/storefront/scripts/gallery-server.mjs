@@ -176,6 +176,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
   container.addClientRenderer({ name: "@astrojs/react", entrypoint: "@astrojs/react/client.js" });
   const gallery = await vite.ssrLoadModule("/src/gallery/server.ts");
   const runtimeModule = await vite.ssrLoadModule("/src/lib/api/runtime.ts");
+  const { serveExtensionFile } = await vite.ssrLoadModule("/src/lib/extensions/files.ts");
   const routes = storefrontRoutes();
 
   // Every API read of a render is answered by the entry's fixture API; any
@@ -209,6 +210,13 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
   handle = async (request, response) => {
     const url = new URL(request.url ?? "/", origin);
     try {
+      // Production's gateway owns this route before Astro. Use its real
+      // bundled-file handler so packed CSS and islands run in the gallery.
+      if (url.pathname.startsWith("/_x/")) {
+        const asset = await serveExtensionFile(new Request(url.href, { method: request.method }), {});
+        response.writeHead(asset.status, Object.fromEntries(asset.headers));
+        return response.end(Buffer.from(await asset.arrayBuffer()));
+      }
       if (url.href.startsWith(apiPrefix)) {
         // A browser read of the fixture API (the cart, recommendations, suggestions).
         const entry = apiEntry(url.href, request.headers.referer);

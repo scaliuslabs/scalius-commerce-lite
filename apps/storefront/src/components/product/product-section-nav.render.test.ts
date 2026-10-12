@@ -56,6 +56,7 @@ describe("marketplace product section navigation", () => {
   it("links only to present sections and keeps native top and review anchors", async () => {
     const document = await render({ detailsId: "about", reviewsId: "reviews" });
     const nav = document.querySelector("[data-product-section-nav]");
+    expect(nav?.hasAttribute("data-product-topbar")).toBe(true);
     expect(nav?.className).toContain("h-[52px]");
     expect([...nav!.querySelectorAll("a")].map((link) => [link.textContent?.trim(), link.getAttribute("href")]))
       .toEqual([["Top", "#product-container"], ["Details", "#about"], ["Reviews", "#reviews"]]);

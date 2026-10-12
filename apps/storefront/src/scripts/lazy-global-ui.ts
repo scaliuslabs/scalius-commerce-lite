@@ -5,7 +5,7 @@ import { installRailFocus } from "@/scripts/rail-focus";
 function hasCustomerAuthMirrorCookie(): boolean {
   return document.cookie
     .split(";")
-    .some((cookie) => cookie.trim().startsWith("cs_auth=1"));
+    .some((cookie) => cookie.trim() === "cs_auth=1");
 }
 
 export function installLazyGlobalUi(): void {

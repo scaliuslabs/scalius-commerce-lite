@@ -11,19 +11,16 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-it.each([
-  [".noor-s-hero overlay", '<section class="noor-s-hero"><div class="noor-hero is-overlay"><div class="noor-hero-media"><img src="/hero.jpg"></div></div></section>', true],
-  ["slideshow overlay", '<section class="noor-s-slideshow"><scalius-island><div class="noor-hero is-overlay"><div class="noor-hero-media"><img src="/hero.jpg"></div></div></scalius-island></section>', true],
-  ["product grid before hero", '<section class="noor-s-products">Products</section><section class="noor-s-hero"><div class="noor-hero is-overlay"><div class="noor-hero-media"><img src="/hero.jpg"></div></div></section>', false],
-  ["split hero", '<section class="noor-s-hero"><div class="noor-hero is-split"><div class="noor-hero-media"><img src="/hero.jpg"></div></div></section>', false],
-  ["hero without media", '<section class="noor-s-hero"><div class="noor-hero is-overlay"><div class="noor-hero-media"></div></div></section>', false],
-])("only enables header overlap over a leading photo overlay: %s", (_, markup, eligible) => {
-  document.body.innerHTML = `<div class="contents"><div class="noor-header-shell is-transparent"><scalius-island></scalius-island></div></div>
-    <main id="main-content"><h1 class="sr-only">Store</h1><div><div data-home-render-unit data-home-section="app"><div class="contents" data-sx-app="scalius.noor">${markup}</div></div></div></main>`;
+it.each([true, false])("preserves the server's transparent decision (%s) regardless of body markup", (transparent) => {
+  document.body.innerHTML = `<div class="noor-header-shell${transparent ? " is-transparent" : ""}"><scalius-island></scalius-island></div>
+    <main><section class="noor-s-products">Products</section><section class="noor-s-hero"><img src="/hero.jpg"></section></main>`;
   const shell = document.querySelector<HTMLElement>(".noor-header-shell")!;
-  expect(shell.hasAttribute("data-overlay-ready")).toBe(false);
   cleanup = header.mount(shell.querySelector<HTMLElement>("scalius-island")!, undefined, {} as never);
-  expect(shell.hasAttribute("data-overlay-ready")).toBe(eligible);
+  expect(shell.classList.contains("is-transparent")).toBe(transparent);
+  expect(shell.hasAttribute("data-overlay-ready")).toBe(false);
+  cleanup?.();
+  cleanup = undefined;
+  expect(shell.classList.contains("is-transparent")).toBe(transparent);
 });
 
 it("only enables the visible announcement and pauses while the buyer uses its link", () => {

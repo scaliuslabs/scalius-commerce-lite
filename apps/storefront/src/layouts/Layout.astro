@@ -66,12 +66,14 @@ import LanguageSelector from "../components/markets/LanguageSelector.astro";
 import MarketSelector from "../components/markets/MarketSelector.astro";
 import MarketSuggestion from "../components/markets/MarketSuggestion.astro";
 import type { LocalizedPaths } from "@/lib/localized-paths";
+import type { HomepageHeaderLead } from "@/lib/homepage-sections";
 
 interface Props {
   title: string;
   description?: string;
   hideHeader?: boolean;
   hideFooter?: boolean;
+  pageLead?: HomepageHeaderLead;
   /**
    * Keeps the `sidebar` navigation style's column off focused transactional
    * pages (order status, payment recovery). Pages without the header
@@ -109,6 +111,7 @@ const {
   description = "",
   hideHeader = false,
   hideFooter = false,
+  pageLead,
   hideNavigationSidebar = false,
   layoutData: providedLayoutData,
   canonicalUrl,
@@ -513,6 +516,7 @@ const pageStoreTimeZone = storeTimeZone();
       {
         !hideHeader && (
           <Header
+            pageLead={pageLead}
             navigation={navigationData}
             categoryTree={categoryTree}
             storeName={storeDisplayName}
@@ -605,7 +609,11 @@ const pageStoreTimeZone = storeTimeZone();
 
     <script>
       import { installLazyGlobalUi } from "@/scripts/lazy-global-ui";
+      import { installStorefrontActions } from "@/scripts/storefront-actions";
+      import { installStorefrontChrome } from "@/scripts/storefront-chrome";
       installLazyGlobalUi();
+      installStorefrontActions();
+      installStorefrontChrome();
     </script>
   </body>
 </html>

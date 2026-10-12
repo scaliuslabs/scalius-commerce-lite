@@ -12,7 +12,7 @@ import type {
   StorefrontProductCard,
   StorefrontResolvedSettings,
 } from "@scalius/shared/plugins/storefront-protocol";
-import { resolveStorefrontSettings } from "@scalius/shared/plugins/storefront-components";
+import { resolveStorefrontSettings, type StorefrontExtension } from "@scalius/shared/plugins/storefront-components";
 import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
 import { mediaImageSrcSet, mediaImageUrl } from "@scalius/shared/media-variants";
 import type { CategoryNavigationNode, FooterMenu, NavigationItem } from "@/lib/api";
@@ -21,6 +21,7 @@ import type { ProductCardModel, ProductCardProduct } from "@/components/cards/ca
 import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
 import { navigationFromCategoryTree, sourceNavigation, type NavigationSource } from "@/components/header/nav-tree";
 import type { RequestTheme } from "@/lib/storefront-theme-context";
+import type { HomepageHeaderLead } from "@/lib/homepage-sections";
 
 /** Three levels at most, store paths or https links only. */
 function menuItems(items: readonly NavigationItem[] | undefined, depth = 1): StorefrontMenuItem[] {
@@ -50,6 +51,7 @@ export function headerData(input: {
   storeName: string | null;
   navigation: readonly NavigationItem[];
   categoryTree: { nodes: CategoryNavigationNode[] } | null | undefined;
+  page?: StorefrontHeaderData["page"];
 }): StorefrontHeaderData {
   const { resolved, brand } = input.theme;
   const nodes = input.categoryTree?.nodes ?? [];
@@ -68,6 +70,26 @@ export function headerData(input: {
     announcement: text ? { text, url: typeof settings.link === "string" && settings.link ? settings.link : null } : null,
     routes: { home: "/", search: "/search", cart: "/cart", account: "/account" },
     searchParam: "q",
+    ...(input.page !== undefined ? { page: input.page } : {}),
+  };
+}
+
+/** No reads: a header sees only its own lead section's normalized settings and resolved media. */
+export function headerPageData(lead: HomepageHeaderLead, extension: StorefrontExtension): NonNullable<StorefrontHeaderData["page"]> {
+  if (!lead || lead.kind === "core") return { lead };
+  const { pluginId, type, instanceId } = lead;
+  const schema = pluginId === extension.pluginId && extension.sections.includes(type)
+    ? extension.sectionSettings[type]
+    : undefined;
+  const media = new Map(lead.media.flatMap((asset) => {
+    const image = storefrontImageOf(asset);
+    return image ? [[asset.id, image] as const] : [];
+  }));
+  return {
+    lead: {
+      kind: "app", pluginId, type, instanceId,
+      ...(schema ? { settings: componentSectionSettings(schema, lead.values, media, new Map()) } : {}),
+    },
   };
 }
 

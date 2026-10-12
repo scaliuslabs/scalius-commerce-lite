@@ -167,6 +167,20 @@ export interface StorefrontHeaderData {
   routes: { home: string; search: string; cart: string; account: string };
   /** The search form's query parameter. */
   searchParam: string;
+  /** The first selected homepage render unit, only when desktop and phone agree. */
+  page?: {
+    lead:
+      | { kind: "core"; type: string }
+      | {
+          kind: "app";
+          pluginId: string;
+          type: string;
+          instanceId: string;
+          /** Same-plugin settings only; media resolved, product lists empty. */
+          settings?: StorefrontResolvedSettings;
+        }
+      | null;
+  };
 }
 
 export interface StorefrontFooterData {

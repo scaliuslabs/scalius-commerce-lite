@@ -82,7 +82,7 @@ async function fetchCheckoutConfig(): Promise<CheckoutConfig | null> {
 
 function hasCustomerAuthMirrorCookie(): boolean {
   return typeof document !== "undefined"
-    && document.cookie.split(";").some((cookie) => cookie.trim().startsWith("cs_auth=1"));
+    && document.cookie.split(";").some((cookie) => cookie.trim() === "cs_auth=1");
 }
 
 const inputClass =

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StorefrontExtension, StorefrontRenderBatch, StorefrontRenderReply } from "@scalius/shared/plugins/storefront-components";
 import { ExtensionHost, clearExtensionMemo } from "./host";
 import { splitCoreEmbeds } from "./embeds";
+import type { StorefrontHeaderData } from "@scalius/shared/plugins/storefront-protocol";
 
 const extension: StorefrontExtension = {
   pluginId: "acme.theme", version: "1.0.0", source: "bundled", release: "e".repeat(64),
@@ -63,6 +64,27 @@ describe("ExtensionHost", () => {
   it("checks what an app draws before the page gets it", async () => {
     const { instance } = host((batch) => ({ abi: 1, results: batch.jobs.map((job) => ({ id: job.id, html: `<p onclick="x()">a</p><script>steal()</script>` })) }));
     expect(await instance.render(extension, section("a"))).toBe("<p>a</p>");
+  });
+
+  it("varies only the header memo when its lead settings change", async () => {
+    const data: StorefrontHeaderData = {
+      store: { name: "Acme", url: "/", logo: null, logoWidth: 100 }, menu: [], categories: [], announcement: null,
+      routes: { home: "/", search: "/search", cart: "/cart", account: "/account" }, searchParam: "q",
+    };
+    const header = (layout: string) => ({ kind: "slot" as const, slot: "header" as const, component: "head", settings: {}, data: {
+      ...data, page: { lead: { kind: "app" as const, pluginId: extension.pluginId, type: "hero", instanceId: "lead", settings: { layout } } },
+    } });
+    const first = host(echo);
+    await Promise.all([first.instance.render(extension, header("overlay")), first.instance.render(extension, section("card"))]);
+    const unchanged = host(echo);
+    await unchanged.instance.render(extension, header("overlay"));
+    expect(unchanged.calls).toHaveLength(0);
+    const changed = host(echo);
+    await Promise.all([changed.instance.render(extension, header("split")), changed.instance.render(extension, section("card"))]);
+    expect(changed.calls).toHaveLength(1);
+    expect(changed.calls[0]!.jobs).toHaveLength(1);
+    expect(changed.calls[0]!.jobs[0]).toMatchObject({ kind: "slot", slot: "header", data: { page: { lead: { settings: { layout: "split" } } } } });
+    expect(changed.calls[0]!.context.page).toEqual({ kind: "home", path: "/" });
   });
 
   it("draws nothing for a failed job, and the rest of the batch still draws", async () => {

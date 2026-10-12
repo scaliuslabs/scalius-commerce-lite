@@ -10,7 +10,9 @@ import {
   CartCount,
   Image,
   Island,
+  accountLink,
   openCart,
+  stickyHeader,
   t,
   type HeaderProps,
   type StorefrontMenuItem,
@@ -28,6 +30,19 @@ export interface HeaderSettings {
   announcements: Array<{ text: string | null; link: string | null }>;
   landing_header: string;
   landing_label: string | null;
+}
+
+/** Only this plugin's resolved, image-backed lead can support light overlay chrome. */
+function supportsOverlay(data: HeaderProps<HeaderSettings>["data"]): boolean {
+  const lead = data.page?.lead;
+  if (lead?.kind !== "app" || lead.pluginId !== "scalius.noor" || !lead.settings) return false;
+  const hasImage = (value: unknown): boolean => typeof value === "object" && value !== null
+    && "url" in value && typeof value.url === "string" && value.url.length > 0;
+  const images = (settings: unknown) => typeof settings === "object" && settings !== null
+    && (("image" in settings && hasImage(settings.image)) || ("phone_image" in settings && hasImage(settings.phone_image)));
+  if (lead.type === "hero") return lead.settings.layout !== "split" && images(lead.settings);
+  return lead.type === "slideshow" && Array.isArray(lead.settings.slides)
+    && lead.settings.slides.some(images);
 }
 
 function Announcements({ items, context }: { items: Array<{ text: string; link: string | null }>; context: Context }) {
@@ -116,7 +131,7 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
   const own = settings.announcements.flatMap((item) => (text(item.text) ? [{ text: text(item.text)!, link: text(item.link) }] : []));
   const announcements = own.length > 0 ? own : data.announcement ? [{ text: data.announcement.text, link: data.announcement.url }] : [];
   const campaign = context.page.kind === "landing" && choice(settings.landing_header, ["full", "campaign"] as const, "campaign") === "campaign";
-  const transparent = settings.transparent_home && context.page.kind === "home";
+  const transparent = settings.transparent_home && context.page.kind === "home" && supportsOverlay(data);
   const layout = choice(settings.layout, ["center", "start"] as const, "center");
   const logo = (
     <a class="noor-logo" href={data.routes.home} aria-label={data.store.name}>
@@ -125,7 +140,7 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
   );
   if (campaign) {
     return (
-      <div class={cx("noor-header-shell", settings.sticky && "is-sticky")} style={{ "--noor-logo-width": `${data.store.logoWidth}px` }}>
+      <div class={cx("noor-header-shell", settings.sticky && "is-sticky")} {...(settings.sticky ? stickyHeader() : {})} style={{ "--noor-logo-width": `${data.store.logoWidth}px` }}>
         <Island name="header" hydrate="idle" class="noor-header-island">
           {announcements.length > 0 ? <Announcements items={announcements.slice(0, 1)} context={context} /> : null}
           <header class="noor-header is-campaign">
@@ -145,7 +160,7 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
   }
   const searchLabel = t(context, { en: "Search", bn: "খুঁজুন" });
   return (
-    <div class={cx("noor-header-shell", settings.sticky && "is-sticky", transparent && "is-transparent")} style={{ "--noor-logo-width": `${data.store.logoWidth}px` }}>
+    <div class={cx("noor-header-shell", settings.sticky && "is-sticky", transparent && "is-transparent")} {...(settings.sticky ? stickyHeader() : {})} style={{ "--noor-logo-width": `${data.store.logoWidth}px` }}>
       <Island name="header" hydrate="idle" class="noor-header-island">
         <Announcements items={announcements} context={context} />
         <header class={cx("noor-header", `is-${layout}`)}>
@@ -172,7 +187,7 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
                 </button>
               ) : null}
               {settings.show_account ? (
-                <a class="noor-icon-btn noor-desk-only" href={data.routes.account} aria-label={t(context, { en: "Account", bn: "অ্যাকাউন্ট" })}>
+                <a class="noor-icon-btn noor-desk-only" href={data.routes.account} {...accountLink()} aria-label={t(context, { en: "Account", bn: "অ্যাকাউন্ট" })}>
                   <Icon name="user" size={21} />
                 </a>
               ) : null}
@@ -197,7 +212,7 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
         </form>
         <nav aria-label={t(context, { en: "Main", bn: "প্রধান" })}><DrawerMenu items={data.menu} context={context} /></nav>
         <div class="noor-drawer-foot">
-          <a href={data.routes.account}><Icon name="user" size={18} />{t(context, { en: "My account", bn: "আমার অ্যাকাউন্ট" })}</a>
+          <a href={data.routes.account} {...accountLink()}><Icon name="user" size={18} />{t(context, { en: "My account", bn: "আমার অ্যাকাউন্ট" })}</a>
         </div>
       </div>
       {settings.show_search ? (

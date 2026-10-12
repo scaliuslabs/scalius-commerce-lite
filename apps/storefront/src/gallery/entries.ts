@@ -40,6 +40,7 @@ import { ARABIC_TEXT, BANGLA_LONG, type ProductScenario } from "./fixtures";
 import type { GalleryCartSeed } from "./cart-seed";
 import { SECTION_CONTENT } from "./section-content";
 import { settingVariants, settingChoices, settingWith, type SettingsSchema } from "./variants";
+import { noorLandingSections, noorTheme } from "./noor";
 
 export type GalleryPage = "home" | "landing" | "product" | "category" | "collection" | "brand" | "search" | "cart" | "page";
 
@@ -51,6 +52,8 @@ export interface GalleryFocus {
 
 export interface GalleryScenario {
   product?: ProductScenario;
+  /** Merchant-authored product detail panels alongside the description. */
+  productInfo?: "tabs" | "dense-tabs";
   /** The page's presence: `bn` (the root speaks Bangla) or `ar` (an Arabic, RTL subfolder). */
   locale?: "bn" | "ar";
   /** The listing's results: a large catalogue (default), none, or a few. */
@@ -61,6 +64,10 @@ export interface GalleryScenario {
   missingSectionMedia?: boolean;
   /** App sections and product blocks draw something. */
   apps?: boolean;
+  /** Real packed Noor through the production host; missing exercises core slot fallback. */
+  noor?: "active" | "missing";
+  /** A small authored menu; omitted retains the 1,000+ link stress fixture. */
+  menu?: "compact";
   /** `localStorage` the browser starts with (a saved cart); the quality audit seeds it before the page loads. */
   storage?: Record<string, string>;
   /** An app draws blocks at the checkout targets (the layout lists the `checkout` page). */
@@ -578,6 +585,80 @@ function localeEntries(): GalleryEntry[] {
   ]);
 }
 
+/** Cross the real extension/core boundary: header, cards, overlays and core checkout embeds. */
+function noorEntries(): GalleryEntry[] {
+  const base = noorTheme(baseTheme());
+  base.blocks.product = {
+    ...base.blocks.product,
+    below: ["description", "spec-table", "reviews", "related"],
+    sticky: { phoneTop: "anchor-bar", phoneBottom: "buy-bar", desktop: "anchor-bar" },
+  };
+  const product = (id: string, title: string, values: NonNullable<NonNullable<StorefrontThemeDocument["apps"]>["header"]>["values"] = {}, scenario: GalleryScenario = {}): GalleryEntry => {
+    const theme = clone(base);
+    theme.apps ??= {};
+    theme.apps.header = { app: "scalius.noor/noor-header", values: { ...theme.apps.header?.values, ...values } };
+    return { id, family: "integration:noor", title, page: "product", theme, focus: WHOLE_PAGE, scenario: { noor: "active", product: "fashion", productInfo: "tabs", menu: "compact", ...scenario } };
+  };
+  const quiet = product("noor-product-quiet", "Noor header without an announcement", { announcements: [] });
+  quiet.theme.blocks.topBar = storefrontBlockDefault("topBar", "none") as typeof quiet.theme.blocks.topBar;
+  const entries = [
+    product("noor-product", "Noor centered sticky header + core product tabs and section navigation"),
+    product("noor-product-static", "Noor non-sticky header + core product navigation", { sticky: false }),
+    quiet,
+    product("noor-product-start", "Noor start-aligned header and simple menus", { layout: "start", menu_style: "simple" }),
+    product("noor-product-dense", "Noor with the full 1,000+ link menu and many detail tabs", {}, { menu: undefined, productInfo: "dense-tabs" }),
+    product("noor-product-missing", "Inactive Noor slots fall back to the core theme", {}, { noor: "missing" }),
+    product("noor-product-bn", "Noor + dense Bangla product and core navigation", {}, { locale: "bn", product: "bangla" }),
+    product("noor-product-rtl", "Noor + RTL presence and core product navigation", {}, { locale: "ar" }),
+  ];
+  const menu = product("noor-menu", "Noor mobile drawer over a core product page");
+  menu.interact = [{ click: 'button[popovertarget="noor-drawer"]:not([popovertargetaction])', maxWidth: 1024, expectVisible: "#noor-drawer:popover-open" }];
+  entries.push(menu);
+  const search = product("noor-search", "Noor search popover over a core product page");
+  search.interact = [{ click: 'button[popovertarget="noor-search"]:visible', expectVisible: "#noor-search:popover-open" }];
+  entries.push(search);
+  // Keep the same tokens and product composition, changing only the slots.
+  const core = product("noor-product-core", "Core header + the same product tabs and navigation");
+  core.theme.apps = {};
+  core.scenario.noor = undefined;
+  entries.push(core);
+  const menuRow = { ...core, id: "core-product-menu-row", title: "Core desktop sticky menu row + product section navigation", theme: clone(core.theme) };
+  menuRow.theme.blocks.desktopNav = storefrontBlockDefault("desktopNav", "sticky-category-bar") as typeof menuRow.theme.blocks.desktopNav;
+  entries.push(menuRow);
+  const buyBar = product("noor-product-buybar", "Noor sticky header + core desktop product buy bar");
+  buyBar.theme.blocks.product.sticky.desktop = "product-bar";
+  entries.push(buyBar);
+  const tabs = product("noor-product-tabs", "Noor sticky header + standalone core detail tabs", {}, { productInfo: "dense-tabs" });
+  tabs.theme.blocks.product.sticky = { phoneTop: "none", phoneBottom: "buy-bar", desktop: "none" };
+  entries.push(tabs);
+  const home = clone(base);
+  home.apps!.header!.values.transparent_home = true;
+  const homeEntry: GalleryEntry = { id: "noor-home", family: "integration:noor", title: "Noor transparent header over the first image hero", page: "home", theme: home, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact" } };
+  entries.push(homeEntry);
+  const textFirst = { ...homeEntry, id: "noor-home-text", title: "Noor transparent setting with a text section first", theme: clone(home) };
+  textFirst.theme.pages.home.unshift(contentSection("editorial", "intro"));
+  entries.push(textFirst);
+  const noImage = { ...homeEntry, id: "noor-home-no-image", title: "Noor transparent setting with an image-less hero", theme: clone(home) };
+  const hero = noImage.theme.pages.home[0]!;
+  if (hero.type === "app") hero.settings.values = { ...hero.settings.values, image: null, phone_image: null };
+  entries.push(noImage);
+  const slideshow = { ...homeEntry, id: "noor-home-slideshow", title: "Noor transparent header over the first slideshow", theme: clone(home) };
+  slideshow.theme.pages.home[0] = { id: "noor-slideshow", type: "app", version: 1, settings: { app: "scalius.noor/slideshow", values: {
+    autoplay: false,
+    slides: [
+      { image: "banner-eid", heading: "The Eid edit", text: "Handwoven colour for the celebrations ahead.", label: "Shop the collection", link: "/collections/col-eid" },
+      { image: "banner-boishakh", heading: "Made by hand", text: "Meet the weavers behind every piece.", label: "Explore sarees", link: "/categories/women" },
+    ],
+  } } };
+  entries.push(slideshow);
+  entries.push({ id: "noor-listing", family: "integration:noor", title: "Noor product cards + core listing filters", page: "category", theme: clone(base), focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact" } });
+  entries.push({ id: "noor-cart", family: "integration:noor", title: "Noor chrome + populated core cart and checkout", page: "cart", theme: clone(base), focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact", cart: "three" } });
+  const landing = clone(base);
+  landing.pages.landing = { "eid-sale": { title: "Noor product campaign", description: "A packed app campaign with the store's actual checkout form.", sections: noorLandingSections() } };
+  entries.push({ id: "noor-landing", family: "integration:noor", title: "Noor campaign + actual core order form", page: "landing", theme: landing, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact", product: "fashion" } });
+  return entries;
+}
+
 let cached: GalleryEntry[] | null = null;
 
 /** Every entry, in family order; ids are unique and stable. */
@@ -594,6 +675,7 @@ export function galleryEntries(): GalleryEntry[] {
     ...productEntries(),
     ...tokenEntries(),
     ...appEntries(),
+    ...noorEntries(),
     ...pageEntries(),
     ...localeEntries(),
   ];

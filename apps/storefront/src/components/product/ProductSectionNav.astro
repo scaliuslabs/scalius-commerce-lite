@@ -26,12 +26,13 @@ const links = [
 
 {links.length > 0 && (phone || desktop) && (
   <nav
+    data-product-topbar
     data-product-section-nav
     data-section-nav-phone={phone ? "" : undefined}
     data-section-nav-desktop={desktop ? "" : undefined}
     aria-label="Product sections"
     class:list={[
-      "sticky top-[var(--header-height,0px)] z-40 h-[52px] border-b border-border bg-background shadow-[0_3px_8px_-5px_rgb(0_0_0/0.35)]",
+      "sticky top-[var(--header-height,0px)] z-[var(--scalius-z-content-bar,40)] h-[52px] border-b border-border bg-background shadow-[0_3px_8px_-5px_rgb(0_0_0/0.35)]",
       phone && desktop ? "flex" : phone ? "flex lg:hidden" : "hidden lg:flex",
     ]}
   >
@@ -58,7 +59,7 @@ const links = [
   /* Sections land below the pinned bar (and the header above it). */
   @media (max-width: 63.999rem) {
     #product-container:has([data-section-nav-phone]) :is([data-product-module], #reviews, #related-products) {
-      scroll-margin-top: calc(var(--header-height, 0px) + 3.75rem);
+      scroll-margin-top: 0.5rem;
     }
   }
   @media (min-width: 64rem) {
@@ -70,7 +71,7 @@ const links = [
       padding-inline: 1.25rem;
     }
     #product-container:has([data-section-nav-desktop]) :is([data-product-module], #reviews, #related-products) {
-      scroll-margin-top: calc(var(--header-height, 0px) + 3.75rem);
+      scroll-margin-top: 0.5rem;
     }
   }
 </style>
