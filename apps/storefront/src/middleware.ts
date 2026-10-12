@@ -40,7 +40,9 @@ import {
   isFramedBrowserContinuationRelayPathname,
 } from "@/lib/browser-continuation-relay";
 import { themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
-import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { currentRequestTheme, resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
+import { themeAppConnectHosts } from "@/lib/extensions/stylesheets";
 import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
 
 interface PreviewFramingLocals {
@@ -158,6 +160,11 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 
   // A theme preview may be framed by the dashboard's editor; a buyer's page never.
   const frameAncestors = await themePreviewFrameAncestors({ request, locals }, response);
+  // The theme the page drew (the draft in a preview) names the apps whose hosts may be reached.
+  const themeConnectHosts = themeAppConnectHosts(
+    (await currentRequestTheme(locals)).theme,
+    readStorefrontExtensions(layout?.appExtensions),
+  );
   // A purchased file streams as a sandboxed attachment: it keeps its own policy.
   return withPageCsp(url.pathname, response, {
     privateRelay: isBrowserContinuationRelayPathname(url.pathname),
@@ -173,6 +180,8 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
       frameAncestors,
       // The same choice Layout.astro makes: the scripts of this page kind.
       appScriptOrigins(appScriptsForPage(layout?.appScripts, storefrontAppPage(url.pathname))),
+      // The browser hosts of the apps the theme draws (their islands).
+      themeConnectHosts,
     ),
   });
 });

@@ -172,6 +172,13 @@ function getAppScriptDomains(appScriptOrigins: readonly string[]): string[] {
   }))];
 }
 
+/** App connect hosts as CSP sources: `https://host` or `https://*.host`, a manifest host pattern only. */
+function getAppConnectSources(hosts: readonly string[]): string[] {
+  return [...new Set(hosts.flatMap((host) => (
+    /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?::\d{1,5})?$/.test(host) ? [`https://${host}`] : []
+  )))];
+}
+
 /**
  * Applies Content Security Policy (CSP) headers to a given Response object.
  * Platform origins and merchant sources come from the per-request context.
@@ -187,6 +194,12 @@ export function setPageCspHeader(
    * `appScripts` for this page kind): allowed to load and to connect.
    */
   appScriptOrigins: readonly string[] = [],
+  /**
+   * Hosts the theme's apps' islands reach from the browser (the layout's
+   * `appExtensions[].connect`, approved with the app): allowed to connect
+   * and to show images, never to load scripts.
+   */
+  appConnectHosts: readonly string[] = [],
 ): Response {
   const apiBaseUrl = origins.apiBaseUrl?.trim() ?? "";
   const additionalDomains = merchantSources
@@ -194,6 +207,7 @@ export function setPageCspHeader(
     : [];
   const platformDomains = getPlatformDomains(origins);
   const appScriptDomains = getAppScriptDomains(appScriptOrigins);
+  const appConnectSources = getAppConnectSources(appConnectHosts);
 
   // Dev mode detection — allow http://localhost in dev, never in production
   const isDev = apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1");
@@ -206,9 +220,9 @@ export function setPageCspHeader(
     `${name} ${[...new Set(sources)].join(" ")}`;
   const cspDirectives = [
     directive("script-src", [...getScriptSrcDirectives(additionalDomains), ...appScriptDomains]),
-    directive("connect-src", [...getConnectSrcDirectives(additionalDomains, apiBaseUrl), ...appScriptDomains]),
+    directive("connect-src", [...getConnectSrcDirectives(additionalDomains, apiBaseUrl), ...appScriptDomains, ...appConnectSources]),
     directive("frame-src", getFrameSrcDirectives(additionalDomains)),
-    directive("img-src", getImgSrcDirectives(additionalDomains, platformDomains, localDevSources)),
+    directive("img-src", [...getImgSrcDirectives(additionalDomains, platformDomains, localDevSources), ...appConnectSources]),
     "object-src 'none'",
     directive("worker-src", getWorkerSrcDirectives(additionalDomains)),
     "base-uri 'self'",

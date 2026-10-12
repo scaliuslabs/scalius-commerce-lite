@@ -35,7 +35,11 @@ function escapeAttribute(value: string): string {
 /** A URL a component may use: relative, a fragment, or http(s), mailto, tel, sms. */
 export function isSafeStorefrontUrl(value: string): boolean {
   // Control characters and whitespace inside a scheme are how `java\tscript:` hides.
-  const compact = value.replace(/[\u0000-\u0020\u007f]+/g, "");
+  let compact = "";
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (code > 0x20 && code !== 0x7f) compact += char;
+  }
   const scheme = SAFE_URL.exec(compact)?.[0] ?? "";
   return scheme === "" || ALLOWED_SCHEMES.has(scheme.toLowerCase());
 }
