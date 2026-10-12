@@ -152,6 +152,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
         allowSelection={!picker || multiple}
         allowManagement={!picker}
         onSearch={mm.applySearch}
+        onClearFilters={mm.files.length > 0 ? mm.clearFilters : undefined}
         onFiltersChange={mm.applyFilters}
         onUploadClick={picker && canUpload ? () => inputRef.current?.click() : undefined}
         onFolderSelect={mm.moveToFolder}

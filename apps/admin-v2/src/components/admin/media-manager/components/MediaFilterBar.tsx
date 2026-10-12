@@ -26,6 +26,7 @@ interface MediaFilterBarProps {
   allowSelection?: boolean;
   allowManagement: boolean;
   onSearch: (value: string) => void;
+  onClearFilters?: () => void;
   onFiltersChange: (updates: Partial<MediaFilterOptions>) => void;
   /** Opens the file chooser; omitted where uploads don't apply (Trash). */
   onUploadClick?: () => void;
@@ -54,12 +55,14 @@ const SORT_LABELS: Record<MediaSortKey, "sortNewest" | "sortOldest" | "sortLarge
 export function MediaFilterBar(props: MediaFilterBarProps) {
   const t = useMessages(mediaMessages);
   const r = useMessages(resourceMessages);
+  const searchRef = useRef<HTMLInputElement>(null);
   const selectTriggerRef = useRef<HTMLButtonElement>(null);
   const wasSelectingRef = useRef(props.selectionMode);
   const [search, setSearch] = useState(props.filters.search);
   const sortValue = (Object.entries(MEDIA_SORTS).find(([, value]) => value[0] === props.filters.sortBy && value[1] === props.filters.sortOrder)?.[0] ?? "newest") as MediaSortKey;
   const selecting = props.allowSelection !== false && props.selectionMode;
   const canAct = props.allowManagement && props.selectedCount > 0;
+  const filtered = Boolean(search.trim()) || (props.capability === "both" && Boolean(props.filters.kind)) || props.currentFolderId !== "all";
 
   useEffect(() => {
     setSearch(props.filters.search);
@@ -76,6 +79,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
         <div className="relative min-w-48 flex-1 basis-56">
           <Search className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
+            ref={searchRef}
             type="search"
             aria-label={t("searchFiles")}
             placeholder={t("searchFiles")}
@@ -115,6 +119,17 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
           }}
           options={(Object.keys(SORT_LABELS) as MediaSortKey[]).map((key) => ({ value: key, label: t(SORT_LABELS[key]) }))}
         />
+        {filtered && props.onClearFilters ? (
+          <Button type="button" variant="ghost" onClick={() => {
+            setSearch("");
+            // Clearing returns to search; Cancel selection returns to Select.
+            wasSelectingRef.current = false;
+            props.onClearFilters?.();
+            searchRef.current?.focus();
+          }}>
+            {r("clearFilters")}
+          </Button>
+        ) : null}
         {props.allowSelection !== false && !props.selectionMode ? (
           <Button ref={selectTriggerRef} type="button" variant="outline" onClick={props.onBeginSelection}>
             {t("select")}

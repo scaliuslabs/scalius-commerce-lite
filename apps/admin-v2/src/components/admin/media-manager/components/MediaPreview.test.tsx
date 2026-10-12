@@ -37,10 +37,17 @@ const onSelect = vi.fn();
 let host: HTMLDivElement;
 let root: Root;
 let current: LibraryMediaFile;
+let well = { width: 712, height: 452 };
 
 beforeEach(() => {
   vi.resetAllMocks();
   setLocale("en");
+  well = { width: 712, height: 452 };
+  const bounds = HTMLElement.prototype.getBoundingClientRect;
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    // Happy DOM has no layout. Only the image well receives a measured box.
+    return this.matches(".relative.size-full") ? DOMRect.fromRect(well) : bounds.call(this);
+  });
   current = media();
   host = document.createElement("div");
   document.body.append(host);
@@ -51,6 +58,7 @@ afterEach(() => {
   host.remove();
   document.body.innerHTML = "";
   setLocale("en");
+  vi.restoreAllMocks();
 });
 
 async function render(file = current, picker = false) {
@@ -127,7 +135,7 @@ describe("media preview drafts", () => {
     click(r("close"));
     click(t("nextFile"));
     click(t("useImage"));
-    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(onNavigate).not.toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
@@ -200,7 +208,7 @@ describe("media preview drafts", () => {
     const next = document.querySelector<HTMLImageElement>('img[alt="landscape.webp"]')!;
     expect(next).not.toBe(first);
     await act(async () => next.dispatchEvent(new Event("load")));
-    expect(document.querySelector('[role="status"]')).toBeNull();
+    expect([...document.querySelectorAll('[role="status"]')].some((element) => element.textContent?.trim())).toBe(false);
     expect(next.classList.contains("invisible")).toBe(false);
   });
 
@@ -225,5 +233,125 @@ describe("media preview drafts", () => {
     expect((document.getElementById("media-filename") as HTMLInputElement).value).toBe("second.webp");
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(onNavigate).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("media image inspection", () => {
+  const region = () => document.querySelector<HTMLDivElement>(`[role="region"][aria-label="${t("originalSizeHint")}"]`);
+  const originalImage = () => region()!.querySelector("img")!;
+  const rendition = (overrides: Partial<LibraryMediaFile> = {}) => media({
+    url: "https://media.example/media/portrait.jpg/1600.webp", width: 1600, height: 3200, ...overrides,
+  });
+  const load = (image: HTMLImageElement) => act(async () => image.dispatchEvent(new Event("load")));
+  async function readyOriginal() {
+    Object.defineProperty(originalImage(), "decode", { value: vi.fn().mockResolvedValue(undefined), configurable: true });
+    await load(originalImage());
+  }
+
+  it("sizes published renditions to the contained portrait, landscape and short viewport", async () => {
+    await render(rendition());
+    let image = document.querySelector("img")!;
+    expect(image.sizes).toBe("226px");
+    expect(image.srcset).toContain("/511.webp 511w");
+    expect(image.srcset).not.toContain("/2400.webp");
+    await render(rendition({ id: "landscape", width: 1600, height: 800 }));
+    image = document.querySelector("img")!;
+    expect(image.sizes).toBe("712px");
+    well.height = 180;
+    await act(async () => window.dispatchEvent(new Event("resize")));
+    expect(image.sizes).toBe("360px");
+  });
+
+  it("caps a small rendition at its saved width and publishes only real ladder widths", async () => {
+    await render(rendition({ url: "https://media.example/media/logo.png/350.webp", width: 350, height: 98 }));
+    const image = document.querySelector("img")!;
+    expect(image.sizes).toBe("350px");
+    expect(image.style.getPropertyValue("--media-original-width")).toBe("350px");
+    expect(image.srcset.split(", ").map((part) => part.split(" ")[1])).toEqual(["144w", "172w", "206w", "247w", "296w", "350w"]);
+    well.width = 200;
+    await act(async () => window.dispatchEvent(new Event("resize")));
+    expect(image.sizes).toBe("200px");
+    expect(image.srcset).not.toContain("/355.webp");
+    expect(region()).toBeNull();
+  });
+
+  it("keeps the single-source fallback when dimensions are unavailable and leaves videos native", async () => {
+    await render(rendition({ width: null, height: null }));
+    expect(document.querySelector("img")!.getAttribute("srcset")).toBeNull();
+    expect(document.querySelector("img")!.src).toContain("/960.webp");
+    await render(video());
+    expect(button(t("originalSize"))).toBeUndefined();
+    expect(document.querySelector("video")!.controls).toBe(true);
+  });
+
+  it.each(["en", "bn"] as const)("loads the original on demand without replacing Fit or the draft in %s", async (locale) => {
+    setLocale(locale);
+    await render(rendition());
+    const fitted = document.querySelector("img")!;
+    await load(fitted);
+    await type("media-description", "Unsaved detail");
+    expect(region()).toBeNull();
+    await act(async () => button(t("originalSize")).focus());
+    click(t("originalSize"));
+    expect(originalImage().src).toBe("https://media.example/media/portrait.jpg");
+    expect(originalImage().getAttribute("srcset")).toBeNull();
+    expect(originalImage().classList.contains("max-w-none")).toBe(true);
+    expect(button(t("fitPreview")).getAttribute("aria-busy")).toBe("true");
+    let finish!: () => void;
+    Object.defineProperty(originalImage(), "decode", { value: () => new Promise<void>((resolve) => { finish = resolve; }) });
+    await load(originalImage());
+    expect(region()!.getAttribute("aria-hidden")).toBe("true");
+    expect(fitted.parentElement!.classList.contains("invisible")).toBe(false);
+    await act(async () => finish());
+    expect(region()!.hasAttribute("aria-hidden")).toBe(false);
+    expect(document.activeElement).toBe(region());
+    expect(document.querySelector("img")).toBe(fitted);
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(region()!.getAttribute("aria-hidden")).toBe("true");
+    expect(document.activeElement).toBe(button(t("originalSize")));
+    expect((document.getElementById("media-description") as HTMLTextAreaElement).value).toBe("Unsaved detail");
+    expect(save().disabled).toBe(false);
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it("keeps Fit after original failure, retries, and does not steal a metadata field's focus", async () => {
+    await render(rendition());
+    const fitted = document.querySelector("img")!;
+    await load(fitted);
+    click(t("originalSize"));
+    Object.defineProperty(originalImage(), "decode", { value: vi.fn().mockRejectedValue(new Error("decode refused")) });
+    await load(originalImage());
+    expect(document.body.textContent).toContain(t("originalPreviewFailed"));
+    expect(region()).toBeNull();
+    expect(document.querySelector("img")).toBe(fitted);
+    expect(fitted.classList.contains("invisible")).toBe(false);
+    click(t("originalSize"));
+    const field = document.getElementById("media-description")!;
+    await act(async () => field.focus());
+    await readyOriginal();
+    expect(document.activeElement).toBe(field);
+    expect(document.body.textContent).not.toContain(t("originalPreviewFailed"));
+    expect(region()!.hasAttribute("aria-hidden")).toBe(false);
+  });
+
+  it("resets inspection on navigation and ignores a detached original's late decode", async () => {
+    const first = rendition();
+    await render(first);
+    click(t("originalSize"));
+    let finish!: () => void;
+    Object.defineProperty(originalImage(), "decode", { value: () => new Promise<void>((resolve) => { finish = resolve; }) });
+    await load(originalImage());
+    await render(rendition({ id: "other", url: "https://media.example/media/other.jpg/1600.webp" }));
+    expect(region()).toBeNull();
+    await render(first);
+    await act(async () => finish());
+    expect(region()).toBeNull();
+    expect(button(t("originalSize"))).toBeDefined();
+    expect(onUpdate).not.toHaveBeenCalled();
   });
 });

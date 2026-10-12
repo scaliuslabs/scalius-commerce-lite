@@ -245,6 +245,8 @@ export function useMediaManager({
 
   /** Clears search, type and folder in one step (one route write). */
   const clearFilters = useCallback(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = null;
     setSelectedFileIds([]);
     setSelectionMode(!!onSelectMultiple);
     selectionAnchorId.current = null;

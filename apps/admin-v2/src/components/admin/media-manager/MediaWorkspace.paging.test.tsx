@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MediaWorkspace } from "./MediaWorkspace";
 import { useMediaManager } from "./hooks/useMediaManager";
-import type { LibraryMediaFile } from "./types";
+import type { LibraryMediaFile, MediaCapability, MediaWorkspaceRouteState } from "./types";
 import { setLocale } from "~/i18n";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -50,9 +50,20 @@ function files(count: number): LibraryMediaFile[] {
 
 let latest: ReturnType<typeof useMediaManager>;
 const onAdd = vi.fn();
-function Harness({ picker = false, unavailableFileIds = [] }: { picker?: boolean; unavailableFileIds?: string[] }) {
-  latest = useMediaManager({ autoLoad: false, capability: "both", unavailableFileIds, onSelectMultiple: picker ? onAdd : undefined });
-  return <MediaWorkspace manager={latest} capability="both" picker={picker} multiple={picker} />;
+function Harness({ picker = false, unavailableFileIds = [], capability = "both", routeControlled = false }: {
+  picker?: boolean; unavailableFileIds?: string[]; capability?: MediaCapability; routeControlled?: boolean;
+}) {
+  const [workspaceState, setWorkspaceState] = useState<MediaWorkspaceRouteState>({
+    view: "ready", folderId: "all", search: "", sortBy: "createdAt", sortOrder: "desc",
+  });
+  latest = useMediaManager({
+    autoLoad: routeControlled, capability, unavailableFileIds, onSelectMultiple: picker ? onAdd : undefined,
+    ...(routeControlled ? {
+      workspaceState,
+      onWorkspaceStateChange: (updates: Partial<MediaWorkspaceRouteState>) => setWorkspaceState((current) => ({ ...current, ...updates })),
+    } : {}),
+  });
+  return <MediaWorkspace manager={latest} capability={capability} picker={picker} multiple={picker} />;
 }
 
 describe("MediaWorkspace page and picker continuity", () => {
@@ -62,6 +73,15 @@ describe("MediaWorkspace page and picker continuity", () => {
   const primary = (index: number) => cards()[index]?.querySelector<HTMLButtonElement>(":scope > button");
   const button = (label: string) => [...host.querySelectorAll<HTMLButtonElement>("button")].find((element) => element.getAttribute("aria-label") === label || element.textContent?.trim() === label)!;
   const click = (label: string) => act(() => button(label).click());
+  const searchInput = () => host.querySelector<HTMLInputElement>('input[type="search"]')!;
+  const typeSearch = (value: string) => act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(searchInput(), value);
+    searchInput().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const serveSearchResults = () => api.fetchFiles.mockImplementation(async (_cursor, limit, filters) => ({
+    files: files(5).filter((file) => file.filename.includes(filters.search)),
+    pagination: { limit, hasMore: false, nextCursor: null },
+  }));
 
   beforeEach(() => {
     setLocale("en");
@@ -76,6 +96,7 @@ describe("MediaWorkspace page and picker continuity", () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    vi.useRealTimers();
   });
 
   it("mounts at most 50 tiles and pages cached rows without a read", () => {
@@ -144,6 +165,60 @@ describe("MediaWorkspace page and picker continuity", () => {
     expect(host.querySelector("[data-preview]")?.textContent).toContain("file-50.webp");
     expect(latest.pageIndex).toBe(0);
     expect(cards()).toHaveLength(50);
+  });
+
+  it.each([
+    { name: "standalone", picker: false, capability: "both" as const, routeControlled: false },
+    { name: "route-controlled", picker: false, capability: "both" as const, routeControlled: true },
+    { name: "fixed image picker", picker: true, capability: "image" as const, routeControlled: false },
+  ])("clears a pending search with visible rows in $name", async ({ picker, capability, routeControlled }) => {
+    vi.useFakeTimers();
+    serveSearchResults();
+    await act(async () => root.render(<Harness picker={picker} capability={capability} routeControlled={routeControlled} />));
+    await act(async () => latest.applyFilters({ sortBy: "filename", sortOrder: "asc" }));
+    expect(cards()).toHaveLength(5);
+    // A non-default sort or a fixed picker capability is not a filter to clear.
+    expect(button("Clear filters")).toBeUndefined();
+    act(() => { latest.setSelectionMode(true); latest.replaceSelection(["media_0"]); });
+    typeSearch("file-1");
+    act(() => vi.advanceTimersByTime(100));
+    await act(async () => button("Clear filters").click());
+    expect(searchInput().value).toBe("");
+    expect(document.activeElement).toBe(searchInput());
+    await act(async () => vi.advanceTimersByTime(1000));
+    // A stale debounce would narrow the actual rendered gallery to one row.
+    expect(cards()).toHaveLength(5);
+    expect(searchInput().value).toBe("");
+    expect(latest.filters).toMatchObject({ search: "", sortBy: "filename", sortOrder: "asc", view: "ready" });
+    expect(latest.filters.kind).toBe(capability === "image" ? "image" : undefined);
+    expect(latest.selectedFileIds).toEqual([]);
+    expect(latest.selectionMode).toBe(picker);
+    expect(button("Clear filters")).toBeUndefined();
+  });
+
+  it("offers reset for a type-only filter with results", async () => {
+    serveSearchResults();
+    await act(async () => latest.applyFilters({ kind: "image" }));
+    expect(cards()).toHaveLength(5);
+    await act(async () => button("Clear filters").click());
+    expect(latest.filters.kind).toBeUndefined();
+    expect(cards()).toHaveLength(5);
+    expect(button("Clear filters")).toBeUndefined();
+  });
+
+  it("also cancels pending typing through the existing empty-results reset", async () => {
+    vi.useFakeTimers();
+    serveSearchResults();
+    typeSearch("no-match");
+    await act(async () => vi.advanceTimersByTime(300));
+    expect(cards()).toHaveLength(0);
+    typeSearch("file-1");
+    act(() => vi.advanceTimersByTime(100));
+    expect([...host.querySelectorAll("button")].filter((item) => item.textContent?.trim() === "Clear filters")).toHaveLength(1);
+    await act(async () => button("Clear filters").click());
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(cards()).toHaveLength(5);
+    expect(searchInput().value).toBe("");
   });
 
   it("places Upload in the standalone header and keeps picker-local Upload", () => {
