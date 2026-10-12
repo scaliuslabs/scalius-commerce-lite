@@ -186,6 +186,23 @@ describe("a product page nobody has edited", () => {
     expect(probe.dirty).toBe(false);
   });
 
+  it("passes product view permission through to readable saved attributes", async () => {
+    const value = `  Hand wash only\n${"Cotton-".repeat(80)}  `;
+    const saved = { ...savedValues, attributes: [{ attributeId: "attr_material", name: "Material", value }] };
+    const probe = await mount(true, saved, true);
+    await vi.waitFor(() => expect(container.textContent).toContain(value));
+    const field = [...container.querySelectorAll('[data-slot="field-label"]')]
+      .find((node) => node.textContent === "Material")?.parentElement;
+    expect(field?.querySelector('[data-slot="field-control"]')?.textContent).toBe(value);
+    const card = field?.closest('[data-slot="card"]');
+    expect(card).not.toBeNull();
+    expect(card?.querySelector("input, select, textarea, [role=combobox]")).toBeNull();
+    expect(card?.querySelectorAll("button")).toHaveLength(1); // Only the card disclosure remains.
+    expect(container.querySelector("fieldset")?.disabled).toBe(true);
+    expect(probe.form!.getValues("attributes")).toEqual(saved.attributes);
+    expect(probe.dirty).toBe(false);
+  });
+
   it("a new product is not unsaved and does not loop", async () => {
     const probe = await mount(false);
     expect(errors.filter((line) => /Maximum update depth|render loop/.test(line))).toEqual([]);

@@ -528,7 +528,7 @@ function ProductEditor({
                 // A new product's tabs go with it; once saved they are edited as content blocks.
                 <AdditionalSectionsCard form={form} readOnly={readOnly} />
               )}
-              <AttributesSection form={form} defaultOpen={readOnly} />
+              <AttributesSection form={form} defaultOpen={readOnly} readOnly={readOnly} />
               <ProductSearchListing form={form} disabled={readOnly} />
             </div>
             {/* On phones the status comes first; the rest of the side column follows the main cards. */}

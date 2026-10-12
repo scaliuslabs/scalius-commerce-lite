@@ -10,7 +10,11 @@ import { Field } from "~/components/ui/field";
 
 const AttributeManager = lazy(() => import("./AttributeManager").then((module) => ({ default: module.AttributeManager })));
 
-export function AttributesSection({ form, defaultOpen }: { form: UseFormReturn<ProductFormValues>; defaultOpen: boolean }) {
+export function AttributesSection({ form, defaultOpen, readOnly = false }: {
+  form: UseFormReturn<ProductFormValues>;
+  defaultOpen: boolean;
+  readOnly?: boolean;
+}) {
   const t = useMessages(productMessages);
   const rowErrors = form.formState.errors.attributes;
   // Rows a check (Save, or a re-check after an error) found without a value.
@@ -27,6 +31,7 @@ export function AttributesSection({ form, defaultOpen }: { form: UseFormReturn<P
             <Suspense fallback={<LoadingFallback height="h-36" />}>
               <AttributeManager
                 initialAttributes={field.value || []}
+                readOnly={readOnly}
                 missingValueRows={missingValueRows}
                 onAttributesChange={(next) =>
                   // A just-added attribute has no value yet: only re-check once a check has failed.

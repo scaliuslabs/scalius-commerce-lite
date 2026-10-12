@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ReadOnlyValue } from "~/components/ui/field";
 import {
   Command,
   CommandEmpty,
@@ -51,6 +52,7 @@ interface AttributeManagerProps {
   ) => void;
   /** Rows the last check found without a value (shown once Save was pressed, not while adding). */
   missingValueRows?: ReadonlySet<number>;
+  readOnly?: boolean;
 }
 
 type AttributeDefinition = Omit<AttributeDto, "valueCount"> & { valueCount?: number };
@@ -84,6 +86,7 @@ export function AttributeManager({
   initialAttributes,
   onAttributesChange,
   missingValueRows,
+  readOnly = false,
 }: AttributeManagerProps) {
   const t = useMessages(productMessages);
   const { attributes: attributeActions } = useCatalogActionPermissions();
@@ -217,6 +220,16 @@ export function AttributeManager({
       <div className="divide-y">
         {assignedAttributes.map((attribute, index) => {
           const definition = definitions.get(attribute.attributeId);
+          if (readOnly) {
+            return (
+              <div key={attribute.attributeId} className="break-words py-2">
+                <ReadOnlyValue
+                  label={definition?.name ?? attribute.name ?? attribute.attributeId}
+                  value={attribute.value ? <span className="whitespace-pre-wrap">{attribute.value}</span> : ""}
+                />
+              </div>
+            );
+          }
           const unavailable = !definitionLookupLoading && !definitionLookupFailed && !definition;
           const label = definition?.name ?? attribute.name ?? t(
             definitionLookupLoading ? "loading" : "attributeRemoved",
@@ -260,15 +273,19 @@ export function AttributeManager({
         })}
       </div>
 
-      <AttributeDefinitionCombobox
-        assignedIds={new Set(assignedAttributes.map((attribute) => attribute.attributeId))}
-        canCreate={attributeActions.canCreate}
-        disabled={assignedAttributes.length >= 90}
-        isCreating={isCreating}
-        onDefinitionsLoaded={rememberDefinitions}
-        onSelect={handleAddAttribute}
-        onCreate={handleCreateAttribute}
-      />
+      {readOnly ? (
+        assignedAttributes.length === 0 ? <ReadOnlyValue label={t("attributes")} value={null} /> : null
+      ) : (
+        <AttributeDefinitionCombobox
+          assignedIds={new Set(assignedAttributes.map((attribute) => attribute.attributeId))}
+          canCreate={attributeActions.canCreate}
+          disabled={assignedAttributes.length >= 90}
+          isCreating={isCreating}
+          onDefinitionsLoaded={rememberDefinitions}
+          onSelect={handleAddAttribute}
+          onCreate={handleCreateAttribute}
+        />
+      )}
 
       {definitionLookupFailed && assignedAttributes.length > 0 && (
         <p className="flex items-start gap-2 text-body text-destructive">
