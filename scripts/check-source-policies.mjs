@@ -22,7 +22,8 @@ export function codeFiles(path, extensions = codeExtensions) {
     if (entry.name === "node_modules" || entry.name === "generated" || entry.name === "testing") return [];
     const child = resolve(absolute, entry.name);
     if (entry.isDirectory()) return codeFiles(child, extensions);
-    if (!extensions.has(extname(entry.name)) || /\.test\.|\.d\.ts$/.test(entry.name)) return [];
+    // `.gen.js` is an app's compiled storefront module (scripts/plugin-build.mjs): the app's code, not the repository's.
+    if (!extensions.has(extname(entry.name)) || /\.test\.|\.d\.ts$|\.gen\.js$/.test(entry.name)) return [];
     return [child];
   });
 }

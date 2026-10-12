@@ -488,7 +488,8 @@ export const manifest = {
   author: { name: "Scalius" },
   icon: "assets/icon.svg",
   categories: ["store-design"],
-  support: { url: "https://scalius.com/support" },
+  support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
+  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/noor",
   translations: {
     bn: {
       name: "নূর থিম",
