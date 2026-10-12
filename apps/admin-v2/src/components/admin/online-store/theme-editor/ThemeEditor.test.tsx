@@ -682,7 +682,7 @@ describe("theme editor: exact canvas text", () => {
   });
   it("edits an app section's marked text setting and writes its value", async () => {
     const apps: ThemeWorkspaceDocument["apps"] = [{
-      id: "acme.studio", name: "Acme Studio", slots: [], templates: [], productBlocks: [],
+      id: "acme.studio", name: "Acme Studio", slots: [], templates: [], pagePresets: [], productBlocks: [],
       sections: [{ key: "acme.studio/quote", type: "quote", name: "Quote", description: null, component: true, settings: [
         { key: "author", label: "Quoted by", help: null, type: "text", required: false, options: null, default: "A buyer", min: null, max: null, integer: false, maxLength: 40 },
       ] }],

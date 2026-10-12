@@ -18,8 +18,13 @@
 import { z } from "zod";
 import type { PluginSettingValue } from "./settings-schema";
 
-/** At most this many app sections render on one homepage; later ones render nothing. */
-export const PLUGIN_HOME_SECTIONS_MAX = 8;
+/**
+ * At most this many app sections render on one page (a page's whole section
+ * cap): component sections draw at the edge from the page's own data.
+ */
+export const PLUGIN_HOME_SECTIONS_MAX = 24;
+/** Of them, at most this many route sections (each a call to its app); later ones render nothing. */
+export const PLUGIN_HOME_ROUTE_SECTIONS_MAX = 8;
 /** At most this many app blocks render on one product page. */
 export const PLUGIN_PRODUCT_BLOCKS_MAX = 10;
 /** A storefront render shares the page's time: its wall time is capped below the manifest's. */

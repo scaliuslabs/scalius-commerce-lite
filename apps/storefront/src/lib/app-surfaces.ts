@@ -49,7 +49,7 @@ export function readAppComponent(value: unknown): HomepageAppComponent | null {
   if (!isRecord(value) || typeof value.pluginId !== "string" || !PLUGIN_ID.test(value.pluginId)) return null;
   if (typeof value.type !== "string" || !TYPE.test(value.type) || !isRecord(value.values)) return null;
   const media = (Array.isArray(value.media) ? value.media : []).flatMap((entry) => {
-    if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.url !== "string" || !/^https:\/\/|^\//.test(entry.url)) return [];
+    if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.url !== "string" || !/^https?:\/\/|^\//.test(entry.url)) return [];
     const size = (input: unknown) => (typeof input === "number" && Number.isFinite(input) && input > 0 ? input : null);
     return [{ id: entry.id, url: entry.url, alt: typeof entry.alt === "string" ? entry.alt : "", width: size(entry.width), height: size(entry.height) }];
   });

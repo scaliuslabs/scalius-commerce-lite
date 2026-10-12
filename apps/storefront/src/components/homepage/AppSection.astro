@@ -35,7 +35,7 @@ if (component) {
   const extension = byId.get(component.pluginId);
   const schema = extension?.sectionSettings[component.type];
   if (extension && schema && extension.sections.includes(component.type)) {
-    const [{ resolved, layout, preview: themePreview }, layoutData] = await Promise.all([currentRequestTheme(Astro.locals), getLayoutData()]);
+    const [{ resolved, preview: themePreview }, layoutData] = await Promise.all([currentRequestTheme(Astro.locals), getLayoutData()]);
     preview = themePreview !== null;
     const currency = { symbol: layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol, code: layoutData?.currency?.code ?? DEFAULT_CURRENCY.code };
     const media = new Map(component.media.flatMap((asset) => {
@@ -47,7 +47,8 @@ if (component) {
       const model = productCardModel(card, {
         currencySymbol: currency.symbol,
         currencyCode: currency.code,
-        hoverImage: layout.productCard.hoverImage,
+        // The app decides whether to show the second photo.
+        hoverImage: true,
         ratings: resolved.facts.hasReviews,
       });
       return productCardData(card, model, currency);

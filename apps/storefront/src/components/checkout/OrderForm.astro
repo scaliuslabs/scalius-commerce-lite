@@ -14,7 +14,7 @@ import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-languag
 import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { formatMoney } from "@/lib/currency";
-import { ORDER_FORM_MAX_QUANTITY, orderFormOptions } from "@/lib/checkout/order-form";
+import { ORDER_FORM_MAX_QUANTITY, orderFormOptionName, orderFormOptions } from "@/lib/checkout/order-form";
 import { QUICK_CHECKOUT_PATH } from "@/lib/checkout/quick-checkout";
 import LocationFields from "./LocationFields.astro";
 
@@ -48,21 +48,38 @@ const money = (amount: number) => formatMoney(amount, currency);
 const productHref = data ? `/products/${data.product.slug}` : null;
 const showNotes = languageResponse?.fieldVisibility?.showOrderNotesField !== false;
 const id = `order-${slug.replace(/[^a-z0-9-]/gi, "").slice(0, 40)}`;
+const ready = checkoutConfig.checkoutReadiness?.status !== "incomplete";
+// One price for every option: say it once (in the product's own price), not on each.
+const samePrice = options.every((option) => option.price === options[0]?.price);
+const optionName = data ? orderFormOptionName(data) ?? data.product.name : "";
+// Short labels (sizes) sit side by side; longer ones (Red / XL, names) stack.
+const compact = options.every((option) => option.label.length <= 6);
+// Why the form is not here, for the merchant in the theme editor's preview
+// (buyers get a link to the product's page instead).
+const missing = !data
+  ? "This product is not available on the storefront. Pick another one in the section's settings."
+  : options.length === 0
+    ? "This product cannot be ordered from a form: it is sold out, inactive, or needs a choice or input the form cannot take. Buyers see a link to its page."
+    : !cod
+      ? "Turn on cash on delivery (Settings > Payments) to take orders here. Buyers see a link to the product's page until then."
+      : !ready
+        ? "Checkout is not ready yet (Settings > Checkout lists what is missing, such as a delivery method). Buyers see a link to the product's page until then."
+        : null;
 ---
 
-{options.length > 0 && cod ? (
+{options.length > 0 && cod && ready ? (
   <form class="scalius-order-form" method="post" action={QUICK_CHECKOUT_PATH} data-order-form data-preview={preview ? "" : undefined} aria-labelledby={`${id}-title`}>
     <h2 id={`${id}-title`} class="scalius-order-form-title">{copy.checkoutSectionTitle}</h2>
     {options.length === 1 ? (
       <input type="hidden" name="cartItems" value={options[0]!.cartItems} />
     ) : (
-      <fieldset class="scalius-order-form-options">
-        <legend>{data!.product.name}</legend>
+      <fieldset class="scalius-order-form-options" data-compact={compact ? "" : undefined}>
+        <legend>{optionName}</legend>
         {options.map((option, index) => (
           <label class="scalius-order-form-option">
             <input type="radio" name="cartItems" value={option.cartItems} checked={index === 0} required />
             <span class="scalius-order-form-option-label">{option.label}</span>
-            <span class="scalius-order-form-option-price">{money(option.price)}</span>
+            {!samePrice && <span class="scalius-order-form-option-price">{money(option.price)}</span>}
           </label>
         ))}
       </fieldset>
@@ -107,9 +124,14 @@ const id = `order-${slug.replace(/[^a-z0-9-]/gi, "").slice(0, 40)}`;
     <input type="hidden" name="intent" value="review" />
     <button type="submit" class="scalius-order-form-submit">{submitLabel?.trim() || copy.placeOrderText}</button>
   </form>
-) : productHref ? (
-  <p class="scalius-order-form-unavailable"><a href={productHref}>{data!.product.name}</a></p>
-) : null}
+) : (
+  <div class="scalius-order-form-unavailable">
+    {preview && missing && <p class="scalius-order-form-notice" role="note">{missing}</p>}
+    {productHref && (
+      <a class="scalius-order-form-submit" href={productHref}>{data!.product.name}<span aria-hidden="true"> →</span></a>
+    )}
+  </div>
+)}
 
 <script>
   // With JavaScript the city and thana are searchable and a city's thanas
@@ -123,3 +145,116 @@ const id = `order-${slug.replace(/[^a-z0-9-]/gi, "").slice(0, 40)}`;
     if (root) enhanceLocationSelects(root, { load: (level, parentId) => fetchLocationOptions(browserApiUrl(""), level, parentId) });
   }
 </script>
+
+<style is:global>
+  /* The form's own look on the store's tokens, matching the city and thana
+     pickers. Every rule is zero-specificity (`:where`) so an app styles it
+     with one class; `--of-*` let it change the basics without selectors. */
+  :where(.scalius-order-form) {
+    --of-radius: 0.5rem;
+    --of-line: var(--input);
+    --of-focus: var(--ring);
+    display: grid;
+    gap: 0.75rem;
+    color: var(--foreground);
+  }
+  :where(.scalius-order-form-title) {
+    margin: 0 0 0.25rem;
+    font-family: var(--theme-font-heading);
+    font-size: 1.25rem;
+    font-weight: var(--theme-heading-weight, 600);
+    line-height: 1.2;
+  }
+  :where(.scalius-order-form-field) {
+    display: grid;
+    gap: 0.25rem;
+  }
+  :where(.scalius-order-form-field) > :where(span),
+  :where(.scalius-order-form-options) > :where(legend) {
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+  :where(.scalius-order-form) :where(input:not([type="radio"], [type="hidden"]), select, textarea) {
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-block-size: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--of-line);
+    border-radius: var(--of-radius);
+    background: var(--background);
+    color: var(--foreground);
+    font: inherit;
+    font-size: 1rem;
+  }
+  :where(.scalius-order-form) :where(textarea) { min-block-size: 4.5rem; resize: vertical; }
+  :where(.scalius-order-form) :where(input, select, textarea):focus {
+    border-color: var(--of-focus);
+    outline: 2px solid color-mix(in oklab, var(--of-focus) 30%, transparent);
+    outline-offset: 0;
+  }
+  :where(.scalius-order-form-quantity) { inline-size: min(100%, 9rem); }
+  :where(.scalius-order-form-options) {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  :where(.scalius-order-form-options) > :where(legend) { margin-block-end: 0.5rem; padding: 0; }
+  :where(.scalius-order-form-options[data-compact]) { grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr)); }
+  :where(.scalius-order-form-options[data-compact]) :where(.scalius-order-form-option) { justify-content: center; gap: 0; padding-inline: 0.5rem; font-weight: 600; }
+  :where(.scalius-order-form-options[data-compact]) :where(.scalius-order-form-option) :where(input) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+  }
+  :where(.scalius-order-form-options[data-compact]) :where(.scalius-order-form-option):has(input:focus-visible) {
+    outline: 2px solid var(--of-focus);
+    outline-offset: 2px;
+  }
+  :where(.scalius-order-form-option) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-block-size: 3rem;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid var(--of-line);
+    border-radius: var(--of-radius);
+    cursor: pointer;
+  }
+  :where(.scalius-order-form-option):has(input:checked) {
+    border-color: var(--of-focus);
+    box-shadow: inset 0 0 0 1px var(--of-focus);
+    background: color-mix(in oklab, var(--of-focus) 5%, transparent);
+  }
+  :where(.scalius-order-form-option) :where(input) { accent-color: var(--of-focus); inline-size: 1.125rem; block-size: 1.125rem; margin: 0; }
+  :where(.scalius-order-form-option-label) { flex: 1; }
+  :where(.scalius-order-form-option-price) { font-weight: 600; font-variant-numeric: tabular-nums; }
+  :where(.scalius-order-form-submit) {
+    min-block-size: 3.25rem;
+    margin-block-start: 0.25rem;
+    padding: 0.75rem 1.25rem;
+    border: 0;
+    border-radius: var(--theme-button-radius, var(--of-radius));
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  :where(.scalius-order-form-submit):hover { background: color-mix(in oklab, var(--primary) 88%, #000); }
+  :where(.scalius-order-form-unavailable) { display: grid; gap: 0.75rem; margin: 0; }
+  :where(.scalius-order-form-unavailable) :where(.scalius-order-form-submit) { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+  :where(.scalius-order-form-notice) {
+    margin: 0;
+    padding: 0.75rem 0.875rem;
+    border: 1px dashed var(--border);
+    border-radius: 0.5rem;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+</style>

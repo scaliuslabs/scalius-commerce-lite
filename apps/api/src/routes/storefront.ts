@@ -25,6 +25,7 @@ import {
   EMPTY_PLUGIN_HEAD,
   PLUGIN_BLOCK_PAGES,
   PLUGIN_BLOCK_TARGETS,
+  PLUGIN_HOME_ROUTE_SECTIONS_MAX,
   PLUGIN_HOME_SECTIONS_MAX,
   PLUGIN_PAGE_BLOCKS_MAX,
   PLUGIN_PRODUCT_BLOCKS_MAX,
@@ -478,7 +479,7 @@ function homeAppRenderer(c: Context<{ Bindings: Env }>, failOnError = false) {
         if (installation.grant?.storefrontCode === true) {
           components.push({ sectionId: request.sectionId, pluginId: request.pluginId, type: request.type, schema: section.settings, values: request.values });
         }
-      } else {
+      } else if (routed.length < PLUGIN_HOME_ROUTE_SECTIONS_MAX) {
         routed.push(request);
       }
     }
@@ -797,11 +798,22 @@ const layoutRoute = createRoute({
 
 app.openapi(layoutRoute, async (c) => {
   const db = c.get("db");
-  const layout = await getLayoutData(db, {
+  const read = () => getLayoutData(db, {
     credentialEncryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY,
     // A presence's menus, category tree, policies and copy in its language (MARKETS-DESIGN D9).
     presence: publicMarketPresence(c) || null,
   });
+  let layout = await read();
+  // Right after a deploy, a bundled app's installation can still name the
+  // release before it, whose storefront files the new storefront no longer
+  // has: bring it in step now (the sync keeps an app that asks for more
+  // access waiting for approval) instead of on the next Apps page visit or tick.
+  const stale = await staleBundledStorefronts(layout.appExtensions);
+  if (stale.length > 0) {
+    const { syncBundledPlugin } = await import("../plugins/bundled-sync");
+    for (const pluginId of stale) await syncBundledPlugin(db, pluginId).catch(() => null);
+    layout = await read();
+  }
   const platform = c.env.PLATFORM_CONFIG ?? EMPTY_PLATFORM_CONFIG;
   return ok(c, {
     ...layout,
@@ -816,6 +828,19 @@ app.openapi(layoutRoute, async (c) => {
     timeZone: storeTimeZoneOf(c.env),
   } as unknown as LayoutData);
 });
+
+/** Bundled apps the layout lists at another release than this deployment compiled in. */
+async function staleBundledStorefronts(extensions: unknown): Promise<string[]> {
+  const listed = Array.isArray(extensions) ? extensions as Array<{ pluginId?: unknown; source?: unknown; release?: unknown }> : [];
+  const bundled = listed.filter((extension) => extension.source === "bundled");
+  if (bundled.length === 0) return [];
+  const { BUNDLED_PLUGINS } = await import("../plugins/bundled.gen");
+  return bundled.flatMap((extension) => {
+    const id = typeof extension.pluginId === "string" ? extension.pluginId : "";
+    const entry = Object.prototype.hasOwnProperty.call(BUNDLED_PLUGINS, id) ? BUNDLED_PLUGINS[id] : undefined;
+    return entry && entry.sha256 !== extension.release ? [id] : [];
+  });
+}
 
 // GET /storefront/markets — the active presence matrix (the storefront
 // gateway resolves a buyer's market choice with it; pages read it in the layout)

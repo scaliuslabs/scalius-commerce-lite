@@ -11,7 +11,7 @@ const STUDIO: ThemeApp = {
   id: "acme.studio",
   name: "Acme Studio",
   sections: [],
-  templates: [],
+  templates: [], pagePresets: [],
   productBlocks: [],
   slots: [{
     key: "acme.studio/header", id: "header", slot: "header", name: "Studio header", description: null,

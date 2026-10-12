@@ -202,7 +202,7 @@ const storefrontSchema = z.object({
      * Route sections only.
      */
     reads: z.array(name).max(20).default([]),
-  }).strict()).max(20).default([]),
+  }).strict()).max(32).default([]),
   /** Blocks inside the product page's purchase area or below it. */
   productBlocks: z.array(z.object({
     type: name,
@@ -247,7 +247,7 @@ const storefrontSchema = z.object({
 function emptyPluginStorefront() {
   return {
     sections: [], productBlocks: [], blocks: [], head: false, scripts: [], proxy: false,
-    slots: [], templates: [], islands: [], stylesheet: false, connect: [],
+    slots: [], templates: [], pagePresets: [], islands: [], stylesheet: false, connect: [],
   };
 }
 
@@ -702,6 +702,7 @@ export const pluginManifestSchema = z.object({
   unique(manifest.storefront.sections.map((section) => section.type), ["storefront", "sections"], "Section types");
   unique(manifest.storefront.slots.map((slot) => slot.id), ["storefront", "slots"], "Slot ids");
   unique(manifest.storefront.templates.map((template) => template.id), ["storefront", "templates"], "Template ids");
+  unique(manifest.storefront.pagePresets.map((preset) => preset.id), ["storefront", "pagePresets"], "Page preset ids");
   unique(manifest.storefront.islands.map((island) => island.name), ["storefront", "islands"], "Island names");
   unique(manifest.storefront.connect, ["storefront", "connect"], "Connect hosts");
   unique(manifest.storefront.productBlocks.map((block) => block.type), ["storefront", "productBlocks"], "Product block types");

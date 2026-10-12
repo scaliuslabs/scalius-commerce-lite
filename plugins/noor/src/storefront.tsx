@@ -5,10 +5,10 @@ import { defineStorefront, type ProductCardProps } from "@scalius/plugin-sdk/sto
 import { Footer } from "./components/footer";
 import { Header } from "./components/header";
 import { ProductCard } from "./components/ui";
-import { PromoCountdown, ProductShowcase, ShopTheLook } from "./components/sections/commerce";
-import { CategoryBento, Faq, Gallery, Marquee, Promises, SignupCall, Story, Testimonials, VideoFeature } from "./components/sections/content";
-import { HeroEditorial, HeroSlideshow } from "./components/sections/hero";
-import { OrderLanding } from "./components/sections/landing";
+import { CollectionTiles, FeaturedProduct, ProductShowcase, PromoCountdown, PromoTiles, ShopTheLook } from "./components/sections/commerce";
+import { Faq, Gallery, Marquee, Promises, RichText, SignupCall, Story, Testimonials, VideoFeature } from "./components/sections/content";
+import { Hero, Slideshow } from "./components/sections/hero";
+import { LandingFeatures, LandingHero, LandingOrder } from "./components/sections/landing";
 
 interface CardSettings {
   ratio: string;
@@ -33,21 +33,26 @@ function Card({ data, settings, context }: ProductCardProps<CardSettings>) {
 
 export default defineStorefront({
   sections: {
-    "hero-editorial": HeroEditorial,
-    "hero-slideshow": HeroSlideshow,
+    hero: Hero,
+    slideshow: Slideshow,
     marquee: Marquee,
-    "product-showcase": ProductShowcase,
-    "category-bento": CategoryBento,
+    products: ProductShowcase,
+    "featured-product": FeaturedProduct,
+    "collection-tiles": CollectionTiles,
+    "promo-tiles": PromoTiles,
     "shop-the-look": ShopTheLook,
-    "promo-countdown": PromoCountdown,
-    testimonials: Testimonials,
+    "sale-countdown": PromoCountdown,
     promises: Promises,
-    story: Story,
+    "image-text": Story,
+    "rich-text": RichText,
+    testimonials: Testimonials,
     faq: Faq,
     video: VideoFeature,
     gallery: Gallery,
     signup: SignupCall,
-    "order-landing": OrderLanding,
+    "landing-hero": LandingHero,
+    "landing-features": LandingFeatures,
+    "landing-order": LandingOrder,
   },
   slots: {
     "noor-header": Header,

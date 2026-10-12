@@ -10,7 +10,7 @@
 import { z } from "zod";
 import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
-import { storefrontSectionListSchema } from "./sections";
+import { storefrontSectionListSchema, type StorefrontSection } from "./sections";
 import { storefrontThemeTokensSchema } from "./tokens";
 import type { StorefrontThemeDocument } from "./document";
 
@@ -54,4 +54,13 @@ export function applyStorefrontAppTemplate(
     apps: { ...(template.apps ?? {}), template: key },
     pages: { ...document.pages, home },
   };
+}
+
+/**
+ * A page preset's sections (`storefront.pagePresets`), or null when they do
+ * not parse against this document version: what a new landing page starts with.
+ */
+export function readStorefrontPagePresetSections(value: unknown): StorefrontSection[] | null {
+  const parsed = storefrontSectionListSchema.safeParse(value);
+  return parsed.success && parsed.data.length > 0 ? parsed.data : null;
 }

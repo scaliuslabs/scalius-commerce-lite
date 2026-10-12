@@ -1,26 +1,23 @@
-// Noor's selling sections: a product showcase with up to three tabs (radio
-// tabs: no script), shop-the-look (a photo with numbered hotspots beside
-// its products) and a sale banner with a live countdown.
+// Noor's selling sections: products with up to three tabs (radio tabs, no
+// script), a featured product, shop the look (a photo with hotspots beside
+// its products), collection tiles (mosaic, row or circles), promo tiles and
+// a sale banner with a live countdown.
 
 import {
   Image,
   Island,
+  Price,
   editable,
+  quickAdd,
   t,
   type SectionProps,
   type StorefrontImage,
   type StorefrontProductCard,
 } from "@scalius/plugin-sdk/storefront";
 import { Icon } from "../icons";
-import { Button, ProductCard, SectionHead, cx, text, type Context } from "../ui";
+import { Button, Products, Rail, Section, SectionHead, Stars, choice, cx, ratingLabel, text, type Context } from "../ui";
 
-function Grid({ products, context, layout, columns }: { products: StorefrontProductCard[]; context: Context; layout: string; columns: number }) {
-  return (
-    <div class={cx("noor-products", `is-${layout}`)} style={{ "--noor-columns": Math.max(2, Math.min(5, Math.round(columns))) }}>
-      {products.map((product) => <ProductCard product={product} context={context} />)}
-    </div>
-  );
-}
+// ── Products with tabs ───────────────────────────────────────────────────
 
 export interface ShowcaseSettings {
   eyebrow: string | null;
@@ -36,6 +33,8 @@ export interface ShowcaseSettings {
   tab3_products: StorefrontProductCard[];
   layout: string;
   columns: number;
+  tone: string;
+  spacing: string;
 }
 
 export function ProductShowcase({ settings, context, instanceId }: SectionProps<ShowcaseSettings>) {
@@ -45,31 +44,90 @@ export function ProductShowcase({ settings, context, instanceId }: SectionProps<
     { label: text(settings.tab3_label), products: settings.tab3_products },
   ].filter((tab) => tab.products.length > 0);
   if (tabs.length === 0) return null;
+  const layout = choice(settings.layout, ["grid", "row"] as const, "grid");
   const name = `noor-tab-${instanceId}`;
+  const heading = text(settings.heading);
+  const list = (products: StorefrontProductCard[]) => (
+    <Products products={products} context={context} layout={layout} columns={settings.columns} label={heading} />
+  );
   return (
-    <section class="noor-section noor-showcase">
-      <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading)} body={text(settings.text)}
+    <Section name="showcase" tone={settings.tone} space={settings.spacing}>
+      <SectionHead eyebrow={text(settings.eyebrow)} heading={heading} body={text(settings.text)}
         link={text(settings.link)} linkLabel={text(settings.link_label)} context={context} />
       {tabs.length > 1 ? (
-        <div class="noor-tabs" style={{ "--noor-tab-count": tabs.length }}>
-          <div class="noor-tablist" role="radiogroup" aria-label={text(settings.heading) ?? t(context, { en: "Products", bn: "পণ্য" })}>
+        <div class="noor-tabs">
+          <div class="noor-tablist" role="radiogroup" aria-label={heading ?? t(context, { en: "Products", bn: "পণ্য" })}>
             {tabs.map((tab, index) => (
               <label class="noor-tab">
-                <input type="radio" name={name} value={String(index)} checked={index === 0} class="noor-tab-input" data-tab={String(index)} />
+                <input type="radio" name={name} value={String(index)} checked={index === 0} class="noor-tab-input" />
                 <span>{tab.label ?? `${index + 1}`}</span>
               </label>
             ))}
           </div>
-          {tabs.map((tab, index) => (
-            <div class="noor-tabpanel" data-panel={String(index)}>
-              <Grid products={tab.products} context={context} layout={settings.layout} columns={settings.columns} />
-            </div>
-          ))}
+          {tabs.map((tab, index) => <div class="noor-tabpanel" data-panel={String(index)}>{list(tab.products)}</div>)}
         </div>
-      ) : <Grid products={tabs[0]!.products} context={context} layout={settings.layout} columns={settings.columns} />}
-    </section>
+      ) : list(tabs[0]!.products)}
+    </Section>
   );
 }
+
+// ── Featured product ─────────────────────────────────────────────────────
+
+export interface FeaturedSettings {
+  product: StorefrontProductCard | null;
+  eyebrow: string | null;
+  heading: string | null;
+  text: string | null;
+  image: StorefrontImage | null;
+  points: Array<{ text: string | null }>;
+  button: string | null;
+  image_side: string;
+  tone: string;
+  spacing: string;
+}
+
+export function FeaturedProduct({ settings, context }: SectionProps<FeaturedSettings>) {
+  const product = settings.product;
+  if (!product) return null;
+  const photo = settings.image ?? product.image;
+  const points = settings.points.flatMap((point) => (text(point.text) ? [text(point.text)!] : []));
+  return (
+    <Section name="feature" tone={settings.tone} space={settings.spacing}>
+      <div class={cx("noor-split", settings.image_side === "end" && "is-flipped")}>
+        <a class="noor-split-media noor-feature-media" href={product.url} tabindex="-1" aria-hidden="true">
+          {photo ? <Image image={photo} sizes="(min-width: 768px) 50vw, 100vw" alt="" class="noor-cover" /> : null}
+          {product.hoverImage && !settings.image ? <Image image={product.hoverImage} sizes="(min-width: 768px) 50vw, 100vw" alt="" class="noor-cover is-alt" /> : null}
+          {product.percentOff ? <span class="noor-badge is-sale">−{product.percentOff}%</span> : null}
+        </a>
+        <div class="noor-split-copy">
+          {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
+          <h2 class="noor-h2"><a href={product.url} {...editable(context, "heading")}>{text(settings.heading) ?? product.title}</a></h2>
+          {product.rating ? (
+            <p class="noor-rating-line">
+              <Stars value={product.rating.average} label={ratingLabel(context, product.rating.average, product.rating.count)} />
+              <span>{product.rating.average.toFixed(1)} · {t(context, { en: `${product.rating.count} reviews`, bn: `${product.rating.count}টি রিভিউ` })}</span>
+            </p>
+          ) : null}
+          <Price price={product.price} compareAt={product.compareAt} from={product.priceVaries} context={context} class="noor-price is-large" />
+          {text(settings.text) ? <p class="noor-lede" {...editable(context, "text")}>{settings.text}</p> : null}
+          {points.length > 0 ? (
+            <ul class="noor-checks">{points.map((point) => <li><Icon name="check" size={16} />{point}</li>)}</ul>
+          ) : null}
+          <div class="noor-actions-row">
+            {product.soldOut
+              ? <span class="noor-badge is-muted is-inline">{t(context, { en: "Sold out", bn: "স্টক শেষ" })}</span>
+              : <a class="noor-btn is-solid is-large" {...quickAdd(product)}>
+                <span {...editable(context, "button")}>{text(settings.button) ?? (product.quickAdd ? t(context, { en: "Add to cart", bn: "কার্টে যোগ করুন" }) : t(context, { en: "Choose options", bn: "অপশন বাছুন" }))}</span>
+              </a>}
+            <a class="noor-more" href={product.url}>{t(context, { en: "View details", bn: "বিস্তারিত দেখুন" })}<Icon name="arrow" size={16} /></a>
+          </div>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+// ── Shop the look ────────────────────────────────────────────────────────
 
 export interface LookSettings {
   eyebrow: string | null;
@@ -79,37 +137,117 @@ export interface LookSettings {
   hotspots: Array<{ x: number | null; y: number | null; title: string | null; text: string | null; link: string | null }>;
   products: StorefrontProductCard[];
   image_side: string;
+  tone: string;
+  spacing: string;
 }
 
 export function ShopTheLook({ settings, context }: SectionProps<LookSettings>) {
   if (!settings.image) return null;
   const spots = settings.hotspots.filter((spot) => text(spot.title));
   return (
-    <section class={cx("noor-section noor-look", settings.image_side === "end" && "is-flipped")}>
-      <div class="noor-look-media">
-        <Image image={settings.image} sizes="(min-width: 900px) 55vw, 100vw" class="noor-look-img" />
-        {spots.map((spot, index) => (
-          <details class="noor-hotspot" style={{ left: `${Math.max(2, Math.min(98, spot.x ?? 50))}%`, top: `${Math.max(2, Math.min(98, spot.y ?? 50))}%` }}>
-            <summary aria-label={spot.title!}><span aria-hidden="true">{index + 1}</span></summary>
-            <div class="noor-hotspot-card">
-              <strong>{spot.title}</strong>
-              {text(spot.text) ? <p>{spot.text}</p> : null}
-              {text(spot.link) ? <a href={spot.link!} class="noor-link-arrow">{t(context, { en: "View", bn: "দেখুন" })}<Icon name="arrow" size={16} /></a> : null}
-            </div>
-          </details>
-        ))}
+    <Section name="look" tone={settings.tone} space={settings.spacing}>
+      <div class={cx("noor-split is-look", settings.image_side === "end" && "is-flipped")}>
+        <div class="noor-split-media noor-look-media">
+          <Image image={settings.image} sizes="(min-width: 768px) 50vw, 100vw" class="noor-cover" />
+          {spots.map((spot, index) => (
+            <details class="noor-spot" style={{ left: `${Math.max(4, Math.min(96, spot.x ?? 50))}%`, top: `${Math.max(4, Math.min(96, spot.y ?? 50))}%` }}>
+              <summary aria-label={spot.title!}><span aria-hidden="true">{index + 1}</span></summary>
+              <div class="noor-spot-card">
+                <strong>{spot.title}</strong>
+                {text(spot.text) ? <p>{spot.text}</p> : null}
+                {text(spot.link) ? <a href={spot.link!} class="noor-more">{t(context, { en: "View", bn: "দেখুন" })}<Icon name="arrow" size={14} /></a> : null}
+              </div>
+            </details>
+          ))}
+        </div>
+        <div class="noor-split-copy noor-look-side">
+          <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading)} body={text(settings.text)} context={context} />
+          {settings.products.length > 0 ? (
+            <Products products={settings.products} context={context} columns={2} card={{ action: "icon", sizes: "(min-width: 768px) 22vw, 46vw" }} />
+          ) : null}
+        </div>
       </div>
-      <div class="noor-look-side">
-        <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading)} body={text(settings.text)} context={context} />
-        {settings.products.length > 0 ? (
-          <div class="noor-look-products">
-            {settings.products.map((product) => <ProductCard product={product} context={context} options={{ ratio: "square", sizes: "(min-width: 900px) 18vw, 45vw" }} />)}
-          </div>
-        ) : null}
-      </div>
-    </section>
+    </Section>
   );
 }
+
+// ── Collection tiles ─────────────────────────────────────────────────────
+
+export interface TilesSettings {
+  eyebrow: string | null;
+  heading: string | null;
+  link: string | null;
+  link_label: string | null;
+  tiles: Array<{ image: StorefrontImage | null; title: string | null; subtitle: string | null; link: string | null }>;
+  layout: string;
+  tone: string;
+  spacing: string;
+}
+
+export function CollectionTiles({ settings, context }: SectionProps<TilesSettings>) {
+  const tiles = settings.tiles.filter((tile) => tile.image && text(tile.title)).slice(0, 8);
+  if (tiles.length === 0) return null;
+  const layout = choice(settings.layout, ["mosaic", "row", "circles"] as const, "mosaic");
+  const heading = text(settings.heading);
+  const tile = (item: TilesSettings["tiles"][number], index: number) => {
+    const body = (
+      <>
+        <span class="noor-tile-photo">
+          <Image image={item.image} alt="" class="noor-cover"
+            sizes={layout === "circles" ? "160px" : layout === "mosaic" && index === 0 ? "(min-width: 768px) 50vw, 100vw" : "(min-width: 768px) 25vw, 50vw"} />
+        </span>
+        <span class="noor-tile-copy">
+          <span class="noor-tile-title">{item.title}</span>
+          {text(item.subtitle) && layout !== "circles" ? <span class="noor-tile-sub">{item.subtitle}</span> : null}
+        </span>
+      </>
+    );
+    return <li class="noor-tile" data-slide>{text(item.link) ? <a href={item.link!}>{body}</a> : <div>{body}</div>}</li>;
+  };
+  const list = <ul class={cx("noor-tiles", `is-${layout}`, `count-${Math.min(tiles.length, 5)}`)} data-track tabindex={layout === "mosaic" ? undefined : "0"}>{tiles.map(tile)}</ul>;
+  return (
+    <Section name="tiles" tone={settings.tone} space={settings.spacing}>
+      <SectionHead eyebrow={text(settings.eyebrow)} heading={heading} link={text(settings.link)} linkLabel={text(settings.link_label)} context={context} />
+      {layout === "mosaic" ? list : <Rail label={heading ?? t(context, { en: "Collections", bn: "কালেকশন" })} context={context}>{list}</Rail>}
+    </Section>
+  );
+}
+
+// ── Promo tiles ──────────────────────────────────────────────────────────
+
+export interface PromosSettings {
+  items: Array<{ image: StorefrontImage | null; eyebrow: string | null; heading: string | null; label: string | null; link: string | null }>;
+  height: string;
+  tone: string;
+  spacing: string;
+}
+
+export function PromoTiles({ settings }: SectionProps<PromosSettings>) {
+  const items = settings.items.filter((item) => item.image).slice(0, 3);
+  if (items.length === 0) return null;
+  return (
+    <Section name="promos" tone={settings.tone} space={settings.spacing}>
+      <ul class={cx("noor-promos", `count-${items.length}`, `h-${choice(settings.height, ["s", "m", "l"] as const, "m")}`)}>
+        {items.map((item) => {
+          const link = text(item.link);
+          const body = (
+            <>
+              <Image image={item.image} alt="" class="noor-cover" sizes={items.length === 1 ? "100vw" : "(min-width: 768px) 50vw, 100vw"} />
+              <span class="noor-promo-copy">
+                {text(item.eyebrow) ? <span class="noor-eyebrow">{item.eyebrow}</span> : null}
+                {text(item.heading) ? <span class="noor-promo-title">{item.heading}</span> : null}
+                {text(item.label) ? <span class="noor-promo-link">{item.label}<Icon name="arrow" size={16} /></span> : null}
+              </span>
+            </>
+          );
+          return <li class="noor-promo">{link ? <a href={link}>{body}</a> : <div>{body}</div>}</li>;
+        })}
+      </ul>
+    </Section>
+  );
+}
+
+// ── Sale banner with a countdown ─────────────────────────────────────────
 
 export interface CountdownSettings {
   eyebrow: string | null;
@@ -120,6 +258,7 @@ export interface CountdownSettings {
   link: string | null;
   image: StorefrontImage | null;
   tone: string;
+  spacing: string;
 }
 
 /** The offset of `timeZone` from UTC at `epoch`, in ms. */
@@ -148,18 +287,18 @@ export function countdownEnd(value: string | null, timeZone: string): number | n
   }
 }
 
-export function Countdown({ end, context, compact = false }: { end: number; context: Context; compact?: boolean }) {
+export function Countdown({ end, context, size = "m" }: { end: number; context: Context; size?: "s" | "m" }) {
   const units = [
     { key: "days", en: "Days", bn: "দিন" },
-    { key: "hours", en: "Hours", bn: "ঘণ্টা" },
+    { key: "hours", en: "Hrs", bn: "ঘণ্টা" },
     { key: "minutes", en: "Min", bn: "মিনিট" },
     { key: "seconds", en: "Sec", bn: "সেকেন্ড" },
   ];
   return (
-    <Island name="countdown" hydrate="visible" props={{ end }} class={cx("noor-countdown", compact && "is-compact")}>
-      <ol class="noor-countdown-list" role="timer" aria-live="off">
+    <Island name="countdown" hydrate="idle" props={{ end }} class={cx("noor-timer", `is-${size}`)}>
+      <ol class="noor-timer-list" role="timer" aria-live="off">
         {units.map((unit) => (
-          <li><span class="noor-countdown-value" data-unit={unit.key}>--</span><span class="noor-countdown-label">{t(context, unit)}</span></li>
+          <li><span class="noor-timer-value" data-unit={unit.key}>--</span><span class="noor-timer-label">{t(context, unit)}</span></li>
         ))}
       </ol>
     </Island>
@@ -170,18 +309,21 @@ export function PromoCountdown({ settings, context }: SectionProps<CountdownSett
   const heading = text(settings.heading);
   if (!heading) return null;
   const end = countdownEnd(settings.ends_at, context.store.timeZone);
+  const tone = choice(settings.tone, ["ink", "accent", "soft"] as const, "ink");
   return (
-    <section class={cx("noor-section noor-promo", `tone-${settings.tone}`, settings.image && "has-image")}>
-      {settings.image ? <Image image={settings.image} sizes="100vw" class="noor-promo-img" alt="" /> : null}
-      <div class="noor-promo-inner">
-        {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
-        <h2 class="noor-display is-medium" {...editable(context, "heading")}>{heading}</h2>
-        {text(settings.text) ? <p class="noor-lede" {...editable(context, "text")}>{settings.text}</p> : null}
+    <Section name="sale" space={settings.spacing}>
+      <div class={cx("noor-sale", `is-${tone}`, settings.image && "has-image")}>
+        {settings.image ? <Image image={settings.image} sizes="100vw" class="noor-cover noor-sale-img" alt="" /> : null}
+        <div class="noor-sale-copy">
+          {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
+          <h2 class="noor-h2" {...editable(context, "heading")}>{heading}</h2>
+          {text(settings.text) ? <p class="noor-lede" {...editable(context, "text")}>{settings.text}</p> : null}
+        </div>
         {end ? <Countdown end={end} context={context} /> : null}
-        {text(settings.label) && text(settings.link)
-          ? <Button href={settings.link!} variant={settings.tone === "dark" || settings.image ? "light" : "solid"} editableKey="label" context={context}>{settings.label}</Button>
-          : null}
+        {text(settings.label) && text(settings.link) ? (
+          <Button href={settings.link!} variant={tone === "soft" && !settings.image ? "solid" : "light"} size="large" editableKey="label" context={context}>{settings.label}</Button>
+        ) : null}
       </div>
-    </section>
+    </Section>
   );
 }

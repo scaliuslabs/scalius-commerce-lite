@@ -20,12 +20,13 @@ const props = Astro.props;
 const app = await appSlot(Astro.locals, Astro.url, "product-card");
 let html: string | null = null;
 if (app) {
-  const { resolved, layout } = await currentRequestTheme(Astro.locals);
+  const { resolved } = await currentRequestTheme(Astro.locals);
   const currency = { symbol: props.currencySymbol ?? DEFAULT_CURRENCY.symbol, code: props.currencyCode ?? DEFAULT_CURRENCY.code };
   const model = productCardModel(props.product, {
     currencySymbol: currency.symbol,
     currencyCode: currency.code,
-    hoverImage: layout.productCard.hoverImage,
+    // The app decides whether to show the second photo (its own card settings).
+    hoverImage: true,
     ratings: resolved.facts.hasReviews,
   });
   const { host } = await requestExtensions(Astro.locals, Astro.url);

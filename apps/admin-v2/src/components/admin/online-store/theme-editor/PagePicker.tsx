@@ -27,6 +27,13 @@ import { NavigationResourcePicker } from "../NavigationResourcePicker";
 import type { Theme } from "../theme-fields";
 import { STORE_PAGE_KINDS, samePage, type EditorPage, type ResourcePageKind } from "./editor-pages";
 import { Field } from "~/components/ui/field";
+import { Badge } from "~/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
+import { ProductSelect } from "../schema-form/resource-fields";
+import type { LandingPreset } from "./landing-presets";
+
+/** The "blank page" choice (preset keys always hold a slash). */
+const BLANK = "blank";
 
 export function usePageName() {
   const t = useMessages(themeEditorMessages);
@@ -109,23 +116,28 @@ function landingHandle(title: string): string {
 }
 
 /** Naming a new landing page: its title and the handle in its address. */
-export function CreateLandingDialog({ open, onOpenChange, theme, onCreate }: {
+export function CreateLandingDialog({ open, onOpenChange, theme, presets = [], onCreate }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   theme: Theme;
-  onCreate: (slug: string, title: string) => void;
+  /** Ready-made pages installed apps offer; the page may start from one. */
+  presets?: readonly LandingPreset[];
+  onCreate: (slug: string, title: string, start: { preset: LandingPreset; productId: string | null } | null) => void;
 }) {
   const t = useMessages(themeEditorMessages);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
+  const [presetKey, setPresetKey] = useState(BLANK);
+  const [productId, setProductId] = useState("");
   useEffect(() => {
-    if (!open) { setTitle(""); setSlug(""); setSlugEdited(false); }
+    if (!open) { setTitle(""); setSlug(""); setSlugEdited(false); setPresetKey(BLANK); setProductId(""); }
   }, [open]);
   const handle = slugEdited ? slug : landingHandle(title);
   const taken = Boolean(theme.pages.landing[handle]);
   const handleValid = storefrontLandingSlugSchema.safeParse(handle).success && !taken;
-  const valid = handleValid && title.trim().length > 0;
+  const preset = presets.find((each) => each.key === presetKey) ?? null;
+  const valid = handleValid && title.trim().length > 0 && (!preset?.needsProduct || productId !== "");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -139,7 +151,7 @@ export function CreateLandingDialog({ open, onOpenChange, theme, onCreate }: {
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
-            if (valid) onCreate(handle, title.trim());
+            if (valid) onCreate(handle, title.trim(), preset ? { preset, productId: productId || null } : null);
           }}
         >
           <Field id="new-landing-title" label={t("landingTitle")}>
@@ -158,6 +170,38 @@ export function CreateLandingDialog({ open, onOpenChange, theme, onCreate }: {
               {handle !== "" && !handleValid ? t(taken ? "landingSlugTaken" : "landingSlugInvalid") : t("landingSlugHelp", { path: `/pages/${handle || "…"}` })}
             </p>
           </Field>
+          {presets.length > 0 ? (
+            <fieldset className="space-y-2">
+              <legend className="text-body font-medium">{t("landingStart")}</legend>
+              <RadioGroup value={presetKey} onValueChange={setPresetKey} className="gap-1">
+                {[
+                  { value: BLANK, label: t("landingBlank"), help: t("landingBlankHelp"), app: null },
+                  ...presets.map((each) => ({ value: each.key, label: each.name, help: each.description, app: each.appName })),
+                ].map((option) => (
+                  <label key={option.value} className="flex min-h-11 items-start gap-3 rounded-md px-2 py-1.5 text-body hover:bg-muted">
+                    <span className="flex h-lh items-center"><RadioGroupItem value={option.value} /></span>
+                    <span className="min-w-0">
+                      <span className="flex flex-wrap items-center gap-2 font-medium">
+                        {option.label}
+                        {option.app ? <Badge variant="secondary">{t("appBadge")}</Badge> : null}
+                      </span>
+                      {option.help || option.app ? (
+                        <span className="block text-muted-foreground">
+                          {[option.help, option.app ? t("appFrom", { app: option.app }) : null].filter(Boolean).join(" ")}
+                        </span>
+                      ) : null}
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </fieldset>
+          ) : null}
+          {preset?.needsProduct ? (
+            <Field id="new-landing-product" label={t("landingProduct")}>
+              <ProductSelect id="new-landing-product" value={productId} onChange={setProductId} />
+              <p className="text-body text-muted-foreground">{t("landingProductHelp")}</p>
+            </Field>
+          ) : null}
         </form>
         <DialogFooter>
           <Button type="submit" form="new-landing-form" disabled={!valid}>{t("addLanding")}</Button>

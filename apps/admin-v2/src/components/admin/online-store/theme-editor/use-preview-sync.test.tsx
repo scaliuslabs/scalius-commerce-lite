@@ -199,7 +199,7 @@ describe("app sections and slots", () => {
     key, label: key, help: null, type, required: false, options: null, default: null, min: null, max: null, integer: false, maxLength: null,
   });
   const appSections = appSectionsByKey([{
-    id: "acme.studio", name: "Studio", slots: [], templates: [], productBlocks: [],
+    id: "acme.studio", name: "Studio", slots: [], templates: [], pagePresets: [], productBlocks: [],
     sections: [{ key: "acme.studio/quote", type: "quote", name: "Quote", description: null, component: true,
       settings: [setting("quote", "textarea"), setting("author", "text"), setting("size", "number")] }],
   }]);

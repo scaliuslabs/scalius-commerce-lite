@@ -2227,6 +2227,15 @@ export type ThemeAppSurfaces = {
             [key: string]: unknown;
         };
     }>;
+    pagePresets: Array<{
+        key: string;
+        id: string;
+        name: string;
+        description: string | null;
+        sections: Array<{
+            [key: string]: unknown;
+        }>;
+    }>;
     productBlocks: Array<{
         key: string;
         type: string;

@@ -40,7 +40,20 @@ export function orderFormOptions(data: ProductPageData, currencyCode: string): O
   ) return [];
   const resolution = resolveBuyerVariants(variants);
   if (resolution.mode === "ambiguous") return [];
-  return resolution.variants.filter(isVariantAvailable).flatMap((variant) => {
+  // In the product's own option order (S, M, L, XL), whatever order the variants were made in.
+  const rank = (variant: (typeof resolution.variants)[number]) => [...variant.selectedOptions]
+    .sort((left, right) => left.position - right.position)
+    .map((option) => option.valuePosition);
+  const ordered = [...resolution.variants].sort((left, right) => {
+    const a = rank(left);
+    const b = rank(right);
+    for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+      const difference = (a[index] ?? 0) - (b[index] ?? 0);
+      if (difference !== 0) return difference;
+    }
+    return 0;
+  });
+  return ordered.filter(isVariantAvailable).flatMap((variant) => {
     const price = calculateVariantPrice({
       basePrice: product.price,
       discountType: product.discountType,
@@ -65,4 +78,14 @@ export function orderFormOptions(data: ProductPageData, currencyCode: string): O
     };
     return [{ id: variant.id, label, price, cartItems: JSON.stringify({ [createCartItemKey({ id: product.id, variantId: variant.id })]: line }) }];
   });
+}
+
+/** The options' name as the picker's label ("Size", "Size / Colour"); null for a product without options. */
+export function orderFormOptionName(data: ProductPageData): string | null {
+  const names = new Map<number, string>();
+  for (const variant of data.variants) {
+    for (const option of variant.selectedOptions) if (!names.has(option.position)) names.set(option.position, option.name);
+  }
+  const ordered = [...names].sort(([left], [right]) => left - right).map(([, name]) => name.trim()).filter(Boolean);
+  return ordered.length > 0 ? ordered.join(" / ") : null;
 }

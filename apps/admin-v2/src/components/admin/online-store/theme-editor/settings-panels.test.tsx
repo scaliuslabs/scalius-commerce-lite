@@ -444,7 +444,7 @@ describe("product page app blocks", () => {
     name: "Acme Reviews",
     sections: [],
     slots: [],
-    templates: [],
+    templates: [], pagePresets: [],
     productBlocks: [
       {
         key: "acme.reviews/stars", type: "stars", name: "Star rating", placement: "buy-box",
@@ -537,7 +537,7 @@ describe("theme slots apps fill", () => {
     id: "acme.studio",
     name: "Acme Studio",
     sections: [],
-    templates: [],
+    templates: [], pagePresets: [],
     productBlocks: [],
     slots: [
       { key: "acme.studio/header", id: "header", slot: "header", name: "Studio header", description: "A centred logo and a search bar.", settings: [

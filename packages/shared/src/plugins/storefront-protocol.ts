@@ -128,7 +128,7 @@ export interface StorefrontProductCard {
   priceVaries: boolean;
   percentOff: number | null;
   image: StorefrontImage | null;
-  /** The second photo (shown on hover), when the theme's card asks for it. */
+  /** The second photo when the product has one; the component decides whether to show it (on hover, in a gallery). */
   hoverImage: StorefrontImage | null;
   soldOut: boolean;
   rating: { average: number; count: number } | null;

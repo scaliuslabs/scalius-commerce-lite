@@ -2,7 +2,7 @@
 
 An app can redesign the storefront: its own header, footer and product card, new sections with their own logic, a single-page order landing, and ready-made templates that apply the whole look in one click. The merchant installs the app, activates it, picks its template in Online Store → Theme, and edits every section and slot in the theme editor like the built-in ones. Nobody forks the storefront.
 
-The reference app is `plugins/noor` (Noor: a complete theme with 15 sections, its own header, footer and card, two templates and a Bangladesh-style order landing). The small worked example is `apps/api/src/plugins/testing/apps/studio`.
+The reference app is `plugins/noor` (Noor: a complete theme with 20 sections, its own header, footer and card, one template, and a landing kit with a page preset for Bangladesh-style single-product campaign pages with a cash-on-delivery order form). The small worked example is `apps/api/src/plugins/testing/apps/studio`.
 
 Source of truth:
 
@@ -39,11 +39,16 @@ The storefront runs the module in one of two loaders, with the same input and th
 | Footer | `slots: [{ id, slot: "footer", settings }]` | `slots[id]` | `apps.footer` |
 | Product card | `slots: [{ id, slot: "product-card", settings }]` | `slots[id]` | `apps.productCard` |
 | Template | `templates: [{ id, name, theme }]` | | `apps.template` (a label) |
+| Page preset | `pagePresets: [{ id, name, sections }]` | | a new landing page's sections |
 | Island | `islands: [{ name }]` | `src/islands/<name>.ts` with `defineIsland` | |
 | Stylesheet | `stylesheet: true` | `src/storefront.css` | |
 | Browser hosts | `connect: ["api.example.com"]` | | |
 
 A section with a `route` is the older kind: the API calls the app's public route and caches the HTML (docs in `packages/plugin-sdk/README.md`). Both kinds coexist; component sections are faster (no network hop) and can show product cards, images and the order form.
+
+A **page preset** is a ready-made landing page: when the merchant makes a new landing page (`/pages/<slug>`), the editor offers "a blank page" or the presets of the active apps, and asks for a product when a preset's sections have `product` settings, which it fills in. Noor's "Product campaign" preset builds a complete Facebook-ad page (offer, promises, features, steps, reviews, questions, order form) in one step; every section stays editable and reorderable.
+
+A page may hold 24 sections, all of them component sections; at most 8 route sections render on one page (each is a call to its app).
 
 The card slot draws every product card the storefront shows: homepage rails, listings, search, related products. The header and footer slots replace the core header and footer on every page. When a slot's app is gone, inactive or fails, the core block renders: a theme never breaks.
 
@@ -126,7 +131,9 @@ An island's module loads from `/_x/...` only when its moment comes, once per pag
 - The storefront replaces the marker with `OrderForm.astro` (at most 2 per page). The app never sees or handles buyer data.
 - The form posts to `/checkout/quick`, the same cash-on-delivery pipeline as the product page's quick buy: stock, prices, the delivery quote, checkout functions and the order commit are the core's. The buyer confirms the total once and the order is placed.
 - It renders only for products that can be ordered from a form (active, in stock, no customization, not a gift card); otherwise it links to the product page.
-- Style it through `.scalius-order-form` and its parts. Noor's `order-landing` section shows a complete landing: hero, benefits, reviews, FAQ, a sticky order bar on phones and the form.
+- The core styles it on the store's tokens (zero-specificity rules; `--of-radius`, `--of-line`, `--of-focus` change the basics), with sizes as compact chips and a price per option only when prices differ. Restyle it through `.scalius-order-form` and its parts.
+- When the store cannot take the order there (cash on delivery off, checkout not ready, a product that needs input), buyers get a link to the product's page and the editor's preview says why.
+- Noor's landing kit shows the pattern: `landing-hero` (photos, offer price, countdown, "Order now", call and WhatsApp), `landing-features` (cards, photo rows or numbered steps) and `landing-order` (the summary, assurances and the form at `#order`, with a sticky order bar on phones), arranged with any other section on a landing page. On landing pages Noor's header and footer switch to a campaign mode (logo and "Order now"; the legal line) unless the merchant keeps the full ones.
 
 ## Build, test, install
 
@@ -159,7 +166,7 @@ The packer (`packStorefront`):
 | Jobs per batch | 120 |
 | Batch CPU (isolate) | 50 ms |
 | Batch wall time | 250 ms, then the core blocks render |
-| Slots, templates, islands, connect hosts | 10, 5, 10, 10 |
+| Sections, slots, templates, page presets, islands, connect hosts | 32, 10, 5, 8, 10, 10 |
 
 Noor, a full theme, packs to a 40 KB module, 3.8 KB of islands and a 44 KB stylesheet.
 

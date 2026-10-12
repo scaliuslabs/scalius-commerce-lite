@@ -138,9 +138,13 @@ body {
     line-height: var(--theme-body-leading, 1.6);
   }
 
+  /* A display face with one weight (Instrument Serif, DM Serif Display)
+     never gets a synthesized bold: a `font-semibold` title draws the real
+     face instead of a smeared copy. */
   .site-root :where(h1, h2, h3, h4, h5, h6) {
     font-family: var(--theme-font-heading);
     font-weight: var(--theme-heading-weight, 650);
+    font-synthesis-weight: none;
     letter-spacing: var(--theme-heading-tracking, -0.02em);
     line-height: var(--theme-heading-leading, 1.15);
     text-wrap: balance;

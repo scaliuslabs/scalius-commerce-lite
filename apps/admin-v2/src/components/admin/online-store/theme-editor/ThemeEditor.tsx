@@ -105,6 +105,7 @@ import {
 import { EditorTopBar, MarketSwitcher, TopBarButton } from "./EditorTopBar";
 import { ShortcutsDialog, matchesEditorShortcut } from "./EditorShortcuts";
 import { LayerTree } from "./LayerTree";
+import { landingPresetSections, landingPresets } from "./landing-presets";
 import { CreateLandingDialog, PagePicker, PageStrip, PreviewResource, useDefaultResource, usePageName } from "./PagePicker";
 import type { LibraryChoice, LibraryOption } from "./SectionLibrary";
 import { SettingsEmpty, SettingsPane, partHasSettings, usePartTitle, type PaneActions } from "./SettingsPanel";
@@ -207,6 +208,7 @@ export function ThemeEditor({ workspace, refetch }: {
   const canConnectAgent = useHasPermission(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE);
   const media = useMediaPreviews(workspace.media);
   const appSections = useMemo(() => appSectionsByKey(workspace.apps), [workspace.apps]);
+  const presets = useMemo(() => landingPresets(workspace.apps), [workspace.apps]);
   const draftApps = useMemo(() => ({
     sections: appSections,
     blocks: appBlocksByKey(workspace.apps),
@@ -1130,8 +1132,10 @@ export function ThemeEditor({ workspace, refetch }: {
         open={creatingLanding}
         onOpenChange={setCreatingLanding}
         theme={theme}
-        onCreate={(slug, title) => {
-          setDraft((current) => ({ ...current, pages: { ...current.pages, landing: { ...current.pages.landing, [slug]: { title, description: "", sections: [] } } } }));
+        presets={presets}
+        onCreate={(slug, title, start) => {
+          const sections = start ? landingPresetSections(start.preset, workspace.apps, start.productId) : [];
+          setDraft((current) => ({ ...current, pages: { ...current.pages, landing: { ...current.pages.landing, [slug]: { title, description: "", sections } } } }));
           setCreatingLanding(false);
           setPage({ kind: "landing", slug });
         }}

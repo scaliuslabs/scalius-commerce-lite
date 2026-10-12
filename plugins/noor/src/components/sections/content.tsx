@@ -1,10 +1,10 @@
-// Noor's storytelling sections: a scrolling marquee, a bento of categories,
-// testimonials, promise icons, a brand story with numbers, questions (with
-// FAQPage structured data), a video feature, a photo wall and a sign-up call.
+// Noor's storytelling sections: a scrolling marquee, promises, an image with
+// text (a brand story with numbers), reviews (quotes or screenshots), a
+// rich text block, questions (with FAQPage structured data), a video, a
+// photo wall and a sign-up call.
 
 import {
   Image,
-  Island,
   editable,
   raw,
   t,
@@ -12,7 +12,17 @@ import {
   type StorefrontImage,
 } from "@scalius/plugin-sdk/storefront";
 import { ICON_NAMES, Icon, type IconName } from "../icons";
-import { Button, SectionHead, Stars, cx, text } from "../ui";
+import { Button, Rail, Section, SectionHead, Stars, choice, cx, ratingLabel, text, type Context } from "../ui";
+
+function iconOf(value: unknown): IconName {
+  return typeof value === "string" && (ICON_NAMES as string[]).includes(value) ? value as IconName : "check";
+}
+
+function paragraphs(value: string | null): string[] {
+  return (value ?? "").split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+}
+
+// ── Marquee ──────────────────────────────────────────────────────────────
 
 export interface MarqueeSettings {
   items: Array<{ text: string | null }>;
@@ -21,109 +31,58 @@ export interface MarqueeSettings {
   separator: string;
 }
 
-export function Marquee({ settings }: SectionProps<MarqueeSettings>) {
+export function Marquee({ settings, context }: SectionProps<MarqueeSettings>) {
   const items = settings.items.flatMap((item) => (text(item.text) ? [text(item.text)!] : []));
   if (items.length === 0) return null;
   const separator = settings.separator === "dot" ? "•" : settings.separator === "slash" ? "/" : "✦";
+  // Enough copies to fill the widest screen; the second half repeats the first for a seamless loop.
+  const copies = Math.max(2, Math.ceil(8 / items.length));
   const run = (hidden: boolean) => (
     <ul class="noor-marquee-run" aria-hidden={hidden ? "true" : undefined}>
-      {items.map((item) => <li>{item}<span class="noor-marquee-sep" aria-hidden="true">{separator}</span></li>)}
+      {Array.from({ length: copies }, (_, copy) => items.map((item) => (
+        <li aria-hidden={copy > 0 && !hidden ? "true" : undefined}>{item}<span class="noor-marquee-sep" aria-hidden="true">{separator}</span></li>
+      )))}
     </ul>
   );
   return (
-    <section class={cx("noor-marquee", `speed-${settings.speed}`, `style-${settings.style}`)}>
+    <section class={cx("noor-marquee", `speed-${choice(settings.speed, ["slow", "normal", "fast"] as const, "normal")}`, `style-${choice(settings.style, ["solid", "plain", "outline"] as const, "solid")}`)}
+      aria-label={t(context, { en: "Highlights", bn: "হাইলাইট" })}>
       <div class="noor-marquee-track">{run(false)}{run(true)}</div>
     </section>
   );
 }
 
-export interface BentoSettings {
-  eyebrow: string | null;
-  heading: string | null;
-  tiles: Array<{ image: StorefrontImage | null; title: string | null; subtitle: string | null; link: string | null }>;
-}
-
-export function CategoryBento({ settings, context }: SectionProps<BentoSettings>) {
-  const tiles = settings.tiles.filter((tile) => tile.image && text(tile.title)).slice(0, 5);
-  if (tiles.length === 0) return null;
-  return (
-    <section class="noor-section noor-bento-section">
-      <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading)} context={context} />
-      <div class={cx("noor-bento", `count-${tiles.length}`)}>
-        {tiles.map((tile, index) => {
-          const body = (
-            <>
-              <Image image={tile.image} sizes={index === 0 ? "(min-width: 900px) 50vw, 100vw" : "(min-width: 900px) 25vw, 50vw"} class="noor-bento-img" alt="" />
-              <span class="noor-bento-copy">
-                <span class="noor-bento-title">{tile.title}</span>
-                {text(tile.subtitle) ? <span class="noor-bento-sub">{tile.subtitle}</span> : null}
-              </span>
-            </>
-          );
-          return text(tile.link) ? <a class="noor-bento-tile" href={tile.link!}>{body}</a> : <div class="noor-bento-tile">{body}</div>;
-        })}
-      </div>
-    </section>
-  );
-}
-
-export interface TestimonialsSettings {
-  eyebrow: string | null;
-  heading: string | null;
-  items: Array<{ quote: string | null; name: string | null; detail: string | null; rating: number | null; avatar: StorefrontImage | null }>;
-}
-
-export function Testimonials({ settings, context, instanceId }: SectionProps<TestimonialsSettings>) {
-  const items = settings.items.filter((item) => text(item.quote) && text(item.name));
-  if (items.length === 0) return null;
-  return (
-    <section class="noor-section noor-quotes">
-      <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading)} align="center" context={context} />
-      <Island name="slideshow" hydrate="visible" props={{ autoplay: false, interval: 6 }}>
-        <ul class="noor-quote-track" id={`noor-quotes-${instanceId}`} data-track tabindex="0">
-          {items.map((item) => (
-            <li class="noor-quote" data-slide>
-              {item.rating ? <Stars value={item.rating} label={t(context, { en: `${item.rating} of 5 stars`, bn: `৫-এ ${item.rating} তারা` })} /> : null}
-              <blockquote><p>“{item.quote}”</p></blockquote>
-              <div class="noor-quote-by">
-                {item.avatar ? <Image image={item.avatar} alt="" class="noor-avatar" /> : <span class="noor-avatar is-initial" aria-hidden="true">{item.name!.slice(0, 1)}</span>}
-                <span><strong>{item.name}</strong>{text(item.detail) ? <span>{item.detail}</span> : null}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
-        {items.length > 1 ? (
-          <div class="noor-slides-ui is-inline" data-controls hidden>
-            <button type="button" class="noor-round" data-prev aria-label={t(context, { en: "Previous", bn: "আগের" })}><span class="noor-flip"><Icon name="chevron" size={18} /></span></button>
-            <button type="button" class="noor-round" data-next aria-label={t(context, { en: "Next", bn: "পরের" })}><Icon name="chevron" size={18} /></button>
-          </div>
-        ) : null}
-      </Island>
-    </section>
-  );
-}
+// ── Promises ─────────────────────────────────────────────────────────────
 
 export interface PromisesSettings {
+  eyebrow: string | null;
+  heading: string | null;
   items: Array<{ icon: string | null; title: string | null; text: string | null }>;
   style: string;
+  tone: string;
+  spacing: string;
 }
 
 export function Promises({ settings, context }: SectionProps<PromisesSettings>) {
   const items = settings.items.filter((item) => text(item.title));
   if (items.length === 0) return null;
+  const style = choice(settings.style, ["strip", "cards", "centered"] as const, "strip");
   return (
-    <section class={cx("noor-promises", `style-${settings.style}`)} aria-label={t(context, { en: "Our promises", bn: "আমাদের প্রতিশ্রুতি" })}>
-      <ul>
+    <Section name="promises" tone={settings.tone} space={settings.spacing} label={text(settings.heading) ? null : t(context, { en: "Our promises", bn: "আমাদের প্রতিশ্রুতি" })}>
+      <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading)} align={style === "strip" ? "start" : "center"} context={context} />
+      <ul class={cx("noor-promise-list", `is-${style}`, `count-${Math.min(items.length, 6)}`)}>
         {items.map((item) => (
-          <li>
-            <span class="noor-promise-icon"><Icon name={(ICON_NAMES as string[]).includes(item.icon ?? "") ? item.icon as IconName : "check"} size={24} /></span>
-            <span><strong>{item.title}</strong>{text(item.text) ? <span>{item.text}</span> : null}</span>
+          <li class="noor-promise">
+            <span class="noor-promise-icon"><Icon name={iconOf(item.icon)} size={22} /></span>
+            <span class="noor-promise-copy"><strong>{item.title}</strong>{text(item.text) ? <span>{item.text}</span> : null}</span>
           </li>
         ))}
       </ul>
-    </section>
+    </Section>
   );
 }
+
+// ── Image with text ──────────────────────────────────────────────────────
 
 export interface StorySettings {
   eyebrow: string | null;
@@ -132,41 +91,129 @@ export interface StorySettings {
   image: StorefrontImage | null;
   image_side: string;
   stats: Array<{ value: string | null; label: string | null }>;
+  points: Array<{ text: string | null }>;
   cta_label: string | null;
   cta_link: string | null;
+  tone: string;
+  spacing: string;
 }
 
 export function Story({ settings, context }: SectionProps<StorySettings>) {
   const heading = text(settings.heading);
   if (!heading) return null;
   const stats = settings.stats.filter((stat) => text(stat.value) && text(stat.label));
-  const paragraphs = (settings.text ?? "").split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+  const points = (settings.points ?? []).flatMap((point) => (text(point.text) ? [text(point.text)!] : []));
+  const body = paragraphs(settings.text);
   return (
-    <section class={cx("noor-section noor-story", settings.image_side === "end" && "is-flipped")}>
-      {settings.image ? <div class="noor-story-media"><Image image={settings.image} sizes="(min-width: 900px) 45vw, 100vw" class="noor-story-img" /></div> : null}
-      <div class="noor-story-copy">
-        {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
-        <h2 class="noor-title" {...editable(context, "heading")}>{heading}</h2>
-        {paragraphs.length > 0 ? <div class="noor-prose" {...editable(context, "text")}>{paragraphs.map((paragraph) => <p>{paragraph}</p>)}</div> : null}
-        {stats.length > 0 ? (
-          <dl class="noor-stats">
-            {stats.map((stat) => <div><dt>{stat.label}</dt><dd>{stat.value}</dd></div>)}
-          </dl>
-        ) : null}
-        {text(settings.cta_label) && text(settings.cta_link)
-          ? <Button href={settings.cta_link!} variant="ghost" editableKey="cta_label" context={context}>{settings.cta_label}</Button>
-          : null}
+    <Section name="story" tone={settings.tone} space={settings.spacing}>
+      <div class={cx("noor-split", !settings.image && "is-text", settings.image_side === "end" && "is-flipped")}>
+        {settings.image ? <div class="noor-split-media"><Image image={settings.image} sizes="(min-width: 768px) 50vw, 100vw" class="noor-cover" /></div> : null}
+        <div class="noor-split-copy">
+          {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
+          <h2 class="noor-h2" {...editable(context, "heading")}>{heading}</h2>
+          {body.length > 0 ? <div class="noor-prose" {...editable(context, "text")}>{body.map((paragraph) => <p>{paragraph}</p>)}</div> : null}
+          {points.length > 0 ? <ul class="noor-checks">{points.map((point) => <li><Icon name="check" size={16} />{point}</li>)}</ul> : null}
+          {stats.length > 0 ? (
+            <dl class="noor-stats">{stats.map((stat) => <div><dt>{stat.label}</dt><dd>{stat.value}</dd></div>)}</dl>
+          ) : null}
+          {text(settings.cta_label) && text(settings.cta_link) ? (
+            <div class="noor-actions-row"><Button href={settings.cta_link!} variant="ink" editableKey="cta_label" context={context} icon>{settings.cta_label}</Button></div>
+          ) : null}
+        </div>
       </div>
-    </section>
+    </Section>
   );
 }
+
+// ── Rich text ────────────────────────────────────────────────────────────
+
+export interface RichTextSettings {
+  eyebrow: string | null;
+  heading: string | null;
+  text: string | null;
+  cta_label: string | null;
+  cta_link: string | null;
+  align: string;
+  size: string;
+  tone: string;
+  spacing: string;
+}
+
+export function RichText({ settings, context }: SectionProps<RichTextSettings>) {
+  const heading = text(settings.heading);
+  const body = paragraphs(settings.text);
+  if (!heading && body.length === 0) return null;
+  const align = choice(settings.align, ["start", "center"] as const, "center");
+  return (
+    <Section name="richtext" tone={settings.tone} space={settings.spacing}>
+      <div class={cx("noor-richtext", `is-${align}`, `size-${choice(settings.size, ["m", "l"] as const, "m")}`)}>
+        {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
+        {heading ? <h2 class="noor-h2" {...editable(context, "heading")}>{heading}</h2> : null}
+        {body.length > 0 ? <div class="noor-prose" {...editable(context, "text")}>{body.map((paragraph) => <p>{paragraph}</p>)}</div> : null}
+        {text(settings.cta_label) && text(settings.cta_link) ? (
+          <div class="noor-actions-row"><Button href={settings.cta_link!} editableKey="cta_label" context={context}>{settings.cta_label}</Button></div>
+        ) : null}
+      </div>
+    </Section>
+  );
+}
+
+// ── Reviews ──────────────────────────────────────────────────────────────
+
+export interface TestimonialsSettings {
+  eyebrow: string | null;
+  heading: string | null;
+  summary: string | null;
+  items: Array<{ quote: string | null; name: string | null; detail: string | null; rating: number | null; photo: StorefrontImage | null }>;
+  style: string;
+  tone: string;
+  spacing: string;
+}
+
+function Review({ item, context }: { item: TestimonialsSettings["items"][number]; context: Context }) {
+  return (
+    <li class="noor-review" data-slide>
+      <figure>
+        {item.photo ? <Image image={item.photo} sizes="(min-width: 768px) 30vw, 80vw" alt={item.photo.alt} class="noor-review-photo" /> : null}
+        {item.rating ? <Stars value={item.rating} label={ratingLabel(context, item.rating)} /> : null}
+        {text(item.quote) ? <blockquote><p>{item.quote}</p></blockquote> : null}
+        <figcaption>
+          <span class="noor-avatar" aria-hidden="true">{item.name!.slice(0, 1)}</span>
+          <span><strong>{item.name}</strong>{text(item.detail) ? <span>{item.detail}</span> : null}</span>
+        </figcaption>
+      </figure>
+    </li>
+  );
+}
+
+export function Testimonials({ settings, context }: SectionProps<TestimonialsSettings>) {
+  const items = settings.items.filter((item) => (text(item.quote) || item.photo) && text(item.name));
+  if (items.length === 0) return null;
+  const style = choice(settings.style, ["row", "grid"] as const, "row");
+  const heading = text(settings.heading);
+  const list = <ul class={cx("noor-reviews", `is-${style}`)} data-track tabindex={style === "row" ? "0" : undefined}>{items.map((item) => <Review item={item} context={context} />)}</ul>;
+  return (
+    <Section name="testimonials" tone={settings.tone} space={settings.spacing}>
+      <SectionHead eyebrow={text(settings.eyebrow)} heading={heading} context={context}>
+        {text(settings.summary) ? <p class="noor-review-summary"><span aria-hidden="true">★★★★★</span> <span {...editable(context, "summary")}>{settings.summary}</span></p> : null}
+      </SectionHead>
+      {style === "row" ? <Rail label={heading ?? t(context, { en: "Reviews", bn: "রিভিউ" })} context={context}>{list}</Rail> : list}
+    </Section>
+  );
+}
+
+// ── Questions ────────────────────────────────────────────────────────────
 
 export interface FaqSettings {
   eyebrow: string | null;
   heading: string | null;
   text: string | null;
   questions: Array<{ question: string | null; answer: string | null }>;
+  contact_label: string | null;
+  contact_link: string | null;
   structured_data: boolean;
+  tone: string;
+  spacing: string;
 }
 
 /** JSON for a `<script type="application/ld+json">`: nothing in it can close the element. */
@@ -178,15 +225,22 @@ export function Faq({ settings, context }: SectionProps<FaqSettings>) {
   const questions = settings.questions.filter((entry) => text(entry.question) && text(entry.answer));
   if (questions.length === 0) return null;
   return (
-    <section class="noor-section noor-faq">
-      <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading)} body={text(settings.text)} context={context} />
-      <div class="noor-faq-list">
-        {questions.map((entry, index) => (
-          <details class="noor-faq-item" open={index === 0}>
-            <summary>{entry.question}<span class="noor-faq-mark" aria-hidden="true"><Icon name="plus" size={18} /></span></summary>
-            <div class="noor-faq-answer"><p>{entry.answer}</p></div>
-          </details>
-        ))}
+    <Section name="faq" tone={settings.tone} space={settings.spacing}>
+      <div class="noor-faq">
+        <div class="noor-faq-head">
+          <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading)} body={text(settings.text)} context={context} />
+          {text(settings.contact_label) && text(settings.contact_link) ? (
+            <Button href={settings.contact_link!} variant="outline" editableKey="contact_label" context={context} icon>{settings.contact_label}</Button>
+          ) : null}
+        </div>
+        <div class="noor-faq-list">
+          {questions.map((entry, index) => (
+            <details class="noor-faq-item" open={index === 0}>
+              <summary><span>{entry.question}</span><span class="noor-faq-mark" aria-hidden="true"><Icon name="plus" size={18} /></span></summary>
+              <div class="noor-faq-answer">{paragraphs(entry.answer).map((paragraph) => <p>{paragraph}</p>)}</div>
+            </details>
+          ))}
+        </div>
       </div>
       {settings.structured_data ? (
         <script type="application/ld+json">{jsonLd({
@@ -195,9 +249,11 @@ export function Faq({ settings, context }: SectionProps<FaqSettings>) {
           mainEntity: questions.map((entry) => ({ "@type": "Question", name: entry.question, acceptedAnswer: { "@type": "Answer", text: entry.answer } })),
         })}</script>
       ) : null}
-    </section>
+    </Section>
   );
 }
+
+// ── Video ────────────────────────────────────────────────────────────────
 
 export interface VideoSettings {
   eyebrow: string | null;
@@ -206,75 +262,102 @@ export interface VideoSettings {
   video_url: string | null;
   poster: StorefrontImage | null;
   autoplay: boolean;
+  layout: string;
   cta_label: string | null;
   cta_link: string | null;
+  tone: string;
+  spacing: string;
 }
 
 export function VideoFeature({ settings, context }: SectionProps<VideoSettings>) {
   const url = text(settings.video_url);
   if (!url && !settings.poster) return null;
+  const layout = choice(settings.layout, ["wide", "split"] as const, "wide");
+  const frame = (
+    <div class="noor-video-frame">
+      {url ? (
+        <video class="noor-cover" src={url} poster={settings.poster?.url} preload={settings.autoplay ? "metadata" : "none"} playsinline
+          controls={!settings.autoplay} autoplay={settings.autoplay} muted={settings.autoplay} loop={settings.autoplay}
+          aria-label={text(settings.heading) ?? t(context, { en: "Video", bn: "ভিডিও" })} />
+      ) : <Image image={settings.poster} sizes="100vw" class="noor-cover" />}
+    </div>
+  );
+  const copy = (
+    <>
+      <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading)} body={text(settings.text)} align={layout === "wide" ? "center" : "start"} context={context} />
+      {text(settings.cta_label) && text(settings.cta_link)
+        ? <div class={cx("noor-actions-row", layout === "wide" && "is-center")}><Button href={settings.cta_link!} editableKey="cta_label" context={context}>{settings.cta_label}</Button></div>
+        : null}
+    </>
+  );
   return (
-    <section class="noor-section noor-video">
-      <div class="noor-video-frame">
-        {url ? (
-          <video class="noor-video-el" src={url} poster={settings.poster?.url} preload="none" playsinline controls={!settings.autoplay}
-            autoplay={settings.autoplay} muted={settings.autoplay} loop={settings.autoplay} />
-        ) : <Image image={settings.poster} sizes="100vw" class="noor-video-el" />}
-      </div>
-      <div class="noor-video-copy">
-        <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading)} body={text(settings.text)} context={context} />
-        {text(settings.cta_label) && text(settings.cta_link)
-          ? <Button href={settings.cta_link!} editableKey="cta_label" context={context}>{settings.cta_label}</Button>
-          : null}
-      </div>
-    </section>
+    <Section name="video" tone={settings.tone} space={settings.spacing}>
+      {layout === "split"
+        ? <div class="noor-split is-video"><div class="noor-split-media">{frame}</div><div class="noor-split-copy">{copy}</div></div>
+        : <div class="noor-video-wide">{copy}{frame}</div>}
+    </Section>
   );
 }
 
+// ── Photo wall ───────────────────────────────────────────────────────────
+
 export interface GallerySettings {
+  eyebrow: string | null;
   heading: string | null;
   handle: string | null;
   link: string | null;
   images: Array<{ image: StorefrontImage | null; link: string | null }>;
+  tone: string;
+  spacing: string;
 }
 
 export function Gallery({ settings, context }: SectionProps<GallerySettings>) {
-  const images = settings.images.filter((entry) => entry.image).slice(0, 8);
+  const images = settings.images.filter((entry) => entry.image).slice(0, 12);
   if (images.length === 0) return null;
   return (
-    <section class="noor-section noor-gallery">
-      <SectionHead heading={text(settings.heading)} link={text(settings.link)} linkLabel={text(settings.handle)} context={context} />
-      <ul class="noor-gallery-grid">
-        {images.map((entry) => (
-          <li>
-            {text(entry.link)
-              ? <a href={entry.link!}><Image image={entry.image} sizes="(min-width: 900px) 25vw, 50vw" class="noor-gallery-img" /></a>
-              : <Image image={entry.image} sizes="(min-width: 900px) 25vw, 50vw" class="noor-gallery-img" />}
-          </li>
-        ))}
+    <Section name="gallery" tone={settings.tone} space={settings.spacing}>
+      <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading)} link={text(settings.link)} linkLabel={text(settings.handle)} context={context} />
+      <ul class={cx("noor-wall", `count-${images.length}`)}>
+        {images.map((entry) => {
+          const photo = <Image image={entry.image} sizes="(min-width: 1024px) 16vw, 33vw" class="noor-cover" />;
+          return <li>{text(entry.link) ? <a href={entry.link!}>{photo}</a> : photo}</li>;
+        })}
       </ul>
-    </section>
+    </Section>
   );
 }
 
+// ── Sign-up call ─────────────────────────────────────────────────────────
+
 export interface SignupSettings {
+  eyebrow: string | null;
   heading: string | null;
   text: string | null;
   button: string | null;
+  link: string | null;
   image: StorefrontImage | null;
+  tone: string;
+  spacing: string;
 }
 
 export function SignupCall({ settings, context }: SectionProps<SignupSettings>) {
   const heading = text(settings.heading);
   if (!heading) return null;
   return (
-    <section class={cx("noor-section noor-signup", settings.image && "has-image")}>
-      {settings.image ? <Image image={settings.image} sizes="(min-width: 900px) 40vw, 100vw" class="noor-signup-img" alt="" /> : null}
-      <div class="noor-signup-copy">
-        <h2 class="noor-title" {...editable(context, "heading")}>{heading}</h2>
-        {text(settings.text) ? <p class="noor-lede" {...editable(context, "text")}>{settings.text}</p> : null}
-        <Button href="/newsletter" editableKey="button" context={context}>{text(settings.button) ?? t(context, { en: "Sign up", bn: "সাইন আপ" })}</Button>
+    <Section name="signup" space={settings.spacing}>
+      <div class={cx("noor-callout", `is-${choice(settings.tone, ["soft", "ink", "accent"] as const, "soft")}`, settings.image && "has-image")}>
+        {settings.image ? <div class="noor-callout-media"><Image image={settings.image} sizes="(min-width: 768px) 40vw, 100vw" class="noor-cover" alt="" /></div> : null}
+        <div class="noor-callout-copy">
+          {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
+          <h2 class="noor-h2" {...editable(context, "heading")}>{heading}</h2>
+          {text(settings.text) ? <p class="noor-lede" {...editable(context, "text")}>{settings.text}</p> : null}
+          <div class="noor-actions-row">
+            <Button href={text(settings.link) ?? "/newsletter"} variant={settings.tone === "soft" || !settings.tone ? "solid" : "light"} editableKey="button" context={context} icon>
+              {text(settings.button) ?? t(context, { en: "Sign up", bn: "সাইন আপ" })}
+            </Button>
+          </div>
+        </div>
       </div>
-    </section>
+    </Section>
   );
 }

@@ -235,6 +235,7 @@ describe("themes page", () => {
       sections: [],
       slots: [],
       productBlocks: [],
+      pagePresets: [],
       templates: [
         { key: "acme.studio/bold", id: "bold", name: "Studio Bold", description: "Big type, quiet colours.",
           theme: { tokens: bold.tokens, apps: { header: { app: "acme.studio/header", values: { tagline: "Hi" } } } } },

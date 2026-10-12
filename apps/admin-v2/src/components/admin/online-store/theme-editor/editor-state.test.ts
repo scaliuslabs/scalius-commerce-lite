@@ -252,7 +252,7 @@ describe("app sections", () => {
       component: true,
     }],
     slots: [],
-    templates: [],
+    templates: [], pagePresets: [],
     productBlocks: [],
   }];
   const byKey = appSectionsByKey(APPS);
@@ -273,13 +273,12 @@ describe("app sections", () => {
     expect(fromPageItems(copy.items).sections[4]).toMatchObject({ type: "app", settings: first.settings });
   });
 
-  it("stops at the app sections a page draws", () => {
+  it("lets app sections fill a page, and stops where the page does", () => {
     const apps = Array.from({ length: PLUGIN_HOME_SECTIONS_MAX }, (_, index) => ({ ...newAppSection("acme.reviews/carousel", {}, []), id: `app-${index}` }));
     expect(canAddSectionType(apps.slice(1), "app")).toBe(true);
     expect(canAddSectionType(apps, "app")).toBe(false);
-    expect(addBlockedReason(apps, "app")).toBe("app-limit");
+    expect(addBlockedReason(apps, "app")).toBe("limit");
     expect(duplicateSection(pageItems(apps, null), "app-0")).toBeNull();
-    expect(canAddSectionType(apps, "faq")).toBe(true);
   });
 
   it("judges values against the app, never a section whose app is not active", () => {

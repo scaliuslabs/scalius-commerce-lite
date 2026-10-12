@@ -1019,6 +1019,7 @@ describe("site settings write behavior", () => {
       }],
       slots: [],
       templates: [],
+      pagePresets: [],
       productBlocks: [{ key: "acme.reviews/stars", type: "stars", name: "Stars", placement: "buy-box", settings: [] }],
     }]);
   });

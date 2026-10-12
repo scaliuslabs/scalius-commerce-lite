@@ -66,6 +66,23 @@ export const storefrontTemplateDeclarationSchema = z.object({
 }).strict();
 export type StorefrontTemplateDeclaration = z.infer<typeof storefrontTemplateDeclarationSchema>;
 
+/**
+ * A ready-made landing page (`storefront.pagePresets`): sections the editor
+ * offers when the merchant makes a new landing page (`/pages/<slug>`), for
+ * a campaign, a launch or one product's single-page order. Its `product`
+ * settings take the product the merchant picks in the same step. The API
+ * checks `sections` against the live section schema when it lists the
+ * preset, so a preset that no longer fits is hidden.
+ */
+export const storefrontPagePresetDeclarationSchema = z.object({
+  id: name,
+  name: title,
+  description: description.optional(),
+  sections: z.array(z.record(z.string(), z.unknown())).min(1).max(24)
+    .refine((value) => JSON.stringify(value).length <= 64 * 1024, "A page preset's sections are at most 64 KiB."),
+}).strict();
+export type StorefrontPagePresetDeclaration = z.infer<typeof storefrontPagePresetDeclarationSchema>;
+
 /** A client module the app's markup mounts (`storefront.islands`, built from `src/islands/<name>.ts`). */
 export const storefrontIslandDeclarationSchema = z.object({
   name,
@@ -75,6 +92,7 @@ export const storefrontIslandDeclarationSchema = z.object({
 export const storefrontComponentsManifestSchema = {
   slots: z.array(storefrontSlotDeclarationSchema).max(10).default([]),
   templates: z.array(storefrontTemplateDeclarationSchema).max(5).default([]),
+  pagePresets: z.array(storefrontPagePresetDeclarationSchema).max(8).default([]),
   islands: z.array(storefrontIslandDeclarationSchema).max(10).default([]),
   /** The package ships `storefront/styles.css`; pages that show the app's components link it. */
   stylesheet: z.boolean().default(false),

@@ -10578,6 +10578,41 @@
               ]
             }
           },
+          "pagePresets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "sections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                }
+              },
+              "required": [
+                "key",
+                "id",
+                "name",
+                "description",
+                "sections"
+              ]
+            }
+          },
           "productBlocks": {
             "type": "array",
             "items": {
@@ -10622,6 +10657,7 @@
           "sections",
           "slots",
           "templates",
+          "pagePresets",
           "productBlocks"
         ]
       },

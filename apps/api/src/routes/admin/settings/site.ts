@@ -1,7 +1,7 @@
 import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { STOREFRONT_COMPONENT_SLOTS } from "@scalius/shared/plugins/storefront-protocol";
-import { readStorefrontAppTemplateTheme, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
+import { readStorefrontAppTemplateTheme, readStorefrontPagePresetSections, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import {
   THEME_VERSION_CHANGES_MAX,
   storefrontLandingSlugSchema,
@@ -252,6 +252,14 @@ const themeAppSurfacesSchema = z.object({
     description: z.string().nullable(),
     theme: z.record(z.string(), z.unknown()),
   })),
+  /** Ready-made landing pages a new landing page can start from; only ones this document version accepts. */
+  pagePresets: z.array(z.object({
+    key: z.string(),
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    sections: z.array(z.record(z.string(), z.unknown())),
+  })),
   productBlocks: z.array(z.object({
     key: z.string(),
     type: z.string(),
@@ -300,6 +308,16 @@ function themeAppSurfaces(installations: PluginInstallations) {
             theme: theme as Record<string, unknown>,
           }] : [];
         }) : [],
+        pagePresets: code ? storefront.pagePresets.flatMap((preset) => {
+          const sections = readStorefrontPagePresetSections(preset.sections);
+          return sections ? [{
+            key: pluginSurfaceKey(installation.pluginId, preset.id),
+            id: preset.id,
+            name: preset.name,
+            description: preset.description ?? null,
+            sections: sections as unknown as Array<Record<string, unknown>>,
+          }] : [];
+        }) : [],
         productBlocks: storefront.productBlocks.map((block) => ({
           key: pluginSurfaceKey(installation.pluginId, block.type),
           type: block.type,
@@ -309,7 +327,7 @@ function themeAppSurfaces(installations: PluginInstallations) {
         })),
       };
     })
-    .filter((surfaces) => surfaces.sections.length + surfaces.productBlocks.length + surfaces.slots.length + surfaces.templates.length > 0)
+    .filter((surfaces) => surfaces.sections.length + surfaces.productBlocks.length + surfaces.slots.length + surfaces.templates.length + surfaces.pagePresets.length > 0)
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 }
 
