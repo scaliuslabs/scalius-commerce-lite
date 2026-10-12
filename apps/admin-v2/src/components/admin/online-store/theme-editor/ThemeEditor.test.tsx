@@ -76,7 +76,7 @@ vi.mock("./use-preview", () => ({
     useEffect(() => options.onConnected(), []); // eslint-disable-line react-hooks/exhaustive-deps -- once, as a frame connects
     return {
       phase: "ready", origin: "https://shop.test", frames: [{ id: 1, src: "about:blank" }], activeId: 1,
-      layout: { rects: frame.rects, scrollY: 0, height: 2000 }, hovered: null, marks: [], shownPath: null,
+      layout: { rects: frame.rects, scrollY: 0, height: 2000 }, hovered: null, marks: ["rail", "faq", "story"], shownPath: null,
       send: frame.send, reload: frame.reload, retry: vi.fn(), register: () => () => {},
     };
   },
@@ -241,7 +241,7 @@ describe("theme editor: layers", () => {
     act(() => row("rail").focus());
     key(row("rail"), { key: "ArrowDown", altKey: true });
     expect(pageRows()).toEqual(["page-settings", "faq", "rail", "story", "add-section"]);
-    expect(frame.send).toHaveBeenCalledWith({ type: "arrange", region: "page", order: ["faq", "rail", "story"] });
+    expect(frame.send).toHaveBeenCalledWith(expect.objectContaining({ type: "arrange", region: "page", order: ["faq", "rail", "story"], revision: expect.any(Number) }));
     await autosaved();
     expect(lastSaved().theme.pages.home.map((each) => each.id)).toEqual(["faq", "rail", "story"]);
     expect(lastSaved().expectedDraftRevision).toBe(1);
@@ -274,7 +274,7 @@ describe("theme editor: live preview and saving", () => {
     act(() => row("rail").click());
     await ready("#theme-section-rail-title");
     type(field("theme-section-rail-title"), "Fresh honey");
-    expect(frame.send).toHaveBeenCalledWith({ type: "text", id: "rail", from: "New honey", to: "Fresh honey" });
+    expect(frame.send).toHaveBeenCalledWith(expect.objectContaining({ type: "text", id: "rail", from: "New honey", to: "Fresh honey", revision: expect.any(Number) }));
     await vi.waitFor(() => expect(frame.send).toHaveBeenCalledWith(expect.objectContaining({
       type: "render",
       body: expect.objectContaining({ scope: { kind: "home" }, only: "rail" }),

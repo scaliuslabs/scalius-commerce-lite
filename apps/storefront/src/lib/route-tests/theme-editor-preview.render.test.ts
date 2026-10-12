@@ -12,11 +12,13 @@ import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ViteDevServer } from "vite";
 import {
+  EMPTY_STORE_SHAPE,
   storefrontSectionDefault,
   storefrontTemplateTheme,
   type StorefrontSection,
   type StorefrontSectionType,
   type StorefrontThemeDocument,
+  type StoreShape,
 } from "@scalius/shared/storefront-theme";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
@@ -187,12 +189,20 @@ interface Api {
   preview?: StorefrontThemeDocument;
   /** Platform origins in the layout (always with a preview). */
   platform?: boolean;
+  unavailable?: string[];
+  previewData?: ReturnType<typeof sectionData>;
+  storeShape?: StoreShape;
+  onPreviewSections?: (ids: string[]) => void;
 }
 
 function stubApi(api: Api) {
   const calls: string[] = [];
   const answer = (path: string): { status: number; body: string } => {
-    if (path === "/api/v1/storefront/layout") return { status: 200, body: envelope(layout(api.document, api.platform === true || api.preview !== undefined)) };
+    if (api.unavailable?.includes(path)) return { status: 503, body: "{}" };
+    if (path === "/api/v1/storefront/layout") return { status: 200, body: envelope({
+      ...layout(api.document, api.platform === true || api.preview !== undefined),
+      ...(api.storeShape ? { storeShape: api.storeShape } : {}),
+    }) };
     if (path === "/api/v1/storefront/homepage") {
       return { status: 200, body: envelope({ seo: { homepageTitle: null, homepageMetaDescription: null }, sections: sectionData() }) };
     }
@@ -216,14 +226,18 @@ function stubApi(api: Api) {
       };
     }
     if (api.preview && path === "/api/v1/storefront/theme-preview/homepage") {
-      return { status: 200, body: envelope(sectionData()) };
+      return { status: 200, body: envelope(api.previewData ?? sectionData()) };
     }
     if (path.startsWith("/api/v1/storefront/theme-preview/")) return { status: 404, body: "{}" };
     return { status: 404, body: "{}" };
   };
-  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     calls.push(`${url.pathname}${url.search}`);
+    if (url.pathname === "/api/v1/storefront/theme-preview/homepage" && typeof init?.body === "string") {
+      const posted = JSON.parse(init.body) as { sections?: Array<{ id: string }> };
+      api.onPreviewSections?.((posted.sections ?? []).map((each) => each.id));
+    }
     if (url.pathname === "/api/v1/storefront/batch") {
       const parts = url.searchParams.getAll("r").map((part) => {
         const { status, body } = answer(new URL(part, url.origin).pathname);
@@ -473,6 +487,59 @@ describe("the preview render route", () => {
     expect((await render(homeBody({ only: "ghost" }))).html.trim()).toBe("");
   });
 
+  it("does not replace a required dependency failure with successful empty HTML", async () => {
+    for (const path of ["/api/v1/storefront/theme-preview/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"]) {
+      const sections = path.endsWith("homepage") ? fixedTheme().pages.home
+        : [section("usp-strip", "delivery", { source: { kind: "delivery-facts" } })];
+      const result = await render(homeBody({ sections }), {}, { ...draft(), unavailable: [path] });
+      expect(result.response.status, path).toBe(503);
+      expect(result.response.headers.get("Cache-Control"), path).toContain("no-store");
+      expect(result.html, path).toBe("");
+    }
+  });
+
+  it.each([false, true])("reads no unrelated catalog or delivery data for a data-free unit edit (phone hero: %s)", async (phoneHero) => {
+    const sections = [...fixedTheme().pages.home, section("usp-strip", "delivery", { source: { kind: "delivery-facts" } })];
+    if (phoneHero) sections.unshift(section("hero", "phone", { phonePlacement: "after-categories", slides: [
+      { image: "d1", alt: "Hero", focalPoint: { x: 50, y: 50 }, link: null },
+    ] }));
+    const result = await render(homeBody({ sections, only: "faq" }), {}, { ...draft(), unavailable: [
+      "/api/v1/storefront/theme-preview/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config",
+    ] });
+    expect(result.response.status).toBe(200);
+    expect(marked(result.html)).toEqual(["faq"]);
+    expect(result.html).toContain("Everywhere in Bangladesh.");
+    expect(result.calls.some((path) => /theme-preview\/homepage|shipping-methods|checkout\/config/.test(path))).toBe(false);
+  });
+
+  it("reads only the target region while retaining banner and phone context", async () => {
+    const seen: string[][] = [];
+    const sections = [section("product-rail", "above"), section("banner", "one", { layout: "two-up", mediaId: "b1" }),
+      section("faq", "empty", { items: [] }), section("banner", "two", { layout: "two-up", mediaId: "b2" })];
+    const result = await render({ scope: { kind: "template", template: "product", main: 1 }, sections, only: "two" }, {},
+      { ...draft(), onPreviewSections: (ids) => seen.push(ids) });
+    expect(result.response.status).toBe(200);
+    expect(marked(result.html)).toEqual(["one", "two"]);
+    expect(seen).toEqual([["one", "empty", "two"]]);
+    seen.length = 0;
+    const phone = [section("hero", "phone", { phonePlacement: "after-categories", slides: [
+      { image: "d1", alt: "Hero", focalPoint: { x: 50, y: 50 }, link: null },
+    ] }), section("category-tiles", "categories", { categoryIds: ["cat-0", "cat-1"] }), section("faq", "faq")];
+    const phoneResult = await render(homeBody({ sections: phone, only: "categories" }), {}, {
+      ...draft(), storeShape: { ...EMPTY_STORE_SHAPE, topCategoryCount: 2 }, onPreviewSections: (ids) => seen.push(ids),
+    });
+    expect(phoneResult.response.status).toBe(200);
+    expect(marked(phoneResult.html)).toEqual(["categories"]);
+    expect(seen).toEqual([["phone", "categories", "faq"]]);
+  });
+
+  it("still accepts a successful empty section result", async () => {
+    const empty = { lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null };
+    const result = await render(homeBody({ only: "rail" }), {}, { ...draft(), previewData: empty });
+    expect(result.response.status).toBe(200);
+    expect(marked(result.html)).toEqual([]);
+  });
+
   it("draws a template's two regions around its fixed part", async () => {
     const sections = [section("editorial", "above", { heading: "Above copy", body: "x" }), section("editorial", "below", { heading: "Below copy", body: "y" })];
     const result = await render({ scope: { kind: "template", template: "product", main: 1 }, sections });
@@ -482,6 +549,35 @@ describe("the preview render route", () => {
     expect(result.html.indexOf("Above copy")).toBeLessThan(result.html.indexOf("Below copy"));
     const only = await render({ scope: { kind: "template", template: "product", main: 1 }, sections, only: "below" });
     expect(marked(only.html)).toEqual(["below"]);
+  });
+});
+
+describe("initial preview dependency failures", () => {
+  it.each(["home", "landing"])("refuses failed %s section data without affecting buyers or genuine empty content", async (kind) => {
+    const document = fixedTheme();
+    document.pages.landing.eid = { title: "Eid", description: "", sections: document.pages.home };
+    const component = kind === "home" ? HomePage : LandingPage;
+    const url = kind === "home" ? "https://shop.test/" : "https://shop.test/pages/eid";
+    const api = { document, preview: document, unavailable: ["/api/v1/storefront/theme-preview/homepage"] };
+    const failed = await renderPage(component, api, { url, cookie: PREVIEW_COOKIE });
+    expect(failed.response.status).toBe(503);
+    expect(failed.response.headers.get("Cache-Control")).toContain("no-store");
+    expect(failed.html).toContain("Storefront temporarily unavailable");
+    expect(failed.html).not.toContain("data-theme-section-id");
+    expect((await renderPage(component, { document, unavailable: api.unavailable }, { url })).response.status).toBe(200);
+    const empty = { lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null };
+    expect((await renderPage(component, { document, preview: document, previewData: empty }, { url, cookie: PREVIEW_COOKIE })).response.status).toBe(200);
+  });
+
+  it.each(["/api/v1/shipping-methods", "/api/v1/checkout/config"])("refuses required initial-preview delivery failures at %s", async (path) => {
+    const document = fixedTheme();
+    document.pages.home = [section("usp-strip", "delivery", { source: { kind: "delivery-facts" } })];
+    document.pages.landing.eid = { title: "Eid", description: "", sections: document.pages.home };
+    for (const [component, url] of [[HomePage, "https://shop.test/"], [LandingPage, "https://shop.test/pages/eid"]] as const) {
+      const result = await renderPage(component, { document, preview: document, unavailable: [path] }, { url, cookie: PREVIEW_COOKIE });
+      expect(result.response.status).toBe(503);
+      expect(result.html).toContain("Storefront temporarily unavailable");
+    }
   });
 });
 

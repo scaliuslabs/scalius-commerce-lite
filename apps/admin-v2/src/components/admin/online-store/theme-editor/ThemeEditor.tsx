@@ -319,6 +319,8 @@ export function ThemeEditor({ workspace, refetch }: {
   usePreviewSync({
     send: preview.send,
     reload: preview.reload,
+    enabled: previewRevision === null,
+    resyncAt: preview.resyncAt,
     connectedAt,
     working: theme,
     sendable: previewRevision === null ? draft.pending : null,
@@ -773,6 +775,13 @@ export function ThemeEditor({ workspace, refetch }: {
             <Button type="button" size="sm" disabled={draft.busy} onClick={() => setPendingRestore({ version: previewRevision })}>{t("restore")}</Button>
           ) : null}
         </span>
+      </AlertDescription>
+    </Alert>
+  ) : preview.failed ? (
+    <Alert variant="warning">
+      <AlertDescription>
+        {t("previewFailed")}
+        <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={preview.retry}>{t("previewRetry")}</Button></span>
       </AlertDescription>
     </Alert>
   ) : preview.shownPath && path && preview.phase === "ready" && !preview.loading && preview.shownPath !== path.split("?")[0] ? (

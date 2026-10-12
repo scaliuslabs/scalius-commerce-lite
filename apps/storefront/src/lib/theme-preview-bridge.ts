@@ -188,35 +188,40 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
   };
   // Only the newest render of each target lands (typing sends several).
   const latest = {};
-  const render = async (body, after) => {
+  let latestRevision = 0;
+  const fresh = (revision) => revision === 0 || revision >= latestRevision;
+  const render = async (body, revision) => {
     const key = body && typeof body.only === "string" ? "unit:" + body.only : "regions";
     const ticket = (latest[key] = (latest[key] || 0) + 1);
     const response = await send(RENDER, body, "text/html");
-    if (ticket !== latest[key]) return;
-    if (!response) return post({ type: "render-failed" });
+    if (ticket !== latest[key] || !fresh(revision)) return "stale";
+    if (!response) return false;
     const template = document.createElement("template");
     template.innerHTML = await response.text();
-    if (ticket !== latest[key]) return;
+    if (ticket !== latest[key] || !fresh(revision)) return "stale";
     const regions = Array.from(template.content.querySelectorAll("[data-theme-region]"));
-    if (regions.some((fresh) => !document.querySelector('[data-theme-region="' + fresh.getAttribute("data-theme-region") + '"]'))) return post({ type: "render-failed" });
+    if (regions.some((fresh) => !document.querySelector('[data-theme-region="' + fresh.getAttribute("data-theme-region") + '"]'))) return false;
     for (const fresh of regions) {
       document.querySelector('[data-theme-region="' + fresh.getAttribute("data-theme-region") + '"]').replaceWith(fresh);
       activate(fresh);
     }
     const unit = template.content.querySelector("[data-home-render-unit]");
     if (typeof body.only === "string" && !unit) {
-      // The section shows nothing now (no content, hidden, does not fit).
+      // Losing a visible unit can merge banner rows. Keep its slot until the
+      // editor reconciles canonical regions; a newer empty edit must still resync.
       const current = unitOf(find(body.only));
-      if (current) current.hidden = true;
+      if (current && !current.hidden) return "stale";
     } else if (unit && !template.content.querySelector("[data-theme-region]")) {
-      const id = body.only;
-      const current = unitOf(find(id));
-      const anchor = after === null ? null : unitOf(find(after));
-      const region = document.querySelector('[data-theme-region="' + (body.region || "page") + '"]');
-      if (current) current.replaceWith(unit);
-      else if (anchor) anchor.after(unit);
-      else if (region) region.prepend(unit);
-      else return post({ type: "render-failed" });
+      const current = unitOf(find(body.only));
+      // A pending region render may have removed this slot since dispatch.
+      // Only canonical regions can split a banner row to restore the section.
+      if (!current) return "stale";
+      // Unit settings do not move its slot. Data-free renders need not read
+      // every sibling merely to recompute this region's phone ordinal.
+      const order = current.style.getPropertyValue("--phone-order");
+      if (order) unit.style.setProperty("--phone-order", order);
+      if (current.hasAttribute("data-phone-order")) unit.setAttribute("data-phone-order", current.getAttribute("data-phone-order"));
+      current.replaceWith(unit);
       activate(unit);
     }
     observe();
@@ -224,11 +229,13 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
     return true;
   };
   let painted = 0;
-  const paint = async (theme) => {
+  const paint = async (theme, revision) => {
     const ticket = ++painted;
     const response = await send(PAINT, { theme }, "application/json");
-    if (!response || ticket !== painted) return;
+    if (ticket !== painted || !fresh(revision)) return "stale";
+    if (!response) return false;
     const result = await response.json();
+    if (ticket !== painted || !fresh(revision)) return "stale";
     const tokensStyle = document.querySelector("style[data-theme-tokens]");
     const fontsStyle = document.querySelector("style[data-theme-fonts]");
     if (tokensStyle && typeof result.css === "string") tokensStyle.textContent = result.css;
@@ -246,6 +253,28 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
       }
     }
     report();
+    return true;
+  };
+  // A transport retry reuses the in-flight work or its completed acknowledgement.
+  const inflight = new Set();
+  const completed = new Map();
+  const asynchronous = (message, task) => {
+    const seq = Number.isSafeInteger(message.seq) && message.seq > 0 ? message.seq : null;
+    if (seq !== null && completed.has(seq)) return ack(seq, completed.get(seq));
+    if (seq !== null && inflight.has(seq)) return;
+    if (seq !== null) inflight.add(seq);
+    Promise.resolve().then(task).catch(() => false).then((result) => {
+      const extra = result === "stale" ? { status: "stale" }
+        : result !== true ? { status: "failed" }
+        : message.type === "render" ? { marks: marks() } : undefined;
+      if (result !== true && result !== "stale") post({ type: "render-failed" });
+      if (seq !== null) {
+        inflight.delete(seq);
+        completed.set(seq, extra);
+        if (completed.size > 64) completed.delete(completed.keys().next().value);
+      }
+      ack(message.seq, extra);
+    });
   };
   window.addEventListener("message", (event) => {
     if (event.source !== parent || event.origin !== DASHBOARD) return;
@@ -259,6 +288,13 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
       return;
     }
     if (!connected) return;
+    const edits = ["tokens", "text", "arrange", "render", "paint"].includes(message.type);
+    if (message.revision !== undefined && (!Number.isSafeInteger(message.revision) || message.revision <= 0)) return;
+    const revision = message.revision || 0;
+    if (edits) {
+      if (!fresh(revision)) return ack(message.seq, { status: "stale" });
+      latestRevision = Math.max(latestRevision, revision);
+    }
     switch (message.type) {
       case "inspector":
         inspector = message.on === true;
@@ -279,13 +315,11 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
       case "render":
         // Acknowledged once it landed or failed (a failure also says render-failed).
         if (message.body && typeof message.body === "object") {
-          render(message.body, valid(message.after))
-            .catch(() => post({ type: "render-failed" }))
-            .then((landed) => ack(message.seq, landed === true ? { marks: marks() } : undefined));
+          asynchronous(message, () => render(message.body, revision));
         }
         return;
       case "paint":
-        if (message.theme && typeof message.theme === "object") paint(message.theme).catch(() => {}).then(() => ack(message.seq));
+        if (message.theme && typeof message.theme === "object") asynchronous(message, () => paint(message.theme, revision));
         return;
     }
     ack(message.seq);

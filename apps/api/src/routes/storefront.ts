@@ -421,7 +421,7 @@ const homepageRoute = createRoute({
 });
 
 /** Draws a homepage's app sections with the request's plugin host (plugins/storefront-render.ts). */
-function homeAppRenderer(c: Context<{ Bindings: Env }>) {
+function homeAppRenderer(c: Context<{ Bindings: Env }>, failOnError = false) {
   return async (requests: HomeAppSectionRequest[]) => {
     const { renderAppSurfaces } = await import("../plugins/storefront-render");
     const drawn = await renderAppSurfaces(
@@ -432,7 +432,7 @@ function homeAppRenderer(c: Context<{ Bindings: Env }>) {
         kind: "section" as const,
         values: request.values,
       })),
-      { env: c.env, ctx: executionContextOf(c), db: c.get("db") },
+      { env: c.env, ctx: executionContextOf(c), db: c.get("db"), failOnError },
     );
     return drawn.map((each) => ({ sectionId: each.instanceId, html: each.html, head: each.head }));
   };
@@ -925,7 +925,7 @@ app.openapi(themePreviewHomepageRoute, async (c) => {
   // A draft's app sections are drawn live (this answer is never cached).
   const data = (await getHomepageData(db, {
     requests,
-    renderApps: homeAppRenderer(c),
+    renderApps: homeAppRenderer(c, true),
     pricing: presence ? startMarketPricing(db, presence) : null,
   })).sections;
   return ok(c, data as unknown as HomepageData["sections"]);

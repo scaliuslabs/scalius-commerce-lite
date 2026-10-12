@@ -12,16 +12,16 @@
 export const partial = true;
 export const prerender = false;
 
-import { storefrontPreviewRenderSchema, storefrontScopeRegions, storefrontThemeWithScope, homeSectionsShowDeliveryFacts } from "@scalius/shared/storefront-theme";
+import { storefrontPreviewRenderSchema, storefrontScopeRegions, storefrontThemeWithScope, homeSectionsShowDeliveryFacts, homeSectionRequests, homeSectionRequestsEmpty } from "@scalius/shared/storefront-theme";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import HomepageSections from "@/components/homepage/HomepageSections.astro";
-import { getCheckoutConfig, getShippingMethods, getThemePreviewHomepageSections } from "@/lib/api";
+import { getCheckoutConfig, isCheckoutConfigReadFailure, getShippingMethods, getThemePreviewHomepageSections } from "@/lib/api";
 import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
 import { buildDeliveryFacts } from "@/lib/delivery-facts";
 import { formatMoney } from "@/lib/currency";
 import { EMPTY_HOMEPAGE_SECTION_DATA, homepageContent, homepageLeadSection } from "@/lib/homepage-sections";
 import { readStoreShape, requestThemeFor } from "@/lib/storefront-theme-context";
-import { THEME_PREVIEW_ROUTE_HEADERS, readThemePreviewPost } from "@/lib/theme-preview-post";
+import { THEME_PREVIEW_ROUTE_HEADERS, readThemePreviewPost, themePreviewRefusal } from "@/lib/theme-preview-post";
 
 const post = await readThemePreviewPost(Astro, storefrontPreviewRenderSchema);
 if (post instanceof Response) return post;
@@ -31,20 +31,38 @@ const { body, token, layoutData, requestTheme } = post;
 const draft = storefrontThemeWithScope(requestTheme.theme, body.scope, body.sections);
 const resolved = requestThemeFor(draft, readStoreShape(layoutData.storeShape)).resolved;
 const regions = storefrontScopeRegions(resolved.pages, body.scope);
-const shown = regions.flatMap((region) => region.sections);
+const only = body.only;
+const target = only ? regions.find((region) => region.sections.some((section) => section.id === only)) ?? null : null;
+const section = target?.sections.find((section) => section.id === only);
+// A unit never needs another region's data. Data-free units need no section
+// read at all unless sibling visibility controls a banner row or phone order.
+const regionSections = only ? target?.sections ?? [] : regions.flatMap((region) => region.sections);
+const emptyContent = homepageContent(EMPTY_HOMEPAGE_SECTION_DATA, []);
+const standalone = section && !(section.type === "banner" && section.settings.layout !== "full")
+  && !((section.type === "hero" || section.type === "category-tiles")
+    && regionSections.some((each) => !each.hidden && each.type === "hero" && each.settings.phonePlacement === "after-categories"))
+  && homeSectionRequestsEmpty(homeSectionRequests([section]))
+  && homepageLeadSection([section], emptyContent) === null;
+const shown = standalone ? [section] : regionSections;
 const presence = body.presence ?? null;
 
-const sectionData = (await getThemePreviewHomepageSections(token, {
-  ...(body.scope.kind === "landing" ? { pageSlug: body.scope.slug } : {}),
-  sections: shown,
-  presence,
-})) ?? EMPTY_HOMEPAGE_SECTION_DATA;
+const sectionData = homeSectionRequestsEmpty(homeSectionRequests(shown))
+  ? EMPTY_HOMEPAGE_SECTION_DATA
+  : await getThemePreviewHomepageSections(token, {
+      ...(body.scope.kind === "landing" ? { pageSlug: body.scope.slug } : {}),
+      sections: shown,
+      presence,
+    });
+if (sectionData === null) return themePreviewRefusal(503);
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
 const showsDeliveryFacts = homeSectionsShowDeliveryFacts(shown);
 const [shippingMethods, checkoutConfig] = showsDeliveryFacts
   ? await Promise.all([getShippingMethods(), getCheckoutConfig()])
   : [null, null];
+if (showsDeliveryFacts && (shippingMethods === null || checkoutConfig === null || isCheckoutConfigReadFailure(checkoutConfig))) {
+  return themePreviewRefusal(503);
+}
 const deliveryFacts = showsDeliveryFacts
   ? buildDeliveryFacts({
       shippingMethods,
@@ -57,8 +75,6 @@ const deliveryFacts = showsDeliveryFacts
 const content = homepageContent(sectionData, deliveryFacts);
 // The layout is the previewed market's (lib/theme-preview-post.ts): its language's words.
 const languageCode = layoutData.storefrontCopy?.languageCode;
-const only = body.only;
-const target = only ? regions.find((region) => region.sections.some((section) => section.id === only)) ?? null : null;
 ---
 
 {only

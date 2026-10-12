@@ -70,6 +70,8 @@ export interface AppSurfaceRender {
 }
 
 export interface AppSurfaceRenderOptions {
+  /** Preview updates retain the previous DOM when a runnable app fails. */
+  failOnError?: boolean;
   env: Env;
   ctx: ExecutionContext;
   db: Database;
@@ -101,9 +103,9 @@ function surfaceOf(installation: PluginInstallation, request: AppSurfaceRequest)
 
 /**
  * Draws every placement, at most `PLUGIN_RENDER_CONCURRENCY` at once, and
- * returns those that drew something, in request order. Never throws for an
- * app's failure; declares every key the output depends on into the current
- * dependency scope.
+ * returns those that drew something, in request order. Preview callers may
+ * opt into failures; published output gracefully omits failed apps. Declares
+ * every output dependency into the current scope.
  */
 export async function renderAppSurfaces(requests: readonly AppSurfaceRequest[], options: AppSurfaceRenderOptions): Promise<AppSurfaceRender[]> {
   if (requests.length === 0) return [];
@@ -182,21 +184,27 @@ async function renderOne(
       render: { collections: [...surface.reads], wallMs: PLUGIN_RENDER_WALL_MS },
     });
   } catch (error) {
+    if (options.failOnError) throw new Error("Preview app render failed");
     // A platform fault: draw nothing, try again soon.
     console.warn(`[plugins] storefront render could not run (${error instanceof Error ? error.name : "error"})`);
     deps.validUntil(Date.now() + PLUGIN_RENDER_RETRY_SECONDS * 1000);
     return null;
   }
   if (!outcome.ok || !outcome.value) {
+    if (options.failOnError) throw new Error("Preview app render failed");
     // A throw or a timeout may not happen next time; an invalid answer is the app's (it is logged by the host).
     if (outcome.failure !== "invalid") deps.validUntil(Date.now() + PLUGIN_RENDER_RETRY_SECONDS * 1000);
     return null;
   }
   const { status, body } = outcome.value;
-  if (status !== 200) return null;
+  if (status !== 200) {
+    if (options.failOnError && status !== 204) throw new Error("Preview app render failed");
+    return null;
+  }
   const parsed = pluginRenderOutputSchema.safeParse(body);
   if (!parsed.success) {
     await host.reportIncident(installation, source, "A storefront section answers { html, head? }.");
+    if (options.failOnError) throw new Error("Preview app render failed");
     return null;
   }
   const html = sanitizePluginHtml(parsed.data.html, {
@@ -209,6 +217,7 @@ async function renderOne(
     await host.reportIncident(installation, source, html.reason === "too_large"
       ? "The section's HTML is over 128 KiB in, or 64 KiB once sanitized."
       : "The section's HTML is nested too deeply or has too many elements.");
+    if (options.failOnError) throw new Error("Preview app render failed");
     return null;
   }
   // Checkout and account pages are never indexed: blocks add no head tags.

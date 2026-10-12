@@ -61,7 +61,7 @@ export type ThemePreviewMessage =
   /** The preview session ended (expired or revoked): the dashboard opens a new one. */
   | { source: typeof THEME_PREVIEW_SOURCE; type: "expired" }
   /** A command was applied (`marks`: the page's marks after a render changed them). */
-  | { source: typeof THEME_PREVIEW_SOURCE; type: "ack"; seq: number; marks?: string[] };
+  | { source: typeof THEME_PREVIEW_SOURCE; type: "ack"; seq: number; marks?: string[]; status?: "stale" | "failed" };
 
 /** Dashboard → preview. Every command but `connect` carries `seq` (see `ack`). */
 export type ThemeEditorCommand =
@@ -84,7 +84,7 @@ export type ThemeEditorCommand =
 
 export type ThemeEditorMessage =
   | Extract<ThemeEditorCommand, { type: "connect" }>
-  | (Exclude<ThemeEditorCommand, { type: "connect" }> & { seq?: number });
+  | (Exclude<ThemeEditorCommand, { type: "connect" }> & { seq?: number; revision?: number });
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -138,10 +138,12 @@ export function readThemePreviewMessage(data: unknown): ThemePreviewMessage | nu
       return { source, type: message.type };
     case "ack":
       if (!seqOf(message.seq)) return null;
-      if (message.marks === undefined) return { source, type: "ack", seq: message.seq };
-      return Array.isArray(message.marks) && message.marks.length <= THEME_PREVIEW_MARKS_MAX && message.marks.every(markId)
-        ? { source, type: "ack", seq: message.seq, marks: [...message.marks] }
-        : null;
+      if (message.status !== undefined && message.status !== "stale" && message.status !== "failed") return null;
+      if (message.marks !== undefined && (!Array.isArray(message.marks) || message.marks.length > THEME_PREVIEW_MARKS_MAX || !message.marks.every(markId))) return null;
+      return { source, type: "ack", seq: message.seq,
+        ...(message.marks === undefined ? {} : { marks: [...(message.marks as string[])] }),
+        ...(message.status === undefined ? {} : { status: message.status }),
+      };
     default:
       return null;
   }
@@ -152,8 +154,13 @@ export function readThemeEditorMessage(data: unknown): ThemeEditorMessage | null
   const message = record(data);
   if (!message || message.source !== THEME_EDITOR_SOURCE) return null;
   if (message.seq !== undefined && (!seqOf(message.seq) || message.type === "connect")) return null;
+  if (message.revision !== undefined && (!seqOf(message.revision) || message.type === "connect")) return null;
   const command = readThemeEditorCommand(message);
-  return command && command.type !== "connect" && seqOf(message.seq) ? { ...command, seq: message.seq } as ThemeEditorMessage : command;
+  return command && command.type !== "connect" ? {
+    ...command,
+    ...(seqOf(message.seq) ? { seq: message.seq } : {}),
+    ...(seqOf(message.revision) ? { revision: message.revision } : {}),
+  } as ThemeEditorMessage : command;
 }
 
 function readThemeEditorCommand(message: Record<string, unknown>): ThemeEditorCommand | null {

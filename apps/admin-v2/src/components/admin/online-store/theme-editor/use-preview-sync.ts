@@ -59,8 +59,12 @@ function needsWholePage(before: Theme, after: Theme, page: EditorPage): boolean 
     || (page.kind === "home" && !same(before.pages.homeMode, after.pages.homeMode));
 }
 
-export function usePreviewSync({ send, reload, connectedAt, working, sendable, savedTheme, page, presence, marks, onNeedSave }: {
+export function usePreviewSync({ send, reload, connectedAt, working, sendable, savedTheme, page, presence, marks, onNeedSave, enabled = true, resyncAt = 0 }: {
   send: (command: PreviewCommand) => void;
+  /** Historical frames must never receive optimistic working-document edits. */
+  enabled?: boolean;
+  /** A stale response needs the latest complete document once, after edits settle. */
+  resyncAt?: number;
   reload: () => void;
   /** Bumps each time a frame connects (it shows the saved draft then). */
   connectedAt: number;
@@ -77,23 +81,29 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
 }) {
   /** What the preview shows now. */
   const shown = useRef<Theme | null>(null);
+  const revision = useRef(0);
+  const reconciled = useRef(0);
   const renderTimers = useRef(new Map<string, number>());
   const paintTimer = useRef(0);
   /** A change waits for its save, then the page loads again. */
   const reloadAfterSave = useRef(false);
-  const latest = useRef({ sendable, page, presence, marks });
-  latest.current = { sendable, page, presence, marks };
+  const latest = useRef({ sendable, page, presence, marks, enabled });
+  latest.current = { sendable, page, presence, marks, enabled };
+  const emit = (command: PreviewCommand) => {
+    if (latest.current.enabled) send({ ...command, revision: Math.max(1, revision.current) });
+  };
 
   // A frame that connects shows the saved draft.
   useEffect(() => {
-    if (connectedAt > 0) shown.current = savedTheme;
-  }, [connectedAt]); // eslint-disable-line react-hooks/exhaustive-deps -- the saved draft as of the connection
+    shown.current = enabled && connectedAt > 0 ? savedTheme : null;
+    if (!enabled) reloadAfterSave.current = false;
+  }, [connectedAt, enabled]); // eslint-disable-line react-hooks/exhaustive-deps -- the saved draft as of the connection
 
   const later = (key: string, delay: number, task: () => void) => {
     window.clearTimeout(renderTimers.current.get(key));
     renderTimers.current.set(key, window.setTimeout(() => {
       renderTimers.current.delete(key);
-      task();
+      if (latest.current.enabled) task();
     }, delay));
   };
 
@@ -108,19 +118,20 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
 
   useEffect(() => {
     const before = shown.current;
-    if (!before || connectedAt === 0) return;
+    if (!enabled || !before || connectedAt === 0) return;
     if (before === working) return;
     shown.current = working;
+    revision.current += 1;
 
     // Theme tokens: at once as custom properties, then painted (fonts, card attributes).
     if (!same(before.tokens, working.tokens)) {
       if (Object.values(working.tokens.colors).every((color) => isStorefrontThemeHexColor(color))) {
-        send({ type: "tokens", vars: buildStorefrontThemeTokens(working) });
+        emit({ type: "tokens", vars: buildStorefrontThemeTokens(working) });
       }
       window.clearTimeout(paintTimer.current);
       paintTimer.current = window.setTimeout(() => {
         const document = latest.current.sendable;
-        if (document && same(document.tokens, shown.current?.tokens)) send({ type: "paint", theme: document });
+        if (document && same(document.tokens, shown.current?.tokens)) emit({ type: "paint", theme: document });
       }, PREVIEW_RENDER_DELAY_MS);
     }
 
@@ -130,55 +141,92 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
     const scope = pageScope(working, page);
     const mainMoved = scope?.kind === "template" && pageScope(before, page)?.kind === "template"
       && (pageScope(before, page) as { main: number }).main !== scope.main;
-    if (!sameShape(was, now) || mainMoved) {
-      const shownIds: string[] = [];
-      if (scope) {
-        for (const region of storefrontScopeRegions({ ...working.pages }, scope)) {
-          const order = region.sections.filter((section) => !section.hidden).map((section) => section.id);
-          shownIds.push(...order);
-          send({ type: "arrange", region: region.region, order });
-        }
+    const shapeChanged = !sameShape(was, now) || mainMoved;
+    const grouped = (section: StorefrontSection) => section.type === "banner" && section.settings.layout !== "full";
+    const settingsChanged = now.filter((section) => {
+      const old = was.find((each) => each.id === section.id);
+      return !section.hidden && old && !same(old.settings, section.settings);
+    });
+    // Grouped banners are one render unit. DOM moves cannot edit one sibling.
+    const groupChanged = (shapeChanged && [...was, ...now].some(grouped))
+      || settingsChanged.some((section) => grouped(section) || was.some((old) => old.id === section.id && grouped(old)));
+    const drawn = new Set(latest.current.marks);
+    // Hero placement follows category tiles. Other units keep their phone slot
+    // through replacements without rereading unrelated sibling dependencies.
+    const phoneOrdered = [...was, ...now].some((section) => !section.hidden && section.type === "hero" && section.settings.phonePlacement === "after-categories");
+    const phonePlacementChanged = settingsChanged.some((section) => section.type === "hero" || section.type === "category-tiles");
+    let regionsNeeded = groupChanged || mainMoved || (phoneOrdered && (shapeChanged || phonePlacementChanged));
+    if (shapeChanged && scope && !groupChanged) {
+      for (const region of storefrontScopeRegions({ ...working.pages }, scope)) {
+        const order = region.sections.filter((section) => !section.hidden).map((section) => section.id);
+        emit({ type: "arrange", region: region.region, order });
+        if (!order.every((id) => drawn.has(id))) regionsNeeded = true;
       }
-      // A move or hide of sections the page already drew is done; a section it lacks (added, or hidden when it loaded) needs a render.
-      const drawn = new Set(latest.current.marks);
-      if (mainMoved || !shownIds.every((id) => drawn.has(id))) {
-        later("regions", PREVIEW_RENDER_DELAY_MS, () => {
-          const body = renderBody({});
-          if (body) send({ type: "render", body, after: null });
-        });
-      }
+    }
+    // Reorder and settings can change in the same history step: handle both.
+    for (const section of settingsChanged) {
+      const old = was.find((each) => each.id === section.id)!;
+      for (const text of changedTexts(old.settings, section.settings)) emit({ type: "text", id: section.id, ...text });
+      // Empty-to-visible has no reliable DOM anchor (several may appear together).
+      // A canonical region render preserves page/before/after and document order.
+      if (!drawn.has(section.id)) regionsNeeded = true;
+    }
+    if (regionsNeeded) {
+      for (const timer of renderTimers.current.values()) window.clearTimeout(timer);
+      renderTimers.current.clear();
+      later("regions", PREVIEW_RENDER_DELAY_MS, () => {
+        const body = renderBody({});
+        if (body) emit({ type: "render", body, after: null });
+      });
     } else {
-      for (const section of now) {
-        const old = was.find((each) => each.id === section.id);
-        if (!old || same(old.settings, section.settings)) continue;
-        for (const text of changedTexts(old.settings, section.settings)) send({ type: "text", id: section.id, ...text });
+      for (const section of settingsChanged) {
         later(section.id, PREVIEW_RENDER_DELAY_MS, () => {
-          // Only a section that is valid now is drawn again; a field with an error keeps its own text in the page.
           const document = latest.current.sendable;
-          const valid = document && pageSections(document, latest.current.page)?.find((each) => each.id === section.id);
+          if (!document) return;
+          const valid = pageSections(document, latest.current.page)?.find((each) => each.id === section.id);
           if (!valid || !same(valid.settings, section.settings)) return;
-          const body = renderBody({ only: section.id });
-          if (body) send({ type: "render", body, after: null });
+          const currentScope = pageScope(document, latest.current.page);
+          const region = currentScope && storefrontScopeRegions(document.pages, currentScope)
+            .find((each) => each.sections.some((item) => item.id === section.id));
+          if (!region) return;
+          const preceding = region.sections.slice(0, region.sections.findIndex((each) => each.id === section.id));
+          const after = preceding.filter((each) => !each.hidden && latest.current.marks.includes(each.id)).at(-1)?.id ?? null;
+          const body = renderBody({ only: section.id, region: region.region });
+          if (body) emit({ type: "render", body, after });
         });
       }
     }
 
     // Shared words show while typing; anything else outside the sections needs the page again, saved.
     if (!same(before.blocks.topBar, working.blocks.topBar)) {
-      for (const text of changedTexts(before.blocks.topBar.settings, working.blocks.topBar.settings)) send({ type: "text", id: THEME_EDITOR_MARKS.announcement, ...text });
+      for (const text of changedTexts(before.blocks.topBar.settings, working.blocks.topBar.settings)) emit({ type: "text", id: THEME_EDITOR_MARKS.announcement, ...text });
     }
     if (!same(before.blocks.footer, working.blocks.footer)) {
-      for (const text of changedTexts(before.blocks.footer.settings, working.blocks.footer.settings)) send({ type: "text", id: THEME_EDITOR_MARKS.footer, ...text });
+      for (const text of changedTexts(before.blocks.footer.settings, working.blocks.footer.settings)) emit({ type: "text", id: THEME_EDITOR_MARKS.footer, ...text });
     }
     if (needsWholePage(before, working, page)) {
       reloadAfterSave.current = true;
       onNeedSave();
     }
-  }, [working, connectedAt]); // eslint-disable-line react-hooks/exhaustive-deps -- runs per edit; the rest is read through refs
+  }, [working, connectedAt, enabled]); // eslint-disable-line react-hooks/exhaustive-deps -- runs per edit; the rest is read through refs
+
+  // A discarded cross-kind response may contain an edit another unit did not.
+  // Reconcile one latest snapshot; no stale-response loop between sibling units.
+  useEffect(() => {
+    if (!enabled || !sendable || connectedAt === 0 || resyncAt <= reconciled.current) return;
+    later("reconcile", PREVIEW_RENDER_DELAY_MS, () => {
+      const document = latest.current.sendable;
+      const body = renderBody({});
+      if (!document || !body) return;
+      reconciled.current = resyncAt;
+      emit({ type: "render", body, after: null });
+      emit({ type: "paint", theme: document });
+    });
+  }, [resyncAt, sendable, enabled, connectedAt]); // eslint-disable-line react-hooks/exhaustive-deps -- latest snapshot at dispatch
 
   // The saved draft caught up with a change only a whole page shows: load it again (in a hidden frame).
   useEffect(() => {
-    if (!reloadAfterSave.current) return;
+    if (!enabled || !reloadAfterSave.current) return;
     if (!sendable || !same(sendable.blocks, savedTheme.blocks) || !same(sendable.brand, savedTheme.brand)) return;
     reloadAfterSave.current = false;
     reload();
@@ -187,5 +235,6 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
   useEffect(() => () => {
     window.clearTimeout(paintTimer.current);
     for (const timer of renderTimers.current.values()) window.clearTimeout(timer);
-  }, []);
+    renderTimers.current.clear();
+  }, [enabled, page, presence]);
 }

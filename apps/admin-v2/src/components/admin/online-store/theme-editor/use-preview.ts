@@ -119,6 +119,8 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
   const resendTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   /** The page is behind the editor: a command had to be sent again. */
   const [behind, setBehind] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [resyncAt, setResyncAt] = useState(0);
   const latest = useRef({ inspector, onSelect, onKey, onConnected, activeId, layout, path, draftRevision, sourceRevision });
   latest.current = { inspector, onSelect, onKey, onConnected, activeId, layout, path, draftRevision, sourceRevision };
 
@@ -139,6 +141,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
     const now = Date.now();
     let lost = false;
     for (const pending of outbox.current.values()) {
+      if (latest.current.sourceRevision !== null && !["inspector", "reveal"].includes(pending.command.type)) continue;
       const wait = pending.command.type === "render" || pending.command.type === "paint" ? PREVIEW_RENDER_ACK_TIMEOUT_MS : PREVIEW_ACK_TIMEOUT_MS;
       if (onlyLate && now - pending.sentAt < wait) continue;
       if (post(id, pending.command, pending.seq)) {
@@ -170,6 +173,7 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
 
   /** Sends to the shown frame; kept until acknowledged, and sent again on connect or when late. */
   const send = useCallback((command: PreviewCommand) => {
+    if (latest.current.sourceRevision !== null && !["inspector", "reveal"].includes(command.type)) return;
     const number = ++seq.current;
     const sent = post(latest.current.activeId, command, number);
     const key = previewCommandKey(command);
@@ -237,6 +241,8 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
     setFrames([]);
     setActiveId(null);
     connected.current.clear();
+    outbox.current.clear();
+    setFailed(false);
     void open();
   }, [open, sourceRevision]);
   const firstPath = useRef(true);
@@ -291,12 +297,20 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
           setShownPath(message.path);
           setMarks(message.marks);
           setPhase("ready");
+          setFailed(false);
           // A (re)connected page gets every command it has not acknowledged, then the unsaved edits.
           flush(id, false);
           latest.current.onConnected();
           break;
         case "ack": {
-          for (const [key, pending] of outbox.current) if (pending.seq === message.seq && id === latest.current.activeId) outbox.current.delete(key);
+          if (id !== latest.current.activeId) break;
+          for (const [key, pending] of outbox.current) {
+            if (pending.seq !== message.seq) continue;
+            outbox.current.delete(key);
+            if (message.status === "stale") setResyncAt((value) => value + 1);
+            if (message.status === "failed") setFailed(true);
+            else if (!message.status && (pending.command.type === "render" || pending.command.type === "paint")) setFailed(false);
+          }
           if (outbox.current.size === 0 && resendTimer.current !== null) {
             clearInterval(resendTimer.current);
             resendTimer.current = null;
@@ -318,8 +332,8 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
           if (id === active) latest.current.onKey(message);
           break;
         case "render-failed":
-          // A section the render route refused: the saved page again (no flash).
-          if (id === active && latest.current.path) load(latest.current.path);
+          // Keep the last canvas on an explicit failure; the merchant can retry.
+          if (id === active) setFailed(true);
           break;
         case "expired":
           void open();
@@ -388,6 +402,8 @@ export function usePreview({ draftRevision, sourceRevision, path, inspector, onS
     marks,
     shownPath,
     behind,
+    failed,
+    resyncAt,
     /** A page loads in a hidden frame to replace the shown one. */
     loading: frames.some((frame) => frame.id !== activeId),
     send,

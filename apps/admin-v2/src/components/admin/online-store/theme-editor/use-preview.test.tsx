@@ -49,13 +49,16 @@ let root: Root;
 let container: HTMLDivElement;
 const handle: { preview: ReturnType<typeof usePreview> | null; rerender: Dispatch<SetStateAction<number>> | null } = { preview: null, rerender: null };
 const connectedCount = { value: 0 };
+let setSourceRevision: Dispatch<SetStateAction<number | null>>;
 
 function Harness() {
   const [tick, setTick] = useState(0);
+  const [sourceRevision, setRevision] = useState<number | null>(null);
+  setSourceRevision = setRevision;
   handle.rerender = setTick;
   const preview = usePreview({
     draftRevision: 3,
-    sourceRevision: null,
+    sourceRevision,
     path: "/",
     inspector: true,
     onSelect: () => {},
@@ -261,4 +264,54 @@ describe("the preview channel", () => {
     expect(previewCommandKey({ type: "render", body: {}, after: null })).toBe("render:regions");
     expect(previewCommandKey({ type: "tokens", vars: {} })).toBe("tokens");
   });
+  it("keeps the active canvas on render failure and asks for one resync on a stale ack", async () => {
+    const frame = await connectFirstFrame();
+    send({ type: "render", body: { only: "faq" }, after: null, revision: 1 });
+    const first = posted(frame).at(-1)!;
+    deliver(frame, { type: "render-failed" });
+    deliver(frame, { type: "ack", seq: first.seq, status: "failed" });
+    expect(frames()).toEqual([frame]);
+    expect(handle.preview!.phase).toBe("ready");
+    expect(handle.preview!.failed).toBe(true);
+    send({ type: "render", body: { only: "faq" }, after: null, revision: 2 });
+    const second = posted(frame).at(-1)!;
+    deliver(frame, { type: "ack", seq: second.seq, status: "stale" });
+    expect(handle.preview!.resyncAt).toBe(1);
+    deliver(frame, { type: "ack", seq: second.seq, status: "stale" });
+    expect(handle.preview!.resyncAt).toBe(1);
+    send({ type: "render", body: {}, after: null, revision: 2 });
+    deliver(frame, { type: "ack", seq: posted(frame).at(-1)!.seq });
+    expect(handle.preview!.failed).toBe(false);
+  });
+
+  it("does not send or replay working edits to a historical frame", async () => {
+    const old = await connectFirstFrame();
+    send({ type: "render", body: { only: "faq" }, after: null, revision: 1 });
+    act(() => setSourceRevision(4));
+    await act(async () => {});
+    await vi.waitFor(() => expect(frames()).toHaveLength(1));
+    const historical = frames()[0]!;
+    expect(historical).not.toBe(old);
+    deliver(historical, { type: "hello", path: "/" });
+    deliver(historical, { type: "ready", path: "/", marks: ["faq"] });
+    send({ type: "tokens", vars: { "color-bg": "#123456" }, revision: 2 });
+    send({ type: "render", body: {}, after: null, revision: 2 });
+    expect(posted(historical).filter(command => ["tokens", "paint", "text", "arrange", "render"].includes(command.type))).toEqual([]);
+    send({ type: "reveal", id: "faq" });
+    expect(posted(historical).at(-1)).toMatchObject({ type: "reveal", id: "faq" });
+  });
+
+  it("ignores a superseded same-key stale ack instead of feeding reconciliation", async () => {
+    const frame = await connectFirstFrame();
+    send({ type: "render", body: {}, after: null, revision: 1 });
+    const old = posted(frame).at(-1)!;
+    send({ type: "render", body: {}, after: null, revision: 1 });
+    const replacement = posted(frame).at(-1)!;
+    deliver(frame, { type: "ack", seq: old.seq, status: "stale" });
+    expect(handle.preview!.resyncAt).toBe(0);
+    deliver(frame, { type: "ack", seq: replacement.seq, marks: ["faq"] });
+    expect(handle.preview!.resyncAt).toBe(0);
+    expect(frames()).toEqual([frame]);
+  });
+
 });

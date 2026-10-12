@@ -164,6 +164,8 @@ Code: `components/admin/layout/`.
 
 Use `MediaField` (Files picker) and `LinkField` (made canonical when the field is left) from `components/admin/online-store/schema-form/resource-fields.tsx`. Never hand-write a section or block settings form: `SchemaSettingsForm` draws it from the registry's zod schemas, and `labels.test.ts` fails on a setting without an English and a Bangla label in `i18n/theme-settings.ts`. Ordered picks inside a section move with up and down buttons. Sections and product page modules also reorder by drag handle or by keyboard (Space, arrows, Space).
 
+Preview updates must converge to the latest draft and match a fresh render, including empty sections, grouped banners and phone order. Failed renders retain the canvas with Retry; historical previews never receive working-draft edits. Verify these transitions through the actual editor as well as the bridge tests.
+
 ## Status to badge variant
 
 Code: `components/admin/orderview/status-badges.ts` (`statusBadgeVariant(status, kind)`) and `components/admin/resource/StatusBadge.tsx` (`RESOURCE_STATUS_VARIANT`). A status not listed is `secondary` (neutral). The badge always carries the word. Colour is never the only signal.

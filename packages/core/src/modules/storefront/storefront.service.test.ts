@@ -11,11 +11,12 @@ import {
   EMPTY_STORE_SHAPE,
   STORE_SHAPE_COUNT_CAP,
   STOREFRONT_SECTION_REGISTRY,
+  homeSectionRequests,
   storefrontTemplateTheme,
   type StorefrontSection,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { getHomepageData, getLayoutData } from "./storefront.service";
 import { readStoreShape } from "./store-shape";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
@@ -327,6 +328,44 @@ describe("storefront homepage data", () => {
     expect(preview.sections.media).toEqual([]);
     expect(preview.sections.categories.map((category) => category.id)).toEqual(["cat_tea"]);
     expect(statements).toBeGreaterThan(0);
+  });
+
+  it("bounds explicit preview collection metadata to the requested IDs", async () => {
+    const reads: Array<{ query: string; ids: readonly SQLInputValue[] }> = [];
+    const { db, sqlite } = createSqliteD1Database({ onQuery: (query, ids) => { reads.push({ query, ids }); } });
+    try {
+      sqlite.exec(`INSERT INTO collections (id, name, presentation, config) VALUES
+        ('col_wanted', 'Wanted', 'grid', '{}'), ('col_unrelated', 'Unrelated', 'grid', '{}')`);
+      const requested = homeSectionRequests([section({ id: "c", type: "collections", settings: {
+        ...STOREFRONT_SECTION_REGISTRY.collections.defaults, collectionIds: ["col_wanted"],
+      } })]);
+      reads.length = 0;
+      await getHomepageData(db, { requests: requested });
+      const metadata = reads.find(({ query }) => /from "collections"/i.test(query));
+      expect(metadata).toBeDefined();
+      expect(metadata!.query).toMatch(/"collections"\."id" in/i);
+      expect(metadata!.ids).toContain("col_wanted");
+      expect(metadata!.ids).not.toContain("col_unrelated");
+      const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${metadata!.query}`).all(...metadata!.ids);
+      expect(JSON.stringify(plan)).toMatch(/SEARCH collections USING INDEX .*\(id=\?\)/);
+      reads.length = 0;
+      await getHomepageData(db, { requests: homeSectionRequests([]) });
+      expect(reads.find(({ query }) => /from "collections"/i.test(query))!.query).toMatch(/false/i);
+    } finally { sqlite.close(); }
+  });
+
+  it("propagates preview app failures but keeps public-page graceful omission", async () => {
+    const { db, sqlite } = createSqliteD1Database();
+    const app = section({ id: "app", type: "app", settings: { app: "acme.reviews/latest", values: {} } });
+    try {
+      const renderApps = vi.fn(async () => { throw new Error("dependency failed"); });
+      await expect(getHomepageData(db, { requests: homeSectionRequests([app]), renderApps }))
+        .rejects.toThrow("Preview app render failed");
+      publishTheme(sqlite, [app]);
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      try { expect((await getHomepageData(db, { renderApps })).sections.apps).toEqual([]); }
+      finally { warn.mockRestore(); }
+    } finally { sqlite.close(); }
   });
 
   it("reads nothing in a second batch when no section needs data", async () => {

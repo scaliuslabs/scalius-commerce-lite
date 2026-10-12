@@ -13,7 +13,7 @@ import {
   productBuyerState,
   products,
 } from "@scalius/database/schema";
-import { eq, isNull, and, sql } from "drizzle-orm";
+import { eq, isNull, and, inArray, sql } from "drizzle-orm";
 import { pickProductPageCopy } from "@scalius/shared/checkout-language";
 import {
   normalizeCloudflareWebAnalyticsConfig,
@@ -234,6 +234,12 @@ export async function getHomepageData(
 ) {
   // A presence page's sections in its language (MARKETS-DESIGN D9); none at the root.
   const translation = translationScopeOf(options.pricing);
+  // Explicit preview requests already identify every collection they need.
+  // Published pages still discover their requests from the saved theme below.
+  const requestedCollectionIds = options.requests ? [...new Set([
+    ...options.requests.collectionIds,
+    ...options.requests.lists.flatMap((list) => list.source.kind === "collection" ? [list.source.collectionId] : []),
+  ])] : null;
   // === BATCH 1: Independent top-level queries ===
   const batchResults = await safeBatch(db, [
     // 0. SEO document (homepage title and description)
@@ -251,7 +257,9 @@ export async function getHomepageData(
         ...translationColumns(translation, "collection", collections.id, { slug: false }),
       })
       .from(collections)
-      .where(and(eq(collections.isActive, true), isNull(collections.deletedAt)))
+      .where(and(eq(collections.isActive, true), isNull(collections.deletedAt),
+        requestedCollectionIds === null ? undefined
+          : requestedCollectionIds.length ? inArray(collections.id, requestedCollectionIds) : sql`false`))
       .orderBy(collections.sortOrder),
 
     // 2. The published theme: its sections and home mode name the reads.
@@ -287,8 +295,12 @@ export async function getHomepageData(
   ]);
   else deps.anyCollection();
   // The apps draw their sections while batch 2 reads the platform sections' data.
+  let previewAppFailed = false;
   const appSections: Promise<HomepageAppSection[]> = (requests.apps ?? []).length > 0 && options.renderApps
     ? options.renderApps(requests.apps ?? []).catch((error: unknown) => {
+      // A preview must retain its previous DOM and report failure, not erase
+      // an app section because a required dependency temporarily failed.
+      if (options.requests) { previewAppFailed = true; return []; }
       console.warn(`[Storefront] App sections could not be drawn (${error instanceof Error ? error.name : "error"}).`);
       // Draw the page without them, and try them again soon.
       deps.validUntil(Date.now() + PLUGIN_RENDER_RETRY_SECONDS * 1000);
@@ -398,6 +410,8 @@ export async function getHomepageData(
     return { key: list.key, products: resolved?.products ?? [], category: resolved?.category ?? null, collection: null };
   });
 
+  const renderedApps = await appSections;
+  if (previewAppFailed) throw new Error("Preview app render failed");
   return {
     seo: seoSettings,
     ...(options.pageSlug ? { landing } : {}),
@@ -412,7 +426,7 @@ export async function getHomepageData(
       // with a redirect to the product's own page.
       homeProduct: productPlan.resolve(results, productOffset),
       // App sections that drew something, by section id (sanitized HTML).
-      apps: await appSections,
+      apps: renderedApps,
       // The Metaobjects sections' content types with their published entries.
       // Only a page with a Metaobjects section carries the key (other pages answer as before).
       ...(metaobjects.types.length > 0 || (requests.metaobjects?.length ?? 0) > 0 ? { metaobjects: metaobjects.types } : {}),

@@ -87,4 +87,15 @@ describe("theme editor messages", () => {
     expect(themeEditorOrigin("https://user:pass@admin.shop.test")).toBe("");
     expect(themeEditorOrigin(undefined)).toBe("");
   });
+  it("validates document revisions and explicit stale/failed acknowledgements", () => {
+    const command = editor({ type: "text", id: "faq", from: "a", to: "b", seq: 8, revision: 3 });
+    expect(readThemeEditorMessage(command)).toEqual(command);
+    for (const revision of [0, -1, 1.5, "3"]) expect(readThemeEditorMessage({ ...command, revision })).toBeNull();
+    for (const status of ["stale", "failed"]) {
+      const ack = preview({ type: "ack", seq: 8, status });
+      expect(readThemePreviewMessage(ack)).toEqual(ack);
+    }
+    expect(readThemePreviewMessage(preview({ type: "ack", seq: 8, status: "success-ish" }))).toBeNull();
+  });
+
 });

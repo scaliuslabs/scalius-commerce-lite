@@ -24,7 +24,7 @@ import { renderAppSurfaces, type AppSurfaceRequest } from "./storefront-render";
 import { pluginTestCtx, pluginTestEnv } from "./testing/fixtures";
 
 const SHA = "a".repeat(64);
-let behaviour: "normal" | "kv" | "undeclared" | "write" | "throw" | "invalid" | "huge" | "script" = "normal";
+let behaviour: "normal" | "kv" | "undeclared" | "write" | "throw" | "invalid" | "huge" | "script" | "no-content" | "empty" | "unavailable" = "normal";
 let invocations = 0;
 
 const manifest = {
@@ -62,6 +62,9 @@ const app = definePlugin({
         if (behaviour === "throw") throw new Error("boom");
         if (behaviour === "invalid") return { body: { markup: "<p>x</p>" } };
         if (behaviour === "huge") return { body: { html: `<p>${"x".repeat(130 * 1024)}</p>` } };
+        if (behaviour === "no-content") return { status: 204 };
+        if (behaviour === "empty") return { body: { html: "" } };
+        if (behaviour === "unavailable") return { status: 503 };
         const count = await ctx.storage.reviews!.count();
         const heading = String(request.render?.settings.heading ?? "");
         const script = behaviour === "script" ? '<script>alert(1)</script><img src="x" onerror="alert(1)"><a href="javascript:alert(1)">x</a>' : "";
@@ -165,6 +168,23 @@ describe("storefront app output", () => {
     const huge = await draw([section()]);
     expect(huge.value).toEqual([]);
     expect((await listPluginLogs(db, "acme.reviews")).map((line) => line.message).join("\n")).toMatch(/128 KiB/);
+  });
+
+  it.each(["throw", "invalid", "huge", "unavailable"] as const)("reports a runnable app's %s to the preview instead of a successful empty update", async (mode) => {
+    behaviour = mode;
+    await expect(renderAppSurfaces([section()], { env: env(), ctx: pluginTestCtx(), db, loaderFor, failOnError: true }))
+      .rejects.toThrow("Preview app render failed");
+  });
+
+  it.each(["no-content", "empty"] as const)("preserves a successful %s app answer in the preview", async (mode) => {
+    behaviour = mode;
+    expect(await renderAppSurfaces([section()], { env: env(), ctx: pluginTestCtx(), db, loaderFor, failOnError: true })).toEqual([]);
+    expect((await draw([section()])).value).toEqual([]);
+  });
+
+  it("still treats an unavailable app as legitimately absent in a preview", async () => {
+    expect(await renderAppSurfaces([{ ...section(), pluginId: "acme.gone" }],
+      { env: env(), ctx: pluginTestCtx(), db, loaderFor, failOnError: true })).toEqual([]);
   });
 
   it("draws nothing for an inactive app or an undeclared type, yet depends on the installation", async () => {

@@ -6,7 +6,7 @@ import "../styles/global.css";
 import HomepageSections from "@/components/homepage/HomepageSections.astro";
 import AppHeadTags from "@/components/apps/AppHeadTags.astro";
 import {
-  getCheckoutConfig,
+  getCheckoutConfig, isCheckoutConfigReadFailure,
   getHomepageData,
   getThemePreviewHomepageSections,
   getShippingMethods,
@@ -64,7 +64,9 @@ const requestTheme = await resolveRequestTheme(Astro, layoutData);
 const homeSections = requestTheme.resolved.pages.home;
 let sectionData = homepageData.sections ?? EMPTY_HOMEPAGE_SECTION_DATA;
 if (requestTheme.preview && requestTheme.previewToken) {
-  sectionData = (await getThemePreviewHomepageSections(requestTheme.previewToken, { presence: getRuntimePresence() })) ?? EMPTY_HOMEPAGE_SECTION_DATA;
+  const previewData = await getThemePreviewHomepageSections(requestTheme.previewToken, { presence: getRuntimePresence() });
+  if (previewData === null) return storefrontDataUnavailableResponse();
+  sectionData = previewData;
 }
 
 // A product homepage answers `/` with its product's own page while that
@@ -96,6 +98,9 @@ const [shippingMethods, checkoutConfig] = await Promise.all([
   showsDeliveryFacts ? shippingMethodsPromise : Promise.resolve(null),
   showsDeliveryFacts ? checkoutConfigPromise : Promise.resolve(null),
 ]);
+if (requestTheme.preview && showsDeliveryFacts && (shippingMethods === null || checkoutConfig === null || isCheckoutConfigReadFailure(checkoutConfig))) {
+  return storefrontDataUnavailableResponse();
+}
 const deliveryFacts = showsDeliveryFacts
   ? buildDeliveryFacts({
       shippingMethods,

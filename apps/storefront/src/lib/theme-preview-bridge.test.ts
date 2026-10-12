@@ -244,22 +244,114 @@ describe("the storefront preview bridge", () => {
     expect(harness.of("ack").map((message) => message.seq)).toEqual([2, 3, 4, 5, 6]);
     harness.fetch.mockResolvedValueOnce(new Response("", { status: 500 }));
     harness.deliver({ source: EDITOR, type: "render", body: { scope: { kind: "home" }, sections: [] }, after: null, seq: 8 });
-    await vi.waitFor(() => expect(harness.of("ack").at(-1)).toEqual({ source: "scalius-theme-preview", type: "ack", seq: 8 }));
+    await vi.waitFor(() => expect(harness.of("ack").at(-1)).toEqual({ source: "scalius-theme-preview", type: "ack", seq: 8, status: "failed" }));
     expect(harness.of("render-failed")).toHaveLength(1);
     harness.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ css: ":root{}", fonts: "", attributes: {} }), { headers: { "Content-Type": "application/json" } }));
     harness.deliver({ source: EDITOR, type: "paint", theme: { version: 8 }, seq: 9 });
     await vi.waitFor(() => expect(harness.of("ack").at(-1)).toMatchObject({ seq: 9 }));
   });
 
-  it("places a new section after its neighbour, and hides one the route no longer draws", async () => {
-    const harness = start();
-    connect(harness);
+  it.each(["story", null])("reconciles a missing unit instead of inserting after %s", async (after) => {
+    const harness = start(); connect(harness);
     harness.fetch.mockResolvedValueOnce(html(UNIT("fresh", "Fresh")));
-    harness.deliver({ source: EDITOR, type: "render", body: { scope: { kind: "home" }, sections: [], only: "fresh" }, after: "story" });
-    await vi.waitFor(() => expect(harness.shown()).toEqual(["story", "fresh", "faq", "seo"]));
+    harness.deliver({ source: EDITOR, type: "render", body: { scope: { kind: "home" }, sections: [], only: "fresh" }, after, seq: 9, revision: 1 });
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 9, status: "stale" })));
+    expect(harness.shown()).toEqual(["story", "faq", "seo"]);
+    expect(harness.of("render-failed")).toEqual([]);
+  });
+
+  it("reconciles banner rows when the middle becomes empty and is restored after the merge", async () => {
+    const harness = start();
+    const banners = (ids: string[]) => `<div data-home-render-unit>${ids.map((id) => `<section data-home-section="banner" data-theme-section-id="${id}">${id}</section>`).join("")}</div>`;
+    const root = harness.window.document.querySelector('[data-theme-region="page"]')!;
+    root.innerHTML = banners(["banner-a"]) + UNIT("middle", "Middle content") + banners(["banner-b"]);
+    connect(harness);
     harness.fetch.mockResolvedValueOnce(html(""));
-    harness.deliver({ source: EDITOR, type: "render", body: { scope: { kind: "home" }, sections: [], only: "faq" }, after: null });
-    await vi.waitFor(() => expect(harness.shown()).toEqual(["story", "fresh", "seo"]));
+    harness.deliver({ source: EDITOR, type: "render", body: { only: "middle" }, after: "banner-a", seq: 10, revision: 1 });
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 10, status: "stale" })));
+    // A unit response cannot regroup its neighbours. Keep the previous slot
+    // until the editor's existing stale-ack path sends the latest full scope.
+    expect(root.querySelector('[data-theme-section-id="middle"]')!.hasAttribute("hidden")).toBe(false);
+    expect(harness.of("render-failed")).toEqual([]);
+    let finishRegions!: (response: Response) => void;
+    harness.fetch.mockReturnValueOnce(new Promise<Response>((resolve) => { finishRegions = resolve; }));
+    harness.deliver({ source: EDITOR, type: "render", body: { scope: { kind: "home" }, sections: [] }, after: null, seq: 11, revision: 1 });
+    await vi.waitFor(() => expect(harness.fetch).toHaveBeenCalledTimes(2));
+    // Undo schedules a unit while the pending region has not removed its mark;
+    // that unit's debounce expires only after the older region has landed.
+    const restored = { source: EDITOR, type: "render", body: { only: "middle" }, after: "banner-a", seq: 12, revision: 2 };
+    finishRegions(html(`<div data-theme-region="page">${banners(["banner-a", "banner-b"])}</div>`));
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 11, marks: ["banner-a", "banner-b"] })));
+    expect(harness.window.document.querySelectorAll("[data-home-render-unit]")).toHaveLength(1);
+    expect(harness.window.document.querySelector('[data-theme-section-id="middle"]')).toBeNull();
+    // Its former anchor is now a grouped row, so placement needs the renderer.
+    harness.fetch.mockResolvedValueOnce(html(UNIT("middle", "Restored content")));
+    harness.deliver(restored);
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 12, status: "stale" })));
+    expect(harness.window.document.querySelector('[data-theme-section-id="middle"]')).toBeNull();
+    expect(harness.window.document.querySelectorAll("[data-home-render-unit]")).toHaveLength(1);
+    harness.fetch.mockResolvedValueOnce(html(`<div data-theme-region="page">${banners(["banner-a"])}${UNIT("middle", "Restored content")}${banners(["banner-b"])}</div>`));
+    harness.deliver({ source: EDITOR, type: "render", body: { scope: { kind: "home" }, sections: [] }, after: null, seq: 13, revision: 2 });
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 13, marks: ["banner-a", "middle", "banner-b"] })));
+    expect(harness.window.document.querySelectorAll("[data-home-render-unit]")).toHaveLength(3);
+    expect(harness.of("render-failed")).toEqual([]);
+    expect(harness.fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps requesting reconciliation if a newer empty edit supersedes the first acknowledgement", async () => {
+    const harness = start(); connect(harness);
+    const command = { source: EDITOR, type: "render", body: { only: "story" }, after: null };
+    for (const seq of [10, 11]) {
+      harness.fetch.mockResolvedValueOnce(html(""));
+      harness.deliver({ ...command, seq, revision: seq });
+      await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq, status: "stale" })));
+    }
+    // The parent may ignore seq 10 after seq 11 replaces its outbox key.
+    // Retrying seq 11 replays the reconciliation ack without another read.
+    harness.deliver({ ...command, seq: 11, revision: 11 });
+    expect(harness.of("ack").at(-1)).toMatchObject({ seq: 11, status: "stale" });
+    expect(harness.fetch).toHaveBeenCalledTimes(2);
+    expect(harness.shown()).toEqual(["story", "faq", "seo"]);
+  });
+
+  it("reconciles the latest of overlapping empty unit responses", async () => {
+    const harness = start(); connect(harness);
+    const finish: Array<(response: Response) => void> = [];
+    harness.fetch.mockImplementation(() => new Promise<Response>((resolve) => { finish.push(resolve); }));
+    for (const seq of [10, 11]) harness.deliver({ source: EDITOR, type: "render", body: { only: "story" }, after: null, seq, revision: seq });
+    await vi.waitFor(() => expect(harness.fetch).toHaveBeenCalledTimes(2));
+    finish[1]!(html(""));
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 11, status: "stale" })));
+    finish[0]!(html(""));
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 10, status: "stale" })));
+    expect(harness.shown()).toEqual(["story", "faq", "seo"]);
+    expect(harness.of("render-failed")).toEqual([]);
+  });
+
+  it("keeps ordinary nonempty FAQ edits between banners on the single-unit path", async () => {
+    const harness = start();
+    const root = harness.window.document.querySelector('[data-theme-region="page"]')!;
+    root.innerHTML = UNIT("banner-a", "Campaign A") + UNIT("faq", "Questions") + UNIT("banner-b", "Campaign B");
+    connect(harness);
+    harness.fetch.mockResolvedValueOnce(html(UNIT("faq", "Updated questions")));
+    harness.deliver({ source: EDITOR, type: "render", body: { only: "faq" }, after: "banner-a", seq: 10, revision: 1 });
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual({ source: "scalius-theme-preview", type: "ack", seq: 10, marks: ["banner-a", "faq", "banner-b"] }));
+    expect(harness.fetch).toHaveBeenCalledTimes(1);
+    expect(harness.shown()).toEqual(["banner-a", "faq", "banner-b"]);
+    expect(root.textContent).toContain("Updated questions");
+  });
+
+  it.each(["hidden", "absent"])("does not reconcile an empty response for an already %s unit", async (state) => {
+    const harness = start();
+    const story = harness.window.document.querySelector('[data-theme-section-id="story"]')!;
+    if (state === "hidden") story.setAttribute("hidden", ""); else story.remove();
+    connect(harness);
+    harness.fetch.mockResolvedValueOnce(html(""));
+    harness.deliver({ source: EDITOR, type: "render", body: { only: "story" }, after: null, seq: 10, revision: 1 });
+    await vi.waitFor(() => expect(harness.of("ack")).toHaveLength(1));
+    expect(harness.of("ack")[0]).not.toHaveProperty("status");
+    expect(harness.shown()).toEqual(["faq", "seo"]);
+    expect(harness.fetch).toHaveBeenCalledTimes(1);
   });
 
   it("swaps whole regions when the route answers regions", async () => {
@@ -310,4 +402,77 @@ describe("the storefront preview bridge", () => {
     expect(body.hasAttribute("data-card-style")).toBe(false);
     expect(harness.window.document.documentElement.style.getPropertyValue("--color-primary")).toBe("");
   });
+  it("keeps an existing unit's phone slot when a data-free replacement omits sibling context", async () => {
+    const harness = start(); connect(harness);
+    const old = harness.window.document.querySelector('[data-theme-section-id="story"]')!.closest('[data-home-render-unit]') as PageElement;
+    old.setAttribute("style", "--phone-order:7"); old.setAttribute("data-phone-order", "7");
+    harness.fetch.mockResolvedValue(html(UNIT("story", "Edited")));
+    harness.deliver({ source: EDITOR, type: "render", body: { only: "story" }, after: null, seq: 20, revision: 1 });
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 20 })));
+    const fresh = harness.window.document.querySelector('[data-theme-section-id="story"]')!.closest('[data-home-render-unit]') as PageElement;
+    expect(fresh.getAttribute("style")).toMatch(/--phone-order:\s*7/);
+    expect(fresh.getAttribute("data-phone-order")).toBe("7");
+  });
+
+  it("deduplicates an in-flight retry and replays its completed ack without another fetch", async () => {
+    const harness = start(); connect(harness);
+    let finish!: (response: Response) => void;
+    harness.fetch.mockReturnValue(new Promise<Response>((resolve) => { finish = resolve; }));
+    const command = { source: EDITOR, type: "render", body: { only: "story" }, after: null, seq: 10, revision: 1 };
+    harness.deliver(command); harness.deliver(command);
+    await vi.waitFor(() => expect(harness.fetch).toHaveBeenCalledTimes(1));
+    finish(html(UNIT("story", "One render")));
+    await vi.waitFor(() => expect(harness.of("ack")).toHaveLength(1));
+    harness.deliver(command);
+    expect(harness.fetch).toHaveBeenCalledTimes(1);
+    expect(harness.of("ack")).toHaveLength(2);
+    expect(harness.of("ack")[1]).toEqual(harness.of("ack")[0]);
+    expect(harness.window.document.body.textContent).toContain("One render");
+  });
+
+  it("rejects an older region after a newer unit, and an older unit after a hide", async () => {
+    const harness = start(); connect(harness);
+    let finish!: (response: Response) => void;
+    harness.fetch.mockReturnValueOnce(new Promise<Response>((resolve) => { finish = resolve; }));
+    harness.deliver({ source: EDITOR, type: "render", body: {}, after: null, seq: 1, revision: 1 });
+    await vi.waitFor(() => expect(harness.fetch).toHaveBeenCalledTimes(1));
+    harness.fetch.mockResolvedValueOnce(html(UNIT("story", "Newest")));
+    harness.deliver({ source: EDITOR, type: "render", body: { only: "story" }, after: null, seq: 2, revision: 2 });
+    await vi.waitFor(() => expect(harness.window.document.body.textContent).toContain("Newest"));
+    finish(html(`<div data-theme-region="page">${UNIT("story", "Stale region")}</div>`));
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 1, status: "stale" })));
+    expect(harness.window.document.body.textContent).toContain("Newest");
+    harness.fetch.mockReturnValueOnce(new Promise<Response>((resolve) => { finish = resolve; }));
+    harness.deliver({ source: EDITOR, type: "render", body: { only: "story" }, after: null, seq: 3, revision: 3 });
+    await vi.waitFor(() => expect(harness.fetch).toHaveBeenCalledTimes(3));
+    harness.deliver({ source: EDITOR, type: "arrange", region: "page", order: ["faq", "seo"], seq: 4, revision: 4 });
+    finish(html(UNIT("story", "Must not revive")));
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 3, status: "stale" })));
+    expect(harness.shown()).toEqual(["faq", "seo"]);
+  });
+
+  it("rechecks paint after JSON resolves and retains newer token overrides", async () => {
+    const harness = start(); connect(harness);
+    let finish!: (result: unknown) => void;
+    const json = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    harness.fetch.mockResolvedValue({ ok: true, status: 200, json });
+    harness.deliver({ source: EDITOR, type: "paint", theme: {}, seq: 3, revision: 3 });
+    await vi.waitFor(() => expect(json).toHaveBeenCalledTimes(1));
+    harness.deliver({ source: EDITOR, type: "tokens", vars: { "color-primary": "#123456" }, seq: 4, revision: 4 });
+    finish({ css: ":root{--color-primary:#abcdef}", fonts: "stale", attributes: {} });
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 3, status: "stale" })));
+    expect(harness.window.document.documentElement.style.getPropertyValue("--color-primary")).toBe("#123456");
+    expect(harness.window.document.querySelector("style[data-theme-fonts]")!.textContent).toBe("");
+  });
+
+  it("reports failed paint without clearing the canvas or token overrides", async () => {
+    const harness = start(); connect(harness);
+    const before = harness.window.document.body.innerHTML;
+    harness.fetch.mockResolvedValue(html("unavailable", 503));
+    harness.deliver({ source: EDITOR, type: "paint", theme: {}, seq: 5, revision: 1 });
+    await vi.waitFor(() => expect(harness.of("ack")).toContainEqual(expect.objectContaining({ seq: 5, status: "failed" })));
+    expect(harness.of("render-failed")).toHaveLength(1);
+    expect(harness.window.document.body.innerHTML).toBe(before);
+  });
+
 });
