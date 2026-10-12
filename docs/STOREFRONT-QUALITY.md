@@ -59,6 +59,8 @@ Exit code: 1 when an entry has a gating finding, else 0. To accept a gating find
 - `entries.test.ts` fails when a section type has no fixture content, when a block variant, template, module, sticky bar or palette has no entry, or when code outside `src/gallery/` imports the gallery.
 - The gallery renders the real page modules (`src/pages/*.astro`) with the real layout and components. It is not a second renderer.
 
+The `catalog:cardinality` entries share finite catalogs of 0, 1 or 200 products across home sections and listing pages. Their continuation links end at the real final page; the Bangla entry exercises load-more paging. Sparse stores use the normal theme fit rules, including omitting EndlessGrid below 40 products. `catalog:missing-media` keeps configured section image references while answering with no matching media, so the real fallback renders. These fixtures do not change section limits or measure production performance.
+
 ## How to add a section
 
 1. Add the type to the registry in `packages/shared/src/storefront-theme/sections.ts` and its renderer as usual.

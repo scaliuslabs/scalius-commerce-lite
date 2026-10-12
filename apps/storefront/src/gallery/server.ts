@@ -7,7 +7,7 @@
  * and a production build refuses to evaluate it.
  */
 import { resolveStorefrontTheme } from "@scalius/shared/storefront-theme";
-import { answerFixtureApi, entryTheme, galleryApiBase, GALLERY_API_PREFIX, unansweredReads } from "./api";
+import { answerFixtureApi, entryTheme, galleryApiBase, galleryStoreShape, GALLERY_API_PREFIX, unansweredReads } from "./api";
 import { galleryEntries, galleryEntry, type GalleryEntry, type GalleryPage } from "./entries";
 import { galleryCartSeed } from "./cart-seed";
 import { PRODUCT_SCENARIO_SLUGS, mediaShape, setFixtureOrigin } from "./fixtures";
@@ -97,10 +97,7 @@ export interface GalleryIndexEntry {
 export function galleryIndex(origin?: string): GalleryIndexEntry[] {
   if (origin) setFixtureOrigin(origin);
   return galleryEntries().map((entry) => {
-    const resolved = resolveStorefrontTheme(entryTheme(entry), {
-      productCount: 1000, skuCount: 1000, topCategoryCount: 18, categoryDepth: 3, categoryGroups: 7, menuTopItems: 18, menuDepth: 3, menuGroups: 7,
-      brandCount: 24, hasCollections: true, hasDeliveryMethods: true, hasKeySpecs: true, hasEmiPlans: true, hasDigitalLines: true, hasReviews: true, hasContentBlocks: true,
-    });
+    const resolved = resolveStorefrontTheme(entryTheme(entry), galleryStoreShape(entry));
     return {
       id: entry.id,
       family: entry.family,

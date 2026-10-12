@@ -55,6 +55,10 @@ export interface GalleryScenario {
   locale?: "bn" | "ar";
   /** The listing's results: a large catalogue (default), none, or a few. */
   listing?: "large" | "empty" | "small";
+  /** A finite product universe shared by section, listing and browser continuation reads. */
+  catalogSize?: 0 | 1 | 200;
+  /** Configured section media IDs do not resolve (for example, deleted uploads). */
+  missingSectionMedia?: boolean;
   /** App sections and product blocks draw something. */
   apps?: boolean;
   /** `localStorage` the browser starts with (a saved cart); the quality audit seeds it before the page loads. */
@@ -368,6 +372,53 @@ function navigationEntries(): GalleryEntry[] {
   return entries;
 }
 
+/** Cardinality is data, not a bigger section limit or a separate renderer. */
+function catalogEntries(): GalleryEntry[] {
+  const theme = withHome(baseTheme(), [
+    contentSection("product-rail", "catalog-rail", { limit: 24 }),
+    contentSection("product-grid", "catalog-grid", { columns: 6, rows: 6 }),
+    contentSection("product-tabs", "catalog-tabs", { limit: 12 }),
+    contentSection("collections", "catalog-collections"),
+    contentSection("endless-grid", "catalog-endless", { pageSize: 24 }),
+  ]);
+  const banglaLoadMore = clone(theme);
+  banglaLoadMore.blocks.listing.paging = "load-more";
+  return [
+    ...([0, 1, 200] as const).flatMap((catalogSize) => (["home", "search"] as const).map((page) => ({
+      id: entryId("catalog", String(catalogSize), page),
+      family: "catalog:cardinality",
+      title: `${catalogSize} products: ${page}`,
+      page,
+      theme: clone(theme),
+      focus: MAIN,
+      scenario: { catalogSize },
+    }))),
+    {
+      id: entryId("catalog", "200", "home", "load-more", "bn"),
+      family: "catalog:cardinality",
+      title: "200 products: Bangla home with load-more listing",
+      page: "home",
+      theme: banglaLoadMore,
+      focus: MAIN,
+      scenario: { catalogSize: 200, locale: "bn" },
+    },
+    {
+      id: entryId("catalog", "missing-section-media"),
+      family: "catalog:missing-media",
+      title: "Configured section images are missing",
+      page: "home",
+      theme: withHome(baseTheme(), [
+        contentSection("hero", "missing-hero"),
+        contentSection("banner", "missing-banner"),
+        contentSection("banner-mosaic", "missing-mosaic"),
+        contentSection("lookbook", "missing-lookbook"),
+      ]),
+      focus: MAIN,
+      scenario: { catalogSize: 1, missingSectionMedia: true },
+    },
+  ];
+}
+
 function productEntries(): GalleryEntry[] {
   const base = baseTheme();
   const entries: GalleryEntry[] = [];
@@ -535,6 +586,7 @@ export function galleryEntries(): GalleryEntry[] {
     ...cardEntries(),
     ...navigationEntries(),
     ...listingEntries(),
+    ...catalogEntries(),
     ...productEntries(),
     ...tokenEntries(),
     ...appEntries(),

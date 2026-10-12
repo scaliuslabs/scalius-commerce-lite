@@ -61,10 +61,10 @@ export function entryTheme(entry: GalleryEntry): StorefrontThemeDocument {
   return { ...entry.theme, brand: { ...entry.theme.brand, logo: GALLERY_LOGO_ID } };
 }
 
-function storeShape() {
+export function galleryStoreShape(entry: GalleryEntry) {
   return storeShapeFromFacts({
-    productCount: 1240,
-    skuCount: 4800,
+    productCount: entry.scenario.catalogSize ?? 1240,
+    skuCount: entry.scenario.catalogSize ?? 4800,
     topCategoryCount: 18,
     categoryDepth: 3,
     categoryGroups: 7,
@@ -111,7 +111,7 @@ function layout(entry: GalleryEntry) {
     ...(markets(entry) ? { markets: markets(entry) } : {}),
     theme,
     brand: { logo: theme.brand.logo ? mediaAsset(GALLERY_LOGO_ID, `${STORE_NAME} logo`) : null, footerLogo: null, favicon: null },
-    storeShape: storeShape(),
+    storeShape: galleryStoreShape(entry),
     business: entry.scenario.locale === "bn" ? { ...business, companyName: BANGLA_STORE_NAME } : business,
     seo: { socialImage: "", returnPolicy: { enabled: true, category: "finite", returnWindowDays: 7, returnFees: "free" } },
     // The API serves the store language; a Bangla store speaks Bangla in its chrome too.
@@ -156,24 +156,40 @@ async function browserPostAnswer(entry: GalleryEntry, path: string, request: Req
   return null;
 }
 
+/** Finite entries never wrap or invent products after the last identity. */
+function catalogProducts(entry: GalleryEntry, count: number, offset = 0) {
+  const total = entry.scenario.catalogSize;
+  return cardProducts(total === undefined ? count : Math.min(count, Math.max(0, total - offset)), offset, { bangla: entry.scenario.locale === "bn" });
+}
+
+function catalogCollection(entry: GalleryEntry, id: string, presentation: "grid" | "carousel" = "grid") {
+  const collection = fixtureCollection(id, presentation);
+  if (entry.scenario.catalogSize === undefined) return collection;
+  const total = entry.scenario.catalogSize;
+  return {
+    ...collection,
+    products: catalogProducts(entry, collection.config.maxProducts),
+    pagination: { page: 1, limit: collection.config.maxProducts, total, totalPages: Math.ceil(total / collection.config.maxProducts) },
+  };
+}
+
 /** The section data a list of sections reads (homepage, landing and template parts). */
 function sectionData(entry: GalleryEntry, sections: readonly StorefrontSection[]) {
   const requests = homeSectionRequests(sections);
-  const bangla = entry.scenario.locale === "bn";
   // A type that is private or gone is missing, as the API leaves it out.
   const metaobjects = (requests.metaobjects ?? []).flatMap((request) => fixtureMetaobject(request.definitionId, request.limit) ?? []);
   return {
     lists: requests.lists.map((list, index) => ({
       key: list.key,
-      products: cardProducts(Math.min(list.limit, HOME_PRODUCT_LIST_LIMIT), index * 5, { bangla }),
+      products: catalogProducts(entry, Math.min(list.limit, HOME_PRODUCT_LIST_LIMIT), entry.scenario.catalogSize === undefined ? index * 5 : 0),
       category: list.source.kind === "category" ? { id: list.source.categoryId, name: "Sarees", slug: "sarees", canonicalPath: null } : null,
       collection: list.source.kind === "collection" ? { id: list.source.collectionId, title: "Eid edit" } : null,
     })),
-    media: [...new Set([...requests.mediaIds, ...metaobjectMediaIds(metaobjects)])].map((id) => mediaAsset(id, `Photo: ${id.replace(/-/g, " ")}`)),
+    media: entry.scenario.missingSectionMedia ? [] : [...new Set([...requests.mediaIds, ...metaobjectMediaIds(metaobjects)])].map((id) => mediaAsset(id, `Photo: ${id.replace(/-/g, " ")}`)),
     brands: requests.brandLimit > 0 ? fixtureBrands(requests.brandLimit) : [],
     promotions: requests.promotionIds.map((id) => ({ id, endsAt: "2026-12-31T18:00:00.000Z" })),
     categories: requests.categoryIds.map(homeCategory),
-    collections: requests.collectionIds.map((id, index) => fixtureCollection(id, index % 2 === 0 ? "carousel" : "grid")),
+    collections: requests.collectionIds.map((id, index) => catalogCollection(entry, id, index % 2 === 0 ? "carousel" : "grid")),
     homeProduct: null,
     metaobjects,
     ...(entry.scenario.apps === undefined ? {} : {
@@ -188,16 +204,28 @@ function sectionData(entry: GalleryEntry, sections: readonly StorefrontSection[]
   };
 }
 
-function listing(entry: GalleryEntry) {
+function positiveInteger(value: string | null, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function listing(entry: GalleryEntry, search: URLSearchParams) {
   const size = entry.scenario.listing ?? "large";
-  const count = size === "empty" ? 0 : size === "small" ? 5 : 24;
-  const total = size === "large" ? 1240 : count;
+  const total = search.get("q") === "zzz-nothing" || size === "empty" ? 0 : entry.scenario.catalogSize ?? (size === "small" ? 5 : 1240);
+  // Match the real listing's default and maximum page sizes (product-list-query.ts).
+  const page = positiveInteger(search.get("page"), 1);
+  const limit = Math.min(60, positiveInteger(search.get("limit"), 20));
+  const offset = (page - 1) * limit;
+  const finiteProducts = entry.scenario.catalogSize === undefined ? null : catalogProducts(entry, total);
+  const prices = finiteProducts?.map((product) => product.discountedPrice);
   return {
-    products: cardProducts(count, 0, { bangla: entry.scenario.locale === "bn" }),
-    pagination: { page: 1, limit: 24, total, totalPages: Math.max(1, Math.ceil(total / 24)) },
-    priceRange: { min: 250, max: 98500 },
-    facets: size === "large" ? fixtureFacets() : [],
-    ratingFacet: [{ min: 4, count: 820 }, { min: 3, count: 1010 }, { min: 2, count: 1100 }, { min: 1, count: 1140 }],
+    products: catalogProducts(entry, Math.min(limit, Math.max(0, total - offset)), offset),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    priceRange: prices ? { min: prices.length ? Math.min(...prices) : 0, max: prices.length ? Math.max(...prices) : 0 } : { min: 250, max: 98500 },
+    facets: finiteProducts ? [] : size === "large" ? fixtureFacets() : [],
+    ratingFacet: finiteProducts
+      ? [4, 3, 2, 1].map((min) => ({ min, count: finiteProducts.filter((product) => product.rating && product.rating.average >= min).length }))
+      : [{ min: 4, count: 820 }, { min: 3, count: 1010 }, { min: 2, count: 1100 }, { min: 1, count: 1140 }],
   };
 }
 
@@ -271,8 +299,12 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   const productApp = /^\/api\/v1\/storefront\/product-apps\/([^/]+)$/.exec(path);
   if (productApp) return productApps(entry);
   if (path === "/api/v1/products/recommendations") {
-    const limit = Math.min(Math.max(Number(search.get("limit")) || 8, 1), 20);
-    return { reason: search.get("productIds") ? "also_bought" : "popular", products: cardProducts(limit, 3) };
+    const limit = Math.min(positiveInteger(search.get("limit"), 8), 20);
+    const sources = new Set((search.get("productIds") ?? "").split(",").filter(Boolean));
+    const products = entry.scenario.catalogSize === undefined
+      ? cardProducts(limit, 3)
+      : catalogProducts(entry, entry.scenario.catalogSize).filter((product) => !sources.has(product.id)).slice(0, limit);
+    return { reason: sources.size ? "also_bought" : "popular", products };
   }
   const product = /^\/api\/v1\/products\/([^/]+)$/.exec(path);
   if (product) {
@@ -281,22 +313,23 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   }
   const category = /^\/api\/v1\/categories\/([^/]+)\/products$/.exec(path);
   if (category) {
-    return { ...listing(entry), category: categoryDetail(decodeURIComponent(category[1]!)), shelfProducts: cardProducts(16, 3) };
+    return { ...listing(entry, search), category: categoryDetail(decodeURIComponent(category[1]!)), shelfProducts: catalogProducts(entry, 16, entry.scenario.catalogSize === undefined ? 3 : 0) };
   }
   const collection = /^\/api\/v1\/collections\/([^/]+)$/.exec(path);
   if (collection) {
-    const value = fixtureCollection(decodeURIComponent(collection[1]!));
-    return { ...value, ...listing(entry), collection: value, categories: value.categories };
+    const value = catalogCollection(entry, decodeURIComponent(collection[1]!));
+    const list = listing(entry, search);
+    return { ...value, ...list, collection: { ...value, products: list.products, pagination: list.pagination }, categories: value.categories };
   }
   const brand = /^\/api\/v1\/brands\/([^/]+)(?:\/products)?$/.exec(path);
   if (brand) {
     const record = fixtureBrands(24).find((each) => each.slug === decodeURIComponent(brand[1]!)) ?? fixtureBrands(1)[0]!;
     return {
-      ...listing(entry),
+      ...listing(entry, search),
       brand: { ...record, description: "Official partner since 2019. Every device carries the brand warranty.", metaTitle: null, metaDescription: null, noIndex: false, excludeFromSitemap: false, listingTemplate: null, createdAt: null, updatedAt: null },
     };
   }
-  if (path === "/api/v1/products") return search.get("q") === "zzz-nothing" || entry.scenario.listing === "empty" ? { ...listing({ ...entry, scenario: { ...entry.scenario, listing: "empty" } }) } : listing(entry);
+  if (path === "/api/v1/products") return listing(entry, search);
   if (path === "/api/v1/products/search/suggestions" || path === "/api/v1/search/suggestions") return { suggestions: [], categories: [] };
   const page = /^\/api\/v1\/(?:storefront\/)?pages\/(?:slug\/)?([^/]+)$/.exec(path);
   if (page) return { page: fixturePage(decodeURIComponent(page[1]!), entry.scenario.locale === "bn") };
