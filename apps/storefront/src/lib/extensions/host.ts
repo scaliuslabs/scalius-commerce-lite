@@ -11,8 +11,8 @@
 //   footer and every card already drawn cost nothing on the next page
 //   (and pages served from the page cache run no app code at all);
 // - comes within `renderWallMs`, or the page draws without it: a section
-//   draws nothing, a slot draws the theme's own block. An app can never take
-//   a page down or hold it back.
+//   draws nothing, a slot draws the theme's own block. This timeout cannot
+//   preempt synchronous bundled code or detect incorrect layout/interaction.
 
 import {
   STOREFRONT_COMPONENT_ABI,

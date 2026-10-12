@@ -1,6 +1,10 @@
 # Storefront quality harness
 
-The harness renders every storefront section, block, template and page kind, and measures each one in a browser. It has two parts:
+The harness renders registered core storefront variants and synthetic app cases,
+and measures those entries in a browser. It is not coverage of installed plugin
+themes or complete buyer/merchant journeys. Follow [UI verification](UI-VERIFICATION.md)
+for composed pages, transitions, independent outcome checks and coverage claims.
+It has two parts:
 
 - **The section gallery** (`apps/storefront/src/gallery/`, served by `apps/storefront/scripts/gallery-server.mjs`). It renders the real storefront pages through Vite, with a fixture store and a fixture API. It needs no API, no database and no secrets.
 - **The audit** (`scripts/storefront-quality.mjs`). It opens each gallery entry in headless Chromium (Playwright) at 390, 768, 1280 and 1440 px, runs the checks, takes screenshots and writes a report.
@@ -35,7 +39,8 @@ Each check looks only at the entry's region (`focus`: a section, the header, the
 | `overflow` | The page scrolls sideways because of an element in the region | yes |
 | `render` | The page answers 4xx or 5xx | yes |
 | `overflow-outside-focus` | Sideways scroll caused outside the region (reported on the entry of that region) | no |
-| `focus-missing` | The region is not on the page: the variant rendered nothing | no |
+| `interaction` | A required action failed or did not reach its declared result | yes, cannot be allowlisted |
+| `focus-missing` | The region is not on the page: the variant rendered nothing | yes, cannot be allowlisted |
 | `keyboard-unreachable` | A visible control cannot take keyboard focus, or an element has a pointer cursor but is not a control | no |
 | `focus-visible` | A control looks the same focused and unfocused (WCAG 2.4.7) | no |
 | `layout-shift` | CLS above 0.1 while the page loads | no |
@@ -50,6 +55,23 @@ Each check looks only at the entry's region (`focus`: a section, the header, the
 Colour schemes: every palette with each header tone and every token value is an entry, so axe measures text contrast in each one.
 
 Exit code: 1 when an entry has a gating finding, else 0. To accept a gating finding, add it to `scripts/storefront-quality/allowlist.json` with a reason: `{ "entry": "<id or glob>", "rule": "<rule>", "widths": [390], "reason": "..." }`. Keep the list empty or very short; fix the component instead.
+
+Required interactions record `passed`, `failed`, `not-run` or `not-applicable`
+in `results.json`. Clicks require an `expectVisible` selector; selections and
+typed input also verify their persisted value. A failed action stops setup for
+that width, retains a failure screenshot, and skips measurements and visual
+comparison of the wrong state. A declared `maxWidth` exclusion is intentional
+and is never recorded as passed. Missing regions and failed actions cannot be
+allowlisted. An empty entry selection fails rather than reporting success, and
+failed gating checks cannot replace the visual baseline.
+
+The current runner resets storage at every navigation, uses Chromium with
+reduced motion, and captures at the top of the page. It cannot establish
+scroll-dependent positioning, session recovery, normal-motion behavior or
+cross-browser correctness. The gallery's one-setting-at-a-time generation is
+not pairwise coverage. Its synthetic app cases do not load Noor's packed
+module, CSS and islands together with the host. Keep these gaps explicit until
+the corresponding real integration journeys are executed.
 
 ## How the gallery stays in sync
 

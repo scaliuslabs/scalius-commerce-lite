@@ -28,6 +28,7 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { writeQualityReport } from "./storefront-quality/report.mjs";
+import { REQUIRED_STATE_RULES, runInteractions } from "./storefront-quality/interactions.mjs";
 import { summarizeResults } from "./quality-shared/report-kit.mjs";
 import { CLS_INIT, focusVisibleCheck, globMatch } from "./quality-shared/page-checks.mjs";
 
@@ -368,29 +369,19 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
       }
       await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
       await page.evaluate(() => document.fonts?.ready).catch(() => {});
-      for (const action of entry.interact ?? []) {
-        if (action.maxWidth && width >= action.maxWidth) continue;
-        const target = page.locator(action.click ?? action.select ?? action.type).first();
-        if (!(await target.count()) || !(await target.isVisible())) continue;
-        if (action.click !== undefined) await target.click({ timeout: 5_000 }).catch(() => {});
-        else if (action.select !== undefined) await target.selectOption(action.value, { timeout: 5_000 }).catch(() => {});
-        else {
-          await target.click({ timeout: 5_000 }).catch(() => {});
-          await target.pressSequentially(action.text, { delay: 30 }).catch(() => {});
-          await page.waitForTimeout(action.wait ?? 600);
-        }
-      }
-      await page.waitForTimeout(400);
-      const cls = await page.evaluate(() => ({ value: window.__galleryCls ?? 0, sources: window.__galleryShifts ?? [] }));
-
-      const findings = [];
-      const checks = await page.evaluate(pageChecks, { focus: entry.focus, locale: entry.locale, dir: entry.dir });
+      const interactions = await runInteractions(page, entry.interact ?? [], width);
+      const findings = interactions.failure ? [interactions.failure] : [];
+      if (!interactions.failure) await page.waitForTimeout(400);
+      const cls = interactions.failure ? { value: 0, sources: [] }
+        : await page.evaluate(() => ({ value: window.__galleryCls ?? 0, sources: window.__galleryShifts ?? [] }));
+      const checks = interactions.failure ? { findings: [], metrics: {} }
+        : await page.evaluate(pageChecks, { focus: entry.focus, locale: entry.locale, dir: entry.dir });
       findings.push(...checks.findings);
       if (cls.value > 0.1) {
         findings.push({ rule: "layout-shift", source: "harness", impact: cls.value > 0.25 ? "serious" : "moderate", message: `Layout shift while loading: CLS ${cls.value.toFixed(3)} (good is 0.1 or less).`, count: 1, nodes: cls.sources });
       }
 
-      if (!findings.some((finding) => finding.rule === "focus-missing")) {
+      if (!interactions.failure && !findings.some((finding) => finding.rule === "focus-missing")) {
         // axe-core, scoped to the entry's region.
         if (!(await page.evaluate(() => typeof window.axe !== "undefined"))) await page.addScriptTag({ content: axeSource });
         const axe = await page.evaluate(async ({ focus, tags }) => {
@@ -445,7 +436,7 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
       });
       let diff = null;
       const baselineFile = join(baseline, shot);
-      if (screenshotPath && existsSync(baselineFile)) {
+      if (screenshotPath && !findings.some((finding) => REQUIRED_STATE_RULES.has(finding.rule)) && existsSync(baselineFile)) {
         const diffPath = `diffs/${entry.id}/${width}.png`;
         const compared = await diffImages(browser, baselineFile, join(out, shot), join(out, diffPath));
         diff = { ratio: compared.ratio, image: diffPath, baseline: pathToFileURL(baselineFile).href };
@@ -456,8 +447,9 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
 
       for (const finding of findings) {
         finding.help ??= null;
-        const gating = finding.rule === "render" || finding.rule === "overflow" || (finding.source === "axe" && GATING_IMPACTS.has(finding.impact));
-        const allow = gating ? allowed(allowlist, entry.id, finding.rule, width) : null;
+        const requiredState = REQUIRED_STATE_RULES.has(finding.rule);
+        const gating = requiredState || finding.rule === "render" || finding.rule === "overflow" || (finding.source === "axe" && GATING_IMPACTS.has(finding.impact));
+        const allow = gating && !requiredState ? allowed(allowlist, entry.id, finding.rule, width) : null;
         finding.gating = gating && !allow;
         if (allow) {
           finding.allowlisted = allow.reason;
@@ -465,7 +457,7 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
           result.allowReason = allow.reason;
         }
       }
-      result.widths[width] = { screenshot: screenshotPath, diff, metrics: { ...checks.metrics, cls: Number(cls.value.toFixed(4)) }, findings };
+      result.widths[width] = { screenshot: screenshotPath, diff, metrics: interactions.failure ? {} : { ...checks.metrics, cls: Number(cls.value.toFixed(4)) }, interactions: interactions.steps, findings };
     }
   } catch (error) {
     result.error = String(error?.stack ?? error).slice(0, 2000);
@@ -523,6 +515,7 @@ async function main() {
   process.once("SIGINT", () => stop().then(() => process.exit(130)));
   try {
     const entries = await loadEntries(args, baseUrl);
+    if (entries.length === 0) throw new Error("No gallery entries matched: nothing was verified. Check --only, --family or --paths.");
     if (args.paths.length) {
       // Real pages: the locale is whatever the page declares.
       for (const entry of entries) entry.locale = "";
@@ -557,10 +550,12 @@ async function main() {
     const report = { generatedAt: new Date().toISOString(), baseUrl, mode: gallery ? "fixture" : "base-url", widths: args.widths, durationSeconds: Math.round((Date.now() - started) / 1000), summary, entries: results };
     writeFileSync(join(args.out, "results.json"), `${JSON.stringify(report, null, 2)}\n`);
     const reportFile = writeQualityReport(args.out, report);
-    if (args.updateBaseline) {
+    if (args.updateBaseline && summary.failingEntries === 0) {
       rmSync(args.baseline, { recursive: true, force: true });
       cpSync(join(args.out, "shots"), join(args.baseline, "shots"), { recursive: true });
       console.log(`Baseline updated: ${args.baseline}`);
+    } else if (args.updateBaseline) {
+      console.log("Baseline unchanged: required audit checks failed.");
     }
     console.log(`\n${summary.entries} entries, ${summary.failingEntries} failing, ${summary.gatingFindings} gating findings (${report.durationSeconds}s)`);
     for (const [rule, value] of Object.entries(summary.byRule).slice(0, 12)) {

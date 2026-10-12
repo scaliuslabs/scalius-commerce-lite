@@ -73,16 +73,20 @@ export interface GalleryScenario {
   cart?: GalleryCartSeed;
 }
 
-/** A click the audit makes before it checks (a closed drawer has nothing to check). */
-export type GalleryInteraction =
+/** Required state setup: a closed drawer is not evidence of an open drawer. */
+export type GalleryInteraction = {
+  /** Only below this viewport width; other widths are explicitly not applicable. */
+  maxWidth?: number;
+} & (
   | {
       click: string;
-      /** Only below this viewport width (phones and tablets). */
-      maxWidth?: number;
+      /** Selector that must become visible after the action. */
+      expectVisible: string;
     }
-  | { select: string; value: string }
-  /** Types into a field one key at a time, then waits (a debounced suggestion list needs it). */
-  | { type: string; text: string; wait?: number };
+  | { select: string; value: string; expectVisible?: string }
+  /** Types one key at a time, then waits for the expected result if specified. */
+  | { type: string; text: string; expectVisible?: string }
+);
 
 export interface GalleryEntry {
   id: string;
@@ -100,7 +104,7 @@ const MAIN: GalleryFocus = { include: ["#main-content"] };
 const CHROME: GalleryFocus = { include: ["body"], exclude: ["#main-content", "footer"] };
 const FOOTER: GalleryFocus = { include: ["footer"] };
 const sectionFocus = (id: string): GalleryFocus => ({ include: [`[data-section-id="${id}"]`] });
-const OPEN_MENU: GalleryInteraction = { click: "#mobile-menu-toggle", maxWidth: 1024 };
+const OPEN_MENU: GalleryInteraction = { click: "#mobile-menu-toggle", maxWidth: 1024, expectVisible: '#mobile-menu-panel[aria-hidden="false"]' };
 
 export function entryId(...parts: string[]): string {
   return parts
@@ -507,8 +511,8 @@ function appEntries(): GalleryEntry[] {
       focus: MAIN,
       scenario: { addressApp: true, storage: { "cart:v3": GALLERY_CART } },
       interact: [
-        { select: "#checkout-country", value: "GB" },
-        { type: "#shippingAddress", text: "10 Down", wait: 900 },
+        { select: "#checkout-country", value: "GB", expectVisible: "#checkout-shippingPostalCode" },
+        { type: "#shippingAddress", text: "10 Down", expectVisible: '[id^="shippingAddress-suggestions-"] [role="option"]' },
       ],
     },
     { id: entryId("app", "section"), family: "app:section", title: "App section on the home page", page: "home", theme: home, focus: { include: ['[data-section-id="app-greeting"]'] }, scenario: { apps: true } },

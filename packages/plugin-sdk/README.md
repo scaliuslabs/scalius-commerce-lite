@@ -89,7 +89,10 @@ After the deploy, the app shows on the Apps page as not active. A Super Admin re
 
 ## Two loaders
 
-One module runs in both loaders with the same runtime code, so a passing harness test holds in either.
+One module uses the same handler contract in both loaders. Harness tests verify
+that contract; they do not prove equivalent isolation, deployment behavior or
+performance. Bundled code is trusted code in the host Worker; the Dynamic Worker
+has a separate execution boundary. Verify loader-specific behavior separately.
 
 - **Bundled** runs in the API Worker on any plan, from `scalius.plugins.json`. Values crossing the bridge are structured-cloned.
 - **Sandbox** needs Workers Paid. Each app version runs in its own Dynamic Worker (binding `LOADER`), cached by id, version and SHA-256. It has no network (`globalOutbound: null`), and the CPU limit `limits.cpuMs` within the plan's ceiling.

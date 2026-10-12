@@ -35,6 +35,14 @@ const ids = new Set(entries.map((entry) => entry.id));
 const families = new Set(entries.map((entry) => entry.family));
 
 describe("the storefront gallery", () => {
+  it("declares observable results for every required stateful interaction", () => {
+    for (const entry of entries) {
+      for (const action of entry.interact ?? []) {
+        expect(action.expectVisible?.trim(), `${entry.id}: expected visible state`).toBeTruthy();
+      }
+    }
+  });
+
   it("has unique ids and only saveable theme documents", () => {
     expect(ids.size).toBe(entries.length);
     for (const entry of entries) expect(storefrontThemeDocumentSchema.safeParse(entry.theme).success, entry.id).toBe(true);

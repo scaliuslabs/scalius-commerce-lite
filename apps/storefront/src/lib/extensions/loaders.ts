@@ -2,13 +2,12 @@
 //
 // - bundled apps (every plan): the module `pnpm plugin` compiled into this
 //   Worker (extensions/bundled.gen.ts), called in process with a structured
-//   clone of the batch, exactly as an isolate would receive it;
+//   clone of the batch. The input shape matches the isolate protocol,
+//   but bundled code is trusted host code, not isolated execution;
 // - uploaded and registry apps (Workers Paid, `LOADER`): the module runs in
 //   its own Dynamic Worker, kept warm by `<plugin id>:<release>`, with no
-//   bindings and no network. It usually runs on the same machine and thread
-//   as this Worker, so a call costs about what a function call does. Its
-//   code is read once per isolate from the API (verified against the
-//   release's sealed digest there) and kept in the Cache API.
+//   bindings and no network. Its code is read once per isolate from the API,
+//   verified against the release's sealed digest there, and kept in the Cache API.
 //
 // Either way the module gets the same batch and answers the same reply.
 

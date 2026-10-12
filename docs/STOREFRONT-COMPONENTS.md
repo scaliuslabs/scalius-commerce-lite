@@ -18,7 +18,9 @@ Source of truth:
 
 ## The model
 
-An app's storefront module is compiled once, at pack time, and linked at activation. It is never rebuilt per store and never fetches anything.
+An app's storefront module is compiled once, at pack time, and linked at activation.
+It is not rebuilt per store. Its render contract is pure: data comes from the
+host, not component fetches. The loaders have different trust boundaries below.
 
 - **Server components.** JSX (or `html` templates) that build HTML strings. A component is a pure function of its input: the resolved settings, the data the page already read, and the render context. No network, no storage, no bindings, no clock beyond `context.now`.
 - **Islands.** The only app JavaScript a buyer's browser runs. An island is a small client module that mounts on server-rendered markup when it becomes visible (or idle, on load, on first interaction). The page works before and without it.
@@ -128,7 +130,9 @@ An island's module loads from `/_x/...` only when its moment comes, once per pag
 
 `<Checkout product={settings.product} maxQuantity={5} />` places the store's own order form in the app's markup: option picker, quantity, name, phone, address. It is the Bangladesh-style landing page: the buyer orders without leaving the page.
 
-- The storefront replaces the marker with `OrderForm.astro` (at most 2 per page). The app never sees or handles buyer data.
+- The storefront replaces the marker with `OrderForm.astro` (at most 2 per page).
+  The server render input contains no buyer form data. The resulting form belongs
+  to core; trusted browser islands share its page and can access its DOM.
 - The form posts to `/checkout/quick`, the same cash-on-delivery pipeline as the product page's quick buy: stock, prices, the delivery quote, checkout functions and the order commit are the core's. The buyer confirms the total once and the order is placed.
 - It renders only for products that can be ordered from a form (active, in stock, no customization, not a gift card); otherwise it links to the product page.
 - The core styles it on the store's tokens (zero-specificity rules; `--of-radius`, `--of-line`, `--of-focus` change the basics), with sizes as compact chips and a price per option only when prices differ. Restyle it through `.scalius-order-form` and its parts.
@@ -175,15 +179,32 @@ Noor, a full theme, packs to a 40 KB module, 3.8 KB of islands and a 44 KB style
 - **One call per app per page.** Every component an app draws on a page (header, footer, every card in a listing, every section) joins one batch, sent once (`ExtensionHost`).
 - **Memo.** Each isolate keeps an LRU of rendered output (2,000 entries, 8 MiB) keyed by the app's release, the job and its context. A popular page's cards and chrome render once per isolate, not per request.
 - **No new reads.** Slots draw from data the page already has (the layout's menus and store info, the cards the page lists). Section data joins the page's existing batch.
-- **No new caches, no KV.** Rendered pages use the storefront's existing HTML cache and its purge rules; release files are immutable for a year (`/_x/<id>/<release>/`), so an update is a new URL. Nothing is stored in KV and no table is added: installs live in the existing plugin tables, files in R2, so the data layer stays portable to Turso and PostgreSQL ([DATABASE-PORTABILITY.md](DATABASE-PORTABILITY.md)).
-- **Failure is local.** A component that throws, times out or exceeds a budget renders the core block in its place (a section renders nothing), and the storefront logs a bounded warning naming the app and the reason.
+- **Existing page cache.** Rendered pages use the storefront's dependency-validated
+  HTML cache; do not add purge or generation-bump paths. Release files are
+  immutable for a year (`/_x/<id>/<release>/`), so an update is a new URL. Installs
+  live in the existing plugin tables and uploaded files in R2, keeping the data
+  layer portable ([DATABASE-PORTABILITY.md](DATABASE-PORTABILITY.md)). Changes to
+  plugin rendering inputs must participate in memo keys and cache dependencies.
+- **Bounded fallback.** Caught render failures use the core block (a section renders
+  nothing), with a bounded warning naming the app and reason. This does not detect
+  broken layout or incorrect interaction. A wall timeout cannot interrupt
+  synchronous code blocking the bundled host's event loop.
 
 ## Security and transparency
 
 The merchant owns their apps (private or uploaded). The platform makes what an app can do visible and bounded:
 
 - Activation shows the access the app asks for. Drawing on the storefront is its own grant (`storefrontCode`), and every browser host its islands may reach (`storefrontConnect`) is listed; a Super Admin approves both. An update that asks for more waits for approval.
-- The module has no network, no storage and no bindings in either loader. It sees only its settings, the page's public data and the render context; never cookies, the customer, the cart or secrets.
+- The render input supplies settings, public page data and context, not buyer
+  sessions or secrets. Uploaded modules run in a Dynamic Worker with no bindings,
+  denied outbound network and a CPU limit. Bundled modules execute in the host
+  Worker: they are trusted deployment code, not an equivalent security sandbox.
+  Structured cloning protects the passed values; it does not isolate execution.
+- Browser islands are trusted same-origin JavaScript. They can access page DOM
+  (including embedded forms) and make requests permitted by browser policy.
+  Activation approval, CSP and server authorization are boundaries; HTML
+  sanitization does not sandbox an approved island. HttpOnly cookies prevent
+  reading cookie values, not making otherwise-authorized same-origin requests.
 - Output passes `sanitizeStorefrontHtml`. Any element, class, inline style, `<style>`, SVG and form stays. Dropped: `<script>` (islands are the only code), `<object>`, `<embed>`, `<base>`, `<meta>`, `<link>`, event handler attributes, `srcdoc`, and any URL that is not relative, `http(s)`, `mailto`, `tel` or `sms` (an `<img>` may use a base64 raster `data:` URL). An `<iframe>` needs an `https://` source and loads lazily.
 - Island code is served from the store's origin under its release; CSP `script-src` gains nothing. Connect hosts join `connect-src` and `img-src` only, on pages whose theme uses the app.
 - SVG files are served with a sandboxing CSP and `nosniff`.
@@ -191,3 +212,7 @@ The merchant owns their apps (private or uploaded). The platform makes what an a
 ## Versioning
 
 The component ABI (`STOREFRONT_COMPONENT_ABI`) and the data shapes are part of the plugin API (`PLUGIN_API_VERSION`): within a version they only gain optional fields. A breaking change bumps the ABI with a changelog entry; app authors repack, merchants update the app. Merchants never touch storefront code.
+
+See [UI verification](UI-VERIFICATION.md) for the composed-journey release bar
+and [extension hardening](STOREFRONT-EXTENSION-HARDENING.md) for the next contract
+improvements. Proposed helpers there are not shipped SDK APIs.
