@@ -327,10 +327,14 @@ export function ThemeEditor({ workspace, refetch }: {
       if (from === "preview") setSheet("half");
     }
   }, [sections, draft, desktop]);
+  // A landing page the merchant just made has no address until the draft
+  // that holds it is saved: the preview waits for it instead of a 404.
+  const pageSaved = page.kind !== "landing" || previewRevision !== null
+    || Boolean((draft.saved.theme as Theme | null)?.pages.landing[page.slug]);
   const preview = usePreview({
     draftRevision: draft.saved.revision,
     sourceRevision: previewRevision,
-    path: draft.saved.revision > 0 ? path : null,
+    path: draft.saved.revision > 0 && pageSaved ? path : null,
     inspector,
     onSelect: (id, field) => afterText(() => {
       select(id, "preview");
@@ -1136,6 +1140,8 @@ export function ThemeEditor({ workspace, refetch }: {
         onCreate={(slug, title, start) => {
           const sections = start ? landingPresetSections(start.preset, workspace.apps, start.productId) : [];
           setDraft((current) => ({ ...current, pages: { ...current.pages, landing: { ...current.pages.landing, [slug]: { title, description: "", sections } } } }));
+          // Saved at once, so the new page's preview shows it without waiting for the next pause.
+          draft.saveSoon();
           setCreatingLanding(false);
           setPage({ kind: "landing", slug });
         }}

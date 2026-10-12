@@ -80,8 +80,21 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
   };
   // A mark may be display:contents: measure what it holds. Any other mark is
   // its own box (what it holds may overflow it: a sticky bar, a popover).
+  // A nested display:contents element (an app component's wrapper) has no
+  // box of its own, so a Range over the mark would skip what it holds: the
+  // children's boxes are unioned, descending through such wrappers.
   const box = (element) => {
     if (getComputedStyle(element).display !== "contents") return element.getBoundingClientRect();
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const child of element.children) {
+      // A fixed bar (an order bar on phones) is the viewport's, not the section's.
+      if (getComputedStyle(child).position === "fixed") continue;
+      const rect = box(child);
+      if (!rect.width && !rect.height) continue;
+      left = Math.min(left, rect.left); top = Math.min(top, rect.top);
+      right = Math.max(right, rect.right); bottom = Math.max(bottom, rect.bottom);
+    }
+    if (right > left || bottom > top) return new DOMRect(left, top, right - left, bottom - top);
     const range = document.createRange();
     range.selectNodeContents(element);
     const rect = range.getBoundingClientRect();
