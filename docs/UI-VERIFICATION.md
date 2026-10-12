@@ -18,6 +18,7 @@ consumer and a different transition that could violate the same invariant.
 | Buy now removes an existing cart line | Cart changes follow the buyer's action and preserve unrelated lines | Add A then Buy B means A+B, quantity limits, reload/back, checkout recovery and new lines added during checkout |
 | Delivery text disagrees between surfaces | Commerce claims come from the applicable authoritative quote | Free delivery, app rates, markets, unavailable zones and stale merchant-written copy |
 | A portrait preview is clipped | Preview lets the user inspect the whole asset | Panorama, small images, zoom, fullscreen, narrow screens and metadata panels |
+| A builder notice blocks editing | Notices can collapse without losing recovery actions or covering selection controls | Route, version, conflict and failure notices; hidden-frame refresh; new messages; narrow canvas and retained focus |
 | Banner arrives without sound | Delivery, in-page audio and native device sound are different outcomes | Browser permission, service worker, foreground/background, OS settings and actual device observation |
 
 Do not automatically change merchant copy to match a quote or call it a pricing
@@ -107,7 +108,9 @@ are required scope to investigate, **not a claim that they currently pass**:
    pending order, account switch and receipt recovery against a local backend.
 7. Builder: preset → edit/revert → reorder/hide → undo/redo → save/reload →
    publish; inspect real preview messages and buyer output, including delayed
-   responses and plugin update/deactivation fallback.
+   responses and plugin update/deactivation fallback. Collapse/reopen notices
+   with a part selected; verify toolbar hit targets, refresh persistence and
+   the way back to the draft when a historical preview fails.
 8. Merchant forms, rich text and media: normalize/revert, failed save, keyboard,
    fullscreen, portrait/panorama and dense/sparse lists.
 9. Notifications: empty/few/many, unread/read/clear, arrival during an overlay,

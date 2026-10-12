@@ -321,6 +321,9 @@ export const themeEditorMessages = defineMessages({
     previewNeedsUrl: "Set your Store URL under Settings → System → Platform to preview the storefront here.",
     previewFrame: "Storefront preview",
     viewingPath: "Viewing {path}",
+    previewNotice: "Preview notice",
+    showPreviewNotice: "Show preview notice",
+    hidePreviewNotice: "Hide preview notice",
 
     // The builder (rebuilt editor)
     themeShort: "Theme",
@@ -806,6 +809,9 @@ export const themeEditorMessages = defineMessages({
     previewNeedsUrl: "এখানে স্টোরফ্রন্ট প্রিভিউ করতে সেটিংস → সিস্টেম → প্ল্যাটফর্মে আপনার স্টোর URL দিন।",
     previewFrame: "স্টোরফ্রন্ট প্রিভিউ",
     viewingPath: "{path} দেখছেন",
+    previewNotice: "প্রিভিউ বার্তা",
+    showPreviewNotice: "প্রিভিউ বার্তা দেখুন",
+    hidePreviewNotice: "প্রিভিউ বার্তা লুকান",
 
     themeShort: "থিম",
     draftBadge: "খসড়া",

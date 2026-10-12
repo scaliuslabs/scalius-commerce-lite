@@ -11,8 +11,8 @@
  * device, the width and the zoom do. Notices overlay the top of the canvas
  * instead of pushing the frame down.
  */
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Plus, Trash2, Pencil } from "lucide-react";
+import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Plus, Trash2, Pencil, X, Info, AlertTriangle } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
@@ -82,7 +82,14 @@ function Outline({ box, rect, tone, dashed, label, children }: {
 const hasToolbar = (actions: SelectionActions) =>
   Boolean(actions.onEditText || actions.onMoveUp || actions.onMoveDown || actions.onDuplicate || actions.onToggleHidden || actions.onRemove);
 
-export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, activeId, register, layout, hovered, selected, names, actions, notice, behind = false, textEditor, onRetry, onScaleChange }: {
+export interface PreviewNotice {
+  /** Changes when the underlying problem or preview destination changes. */
+  id: string;
+  tone: "info" | "warning";
+  content: ReactNode;
+}
+
+export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, activeId, register, layout, hovered, selected, names, actions, notice, noticeCollapsed = false, onToggleNotice, behind = false, textEditor, onRetry, onScaleChange }: {
   device: PreviewDevice;
   desktopWidth: DesktopWidth;
   zoom: PreviewZoom;
@@ -97,7 +104,9 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
   names: Readonly<Record<string, { name: string; shared?: boolean }>>;
   actions: SelectionActions | null;
   /** A notice over the top of the canvas (conflict, failed save, version preview). */
-  notice?: ReactNode;
+  notice?: PreviewNotice | null;
+  noticeCollapsed?: boolean;
+  onToggleNotice?: () => void;
   /** The page has not confirmed the latest edits yet (it is slow or reconnecting). */
   behind?: boolean;
   textEditor?: (box: FrameBox) => ReactNode;
@@ -106,6 +115,7 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
 }) {
   const t = useMessages(themeEditorMessages);
   const stage = useRef<HTMLDivElement>(null);
+  const noticeContentId = useId();
   const [size, setSize] = useState({ width: 0, height: 0 });
   useLayoutEffect(() => {
     const element = stage.current;
@@ -235,8 +245,24 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
         {t("previewUpdating")}
       </p>
       {notice ? (
-        <div className="pointer-events-none absolute inset-x-4 top-6 z-10 flex justify-center">
-          <div className="pointer-events-auto max-w-xl rounded-lg shadow-popover">{notice}</div>
+        <div className={cn("pointer-events-none absolute inset-x-4 z-10 flex justify-center", noticeCollapsed ? "bottom-6" : "top-6")}>
+          <div data-canvas-notice className={cn("pointer-events-auto relative min-w-0 max-w-xl", noticeCollapsed ? "me-auto" : "rounded-lg shadow-popover")}>
+            <div id={noticeContentId} hidden={noticeCollapsed} className="max-h-[min(24rem,60vh)] overflow-y-auto break-words">
+              {notice.content}
+            </div>
+            <Button
+              type="button"
+              variant={noticeCollapsed ? "outline" : "ghost"}
+              size={noticeCollapsed ? "sm" : "icon-sm"}
+              className={noticeCollapsed ? "max-w-full" : "absolute end-1 top-2"}
+              aria-label={t(noticeCollapsed ? "showPreviewNotice" : "hidePreviewNotice")}
+              aria-expanded={!noticeCollapsed}
+              aria-controls={noticeContentId}
+              onClick={onToggleNotice}
+            >
+              {noticeCollapsed ? <>{notice.tone === "warning" ? <AlertTriangle className="text-warning" aria-hidden="true" /> : <Info aria-hidden="true" />}{t("previewNotice")}</> : <X aria-hidden="true" />}
+            </Button>
+          </div>
         </div>
       ) : null}
     </main>

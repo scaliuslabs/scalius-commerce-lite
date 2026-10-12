@@ -30,6 +30,9 @@ const api = vi.hoisted(() => ({
 const frame = vi.hoisted(() => ({
   send: vi.fn(), reload: vi.fn(),
   path: null as string | null,
+  shownPath: undefined as string | undefined,
+  loading: false,
+  failed: false,
   onSelect: null as null | ((id: string, field?: ThemeTextField) => void),
   onEditText: null as null | ((id: string, field: ThemeTextField, rect?: ThemePreviewRect) => void),
   field: null as ThemePreviewField | null,
@@ -81,7 +84,7 @@ vi.mock("./use-preview", () => ({
     useEffect(() => options.onConnected(), []); // eslint-disable-line react-hooks/exhaustive-deps -- once, as a frame connects
     return {
       phase: "ready", origin: "https://shop.test", frames: [{ id: 1, src: "about:blank" }], activeId: 1,
-      layout: { rects: frame.rects, field: frame.field, scrollY: 0, height: 2000 }, hovered: null, marks: ["rail", "faq", "story"], shownPath: options.path, fieldsEnabled: true,
+      layout: { rects: frame.rects, field: frame.field, scrollY: 0, height: 2000 }, hovered: null, marks: ["rail", "faq", "story"], shownPath: frame.shownPath ?? options.path, fieldsEnabled: true, loading: frame.loading, failed: frame.failed,
       send: frame.send, reload: frame.reload, retry: vi.fn(), register: () => () => {},
     };
   },
@@ -129,6 +132,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   frame.rects = {};
   frame.field = null;
+  frame.shownPath = undefined;
+  frame.loading = false;
+  frame.failed = false;
   act(() => setLocale("en"));
   setViewport(1440);
   try { window.localStorage.clear(); } catch { /* none */ }
@@ -229,6 +235,89 @@ function type(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+
+describe("theme editor: canvas notices", () => {
+  it("collapses without navigation or resizing, preserves focus, and reopens the actions", () => {
+    frame.shownPath = "/products/another-page";
+    render();
+    const geometry = frameStyle();
+    const toggle = button("Hide preview notice");
+    act(() => { toggle.focus(); toggle.click(); });
+    expect(button("Show preview notice")).toBe(toggle);
+    expect(document.activeElement).toBe(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector("[data-canvas-notice] [hidden]")).toBeTruthy();
+    expect(frame.reload).not.toHaveBeenCalled();
+    expect(api.draft).not.toHaveBeenCalled();
+    expect(frameStyle()).toBe(geometry);
+    act(() => toggle.click());
+    expect(button("Hide preview notice")).toBe(toggle);
+    expect(document.activeElement).toBe(toggle);
+    expect(container.querySelector("[data-canvas-notice] [hidden]")).toBeNull();
+    act(() => button("Back to Home page").click());
+    expect(frame.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays collapsed through refresh, but reappears for another destination or a new visit", () => {
+    const theme = themeWith(HOME);
+    frame.shownPath = "/products/one";
+    render(theme);
+    act(() => button("Hide preview notice").click());
+    render(theme);
+    expect(button("Show preview notice")).toBeTruthy();
+    frame.loading = true;
+    render(theme);
+    expect(container.querySelector("[data-canvas-notice]")).toBeNull();
+    frame.loading = false;
+    render(theme);
+    expect(button("Show preview notice")).toBeTruthy();
+    frame.shownPath = "/products/two";
+    render(theme);
+    expect(button("Hide preview notice")).toBeTruthy();
+    frame.shownPath = "/products/one";
+    render(theme);
+    expect(button("Hide preview notice")).toBeTruthy();
+    act(() => button("Hide preview notice").click());
+    frame.shownPath = undefined;
+    render(theme);
+    expect(container.querySelector("[data-canvas-notice]")).toBeNull();
+    frame.shownPath = "/products/two";
+    render(theme);
+    expect(button("Hide preview notice")).toBeTruthy();
+    expect(api.draft).not.toHaveBeenCalled();
+  });
+
+  it("reveals a new preview failure over a collapsed route message without clearing it", () => {
+    const theme = themeWith(HOME);
+    frame.shownPath = "/products/one";
+    render(theme);
+    act(() => button("Hide preview notice").click());
+    frame.failed = true;
+    render(theme);
+    expect(button("Hide preview notice")).toBeTruthy();
+    expect(container.querySelector("[data-canvas-notice]")?.textContent).toContain("The preview couldn't load.");
+    expect(button("Try again")).toBeTruthy();
+    act(() => button("Hide preview notice").click());
+    expect(frame.failed).toBe(true);
+    expect(button("Show preview notice").querySelector(".text-warning")).toBeTruthy();
+  });
+
+  it("keeps the way back to the draft available when a historical preview fails", async () => {
+    api.versions.mockResolvedValue({ versions: [{ revision: 1, createdAt: "2026-10-13T00:00:00Z", changes: [], moreChanges: 0 }], nextBeforeRevision: null, retained: 20 });
+    render();
+    act(() => button("Versions").click());
+    await ready("[data-theme-version='1']");
+    act(() => document.querySelector<HTMLButtonElement>("[data-theme-version='1'] button")!.click());
+    expect(button("Back to draft")).toBeTruthy();
+    frame.failed = true;
+    render();
+    expect(button("Try again")).toBeTruthy();
+    act(() => button("Back to draft").click());
+    expect(button("Back to draft")).toBeUndefined();
+    expect(api.restore).not.toHaveBeenCalled();
+    expect(api.draft).not.toHaveBeenCalled();
+  });
+});
 
 describe("theme editor: layers", () => {
   it("starts with nothing selected, with shared parts around the page's sections in ARIA trees", () => {
@@ -397,6 +486,11 @@ describe("theme editor: live preview and saving", () => {
     key(row("rail"), { key: "ArrowDown", altKey: true });
     await vi.waitFor(() => expect(container.textContent).toContain("Rahima saved this theme"));
     expect(status()).toBe("conflict");
+    act(() => button("Hide preview notice").click());
+    expect(status()).toBe("conflict");
+    expect(api.draft).toHaveBeenCalledTimes(1);
+    act(() => button("Show preview notice").click());
+    expect(button("Overwrite with my edits")).toBeTruthy();
     expect(pageRows()).toEqual(["page-settings", "faq", "rail", "story", "add-section"]);
     await act(async () => button("Overwrite with my edits").click());
     await autosaved(2);

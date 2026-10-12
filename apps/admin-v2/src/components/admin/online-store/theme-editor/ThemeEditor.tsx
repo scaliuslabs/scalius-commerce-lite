@@ -64,7 +64,7 @@ import { themeProblemTarget, type ThemeRevealRequest } from "../theme-reveal";
 import { useOpenThemePreview } from "../theme-preview";
 import type { AiPage } from "./AiDraftDialog";
 import { DESKTOP_WIDTHS, type DesktopWidth, type FrameBox, type PreviewDevice, type PreviewZoom } from "./canvas-geometry";
-import { EditorCanvas, type SelectionActions } from "./EditorCanvas";
+import { EditorCanvas, type SelectionActions, type PreviewNotice } from "./EditorCanvas";
 import {
   EDITOR_PARTS,
   isResourcePage,
@@ -836,52 +836,67 @@ export function ThemeEditor({ workspace, refetch }: {
 
   // Hover from the tree outlines the part in the preview; the preview's own hover too.
   const outlined = hovered ? selectionMark(hovered) : preview.hovered;
-  const conflictNotice = draft.conflict ? (
-    <Alert variant="warning">
-      <AlertDescription>
-        {draft.conflict.name
-          ? t("conflictNamed", { name: draft.conflict.name, time: draft.conflict.at ? formatDateTime(new Date(draft.conflict.at), { timeStyle: "short" }) : "" })
-          : t("statusConflict")}
-        <span className="mt-2 flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" loading={draft.busy} onClick={() => void draft.reload()}>{t("reloadDraft")}</Button>
-          <Button type="button" variant="outline" size="sm" disabled={draft.busy} onClick={() => void draft.reload(true)}>{t("overwriteDraft")}</Button>
-        </span>
-      </AlertDescription>
-    </Alert>
-  ) : draft.failureMessage ? (
-    <Alert variant="warning">
-      <AlertDescription>
-        {t("saveFailed", { reason: draft.failureMessage })}
-        <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={() => void draft.save()}>{t("retry")}</Button></span>
-      </AlertDescription>
-    </Alert>
-  ) : previewRevision !== null ? (
-    <Alert variant="info">
-      <AlertDescription>
-        {t(versionLacksPage ? "previewingVersionHome" : "previewingVersion", { revision: previewRevision })}
-        <span className="mt-2 flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => setPreviewRevision(null)}>{t("currentDraft")}</Button>
-          {previewRevision !== draft.published.revision && canEdit ? (
-            <Button type="button" size="sm" disabled={draft.busy} onClick={() => setPendingRestore({ version: previewRevision })}>{t("restore")}</Button>
-          ) : null}
-        </span>
-      </AlertDescription>
-    </Alert>
-  ) : preview.failed ? (
-    <Alert variant="warning">
-      <AlertDescription>
-        {t("previewFailed")}
-        <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={preview.retry}>{t("previewRetry")}</Button></span>
-      </AlertDescription>
-    </Alert>
-  ) : preview.shownPath && path && preview.phase === "ready" && !preview.loading && preview.shownPath !== path.split("?")[0] ? (
-    <Alert variant="info">
-      <AlertDescription>
-        {t("viewingPath", { path: preview.shownPath })}
-        <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={preview.reload}>{t("backToPage", { page: pageName })}</Button></span>
-      </AlertDescription>
-    </Alert>
-  ) : null;
+  const notice: PreviewNotice | null = draft.conflict ? {
+    id: JSON.stringify(["conflict", draft.conflict]), tone: "warning", content: (
+      <Alert variant="warning">
+        <AlertDescription className="me-6">
+          {draft.conflict.name
+            ? t("conflictNamed", { name: draft.conflict.name, time: draft.conflict.at ? formatDateTime(new Date(draft.conflict.at), { timeStyle: "short" }) : "" })
+            : t("statusConflict")}
+          <span className="mt-2 flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" loading={draft.busy} onClick={() => void draft.reload()}>{t("reloadDraft")}</Button>
+            <Button type="button" variant="outline" size="sm" disabled={draft.busy} onClick={() => void draft.reload(true)}>{t("overwriteDraft")}</Button>
+          </span>
+        </AlertDescription>
+      </Alert>
+  ) } : draft.failureMessage ? {
+    id: JSON.stringify(["save", draft.failureMessage]), tone: "warning", content: (
+      <Alert variant="warning">
+        <AlertDescription className="me-6">
+          {t("saveFailed", { reason: draft.failureMessage })}
+          <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={() => void draft.save()}>{t("retry")}</Button></span>
+        </AlertDescription>
+      </Alert>
+  ) } : preview.failed ? {
+    id: JSON.stringify(["preview-failed", path, previewRevision]), tone: "warning", content: (
+      <Alert variant="warning">
+        <AlertDescription className="me-6">
+          {t("previewFailed")}
+          <span className="mt-2 flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={preview.retry}>{t("previewRetry")}</Button>
+            {previewRevision !== null ? <Button type="button" variant="outline" size="sm" onClick={() => setPreviewRevision(null)}>{t("currentDraft")}</Button> : null}
+          </span>
+        </AlertDescription>
+      </Alert>
+  ) } : previewRevision !== null ? {
+    id: JSON.stringify(["version", previewRevision, versionLacksPage]), tone: "info", content: (
+      <Alert variant="info">
+        <AlertDescription className="me-6">
+          {t(versionLacksPage ? "previewingVersionHome" : "previewingVersion", { revision: previewRevision })}
+          <span className="mt-2 flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setPreviewRevision(null)}>{t("currentDraft")}</Button>
+            {previewRevision !== draft.published.revision && canEdit ? (
+              <Button type="button" size="sm" disabled={draft.busy} onClick={() => setPendingRestore({ version: previewRevision })}>{t("restore")}</Button>
+            ) : null}
+          </span>
+        </AlertDescription>
+      </Alert>
+  ) } : preview.shownPath && path && preview.phase === "ready" && !preview.loading && preview.shownPath !== path.split("?")[0] ? {
+    id: JSON.stringify(["path", path, preview.shownPath]), tone: "info", content: (
+      <Alert variant="info">
+        <AlertDescription className="me-6">
+          {t("viewingPath", { path: preview.shownPath })}
+          <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={preview.reload}>{t("backToPage", { page: pageName })}</Button></span>
+        </AlertDescription>
+      </Alert>
+  ) } : null;
+
+  const [collapsedNotice, setCollapsedNotice] = useState<string | null>(null);
+  const noticeId = notice?.id ?? null;
+  useEffect(() => {
+    // Hidden-frame refreshes temporarily suppress route notices; keep their collapse state.
+    if (noticeId !== null || !preview.loading) setCollapsedNotice((current) => current === noticeId ? current : null);
+  }, [noticeId, preview.loading]);
 
   const unopened = useMemo(() => unopenedAiSections(theme), [theme]);
   const publishable = canEdit && draft.differsFromLive && !draft.conflict && !draft.busy && draft.pending !== null;
@@ -1006,7 +1021,9 @@ export function ThemeEditor({ workspace, refetch }: {
               setTextDirty(false);
               if (restoreFocus) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>("[data-canvas-edit-text]")?.focus());
             }} /> : undefined}
-          notice={conflictNotice}
+          notice={notice}
+          noticeCollapsed={noticeId !== null && collapsedNotice === noticeId}
+          onToggleNotice={() => setCollapsedNotice(collapsedNotice === noticeId ? null : noticeId)}
           behind={preview.behind}
           onRetry={preview.retry}
           onScaleChange={(box: FrameBox) => setScale(box.scale)}
