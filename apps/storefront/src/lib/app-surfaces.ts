@@ -20,11 +20,45 @@ import {
   type PluginHead,
 } from "@scalius/shared/plugins/storefront";
 
-/** One drawn homepage section, keyed by its theme section id. */
+/**
+ * A component section's data (docs/STOREFRONT-COMPONENTS.md): the app's
+ * storefront module draws it here, at the edge, from these values and the
+ * images and product cards its settings name.
+ */
+export interface HomepageAppComponent {
+  pluginId: string;
+  type: string;
+  values: Record<string, unknown>;
+  media: Array<{ id: string; url: string; alt: string; width: number | null; height: number | null }>;
+  lists: Array<{ source: string; products: unknown[] }>;
+}
+
+/** One homepage app section, keyed by its theme section id: drawn HTML, or a component section's data. */
 export interface HomepageAppSurface {
   sectionId: string;
   html: string;
   head: PluginHead;
+  component?: HomepageAppComponent;
+}
+
+const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
+const TYPE = /^[a-z][a-z0-9-]{0,47}$/;
+
+/** A component section's data, shape-checked; null when it is not one. */
+export function readAppComponent(value: unknown): HomepageAppComponent | null {
+  if (!isRecord(value) || typeof value.pluginId !== "string" || !PLUGIN_ID.test(value.pluginId)) return null;
+  if (typeof value.type !== "string" || !TYPE.test(value.type) || !isRecord(value.values)) return null;
+  const media = (Array.isArray(value.media) ? value.media : []).flatMap((entry) => {
+    if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.url !== "string" || !/^https:\/\/|^\//.test(entry.url)) return [];
+    const size = (input: unknown) => (typeof input === "number" && Number.isFinite(input) && input > 0 ? input : null);
+    return [{ id: entry.id, url: entry.url, alt: typeof entry.alt === "string" ? entry.alt : "", width: size(entry.width), height: size(entry.height) }];
+  });
+  const lists = (Array.isArray(value.lists) ? value.lists : []).flatMap((entry) => (
+    isRecord(entry) && typeof entry.source === "string" && Array.isArray(entry.products)
+      ? [{ source: entry.source, products: entry.products as unknown[] }]
+      : []
+  ));
+  return { pluginId: value.pluginId, type: value.type, values: value.values, media, lists };
 }
 
 /** One drawn product block, in the merchant's order; its app decides where it goes. */
@@ -74,8 +108,14 @@ export function readHomepageAppSurfaces(value: unknown): Map<string, HomepageApp
   const surfaces = new Map<string, HomepageAppSurface>();
   for (const entry of Array.isArray(value) ? value : []) {
     if (!isRecord(entry) || typeof entry.sectionId !== "string" || !SURFACE_ID.test(entry.sectionId)) continue;
+    if (surfaces.has(entry.sectionId)) continue;
+    const component = readAppComponent(entry.component);
+    if (component) {
+      surfaces.set(entry.sectionId, { sectionId: entry.sectionId, html: "", head: readAppHead(entry.head), component });
+      continue;
+    }
     const html = drawnHtml(entry.html);
-    if (!html || surfaces.has(entry.sectionId)) continue;
+    if (!html) continue;
     surfaces.set(entry.sectionId, { sectionId: entry.sectionId, html, head: readAppHead(entry.head) });
   }
   return surfaces;

@@ -28,6 +28,8 @@ import type { Database } from "@scalius/database/client";
 import { checkOutboundUrl } from "@scalius/shared/outbound-url";
 import { pluginCompatibility, type PluginManifest } from "@scalius/shared/plugins";
 import { checkPluginAsset } from "@scalius/shared/plugins/assets";
+import { verifyStorefrontFiles } from "@scalius/shared/plugins/storefront-files";
+import { STOREFRONT_COMPONENT_LIMITS, storefrontFileContentType } from "@scalius/shared/plugins/storefront-protocol";
 import {
   isNewerPluginVersion,
   pluginPackageSignatureSchema,
@@ -43,6 +45,10 @@ import {
 } from "@scalius/shared/plugins/registry";
 import { pluginAssetKey } from "./listing";
 import { pluginBundleKey } from "./loaders/sandbox";
+import { pluginStorefrontFileKey, pluginStorefrontIndexKey } from "./storefront-files";
+
+/** The largest storefront file a registry download reads. */
+const STOREFRONT_FILE_MAX_BYTES = Math.max(STOREFRONT_COMPONENT_LIMITS.moduleBytes, STOREFRONT_COMPONENT_LIMITS.publicFileBytes);
 
 const INDEX_MAX_BYTES = 4 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
@@ -54,6 +60,8 @@ export interface PluginRelease {
   code: Uint8Array;
   /** Listing images by package path, each checked against its sealed digest. */
   assets: Map<string, Uint8Array>;
+  /** Storefront files by path under `storefront/`, each checked against its sealed digest (storefront-files.ts). */
+  storefront: Map<string, Uint8Array>;
   /** The trusted key that verified it; null for an unsigned upload a Super Admin accepted. */
   signer: PluginTrustedKey | null;
 }
@@ -145,6 +153,8 @@ export interface VerifyReleaseInput {
   trustedKeys: readonly PluginTrustedKey[];
   /** The listing images, or a reader for them (registry downloads). */
   asset: (path: string) => Promise<Uint8Array | null>;
+  /** The storefront files (`storefront/<path>` in a package), or a reader for them; none without it. */
+  storefrontFile?: (path: string) => Promise<Uint8Array | null>;
   source: "registry" | "upload";
   /** Uploads only: a Super Admin accepted this release without a signature. */
   allowUnsigned?: boolean;
@@ -185,7 +195,13 @@ export async function verifyRelease(input: VerifyReleaseInput): Promise<PluginRe
     if (problem) throw new PluginError("package.invalid", problem);
     assets.set(path, bytes);
   }
-  return { manifest, sha256, code: input.code, assets, signer };
+  let storefront: Map<string, Uint8Array>;
+  try {
+    storefront = await verifyStorefrontFiles(manifest, new TextDecoder().decode(input.code), input.storefrontFile ?? (async () => null));
+  } catch (error) {
+    throw new PluginError("package.invalid", error instanceof Error ? error.message : "The storefront files do not match the bundle.");
+  }
+  return { manifest, sha256, code: input.code, assets, storefront, signer };
 }
 
 /** Stores a verified release's bundle and images in R2 (private prefix), where the sandbox loader and the image route read them. */
@@ -196,6 +212,19 @@ export async function storeRelease(env: Env, release: PluginRelease): Promise<vo
   });
   for (const [path, bytes] of release.assets) {
     await env.BUCKET.put(pluginAssetKey(manifest.id, manifest.version, sha256, path), bytes);
+  }
+  if (release.storefront.size > 0) {
+    // The files first, then their index: the file route serves nothing until the index names it.
+    const digests: Record<string, string> = {};
+    for (const [path, bytes] of release.storefront) {
+      await env.BUCKET.put(pluginStorefrontFileKey(manifest.id, manifest.version, sha256, path), bytes, {
+        httpMetadata: { contentType: storefrontFileContentType(path) ?? "application/octet-stream" },
+      });
+      digests[path] = await sha256Hex(bytes);
+    }
+    await env.BUCKET.put(pluginStorefrontIndexKey(manifest.id, manifest.version, sha256), JSON.stringify(digests), {
+      httpMetadata: { contentType: "application/json" },
+    });
   }
 }
 
@@ -228,6 +257,7 @@ export async function downloadRegistryRelease(
     signature: entry.signature,
     trustedKeys: trustedPluginKeys(settings),
     asset: (path) => fetchBytes(releaseUrl(source.indexUrl, entry, `assets/${path}`), 1024 * 1024).catch(() => null),
+    storefrontFile: (path) => fetchBytes(releaseUrl(source.indexUrl, entry, `storefront/${path}`), STOREFRONT_FILE_MAX_BYTES).catch(() => null),
     source: "registry",
   });
 }
@@ -298,6 +328,7 @@ export async function verifyUploadedPackage(
     signature,
     trustedKeys,
     asset: async (path) => read(`assets/${path}`),
+    storefrontFile: async (path) => read(`storefront/${path}`),
     source: "upload",
     allowUnsigned: trust.allowUnsigned,
   });

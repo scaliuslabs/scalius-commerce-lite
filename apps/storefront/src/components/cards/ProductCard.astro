@@ -1,195 +1,48 @@
 ---
-// src/components/cards/ProductCard.astro
-// The one product card (mix rule 2): listings, rails, related products and
-// search render it. Its photo ratio and fit, radius and surface are the
-// theme's tokens; its type is the system's. Three settings vary it
-// (`blocks.card.settings`): the facts under the title (none, key specs,
-// swatches, delivery), the buy action (none, a round quick-add on the
-// photo, a full button at the bottom) and the hover photo.
-//
-// One link per card: the title link stretches over the card, so the card is
-// one tab stop and screen readers hear the name once. Only the add-to-cart
-// control sits above it as its own control. In a grid every card fills its
-// row's height, so prices and actions line up.
-import "./product-card.css";
+// The product card every listing, rail and search draws: the app card the
+// theme names (`apps.productCard`, an app's product-card slot), else the
+// theme's own card (CoreProductCard.astro). The app card gets the same
+// card model (prices in the page's market, photo renditions, the quick-add
+// rules); one that fails or is late gives way to the core card. A grid of
+// app cards is one call to the app (lib/extensions/host.ts).
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import { buildStorefrontThemeTokens } from "@scalius/shared/storefront-theme";
+import { storefrontExtensionBase } from "@scalius/shared/plugins/storefront-protocol";
+import AppComponent from "@/components/apps/AppComponent.astro";
+import { appSlot, requestExtensions } from "@/lib/extensions";
+import { productCardData } from "@/lib/extensions/data";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { storefrontCopy } from "@/lib/storefront-copy";
-import {
-  listingFilterColumnPx,
-  productCardImageMaxCssWidth,
-  productCardImageLoading,
-  productCardImageSizes,
-  productGridFirstRow,
-  productGridSpec,
-  type ProductGridContext,
-  type ProductGridPhoneLayout,
-} from "@/lib/product-card-layout";
-import { capPhoneSizesDensity, scaleSizes } from "@/lib/responsive-image";
-import { CARD_IMAGE_DIMENSIONS, productCardModel, type ProductCardProduct } from "./card-model";
-import CardMedia from "./parts/CardMedia.astro";
-import Badge from "@/components/ui/Badge.astro";
-import Button from "@/components/ui/Button.astro";
-import Price from "@/components/ui/Price.astro";
-import Rating from "@/components/ui/Rating.astro";
+import { productCardModel } from "./card-model";
+import CoreProductCard from "./CoreProductCard.astro";
 
-interface Props {
-  product: ProductCardProduct;
-  currencySymbol?: string;
-  currencyCode?: string;
-  /** Position in its list; with `aboveFold`, the first row loads eagerly. */
-  index?: number;
-  /** The list starts in the first viewport (its first photo is a likely LCP). */
-  aboveFold?: boolean;
-  /**
-   * Where the card sits, for image `sizes`: a page-wide grid, the catalog
-   * grid beside the filter sidebar, or a horizontal collection rail.
-   */
-  context?: ProductGridContext;
-  /** The grid's phone layout (ProductGrid `phoneLayout`): list rows have a small photo. */
-  phoneLayout?: ProductGridPhoneLayout;
-  /**
-   * The page container's max width when it is not the theme's (the product
-   * page keeps `max-w-7xl` at 80rem), so `sizes` caps where the grid does.
-   */
-  containerWidth?: string;
-  /**
-   * The photo's `sizes` when the card sits in a layout the grid model does
-   * not describe (listing list rows, shelves, the quick-add grid).
-   */
-  sizes?: string;
-  /** h3 under a section or "Products" h2 (the default); h2 only where nothing heads the grid. */
-  headingLevel?: "h2" | "h3";
-  /** The grid's column cap (a homepage grid section's `columns`), for image `sizes`. */
-  maxColumns?: number;
-  /**
-   * The filter column beside a `beside-filters` grid, in px; by default the
-   * listing's own (`listingFilterColumnPx(resolved filters)`), 0 for a bar or drawer.
-   */
-  filterColumnPx?: number;
+type Props = import("astro/types").ComponentProps<typeof CoreProductCard>;
+
+const props = Astro.props;
+const app = await appSlot(Astro.locals, Astro.url, "product-card");
+let html: string | null = null;
+if (app) {
+  const { resolved, layout } = await currentRequestTheme(Astro.locals);
+  const currency = { symbol: props.currencySymbol ?? DEFAULT_CURRENCY.symbol, code: props.currencyCode ?? DEFAULT_CURRENCY.code };
+  const model = productCardModel(props.product, {
+    currencySymbol: currency.symbol,
+    currencyCode: currency.code,
+    hoverImage: layout.productCard.hoverImage,
+    ratings: resolved.facts.hasReviews,
+  });
+  const { host } = await requestExtensions(Astro.locals, Astro.url);
+  html = await host.render(app.extension, {
+    kind: "slot",
+    slot: "product-card",
+    component: app.component,
+    settings: app.settings,
+    data: {
+      product: productCardData(props.product, model, currency),
+      position: props.index ?? 0,
+      aboveFold: props.aboveFold === true && (props.index ?? 0) < 4,
+    },
+  });
 }
-
-const {
-  product,
-  currencySymbol = DEFAULT_CURRENCY.symbol,
-  currencyCode = DEFAULT_CURRENCY.code,
-  index,
-  aboveFold = false,
-  context = "grid",
-  phoneLayout = "grid",
-  containerWidth: containerWidthOverride,
-  sizes: sizesOverride,
-  headingLevel = "h3",
-  maxColumns,
-  filterColumnPx: filterColumnOverride,
-} = Astro.props;
-
-const { resolved, layout, language } = await currentRequestTheme(Astro.locals);
-const card = layout.productCard;
-const copy = storefrontCopy(language).card;
-const grid = productGridSpec(layout.grid, card.imageRatio);
-const containerWidth = containerWidthOverride ?? buildStorefrontThemeTokens(resolved)["theme-container-width"]!;
-const loading = productCardImageLoading(productGridFirstRow(grid, containerWidth, maxColumns), { index, aboveFold });
-const filterColumnPx = filterColumnOverride
-  ?? (context === "beside-filters" ? listingFilterColumnPx(resolved.blocks.listing.filters) : 0);
-// A contained photo is drawn inside a 6% margin (product-card.css), so it
-// asks for that much less; DPR-3 phones fetch about 2x pixels.
-const drawn = card.imageFit === "contain" ? 0.88 : 1;
-const slotSizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx);
-const sizes = capPhoneSizesDensity(scaleSizes(slotSizes, drawn));
-const imageMaxWidth = sizesOverride ? undefined : Math.ceil(
-  productCardImageMaxCssWidth(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx) * 2 * drawn,
-);
-const model = productCardModel(product, {
-  currencySymbol,
-  currencyCode,
-  hoverImage: card.hoverImage,
-  imageMaxWidth,
-  // Ratings show only while the store takes reviews and has a published one.
-  ratings: resolved.facts.hasReviews,
-});
-const { facts } = model;
-const TitleTag = headingLevel;
-const details = [facts.packSize, model.condition].filter(Boolean).join(" · ");
-const keySpecs = card.facts === "key-specs" ? facts.keySpecs : [];
-const swatches = card.facts === "swatches" ? facts.swatches : { items: [], more: 0 };
-const delivery = card.facts === "delivery" ? facts.delivery : null;
-const swatchWords = swatches.items.length > 0
-  ? copy.colours([...swatches.items.map((swatch) => swatch.label), ...(swatches.more > 0 ? [copy.moreColours(swatches.more)] : [])].join(", "))
-  : "";
 ---
 
-<div
-  data-theme-component="product-card"
-  class="product-card"
-  data-surface={card.surface}
-  data-fit={card.imageFit}
-  data-action={card.action}
->
-  <CardMedia model={model} dimensions={CARD_IMAGE_DIMENSIONS[card.imageRatio]} sizes={sizes} loading={loading}>
-    {(model.soldOut || model.percentOff) && (
-      <div class="product-card-badges">
-        {model.soldOut ? <Badge kind="sold-out" /> : <Badge kind="sale" label={model.percentOff} />}
-      </div>
-    )}
-    {card.action === "quick-add" && model.quickAddEligible && (
-      <a href={model.href} data-card-quick-add data-astro-prefetch="false" rel="nofollow" class="product-card-quick">
-        <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" /></svg>
-        <span class="sr-only">{copy.addToCart}: {model.name}</span>
-      </a>
-    )}
-    {card.action === "quick-add" && model.needsOptions && (
-      /* Options are chosen on the product page: the hint sits under the card link. */
-      <span aria-hidden="true" class="product-card-quick" data-card-action-hint>
-        <svg viewBox="0 0 24 24" width="20" height="20" data-dir-icon><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" /></svg>
-      </span>
-    )}
-  </CardMedia>
-
-  <div class="product-card-body">
-    <TitleTag class="product-card-name">
-      <a href={model.href} class="product-card-link">{model.name}</a>
-    </TitleTag>
-    {details && <p class="product-card-meta" data-card-fact="details">{details}</p>}
-    {facts.rating && <Rating average={facts.rating.average} count={facts.rating.count} class="product-card-rating" />}
-    {keySpecs.length > 0 && (
-      <ul class="product-card-specs" data-card-fact="key-specs">
-        {keySpecs.map((spec) => <li>{spec}</li>)}
-      </ul>
-    )}
-    {swatches.items.length > 0 && (
-      <p class="product-card-swatches" data-card-fact="swatches">
-        {swatches.items.map((swatch) => <span class="product-card-swatch" style={`--swatch:${swatch.colour}`} aria-hidden="true"></span>)}
-        {swatches.more > 0 && <span class="product-card-swatch-more" aria-hidden="true">+{swatches.more}</span>}
-        <span class="sr-only">{swatchWords}</span>
-      </p>
-    )}
-    {delivery && (
-      <p class="product-card-meta" data-card-fact="delivery">
-        {delivery.free ? copy.freeDelivery : copy.deliveryFrom(delivery.fee)}
-      </p>
-    )}
-    <div class="product-card-foot">
-      <Price amount={model.price.current} compareAt={model.price.regular} from={model.price.from} />
-      {card.action === "full" && (
-        model.quickAddEligible ? (
-          <Button href={model.href} variant="secondary" size="sm" full class="product-card-action" data-card-quick-add data-astro-prefetch="false" rel="nofollow">
-            {copy.addToCart}<span class="sr-only">: {model.name}</span>
-          </Button>
-        ) : (
-          /* Options or a sold-out product: the product page is the next step, under the card link. */
-          <Button as="span" aria-hidden="true" variant="secondary" size="sm" full class="product-card-action" data-card-action-hint>
-            {model.needsOptions ? copy.chooseOptions : copy.viewProduct}
-          </Button>
-        )
-      )}
-    </div>
-  </div>
-  {card.action !== "none" && (
-    <script>
-      import { initQuickAddCards } from "./scripts/quick-add-card";
-      initQuickAddCards();
-    </script>
-  )}
-</div>
+{html !== null && app
+  ? <AppComponent html={html} pluginId={app.extension.pluginId} base={storefrontExtensionBase(app.extension.pluginId, app.extension.release)} />
+  : <CoreProductCard {...props} />}

@@ -17,8 +17,38 @@ export const PLUGIN_SETTING_TYPES = [
   "url",
   "email",
   "color",
+  // Storefront component settings only (sections and slots an app's storefront
+  // module draws): the storefront resolves them before the component renders.
+  "image",
+  "products",
+  "link",
+  "list",
 ] as const;
 export type PluginSettingType = (typeof PLUGIN_SETTING_TYPES)[number];
+
+/**
+ * Types only a storefront component's settings may use (`storefront.sections`
+ * drawn by the storefront module, and `storefront.slots`). A component gets
+ * them resolved: an image as its URLs and size, a product source as its
+ * products' cards, a link as a safe href, a list as its items.
+ */
+export const PLUGIN_STOREFRONT_SETTING_TYPES = ["image", "products", "link", "list"] as const satisfies readonly PluginSettingType[];
+export type PluginStorefrontSettingType = (typeof PLUGIN_STOREFRONT_SETTING_TYPES)[number];
+
+/** The most items one `list` setting holds. */
+export const PLUGIN_SETTING_LIST_MAX = 24;
+/** The most products one `products` setting shows. */
+export const PLUGIN_SETTING_PRODUCTS_MAX = 36;
+
+/** A media library id (an `image` setting's value). */
+export const PLUGIN_MEDIA_ID = /^[A-Za-z0-9_-]{1,64}$/;
+/**
+ * A product source (a `products` setting's value), as the theme names one:
+ * `newest`, `on-sale`, `popular`, `collection:<id>` or `category:<id>`.
+ */
+export const PLUGIN_PRODUCT_SOURCE = /^(?:newest|on-sale|popular|(?:collection|category):[A-Za-z0-9_-]{1,64})$/;
+/** A same-store path (`/collections/new`) or an https URL (a `link` setting's value). */
+export const PLUGIN_LINK = /^(?:\/(?!\/)[^\s]*|https:\/\/[^\s]+)$/;
 
 /** A setting key: lowercase words joined by underscores, unique per plugin. */
 export const PLUGIN_SETTING_KEY = /^[a-z][a-z0-9_]{0,47}$/;
@@ -48,25 +78,80 @@ const base = {
   group: z.string().regex(PLUGIN_SETTING_GROUP).optional(),
 };
 
+const textField = z.object({ ...base, type: z.literal("text"), default: z.string().max(500).optional(), maxLength: z.number().int().min(1).max(500).default(200) }).strict();
+const textareaField = z.object({ ...base, type: z.literal("textarea"), default: z.string().max(5000).optional(), maxLength: z.number().int().min(1).max(5000).default(2000) }).strict();
+const numberField = z.object({
+  ...base,
+  type: z.literal("number"),
+  default: z.number().finite().optional(),
+  min: z.number().finite().optional(),
+  max: z.number().finite().optional(),
+  integer: z.boolean().default(false),
+}).strict();
+const booleanField = z.object({ ...base, type: z.literal("boolean"), default: z.boolean().default(false) }).strict();
+const selectField = z.object({ ...base, type: z.literal("select"), options: z.array(choice).min(1).max(50), default: z.string().optional() }).strict();
+const urlField = z.object({ ...base, type: z.literal("url"), default: z.string().url().optional() }).strict();
+const colorField = z.object({ ...base, type: z.literal("color"), default: z.string().regex(/^#[0-9a-f]{6}$/).optional() }).strict();
+/** A media library image; the component gets its URLs, size and alt text. */
+const imageField = z.object({ ...base, type: z.literal("image") }).strict();
+/** A same-store path or an https link. */
+const linkField = z.object({ ...base, type: z.literal("link"), default: z.string().max(2048).regex(PLUGIN_LINK).optional() }).strict();
+/** Where products come from; the component gets up to `limit` product cards. */
+const productsField = z.object({
+  ...base,
+  type: z.literal("products"),
+  default: z.string().regex(PLUGIN_PRODUCT_SOURCE).optional(),
+  limit: z.number().int().min(1).max(PLUGIN_SETTING_PRODUCTS_MAX).default(8),
+}).strict();
+
+/** The fields one item of a `list` setting has (no lists in lists, no products). */
+export const pluginSettingItemFieldSchema = z.discriminatedUnion("type", [
+  textField,
+  textareaField,
+  numberField,
+  booleanField,
+  selectField,
+  urlField,
+  colorField,
+  imageField,
+  linkField,
+]);
+export type PluginSettingItemField = z.infer<typeof pluginSettingItemFieldSchema>;
+
+/** Repeatable items (slides, quotes, questions), each with the same fields. */
+const listField = z.object({
+  ...base,
+  type: z.literal("list"),
+  fields: z.array(pluginSettingItemFieldSchema).min(1).max(12),
+  /** What one item is called in the editor ("Slide"). */
+  itemLabel: label.optional(),
+  min: z.number().int().min(0).max(PLUGIN_SETTING_LIST_MAX).default(0),
+  max: z.number().int().min(1).max(PLUGIN_SETTING_LIST_MAX).default(12),
+}).strict().superRefine((field, context) => {
+  const seen = new Set<string>();
+  field.fields.forEach((item, index) => {
+    if (seen.has(item.key)) context.addIssue({ code: "custom", path: ["fields", index, "key"], message: `Duplicate item field ${item.key}.` });
+    seen.add(item.key);
+  });
+  if (field.min > field.max) context.addIssue({ code: "custom", path: ["min"], message: "min must not exceed max." });
+});
+
 export const pluginSettingFieldSchema = z.discriminatedUnion("type", [
-  z.object({ ...base, type: z.literal("text"), default: z.string().max(500).optional(), maxLength: z.number().int().min(1).max(500).default(200) }).strict(),
-  z.object({ ...base, type: z.literal("textarea"), default: z.string().max(5000).optional(), maxLength: z.number().int().min(1).max(5000).default(2000) }).strict(),
-  z.object({
-    ...base,
-    type: z.literal("number"),
-    default: z.number().finite().optional(),
-    min: z.number().finite().optional(),
-    max: z.number().finite().optional(),
-    integer: z.boolean().default(false),
-  }).strict(),
-  z.object({ ...base, type: z.literal("boolean"), default: z.boolean().default(false) }).strict(),
-  z.object({ ...base, type: z.literal("select"), options: z.array(choice).min(1).max(50), default: z.string().optional() }).strict(),
+  textField,
+  textareaField,
+  numberField,
+  booleanField,
+  selectField,
   z.object({ ...base, type: z.literal("multiselect"), options: z.array(choice).min(1).max(50), default: z.array(z.string()).optional() }).strict(),
   // Never echoed back: reads report only whether a value is set.
   z.object({ ...base, type: z.literal("secret") }).strict(),
-  z.object({ ...base, type: z.literal("url"), default: z.string().url().optional() }).strict(),
+  urlField,
   z.object({ ...base, type: z.literal("email"), default: z.string().email().optional() }).strict(),
-  z.object({ ...base, type: z.literal("color"), default: z.string().regex(/^#[0-9a-f]{6}$/).optional() }).strict(),
+  colorField,
+  imageField,
+  productsField,
+  linkField,
+  listField,
 ]);
 export type PluginSettingField = z.infer<typeof pluginSettingFieldSchema>;
 
@@ -92,11 +177,23 @@ export const pluginSettingsSchemaSchema = z
   });
 export type PluginSettingsSchema = z.infer<typeof pluginSettingsSchemaSchema>;
 
-export type PluginSettingValue = string | number | boolean | string[] | null;
+/** One item of a `list` setting: its fields' values by key. */
+export type PluginSettingItem = Record<string, string | number | boolean | null>;
+export type PluginSettingValue = string | number | boolean | string[] | PluginSettingItem[] | null;
 export type PluginSettingValues = Record<string, PluginSettingValue>;
 
+/** One `list` item: each declared field's value (an unset optional field is null or absent). */
+function itemSchema(fields: readonly PluginSettingItemField[]): z.ZodType<PluginSettingItem> {
+  const shape: Record<string, z.ZodType> = {};
+  for (const field of fields) {
+    const value = valueSchema(field) as z.ZodType;
+    shape[field.key] = field.required ? value : z.union([value, z.null(), z.literal("")]).optional();
+  }
+  return z.object(shape).strict() as unknown as z.ZodType<PluginSettingItem>;
+}
+
 /** The zod schema of one field's value (null clears an optional field). */
-function valueSchema(field: PluginSettingField): z.ZodType<PluginSettingValue> {
+function valueSchema(field: PluginSettingField | PluginSettingItemField): z.ZodType<PluginSettingValue> {
   switch (field.type) {
     case "text":
     case "textarea":
@@ -122,6 +219,14 @@ function valueSchema(field: PluginSettingField): z.ZodType<PluginSettingValue> {
       return z.string().email().max(254);
     case "color":
       return z.string().regex(/^#[0-9a-f]{6}$/);
+    case "image":
+      return z.string().regex(PLUGIN_MEDIA_ID);
+    case "products":
+      return z.string().regex(PLUGIN_PRODUCT_SOURCE);
+    case "link":
+      return z.string().max(2048).regex(PLUGIN_LINK, "Use a store path (/…) or an https:// link.");
+    case "list":
+      return z.array(itemSchema(field.fields)).min(field.min).max(field.max);
   }
 }
 

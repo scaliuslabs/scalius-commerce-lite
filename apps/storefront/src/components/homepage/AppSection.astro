@@ -1,11 +1,23 @@
 ---
-// A homepage section an installed app draws (`type: "app"`): the HTML its
-// app drew into the homepage read, sanitized by the API. HomepageSections
-// renders it only when the app drew something, so there is never an empty box.
+// A section an installed app draws (`type: "app"`):
+// - a route section: the HTML its app drew into the homepage read, sanitized by the API;
+// - a component section: drawn here by the app's storefront module
+//   (docs/STOREFRONT-COMPONENTS.md) from its settings, the images they name
+//   and the product cards of its product settings, priced in the page's market.
+// HomepageSections renders it only when there is something to show; a
+// component that draws nothing, fails or is late renders nothing.
 import AppSurface from "@/components/apps/AppSurface.astro";
+import AppComponent from "@/components/apps/AppComponent.astro";
 import type { StorefrontAppSection } from "@scalius/shared/storefront-theme";
+import { storefrontExtensionBase } from "@scalius/shared/plugins/storefront-protocol";
 import type { HomepageAppSurface } from "@/lib/app-surfaces";
 import Container from "@/components/ui/Container.astro";
+import { requestExtensions } from "@/lib/extensions";
+import { componentSectionSettings, productCardData, storefrontImageOf } from "@/lib/extensions/data";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { productCardModel, type ProductCardProduct } from "@/components/cards/card-model";
+import { getLayoutData } from "@/lib/api/storefront";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 interface Props {
   section: StorefrontAppSection;
@@ -13,10 +25,49 @@ interface Props {
 }
 
 const { section, surface } = Astro.props;
+const component = surface.component;
+let html: string | null = null;
+let base = "";
+let pluginId = "";
+if (component) {
+  const { byId, host } = await requestExtensions(Astro.locals, Astro.url);
+  const extension = byId.get(component.pluginId);
+  const schema = extension?.sectionSettings[component.type];
+  if (extension && schema && extension.sections.includes(component.type)) {
+    const [{ resolved, layout }, layoutData] = await Promise.all([currentRequestTheme(Astro.locals), getLayoutData()]);
+    const currency = { symbol: layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol, code: layoutData?.currency?.code ?? DEFAULT_CURRENCY.code };
+    const media = new Map(component.media.flatMap((asset) => {
+      const image = storefrontImageOf(asset);
+      return image ? [[asset.id, image] as const] : [];
+    }));
+    const products = new Map(component.lists.map((list) => [list.source, list.products.map((product) => {
+      const card = product as ProductCardProduct;
+      const model = productCardModel(card, {
+        currencySymbol: currency.symbol,
+        currencyCode: currency.code,
+        hoverImage: layout.productCard.hoverImage,
+        ratings: resolved.facts.hasReviews,
+      });
+      return productCardData(card, model, currency);
+    })]));
+    html = await host.render(extension, {
+      kind: "section",
+      type: component.type,
+      instanceId: section.id,
+      settings: componentSectionSettings(schema, component.values, media, products),
+    });
+    base = storefrontExtensionBase(extension.pluginId, extension.release);
+    pluginId = extension.pluginId;
+  }
+}
 ---
 
-<section class="home-section w-full" data-app-section={section.settings.app}>
-  <Container>
-    <AppSurface html={surface.html} app={section.settings.app} instanceId={section.id} />
-  </Container>
-</section>
+{component
+  ? html !== null && html.trim() !== "" && <AppComponent html={html} pluginId={pluginId} base={base} />
+  : (
+    <section class="home-section w-full" data-app-section={section.settings.app}>
+      <Container>
+        <AppSurface html={surface.html} app={section.settings.app} instanceId={section.id} />
+      </Container>
+    </section>
+  )}

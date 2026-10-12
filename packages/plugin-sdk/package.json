@@ -11,7 +11,12 @@
     "./fixtures": "./src/fixtures.ts",
     "./manifest": "./src/manifest.ts",
     "./runtime": "./src/runtime.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./storefront": "./src/storefront/index.ts",
+    "./storefront/jsx-runtime": "./src/storefront/jsx-runtime.ts",
+    "./storefront/jsx-dev-runtime": "./src/storefront/jsx-dev-runtime.ts",
+    "./storefront/testing": "./src/storefront/testing.ts",
+    "./island": "./src/storefront/island.ts"
   },
   "scripts": {
     "lint": "oxlint -c ../../.oxlintrc.json src/",

@@ -2,6 +2,7 @@
 // Storefront API — thin HTTP layer.
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
+import { STOREFRONT_COMPONENT_SLOTS } from "@scalius/shared/plugins/storefront-protocol";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
@@ -10,11 +11,18 @@ import {
   getLayoutData,
   getTemplateSectionsData,
   getPageRenderData,
+  readAppComponentData,
   readPluginBlockContext,
+  readPluginRenderContext,
   readProductAppContext,
   readThemeBrandAssets,
+  type AppComponentPlacement,
+  type HomepageAppSection,
 } from "@scalius/core/modules/storefront";
+import { deps } from "@scalius/core/cache-deps";
+import type { MarketPricing } from "@scalius/core/modules/price-lists";
 import {
+  EMPTY_PLUGIN_HEAD,
   PLUGIN_BLOCK_PAGES,
   PLUGIN_BLOCK_TARGETS,
   PLUGIN_HOME_SECTIONS_MAX,
@@ -194,8 +202,19 @@ const homepageSectionsSchema = z.object({
   homeProduct: z.object({ id: z.string(), slug: z.string() }).nullable().openapi({
     description: "A product homepage's product while it is public (the storefront answers `/` with a redirect to its page); null for a sections homepage or a product that is not public.",
   }),
-  apps: z.array(appSurfaceRenderSchema.extend({ sectionId: z.string() })).max(PLUGIN_HOME_SECTIONS_MAX).openapi({
-    description: "The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing.",
+  apps: z.array(appSurfaceRenderSchema.extend({
+    sectionId: z.string(),
+    component: z.object({
+      pluginId: z.string(),
+      type: z.string(),
+      values: z.record(z.string(), z.unknown()),
+      media: z.array(z.object({ id: z.string(), url: z.string(), alt: z.string(), width: z.number().nullable(), height: z.number().nullable() })),
+      lists: z.array(z.object({ source: z.string(), products: z.array(z.unknown()) })),
+    }).optional().openapi({
+      description: "A component section (no `html`): the storefront draws it at the edge with the app's storefront module, from these resolved values, images and product cards.",
+    }),
+  })).max(PLUGIN_HOME_SECTIONS_MAX).openapi({
+    description: "The app sections to show, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add, or a component section's data. An app section missing here renders nothing.",
   }),
   metaobjects: z.array(z.object({
     id: z.string(),
@@ -384,6 +403,24 @@ const layoutDataSchema = z.object({
     placement: z.enum(["head", "body-end"]),
     pages: z.array(z.enum(["all", "home", "product", "listing", "cart", "checkout", "order-success"])),
   })),
+  appExtensions: z.array(z.object({
+    pluginId: z.string(),
+    version: z.string(),
+    source: z.enum(["bundled", "registry", "upload"]),
+    release: z.string().openapi({ description: "The release's bundle SHA-256: names its storefront files (/_x/<plugin id>/<release>/) and its isolate." }),
+    sections: z.array(z.string()),
+    sectionSettings: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
+    slots: z.array(z.object({
+      id: z.string(),
+      slot: z.enum(STOREFRONT_COMPONENT_SLOTS),
+      settings: z.array(z.record(z.string(), z.unknown())),
+    })),
+    islands: z.array(z.string()),
+    stylesheet: z.boolean(),
+    connect: z.array(z.string()),
+  })).openapi({
+    description: "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections and slots their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
+  }),
   appBlockPages: z.array(z.enum(PLUGIN_BLOCK_PAGES)).openapi({
     description: "The page groups where an active app draws a checkout or customer-account block. Only these pages read /storefront/app-blocks/{page}.",
   }),
@@ -420,21 +457,51 @@ const homepageRoute = createRoute({
   }
 });
 
-/** Draws a homepage's app sections with the request's plugin host (plugins/storefront-render.ts). */
+/**
+ * A page's app sections: route sections drawn by their apps with the
+ * request's plugin host (plugins/storefront-render.ts), component sections
+ * given their settings' images and products for the storefront to draw
+ * (core app-components.ts), both from one read of the apps.
+ */
 function homeAppRenderer(c: Context<{ Bindings: Env }>, failOnError = false) {
-  return async (requests: HomeAppSectionRequest[]) => {
+  return async (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null }) => {
+    const db = c.get("db");
+    const context = await readPluginRenderContext(db, [...new Set(requests.map((request) => request.pluginId))]);
+    const components: AppComponentPlacement[] = [];
+    const routed: HomeAppSectionRequest[] = [];
+    for (const request of requests) {
+      const installation = context.installations.get(request.pluginId);
+      const section = installation?.manifest.storefront.sections.find((entry) => entry.type === request.type);
+      if (installation && section && section.route === undefined) {
+        // Drawn at the edge only while the approved grant covers storefront code.
+        deps.plugin(request.pluginId);
+        if (installation.grant?.storefrontCode === true) {
+          components.push({ sectionId: request.sectionId, pluginId: request.pluginId, type: request.type, schema: section.settings, values: request.values });
+        }
+      } else {
+        routed.push(request);
+      }
+    }
     const { renderAppSurfaces } = await import("../plugins/storefront-render");
-    const drawn = await renderAppSurfaces(
-      requests.map((request) => ({
-        instanceId: request.sectionId,
-        pluginId: request.pluginId,
-        type: request.type,
-        kind: "section" as const,
-        values: request.values,
-      })),
-      { env: c.env, ctx: executionContextOf(c), db: c.get("db"), failOnError },
-    );
-    return drawn.map((each) => ({ sectionId: each.instanceId, html: each.html, head: each.head }));
+    const [drawn, data] = await Promise.all([
+      renderAppSurfaces(
+        routed.map((request) => ({
+          instanceId: request.sectionId,
+          pluginId: request.pluginId,
+          type: request.type,
+          kind: "section" as const,
+          values: request.values,
+        })),
+        { env: c.env, ctx: executionContextOf(c), db, failOnError, context },
+      ),
+      readAppComponentData(db, components, page.pricing),
+    ]);
+    const bySection = new Map<string, HomepageAppSection>([
+      ...drawn.map((each) => [each.instanceId, { sectionId: each.instanceId, html: each.html, head: each.head }] as const),
+      ...data.map((each) => [each.sectionId, { sectionId: each.sectionId, html: "", head: EMPTY_PLUGIN_HEAD, component: each.component }] as const),
+    ]);
+    // Document order.
+    return requests.flatMap((request) => bySection.get(request.sectionId) ?? []);
   };
 }
 
@@ -578,6 +645,55 @@ async function drawProductAppBlocks(c: Context<{ Bindings: Env }>, slug: string,
 app.openapi(productAppsRoute, async (c) => {
   if (new URL(c.req.url).search) throw new ValidationError("The product apps read takes no query parameters");
   return ok(c, await drawProductAppBlocks(c, c.req.valid("param").slug));
+});
+
+// GET /storefront/extensions/:pluginId/:release?path= — an app's storefront file
+const extensionFileRoute = createRoute({
+  method: "get",
+  path: "/extensions/{pluginId}/{release}",
+  operationId: "storefront.extension_file.get",
+  tags: ["Storefront"],
+  summary: "Read one storefront file of an installed app's current release",
+  description:
+    "The storefront module, stylesheet, an island or a public file (font, image) of an app's current release, checked against the digests sealed into its signed bundle. Immutable: a release's file never changes, so it is cached for a year. The storefront serves it on its own origin at /_x/<plugin id>/<release>/<path>. Bundled apps' files are compiled into the storefront and are not served here.",
+  request: {
+    params: z.object({
+      pluginId: z.string().max(100),
+      release: z.string().regex(/^[0-9a-f]{64}$/).openapi({ description: "The release's bundle SHA-256 (the layout's appExtensions[].release)." }),
+    }),
+    query: z.object({ path: z.string().max(200).openapi({ description: "storefront.js, styles.css, islands/<name>.js or public/<path>." }) }),
+  },
+  responses: {
+    200: {
+      description: "The file",
+      content: {
+        "text/javascript": { schema: z.string() },
+        "text/css": { schema: z.string() },
+        "font/woff2": { schema: z.string().openapi({ format: "binary" }) },
+        "image/svg+xml": { schema: z.string().openapi({ format: "binary" }) },
+      },
+    },
+    404: errorResponses[404],
+  },
+});
+app.openapi(extensionFileRoute, async (c) => {
+  const { pluginId, release } = c.req.valid("param");
+  const { readPluginStorefrontFile } = await import("../plugins/storefront-files");
+  const file = await readPluginStorefrontFile(c.env, c.get("db"), pluginId, release, c.req.valid("query").path);
+  if (!file) {
+    return new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "File not found" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    }) as never;
+  }
+  return new Response(file.bytes as Uint8Array<ArrayBuffer>, {
+    headers: {
+      "Content-Type": file.contentType,
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff",
+      ...(file.contentType === "image/svg+xml" ? { "Content-Security-Policy": "sandbox" } : {}),
+    },
+  }) as never;
 });
 
 // GET /storefront/app-blocks/:page — the checkout or customer-account app blocks

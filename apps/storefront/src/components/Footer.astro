@@ -1,170 +1,40 @@
 ---
-// src/components/Footer.astro
-// The footer block (theme block `footer`), one component per variant under
-// ./footer, all reading one model (footer/footer-model.ts):
-// - columns: the logo, words and contact details, then the link groups.
-// - centered-compact: one centred stack with the signup and grouped links.
-// - directory: the store's contact details and a curated link directory;
-//   with `style: bands`, a banded directory in the header's tone.
-// `tone` (columns, centered-compact) picks the surface: page, muted, the
-// header colours or the page's ink.
-// Every footer sits in the page Container, so its edges line up with the
-// header and the sections, and groups links the same way (FooterMenus).
-// Tones re-point the footer's own surface tokens (secondary, border), so the
-// shared bottom row and the menus read correctly on every surface. Every
-// tone is a theme pair the AA rule checks (the header pair, ink on page, ink
-// on muted); the banded directory's raised and deep bands are derived from
-// the header pair with the same or better contrast (theme-header-raised,
-// theme-header-deep). The words (tagline, about, the name after ©) are the
-// footer block's settings and the footer logo the theme's brand; identity
-// and contact facts are Business settings.
-import type { FooterMenu, SocialLink } from "@/lib/api";
-import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
-import type { StorefrontFooterRenderer } from "@scalius/shared/storefront-theme";
+// The store footer: the app footer the theme names (`apps.footer`, an app's
+// footer slot), else the theme's own footer (CoreFooter.astro). An app
+// footer that is inactive, fails or is late gives way to the core footer.
+import { storefrontExtensionBase } from "@scalius/shared/plugins/storefront-protocol";
+import AppComponent from "@/components/apps/AppComponent.astro";
+import { appSlot, requestExtensions } from "@/lib/extensions";
+import { footerData } from "@/lib/extensions/data";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { footerModel, footerWords } from "./footer/footer-model";
-import ColumnsFooter from "./footer/ColumnsFooter.astro";
-import NewsletterFooter from "./footer/NewsletterFooter.astro";
-import DirectoryFooter from "./footer/DirectoryFooter.astro";
-import FooterBottom from "./footer/FooterBottom.astro";
-import { newsletterLanguage } from "@/lib/newsletter-copy";
-import Container from "./ui/Container.astro";
-import { storefrontCopy } from "@/lib/storefront-copy";
-import { newsletterFormModel, themeNewsletterSettings } from "@/lib/newsletter-form";
+import CoreFooter from "./CoreFooter.astro";
 
-interface Props {
-  /** The store's language (the layout's `storefrontCopy.languageCode`) for the signup's words. */
-  languageCode?: string | null;
-  /** The footer menus (Online store -> Navigation; the layout read's `footerMenus`). */
-  menus: FooterMenu[];
-  /** Business settings identity and the store's single social set. */
-  storeName: string | null;
-  storePhone: string | null;
-  social: SocialLink[];
-  /** Policy pages from Settings -> Policies. */
-  policies: Array<{ title: string; path: string }>;
-  /** The coarse renderer fact (`resolved.layout.footer`); the variant comes from the resolved theme. */
-  variant: StorefrontFooterRenderer;
-  business: StorefrontBusinessInfo | null | undefined;
+type Props = import("astro/types").ComponentProps<typeof CoreFooter>;
+
+const props = Astro.props;
+const app = await appSlot(Astro.locals, Astro.url, "footer");
+let html: string | null = null;
+if (app) {
+  const theme = await currentRequestTheme(Astro.locals);
+  const { host } = await requestExtensions(Astro.locals, Astro.url);
+  html = await host.render(app.extension, {
+    kind: "slot",
+    slot: "footer",
+    component: app.component,
+    settings: app.settings,
+    data: footerData({
+      theme,
+      storeName: props.storeName,
+      storePhone: props.storePhone,
+      menus: props.menus,
+      policies: props.policies,
+      business: props.business,
+      social: props.social,
+    }),
+  });
 }
-
-const { menus, storeName, storePhone, social, policies, business, languageCode } = Astro.props;
-const { resolved, brand, language } = await currentRequestTheme(Astro.locals);
-const copy = storefrontCopy(language).chrome;
-const variant = resolved.blocks.footer.variant;
-// newsletter-grey carries the signup form, with the homepage newsletter
-// section's settings when the theme has one. A homepage that shows that
-// section, and the newsletter's own pages, already have their form (or are
-// about leaving the list), so the footer leaves its own out there.
-const newsletterSettings = themeNewsletterSettings(resolved.pages.home);
-const pageHasSignup = /^\/newsletter(?:\/|$)/.test(Astro.url.pathname)
-  || (Astro.url.pathname === "/" && resolved.pages.homeMode.kind === "sections" && newsletterSettings !== null);
-const signup = variant === "centered-compact" && !pageHasSignup
-  ? newsletterFormModel(newsletterSettings, newsletterLanguage(languageCode))
-  : null;
-const marketplaceDirectory = variant === "directory" && resolved.blocks.footer.settings.style === "bands";
-const model = footerModel({
-  words: footerWords(resolved.blocks.footer.settings),
-  logo: brand.footerLogo,
-  menus,
-  storeName,
-  storePhone,
-  social,
-  policies,
-  business,
-  trackOrderLabel: copy.nav.trackOrder,
-});
-const tone = resolved.blocks.footer.settings.tone;
-const TONES: Record<string, string | undefined> = { muted: "muted", header: "header", ink: "ink" };
 ---
 
-<footer
-  class="relative border-t border-border bg-secondary text-secondary-foreground overflow-hidden"
-  data-footer-variant={variant}
-  data-footer-tone={marketplaceDirectory ? "header" : typeof tone === "string" ? TONES[tone] : undefined}
-  data-footer-marketplace={marketplaceDirectory ? "" : undefined}
->
-  {marketplaceDirectory && <a class="directory-back-to-top" data-footer-back-to-top href="#">{copy.footer.backToTop}</a>}
-  <Container class:list={["relative", marketplaceDirectory ? "directory-main py-8 lg:py-10" : "py-8 lg:py-10"]}>
-    {variant === "columns" && <ColumnsFooter model={model} />}
-    {variant === "centered-compact" && <NewsletterFooter model={model} signup={signup} />}
-    {variant === "directory" && <DirectoryFooter model={model} marketplace={marketplaceDirectory} />}
-    {!marketplaceDirectory && <FooterBottom model={model} showPolicies={variant !== "centered-compact"} />}
-  </Container>
-  {marketplaceDirectory && (
-    <div class="directory-lower" data-footer-lower>
-      <Container class="relative">
-        <FooterBottom model={model} marketplace />
-      </Container>
-    </div>
-  )}
-</footer>
-
-<style>
-  footer {
-    /* Edge-to-edge: Add safe area padding using Chrome's optimized pattern */
-    padding-bottom: var(--safe-area-max-inset-bottom);
-    margin-bottom: calc(
-      env(safe-area-inset-bottom, 0px) - var(--safe-area-max-inset-bottom)
-    );
-  }
-
-  footer::after {
-    content: "";
-    position: absolute;
-    bottom: calc(-100vh - env(safe-area-inset-bottom, 0px));
-    inset-inline-start: 0;
-    inset-inline-end: 0;
-    height: 100vh;
-    background-color: var(--secondary);
-    z-index: -20;
-  }
-
-  /* Each tone is an AA pair of the theme (header tone, ink on page, ink on muted). */
-  footer[data-footer-tone="header"] {
-    --secondary: var(--theme-header-background);
-    --secondary-foreground: var(--theme-header-foreground);
-    --primary-foreground: var(--theme-header-foreground);
-    --border: color-mix(in srgb, var(--theme-header-foreground) 20%, transparent);
-  }
-
-  footer[data-footer-tone="ink"] {
-    --secondary: var(--foreground);
-    --secondary-foreground: var(--background);
-    --primary-foreground: var(--background);
-    --border: color-mix(in srgb, var(--background) 20%, transparent);
-  }
-
-  footer[data-footer-tone="muted"] {
-    --secondary: var(--muted);
-    --secondary-foreground: var(--foreground);
-  }
-
-  /* Amazon's bands, in the header's tone: the raised "Back to top" band,
-     the directory on the header surface, and the deeper bottom band. */
-  footer[data-footer-marketplace]::after,
-  .directory-lower {
-    background-color: var(--theme-header-deep);
-  }
-
-  .directory-back-to-top {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 50px;
-    background: var(--theme-header-raised);
-    color: var(--theme-header-foreground);
-    font-size: 0.875rem;
-    font-weight: 600;
-  }
-
-  .directory-back-to-top:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-
-  .directory-back-to-top:focus-visible {
-    outline: 2px solid var(--theme-header-foreground);
-    outline-offset: -4px;
-  }
-</style>
+{html !== null && app
+  ? <AppComponent html={html} pluginId={app.extension.pluginId} base={storefrontExtensionBase(app.extension.pluginId, app.extension.release)} />
+  : <CoreFooter {...props} />}

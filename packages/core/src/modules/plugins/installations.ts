@@ -109,10 +109,16 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
     parsed[key] = list;
   }
   if (typeof raw.publicRoutes !== "boolean" || typeof raw.storefrontSurfaces !== "boolean") return null;
+  // Storefront components (added later): absent on grants that never asked.
+  if (raw.storefrontCode !== undefined && raw.storefrontCode !== true) return null;
+  const connect = raw.storefrontConnect === undefined ? undefined : stringList(raw.storefrontConnect);
+  if (connect === null) return null;
   return {
     ...(parsed as Record<(typeof lists)[number], string[]>),
     publicRoutes: raw.publicRoutes,
     storefrontSurfaces: raw.storefrontSurfaces,
+    ...(raw.storefrontCode === true ? { storefrontCode: true as const } : {}),
+    ...(connect && connect.length > 0 ? { storefrontConnect: connect } : {}),
   } as PluginGrantRequest;
 }
 

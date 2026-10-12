@@ -10,6 +10,7 @@ import { createCacheFrontierClient, type CacheFrontierClient } from "./lib/cache
 import { CACHE_FRONTIER_SECRET_PURPOSE } from "@scalius/shared/cache-frontier";
 import { INTERNAL_SERVICE_ORIGIN } from "@scalius/shared/platform-config";
 import { httpsRedirectResponse } from "./lib/storefront-origin";
+import { serveExtensionFile } from "./lib/extensions/files";
 import { oneClickUnsubscribeRequest } from "./lib/newsletter-one-click";
 import { BUILD_ID } from "./config/build-id";
 import {
@@ -89,6 +90,9 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     const request = withoutInboundPresence(await resolveFrontProxy(incoming, this.env));
     const httpsRedirect = httpsRedirectResponse(request);
     if (httpsRedirect) return httpsRedirect;
+    // An app's storefront files (immutable, by release): no page render.
+    const extensionFile = await serveExtensionFile(request, this.env);
+    if (extensionFile) return extensionFile;
     // A presence serves its pages and its own sitemaps and feeds, nothing else.
     if (presenceRenderTarget(request) === "not_found") return PRESENCE_NOT_FOUND();
     // A buyer's explicit market choice; never geo, never a crawler.

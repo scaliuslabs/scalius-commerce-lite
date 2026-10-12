@@ -37,7 +37,12 @@ export function quickAddCartLine(data: ProductPageData, currencyCode: string): C
   };
 }
 
+let quickAddInstalled = false;
+
+/** Installs the one delegated quick-add listener (core cards and app components share it). */
 export function initQuickAddCards(): void {
+  if (quickAddInstalled) return;
+  quickAddInstalled = true;
   document.addEventListener("click", async (event) => {
     const target = event.target;
     const link = target instanceof Element ? target.closest<HTMLAnchorElement>("a[data-card-quick-add]") : null;

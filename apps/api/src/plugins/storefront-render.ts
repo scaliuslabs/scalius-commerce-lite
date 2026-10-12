@@ -117,8 +117,10 @@ export async function renderAppSurfaces(requests: readonly AppSurfaceRequest[], 
   const runnable = requests.flatMap((request) => {
     const installation = installations.get(request.pluginId);
     if (!installation?.grant?.storefrontSurfaces) return [];
-    const surface = surfaceOf(installation, request);
-    if (!surface) return [];
+    const found = surfaceOf(installation, request);
+    // A component section (no route) is drawn by the storefront, not here.
+    if (!found || found.route === undefined) return [];
+    const surface = { ...found, route: found.route };
     deps.pluginCollections(request.pluginId, surface.reads);
     return [{ request, installation, surface }];
   });
@@ -154,7 +156,7 @@ async function renderOne(
   host: PluginHost,
   installation: PluginInstallation,
   request: AppSurfaceRequest,
-  surface: NonNullable<ReturnType<typeof surfaceOf>>,
+  surface: NonNullable<ReturnType<typeof surfaceOf>> & { route: string },
   options: AppSurfaceRenderOptions,
 ): Promise<AppSurfaceRender | null> {
   const render: PluginRenderContext = {

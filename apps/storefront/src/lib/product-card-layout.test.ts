@@ -43,7 +43,7 @@ describe("fluid product grid", () => {
 
   it("keeps card styles out of the shared foundation", () => {
     expect(css).not.toMatch(/\.product-card-|card-row-media|\[data-theme-card-style/);
-    const card = readFileSync(new URL("../components/cards/ProductCard.astro", import.meta.url), "utf8");
+    const card = readFileSync(new URL("../components/cards/CoreProductCard.astro", import.meta.url), "utf8");
     expect(card).toContain('import "./product-card.css";');
   });
 

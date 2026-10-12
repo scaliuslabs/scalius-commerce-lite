@@ -14,6 +14,7 @@
 // `nosniff`, so a check that missed something still cannot run.
 
 import { Parser } from "htmlparser2";
+import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_FILE_PATH, STOREFRONT_PUBLIC_FILE_TYPES } from "./storefront-components";
 import {
   PLUGIN_ICON_MAX_BYTES,
   PLUGIN_ICON_TYPES,
@@ -97,6 +98,13 @@ function matchesType(bytes: Uint8Array, contentType: string): boolean {
       return startsWith(bytes, [0xff, 0xd8, 0xff]);
     case "image/webp":
       return startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) && startsWith(bytes, [0x57, 0x45, 0x42, 0x50], 8);
+    case "image/avif":
+      // An ISO-BMFF `ftyp` box of an AVIF brand.
+      return startsWith(bytes, [0x66, 0x74, 0x79, 0x70], 4) && /^avi[fs]$/.test(String.fromCharCode(...bytes.slice(8, 12)));
+    case "font/woff2":
+      return startsWith(bytes, [0x77, 0x4f, 0x46, 0x32]);
+    case "font/woff":
+      return startsWith(bytes, [0x77, 0x4f, 0x46, 0x46]);
     default:
       return false;
   }
@@ -124,4 +132,33 @@ export function checkPluginAsset(path: string, bytes: Uint8Array, role: PluginAs
     return problem ? `${path}: ${problem}` : null;
   }
   return matchesType(bytes, contentType) ? null : `${path} is not a ${contentType} file.`;
+}
+
+/**
+ * Null when the file may be one of an app's storefront public files (a font
+ * or an image under `public/`, served from the store's origin), else the
+ * reason it is refused. The same rules as listing images: real bytes of the
+ * named type, and an SVG that cannot run code or load anything.
+ */
+export function checkStorefrontPublicFile(path: string, bytes: Uint8Array): string | null {
+  if (!STOREFRONT_FILE_PATH.test(`public/${path}`) || path.includes("..")) {
+    return `public/${path}: use lower-case names (a-z, 0-9, -, _, .) at most four folders deep.`;
+  }
+  const contentType = STOREFRONT_PUBLIC_FILE_TYPES[path.slice(path.lastIndexOf(".") + 1)];
+  if (!contentType) return `public/${path}: public files are ${Object.keys(STOREFRONT_PUBLIC_FILE_TYPES).join(", ")}.`;
+  if (bytes.byteLength === 0) return `public/${path} is empty.`;
+  if (bytes.byteLength > STOREFRONT_COMPONENT_LIMITS.publicFileBytes) {
+    return `public/${path} is ${bytes.byteLength} bytes; one public file is at most ${STOREFRONT_COMPONENT_LIMITS.publicFileBytes}.`;
+  }
+  if (contentType === "image/svg+xml") {
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      return `public/${path} is not UTF-8 text.`;
+    }
+    const problem = checkPluginSvg(text);
+    return problem ? `public/${path}: ${problem}` : null;
+  }
+  return matchesType(bytes, contentType) ? null : `public/${path} is not a ${contentType} file.`;
 }

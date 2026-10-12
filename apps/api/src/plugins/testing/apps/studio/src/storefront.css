@@ -1,0 +1,59 @@
+/* Studio: styled with the store's own tokens, so the merchant's colours,
+   fonts, radius and container width apply. Every rule is scoped to studio-. */
+.studio-header { background: var(--theme-header-background, var(--background)); color: var(--theme-header-foreground, var(--foreground)); border-bottom: 1px solid var(--border); z-index: 30; }
+.studio-header.is-sticky { position: sticky; top: 0; }
+.studio-announcement { margin: 0; padding: 6px 16px; text-align: center; font-size: var(--theme-text-sm, 14px); background: var(--primary); color: var(--primary-foreground); }
+.studio-announcement a { color: inherit; }
+.studio-bar { display: flex; align-items: center; gap: 24px; max-width: var(--theme-container-width, 1200px); margin: 0 auto; padding: 12px var(--theme-gutter-phone, 16px); }
+.studio-logo { font-family: var(--theme-font-heading); font-weight: var(--theme-heading-weight, 600); font-size: var(--theme-text-xl, 20px); color: inherit; text-decoration: none; }
+.studio-logo-image { height: 32px; width: auto; }
+.studio-nav { display: none; gap: 20px; flex: 1; }
+.studio-nav a, .studio-menu summary { color: inherit; text-decoration: none; cursor: pointer; }
+.studio-menu { position: relative; }
+.studio-menu ul { position: absolute; top: 100%; left: 0; min-width: 200px; margin: 8px 0 0; padding: 8px 0; list-style: none; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--border); border-radius: var(--radius); }
+.studio-menu li a { display: block; padding: 6px 16px; }
+.studio-actions { display: flex; align-items: center; gap: 16px; margin-left: auto; }
+.studio-search input { min-height: var(--target-min, 40px); padding: 0 12px; border: 1px solid var(--input); border-radius: var(--theme-button-radius, var(--radius)); background: var(--background); color: var(--foreground); }
+.studio-icon-link, .studio-cart { color: inherit; text-decoration: none; }
+.studio-cart-count:not(:empty) { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 12px; }
+@media (min-width: 1024px) { .studio-nav { display: flex; } }
+
+.studio-footer { display: grid; gap: 32px; max-width: var(--theme-container-width, 1200px); margin: 64px auto 0; padding: 48px var(--theme-gutter-phone, 16px); border-top: 1px solid var(--border); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.studio-footer h2 { font-size: var(--theme-text-sm, 14px); text-transform: uppercase; letter-spacing: 0.08em; }
+.studio-footer ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.studio-footer a { color: var(--muted-foreground); text-decoration: none; }
+.studio-footer-legal { grid-column: 1 / -1; color: var(--muted-foreground); font-size: var(--theme-text-sm, 14px); }
+
+.studio-card { display: grid; gap: 6px; min-width: 0; }
+.studio-card-media { position: relative; display: block; overflow: hidden; border-radius: var(--radius); background: var(--muted); aspect-ratio: 4 / 5; }
+.studio-card.ratio-square .studio-card-media { aspect-ratio: 1; }
+.studio-card-media img { width: 100%; height: 100%; object-fit: var(--theme-image-fit, cover); transition: transform var(--theme-duration-base, 250ms); }
+.studio-card:hover .studio-card-media img { transform: scale(1.03); }
+.studio-badge { position: absolute; top: 8px; left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--theme-sale); color: var(--background); font-size: 12px; }
+.studio-card-title { margin: 4px 0 0; font-size: var(--theme-text-sm, 14px); font-weight: 500; }
+.studio-card-title a { color: var(--foreground); text-decoration: none; }
+.studio-price [data-price-current] { font-weight: 600; }
+.studio-price[data-discounted] [data-price-current] { color: var(--theme-sale); }
+.studio-price [data-price-regular] { margin-left: 6px; color: var(--muted-foreground); }
+.studio-rating { margin: 0; color: var(--muted-foreground); font-size: 13px; }
+.studio-add, .studio-button { display: inline-flex; justify-content: center; align-items: center; min-height: var(--target-min, 40px); padding: 0 16px; border-radius: var(--theme-button-radius, var(--radius)); background: var(--primary); color: var(--primary-foreground); text-decoration: none; font-weight: 600; }
+.studio-sold-out { margin: 0; color: var(--muted-foreground); }
+
+.studio-hero { position: relative; display: grid; min-height: min(70vh, 640px); overflow: hidden; }
+.studio-hero-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.studio-hero-copy { position: relative; align-self: end; max-width: var(--theme-container-width, 1200px); width: 100%; margin: 0 auto; padding: 48px var(--theme-gutter-phone, 16px); color: #fff; text-shadow: 0 1px 12px rgb(0 0 0 / 0.45); }
+.studio-hero.no-image .studio-hero-copy { color: var(--foreground); text-shadow: none; }
+.studio-hero.align-center .studio-hero-copy { text-align: center; }
+.studio-hero h1 { margin: 0 0 12px; font-family: var(--theme-font-heading); font-size: clamp(32px, 5vw, 56px); line-height: 1.05; }
+
+.studio-featured, .studio-features, .studio-faq { max-width: var(--theme-container-width, 1200px); margin: 64px auto; padding: 0 var(--theme-gutter-phone, 16px); }
+.studio-featured scalius-island { display: block; position: relative; }
+.studio-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(180px, 24%); gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.studio-row > * { scroll-snap-align: start; }
+.studio-carousel-controls { position: absolute; top: -48px; right: 0; display: flex; gap: 8px; }
+.studio-carousel-controls button { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 999px; background: var(--background); color: var(--foreground); }
+.studio-mark { display: none; }
+.studio-features ul { display: grid; gap: 24px; margin: 0; padding: 0; list-style: none; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.studio-feature-icon { width: 40px; height: 40px; }
+.studio-faq details { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.studio-faq summary { cursor: pointer; font-weight: 600; }

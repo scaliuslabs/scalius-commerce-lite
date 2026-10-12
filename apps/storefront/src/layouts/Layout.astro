@@ -52,6 +52,8 @@ import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-pr
 import { AD_CLICK_ID_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
 import { optimizeAnalyticsScriptDelivery } from "@/lib/analytics-script-delivery";
 import { appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
+import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
+import { themeAppStylesheets } from "@/lib/extensions/stylesheets";
 import {
   buildPartytownBootstrap,
   partytownForwardFor,
@@ -136,6 +138,8 @@ const {
 } = await resolveRequestTheme(Astro, layoutData);
 const chromeCopy = storefrontCopy(themeLanguage).chrome;
 const isThemePreview = themePreview !== null;
+// The stylesheets of the apps the theme names (their slots and sections): immutable, cached files.
+const appStylesheets = themeAppStylesheets(storefrontTheme, readStorefrontExtensions(layoutData?.appExtensions));
 // The theme editor's bridge, only under a valid preview: buyers never get it.
 const themeEditorBridge = isThemePreview
   ? themePreviewBridgeScript(themeEditorOrigin(getRuntimeDashboardUrl()))
@@ -484,6 +488,7 @@ const pageStoreTimeZone = storeTimeZone();
     {appHeadScripts.map((script) => <script is:inline async src={script.src} data-app-script={script.pluginId}></script>)}
 
     <style set:html={paint.css} data-theme-tokens={isThemePreview ? "" : undefined} />
+    {appStylesheets.map((href) => <link rel="stylesheet" href={href} data-app-stylesheet />)}
 
     <slot name="head" />
   </head>

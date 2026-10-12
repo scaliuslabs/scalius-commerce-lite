@@ -10,7 +10,9 @@ import { isEventTopicFilter, topicMatchesAnyFilter, type EventTopic, type EventT
 import { SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
 import { parsePluginCronSchedule } from "./cron";
 import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
-import { PLUGIN_SETTING_KEY, pluginSettingsSchemaSchema } from "./settings-schema";
+import { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN, PLUGIN_PERMISSION_PATTERN } from "./manifest-patterns";
+import { storefrontComponentsManifestSchema } from "./storefront-components";
+import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginSettingsSchemaSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { PLUGIN_BLOCK_TARGETS } from "./storefront";
 import { metaobjectDefinitionInputSchema } from "../metaobjects";
@@ -21,39 +23,9 @@ export { PLUGIN_API_VERSION, SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERS
 
 /** `vendor.name` (in ./ids.ts, so id checks don't need this schema module). */
 export { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN };
+/** Name and host patterns (in ./manifest-patterns.ts, shared with the storefront components contract). */
+export { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN, PLUGIN_PERMISSION_PATTERN, isPluginHostAllowed } from "./manifest-patterns";
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]{1,40})?$/;
-/**
- * RBAC permission names, as staff roles use them (`orders.view`,
- * `settings.shipping_methods.view`); checked against the live catalog at
- * install.
- */
-export const PLUGIN_PERMISSION_PATTERN = /^[a-z][a-z_]*(?:\.[a-z][a-z_]*){1,2}$/;
-/** Route, page, card, action, cron, collection and section names. */
-export const PLUGIN_NAME_PATTERN = /^[a-z][a-z0-9-]{0,47}$/;
-/**
- * Exact hosts or one leading wildcard label (`*.example.com`); never IP
- * literals or localhost. An exact host may name one non-default https port
- * (`sandbox.example.com:10061`, a provider sandbox's): only that port is
- * then reachable on it.
- */
-export const PLUGIN_HOST_PATTERN = /^(?:(?:\*\.)?(?=[a-z0-9.-]{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}|(?=[a-z0-9.-]{1,253}:)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}:(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))$/;
-
-/**
- * Whether `allowedHosts` lets a request reach `hostname` on `port` ("" for
- * the default https port). A wildcard matches subdomains only, and only on
- * the default port; a non-default port needs its exact `host:port` entry.
- */
-export function isPluginHostAllowed(hostname: string, allowedHosts: readonly string[], port = ""): boolean {
-  const host = hostname.toLowerCase().replace(/\.$/, "");
-  if (port !== "" && port !== "443") return allowedHosts.some((pattern) => pattern.toLowerCase() === `${host}:${port}`);
-  return allowedHosts.some((pattern) => {
-    const allowed = pattern.toLowerCase();
-    if (allowed.includes(":")) return false;
-    if (allowed.startsWith("*.")) return host.endsWith(allowed.slice(1)) && host.length > allowed.length - 1;
-    return host === allowed;
-  });
-}
-
 const name = z.string().regex(PLUGIN_NAME_PATTERN);
 const title = z.string().trim().min(1).max(80);
 const description = z.string().trim().min(1).max(500);
@@ -210,18 +182,24 @@ const timelineSchema = z.array(z.object({ kind: name, title }).strict()).max(20)
   .refine((kinds) => new Set(kinds.map((entry) => entry.kind)).size === kinds.length, "Timeline kinds must be unique.");
 
 const storefrontSchema = z.object({
-  /** Theme sections the merchant can add in the theme editor/builder. */
+  /**
+   * Theme sections the merchant can add in the theme editor/builder. A
+   * section with a `route` is drawn by that public route (sanitized HTML,
+   * cached under dependency validation); one without is a component the
+   * app's storefront module draws at the edge (storefront-components.ts).
+   */
   sections: z.array(z.object({
     type: name,
     name: title,
     description: description.optional(),
     settings: pluginSettingsSchemaSchema.default([]),
     /** The public route that renders the section (sanitized HTML), cached under dependency validation. */
-    route: name,
+    route: name.optional(),
     /**
      * Storage collections the render reads. Rendering may read only these
      * (and the app's settings); a write to one invalidates the cached
      * section. Nothing declared: the output depends on settings alone.
+     * Route sections only.
      */
     reads: z.array(name).max(20).default([]),
   }).strict()).max(20).default([]),
@@ -259,7 +237,24 @@ const storefrontSchema = z.object({
   }).strict()).max(5).default([]),
   /** `/apps/<plugin id>/*` on the storefront origin proxies to the plugin's public routes. */
   proxy: z.boolean().default(false),
+  // Storefront components (storefront-components.ts): theme slots the
+  // storefront module fills, ready-made templates, client islands, the
+  // stylesheet and the hosts islands reach.
+  ...storefrontComponentsManifestSchema,
 }).strict();
+
+/** The empty `storefront` part (a manifest that declares none). */
+function emptyPluginStorefront() {
+  return {
+    sections: [], productBlocks: [], blocks: [], head: false, scripts: [], proxy: false,
+    slots: [], templates: [], islands: [], stylesheet: false, connect: [],
+  };
+}
+
+/** Whether the app ships a storefront module (component sections or slots). */
+export function pluginHasStorefrontModule(storefront: Pick<PluginManifest["storefront"], "sections" | "slots">): boolean {
+  return storefront.slots.length > 0 || storefront.sections.some((section) => section.route === undefined);
+}
 
 // ── Settings groups ───────────────────────────────────────────────────────
 
@@ -495,7 +490,7 @@ export const pluginManifestSchema = z.object({
 
   admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [], listColumns: [] }),
   timeline: timelineSchema,
-  storefront: storefrontSchema.default({ sections: [], productBlocks: [], blocks: [], head: false, scripts: [], proxy: false }),
+  storefront: storefrontSchema.default(emptyPluginStorefront),
   /** The dashboard text in other languages (additive; English is the manifest itself). */
   translations: z.object({ bn: pluginTranslationSchema.optional() }).strict().optional(),
 
@@ -577,8 +572,13 @@ export const pluginManifestSchema = z.object({
     ...manifest.storefront.productBlocks.map((surface, index) => ({ surface, path: ["storefront", "productBlocks", index] as (string | number)[] })),
     ...manifest.storefront.blocks.map((surface, index) => ({ surface: { ...surface, settings: [] }, path: ["storefront", "blocks", index] as (string | number)[] })),
   ];
+  const storefrontOnly = new Set<string>(PLUGIN_STOREFRONT_SETTING_TYPES);
   for (const { surface, path } of surfaces) {
-    needPublicRoute([...path, "route"], surface.route);
+    const component = surface.route === undefined;
+    if (surface.route !== undefined) needPublicRoute([...path, "route"], surface.route);
+    else if (surface.reads.length > 0) {
+      context.addIssue({ code: "custom", path: [...path, "reads"], message: "A component section reads no storage: its storefront module draws from its settings. Give it a route to read storage." });
+    }
     surface.reads.forEach((collection, readIndex) => {
       if (!collections.has(collection)) {
         context.addIssue({ code: "custom", path: [...path, "reads", readIndex], message: `Storage collection ${collection} is not declared.` });
@@ -591,8 +591,27 @@ export const pluginManifestSchema = z.object({
       if (field.group !== undefined) {
         context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "group"], message: "Groups are for the app's own settings." });
       }
+      if (!component && storefrontOnly.has(field.type)) {
+        context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "type"], message: `${field.type} settings are for component sections and slots (drawn by the storefront module).` });
+      }
     });
   }
+  manifest.settings.forEach((field, index) => {
+    if (storefrontOnly.has(field.type)) {
+      context.addIssue({ code: "custom", path: ["settings", index, "type"], message: `${field.type} settings are for storefront components, not the app's own settings.` });
+    }
+  });
+  manifest.storefront.slots.forEach((slot, index) => {
+    slot.settings.forEach((field, fieldIndex) => {
+      const path = ["storefront", "slots", index, "settings", fieldIndex];
+      if (field.type === "secret") context.addIssue({ code: "custom", path: [...path, "type"], message: "Storefront settings are public: keep secrets in the app's settings." });
+      if (field.group !== undefined) context.addIssue({ code: "custom", path: [...path, "group"], message: "Groups are for the app's own settings." });
+      // A slot draws from the layout read alone: its settings resolve at the edge, without a media or catalog read.
+      const needsRead = field.type === "image" || field.type === "products"
+        || (field.type === "list" && field.fields.some((item) => item.type === "image"));
+      if (needsRead) context.addIssue({ code: "custom", path: [...path, "type"], message: "A slot's settings cannot name images or products (ship images in the app's public files)." });
+    });
+  });
   if (manifest.storefront.proxy && publicRoutes.size === 0) {
     context.addIssue({ code: "custom", path: ["storefront", "proxy"], message: "The storefront proxy needs at least one public route." });
   }
@@ -681,6 +700,10 @@ export const pluginManifestSchema = z.object({
     }
   });
   unique(manifest.storefront.sections.map((section) => section.type), ["storefront", "sections"], "Section types");
+  unique(manifest.storefront.slots.map((slot) => slot.id), ["storefront", "slots"], "Slot ids");
+  unique(manifest.storefront.templates.map((template) => template.id), ["storefront", "templates"], "Template ids");
+  unique(manifest.storefront.islands.map((island) => island.name), ["storefront", "islands"], "Island names");
+  unique(manifest.storefront.connect, ["storefront", "connect"], "Connect hosts");
   unique(manifest.storefront.productBlocks.map((block) => block.type), ["storefront", "productBlocks"], "Product block types");
   unique(manifest.storefront.blocks.map((block) => block.type), ["storefront", "blocks"], "Block types");
   unique([...manifest.admin.pages, ...manifest.admin.cards, ...manifest.admin.actions, ...manifest.admin.widgets].map((item) => item.id), ["admin"], "Admin ids");
@@ -747,6 +770,14 @@ export interface PluginGrantRequest {
   storefrontScripts: string[];
   storefrontSurfaces: boolean;
   customFieldOwners: string[];
+  /**
+   * Runs code on the storefront: a storefront module (component sections,
+   * slots), client islands or a stylesheet. Present only when true, so the
+   * grants of apps without components keep their key.
+   */
+  storefrontCode?: true;
+  /** Hosts the app's islands reach from the buyer's browser. Present only when not empty. */
+  storefrontConnect?: string[];
 }
 
 export function pluginGrantRequest(manifest: PluginManifest): PluginGrantRequest {
@@ -761,8 +792,12 @@ export function pluginGrantRequest(manifest: PluginManifest): PluginGrantRequest
     publicRoutes: manifest.routes.public.length > 0 || manifest.routes.webhooks.length > 0 || manifest.storefront.proxy,
     storefrontScripts: sorted(manifest.storefront.scripts.map((script) => new URL(script.src).host)),
     storefrontSurfaces: manifest.storefront.sections.length > 0 || manifest.storefront.productBlocks.length > 0
-      || manifest.storefront.blocks.length > 0 || manifest.storefront.head,
+      || manifest.storefront.blocks.length > 0 || manifest.storefront.head || manifest.storefront.slots.length > 0,
     customFieldOwners: sorted(manifest.customFields.map((field) => field.ownerType)),
+    ...(pluginHasStorefrontModule(manifest.storefront) || manifest.storefront.islands.length > 0 || manifest.storefront.stylesheet
+      ? { storefrontCode: true as const }
+      : {}),
+    ...(manifest.storefront.connect.length > 0 ? { storefrontConnect: sorted(manifest.storefront.connect) } : {}),
   };
 }
 
@@ -783,7 +818,9 @@ export function pluginGrantExpands(granted: PluginGrantRequest, next: PluginGran
     || (!granted.publicRoutes && next.publicRoutes)
     || grows(granted.storefrontScripts, next.storefrontScripts)
     || (!granted.storefrontSurfaces && next.storefrontSurfaces)
-    || grows(granted.customFieldOwners, next.customFieldOwners);
+    || grows(granted.customFieldOwners, next.customFieldOwners)
+    || (!granted.storefrontCode && next.storefrontCode === true)
+    || grows(granted.storefrontConnect ?? [], next.storefrontConnect ?? []);
 }
 
 /**
@@ -805,6 +842,10 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
     storefrontScripts: added(granted.storefrontScripts, next.storefrontScripts),
     storefrontSurfaces: next.storefrontSurfaces && !granted.storefrontSurfaces,
     customFieldOwners: added(granted.customFieldOwners, next.customFieldOwners),
+    ...(next.storefrontCode && !granted.storefrontCode ? { storefrontCode: true as const } : {}),
+    ...(added(granted.storefrontConnect ?? [], next.storefrontConnect ?? []).length > 0
+      ? { storefrontConnect: added(granted.storefrontConnect ?? [], next.storefrontConnect ?? []) }
+      : {}),
   };
 }
 

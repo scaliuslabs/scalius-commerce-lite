@@ -1,0 +1,41 @@
+// @scalius/plugin-sdk/storefront: an app's storefront module. Components are
+// JSX (or `html` templates) that build HTML on the server; islands are the
+// only client code. Set `"jsxImportSource": "@scalius/plugin-sdk/storefront"`
+// in the app's tsconfig (the scaffold does).
+//
+//   import { defineStorefront, Image, Price, quickAdd } from "@scalius/plugin-sdk/storefront";
+//
+//   export default defineStorefront({
+//     sections: { hero: Hero },
+//     slots: { "clean-card": Card },
+//   });
+
+export { defineStorefront, storefrontDefinitionOf } from "./define";
+export type {
+  FooterComponent,
+  FooterProps,
+  HeaderComponent,
+  HeaderProps,
+  ProductCardComponent,
+  ProductCardProps,
+  SectionComponent,
+  SectionProps,
+  SlotProps,
+  StorefrontDefinition,
+  StorefrontModuleDefinition,
+} from "./define";
+export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";
+export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
+export { CartCount, Image, Island, Price, asset, editable, openCart, quickAdd, t } from "./components";
+export type { ImageProps, IslandProps, PriceProps } from "./components";
+export type {
+  StorefrontFooterData,
+  StorefrontHeaderData,
+  StorefrontImage,
+  StorefrontMenuItem,
+  StorefrontMoney,
+  StorefrontProductCard,
+  StorefrontRenderContext,
+  StorefrontResolvedSettings,
+  StorefrontStoreInfo,
+} from "@scalius/shared/plugins/storefront-protocol";

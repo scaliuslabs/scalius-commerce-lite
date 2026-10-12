@@ -384,6 +384,10 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
           ? manifest.storefront.productBlocks.find((entry) => entry.type === type)
           : block ? { ...block, settings: [] } : undefined;
       if (!surface) throw new Error(`The manifest declares no ${kind} of type ${type}.`);
+      const route = surface.route;
+      if (route === undefined) {
+        throw new Error(`${type} is a component section (drawn by the storefront module): render it with @scalius/plugin-sdk/storefront/testing.`);
+      }
       const render: PluginRenderContext = {
         kind,
         ...(block ? { target: block.target } : {}),
@@ -395,7 +399,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       return run({
         kind: "route",
         surface: "public",
-        name: surface.route,
+        name: route,
         request: { method: "GET", subpath: "", query: {}, headers: { accept: "text/html" }, body: null, rawBody: null, staffId: null, render, customer: null },
       }, renderBridge(surface.reads));
     },

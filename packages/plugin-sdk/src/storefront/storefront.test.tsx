@@ -1,0 +1,158 @@
+/** @jsxImportSource @scalius/plugin-sdk/storefront */
+import { describe, expect, it } from "vitest";
+import { STOREFRONT_COMPONENT_ABI } from "@scalius/shared/plugins/storefront-protocol";
+import {
+  CartCount,
+  Image,
+  Island,
+  Price,
+  asset,
+  defineStorefront,
+  editable,
+  html,
+  quickAdd,
+  raw,
+  storefrontDefinitionOf,
+  type HeaderProps,
+  type ProductCardProps,
+  type SectionProps,
+} from "./index";
+import { fixtureContext, fixtureProductCard, renderHeader, renderProductCard, renderSection } from "./testing";
+
+const Hero = ({ settings, context }: SectionProps<{ heading: string; text: string | null }>) => (
+  <section class="hero" data-kind={context.page.kind}>
+    <h2 {...editable(context, "heading")}>{settings.heading}</h2>
+    {settings.text ? <p>{settings.text}</p> : null}
+  </section>
+);
+
+const Card = ({ data, context }: ProductCardProps) => (
+  <article class={["card", data.product.soldOut && "sold-out"]}>
+    <a href={data.product.url}>
+      <Image image={data.product.image} sizes="50vw" loading={data.aboveFold ? "eager" : "lazy"} />
+      <h3>{data.product.title}</h3>
+    </a>
+    <Price price={data.product.price} compareAt={data.product.compareAt} context={context} />
+    <a {...quickAdd(data.product)}>Add</a>
+  </article>
+);
+
+const Header = ({ data }: HeaderProps) => (
+  <header>
+    <a href={data.routes.home}>{data.store.name}</a>
+    <nav>{data.menu.map((item) => <a href={item.url}>{item.title}</a>)}</nav>
+    <button type="button" data-cart-open=""><CartCount /></button>
+  </header>
+);
+
+const storefront = defineStorefront({
+  sections: { hero: Hero, broken: () => { throw new Error("boom"); } },
+  slots: { "clean-card": Card, "clean-header": Header },
+});
+
+describe("storefront JSX", () => {
+  it("escapes text and attribute values", () => {
+    const out = renderSection(storefront, "hero", { heading: `<script>alert("x")</script>`, text: `a & b "c"` });
+    expect(out).toBe(`<section class="hero" data-kind="home"><h2>&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;</h2><p>a &amp; b &quot;c&quot;</p></section>`);
+  });
+
+  it("marks editable text only in the editor's preview", () => {
+    expect(renderSection(storefront, "hero", { heading: "Hi", text: null })).not.toContain("data-theme-field");
+    expect(renderSection(storefront, "hero", { heading: "Hi", text: null }, { context: { preview: true } }))
+      .toContain(`<h2 data-theme-field="heading">Hi</h2>`);
+  });
+
+  it("joins class lists, renders void elements and drops false attributes", () => {
+    const out = (<div class={["a", false, "b"]} hidden={false} data-x={1}><br /><input disabled /></div>).value;
+    expect(out).toBe(`<div class="a b" data-x="1"><br><input disabled></div>`);
+  });
+
+  it("writes style objects and refuses event handlers and bad names", () => {
+    expect((<p style={{ marginTop: 4, "--accent": "#fff", color: null }} />).value).toBe(`<p style="margin-top:4;--accent:#fff"></p>`);
+    expect(() => <button onClick={() => {}} />).toThrow(/island/);
+    expect(() => <p {...{ "bad name": "x" }} />).toThrow(/Invalid attribute/);
+  });
+
+  it("keeps raw text elements to trusted markup", () => {
+    expect((<style>{raw(".a{color:red}")}</style>).value).toBe("<style>.a{color:red}</style>");
+    expect(() => <style>{"}</style><script>"}</style>).toThrow(/raw/);
+  });
+
+  it("renders html templates with escaped interpolations", () => {
+    expect(html`<p title="${`"q"`}">${"<b>"}${raw("<i>ok</i>")}${[1, 2]}</p>`.value).toBe(`<p title="&quot;q&quot;">&lt;b&gt;<i>ok</i>12</p>`);
+  });
+});
+
+describe("primitives", () => {
+  it("draws a card with its image renditions, price and quick add", () => {
+    const out = renderProductCard(storefront, "clean-card");
+    expect(out).toContain(`srcset="https://media.example.com/shirt-480.webp 480w, https://media.example.com/shirt-960.webp 960w"`);
+    expect(out).toContain(`sizes="50vw"`);
+    expect(out).toContain(`width="960" height="1200"`);
+    expect(out).toContain(`loading="lazy"`);
+    expect(out).toContain(`<span data-price-current>৳1,200</span>`);
+    expect(out).toContain(`<s data-price-regular>৳1,500</s>`);
+    expect(out).toContain(`<a href="/products/linen-shirt" data-card-quick-add="">Add</a>`);
+  });
+
+  it("does not offer quick add for a product that needs its page", () => {
+    expect(renderProductCard(storefront, "clean-card", {}, { quickAdd: false })).toContain(`<a href="/products/linen-shirt">Add</a>`);
+  });
+
+  it("loads the first image eagerly with high priority", () => {
+    const out = Image({ image: fixtureProductCard().image, loading: "eager" }).value;
+    expect(out).toContain(`loading="eager"`);
+    expect(out).toContain(`fetchpriority="high"`);
+    expect(Image({ image: null }).value).toBe("");
+  });
+
+  it("prices in Bangla with a from-price and no struck price when not discounted", () => {
+    const out = Price({ price: { amount: 900, formatted: "৳900" }, compareAt: { amount: 900, formatted: "৳900" }, from: true, context: fixtureContext({ store: { name: "x", currency: "BDT", locale: "bn-BD", language: "bn" } }) }).value;
+    expect(out).toContain("৳900 থেকে");
+    expect(out).not.toContain("data-price-regular");
+  });
+
+  it("places islands with JSON props and fallback markup", () => {
+    const out = Island({ name: "carousel", props: { a: `"</script>` }, hydrate: "idle", children: <p>Slides</p> }).value;
+    expect(out).toBe(`<scalius-island data-island="carousel" data-hydrate="idle" data-props="{&quot;a&quot;:&quot;\\&quot;&lt;/script&gt;&quot;}"><p>Slides</p></scalius-island>`);
+  });
+
+  it("names public files and the cart count", () => {
+    expect(asset(fixtureContext(), "/fonts/a.woff2")).toBe("/_x/acme.theme/0123456789abcdef/public/fonts/a.woff2");
+    expect(renderHeader(storefront, "clean-header")).toContain(`<button type="button" data-cart-open=""><span data-scalius-cart-count aria-live="polite"></span></button>`);
+  });
+});
+
+describe("defineStorefront", () => {
+  it("answers each job alone: one failure never hides the others", () => {
+    const reply = storefront.render({
+      abi: STOREFRONT_COMPONENT_ABI,
+      context: fixtureContext(),
+      jobs: [
+        { id: "a", kind: "section", type: "broken", instanceId: "s1", settings: {} },
+        { id: "b", kind: "section", type: "hero", instanceId: "s2", settings: { heading: "Ok", text: null } },
+        { id: "c", kind: "section", type: "missing", instanceId: "s3", settings: {} },
+      ],
+    });
+    expect(reply.results).toEqual([
+      { id: "a", error: "Error: boom" },
+      { id: "b", html: `<section class="hero" data-kind="home"><h2>Ok</h2></section>` },
+      { id: "c", error: "Error: No component for section missing." },
+    ]);
+  });
+
+  it("refuses another ABI", () => {
+    const reply = storefront.render({ abi: 2 as never, context: fixtureContext(), jobs: [{ id: "a", kind: "section", type: "hero", instanceId: "s", settings: {} }] });
+    expect(reply.results[0]).toEqual({ id: "a", error: "Unsupported render ABI 2." });
+  });
+
+  it("exposes its definition for the packer", () => {
+    expect(Object.keys(storefrontDefinitionOf(storefront)?.sections ?? {})).toEqual(["hero", "broken"]);
+    expect(storefrontDefinitionOf({ abi: 1 })).toBeNull();
+  });
+
+  it("refuses async components", () => {
+    const asyncModule = defineStorefront({ sections: { slow: async () => "x" } as never });
+    expect(() => renderSection(asyncModule, "slow")).toThrow(/synchronously/);
+  });
+});

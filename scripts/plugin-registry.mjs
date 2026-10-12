@@ -68,7 +68,7 @@ export async function loadRegistryContract() {
   const esbuild = await loadEsbuild();
   const result = await esbuild.build({
     stdin: {
-      contents: 'export * from "@scalius/shared/plugins/registry";',
+      contents: 'export * from "@scalius/shared/plugins/registry";\nexport { sealedStorefrontDigests, STOREFRONT_FILE_PATH, STOREFRONT_COMPONENT_LIMITS } from "@scalius/shared/plugins/storefront-components";',
       resolveDir: join(root, "packages/plugin-sdk"),
       loader: "ts",
     },
@@ -244,6 +244,7 @@ export async function packSigned(source, { key = null, developer = null } = {}) 
     ["manifest.json", Buffer.from(manifestText)],
     ["plugin.js", code],
     ...packed.assets.map((asset) => [`assets/${asset.path}`, Buffer.from(asset.bytes)]),
+    ...packed.storefront.map((file) => [`storefront/${file.path}`, Buffer.from(file.bytes)]),
   ];
   const signaturePath = join(dist, "signature.json");
   rmSync(signaturePath, { force: true });
@@ -325,6 +326,11 @@ export async function buildRegistry(distDirs, { out, name = null }) {
       const file = join(dist, "assets", path);
       if (!existsSync(file) || sha256Of(readFileSync(file)) !== digest) throw new Error(`${dist}: assets/${path} is missing or does not match the bundle. Pack it again.`);
     }
+    const storefront = registry.sealedStorefrontDigests(code.toString("utf8"));
+    for (const [path, digest] of Object.entries(storefront)) {
+      const file = join(dist, "storefront", path);
+      if (!existsSync(file) || sha256Of(readFileSync(file)) !== digest) throw new Error(`${dist}: storefront/${path} is missing or does not match the bundle. Pack it again.`);
+    }
     const entry = { id: manifest.id, version: manifest.version, manifest, sha256, size: code.length, path: `${manifest.id}/${manifest.version}`, signature };
     const base = join(out, entry.path);
     rmSync(base, { recursive: true, force: true });
@@ -334,6 +340,11 @@ export async function buildRegistry(distDirs, { out, name = null }) {
       const target = join(base, "assets", relative(join(dist, "assets"), file));
       mkdirSync(dirname(target), { recursive: true });
       writeFileSync(target, readFileSync(file));
+    }
+    for (const path of Object.keys(storefront)) {
+      const target = join(base, "storefront", path);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, readFileSync(join(dist, "storefront", path)));
     }
     index = {
       version: 1,
@@ -447,6 +458,15 @@ export async function installFromRegistry({ id, indexUrl, version = null, plugin
     assets.push({ path, bytes });
   }
 
+  // Storefront files: compiled by the developer, installed as they are (`storefront/`), checked against the sealed digests.
+  const storefront = [];
+  for (const [path, digest] of Object.entries(registry.sealedStorefrontDigests(code.toString("utf8")))) {
+    const limits = registry.STOREFRONT_COMPONENT_LIMITS;
+    const bytes = await download(releaseUrl(`storefront/${path}`), Math.max(limits.moduleBytes, limits.publicFileBytes), fetchImpl);
+    if (sha256Of(bytes) !== digest) throw new Error(`storefront/${path} does not match the bundle. Nothing was installed.`);
+    storefront.push({ path, bytes });
+  }
+
   const directory = join(pluginsDir, packageFolderName(entry.id));
   const marker = join(directory, "package.json");
   if (existsSync(directory)) {
@@ -475,6 +495,12 @@ export async function installFromRegistry({ id, indexUrl, version = null, plugin
     if (relative(directory, target).startsWith("..")) throw new Error(`Unsafe asset path ${asset.path}.`);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, asset.bytes);
+  }
+  for (const file of storefront) {
+    const target = join(directory, "storefront", file.path);
+    if (relative(directory, target).startsWith("..") || !registry.STOREFRONT_FILE_PATH.test(file.path)) throw new Error(`Unsafe storefront path ${file.path}.`);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, file.bytes);
   }
   return { directory, id: entry.id, version: entry.version, sha256, signer: check.key, registryName: index.name };
 }

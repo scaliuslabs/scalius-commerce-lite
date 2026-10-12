@@ -1,0 +1,26 @@
+---
+// One app component's markup (docs/STOREFRONT-COMPONENTS.md): a section, or
+// the header, footer or card slot an app fills. The HTML was drawn by the
+// app's storefront module and checked by the host (lib/extensions/host.ts).
+// The wrapper names the app and its file base for the client runtime and
+// adds no box (`display: contents`), so grids and sticky headers lay out
+// as the app wrote them.
+interface Props {
+  html: string;
+  pluginId: string;
+  /** `/_x/<plugin id>/<release>/`. */
+  base: string;
+  /** The theme editor's mark (preview only). */
+  editorMark?: string | undefined;
+}
+
+const { html, pluginId, base, editorMark } = Astro.props;
+---
+
+<div class="contents" data-sx-app={pluginId} data-sx-base={base} data-theme-section-id={editorMark} set:html={html} />
+
+<script>
+  import { installAppComponents } from "@/scripts/app-components";
+
+  installAppComponents();
+</script>

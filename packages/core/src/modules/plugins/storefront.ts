@@ -9,6 +9,7 @@ import type { Database } from "@scalius/database/client";
 import { pluginInstallations, type PluginInstallationRow } from "@scalius/database/schema";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { deps } from "../../cache-deps";
+import { pluginHasStorefrontModule, type StorefrontExtension } from "@scalius/shared/plugins";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
 
 /**
@@ -71,4 +72,35 @@ export function activePluginStorefrontScripts(installations: Iterable<PluginInst
     }
   }
   return scripts.sort((left, right) => left.pluginId.localeCompare(right.pluginId));
+}
+
+/**
+ * Active apps with storefront components, as the layout payload lists them
+ * (`appExtensions`, `StorefrontExtension`): their release, the component
+ * sections and slots their storefront module draws (with the settings
+ * schemas the storefront resolves), islands, stylesheet and browser hosts.
+ * An app whose approved grant does not cover storefront code (approved
+ * before it asked) is left out until a Super Admin approves the update.
+ */
+export function activePluginStorefrontExtensions(installations: Iterable<PluginInstallation>): StorefrontExtension[] {
+  const extensions: StorefrontExtension[] = [];
+  for (const installation of installations) {
+    const storefront = installation.manifest.storefront;
+    const ships = pluginHasStorefrontModule(storefront) || storefront.islands.length > 0 || storefront.stylesheet;
+    if (!ships || installation.grant?.storefrontCode !== true) continue;
+    const granted = new Set(installation.grant.storefrontConnect ?? []);
+    extensions.push({
+      pluginId: installation.pluginId,
+      version: installation.version,
+      source: installation.source,
+      release: installation.bundleSha256,
+      sections: storefront.sections.filter((section) => section.route === undefined).map((section) => section.type),
+      sectionSettings: Object.fromEntries(storefront.sections.filter((section) => section.route === undefined).map((section) => [section.type, section.settings])),
+      slots: storefront.slots.map((slot) => ({ id: slot.id, slot: slot.slot, settings: slot.settings })),
+      islands: storefront.islands.map((island) => island.name),
+      stylesheet: storefront.stylesheet,
+      connect: storefront.connect.filter((host) => granted.has(host)),
+    });
+  }
+  return extensions.sort((left, right) => left.pluginId.localeCompare(right.pluginId));
 }

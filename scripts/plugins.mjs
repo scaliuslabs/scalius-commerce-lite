@@ -41,6 +41,7 @@ import {
   renderSandboxRuntimeGen,
   root,
   writeIfChanged,
+  writeStorefrontGenerated,
 } from "./plugin-build.mjs";
 import {
   buildRegistry,
@@ -101,6 +102,7 @@ async function regenerate(lockfile) {
   const packed = await packForGenerated(lockfile);
   const assets = writeIfChanged(ASSETS_GEN, renderAssetsGen([...packed.bundled, ...packed.catalog]));
   const catalog = writeIfChanged(CATALOG_GEN, renderCatalogGen(packed.catalog));
+  for (const path of writeStorefrontGenerated(lockfile, packed.bundled)) console.log(`Updated ${relative(root, path)}`);
   if (bundled) console.log(`Updated ${relative(root, BUNDLED_GEN)}`);
   if (runtime) console.log(`Updated ${relative(root, SANDBOX_RUNTIME_GEN)}`);
   if (assets) console.log(`Updated ${relative(root, ASSETS_GEN)}`);

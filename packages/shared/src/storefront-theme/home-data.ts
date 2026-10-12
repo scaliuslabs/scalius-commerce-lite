@@ -81,6 +81,14 @@ export function storefrontProductSourceKey(source: StorefrontProductSource): str
   return source.kind;
 }
 
+/** The source a `storefrontProductSourceKey` names (an app's `products` setting value); null for anything else. */
+export function parseStorefrontProductSourceKey(key: string): StorefrontProductSource | null {
+  if (key === "newest" || key === "on-sale" || key === "popular") return { kind: key };
+  const match = /^(collection|category):([A-Za-z0-9_-]{1,64})$/.exec(key);
+  if (!match) return null;
+  return match[1] === "collection" ? { kind: "collection", collectionId: match[2]! } : { kind: "category", categoryId: match[2]! };
+}
+
 /** The product lists a section shows (a tabbed block has one per tab), with how many products each needs. */
 export function homeSectionProductLists(section: StorefrontSection): Array<{ source: StorefrontProductSource; limit: number }> {
   switch (section.type) {

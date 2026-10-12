@@ -23,6 +23,7 @@ import {
   type StorefrontBlockSlot,
   type StorefrontThemeBlocks,
 } from "./blocks";
+import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBrandSchema } from "./brand";
 import { storefrontSectionListSchema } from "./sections";
 import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefrontPageTemplateSchemaOf, storefrontPageTemplatesSchemaOf } from "./pages";
@@ -129,6 +130,11 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
     /** The logo, its width, the footer logo and the tab icon (media ids). */
     brand: storefrontThemeBrandSchema,
     blocks: storefrontThemeBlocksSchema,
+    /**
+     * Slots installed apps fill (header, footer, product card) and the app
+     * template the look came from. Absent: every slot is the core block's.
+     */
+    apps: storefrontThemeAppsSchema.optional(),
     /**
      * Section pages: the homepage and landing pages (`/pages/<slug>`), and the
      * sections around the product, listing, cart and CMS pages' fixed parts.

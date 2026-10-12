@@ -29,6 +29,7 @@ import {
   priceCardRowsInResults,
 } from "../catalog";
 import { planHomeMedia, planHomePromotions, planPublishedThemeBrandMedia } from "./homepage-sections";
+import type { HomepageAppComponent } from "./app-components";
 import { marketPriceContextOf, marketShopAmounts, type MarketPricing } from "../price-lists";
 import { normalizeCollectionConfig, publicCollectionConfig } from "../collections";
 import {
@@ -71,6 +72,7 @@ import {
 import { publicCategoryConditions } from "../categories";
 import {
   activePluginInstallationsFromRows,
+  activePluginStorefrontExtensions,
   activePluginStorefrontScripts,
   selectActivePluginInstallations,
 } from "../plugins";
@@ -200,11 +202,16 @@ function planHomeProduct(db: Database, productId: string | null, translation: Tr
  * `requests` (a preview's draft, `homeSectionRequests(draft.pages.home,
  * draft.pages.homeMode)`) replaces the published theme's.
  */
-/** One app section drawn by its app (apps/api plugins/storefront-render.ts). */
+/**
+ * One app section: drawn by its app's public route (apps/api
+ * plugins/storefront-render.ts: sanitized `html`), or a component section
+ * the storefront draws at the edge from `component` (app-components.ts).
+ */
 export interface HomepageAppSection {
   sectionId: string;
   html: string;
   head: { meta: Array<{ attribute: "name" | "property"; key: string; content: string }>; jsonLd: string[] };
+  component?: HomepageAppComponent;
 }
 
 export async function getHomepageData(
@@ -227,7 +234,7 @@ export async function getHomepageData(
      * second batch, so a homepage with app sections adds no wave before its
      * apps' own reads. Without it, app sections draw nothing.
      */
-    renderApps?: (requests: HomeAppSectionRequest[]) => Promise<HomepageAppSection[]>;
+    renderApps?: (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null }) => Promise<HomepageAppSection[]>;
     /** A presence page's market pricing (MARKETS-DESIGN D5); null at the root. */
     pricing?: MarketPricing | null;
   } = {},
@@ -297,7 +304,7 @@ export async function getHomepageData(
   // The apps draw their sections while batch 2 reads the platform sections' data.
   let previewAppFailed = false;
   const appSections: Promise<HomepageAppSection[]> = (requests.apps ?? []).length > 0 && options.renderApps
-    ? options.renderApps(requests.apps ?? []).catch((error: unknown) => {
+    ? options.renderApps(requests.apps ?? [], { pricing: options.pricing ?? null }).catch((error: unknown) => {
       // A preview must retain its previous DOM and report failure, not erase
       // an app section because a required dependency temporarily failed.
       if (options.requests) { previewAppFailed = true; return []; }
@@ -757,6 +764,8 @@ export async function getLayoutData(
     policies: publicPolicies,
     // Active apps' approved scripts: the storefront loads them on their pages and adds their hosts to the CSP.
     appScripts: activePluginStorefrontScripts(activeApps.values()),
+    // Apps with storefront components (sections, slots, islands, stylesheet).
+    appExtensions: activePluginStorefrontExtensions(activeApps.values()),
     // The page groups where an active app draws a checkout or account block:
     // only those pages read their blocks part (none: no read at all).
     appBlockPages: activePluginBlockPages(activeApps.values()),
