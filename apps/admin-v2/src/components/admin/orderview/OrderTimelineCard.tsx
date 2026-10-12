@@ -1,6 +1,7 @@
 import { InlineError } from "~/components/admin/states/InlineError";
-import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Loader2 } from "lucide-react";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import {
@@ -22,7 +23,8 @@ import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useAddOrderComment, useDeleteOrderComment } from "~/lib/api-mutations/orders";
-import { orderTimelineQueryOptions } from "~/lib/api-query-options/orders";
+import { orderTimelineWindowOptions } from "~/lib/api-query-options/orders";
+import { readAdminApiErrorCode } from "~/lib/admin-api-error";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
 import { describeTimelineEvent } from "~/lib/order-timeline-display";
@@ -32,8 +34,14 @@ import { matchesShortcut } from "../layout/shortcuts";
 
 const COMMENT_MAX_LENGTH = 2000;
 
-/** Shopify's order timeline: a staff comment box, then what happened, newest first. */
+/** Key request/focus state to the order, including an A → B → A revisit. */
 export function OrderTimelineCard({ order }: { order: Order }) {
+  return <OrderTimeline key={order.id} order={order} />;
+}
+
+type HistoryAction = "append" | "older" | "newer" | "newest";
+
+function OrderTimeline({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
   const r = useMessages(resourceMessages);
@@ -44,13 +52,74 @@ export function OrderTimelineCard({ order }: { order: Order }) {
   // One key per draft: a double Post adds the comment once; a new draft gets a new key.
   const requestKey = useRef<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-  // The page's loader read this with the order; revisits within the window reuse it.
-  const query = useQuery({ ...orderTimelineQueryOptions(order.id), enabled: hydrated, staleTime: ORDER_DETAIL_PREFETCH_STALE_MS });
+  const client = useQueryClient();
+  const [windows, setWindows] = useState<Array<string | null>>([null]);
+  const [busy, setBusy] = useState<HistoryAction | null>(null);
+  const [historyError, setHistoryError] = useState<{ error: unknown; action: HistoryAction; windows?: Array<string | null> } | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const [focusRow, setFocusRow] = useState<string | null>(null);
+  const history = useRef<HTMLDivElement>(null);
+  const request = useRef(0);
+  const running = useRef(false);
+  useEffect(() => () => { request.current += 1; }, []);
+  // Prefetch warms the first page in the same infinite-query cache shape.
+  const query = useInfiniteQuery({ ...orderTimelineWindowOptions(order.id, windows.at(-1)), enabled: hydrated, staleTime: ORDER_DETAIL_PREFETCH_STALE_MS });
+  useLayoutEffect(() => {
+    if (!focusRow) return;
+    const row = Array.from(history.current?.querySelectorAll<HTMLElement>("[data-timeline-event]") ?? [])
+      .find((element) => element.dataset.timelineEvent === focusRow);
+    row?.focus();
+    setFocusRow(null);
+  }, [focusRow]);
   const mutation = useAddOrderComment();
   const deleteMutation = useDeleteOrderComment();
   const saved = resolveSavedOrderMoneySummary(order);
   const money = (amount: number) => (saved ? formatSavedMajorAmount(amount, saved) : fmt(amount));
-  const events = query.data?.events ?? [];
+  const events = query.data?.pages.flatMap((page) => page.events) ?? [];
+  const nextCursor = query.data?.pages.at(-1)?.nextCursor;
+  const canAppend = (query.data?.pages.length ?? 0) < 2;
+
+  async function loadHistory(action: HistoryAction, button: HTMLButtonElement, targetWindows?: Array<string | null>) {
+    if (running.current) return;
+    running.current = true;
+    const token = ++request.current;
+    setBusy(action);
+    setHistoryError(null);
+    try {
+      const oldPageCount = query.data?.pages.length ?? 0;
+      const result = action === "append"
+        ? await query.fetchNextPage({ cancelRefetch: false })
+        : await client.fetchInfiniteQuery({ ...orderTimelineWindowOptions(order.id, targetWindows?.at(-1)), staleTime: 0 });
+      if (token !== request.current) return;
+      const data = "pages" in result ? result : result.data;
+      if (!("pages" in result) && result.isError) throw result.error;
+      if (!data) return;
+      // Keep the current window on screen until the replacement succeeded.
+      // A failed request never strands the reader on an empty older page.
+      const retainFocus = document.activeElement === button;
+      if (targetWindows) setWindows(targetWindows);
+      const firstAdded = data.pages[action === "append" ? oldPageCount : 0]?.events[0];
+      if (retainFocus && firstAdded) setFocusRow(firstAdded.id);
+      setAnnouncement(t("timeline.loaded", { count: data.pages.reduce((count, page) => count + page.events.filter((event) => event.kind !== "placed").length, 0) }));
+    } catch (error) {
+      if (token === request.current) setHistoryError({ error, action, windows: targetWindows });
+    } finally {
+      if (token === request.current) {
+        running.current = false;
+        setBusy(null);
+      }
+    }
+  }
+
+  const historyButton = (action: HistoryAction, label: string, targetWindows?: Array<string | null>) => (
+    <Button type="button" variant="outline" size="sm" aria-label={label}
+      aria-busy={busy === action || undefined} aria-disabled={busy === action || undefined}
+      disabled={busy !== null && busy !== action}
+      onClick={(event) => void loadHistory(action, event.currentTarget, targetWindows)}>
+      <span className={busy === action ? "invisible contents" : undefined}>{label}</span>
+      {busy === action ? <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true"><Loader2 className="h-4 w-4 animate-spin" /></span> : null}
+    </Button>
+  );
 
   const post = () => {
     const body = comment.trim();
@@ -60,6 +129,11 @@ export function OrderTimelineCard({ order }: { order: Order }) {
       onSuccess: () => {
         setComment("");
         requestKey.current = null;
+        request.current += 1;
+        running.current = false;
+        setBusy(null);
+        setHistoryError(null);
+        setWindows([null]);
       },
     });
   };
@@ -105,11 +179,11 @@ export function OrderTimelineCard({ order }: { order: Order }) {
             </div>
           </form>
         ) : null}
-        {!hydrated || query.isLoading ? (
+        <div ref={history} role="region" aria-label={t("timeline.title")} aria-busy={busy !== null} className="space-y-4">
+        <p role="status" aria-live="polite" className="sr-only">{announcement}</p>
+        {!hydrated || (query.isLoading && events.length === 0) ? (
           <p className="text-muted-foreground">{t("read.loading")}</p>
-        ) : query.isError ? (
-          <InlineError title={t("timeline.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
-        ) : events.length === 0 ? (
+        ) : events.length === 0 && !query.isError ? (
           <p className="text-muted-foreground">{t("timeline.empty")}</p>
         ) : (
           <ol className="space-y-3 border-s ps-4">
@@ -117,9 +191,9 @@ export function OrderTimelineCard({ order }: { order: Order }) {
               const line = describeTimelineEvent(event, t, o, money);
               const comment = event.kind === "comment";
               return (
-                <li key={event.id} className="space-y-0.5">
-                  <p className={comment ? "whitespace-pre-wrap break-words" : undefined}>{line.text}</p>
-                  {line.detail ? <p className="whitespace-pre-wrap break-words text-muted-foreground">{line.detail}</p> : null}
+                <li key={event.id} data-timeline-event={event.id} tabIndex={-1} className="space-y-0.5 wrap-anywhere rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <p className={comment ? "whitespace-pre-wrap" : undefined}>{line.text}</p>
+                  {line.detail ? <p className="whitespace-pre-wrap text-muted-foreground">{line.detail}</p> : null}
                   <div className="flex flex-wrap items-center gap-x-2">
                     <p className="text-muted-foreground">
                       {/* "Order created by Rina" already names who. */}
@@ -136,6 +210,19 @@ export function OrderTimelineCard({ order }: { order: Order }) {
             })}
           </ol>
         )}
+        {query.isError && !historyError && !busy ? (
+          <InlineError title={t("timeline.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />
+        ) : null}
+        {historyError ? <InlineError title={t("timeline.olderFailed")} error={historyError.error} /> : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {windows.length > 1 ? historyButton("newer", historyError?.action === "newer" ? r("retry") : t("timeline.newer"),
+            historyError?.action === "newer" ? historyError.windows : windows.slice(0, -1)) : null}
+          {windows.length > 2 || historyError?.action === "newest" || busy === "newest" || readAdminApiErrorCode(historyError?.error ?? query.error) === "INVALID_CURSOR"
+            ? historyButton("newest", historyError?.action === "newest" ? r("retry") : t("timeline.newest"), [null]) : null}
+          {historyError?.action === "append" || historyError?.action === "older" ? historyButton(historyError.action, r("retry"), historyError.windows)
+            : nextCursor ? historyButton(canAppend ? "append" : "older", t(canAppend ? "timeline.loadOlder" : "timeline.older"), canAppend ? undefined : [...windows, nextCursor]) : null}
+        </div>
+        </div>
       </CardContent>
       <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && !deleteMutation.isPending && setDeleting(null)}>
         <AlertDialogContent>

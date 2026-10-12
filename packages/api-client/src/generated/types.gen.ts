@@ -46092,11 +46092,17 @@ export type GetApiV1AdminOrdersByIdTimelineData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        cursor?: string;
+    };
     url: '/api/v1/admin/orders/{id}/timeline';
 };
 
 export type GetApiV1AdminOrdersByIdTimelineErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
     /**
      * Not found
      */
@@ -46126,6 +46132,8 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
                 own: boolean;
                 createdAt: string | number;
             }>;
+            nextCursor: string | null;
+            hasMore: boolean;
         };
     };
 };

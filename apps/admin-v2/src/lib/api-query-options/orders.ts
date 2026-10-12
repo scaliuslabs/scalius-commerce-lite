@@ -123,9 +123,16 @@ export const orderShipmentsQueryOptions = (orderId: string) =>
   });
 
 /** Staff comments and what happened to the order, newest first. */
-export const orderTimelineQueryOptions = (orderId: string) =>
-  queryOptions({
-    queryKey: ["orders", "timeline", orderId] as const,
-    queryFn: () => apiData(getApiV1AdminOrdersByIdTimeline({ path: { id: orderId } })),
+export const orderTimelineWindowOptions = (orderId: string, cursor: string | null = null) =>
+  infiniteQueryOptions({
+    queryKey: ["orders", "timeline", orderId, "window", cursor] as const,
+    initialPageParam: cursor,
+    queryFn: ({ pageParam, signal }) => apiData(getApiV1AdminOrdersByIdTimeline({
+      path: { id: orderId }, query: { cursor: pageParam ?? undefined }, signal,
+    })),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    // The UI appends once, then moves to another explicit window. Never evict
+    // rows above the reader implicitly when they ask to see older events.
+    maxPages: 2,
     staleTime: 0,
   });

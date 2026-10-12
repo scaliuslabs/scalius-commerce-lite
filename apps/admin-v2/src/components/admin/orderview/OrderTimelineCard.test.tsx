@@ -15,7 +15,10 @@ const mocks = vi.hoisted(() => ({ post: vi.fn(), remove: vi.fn(), pending: false
 vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ symbol: "৳", fmt: (value: number) => `৳${value}` }) }));
 vi.mock("~/hooks/use-order-action-permissions", () => ({ useOrderActionPermissions: () => ({ canEditOrders: true }) }));
 vi.mock("~/lib/api-query-options/orders", () => ({
-  orderTimelineQueryOptions: (id: string) => ({ queryKey: ["timeline", id], queryFn: () => new Promise(() => undefined) }),
+  orderTimelineWindowOptions: (id: string, cursor: string | null = null) => ({
+    queryKey: ["timeline", id, "window", cursor], initialPageParam: cursor,
+    queryFn: () => new Promise(() => undefined), getNextPageParam: () => undefined,
+  }),
 }));
 vi.mock("~/lib/api-mutations/orders", () => ({
   orderErrorMessage: (error: Error) => error.message,
@@ -56,7 +59,7 @@ describe("OrderTimelineCard", () => {
   });
 
   async function render(events: ReturnType<typeof event>[] = []) {
-    client.setQueryData(["timeline", order.id], { events });
+    client.setQueryData(["timeline", order.id, "window", null], { pages: [{ events, nextCursor: null, hasMore: false }], pageParams: [null] });
     await act(async () => root.render(
       <QueryClientProvider client={client}>
         <OrderTimelineCard order={order} />

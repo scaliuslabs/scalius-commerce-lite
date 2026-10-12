@@ -25,8 +25,8 @@ const queryOptionMocks = vi.hoisted(() => ({
     queryKey: ["orders", "notifications", id],
     queryFn: vi.fn(),
   })),
-  orderTimelineQueryOptions: vi.fn((id: string) => ({
-    queryKey: ["orders", "timeline", id],
+  orderTimelineWindowOptions: vi.fn((id: string) => ({
+    queryKey: ["orders", "timeline", id, "window", null],
     queryFn: vi.fn(),
   })),
   deliveryProvidersQueryOptions: vi.fn(() => ({
@@ -43,7 +43,7 @@ vi.mock("../../../lib/api-query-options/orders", () => ({
   orderCodQueryOptions: queryOptionMocks.orderCodQueryOptions,
   orderNotificationsQueryOptions: queryOptionMocks.orderNotificationsQueryOptions,
   orderReturnsQueryOptions: queryOptionMocks.orderReturnsQueryOptions,
-  orderTimelineQueryOptions: queryOptionMocks.orderTimelineQueryOptions,
+  orderTimelineWindowOptions: queryOptionMocks.orderTimelineWindowOptions,
   orderPaymentsQueryOptions: queryOptionMocks.orderPaymentsQueryOptions,
   orderQueryOptions: queryOptionMocks.orderQueryOptions,
   orderShipmentsQueryOptions: queryOptionMocks.orderShipmentsQueryOptions,
@@ -100,8 +100,10 @@ function createQueryClient(
     }
   });
 
+  const prefetchInfiniteQuery = vi.fn(async () => {});
   return {
-    queryClient: { ensureQueryData, prefetchQuery } as unknown as PrefetchClient,
+    prefetchInfiniteQuery,
+    queryClient: { ensureQueryData, prefetchQuery, prefetchInfiniteQuery } as unknown as PrefetchClient,
     ensureQueryData,
     prefetchQuery,
   };
@@ -113,7 +115,7 @@ describe("order detail prefetch", () => {
   });
 
   it("requires order detail and warms every card read, plus COD tracking for COD orders", async () => {
-    const { queryClient, ensureQueryData, prefetchQuery } = createQueryClient("cod");
+    const { queryClient, ensureQueryData, prefetchQuery, prefetchInfiniteQuery } = createQueryClient("cod");
 
     await prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: true });
 
@@ -126,12 +128,12 @@ describe("order detail prefetch", () => {
         ["orders", "payments", "ord_1"],
         ["orders", "returns", "ord_1"],
         ["orders", "notifications", "ord_1"],
-        ["orders", "timeline", "ord_1"],
         ["orders", "cod", "ord_1"],
         ["settings", "currency"],
         ["settings", "delivery-providers"],
       ]),
     );
+    expect(prefetchInfiniteQuery).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["orders", "timeline", "ord_1", "window", null] }));
   });
 
   it("skips the courier list for staff who can't book couriers", async () => {
@@ -181,7 +183,7 @@ describe("order detail prefetch", () => {
 
   it("starts the card reads in the same round trip as the order, not after it", async () => {
     let resolveOrder: (value: { id: string; paymentMethod: string | null }) => void = () => {};
-    const { queryClient, ensureQueryData, prefetchQuery } = createQueryClient("stripe");
+    const { queryClient, ensureQueryData, prefetchQuery, prefetchInfiniteQuery } = createQueryClient("stripe");
     ensureQueryData.mockImplementationOnce(() => new Promise<{ id: string; paymentMethod: string | null }>((resolve) => { resolveOrder = resolve; }));
 
     const pending = prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: false });
@@ -191,9 +193,9 @@ describe("order detail prefetch", () => {
         ["orders", "payments", "ord_1"],
         ["orders", "returns", "ord_1"],
         ["orders", "notifications", "ord_1"],
-        ["orders", "timeline", "ord_1"],
       ]),
     );
+    expect(prefetchInfiniteQuery).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["orders", "timeline", "ord_1", "window", null] }));
     resolveOrder({ id: "ord_1", paymentMethod: "stripe" });
     await expect(pending).resolves.toMatchObject({ id: "ord_1" });
   });

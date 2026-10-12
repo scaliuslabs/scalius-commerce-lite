@@ -8,10 +8,10 @@ import {
   orderQueryOptions,
   orderReturnsQueryOptions,
   orderShipmentsQueryOptions,
-  orderTimelineQueryOptions,
+  orderTimelineWindowOptions,
 } from "./api-query-options/orders";
 
-type OrderDetailQueryClient = Pick<QueryClient, "ensureQueryData" | "prefetchQuery">;
+type OrderDetailQueryClient = Pick<QueryClient, "ensureQueryData" | "prefetchQuery" | "prefetchInfiniteQuery">;
 
 export const ORDER_DETAIL_PREFETCH_STALE_MS = 30_000;
 
@@ -42,7 +42,7 @@ export async function prefetchOrderDetailQueries(
   warm(queryClient.prefetchQuery({ ...orderPaymentsQueryOptions(orderId), staleTime: Infinity }));
   warm(queryClient.prefetchQuery({ ...orderReturnsQueryOptions(orderId), staleTime: ORDER_DETAIL_PREFETCH_STALE_MS }));
   warm(queryClient.prefetchQuery({ ...orderNotificationsQueryOptions(orderId), staleTime: ORDER_DETAIL_PREFETCH_STALE_MS }));
-  warm(queryClient.prefetchQuery({ ...orderTimelineQueryOptions(orderId), staleTime: ORDER_DETAIL_PREFETCH_STALE_MS }));
+  warm(queryClient.prefetchInfiniteQuery({ ...orderTimelineWindowOptions(orderId), staleTime: ORDER_DETAIL_PREFETCH_STALE_MS }));
   warm(queryClient.prefetchQuery(currencySettingsQueryOptions()));
   if (options.couriers) warm(queryClient.prefetchQuery(deliveryProvidersQueryOptions()));
 

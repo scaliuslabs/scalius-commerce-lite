@@ -157263,7 +157263,7 @@
         "tags": [
           "Admin - Orders"
         ],
-        "summary": "Order timeline: staff comments and what happened, newest first",
+        "summary": "Order timeline: 50 events per page, newest first; placed marker only at the end",
         "parameters": [
           {
             "schema": {
@@ -157272,6 +157272,15 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
           }
         ],
         "responses": {
@@ -157363,10 +157372,19 @@
                               "createdAt"
                             ]
                           }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "hasMore": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
-                        "events"
+                        "events",
+                        "nextCursor",
+                        "hasMore"
                       ]
                     }
                   },
@@ -157374,6 +157392,16 @@
                     "success",
                     "data"
                   ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }

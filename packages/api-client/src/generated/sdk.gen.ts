@@ -5234,7 +5234,7 @@ export const postApiV1AdminOrdersBulkFulfill = <ThrowOnError extends boolean = f
 });
 
 /**
- * Order timeline: staff comments and what happened, newest first
+ * Order timeline: 50 events per page, newest first; placed marker only at the end
  */
 export const getApiV1AdminOrdersByIdTimeline = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdTimelineData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdTimelineResponses, GetApiV1AdminOrdersByIdTimelineErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdTimelineResponses, GetApiV1AdminOrdersByIdTimelineErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/timeline', ...options });
 

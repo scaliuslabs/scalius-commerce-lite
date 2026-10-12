@@ -4,6 +4,8 @@ import type { Database } from "@scalius/database/client";
 import { adminOrderCreateAttempts, orderEvents, orders, user } from "@scalius/database/schema";
 import { ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "@scalius/shared/hash";
+import { encodeListCursor } from "@scalius/shared/pagination";
+import { invalidCursor, keysetCondition, readListCursor } from "@scalius/core/utils/keyset";
 import { ORDER_APP_FACT_KINDS } from "../order-kernel";
 
 /** What happened to an order. The dashboard words each kind; `data` carries the facts. */
@@ -178,8 +180,10 @@ export async function addOrderComment(
         actorId: knownStaffId(actorId),
         createdAt: sql`unixepoch()`,
     }).onConflictDoNothing({ target: orderEvents.id });
-    const events = await listOrderTimeline(db, orderId, actorId);
-    return events.find((event) => event.id === id)!;
+    // A retry can refer to a comment older than the first timeline page.
+    const [event] = await readTimelineEvents(db, and(eq(orderEvents.orderId, orderId), eq(orderEvents.id, id))!, actorId, 1);
+    if (!event) throw new NotFoundError("Comment not found");
+    return event;
 }
 
 /** The most fields one app timeline entry carries. */
@@ -262,18 +266,16 @@ export async function deleteOrderComment(
     await db.delete(orderEvents).where(and(eq(orderEvents.id, eventId), eq(orderEvents.orderId, orderId)));
 }
 
-/** Newest first, ending with the order being placed. `viewerId` marks the viewer's own comments. */
-export async function listOrderTimeline(
-    db: Database,
-    orderId: string,
-    viewerId?: string | null,
-): Promise<OrderTimelineEvent[]> {
-    // A manual order was created by a staff member: the timeline names them.
-    const order = await db.select({ createdAt: orders.createdAt, creatorName: user.name }).from(orders)
-        .leftJoin(adminOrderCreateAttempts, eq(adminOrderCreateAttempts.orderId, orders.id))
-        .leftJoin(user, eq(user.id, adminOrderCreateAttempts.actorId))
-        .where(eq(orders.id, orderId)).get();
-    if (!order) throw new NotFoundError("Order not found");
+export const ORDER_TIMELINE_PAGE_SIZE = 50;
+
+export interface OrderTimelinePage {
+    events: OrderTimelineEvent[];
+    nextCursor: string | null;
+    hasMore: boolean;
+}
+
+/** The same projection for a page, legacy readers and an idempotent comment response. */
+async function readTimelineEvents(db: Database, condition: SQL, viewerId: string | null | undefined, limit: number): Promise<OrderTimelineEvent[]> {
     const rows = await db.select({
         id: orderEvents.id,
         kind: orderEvents.kind,
@@ -285,28 +287,56 @@ export async function listOrderTimeline(
     }).from(orderEvents)
         .leftJoin(user, eq(user.id, orderEvents.actorId))
         // App facts (discounts, risk checks) show in the summary and customer card, not here.
-        .where(and(eq(orderEvents.orderId, orderId), notInArray(orderEvents.kind, [...ORDER_APP_FACT_KINDS])))
+        .where(and(condition, notInArray(orderEvents.kind, [...ORDER_APP_FACT_KINDS])))
         .orderBy(desc(orderEvents.createdAt), desc(orderEvents.id))
-        .limit(200)
+        .limit(limit)
         .all();
-    return [
-        ...rows.map((row) => ({
-            id: row.id,
-            kind: row.kind as OrderEventKind,
-            body: row.body,
-            data: parseData(row.data),
-            actorName: row.actorName,
-            own: row.kind === "comment" && Boolean(viewerId) && row.actorId === viewerId,
-            createdAt: new Date(Number(row.createdAt) * 1000),
-        })),
-        {
-            id: `placed_${orderId}`,
-            kind: "placed" as const,
-            body: null,
-            data: null,
-            actorName: order.creatorName ?? null,
-            own: false,
-            createdAt: order.createdAt,
-        },
-    ];
+    return rows.map((row) => ({
+        id: row.id,
+        kind: row.kind as OrderEventKind,
+        body: row.body,
+        data: parseData(row.data),
+        actorName: row.actorName,
+        own: row.kind === "comment" && Boolean(viewerId) && row.actorId === viewerId,
+        createdAt: new Date(Number(row.createdAt) * 1000),
+    }));
+}
+
+async function readTimelinePage(db: Database, orderId: string, viewerId: string | null | undefined, cursor: string | undefined, limit: number): Promise<OrderTimelinePage> {
+    const conditions: SQL[] = [eq(orderEvents.orderId, orderId)];
+    if (cursor !== undefined) {
+        const position = readListCursor(cursor, { sort: "orderTimeline", direction: "desc", kinds: ["number", "text"] });
+        const [createdAt, scope] = position.values;
+        if (typeof createdAt !== "number" || !Number.isSafeInteger(createdAt) || createdAt < 0 || scope !== orderId) {
+            throw invalidCursor("This timeline cursor does not belong to this order.");
+        }
+        conditions.push(keysetCondition({ column: orderEvents.createdAt, id: orderEvents.id, direction: "desc" }, position));
+    }
+    // A manual order was created by a staff member: the final line names them.
+    const order = await db.select({ createdAt: orders.createdAt, creatorName: user.name }).from(orders)
+        .leftJoin(adminOrderCreateAttempts, eq(adminOrderCreateAttempts.orderId, orders.id))
+        .leftJoin(user, eq(user.id, adminOrderCreateAttempts.actorId))
+        .where(eq(orders.id, orderId)).get();
+    if (!order) throw new NotFoundError("Order not found");
+    const rows = await readTimelineEvents(db, and(...conditions)!, viewerId, limit + 1);
+    const events = rows.slice(0, limit);
+    const last = events.at(-1);
+    const nextCursor = rows.length > limit && last ? encodeListCursor({
+        sort: "orderTimeline", direction: "desc", values: [last.createdAt.getTime() / 1000, orderId], id: last.id,
+    }) : null;
+    if (!nextCursor) events.push({
+        id: `placed_${orderId}`, kind: "placed", body: null, data: null,
+        actorName: order.creatorName ?? null, own: false, createdAt: order.createdAt,
+    });
+    return { events, nextCursor, hasMore: nextCursor !== null };
+}
+
+/** Bounded newest-first pages; the placed marker appears only once history is complete. */
+export function listOrderTimelinePage(db: Database, orderId: string, viewerId?: string | null, cursor?: string): Promise<OrderTimelinePage> {
+    return readTimelinePage(db, orderId, viewerId, cursor, ORDER_TIMELINE_PAGE_SIZE);
+}
+
+/** Compatibility for internal array readers. The dashboard uses the cursor page above. */
+export async function listOrderTimeline(db: Database, orderId: string, viewerId?: string | null): Promise<OrderTimelineEvent[]> {
+    return (await readTimelinePage(db, orderId, viewerId, undefined, 200)).events;
 }

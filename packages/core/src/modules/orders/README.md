@@ -207,7 +207,7 @@ Payment events (one `payment.event` message type for every gateway) are handled 
 | POST | `/` | `createOrder()` | Manual order creation with reserve-then-deduct inventory |
 | GET | `/:id` | `getOrderDetails()` | Full order with items, variant info, images |
 | PUT | `/:id/details` | `updateOrderDetails()` | Customer and delivery details before shipment |
-| GET/POST | `/:id/timeline` | `listOrderTimeline()` / `addOrderComment()` | Order timeline and staff comments |
+| GET/POST | `/:id/timeline` | `listOrderTimelinePage()` / `addOrderComment()` | 50 newest-first events per cursor page; `nextCursor` continues history and “Order placed” appears only at its end. Comment retries return the exact original event. |
 | POST | `/bulk-confirm` | `bulkConfirmOrders()` | Confirm several new orders |
 | POST | `/bulk-fulfill` | `bulkFulfillOrders()` | Own-courier "Mark as sent" for several confirmed orders |
 | POST | `/:id/restore` | `restoreOrder()` | Restore archived order visibility with version CAS |

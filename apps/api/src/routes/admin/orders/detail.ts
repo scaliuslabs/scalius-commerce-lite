@@ -8,7 +8,7 @@ import {
     deleteOrderComment,
     getOrderDetails,
     getOrderEditReadiness,
-    listOrderTimeline,
+    listOrderTimelinePage,
     orderBillingAddressSelection,
     orderShippingAddressSelection,
     previewOrderPaymentRecoveryLink,
@@ -344,21 +344,25 @@ const getTimelineRoute = createRoute({
     method: "get",
     path: "/{id}/timeline",
     tags: ["Admin - Orders"],
-    summary: "Order timeline: staff comments and what happened, newest first",
-    request: { params: z.object({ id: z.string() }) },
+    summary: "Order timeline: 50 events per page, newest first; placed marker only at the end",
+    request: {
+        params: z.object({ id: z.string() }),
+        query: z.object({ cursor: z.string().max(1024).optional() }),
+    },
     responses: {
         200: {
             description: "Timeline",
-            content: { "application/json": { schema: successEnvelope(z.object({ events: z.array(timelineEventSchema) })) } },
+            content: { "application/json": { schema: successEnvelope(z.object({ events: z.array(timelineEventSchema), nextCursor: z.string().nullable(), hasMore: z.boolean() })) } },
         },
+        400: errorResponses[400],
         404: errorResponses[404],
     },
 });
 
 app.openapi(getTimelineRoute, (async (c: AdminRouteContext<typeof getTimelineRoute>) => {
     const user = c.get("user") as { id?: string } | undefined;
-    const events = await listOrderTimeline(c.get("db"), c.req.valid("param").id, user?.id ?? null);
-    return ok(c, { events: events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })) });
+    const page = await listOrderTimelinePage(c.get("db"), c.req.valid("param").id, user?.id ?? null, c.req.valid("query").cursor);
+    return ok(c, { ...page, events: page.events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })) });
 }) as unknown as AdminRouteHandler<typeof getTimelineRoute>);
 
 const addCommentRoute = createRoute({
