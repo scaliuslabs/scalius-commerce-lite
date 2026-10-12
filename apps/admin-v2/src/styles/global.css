@@ -850,10 +850,7 @@ body.editor-fullscreen-active [data-slot="dialog-content"] {
 /* A table control needs a hit area even when it contains only one short word.
    Utilities can still clamp names or lay out a phone card as a flex column. */
 @layer components {
-  [data-slot="table"] a[href],
-  [data-slot="index-table"] a[href],
-  [data-slot="table"] button,
-  [data-slot="index-table"] button {
+  :is([data-slot="table"], [data-slot="index-table"]) :is(a[href], button) {
     display: inline-block;
     min-height: 2.75rem;
     min-width: 1.5rem;
