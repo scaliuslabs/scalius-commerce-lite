@@ -4,7 +4,7 @@ import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { Client } from "pg";
 import { describe, expect, it } from "vitest";
 
-import { compileCanonicalPostgresSchema } from "../scripts/postgres-schema";
+import { compileCanonicalPostgresSchema, compileSqliteTriggerForPostgres } from "../scripts/postgres-schema";
 import { safeBatch } from "../src/batch-helper";
 import {
   connectPostgres,
@@ -37,6 +37,30 @@ async function freshDatabaseUrl(): Promise<{ url: string; drop: () => Promise<vo
 }
 
 describe.runIf(serverUrl)("native PostgreSQL adapter conformance", () => {
+  it("executes a generated function and trigger as one rowless transaction result", async () => {
+    const target = await freshDatabaseUrl();
+    try {
+      const connection = connectPostgres(target.url);
+      const trigger = compileSqliteTriggerForPostgres({
+        name: "native_ddl_probe_insert",
+        sql: `CREATE TRIGGER native_ddl_probe_insert AFTER INSERT ON native_ddl_probe
+          BEGIN UPDATE native_ddl_probe SET value=value+1 WHERE id=NEW.id; END`,
+      });
+      const results = await connection.transaction([
+        connection.query("CREATE TABLE native_ddl_probe(id bigint PRIMARY KEY,value bigint NOT NULL DEFAULT 0)", []),
+        connection.query(trigger, []),
+        connection.query("INSERT INTO native_ddl_probe(id) VALUES(1)", []),
+      ], {
+        arrayMode: true, fullResults: true, isolationLevel: "Serializable", readOnly: false,
+      });
+      expect(results).toEqual([
+        { rows: [], fields: [] }, { rows: [], fields: [] }, { rows: [], fields: [] },
+      ]);
+      expect((await connection.query("SELECT value::int FROM native_ddl_probe WHERE id=1", [])).rows)
+        .toEqual([[1]]);
+    } finally { await target.drop(); }
+  });
+
   it("persists, revokes, expires, and rolls back customer sessions", async () => {
     const target = await freshDatabaseUrl();
     const db = createPostgresDatabase(target.url, {

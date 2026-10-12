@@ -49,16 +49,18 @@ export interface PostgresHttpConnection {
   ): Promise<PostgresFullResult[]>;
 }
 
+interface NativePostgresResult {
+  rows: unknown[][];
+  fields: Array<{ name: string; dataTypeID: number }>;
+}
+
 interface NativePostgresClient {
   connect(): Promise<void>;
   query(config: {
     text: string;
     values?: unknown[];
     rowMode: "array";
-  }): Promise<{
-    rows: unknown[][];
-    fields: Array<{ name: string; dataTypeID: number }>;
-  }>;
+  }): Promise<NativePostgresResult | NativePostgresResult[]>;
   end(): Promise<void>;
 }
 
@@ -83,10 +85,15 @@ export function connectNeonPostgres(
   };
 }
 
-function toPostgresFullResult(result: {
-  rows: unknown[][];
-  fields: Array<{ name: string; dataTypeID: number }>;
-}): PostgresFullResult {
+function toPostgresFullResult(result: NativePostgresResult | NativePostgresResult[]): PostgresFullResult {
+  if (Array.isArray(result)) {
+    // A generated migration breakpoint may contain a function and its trigger.
+    // pg returns one result per command; the transport keeps one per breakpoint.
+    if (result.some((command) => command.fields.length > 0 || command.rows.length > 0)) {
+      throw new Error("Multi-command PostgreSQL queries cannot return rows.");
+    }
+    return { rows: [], fields: [] };
+  }
   return {
     rows: result.rows,
     fields: result.fields.map((field) => ({

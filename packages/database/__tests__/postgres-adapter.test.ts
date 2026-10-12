@@ -6,6 +6,7 @@ import {
   connectNativePostgres,
   createPostgresDatabase,
   isPostgresSerializationError,
+  type NativePostgresConnectionOptions,
   type PostgresFullResult,
   type PostgresHttpConnection,
   type PostgresQuery,
@@ -226,10 +227,11 @@ describe("PostgreSQL HTTP adapter", () => {
 });
 
 describe("native PostgreSQL transport", () => {
+  type NativeClient = ReturnType<NonNullable<NativePostgresConnectionOptions["createClient"]>>;
   function nativeClient() {
     return {
       connect: vi.fn(async () => undefined),
-      query: vi.fn(async ({ text }: { text: string }) => ({
+      query: vi.fn<NativeClient["query"]>(async ({ text }) => ({
         rows: text === "SELECT $1" ? [[42]] : [],
         fields: text === "SELECT $1"
           ? [{ name: "answer", dataTypeID: 23 }]
@@ -281,6 +283,46 @@ describe("native PostgreSQL transport", () => {
       "SELECT $1",
       "UPDATE example SET value = $1",
       "COMMIT",
+    ]);
+    expect(client.end).toHaveBeenCalledOnce();
+  });
+
+  it.each(["standalone", "transaction"] as const)("normalizes rowless multi-command DDL as one %s result without splitting its SQL", async (mode) => {
+    const ddl = "CREATE FUNCTION example_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$; "
+      + "CREATE TRIGGER example_trigger AFTER INSERT ON example FOR EACH ROW EXECUTE FUNCTION example_fn();";
+    const ledger = "INSERT INTO migration_ledger(version) VALUES(143)";
+    const client = nativeClient();
+    client.query.mockImplementation(async ({ text }) => text === ddl
+      ? [{ rows: [], fields: [] }, { rows: [], fields: [] }]
+      : { rows: [], fields: [] });
+    const connection = connectNativePostgres("postgresql://localhost/owned_test", { createClient: () => client });
+    if (mode === "standalone") {
+      await expect(connection.query(ddl, [])).resolves.toEqual({ rows: [], fields: [] });
+      expect(client.query.mock.calls.map(([input]) => input.text)).toEqual([ddl]);
+    } else {
+      await expect(connection.transaction([connection.query(ddl, []), connection.query(ledger, [])], {
+        arrayMode: true, fullResults: true, isolationLevel: "Serializable", readOnly: false,
+      })).resolves.toEqual([{ rows: [], fields: [] }, { rows: [], fields: [] }]);
+      expect(client.query.mock.calls.map(([input]) => input.text)).toEqual([
+        "BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE", ddl, ledger, "COMMIT",
+      ]);
+    }
+    expect(client.query).toHaveBeenCalledWith({ text: ddl, values: [], rowMode: "array" });
+    expect(client.end).toHaveBeenCalledOnce();
+  });
+
+  it("rejects row-bearing multi-command results instead of discarding rows, and rolls the batch back", async () => {
+    const client = nativeClient();
+    const text = "UPDATE example SET value=1; SELECT value FROM example";
+    client.query.mockImplementation(async (input) => input.text === text
+      ? [{ rows: [], fields: [] }, { rows: [[1]], fields: [{ name: "value", dataTypeID: 23 }] }]
+      : { rows: [], fields: [] });
+    const connection = connectNativePostgres("postgresql://localhost/owned_test", { createClient: () => client });
+    await expect(connection.transaction([connection.query(text, [])], {
+      arrayMode: true, fullResults: true, isolationLevel: "Serializable", readOnly: false,
+    })).rejects.toThrow("Multi-command PostgreSQL queries cannot return rows.");
+    expect(client.query.mock.calls.map(([input]) => input.text)).toEqual([
+      "BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE", text, "ROLLBACK",
     ]);
     expect(client.end).toHaveBeenCalledOnce();
   });
