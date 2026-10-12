@@ -307,11 +307,20 @@ export function collectFacts() {
     if (!control || !visible(label) || !visible(control)) continue;
     facts.gapPairs.push({ id: describe(control), kind: "label", above: edges(label), below: edges(control) });
   }
+  const groupedHelp = new Set();
   for (const control of document.querySelectorAll("[aria-describedby]")) {
     if (!visible(control) || !control.matches("input,textarea,select,[role=combobox],button")) continue;
     const help = document.getElementById(control.getAttribute("aria-describedby").split(/\s+/)[0]);
     if (!help || !visible(help) || help.closest("[role=tooltip]")) continue;
-    facts.gapPairs.push({ id: describe(control), kind: "help", above: edges(control), below: edges(help) });
+    const fieldControl = control.closest('[data-slot="field-control"]');
+    const field = fieldControl?.parentElement;
+    const ownFieldHelp = field?.matches('[data-slot="field"]') && help.parentElement === field
+      && help.matches('[data-slot="field-help"],[data-slot="field-error"]');
+    // A Field's note describes its whole control group, including list actions.
+    if (ownFieldHelp && groupedHelp.has(help)) continue;
+    if (ownFieldHelp) groupedHelp.add(help);
+    const boundary = ownFieldHelp ? fieldControl : control;
+    facts.gapPairs.push({ id: describe(boundary), kind: "help", above: edges(boundary), below: edges(help) });
   }
 
   // N2: the main scroller does not scroll sideways either.

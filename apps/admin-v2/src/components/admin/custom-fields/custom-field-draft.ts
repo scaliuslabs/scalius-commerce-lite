@@ -14,11 +14,13 @@ import {
   type CustomFieldWireValue,
 } from "@scalius/shared/custom-fields";
 
+import { parseDateOnly } from "~/lib/date-only";
+
 export type CustomFieldDraft = string | string[];
 
 const pad = (value: number) => String(value).padStart(2, "0");
 
-/** A UTC instant as a `datetime-local` value in the browser's time zone. */
+/** A UTC instant as a date/time draft in the browser's time zone. */
 export function localDateTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -69,7 +71,10 @@ function itemValue(type: CustomFieldType, draft: string): ItemResult {
       return { ok: true, value: text === "" ? null : text === "true" };
     case "date_time": {
       if (!text) return { ok: true, value: null };
-      // A datetime-local value has no zone: it is the browser's local time.
+      // The two controls can hold a partial draft; never coerce a date alone to midnight.
+      const parts = /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?$/.exec(text);
+      if (!parts || !parseDateOnly(parts[1])) return { ok: false };
+      // No offset in the draft: retain the browser's existing local-time conversion.
       const date = new Date(text);
       return Number.isNaN(date.getTime()) ? { ok: false } : { ok: true, value: date.toISOString() };
     }

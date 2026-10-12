@@ -126,7 +126,7 @@ function AdminLayout() {
         </a>
         <GlobalSearch nav={nav} canOpen={canOpen} />
         <Suspense fallback={null}>
-          <StoreReachProbe languages={canOpen("/admin/translations")} priceLists={canOpen("/admin/price-lists")} />
+          <StoreReachProbe languages={canOpen("/admin/settings/languages")} priceLists={canOpen("/admin/price-lists")} />
         </Suspense>
         {/* Shopify's frame: the near-black navigation and top bar, and the
             page on a rounded canvas inset from them (square-cornered edge to

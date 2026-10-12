@@ -5,6 +5,7 @@
 import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { getApiV1AdminCollections, getApiV1AdminProducts } from "@scalius/api-client/sdk";
 import {
   customFieldItemType,
@@ -17,9 +18,11 @@ import { MediaManager } from "~/components/admin/media-manager";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { DateInput } from "~/components/ui/date-input";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { useCurrency } from "~/hooks/use-currency";
+import { usePermissions } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
 import { customFieldMessages } from "~/i18n/custom-fields";
 import { apiData } from "~/lib/api";
@@ -58,15 +61,14 @@ const loadCollections: SearchableSelectLoader = async ({ search, page, signal })
 
 function ProductReferenceSelect(props: ItemProps) {
   const t = useMessages(customFieldMessages);
-  const chosen = useQuery({ ...productsByIdsQueryOptions(props.value ? [props.value] : []), enabled: Boolean(props.value) });
-  const name = (chosen.data as { products?: Array<{ id: string; name: string }> } | undefined)?.products
-    ?.find((product) => product.id === props.value)?.name;
+  const canView = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_VIEW);
+  const chosen = useQuery({ ...productsByIdsQueryOptions(props.value ? [props.value] : []), enabled: canView && Boolean(props.value) });
+  const name = canView && !chosen.isError ? chosen.data?.products.find((product) => product.id === props.value)?.name : undefined;
   return (
     <SearchableSelect
       id={props.id}
       value={props.value}
-      load={loadProducts}
-      queryKey={["custom-field-products"]}
+      {...(canView ? { load: loadProducts, queryKey: ["custom-field-products"] } : { options: [] })}
       selectedLabel={name ?? (props.value || undefined)}
       onValueChange={(value) => props.onChange(value)}
       clearable
@@ -83,14 +85,14 @@ function ProductReferenceSelect(props: ItemProps) {
 
 function CollectionReferenceSelect(props: ItemProps) {
   const t = useMessages(customFieldMessages);
-  const chosen = useQuery({ ...collectionsByIdsQueryOptions(props.value ? [props.value] : []), enabled: Boolean(props.value) });
-  const name = chosen.data?.collections.find((collection) => collection.id === props.value)?.name;
+  const canView = usePermissions().hasPermission(PERMISSIONS.COLLECTIONS_VIEW);
+  const chosen = useQuery({ ...collectionsByIdsQueryOptions(props.value ? [props.value] : []), enabled: canView && Boolean(props.value) });
+  const name = canView && !chosen.isError ? chosen.data?.collections.find((collection) => collection.id === props.value)?.name : undefined;
   return (
     <SearchableSelect
       id={props.id}
       value={props.value}
-      load={loadCollections}
-      queryKey={["custom-field-collections"]}
+      {...(canView ? { load: loadCollections, queryKey: ["custom-field-collections"] } : { options: [] })}
       selectedLabel={name ?? (props.value || undefined)}
       onValueChange={(value) => props.onChange(value)}
       clearable
@@ -203,9 +205,30 @@ function ItemInput(props: ItemProps) {
         />
       );
     case "date":
-      return text({ type: "date" });
-    case "date_time":
-      return text({ type: "datetime-local", step: 1 });
+      return <DateInput {...common} aria-label={props.label} value={props.value} onValueChange={props.onChange} />;
+    case "date_time": {
+      const [day = "", time = ""] = props.value.split("T");
+      return (
+        <div role="group" aria-label={props.label} className="space-y-2">
+          <DateInput
+            {...common}
+            aria-label={t("dateOf", { field: props.label })}
+            value={day}
+            onValueChange={(next) => props.onChange(next ? `${next}T${time}` : "")}
+          />
+          <Input
+            {...common}
+            id={`${props.id}-time`}
+            type="time"
+            step={1}
+            aria-label={t("timeOf", { field: props.label })}
+            disabled={props.disabled || !day}
+            value={time}
+            onChange={(event) => props.onChange(`${day}T${event.target.value}`)}
+          />
+        </div>
+      );
+    }
     case "url":
       return text({ type: "url", inputMode: "url", autoComplete: "off", spellCheck: false });
     case "color":

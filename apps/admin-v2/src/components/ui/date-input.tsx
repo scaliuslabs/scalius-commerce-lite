@@ -41,6 +41,7 @@ export function DateInput(fieldProps: DateInputProps) {
   const latest = parseDateOnly(max);
   // A calendar day has no time zone: write it as the same day everywhere.
   const label = day ? formatDateTime(new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate())), { dateStyle: "medium", timeZone: "UTC" }) : null;
+  const displayedValue = label ?? t("pickDate");
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -50,8 +51,9 @@ export function DateInput(fieldProps: DateInputProps) {
           disabled={disabled}
           className={cn(fieldClassName, "flex h-11 items-center gap-2 py-1 text-start sm:h-9", className)}
           {...aria}
+          aria-label={aria["aria-label"] ? `${aria["aria-label"]}: ${displayedValue}` : undefined}
         >
-          <span className={cn("min-w-0 flex-1 truncate", !label && "text-muted-foreground")}>{label ?? t("pickDate")}</span>
+          <span className={cn("min-w-0 flex-1 truncate", !label && "text-muted-foreground")}>{displayedValue}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
@@ -73,7 +75,7 @@ export function DateInput(fieldProps: DateInputProps) {
           <div className="flex justify-end border-t p-1.5">
             <button
               type="button"
-              className="flex h-9 items-center gap-2 rounded-md px-3 text-body hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
+              className="flex h-11 items-center gap-2 rounded-md px-3 text-body hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
               onClick={() => {
                 onValueChange("");
                 setOpen(false);
