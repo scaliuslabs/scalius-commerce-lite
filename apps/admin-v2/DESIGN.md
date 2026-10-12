@@ -1,6 +1,12 @@
 # Dashboard design system
 
-Binding rules for every contributor to `apps/admin-v2`. The look follows Shopify admin (Polaris). The discipline follows Cloudflare Kumo's design rules (a reference, not a dependency). The primitives are shadcn/ui on Radix (`src/components/ui/`). Token values, the type scale and motion are in `src/styles/global.css`, and copy is in `src/i18n/`. `pnpm --filter ./apps/admin-v2 lint` enforces part of this document as errors (see [Lint](#lint)). Rules without a "(lint)" mark are review rules: follow them anyway. [The polish bar](#the-polish-bar) gives every rule an ID and a check: `lint`, `harness` (`pnpm quality:admin`) or `review`.
+Binding rules for every contributor to `apps/admin-v2`. The established visual language draws from Polaris and Kumo; these are references, not the quality ceiling. The primitives are shadcn/ui on Radix (`src/components/ui/`). Token values, the type scale and motion are in `src/styles/global.css`, and copy is in `src/i18n/`. `pnpm --filter ./apps/admin-v2 lint` enforces part of this document as errors (see [Lint](#lint)). Rules without a "(lint)" mark are review rules: follow them anyway. [The polish bar](#the-polish-bar) gives every rule an ID and a check: `lint`, `harness` (`pnpm quality:admin`) or `review`.
+
+## Design decisions
+
+Research the strongest current interfaces for the particular task, including specialist products; do not default to familiar incumbents. Judge their actual interactions against task completion, information density, fidelity, recovery from errors, keyboard access and mobile use. Choose the strongest patterns, improve their weaknesses, and implement them with the dashboard's existing visual language.
+
+Use live products or public demos where available, supported by current official documentation. Record the comparison, the chosen approach and measurable acceptance checks in the task's evidence. Keep researched capabilities, design judgment and verified behavior distinct: a feature list or screenshot alone does not establish superiority. For Files, evaluate modern asset viewers and organization tools, not only commerce dashboards.
 
 Dark mode is only the token file. Never write `dark:` (lint). Never use palette colours such as `bg-red-500` (lint, `no-raw-colors`).
 

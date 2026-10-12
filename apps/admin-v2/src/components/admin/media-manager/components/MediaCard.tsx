@@ -112,9 +112,11 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
 
       {!selectionMode ? (
         <div className="absolute inset-e-1.5 top-1.5 flex gap-1">
-          <Button type="button" variant="outline" size="icon-sm" onClick={onPreview} aria-label={t("previewFile", { name: file.filename })}>
-            <Eye aria-hidden="true" />
-          </Button>
+          {!allowManagement ? (
+            <Button type="button" variant="outline" size="icon-sm" onClick={onPreview} aria-label={t("previewFile", { name: file.filename })}>
+              <Eye aria-hidden="true" />
+            </Button>
+          ) : null}
           {allowManagement ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

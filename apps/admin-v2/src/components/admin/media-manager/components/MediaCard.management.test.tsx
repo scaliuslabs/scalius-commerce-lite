@@ -73,10 +73,10 @@ describe("MediaCard picker management boundary", () => {
     expect(host.querySelector('button[aria-label="Actions for product-front.webp"]')).toBeNull();
   });
 
-  it("keeps Preview and lifecycle actions in the standalone library", () => {
+  it("keeps lifecycle actions without a duplicate Preview button in the standalone library", () => {
     render(true);
 
-    expect(host.querySelector('button[aria-label="Preview product-front.webp"]')).toBeTruthy();
+    expect(host.querySelector('button[aria-label="Preview product-front.webp"]')).toBeNull();
     expect(host.querySelector('button[aria-label="Actions for product-front.webp"]')).toBeTruthy();
   });
 

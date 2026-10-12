@@ -138,7 +138,7 @@ describe("MediaWorkspace page and picker continuity", () => {
     all[0] = { ...all[0]!, kind: "video", mimeType: "video/mp4", posterMediaId: "media_90" };
     act(() => latest.setFiles(all));
     expect(cards()[0]?.querySelector("img")?.getAttribute("src")).toContain("file-90.webp");
-    act(() => cards()[49]?.querySelector<HTMLButtonElement>('button[aria-label^="Preview"]')?.click());
+    act(() => primary(49)?.click());
     expect(host.querySelector("[data-preview]")?.textContent).toContain("file-49.webp");
     act(() => host.querySelector<HTMLButtonElement>("[data-preview-next]")?.click());
     expect(host.querySelector("[data-preview]")?.textContent).toContain("file-50.webp");
