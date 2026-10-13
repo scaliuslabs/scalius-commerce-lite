@@ -1,6 +1,11 @@
 ---
 // Buyer payment selection. The authoritative quote and merchant eligibility
 // are loaded before any payment action becomes available.
+// The GET render is a buyer-agnostic shell the edge caches like the cart
+// (lib/cache-policy.ts isBuyerShellPathname): it reads only public,
+// dependency-validated settings and never a cookie or a query parameter. The
+// checkout session, quote and payment options load in the browser from
+// no-store APIs.
 import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
@@ -9,8 +14,10 @@ import {
   getLayoutData,
   getCheckoutConfig,
   getActiveCheckoutLanguage,
+  isCheckoutConfigReadFailure,
   type CheckoutLanguageData,
 } from "@/lib/api";
+import { markRenderUncacheable } from "@/lib/cache-policy";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import AppBlocks from "@/components/apps/AppBlocks.astro";
 import { getAppBlocks } from "@/lib/api/app-blocks";
@@ -28,6 +35,11 @@ const [layoutData, checkoutConfig, checkoutLanguageResponse] = await Promise.all
 ]);
 // Apps' checkout blocks: read only when the layout says an active app draws one.
 const appBlocks = layoutHasAppBlocks(layoutData, "checkout") ? await getAppBlocks("checkout") : [];
+// A failed read renders the fail-closed page (checkout unavailable, English
+// copy); that answer is for this request only, never the shared cache.
+if (!layoutData || checkoutLanguageResponse === null || isCheckoutConfigReadFailure(checkoutConfig)) {
+  markRenderUncacheable(Astro.response.headers);
+}
 const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse ?? {
   id: "fallback",
   name: "English (Fallback)",

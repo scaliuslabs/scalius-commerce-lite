@@ -575,10 +575,12 @@ function evaluateCheckoutCacheHeaders(headers) {
       errors.push("checkout Cache-Control must include no-store.");
     }
   }
+  // The checkout is a buyer shell: the edge stores it like a public page
+  // (HIT or MISS) while the browser copy stays private and no-store.
   if (!cacheStatus) {
     errors.push("checkout must include X-Cache-Status.");
-  } else if (!hasHeaderToken(normalizedCacheStatus, "no_cache")) {
-    errors.push("checkout X-Cache-Status must report NO_CACHE.");
+  } else if (!["hit", "miss"].some((status) => hasHeaderToken(normalizedCacheStatus, status))) {
+    errors.push("checkout X-Cache-Status must report HIT or MISS (a cached buyer shell).");
   }
 
   return {
@@ -1864,7 +1866,7 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
   }
 
   logger?.log(
-    "PASS storefront cache headers: public pages and feed revalidate, and checkout is no-store.",
+    "PASS storefront cache headers: public pages and feed revalidate, and the checkout shell is edge-cached and browser no-store.",
   );
   return {
     paths: [...STOREFRONT_CACHE_HEADER_PATHS],

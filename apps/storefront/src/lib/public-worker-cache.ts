@@ -139,7 +139,7 @@ function isCmsPagePath(pathname: string): boolean {
 }
 
 /**
- * Anonymous pages, discovery files and the cart shell (`isBuyerShellPathname`);
+ * Anonymous pages, discovery files and the buyer shells (`isBuyerShellPathname`);
  * everything else is never cached.
  */
 function isPublicCachePath(pathname: string): boolean {
@@ -223,8 +223,8 @@ export function getPublicStorefrontCachePolicy(
   if (hasStorefrontProductVariantSelectionParams(logical)) return null;
   if (!isPublicCachePath(logical.pathname)) return null;
   const normalizedPathname = logical.pathname.replace(/\/$/, "") || "/";
-  // The cart shell reads no query parameter on the server, so every /cart URL
-  // shares one entry and a query can neither split nor poison it.
+  // A buyer shell reads no query parameter on the server, so every /cart (or
+  // /checkout) URL shares one entry and a query can neither split nor poison it.
   const canonicalCachePath = isBuyerShellPathname(normalizedPathname)
     ? normalizedPathname
     : canonicalizeStorefrontHtmlCachePath(`${normalizedPathname}${logical.search}`);
@@ -348,9 +348,9 @@ export interface PublicStorefrontCacheContext {
 }
 
 /**
- * Serves one storefront request. Private requests (checkout, account, a named
+ * Serves one storefront request. Private requests (receipts, accounts, a named
  * session cookie, variant selections) always render. Public requests and the
- * cart shell render the canonical, cookie-less URL, and
+ * buyer shells render the canonical, cookie-less URL, and
  * a successful anonymous render is stored for the next visitor.
  */
 export async function servePublicStorefrontRequest(

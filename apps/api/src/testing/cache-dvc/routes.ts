@@ -220,6 +220,7 @@ export function dvcPageCatalogue(): DvcPage[] {
     { name: "landing", parts: [...SHELL, "/api/v1/storefront/landing/eid", ...COMMERCE] },
     { name: "article", parts: [...SHELL, "/api/v1/articles/slug/eid-lookbook"] },
     { name: "cart-shell", parts: [...SHELL, ...COMMERCE, "/api/v1/checkout-languages/active", "/api/v1/locations/cities"] },
+    { name: "checkout-shell", parts: [...SHELL, "/api/v1/checkout/config", "/api/v1/checkout-languages/active"] },
     { name: "sitemap-products", parts: ["/api/v1/products/sitemap"] },
     { name: "feed", parts: ["/api/v1/products/feed", "/api/v1/seo"] },
     { name: "feed:meta", parts: ["/api/v1/products/feed?channel=sc_meta", "/api/v1/seo"] },

@@ -1,8 +1,8 @@
 // @vitest-environment node
 /**
- * The cart page is a buyer-agnostic shell that the edge caches under the
- * store's cache generation (lib/cache-policy.ts `isBuyerShellPathname`). This
- * renders the real pages/cart.astro (Astro container API through a Vite dev
+ * The cart and checkout pages are buyer-agnostic shells that the edge caches
+ * like public pages (lib/cache-policy.ts `isBuyerShellPathname`). This
+ * renders the real pages/cart.astro and pages/checkout.astro (Astro container API through a Vite dev
  * server in middleware mode) against a stubbed API and checks what the shared
  * copy promises:
  *
@@ -48,6 +48,7 @@ interface RuntimeModule {
 let server: ViteDevServer;
 let container: Container;
 let CartPage: unknown;
+let CheckoutPage: unknown;
 let runtimeModule: RuntimeModule;
 
 beforeAll(async () => {
@@ -79,6 +80,7 @@ beforeAll(async () => {
     renderer: reactRenderer,
   });
   CartPage = (await server.ssrLoadModule("/src/pages/cart.astro")).default;
+  CheckoutPage = (await server.ssrLoadModule("/src/pages/checkout.astro")).default;
   runtimeModule = (await server.ssrLoadModule("/src/lib/api/runtime.ts")) as RuntimeModule;
 }, 120_000);
 
@@ -370,6 +372,62 @@ describe("the cart shell render", () => {
       if (code === "CHECKOUT_ATTEMPT_CONFLICT") expect(html).toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.checkoutAttemptConflictText);
     },
   );
+});
+
+describe("the checkout shell render", () => {
+  const checkoutRequest = (cookies = BUYER_COOKIES, query = "?payment=card&orderId=order_buyer_77&discount=SAVE50") =>
+    new Request(`https://shop.test/checkout${query}`, {
+      headers: { Cookie: cookies, "Accept-Language": "bn", "User-Agent": "buyer-agent" },
+    });
+  const renderCheckout = (request: Request, table: Reads = reads()) => renderPage(CheckoutPage, request, table);
+
+  it("carries nothing from the request and gives every buyer the same bytes", async () => {
+    const signedIn = await renderCheckout(checkoutRequest());
+    expect(signedIn.response.status).toBe(200);
+    expect(signedIn.response.headers.has("Set-Cookie")).toBe(false);
+    expect(signedIn.response.headers.get("Cache-Control") ?? "").not.toMatch(/no-store/);
+    for (const secret of ["cs_secret_session_token", "chk_receipt_proof_value", "cst_status_token_value", "fb.1.1700000000", "SAVE50", "buyer-agent", "order_buyer_77"]) {
+      expect(signedIn.html, secret).not.toContain(secret);
+    }
+
+    // Receipt, checkout-status and tracking cookies keep a buyer on the shared
+    // lane (a session cookie renders live), and the gateway strips every
+    // cookie and query before this render anyway.
+    const buyer = await renderCheckout(checkoutRequest("order_receipt=chk_receipt_proof_value; scalius_checkout_status=cst_x; _fbp=fb.1.1"));
+    const other = await renderCheckout(checkoutRequest("order_receipt=chk_other; _ga=GA1.1", "?token=x"));
+    const anonymous = await renderCheckout(new Request("https://shop.test/checkout"));
+    expect(other.html).toBe(buyer.html);
+    expect(anonymous.html).toBe(buyer.html);
+  });
+
+  it("reads only public dependency-validated settings, in one batch", async () => {
+    const { calls } = await renderCheckout(checkoutRequest());
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatch(/^\/api\/v1\/storefront\/batch\?/);
+  });
+
+  it.each([
+    ["the layout", "/api/v1/storefront/layout"],
+    ["the checkout copy", "/api/v1/checkout-languages/active"],
+    ["the checkout settings", "/api/v1/checkout/config"],
+  ])("asks never to be stored when %s could not be read", async (_label, path) => {
+    const { response } = await renderCheckout(
+      new Request("https://shop.test/checkout"),
+      reads({ [path]: { status: 503, body: JSON.stringify({ success: false }) } }),
+    );
+
+    expect(response.headers.get("Cache-Control")).toBe("private, no-cache, no-store, must-revalidate");
+  });
+
+  it("keeps a store that is genuinely unavailable cacheable", async () => {
+    const { response } = await renderCheckout(
+      new Request("https://shop.test/checkout"),
+      reads({ "/api/v1/checkout/config": { status: 200, body: envelope({ ...COD_CONFIG, gateways: [], unavailable: true }) } }),
+    );
+
+    expect(response.headers.get("Cache-Control") ?? "").not.toMatch(/no-store/);
+  });
 });
 
 describe("conflict recovery receipt marker", () => {

@@ -8,16 +8,18 @@ export function isPrivateStorefrontPathname(pathname: string): boolean {
 }
 
 /**
- * Private pages whose HTML is a buyer-agnostic shell: the cart. Its lines live
- * in the browser (`cart:v3`) and paint from storage, and everything
- * buyer-specific (sign-in state, saved details, discounts, validation, the
- * order itself) comes from no-store APIs or a POST. So the edge caches the
- * shell like any public page, under the same build, Worker version and cache
- * generation key, while the browser still gets `no-store` and speculative
- * prefetch stays off. Checkout, payment, receipts and accounts are never
- * shells.
+ * Private pages whose HTML is a buyer-agnostic shell: the cart and the
+ * checkout's payment step. The cart lines live in the browser (`cart:v3`) and
+ * paint from storage; the checkout reads its session from the browser and its
+ * quote and payment options from no-store APIs. Everything buyer-specific
+ * (sign-in state, saved details, discounts, validation, the order itself)
+ * comes from no-store APIs or a POST, and the server render reads no cookie
+ * and no query. So the edge caches each shell like any public page, validated
+ * by the dependencies of its reads, while the browser still gets `no-store`
+ * and speculative prefetch stays off. Receipts, payment recovery, quick buy
+ * and accounts are never shells.
  */
-const BUYER_SHELL_PATHNAME_RE = /^\/cart\/?$/;
+const BUYER_SHELL_PATHNAME_RE = /^\/(?:cart|checkout)\/?$/;
 
 export function isBuyerShellPathname(pathname: string): boolean {
   return BUYER_SHELL_PATHNAME_RE.test(pathname);

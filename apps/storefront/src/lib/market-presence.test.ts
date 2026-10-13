@@ -66,9 +66,10 @@ describe("presence page cache keys", () => {
     expect(key("/en-in/categories/bags?page=1&sortBy=newest")).toBe(key("/en-in/categories/bags"));
     expect(key("/en-in/cart?x=1")).toBe(`${ORIGIN}/en-in/cart`);
     expect(key("/en-in/sitemap-products.xml?page=2")).toBe(`${ORIGIN}/en-in/sitemap-products.xml?page=2`);
-    // A variant selection and a checkout are private under a presence too.
+    // A variant selection and a receipt are private under a presence too; the checkout is a shell.
     expect(key("/en-in/products/tee?size=M")).toBeNull();
-    expect(key("/en-in/checkout")).toBeNull();
+    expect(key("/en-in/order-success?orderId=o1")).toBeNull();
+    expect(key("/en-in/checkout?payment=card")).toBe(`${ORIGIN}/en-in/checkout`);
     // The market cookie never bypasses the shared cache.
     expect(key("/products/tee", { headers: { Cookie: "localization=IN%3Aen-in" } })).toBe(`${ORIGIN}/products/tee`);
   });

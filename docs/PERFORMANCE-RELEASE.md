@@ -15,7 +15,7 @@ A baseline is one measurement at one date on one build. Measure again before you
 | API calls, D1 round trips and waves per page render | 1 call; per-page limits in [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md#budgets-and-guardrails) | `render-batch.test.ts`, `storefront-render-budget.test.ts` |
 | Dashboard first-render JavaScript (Brotli) | `BUNDLE_BUDGETS` in `scripts/admin-perf-check.mjs` | `pnpm check:admin-perf` |
 | API Worker size | 90% of 64 MiB uncompressed | `pnpm check:api-bundle` |
-| Public pages report their cache lane | `X-Cache-Status` is `HIT` or `MISS`; checkout is `NO_CACHE` | `pnpm release:check` |
+| Public pages report their cache lane | `X-Cache-Status` is `HIT` or `MISS`, also for the checkout shell, whose browser copy stays `private, no-store` | `pnpm release:check` |
 | Every Worker declares `CF_VERSION_METADATA`; the API keeps Workers Cache off | n/a | `pnpm check:env` |
 
 Run the heavy gates one at a time on a 16 GB host. `pnpm typecheck` (`scripts/typecheck.mjs`) runs one `tsc --build` with two builders and two checkers (about 4 GB peak), then `astro check`.

@@ -33,8 +33,9 @@ The batch carries at most 8 parts of at most 2,048 characters each (`MAX_STOREFR
 | Collection | `storefront/layout`, `collections/<id>?...` |
 | Search | `storefront/layout`, `products?...&search=...` |
 | Cart shell | `storefront/layout`, `locations/cities`, `shipping-methods`, `checkout-languages/active`, `checkout/config` |
+| Checkout shell | `storefront/layout`, `checkout/config`, `checkout-languages/active` |
 
-Sources: `PAGE_PARTS` in `apps/api/src/storefront-render-budget.test.ts` and `apps/storefront/src/pages/cart.astro`. Installed apps draw inside these parts and add no call. The API sanitizes the drawn output and caches it under the `plg` and `plgs` dependency keys, so a hit runs no app code (`apps/api/src/plugins/storefront-render.ts`).
+Sources: `PAGE_PARTS` in `apps/api/src/storefront-render-budget.test.ts`. Installed apps draw inside these parts and add no call. The API sanitizes the drawn output and caches it under the `plg` and `plgs` dependency keys, so a hit runs no app code (`apps/api/src/plugins/storefront-render.ts`).
 
 ### Transport rules
 
@@ -49,7 +50,7 @@ Code: `apps/api/src/routes/storefront.ts`, `apps/api/src/storefront-batch.ts`, `
 
 - A part comes from the Cache API under `dvcReadCacheKey` (canonical path, sorted query, `__cv=<API Worker version>`). Otherwise `renderPublicRead` renders it from the one snapshot that validated the hits.
 - Each part answers as its own GET would, with its status, body and proof. A part that fails fails alone (status 502 for that part).
-- Up to 4 parts render at once (`MAX_BATCH_PART_RENDERS`). D1 queues the rest on the invocation's six connections.
+- Every part of a batch renders at once (`MAX_BATCH_PART_RENDERS` equals the 8-part cap). D1 queues their statements on the invocation's six connections. A lower limit made the fifth part of the product page and the cart wait for the first to finish, one extra D1 wave.
 - The batch response is `private, no-store`, and public API responses carry `no-store` CDN headers, so no CDN copy skips validation. Workers Cache entrypoints stay off for the same reason: a hit runs no code and cannot validate. `pnpm check:env` fails when an entrypoint enables it.
 
 ### API placement
@@ -66,7 +67,7 @@ A request uses the shared page cache (`getPublicStorefrontCachePolicy`) when all
 - The request has no `Authorization` or `X-API-Token` header and no `cs_tok`, `cs_auth` or `stp_theme_preview` cookie. Other cookies do not matter: the render drops every cookie.
 - After tracking parameters leave, the query has at most 30 entries, each key at most 64 characters and each value at most 512.
 - The URL is not a product page with a `size` or `color` query (a variant selection).
-- The path is public (`isPublicCachePath`): pages, feeds, sitemaps, `/robots.txt`, `/llms.txt`, `/.well-known/ucp` and the cart shell.
+- The path is public (`isPublicCachePath`): pages, feeds, sitemaps, `/robots.txt`, `/llms.txt`, `/.well-known/ucp` and the buyer shells (cart and checkout).
 
 The public and private path lists and the browser `Cache-Control` values are in [apps/storefront/README.md](../apps/storefront/README.md#public-cache-and-private-pages).
 
@@ -94,27 +95,27 @@ A page entry is valid by committed dependencies, not by age, so an unchanged ent
 - A scheduled change (a promotion start or end) sets `validUntil`, and the gateway never serves the entry at or after it. Buyer facts have no stale-if-error allowance.
 - Public product, search and feed projections carry `availabilityBand`. `stock` and `reservedStock` are stable compatibility values, never exact quantity. A write inside one band changes no bytes and no dependency. Cart and checkout stay the live authority.
 
-## The cart shell
+## Buyer shells: cart and checkout
 
-The `GET /cart` HTML does not depend on the buyer, so the gateway caches it like a public page (`isBuyerShellPathname` in `apps/storefront/src/lib/cache-policy.ts`).
+The `GET /cart` and `GET /checkout` HTML does not depend on the buyer, so the gateway caches it like a public page (`isBuyerShellPathname` in `apps/storefront/src/lib/cache-policy.ts`). A page that always rendered paid one placed-API round trip per view: from Dhaka about 150 ms for the API hop alone and 285-1,400 ms for `/checkout` (2026-10-14). A shell hit costs what any page hit costs.
 
-- The cart lines live in `localStorage` (`cart:v3`). An inline script paints them, or the empty state, before first paint. Sign-in state comes from the browser (`cs_auth=1`). Saved details, discounts, cart validation, the tax quote and the order come from no-store APIs or the POST.
-- The reads are public and dependency-validated: layout, cities, shipping methods, checkout copy and checkout settings.
-- The key drops every `/cart` query. A session cookie (`cs_tok`, `cs_auth`) bypasses the cache. A POST is never cached.
-- A failed read (fail-closed "checkout unavailable") renders for this request only: `markRenderUncacheable` sets `no-store`, the middleware answers `BYPASS_DEGRADED`, and the gateway does not store it.
-- The browser copy stays `private, no-cache, no-store, must-revalidate`, because the buyer types contact details into the page. Prefetch of `/cart` stays off.
+- The cart lines live in `localStorage` (`cart:v3`). An inline script paints them, or the empty state, before first paint. The checkout reads its session from the browser. Sign-in state comes from the browser (`cs_auth=1`). Saved details, discounts, cart validation, the tax quote, the payment options of the quote and the order come from no-store APIs or the POST.
+- The reads are public and dependency-validated: layout, cities, shipping methods, checkout copy and checkout settings (the checkout needs only the layout, settings and copy).
+- The key drops every query. A session cookie (`cs_tok`, `cs_auth`) bypasses the cache. A POST is never cached. `/checkout/quick`, receipts, payment recovery and accounts are never shells.
+- A failed read (fail-closed "checkout unavailable") renders for this request only: `markRenderUncacheable` sets `no-store`, the middleware answers `BYPASS_DEGRADED`, and the gateway does not store it. A store that is really unavailable is a valid answer and is stored.
+- The browser copy stays `private, no-cache, no-store, must-revalidate`, because the buyer types contact and payment details into the page. Prefetch of `/cart` and `/checkout` stays off.
 
-`cart-shell.render.test.ts` (beside the cart code) renders the real page with buyer cookies and asserts identical bytes, one API batch and uncacheable failed renders.
+`cart-shell.render.test.ts` (beside the cart code) renders both real pages with buyer cookies and queries and asserts identical bytes, one API batch and uncacheable failed renders.
 
 ## Budgets and guardrails
 
 | Guardrail | Where | Limit |
 | --- | --- | --- |
-| API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts` (`PAGE_API_CALL_BUDGET`), `cart-shell.render.test.ts` | 1 for home, product, category, search and cart |
+| API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts` (`PAGE_API_CALL_BUDGET`), `cart-shell.render.test.ts` | 1 for home, product, category, search, cart and checkout |
 | D1 round trips and waves of a cold render | `apps/api/src/storefront-render-budget.test.ts` (`PAGE_D1_BUDGETS`) | table below |
 | Validation statement | same test | exactly 1, in wave 1. Every render statement starts in wave 2. |
 | The same page again (all parts validated hits) | same test | exactly 1 statement, 1 wave, identical bodies |
-| A page with one app drawing | same test (`APP_PAGE_D1_BUDGETS`) | home 12 / 2, product 20 / 3 |
+| A page with one app drawing | same test (`APP_PAGE_D1_BUDGETS`) | home 11 / 2, product 19 / 3 |
 | Batch safety, and batchable reads only in read-only route families | `storefront-batch*.test.ts`, `runtime/storefront-render-families.test.ts` | exact |
 | API Worker size | `pnpm check:api-bundle` (also in every deploy) | at most 90% of 64 MiB uncompressed |
 | Product JSON-LD weight | `commerce-structured-data.product-group.test.ts` | at most 20 KB (`PRODUCT_JSON_LD_MAX_BYTES`) |
@@ -127,14 +128,16 @@ D1 budgets of a cold render, per page (seeded store; the home page uses every se
 
 | Page | Round trips | Waves |
 | --- | ---: | ---: |
-| Home | 13 | 2 |
-| Landing page | 13 | 2 |
-| Product | 21 | 3 |
-| Category | 7 | 3 |
-| Collection | 7 | 3 |
-| Search | 7 | 2 |
+| Home | 10 | 2 |
+| Landing page | 10 | 2 |
+| Product | 19 | 3 |
+| Category | 5 | 3 |
+| Collection | 6 | 3 |
+| Search | 5 | 2 |
+| Cart shell | 10 | 2 |
+| Checkout shell | 7 | 2 |
 
-A product with 6 reviews may use 22 round trips in 3 waves.
+A product with 6 reviews may use 20 round trips in 3 waves. The budgets are the measured values (2026-10-14), so any new statement or wave fails the test.
 
 A wave is a round of D1 calls that must wait for the previous one, and each wave costs a full database round trip. A new sequential `await` in a storefront read fails the budget test even when the query count stays the same. The layout and homepage parts each read in two steps (batch contents: [storefront README](../packages/core/src/modules/storefront/README.md)).
 
