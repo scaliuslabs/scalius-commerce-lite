@@ -3,7 +3,7 @@
 Customer records, the buyer's sign-in by one-time code, the identity rules that tie orders to accounts, tags, saved segments and the CSV export. For contributors and coding agents.
 
 - Layer L2. The domain imports only `settings` (`scripts/core-domain-graph.allow.json`).
-- Two entries. `index.ts` is the server API. `browser.ts` is the closed browser-safe entry: it exports only `otp-transport.ts` (`OtpQueuePayload`, `buildOtpQueuePayload`).
+- Two entries. `index.ts` is the server API. `browser.ts` is the closed browser-safe entry: it exports only `otp-transport.ts` (`OtpDelivery`, `buildOtpDelivery`).
 - Main files: `customers.service.ts` (admin records), `addresses.ts` (the address book and the one address resolution), `customer-identity.ts` (identity rules), `customer-auth.service.ts` (sign-in, sessions, cookies, profile), `customer-auth-otp-challenges.ts`, `customer-auth-rate-limit.ts`, `otp-delivery-receipts.ts`, `customer-code-channels.ts` and `sign-in-readiness.ts` (channels and readiness), `customer-tags.ts`, `customer-segments.ts` and `customer-export.ts`.
 - Not here: the buyer's account orders and guest-order claims (`orders`: `account-orders.ts`, `account-claims.ts`), marketing consent (`customer-marketing`), and order codes for Track your order and payment recovery (`orders`; they use the code channels from this domain).
 
@@ -34,11 +34,11 @@ The browser calls the storefront same-origin proxy `/api/customer-auth/*`. The p
 2. Pick the channel from the `customer_auth` settings document. An unchosen channel throws 403, and a code never moves to another channel. An unready provider throws 503 (`assertCustomerChannelReady`).
 3. Count the request against the send limits (below). A resend inside the cooldown returns 429.
 4. Derive the 6-digit code: HMAC of `customer-auth-otp-delivery:<otpKey>:<deliveryKey>`, key `CREDENTIAL_ENCRYPTION_KEY`. The code is never stored. Upsert the `customer_auth_otp_challenges` row.
-5. Send `auth.send_otp` to `JOBS_QUEUE`. The payload holds only `challengeKey`, `deliveryKey`, `purpose`, `otpExpiresAt`, `method`, `allowedMethod` and `channel`. If the queue refuses it, `enqueueAuthOtp` (`apps/api/src/utils/otp-queue.ts`) delivers from `waitUntil`. With no execution context the route deletes the challenge and returns 503.
+5. Return an `OtpDelivery`: `purpose`, `challengeKey`, `deliveryKey` and `channel` only. The route hands it to `sendAuthOtp` (`apps/api/src/background/otp-sender.ts`), which sends the code right after the response.
 
 Sending a code never reveals whether an account exists. Only `verifyOtp` decides that, after the code is right.
 
-The queue consumer (`apps/api/src/queue-consumer.ts`) decrypts the delivery target from the challenge row and claims the `auth_otp_delivery_receipts` row for the `deliveryKey` (5-minute lease; accepted, delivered and skipped receipts end the job). It derives the code again and sends it by e-mail, SMS or WhatsApp. Success marks the receipt `accepted`. A retryable failure marks it `failed` and the queue retries. An expired code or a terminal failure marks it `skipped`, and a provider setup failure also blocks that provider until the merchant saves its settings. Raw `code`, `identifier` and `name` fields in the queue payload are a legacy fallback that new messages never carry. Logs carry only short hash prefixes.
+The sender (`apps/api/src/background/otp.ts`) decrypts the delivery target from the challenge row and claims the `auth_otp_delivery_receipts` row for the `deliveryKey` (5-minute lease; accepted, delivered and skipped receipts end the job). It derives the code again and sends it by e-mail, SMS or WhatsApp. Success marks the receipt `accepted`. A retryable failure marks it `failed`, and the sender tries again in the same invocation, up to 3 attempts 2 s and 6 s apart. After that the buyer asks for a new code. An expired code or a terminal failure marks it `skipped`, and a provider setup failure also blocks that provider until the merchant saves its settings. Logs carry only short hash prefixes.
 
 `POST /verify-otp` (`verifyOtp`):
 

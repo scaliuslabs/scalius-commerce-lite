@@ -33,7 +33,7 @@ The batch guard refuses a store that is no longer new. A store is new while it h
 
 Setup creates no tax region and no shipping zone. The Home setup guide shows "Tell us about your store" while the store is new, then "Review delivery charges" and "Review taxes".
 
-When the price increment changes (whole taka to cents), the API queues the catalogue projection rebuild.
+When the price increment changes (whole taka to cents), the API requests the catalogue projection rebuild.
 
 Headless installs send the same fields as `store` in `POST /api/v1/setup`. The admin is created first; a refused setup reports `storeSetup: "skipped"` and the dashboard step stays available. `pnpm dev:admin:create --country <code> [--time-zone <zone>] [--currency <code>] [--store-name <name>]` uses it. The default country is BD with Asia/Dhaka.
 
@@ -52,7 +52,7 @@ The store time zone is an IANA name, such as `America/New_York`. It is the merch
 - the default schedule zone of a new discount;
 - every date in the dashboard, and buyer-facing dates on the storefront (orders, reviews, blog posts, messages).
 
-**Storage.** The zone, the unit system and the weight unit are fields of the `platform` settings document (`timeZone`, `unitSystem`, `weightUnit`). Worker entry resolves that document from its per-colo Cache API mirror for every request, cron run and queue batch (`env.PLATFORM_CONFIG`). Thus no request spends a database read on them. A missing or unknown value reads as `Asia/Dhaka`, metric, grams: every store from before this setting behaves as before.
+**Storage.** The zone, the unit system and the weight unit are fields of the `platform` settings document (`timeZone`, `unitSystem`, `weightUnit`). Worker entry resolves that document from its per-colo Cache API mirror for every request and cron run (`env.PLATFORM_CONFIG`). Thus no request spends a database read on them. A missing or unknown value reads as `Asia/Dhaka`, metric, grams: every store from before this setting behaves as before.
 
 **Calendar math.** `@scalius/shared/commerce-time` computes every boundary with `Intl` for the zone. A day can be 23, 24 or 25 hours long. A day that skips midnight starts at the first instant after the gap. No code uses a fixed offset.
 

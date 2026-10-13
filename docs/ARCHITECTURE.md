@@ -23,8 +23,8 @@ Related docs:
 │ API Worker (Hono)                                      │
 │  - dashboard SPA (ASSETS) and Better Auth              │
 │  - HTTP routes, loaded lazily per route family         │
-│  - queue consumer: JOBS_QUEUE and jobs-dlq             │
-│  - cron every 15 minutes: maintenance sweeps           │
+│  - background work after the response (waitUntil)      │
+│  - cron every minute: drains; every 15 min: sweeps     │
 └────────────────────────────┬───────────────────────────┘
                              │
 ┌────────────────────────────▼───────────────────────────┐
@@ -43,9 +43,9 @@ Related docs:
 - Local ports: API 8787, storefront 4322, dashboard dev server 4323 (`scripts/dev-ports.mjs`).
 - `apps/api/src/runtime/fetch-runtime-app.ts` sorts a request path into one family (`probe`, `public`, `admin`, `system`, `docs`, `plugins`) and loads only that family's app. `runtime/admin-app.ts` and `runtime/public-app.ts` split their families into lazy groups.
 - `apps/api/src/app.ts` is the full contract app that produces the OpenAPI contract. `runtime/route-family-parity.test.ts` checks that each of its routes belongs to exactly one runtime app.
-- `JOBS_QUEUE` message types: `payment.event`, `auth.send_otp`, `notification`, `order.notification` (legacy), `order.auto_fulfil`, `media.render_variants`, `catalog.recommendations.refresh`, `catalog.projections.rebuild`, `events.dispatch`, `webhooks.deliver`, `plugins.deliver`. `jobs-dlq` archives exhausted messages.
+- A store has no queue. Background work is a durable row first: a notification, a domain event, a webhook or app delivery, a payment event, an OTP delivery receipt, or a `system_kv` cursor. The request that commits the row starts the work after the response (`apps/api/src/background/`); the cron retries and finishes it. The table of work, retries and terminal states is in [FREE-PLAN.md](./FREE-PLAN.md#background-work).
 - The API Worker also exports the realtime hub, one Durable Object per store (see [Realtime hub](#realtime-hub)).
-- The cron runs `runScheduledMaintenance` (`apps/api/src/scheduled-maintenance.ts`). On Workers Free the sweeps rotate through four slices, so each runs hourly. On Paid every sweep runs on every tick. Sweeps marked `every` (notification outbox flush, event outbox maintenance, plugin maintenance) run on every tick on both plans.
+- The cron runs `runScheduledMaintenance` (`apps/api/src/scheduled-maintenance.ts`) every minute. Every tick runs the background drains (`BACKGROUND_DRAINS`) and the tick's maintenance jobs (`MAINTENANCE_SWEEPS`). Workers Free runs one job a minute, so each job runs every 24 minutes and a tick fits 50 D1 queries. Paid runs every job every 15 minutes. The 02:00 store-time minute runs only the nightly pass.
 
 ## Layer rules
 
@@ -169,7 +169,7 @@ Shared composition files are split so that features in different domains never e
 - Agent operation registry: `apps/api/src/openapi/operation-registry/<surface>-<area>.ts`, merged by `index.ts` (row shape in `entry.ts`). An operation id belongs to exactly one file (`agent-operation-contract.test.ts`).
 - Order routes: `routes/storefront-orders/`, `routes/customer-auth/` and `routes/admin/orders/` under `apps/api/src`, one router per flow. Each `index.ts` mounts them in registration order, which is also the published OpenAPI path order. Append new routers; never reorder.
 - Order-line extras: `apps/api/src/routes/shared/order-line-extras.ts` composes each item's review, download, licence-key, gift-card and warranty facts at the API layer. `warranty` sits above `orders`, so `orders` cannot import it.
-- Automatic fulfilment: `apps/api/src/utils/auto-fulfil-queue.ts` sends `order.auto_fulfil` after a write that settles payment (checkout commit, payment confirmation, cash collection). It never throws. The scheduled `auto_fulfil_sweep` is the backstop.
+- Automatic fulfilment: `apps/api/src/background/auto-fulfil.ts` runs after a write that settles payment (checkout commit, payment confirmation, cash collection), after the response. It never throws. The scheduled `auto_fulfil_sweep` is the backstop.
 
 ## Provider ports
 
@@ -181,13 +181,13 @@ Shared composition files are split so that features in different domains never e
 
 ## Runtime configuration boundary
 
-Wrangler configs declare resource bindings only and carry no `vars`, except `LOCAL_MAILPIT_URL` in `apps/api/wrangler.local.jsonc`. `pnpm check:env` enforces this. It allows no KV namespace and limits bindings to R2 `BUCKET`, rate limiters `RL_STRICT` and `RL_STANDARD`, queue producer `JOBS_QUEUE` and the Durable Object `REALTIME_HUB` (class `RealtimeHub`, SQLite-backed, created by a `new_sqlite_classes` migration). It requires `CF_VERSION_METADATA`, keeps the entrypoints uncached and checks each Worker's `Env` declaration.
+Wrangler configs declare resource bindings only and carry no `vars`, except `LOCAL_MAILPIT_URL` in `apps/api/wrangler.local.jsonc`. `pnpm check:env` enforces this. It allows no KV namespace and no queue, and limits bindings to R2 `BUCKET`, rate limiters `RL_STRICT` and `RL_STANDARD` and the Durable Object `REALTIME_HUB` (class `RealtimeHub`, SQLite-backed, created by a `new_sqlite_classes` migration). It requires `CF_VERSION_METADATA`, keeps the entrypoints uncached and checks each Worker's `Env` declaration.
 
 - Installed secrets: `SCALIUS_SECRET` on both Workers and `CREDENTIAL_ENCRYPTION_KEY` on the API Worker. Every per-purpose secret is HKDF-derived from `SCALIUS_SECRET` at Worker entry (`packages/shared/src/runtime-secrets.ts`).
 - Public origins are the `platform` settings document, not deployment configuration. Merchants edit the origins under Settings > Store details > Web addresses. They edit the customer cookie domain, extra CORS origins and single sign-on under Settings > Advanced > Sign-in and access. `GET /api/v1/platform` serves the four origins and the setup-token and identity-handoff flags with `Cache-Control: no-store`.
 - The API Worker resolves the document once per invocation in `runtime/runtime-env.ts`, through the `platform` domain only, so the entry's static graph stays small. It returns a request-scoped env with the derived secrets and `PLATFORM_CONFIG`. Consumers read fields such as `env.STOREFRONT_URL`.
 - The storefront Worker reads the origins from the platform fields of the layout payload that every page fetches (`applyPlatformOrigins`, `apps/storefront/src/lib/api/runtime.ts`). Its own URL falls back to the request origin. The dashboard SPA calls the same-origin API Worker and needs no origins.
-- `--plan paid` (default Free) generates a Wrangler config with the Paid CPU limit, queue batch sizes and the build constant `__SCALIUS_PLAN__`. Plan-sized values live in `packages/shared/src/plan-limits.ts` and are read through `planLimits()`. Code never branches on the plan name. See [FREE-PLAN.md](./FREE-PLAN.md).
+- `--plan paid` (default Free) generates a Wrangler config with the Paid CPU limit and the build constant `__SCALIUS_PLAN__`. Plan-sized values live in `packages/shared/src/plan-limits.ts` and are read through `planLimits()`. Code never branches on the plan name. See [FREE-PLAN.md](./FREE-PLAN.md).
 - Seven opt-in contracts support automated deployments. All are off by default and add no `vars` and no installed secret. See [AUTOMATED-DEPLOYMENTS.md](./AUTOMATED-DEPLOYMENTS.md).
 
 ### Build outputs and secrets
@@ -249,7 +249,7 @@ Every storefront and agent checkout commits through `commitStorefrontOrderPayloa
 
 Stock holds live only on `product_variants` (`reserved_stock`, `stock_version`), with one ledger-v2 movement per change. A new order starts with `inventory_action = reserved` when any line is tracked.
 
-Post-commit work runs through `waitUntil()` and never fails a committed checkout. It relays outbox rows to the queue, dispatches Meta events, enqueues automatic fulfilment for a paid order, runs app risk checks and records marketing consent.
+Post-commit work runs through `waitUntil()` and never fails a committed checkout. It sends the committed notification rows, dispatches Meta events, runs automatic fulfilment for a paid order, runs app risk checks and records marketing consent.
 
 ### Statuses and where they come from
 
@@ -307,9 +307,10 @@ Fulfilment action / generic editor / delivery webhook
    or restore, with deterministic movement claims and a stockVersion CAS
    in one safeBatch()
     ↓
-4. The API route records a notification_outbox row and sends it to JOBS_QUEUE
+4. The API route records a notification_outbox row
     ↓
-5. The queue consumer dispatches each enabled channel
+5. After the response, the row is sent on each enabled channel
+   (the every-minute cron retries what is still due)
 ```
 
 If step 3 fails, the lifecycle kernel rolls the status back. The delivery webhook marks the shipment for reconciliation instead.
@@ -318,7 +319,7 @@ Inventory protection: a status transition writes a deterministic `inventory_move
 
 ### Notifications and courier webhooks
 
-- **Notifications.** A fact commits a `notification_outbox` row and sends `{ type: "notification", outboxId }` to `JOBS_QUEUE`. The message carries no contact or body. The consumer claims the row, reads the channel rules, fences each recipient with a `notification_delivery_receipts` row and calls the provider. A failure marks the row failed with backoff, and the scheduled `notification_outbox_flush` retries it. Order types are `ORDER_NOTIFICATION_TYPES` (`notifications/notification-types.ts`). Details: [notifications README](../packages/core/src/modules/notifications/README.md).
+- **Notifications.** A fact commits a `notification_outbox` row and hands its id to the sender, which runs after the response. The row carries no contact. The sender claims the row, reads the channel rules, fences each recipient with a `notification_delivery_receipts` row and calls the provider. A failure marks the row failed with backoff, and the cron's `notification_drain` retries it. Order types are `ORDER_NOTIFICATION_TYPES` (`notifications/notification-types.ts`). Details: [notifications README](../packages/core/src/modules/notifications/README.md).
 - **Courier webhooks.** Every courier is an app's: `POST /api/v1/webhooks/couriers/{provider}` (and the old `/webhooks/pathao`, `/webhooks/steadfast`, forwarded to the Bangladesh pack's couriers) has the app verify the callback; the route then claims a `webhook_events` row, save the shipment status, update the fulfilment ledger and move the order through `updateOrderStatusFromShipment()` (`delivery/tracking.ts`). A refused transition is skipped, and an admin change wins a race. The shipment-to-order table is in the [delivery README](../packages/core/src/modules/delivery/README.md).
 
 ## Money
@@ -330,13 +331,14 @@ Money is stored and computed as integer minor units of the order or store curren
 ```text
 provider webhook / hosted return / buyer reconcile
         ↓
-claimAndEnqueuePaymentEvent (apps/api/src/routes/payment/payment-events.ts)
+claimAndApplyPaymentEvent (apps/api/src/routes/payment/payment-events.ts)
  1. The gateway adapter verifies the callback (or queries the provider
     on a buyer reconcile).
- 2. One webhook_events row is claimed before any side effect.
- 3. One payment.event message goes to JOBS_QUEUE.
+ 2. One webhook_events row is claimed before any side effect. It keeps
+    the verified event (payload) for retries.
         ↓
-Queue consumer (apps/api/src/queue-consumer.ts)
+After the response (apps/api/src/background/payment-events.ts;
+the cron's payment_event_drain retries with backoff, 6 attempts)
  processPaymentConfirmed() / processPaymentFailed()
   - refuses a deleted, fully paid, refunded, cancelled or returned order
   - validates the order and payment transitions
@@ -348,7 +350,7 @@ Stock was reserved at checkout, so payment confirmation writes no inventory stat
 
 | Guard | Where | Mechanism |
 |-------|-------|-----------|
-| Webhook claim | `webhook_events` | Claim before side effect. Failed claims retry. Stale `processing` claims are reclaimed after a 5-minute lease. |
+| Webhook claim | `webhook_events` | Claim before side effect. A failed apply is `retrying` until the sixth attempt, then `failed` (a dead-letter issue on the order page). Stale `processing` claims are reclaimed after a 5-minute lease. |
 | Payment record | `order_payments` | Unique index on `(payment_method, provider_ref)` where `provider_ref` is not null |
 | Status guard | `getUnpayableOrderReason()` | Refuses an order that cannot take a payment |
 | Version CAS | `orders.version` | The batch fails if the order changed |
@@ -423,7 +425,7 @@ The notification channels (`email`, `sms`, `whatsapp`, `push`) are fixed in the 
 2. Every status transition passes the state machine. Shipped, delivered and returned come only from fulfilment actions.
 3. Every stock mutation uses a `stockVersion` CAS and writes its ledger-v2 edge in the same batch.
 4. Payment confirmation is one `safeBatch()` across the order, the payment record and the payment plan.
-5. Webhook handlers claim before side effects. A duplicate returns success. A failed queue send marks the event failed and returns a retryable error.
+5. Webhook handlers claim before side effects and store the verified event. A duplicate returns success. The apply runs after the response and retries from the row.
 6. API responses use the envelope `{ success: true, data: T }`. Consumers read `data` (the storefront uses `apps/storefront/src/lib/api/unwrap.ts`).
 7. Secrets come from `env.*` at request time, never from `import.meta.env` at build time.
 8. Core domains are reached only through their entries. The domain graph is acyclic and only shrinks.

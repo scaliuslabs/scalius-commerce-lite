@@ -77,11 +77,11 @@ Courier status checks (`POST /{id}/shipments/{shipmentId}/status`, `/refresh`) a
 
 ## Automatic fulfilment
 
-- `autoFulfilOrder()` hands over `digital` and `gift_card` lines of a settled order (`paid` or `partially_refunded`), one fulfilment per type (`request_key = auto:<type>`). A queue redelivery or a concurrent run fails on the unique key and does nothing.
+- `autoFulfilOrder()` hands over `digital` and `gift_card` lines of a settled order (`paid` or `partially_refunded`), one fulfilment per type (`request_key = auto:<type>`). A repeated or concurrent run fails on the unique key and does nothing.
 - `FULFILLER_REGISTRY` (`registry.ts`) maps a line type to `manual` (`ship`, `pickup`, `service`) or an automatic fulfiller (`auto/digital.ts`, `auto/gift-card.ts`). A type without a fulfiller fails closed at cart validation and checkout (`FULFILMENT_UNAVAILABLE`).
 - A fulfiller returns statements that run in the same batch as the ledger rows. The digital fulfiller creates entitlements or takes keys from the pool. When the pool is short it writes a staff alert, delivers nothing and fails the run. A digital-only order becomes `delivered` once everything is handed over.
 - With `checkout.autoFulfilMode = after_confirmation` (the `checkout` settings document), delivery waits until staff confirm the order. An unreadable setting also waits. A held order waits for release.
-- Triggers: the queue message `order.auto_fulfil` (`{ type, orderId }`, ids only) after payment settles, checkout commit, COD collected or cash taken; and `sweepAutoFulfilment()`, which runs in cron maintenance slice 1 (every 15 minutes on the Paid plan profile, hourly on Free). The sweep reads at most 50 orders from the partial index `order_items_auto_pending_idx` (owed `digital` and `gift_card` lines).
+- Triggers: `runOrderAutoFulfil` (`apps/api/src/background/auto-fulfil.ts`) right after the response when payment settles, checkout commits, COD is collected or cash is taken; and `sweepAutoFulfilment()`, which runs in the cron's sweep rotation (every 15 minutes on the Paid plan profile, every 24 minutes on Free). The sweep walks a cursor over the partial index `order_items_auto_pending_idx` (owed `digital` and `gift_card` lines), at most `planLimits().background.autoFulfilPerRun` orders a run (1 on Free, 50 on Paid).
 
 ## Rules
 

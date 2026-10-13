@@ -72,8 +72,8 @@ The route opens the circuit when `sendCapiEvent()` fails with `retryable: false`
 - The event ID is `Purchase:<orderId>`. It matches the Pixel `eventID` for deduplication.
 - An order is eligible when it is not deleted and not `incomplete`, `cancelled`, `refunded` or `returned`, and it is COD, or paid, or partly paid.
 - The checkout commit inserts the row in the order's commit batch (`source` `storefront-order`) when Meta is enabled with a pixel ID and a token in the checkout authority snapshot. Post-commit code then sends it (`processExistingMetaPurchaseOutboxForOrder`).
-- The payment confirmation path inserts the row in the same batch as the payment change (`source` `payment-<provider>-confirmed`). The queue consumer then starts the send in `waitUntil`.
-- `meta_purchase_outbox_flush` retries due rows with `flushPendingMetaPurchaseOutbox()`: 25 per run on Paid, 5 on Free. It runs every 15 minutes on Paid and hourly on Free.
+- The payment confirmation path inserts the row in the same batch as the payment change (`source` `payment-<provider>-confirmed`). The payment-event handler then starts the send in `waitUntil`.
+- `meta_purchase_outbox_flush` retries due rows with `flushPendingMetaPurchaseOutbox()`: 25 per run on Paid, 5 on Free. It runs every 15 minutes on Paid and every 24 minutes on Free (the cron's sweep rotation).
 - Each attempt claims the row (5-minute lease) and rebuilds the event from the committed `orders` and `order_items`: source URL `<storefront origin>/order-success?orderId=<id>`, value, currency, content IDs (SKU ID, else product ID), contents, order ID and item count. Matching fields are phone, email, first and last name, city, customer ID and country `bd`.
 - A disabled or unconfigured setup, a missing storefront URL, a missing or ineligible order, and a non-retryable Meta error end as `skipped`. A 429, 5xx or network failure ends as `failed` and retries with backoff `60 s x 2^(attempts-1)`, at most 1 hour.
 
@@ -82,4 +82,4 @@ The route opens the circuit when `sendCapiEvent()` fails with `retryable: false`
 - The `whatsapp` settings document: `accessToken` (secret, strict read), `phoneNumberId`, `authTemplateName` (empty means `auth_otp`). A merchant saves them with `POST /api/v1/admin/settings/auth`. The order template name and language are in the `notifications` document. Placeholder values (`dummy`, `example`, `changeme`, repeated digits) are refused on save and read as not configured.
 - `sendWhatsAppTemplateMessage()` posts a template message to `https://graph.facebook.com/<version>/<phoneNumberId>/messages` with body values and an optional URL-button value. The default language is `en_US`.
 - Failure handling: HTTP 408, 409, 429 and 5xx, and a 200 without a message ID, are retryable. A paused message (`message_status: paused`) is not. Provider errors are summarized with emails and phone numbers masked.
-- Callers: order messages ([notifications README](../../modules/notifications/README.md)) and OTP codes (queue consumer). Both use the WhatsApp pause markers. Meta has no idempotency key for these messages.
+- Callers: order messages ([notifications README](../../modules/notifications/README.md)) and OTP codes (`apps/api/src/background/otp.ts`). Both use the WhatsApp pause markers. Meta has no idempotency key for these messages.

@@ -70,7 +70,7 @@ pnpm --filter @scalius/database upgrade:schema --provider postgres \
 `DATABASE_MIGRATION_FREEZE` on the API Worker (`1`, `true` or `on`) stops all writes while an operator copies the database. The API Worker is the only Worker that writes to the database.
 
 - A request gets 503 `DATABASE_MIGRATION_IN_PROGRESS` with `Retry-After: 60`. Only `GET` and `HEAD` of `/api/v1/health`, `/api/v1/readyz` and `/api/v1/meta` pass.
-- Queue batches retry with a 60 second delay. The cron run does nothing.
+- The cron run does nothing. Background rows that are due wait in the database and run after the freeze ends.
 
 ## Cutover: D1 to TursoDB
 
@@ -114,8 +114,8 @@ Persist a record of each step. Do not skip a gate.
    Gate: the deploy script's schema check passes and its `/readyz` samples are ready.
 10. Sample readiness again: `pnpm ops:check --api-base-url <api-origin>`.
     Gate: every sample is ready, and `GET /api/v1/readyz` shows `checks.turso.status` as `ok`.
-11. Remove `DATABASE_MIGRATION_FREEZE`. Then smoke-test public reads, an authenticated admin read, one idempotent checkout, an order transition, an inventory release, queues, storefront rendering and browser hydration.
-    Gate: `pnpm ops:check --queues --api-base-url <api-origin>` passes.
+11. Remove `DATABASE_MIGRATION_FREEZE`. Then smoke-test public reads, an authenticated admin read, one idempotent checkout, an order transition, an inventory release, a notification sent by the cron drain, storefront rendering and browser hydration.
+    Gate: `pnpm ops:check --api-base-url <api-origin>` passes.
     Gate: `pnpm release:check --api-base-url <api-origin> --storefront-url <store-origin> --dashboard-url <dashboard-url>` passes. Both commands default to the Scalius demo hosts.
 12. Keep the frozen D1 database for the rollback window. Destroy it only under a separate, explicit retention decision.
 
@@ -166,7 +166,7 @@ These scripts run through `pnpm --filter @scalius/database <name>` against dispo
 Rules for a capacity claim:
 
 - A conflict test proves adapter correctness. It is not a throughput figure.
-- A claim needs a disposable, fully migrated store, load through the Worker origin, realistic SKU contention, stubbed providers, queue drain times, latency percentiles, and explicit error, oversell and duplicate-order targets.
+- A claim needs a disposable, fully migrated store, load through the Worker origin, realistic SKU contention, stubbed providers, background drain times, latency percentiles, and explicit error, oversell and duplicate-order targets.
 - Do not publish "supports N orders per second" for a provider tier until `load:checkout-live` passes on that tier. In 2026-08 rehearsals (unverified here) only PostgreSQL passed a sustained full-route load.
 - Hosted Turso load spends organization-wide row quotas. Use a separate test organization.
 

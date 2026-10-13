@@ -132,7 +132,7 @@ rounds to: the minor unit (1) or one whole unit (10^exponent). The backup
 market holds it (`markets.price_increment_minor`, MARKETS-DESIGN step 2), not
 this document. Merchants change it in Settings → Markets on the backup
 market; it stays editable after the code locks. Saved prices are never
-rewritten. A change queues a full catalogue projection rebuild, because
+rewritten. A change requests a full catalogue projection rebuild, because
 stored card prices round to it. A change of currency resets it to the new
 currency's default (`resetBackupPriceIncrement()`): whole taka for BDT, the
 minor unit otherwise. Read it through `readStoreCurrency()` or, in SQL,
@@ -151,7 +151,7 @@ WhatsApp saves require a ready provider that is not paused by
 
 ## Admin routes (`apps/api/src/routes/admin/settings/`)
 
-- `site.ts` -- currency (a price-increment change queues the projection rebuild), the theme (editor, workspace, document, versions, draft, page draft, publish, restore, discard, preview session), media, SEO (partial discovery/return-policy patches, feed diagnostics, live probe), storefront URL, allowed countries. Public caches need no bump: a save advances the document's cache dependency in the same transaction (dependency-validated caching, `packages/shared/src/cache-deps.ts`).
+- `site.ts` -- currency (a price-increment change requests the projection rebuild), the theme (editor, workspace, document, versions, draft, page draft, publish, restore, discard, preview session), media, SEO (partial discovery/return-policy patches, feed diagnostics, live probe), storefront URL, allowed countries. Public caches need no bump: a save advances the document's cache dependency in the same transaction (dependency-validated caching, `packages/shared/src/cache-deps.ts`).
 - `notification-channels.ts`, `notification-templates.ts` -- customer and admin order channels, message templates.
 - `system.ts` -- customer auth + WhatsApp (policy saves fail closed unless every selected OTP channel is deliverable; WhatsApp token saves require `CREDENTIAL_ENCRYPTION_KEY`, reject placeholders, skip masked values, and clear WhatsApp provider pauses in the same batch), checkout flow (`expectedRevision` CAS, revision `0` before the first save), checkout readiness, security (CSP only; never widens API CORS), email, Firebase.
 - `payments.ts` -- payment methods and Stripe (SSLCommerz is the Bangladesh pack's; its keys are the pack's settings). Secret saves require `CREDENTIAL_ENCRYPTION_KEY`; enabled saves require non-placeholder credentials.

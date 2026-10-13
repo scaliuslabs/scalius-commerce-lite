@@ -51,7 +51,7 @@ Provider-aware helpers supply bounded alternatives where a feature is missing (f
 
 Raw `db.all(sql)` and `db.get(sql)` return named objects on every provider, including inside `safeBatch()`. The remote adapters map transport column metadata through `remote-raw-rows.ts`; mapped builders and `db.values(sql)` keep positional transport rows.
 
-For a cutover, an operator sets the `DATABASE_MIGRATION_FREEZE` secret to `1`, `true` or `on`. The API Worker then answers ordinary requests with 503, retries queue messages and skips scheduled mutations. The health, readiness and meta probes stay available.
+For a cutover, an operator sets the `DATABASE_MIGRATION_FREEZE` secret to `1`, `true` or `on`. The API Worker then answers ordinary requests with 503 and skips scheduled mutations. The health, readiness and meta probes stay available.
 
 ### Atomic batches
 

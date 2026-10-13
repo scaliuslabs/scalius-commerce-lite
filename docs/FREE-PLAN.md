@@ -1,6 +1,6 @@
 # Running on Workers Free
 
-This page covers how Scalius runs on the Cloudflare Workers Free plan and scales up on Workers Paid. It is for operators who pick a plan and for contributors who add queries or queue messages.
+This page covers how Scalius runs on the Cloudflare Workers Free plan and scales up on Workers Paid. It is for operators who pick a plan and for contributors who add queries or background work.
 
 Free is the default: the committed Wrangler configs deploy there unchanged. A Paid deploy adds one flag. Cloudflare limits last checked: 2026-10-03.
 
@@ -16,9 +16,9 @@ pnpm run deploy --plugin-sandbox   # Worker Loader: needs Paid, implies --plan p
 
 `scripts/plan.mjs` picks the plan in this order: the `--plan` flag, the `SCALIUS_PLAN` variable of the deploy shell (no Worker reads it), Paid when the plugin sandbox is on, else Free. An explicit Free with the sandbox on fails. The sandbox is on with `--plugin-sandbox`, `SCALIUS_PLUGIN_SANDBOX=1` or `pnpm plugin sandbox on`.
 
-A Paid deploy writes `apps/api/wrangler.deploy.gen.json` (git-ignored) beside the committed config. It adds `limits.cpu_ms`, the larger `max_batch_size` of the `jobs` and `jobs-dlq` consumers, and `define: { __SCALIUS_PLAN__: "paid" }`, which `planLimits()` reads. It also adds `limits.cpu_ms` to the generated storefront config. `--plan paid` fails with a custom `--wrangler-config`: set the same values in that file.
+A Paid deploy writes `apps/api/wrangler.deploy.gen.json` (git-ignored) beside the committed config. It adds `limits.cpu_ms` and `define: { __SCALIUS_PLAN__: "paid" }`, which `planLimits()` reads. It also adds `limits.cpu_ms` to the generated storefront config. `--plan paid` fails with a custom `--wrangler-config`: set the same values in that file.
 
-`__SCALIUS_PLAN__` is a build constant, not an environment variable or a secret. Without it the deployment is Free. `pnpm check:env` fails when a committed Wrangler config declares `limits`, defines `__SCALIUS_PLAN__`, or sets a queue batch size other than the Free value.
+`__SCALIUS_PLAN__` is a build constant, not an environment variable or a secret. Without it the deployment is Free. `pnpm check:env` fails when a committed Wrangler config declares `limits` or defines `__SCALIUS_PLAN__`. It also fails on any KV namespace or queue.
 
 Code reads values from the profile and never branches on the plan name. Paid values keep at least the baseline the code had before the profile existed. `packages/shared/src/plan-limits.test.ts` fails when a Paid value drops below it.
 
@@ -26,15 +26,16 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | --- | --- | --- |
 | Worker CPU (`limits.cpu_ms`) | not set (fixed 10 ms) | 30,000 ms |
 | New password hash | PBKDF2-SHA256, 30,000 iterations | scrypt N=16384, r=16, p=1 |
-| Queue consumer `max_batch_size` (`jobs`; the dead-letter queue gets 10 on Paid) | 1 | 15 |
-| Bulk backlog limit (no bulk fan-out at or above it) | 20 messages | 1,000 |
-| Rendition queued from a public read | off | on |
-| Cron slices (each sweep runs once per rotation) | 4 (hourly) | 1 (every 15 minutes) |
-| Cron: each sweep's row limit | 20% | 100% |
+| Rows per drain: events, deliveries, notifications, payment events | 2, 2, 1, 1 | 50, 25, 20, 10 |
+| Renditions rendered from one public read | 0 | 4 |
+| Recommendation rotation per run | 4 products | 32 products |
+| Maintenance jobs (the sweep rotation) | one a minute: each job every 24 minutes | every job every 15 minutes |
+| Expired reservations released per run | 4 | 50 |
+| Each sweep's row limit | 20% | 100% |
 | List total counted up to (`countCap`) | 1,000 | 10,000 |
 | Deepest numbered page (`maxOffset`) | 1,000 rows | 10,000 rows |
 
-The profile also sets the bulk page, the recommendation message size, the catalogue rebuild chunk and the cron inline image limit. `nightlyRecommendationRefreshLimit` is in the profile, but no code reads it: the nightly pass refreshes up to 3,000 products on both plans (`NIGHTLY_RECOMMENDATION_REFRESH_LIMIT` in `apps/api/src/scheduled/catalog-projections.ts`).
+The profile also sets the bulk page, the products refreshed after a catalogue write, the nightly sold-products refresh, the catalogue rebuild chunk and the backfill image limit.
 
 ## The Cloudflare limits
 
@@ -42,11 +43,10 @@ The budget harness encodes the per-invocation limits (`apps/api/src/free-plan-bu
 
 | Free limit | Value |
 | --- | --- |
-| CPU per HTTP request, queue invocation and cron run | 10 ms |
+| CPU per HTTP request and cron run | 10 ms |
 | Subrequests per invocation | 50 external, 1,000 to Cloudflare services |
 | D1 queries per invocation (a `batch()` is one) | 50 |
 | D1 per day | 5M rows read, 100,000 rows written |
-| Queues operations per day (a delivered message is 3) | 10,000 |
 | Requests per day | 100,000 |
 | Images transformations per month | 5,000 (unverified) |
 | Worker script size | 64 MiB uncompressed, no compressed limit |
@@ -64,10 +64,10 @@ pnpm free-plan:budget --orders 250    # orders per day in the quota model (defau
 pnpm free-plan:budget --json out.json # keep the raw report
 ```
 
-- **Node tier** (`apps/api/src/free-plan-budget.test.ts`) drives the real Worker entrypoints (`fetch`, `queue`, `scheduled`) over an in-memory D1 and meters every binding. It asserts D1 calls, queue messages and external subrequests against `apps/api/src/testing/free-plan-budgets.ts` and the plan's per-invocation limits. A new query or fan-out fails here first. CPU in this tier is a relative figure.
+- **Node tier** (`apps/api/src/free-plan-budget.test.ts`) drives the real Worker entrypoints (`fetch`, `scheduled`) over an in-memory D1 and meters every binding. It asserts D1 calls and external subrequests against `apps/api/src/testing/free-plan-budgets.ts` and the plan's per-invocation limits. A new query or fan-out fails here first. CPU in this tier is a relative figure.
 - **workerd tier** (`apps/api/src/free-plan-workerd.test.ts`) runs the bundled Worker in workerd, where CPU is wall time minus time waiting on the D1 proxy. Only this tier shows cold route graphs and real hashing cost. The Free password hash and verify must each stay below 5 ms (best of 15 runs).
 
-The daily quota model charges each order with a 3-line checkout, its queued messages, tax quotes, sign-in codes and 20 page views, and adds 96 cron runs a day. D1 rows written count rows changed times 3, for index entries. In the 100-order run of 2026-10-03, D1 rows written ended a Free store first, at about 210 orders a day (unverified: rerun the command). The Images allowance also ends a Free store before any CPU limit does.
+The daily quota model charges each order with a 3-line checkout, its notifications, tax quotes, sign-in codes and 20 page views, and adds 1,440 cron ticks a day (the steady-state mean of an hour of ticks). D1 rows written count rows changed times 3, for index entries. In the 100-order run of 2026-10-14, D1 rows written ended a Free store first, at about 267 orders a day (unverified: rerun the command). The Images allowance also ends a Free store before any CPU limit does.
 
 ## Rules by area
 
@@ -83,20 +83,26 @@ The format is `$sc1$pbkdf2-sha256$i=30000,k=1$<salt>$<hash>` on Free and `$sc1$s
 - After a Paid-to-Free move, the first sign-in of each account verifies a scrypt hash on Free, which can exceed the CPU limit (error 1102; unverified). The "forgot password" email writes a Free hash.
 - Turn on staff 2FA (`twoFactor` in `packages/core/src/auth/auth.ts`).
 
-### Queue lanes
+### Background work
 
-A store has one `jobs` queue. `apps/api/src/utils/queue-lanes.ts` makes two lanes out of it:
+A store has no queue: a queue is one more resource per store, and Free allows 10,000 queue operations a day. Work that must survive a failure is a database row first. The request that commits the row starts the work right after the response (`ctx.waitUntil`, `apps/api/src/background/after-response.ts`). The cron runs every minute and drains what is still due (`BACKGROUND_DRAINS` in `apps/api/src/scheduled-maintenance.ts`).
 
-- **urgent**: OTP, payments, notifications, fulfilment, events, webhooks, plugin deliveries, and any unknown message type.
-- **bulk**: `media.render_variants`, `catalog.recommendations.refresh` and `catalog.projections.rebuild`.
+| Work | Durable row | After the write | Retry and terminal state |
+| --- | --- | --- | --- |
+| Notifications | `notification_outbox` | sends the committed rows | backoff in `next_attempt_at`; `dead_lettered` after 8 attempts |
+| Domain events, webhooks, app deliveries | `event_outbox`, `webhook_event_deliveries`, `plugin_event_deliveries` | `flushEventsAfterWrite` | backoff; `dead_lettered` or `exhausted` after 8 attempts, retried from the dashboard |
+| Payment events | `webhook_events` (`payload`, `attempts`, `next_attempt_at`) | applied after the provider gets its 200 | 6 attempts, 1 to 16 minutes apart; then `failed`, a dead-letter issue on the order page |
+| Sign-in codes | `auth_otp_delivery_receipts` | up to 3 attempts, 2 s and 6 s apart | none after that: a code lives 5 minutes, so the buyer asks for a new one |
+| Automatic fulfilment | the settled order | `runOrderAutoFulfil` | `auto_fulfil_sweep` |
+| Projection rebuild | `system_kv` `catalog:projections:rebuild-cursor` | the first chunks | each drain continues from the cursor |
+| Recommendations | `system_kv` `catalog:recommendations:rotation-cursor` | the written products and their peers | the rotation visits every public product; the nightly tick refreshes products sold that day |
+| Image renditions | media rows without renditions | Paid: a rendered public read renders up to 4 | the `media_rendition_backfill` job |
 
 Rules:
 
-- A bulk producer reads `queue.metrics().backlogCount` and adds at most the room under the plan's bulk backlog limit, at most one page. An urgent message waits behind a bounded number of bulk jobs, and the consumer starts urgent messages first.
-- A cron that finds the bulk lane full waits. It never renders the queue's work inline.
-- If the queue refuses an OTP (binding down, or the daily operations spent), `enqueueAuthOtp` delivers it from `waitUntil` (`apps/api/src/utils/otp-queue.ts`) through the consumer's receipt-guarded function. The D1 delivery receipt is claimed once, so a message the queue took after all does nothing.
-
-Free runs one message per consumer invocation, within 50 D1 queries. On Paid the harness runs one batch of each job type at batch size 15 and holds it under 1,000 D1 queries.
+- A drain takes at most its plan batch (`planLimits().background`) and leaves the rest due for the next tick. The drains and the tick's maintenance job share one cron invocation, so on Free the batches keep a tick within 50 D1 queries.
+- A claim with a lease guards each row, and the handlers are idempotent. An after-response run and a tick never deliver the same row twice, and a crashed run is reclaimed when its lease ends.
+- After-response work shares the request's invocation budget. On Free a request sends at most `notificationsPerDrain` committed notifications; the next tick sends the rest.
 
 ### No KV
 
@@ -104,10 +110,12 @@ A store has no KV namespace (an account allows 1,000, and KV was only ever a hin
 
 ### Maintenance cron
 
-The cron runs every 15 minutes (`*/15 * * * *` in `apps/api/wrangler.jsonc`). `MAINTENANCE_SWEEPS` in `apps/api/src/scheduled-maintenance.ts` lists the sweeps as data. Each has a slice (`apps/api/src/scheduled/slices.ts`): 18 sweeps in slices 0 to 3, and 3 with the slice `"every"`.
+The cron runs every minute (`* * * * *` in `apps/api/wrangler.jsonc`). Every tick runs the background drains. `MAINTENANCE_SWEEPS` in `apps/api/src/scheduled-maintenance.ts` lists the maintenance jobs as data, in rotation order (24 jobs, including the media rendition backfill and agent-access housekeeping). `apps/api/src/scheduled/slices.ts` picks the jobs of a tick from two plan values, `sweepEveryMinutes` and `sweepsPerTick`:
 
-- Free runs one slice per tick, so each sweep runs once an hour. The media rendition backlog runs in slice 3. The `"every"` sweeps (`notification_outbox_flush`, `event_outbox_maintenance`, `plugin_maintenance`) run on every tick.
-- Paid has one slice: every sweep runs every tick.
+- Free runs the next job of the rotation on every tick, beside the drains. Each job runs every 24 minutes, and every tick of a whole rotation stays within 50 D1 queries with work due (`apps/api/src/maintenance-budget.test.ts`).
+- Paid runs every job on every fifteenth minute.
+- The 02:00 store-time minute runs only the nightly pass: sales stats, a projection rebuild request, the recommendations of products sold that day, app storage sizes and a sampled drift check.
+- Hourly work inside a job (app exchange rates) runs on the job's first run of each hour (`firstSweepRunOfHour`).
 - A sweep's row limit is `floor(limit * limitScale)`, at least 1.
 
 ### Frontier cache refresh
@@ -135,6 +143,6 @@ A cursor travels in a URL, so it never carries personal data. A sort on personal
 
 Check these live:
 
-- CPU time per request (p50 and p99) for `/api/auth/sign-in/email`, `/api/v1/storefront/batch`, `POST /api/v1/orders`, the cron and the queue consumer, and error 1102 ("Worker exceeded resource limits") by route.
-- Queues operations per day, the `jobs` backlog (`backlogCount`) during a cron run, and D1 rows written per day.
-- `pnpm ops:check --queues` and `pnpm release:check`. Pass `--api-base-url`, and for the release check `--storefront-url` and `--dashboard-url`. The defaults are the Scalius demo hosts.
+- CPU time per request (p50 and p99) for `/api/auth/sign-in/email`, `/api/v1/storefront/batch`, `POST /api/v1/orders` and the cron, and error 1102 ("Worker exceeded resource limits") by route.
+- D1 rows written per day, and rows still due after a tick (`notification_outbox`, `event_outbox`, `webhook_events` with `next_attempt_at` in the past).
+- `pnpm ops:check` and `pnpm release:check`. Pass `--api-base-url`, and for the release check `--storefront-url` and `--dashboard-url`. The defaults are the Scalius demo hosts.

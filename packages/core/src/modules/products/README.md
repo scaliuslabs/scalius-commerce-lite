@@ -59,7 +59,7 @@ This domain reads and defines. [`product-admin`](../product-admin/README.md) wri
 
 - Every write that can change a projection appends `catalogProjectionRefreshStatements` (or the SKU-scoped `catalogBuyerStateRefreshStatementsForSkus` for stock writes) to its own batch, after the ledger edge and the `stockVersion` CAS. A statement group covers at most 90 products through one `json_each` parameter. The facet refresh rewrites only rows that differ, so unchanged saves fire no DVC trigger.
 - `rebuildCatalogProjections` recomputes in keyset pages of 90. One call handles 900 products by default and 2,700 at most.
-- The API queues `catalog.projections.rebuild` nightly (first cron tick at or after 20:00 UTC) and on the first cron tick of a new API version (`apps/api/src/scheduled/catalog-projections.ts`).
+- The API requests a rebuild nightly (02:00 store time), on the first rotation run of a new API version (`apps/api/src/scheduled/catalog-projections.ts`) and after a settings write that changes bands or prices. A request stores a `system_kv` cursor (`catalog:projections:rebuild-cursor`); the first chunks run right after the write, and each cron tick continues from the cursor (`apps/api/src/background/catalog.ts`).
 - To heal or fill by hand, call `POST /api/v1/admin/catalog/projections/rebuild` (`PRODUCTS_EDIT`). Send `{}`, then `{ "afterProductId": <nextAfterProductId> }`, until `done` is true.
 
 ## Settings and DVC

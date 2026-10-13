@@ -128,10 +128,10 @@ the presentment currency. No built-in adapter reports settlement yet.
 | Step | Code |
 | --- | --- |
 | Session | `POST /api/v1/payment/{provider}/session` → `apps/api/src/routes/payment/payment-session-create.ts`: assert payable → currency/limits → checkout policy → ready settings → plan → gateway switch → claim attempt → provider call under a deadline → record attempt |
-| Webhook | `POST /api/v1/webhooks/{provider}` → adapter verification → `claimAndEnqueuePaymentEvent` |
+| Webhook | `POST /api/v1/webhooks/{provider}` → adapter verification → `claimAndApplyPaymentEvent` (claims a `webhook_events` row holding the verified event) |
 | Hosted return | `GET|POST /api/v1/payment/{provider}/success|fail|cancel` |
 | Buyer reconcile | `POST /api/v1/payment/{provider}/reconcile` (gateways with `query`) |
-| Apply | queue message `payment.event` → `processPaymentConfirmed` / `processPaymentFailed` / `releaseOrderInventory` |
+| Apply | after the response, retried by the cron's `payment_event_drain` (6 attempts) → `processPaymentConfirmed` / `processPaymentFailed` / `releaseOrderInventory` |
 | Refund | `processRefund` → allocation claim → `gateway.refund` |
 | Reconcile | `reconcileDueRefundAttempts` (`gateway.refundStatus`), `reconcileExternalRefundWebhooks` (`gateway.listRefunds`, `refund.observed` events) |
 

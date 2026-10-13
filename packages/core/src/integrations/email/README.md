@@ -65,7 +65,7 @@ The `email` settings document (`emailDocument` in `packages/core/src/modules/set
 
 ## Call context
 
-Callers inside Workers pass `{ db, env, encryptionKey, appProviders }` as the second argument (`requestAppProviders(c)`, or `detachedAppProviders(env, db, key)` in queues). The context gives the selector the `env.EMAIL` binding, the database for settings and the credential key.
+Callers inside Workers pass `{ db, env, encryptionKey, appProviders }` as the second argument (`requestAppProviders(c)`, or `detachedAppProviders(env, db, key)` in background work). The context gives the selector the `env.EMAIL` binding, the database for settings and the credential key.
 
 ## Adding a provider
 

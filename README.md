@@ -16,7 +16,7 @@ A Turborepo monorepo. The dashboard is a React 19 SPA, the storefront is Astro 7
 ```text
 apps/
   admin-v2/     @scalius/admin-v2    Dashboard SPA; no Worker of its own (dev :4323)
-  api/          @scalius/api         API Worker: Hono routes, queue consumer, cron, serves the dashboard (dev :8787)
+  api/          @scalius/api         API Worker: Hono routes, cron, serves the dashboard (dev :8787)
   storefront/   @scalius/storefront  Storefront Worker: Astro SSR (dev :4322)
 packages/
   api-client/   Generated SDK from the API's OpenAPI spec
@@ -42,9 +42,7 @@ flowchart LR
     SF -->|"service binding BACKEND_API"| API["API Worker<br/>Hono + dashboard SPA (ASSETS)"]
     API --> DB[("D1, TursoDB, or PostgreSQL")]
     API --> R2[("R2: BUCKET")]
-    API --> Q["Queue: jobs + jobs-dlq"]
-    Q -->|"queue consumer"| API
-    CRON["Cron every 15 min"] --> API
+    CRON["Cron every minute"] --> API
     API -.-> EXT["Stripe, SSLCommerz, couriers, email, SMS, WhatsApp, FCM"]
 ```
 
@@ -181,7 +179,6 @@ The committed `apps/api/wrangler.jsonc` and `apps/storefront/wrangler.jsonc` hol
 |----------|--------|---------|
 | D1 database (`migrations_dir` is `packages/database/migrations`) | API | `DB` |
 | R2 bucket (media under `media/`, sealed agent artifacts under `private/agent-artifacts/`) | API | `BUCKET` |
-| Queues `jobs` and `jobs-dlq` | API (producer, both consumers) | `JOBS_QUEUE` |
 | Rate limiters: strict 5 per 60 s, standard 60 per 60 s (counters are account-wide per `namespace_id`: use your own IDs) | API | `RL_STRICT`, `RL_STANDARD` |
 | Email sending | API | `EMAIL` |
 | Images | API | `IMAGES` |
@@ -219,7 +216,7 @@ The pipeline runs these steps in order:
 | Option | Effect |
 |--------|--------|
 | `--only api` or `--only storefront` | Deploy one Worker (`pnpm run deploy:api`, `deploy:storefront`) |
-| `--plan paid` | Workers Paid profile: CPU limit, larger queue batches. The default is Free ([docs/FREE-PLAN.md](docs/FREE-PLAN.md)) |
+| `--plan paid` | Workers Paid profile: CPU limit and larger per-invocation batches. The default is Free ([docs/FREE-PLAN.md](docs/FREE-PLAN.md)) |
 | `--plugin-sandbox` | Bind the Worker Loader for sandboxed plugins (Workers Paid; implies `--plan paid`) |
 | `--dry-run` | Typecheck, build, and run the dist checks only |
 
@@ -248,7 +245,7 @@ pnpm ops:check --api-base-url https://api.example.com
 pnpm release:check --api-base-url https://api.example.com --storefront-url https://shop.example.com --dashboard-url https://dashboard.example.com
 ```
 
-`GET /api/v1/meta` reports the release, the supported API majors, the database provider, and whether the applied schema matches this build. Add `--queues` to `ops:check` to verify the queue wiring. Add `--skip-wrangler` to either check to skip the Wrangler deployment proof.
+`GET /api/v1/meta` reports the release, the supported API majors, the database provider, and whether the applied schema matches this build. Add `--skip-wrangler` to either check to skip the Wrangler deployment proof.
 
 ## Troubleshooting
 

@@ -76,7 +76,7 @@ The requests and answers are the same as the built-in gateways sent before the m
 - A refusal is an answer (`success: false`), retryable only when the same message can pass later (`src/sms-diagnostics.ts`).
 - A timeout or a network failure throws a retryable, uncertain `ProviderError`. The platform retries it only with the message's idempotency key.
 - Answers keep no phone number, e-mail address or credential. The app logs no request or response.
-- Sign-in codes go through the queue consumer with opaque references only. The platform derives the code at send time and gives the app the number and the text.
+- Sign-in codes are sent after the response from opaque references only. The platform derives the code at send time and gives the app the number and the text.
 - A provider operation's calls to its own gateway do not count against the app's outbound request limit, so a burst of sign-in codes is not throttled.
 
 ## SSLCommerz
@@ -136,6 +136,6 @@ pnpm exec vitest run plugins/bangladesh apps/api/src/plugins/bangladesh-pack.e2e
 ```
 
 - `src/*.test.ts` run the app over the SDK harness with scripted gateway and service answers. The cases are core's tests from before the move.
-- `bangladesh-pack.e2e.test.ts` runs the bundled pack on the migrated schema. It covers the handoff of saved keys, the 11,550-place seed, a sign-in code from the queue consumer, a fraud check, a second activation and an uninstall.
+- `bangladesh-pack.e2e.test.ts` runs the bundled pack on the migrated schema. It covers the handoff of saved keys, the 11,550-place seed, a sign-in code sent from its references, a fraud check, a second activation and an uninstall.
 - `bangladesh-couriers.e2e.test.ts` covers the couriers' fail-closed state before activation, the handoff of courier rows and shipments, the old webhook URLs, Pathao's place ids and once-only bulk booking. `bangladesh-couriers.outcome.d1.test.ts` runs core's booking-outcome cases (lost answers, refusals, Steadfast's lookup) through the pack.
 - `bangladesh-sslcommerz.e2e.test.ts` covers SSLCommerz's fail-closed state before activation, the handoff (keys, environment, checkout choice, open payments), a validated IPN at the old URL credited once, a tampered IPN, a cancel at the old return URL, and a refund of a payment made before the move.

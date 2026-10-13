@@ -38,7 +38,7 @@ The notifications domain sends buyer and staff messages over email, SMS, WhatsAp
 - `marketing_opt_in` (double opt-in email) is a buyer flow, not a merchant choice.
 - Defaults (`DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS`, `DEFAULT_ADMIN_NOTIFICATION_CHANNELS` in `documents.ts`): buyers get email for every buyer type, plus SMS for `order_ready_for_pickup`, `order_digital_delivered` and `gift_card_issued`, and never WhatsApp. Staff get push for `order_created`, `order_cancelled`, `support_request_submitted`, `conversation_message` and `review_pending`, and push plus email for `digital_keys_exhausted`.
 - Support notification payloads carry only the order id, request id, request type and status. Free-form customer text stays out of provider payloads.
-- Status changes enqueue a notification only for shipped, delivered, cancelled, returned and refunded orders (`getOrderNotificationTypeForStatus` in `apps/api/src/utils/order-notification-queue.ts`). Other flows (checkout, refunds, pickup, support, fulfilment, reviews) write their own rows.
+- Status changes send a notification only for shipped, delivered, cancelled, returned and refunded orders (`getOrderNotificationTypeForStatus` in `apps/api/src/utils/order-notifications.ts`). Other flows (checkout, refunds, pickup, support, fulfilment, reviews) write their own rows.
 
 ## Settings
 
@@ -68,7 +68,7 @@ All paths start with `/api/v1/admin`.
 | `POST /orders/{id}/notifications/{outboxId}/retry` | `orders.edit` |
 | `POST /orders/{id}/notifications/{outboxId}/resend` | `orders.edit` |
 
-- Retry works on a `pending`, `failed` or `dead_lettered` row. It resets the pending and failed receipts and enqueues the same row. Accepted and skipped receipts stay terminal, so nothing is sent twice.
+- Retry works on a `pending`, `failed` or `dead_lettered` row. It resets the pending and failed receipts and sends the same row. Accepted and skipped receipts stay terminal, so nothing is sent twice.
 - Resend works on a `sent` row and creates a new row. It needs a request id (the `Idempotency-Key` header or `resendRequestId`). Its dedupe key is `manual_resend:<outboxId>:<resendRequestId>`.
 - Email, Firebase and push-token routes are in the integration READMEs.
 
@@ -77,21 +77,20 @@ All paths start with `/api/v1/admin`.
 ```text
 fact commits
   -> notification_outbox row (pending), same batch as the fact or right after
-  -> JOBS_QUEUE { type: "notification", outboxId }
-  -> queue consumer claims the row, reads recipient and text now
+  -> after the response: the sender claims the row by id, reads recipient and text now
+     (the cron's notification_drain sends every due row each minute)
   -> one notification_delivery_receipts row per channel and recipient
   -> provider call -> receipt accepted | skipped | failed
   -> outbox row sent | failed (backoff) | dead_lettered
 ```
 
-- Table `notification_outbox`. Subjects: `order`, `conversation`, `gift_card`, `digital`, `customer`. The consumer dispatches `order`, `gift_card`, `customer` (`marketing_opt_in` only) and `conversation`. It dead-letters any other subject as unsupported.
-- The row and the queue message carry ids only. `sanitizeNotificationData` keeps at most 12 short primitive facts and drops keys that look like a contact, text, code or token. Nothing resolved at send time is persisted.
+- Table `notification_outbox`. Subjects: `order`, `conversation`, `gift_card`, `digital`, `customer`. The sender dispatches `order`, `gift_card`, `customer` (`marketing_opt_in` only) and `conversation`. It dead-letters any other subject as unsupported.
+- The row and the sender's argument carry ids only. `sanitizeNotificationData` keeps at most 12 short primitive facts and drops keys that look like a contact, text, code or token. Nothing resolved at send time is persisted.
 - `dedupe_key` is unique.
-- Row states: `pending`, `enqueueing`, `queued`, `processing`, `sent`, `failed`, `dead_lettered`. Leases: 5 minutes to enqueue, 15 to process. Each enqueue or processing claim adds one attempt. At 8 attempts the row becomes `dead_lettered`.
-- Backoff is `60 s x 2^(attempts-1)`, at most 1 hour. A failed delivery marks the row `failed` and acks the queue message. The scheduled flush is the retry authority.
-- `notification_outbox_flush` runs on every cron tick (every 15 minutes) on both plans. It sends due rows, rows with an expired lease and `queued` rows older than 1 hour (`STALE_QUEUED_REPLAY_SECONDS`). The limit per run is 200 on Paid and 40 on Free (`ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT` x plan scale), sent in chunks of 50 with `sendBatch`.
+- Row states: `pending`, `processing`, `sent`, `failed`, `dead_lettered`. The processing lease is 15 minutes. Each claim adds one attempt. At 8 attempts the row becomes `dead_lettered`.
+- Backoff is `60 s x 2^(attempts-1)`, at most 1 hour. A failed delivery marks the row `failed`. The drain is the retry authority.
+- `notification_drain` runs on every cron tick (every minute) on both plans. It sends due rows and rows with an expired lease, at most `planLimits().background.notificationsPerDrain` per tick (1 on Free, 20 on Paid). The sender after a write sends at most the same number; the drain sends the rest.
 - `NotificationInput.notBefore` schedules a row. It becomes `next_attempt_at`.
-- `jobs-dlq` marks the row `dead_lettered`. It never resends.
 
 ## Delivery receipts
 
@@ -126,7 +125,7 @@ fact commits
 
 - `sendOrderNotification()` pushes to every active token in `admin_fcm_tokens`. The link is `<dashboard origin>/admin/orders/<id>`, from the `dashboardUrl` of the `platform` settings document (`BETTER_AUTH_URL`). Without it the link is omitted.
 - With an `outboxId`, each token has its own receipt. An unregistered or invalid token ends as a skipped receipt, then `is_active` becomes false. A setup failure pauses the `push`/`fcm` provider.
-- The queue handler (`apps/api/src/queue-notifications.ts`) checks the staff rule for `push`. It skips push, with a warning log, when the `apiUrl` of the `platform` settings document is empty (Settings > Store details > Web addresses).
+- The sender (`apps/api/src/background/notifications.ts`) checks the staff rule for `push`. It skips push, with a warning log, when the `apiUrl` of the `platform` settings document is empty (Settings > Store details > Web addresses).
 - `sendStaffOrderEmails()` emails every `staffEmailRecipients` address for `order_created` only. Each recipient has a receipt (`staff:<email>`).
 - `sendStaffAlertNotification()` sends `review_pending` and `digital_keys_exhausted` to staff with no buyer content.
 - `sendConversationNotification()` sends thread notifications. Reply email carries the escaped message text. Reply SMS carries no text and goes out at most once per thread per hour. The staff push for a buyer message names the order number and carries no message text.
@@ -136,12 +135,11 @@ fact commits
 
 ## OTP delivery
 
-The `auth.send_otp` queue message is handled in `apps/api/src/queue-consumer.ts`, not through the outbox. Its receipts are `auth_otp_delivery_receipts`. The [customers README](../customers/README.md) owns the flow (opaque payload, send-time code, receipts). Notification rules that apply:
+Sign-in codes are sent by `apps/api/src/background/otp.ts` right after the response, not through the outbox. Its receipts are `auth_otp_delivery_receipts`. The [customers README](../customers/README.md) owns the flow (opaque payload, send-time code, receipts). Notification rules that apply:
 
 - Email, SMS and WhatsApp OTP use the same pause markers. A paused provider gives a terminal skipped receipt.
 - WhatsApp OTP uses the `whatsapp` document's `authTemplateName` (default `auth_otp`), language `en_US`, and the code as the one body value.
-- `jobs-dlq` never calls a provider. It marks the receipt `skipped` (`auth_otp_dlq_terminal`).
-- If a provider accepts a code and D1 cannot record it after brief retries, the message retries and may send one duplicate code. The receipt is the only authority; there is no KV hint.
+- If a provider accepts a code and D1 cannot record it after brief retries, the receipt keeps its lease and no later attempt sends again; the buyer may ask for a new code. The receipt is the only authority; there is no KV hint.
 
 ## Dispatch kit
 

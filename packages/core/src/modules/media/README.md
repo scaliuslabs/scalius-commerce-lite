@@ -11,7 +11,7 @@ How other records point at a stored file (the published key and URL projection, 
 ## Layer and imports
 
 - Layer L2. Imports `media-references` and `settings`. The usage index reads the `business` and `seo` settings documents, so this domain sits above `settings`. It also uses `packages/core/src/integrations/storage.ts` and `settings-store`.
-- No other core domain imports it. The API routes, the queue consumer and the cron call it.
+- No other core domain imports it. The API routes, public reads and the cron call it.
 
 ## Tables
 
@@ -51,9 +51,8 @@ Product photos are `product_media` rows that point at `media` with `restrict`. O
 - The published URL is the largest rendition. Consumers derive the smaller ones from that URL alone. Changing the ladder needs a migration that sends every image back to its original.
 - Who renders:
   - The dashboard browser encodes the ladder and sends it to `POST /{id}/variants` (`components/admin/media-manager/utils/media-variants.ts`).
-  - Upload completion enqueues the `media.render_variants` job on `JOBS_QUEUE` with a 120 second delay. The consumer `renderMissingMediaVariants` renders only if `variant_width` is still NULL. It needs the `IMAGES` binding.
-  - The cron (`*/15 * * * *`) fans the backlog out to the queue (`enqueueMediaVariantsBacklog`). Without a queue it renders inline (`backfillMissingMediaVariants`, limited by the plan profile). It skips files touched in the last 10 minutes.
-  - On the Paid plan profile, a public read that renders a still original queues the job at once (`apps/api/src/utils/media-rendition-hints.ts`, per-colo Cache API marker keyed by the Worker version, at most 24 ids per read).
+  - The cron's `media_rendition_backfill` job renders the backlog inline (`backfillMissingMediaVariants`, at most `planLimits().maintenance.inlineRenditionsPerRun` images within a time budget). It skips files touched in the last 10 minutes, so an upload the browser is still finishing is left alone. It needs the `IMAGES` binding.
+  - On the Paid plan profile, a public read that renders a still original renders up to 4 such images right after the response (`renderMissingMediaVariants`, which renders only if `variant_width` is still NULL; `apps/api/src/utils/media-rendition-hints.ts`, per-colo Cache API marker keyed by the Worker version).
 - Plan limits: [`docs/FREE-PLAN.md`](../../../../../docs/FREE-PLAN.md).
 
 ## Usage index

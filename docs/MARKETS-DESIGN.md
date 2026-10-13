@@ -203,7 +203,7 @@ BDT and 1 otherwise; `priceIncrementChoices()` is the minor unit or the whole
 unit. Step 2 moved it to the backup market (see "Step 2 implemented"). It is
 served to the dashboard (`useCurrency()`) and the storefront
 (`window.__CURRENCY_PRICE_INCREMENT__`, the layout `currency` block). A change
-queues a catalogue projection rebuild. `money.ts` replaces the BDT cash
+requests a catalogue projection rebuild. `money.ts` replaces the BDT cash
 helpers with `toIncrementMinor()`, `roundToIncrementMinor()`,
 `floorToIncrementMinor()`, `percentOfMinor()`, `discountedPriceMinor(..., inc)`,
 `PriceIncrementError` and `priceIncrementMessage()`. Catalogue and SQL-twin
@@ -287,7 +287,7 @@ countries advances the checkout authority fence.
 **Price increment** (D1). The backup market row is the one source. The
 `markets` domain owns `readStoreCurrency()`, `backupPriceIncrementSql()` and
 `storePriceIncrementSql()`. Settings → Markets edits it on the backup
-market; Store details no longer does. A change queues a catalogue projection
+market; Store details no longer does. A change requests a catalogue projection
 rebuild. A new shop currency resets it to that currency's default
 (`resetBackupPriceIncrement()`). The shop currency stays in the `currency`
 document, and a market never stores a copy.
@@ -1038,7 +1038,7 @@ every location, the subtraction is a constant 0 that SQLite decides once per
 statement, so a single-location store does no work per SKU. Card bands, the
 buyer projection, the product page, search, feeds, market list pricing,
 cart validation and the checkout reservation guard read it for their
-channel. Linking or unlinking a location queues a catalogue projection
+channel. Linking or unlinking a location requests a catalogue projection
 rebuild.
 
 **Writes.**

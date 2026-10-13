@@ -45,7 +45,7 @@ A batch may stop early when its time budget runs out or D1's per-invocation quer
 
 - Remote media get the id `media_u<sha256(url)[:24]>_<suffix>`. One URL downloads once per store. An image already on the product is left alone. This store's own media URLs (a re-imported export) are reused.
 - New images append in one aggregate-revision write. The first becomes featured when the product has none. A SKU without an image gets the one the file named.
-- Downloads use the guarded media URL import that the API injects (public HTTPS, bounded size, signature checked). The API then queues the rendition job.
+- Downloads use the guarded media URL import that the API injects (public HTTPS, bounded size, signature checked). The scheduled backfill renders their renditions.
 
 ### Customers
 

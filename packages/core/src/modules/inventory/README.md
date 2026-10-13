@@ -88,12 +88,12 @@ Types: `reserved`, `preorder_reserved`, `released`, `deducted`, `preorder_deduct
 
 - The alert level of a SKU is its own `low_stock_threshold`, else the store default. `0` turns alerts off; sold out always needs review (`effectiveLowStockThresholdSql()` in `products/low-stock-policy.ts`).
 - `checkAndAlertLowStock()` creates, reactivates, refreshes or resolves the alert row after a stock write. A failure is logged and never fails the committed write.
-- `setLowStockThreshold()` sets a SKU level and writes no movement. `setDefaultLowStockThreshold()` writes the `inventory` document; its route then enqueues a catalog projection rebuild, because the level changes bands. The Low stock list reads live stock, not the alert rows.
+- `setLowStockThreshold()` sets a SKU level and writes no movement. `setDefaultLowStockThreshold()` writes the `inventory` document; its route then requests a catalog projection rebuild, because the level changes bands. The Low stock list reads live stock, not the alert rows.
 - A band is `untracked`, `out_of_stock`, `low_stock` or `in_stock` (`@scalius/shared/buyer-availability`). The band is the buyer-visible truth. Public reads carry `availabilityBand`. Never expose exact stock to a public read: `stock` and `reservedStock` there are fixed compatibility values. Live cart and checkout validation stays authoritative.
 
 ## Reservation expiry
 
-`releaseExpiredReservations(db, maxAgeMinutes = 30, { limit })` frees reservations whose order row never committed. It takes `reserved` and `preorder_reserved` movements older than the age with an `order_id` and no `orders` row, groups them by variant, order, pool and generation, and subtracts deducted and released quantities. It processes at most `limit` groups (default 50, maximum 200), reports `hasMore`, and writes a `released` movement with the counter update in one batch. It never touches an order that exists: a status transition cancels those. The cron runs it in maintenance slice 0 (`apps/api/src/scheduled-maintenance.ts`).
+`releaseExpiredReservations(db, maxAgeMinutes = 30, { limit })` frees reservations whose order row never committed. It takes `reserved` and `preorder_reserved` movements older than the age with an `order_id` and no `orders` row, groups them by variant, order, pool and generation, and subtracts deducted and released quantities. It processes at most `limit` groups (default 50, maximum 200), reports `hasMore`, and writes a `released` movement with the counter update in one batch. It never touches an order that exists: a status transition cancels those. The cron runs it in its sweep rotation, `planLimits().maintenance.inventoryExpiryPerRun` groups a run (`apps/api/src/scheduled-maintenance.ts`).
 
 ## Purchasing, transfers and unit cost
 

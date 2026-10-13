@@ -54,5 +54,4 @@ Each file in `unit/` is named `<name>.test.ts`. Only `page-content-sanitization`
 | Helper | What it gives you |
 |--------|-------------------|
 | `createMockDb(overrides?)` | A drizzle-style database mock. It records calls in `db._calls` (clear with `db._reset()`), returns the configured results, and supports `batch()`. Chainable methods: `from`, `where`, `set`, `values`, `returning`, `orderBy`, `limit`, `offset`, `groupBy`, `leftJoin`, `innerJoin`. Terminal methods: `get()`, `all()`, and `await`. |
-| `createMockEnv()` | Mock bindings `DB` (D1 `prepare`, `batch`, `exec`), `KV` (backed by a `Map`), `R2`, and `QUEUE` (`send`, `sendBatch`, messages in `_messages`). These names are the mock's own, not the Worker's binding names. |
 | `seedProduct`, `seedVariant`, `seedOrder`, `seedOrderItem`, `seedCustomer` | Plain objects with defaults and per-field overrides. IDs use the prefixes `prod_`, `var_`, `ORD-`, `item_`, and `cust_`. Money fields are integer minor units (`*Minor`). |

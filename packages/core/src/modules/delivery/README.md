@@ -85,7 +85,7 @@ The API mounts `POST /api/v1/webhooks/couriers/{id}` (app couriers whose port im
 1. Finds the shipment by external id, scoped to the one active provider row and the courier. An old or inactive row, or another provider's colliding id, cannot match. With the order number the courier echoes, it refuses a booking of another order and binds a booking a lookup confirmed without its id.
 2. Claims the event once in `webhook_events`. A duplicate returns the earlier result.
 3. Stores the status and details on the shipment, then runs `syncCourierFulfilmentFromShipment()`, `updateOrderStatusFromShipment()` and `syncCourierFulfilmentFromShipment()` again.
-4. Enqueues the customer notification after a committed status change.
+4. Records the customer notification after a committed status change; it is sent after the response.
 
 Admin status checks use the same sync through `checkAndSyncShipmentStatus()` (`apps/api/src/routes/admin/shipment-status-sync.ts`). Use that helper for every status-check endpoint.
 
