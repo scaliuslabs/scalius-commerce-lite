@@ -305,6 +305,17 @@ describe("Noor chrome", () => {
     expect(html).toContain('class="noor-card-bar" href="/products/linen-shirt" data-card-quick-add aria-label="Add Linen shirt to cart"');
   });
 
+  it("writes ratings, review counts and discounts in the page's numbers and plural rules", () => {
+    const one = renderProductCard(storefront, "noor-card", slotSettings("noor-card"), { rating: { average: 4.5, count: 1 } });
+    expect(one).toContain('aria-label="Rated 4.5 out of 5 from 1 review"');
+    const bangla = renderProductCard(storefront, "noor-card", slotSettings("noor-card"), { rating: { average: 4.5, count: 12 } }, {
+      context: { store: { name: "দোকান", currency: "BDT", locale: "bn-BD", language: "bn", timeZone: "Asia/Dhaka" } },
+    });
+    expect(bangla).toContain("১২টি রিভিউতে ৫-এর মধ্যে ৪.৫");
+    expect(bangla).toContain("★ ৪.৫");
+    expect(bangla).toContain("−২০%");
+  });
+
   it("offers no add button on a sold-out card, and a round one when asked", () => {
     const soldOut = renderProductCard(storefront, "noor-card", slotSettings("noor-card"), { soldOut: true, quickAdd: false });
     expect(soldOut).toContain("Sold out");
@@ -421,7 +432,8 @@ describe("Noor landing kit", () => {
   it("places the store's order form at its instance anchor, with the phone order bar", () => {
     const html = shown(render("landing-order", { assurances: [{ icon: "truck", text: "2-day delivery" }], max_quantity: 3 }));
     expect(html).toContain('id="noor-order-app-landing-order"');
-    expect(html).toContain('<scalius-checkout data-product="linen-shirt" data-max-quantity="3"></scalius-checkout>');
+    // The embed names the product by id, never by a URL a canonical path override can change.
+    expect(html).toContain('<scalius-checkout data-product="product:prod_1-1" data-max-quantity="3"></scalius-checkout>');
     expect(html).toContain('data-island="landing-bar"');
     expect(html).toContain("2-day delivery");
     expect(html).not.toContain("Cash on delivery: pay when it arrives");

@@ -53,7 +53,7 @@ import { AD_CLICK_ID_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-bo
 import { optimizeAnalyticsScriptDelivery } from "@/lib/analytics-script-delivery";
 import { appComponentsRenderOn, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
-import { setExtensionPageNoIndex } from "@/lib/extensions";
+import { setExtensionPage } from "@/lib/extensions";
 import { themeAppStylesheets } from "@/lib/extensions/stylesheets";
 import {
   buildPartytownBootstrap,
@@ -150,8 +150,6 @@ const isThemePreview = themePreview !== null;
 const appStylesheets = appComponentsRenderOn(storefrontAppPage(Astro.url.pathname))
   ? themeAppStylesheets(storefrontTheme, readStorefrontExtensions(layoutData?.appExtensions))
   : [];
-// App JSON-LD stays out of a noindex page (its components draw after this).
-if (noindex) setExtensionPageNoIndex(Astro.locals);
 // The theme editor's bridge, only under a valid preview: buyers never get it.
 const themeEditorBridge = isThemePreview && !libraryPreview
   ? themePreviewBridgeScript(themeEditorOrigin(getRuntimeDashboardUrl()))
@@ -221,6 +219,8 @@ const presenceEntry = marketPresence ? marketOfPresence(marketMatrix, marketPres
 const pageLanguage = presenceEntry?.presence.locale
   ?? (hasSeveralPresences(marketMatrix) ? defaultLocale(marketMatrix) : null)
   ?? documentLanguage;
+// App components draw after this, in the page's language; no app JSON-LD on a noindex page.
+setExtensionPage(Astro.locals, { language: pageLanguage, storeName: storeDisplayName ?? "", noIndex: noindex === true });
 // The page's country: the store's (the backup market's). Numbers and dates are
 // written as there; Open Graph names the presence's country, else the store's.
 const pageRegion = storeRegion();

@@ -20,7 +20,7 @@ import {
   type StorefrontProductCard,
 } from "@scalius/plugin-sdk/storefront";
 import { ICON_NAMES, Icon, type IconName } from "../icons";
-import { Section, SectionHead, Stars, choice, cx, ratingLabel, text, type Context } from "../ui";
+import { Section, SectionHead, Stars, choice, cx, percent, ratingLabel, ratingValue, reviewCount, text, type Context } from "../ui";
 import { Countdown, countdownEnd } from "./commerce";
 
 function iconOf(value: unknown): IconName {
@@ -43,7 +43,8 @@ function Empty({ context, words }: { context: Context; words: { en: string; bn: 
 
 function Savings({ product, context }: { product: StorefrontProductCard; context: Context }) {
   if (!product.compareAt || product.compareAt.amount <= product.price.amount) return null;
-  return <span class="noor-save">{t(context, { en: `Save ${product.percentOff ?? 0}%`, bn: `${product.percentOff ?? 0}% ছাড়` })}</span>;
+  const off = percent(context, product.percentOff ?? 0);
+  return <span class="noor-save">{t(context, { en: `Save ${off}`, bn: `${off} ছাড়` })}</span>;
 }
 
 // ── Product hero ─────────────────────────────────────────────────────────
@@ -88,7 +89,7 @@ export function LandingHero({ settings, context, instanceId }: SectionProps<Land
               </li>
             ))}
           </ul>
-          {product.percentOff ? <span class="noor-badge is-sale is-large">−{product.percentOff}%</span> : null}
+          {product.percentOff ? <span class="noor-badge is-sale is-large">−{percent(context, product.percentOff)}</span> : null}
           {photos.length > 1 ? (
             <ol class="noor-thumbs" data-controls hidden>
               {photos.map((photo, index) => (
@@ -106,7 +107,7 @@ export function LandingHero({ settings, context, instanceId }: SectionProps<Land
           {product.rating ? (
             <p class="noor-rating-line">
               <Stars value={product.rating.average} label={ratingLabel(context, product.rating.average, product.rating.count)} />
-              <span>{product.rating.average.toFixed(1)} · {t(context, { en: `${product.rating.count} reviews`, bn: `${product.rating.count}টি রিভিউ` })}</span>
+              <span>{ratingValue(context, product.rating.average)} · {reviewCount(context, product.rating.count)}</span>
             </p>
           ) : null}
           <div class="noor-lhero-price">

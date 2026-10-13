@@ -9,6 +9,8 @@ import {
   Island,
   Price,
   editable,
+  formatNumber,
+  plural,
   quickAdd,
   t,
   type Renderable,
@@ -128,11 +130,27 @@ export function Stars({ value, label }: { value: number; label: string }) {
   );
 }
 
+/** A rating as the store writes numbers ("4.6", "৪.৬"). */
+export function ratingValue(context: Context, average: number): string {
+  return formatNumber(context, average, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+/** "1 review", "12 reviews", "১২টি রিভিউ". */
+export function reviewCount(context: Context, count: number): string {
+  return plural(context, count, { en: { one: "# review", other: "# reviews" }, bn: { other: "#টি রিভিউ" } });
+}
+
+/** A sale badge's percentage ("20%", "২০%"). */
+export function percent(context: Context, value: number): string {
+  return formatNumber(context, value / 100, { style: "percent" });
+}
+
 export function ratingLabel(context: Context, average: number, count?: number): string {
-  const value = average.toFixed(1);
+  const value = ratingValue(context, average);
+  const five = formatNumber(context, 5);
   return count === undefined
-    ? t(context, { en: `Rated ${value} out of 5`, bn: `৫-এর মধ্যে ${value}` })
-    : t(context, { en: `Rated ${value} out of 5 from ${count} reviews`, bn: `${count}টি রিভিউতে ৫-এর মধ্যে ${value}` });
+    ? t(context, { en: `Rated ${value} out of ${five}`, bn: `${five}-এর মধ্যে ${value}` })
+    : t(context, { en: `Rated ${value} out of ${five} from ${reviewCount(context, count)}`, bn: `${reviewCount(context, count)}তে ${five}-এর মধ্যে ${value}` });
 }
 
 export interface CardOptions {
@@ -173,7 +191,7 @@ export function ProductCard({ product, context, options = {} }: { product: Store
         </a>
         {product.soldOut
           ? <span class="noor-badge is-muted">{t(context, { en: "Sold out", bn: "স্টক শেষ" })}</span>
-          : product.percentOff ? <span class="noor-badge is-sale">−{product.percentOff}%</span> : null}
+          : product.percentOff ? <span class="noor-badge is-sale">−{percent(context, product.percentOff)}</span> : null}
         {canAdd && action === "bar" ? (
           <a class="noor-card-bar" {...quickAdd(product)} aria-label={addLabel}>
             <Icon name={product.quickAdd ? "plus" : "arrow"} size={16} /><span>{addWords}</span>
@@ -191,7 +209,7 @@ export function ProductCard({ product, context, options = {} }: { product: Store
           <Price price={product.price} compareAt={product.compareAt} from={product.priceVaries} context={context} class="noor-price" />
           {options.showRating !== false && product.rating ? (
             <span class="noor-card-rating" role="img" aria-label={ratingLabel(context, product.rating.average, product.rating.count)}>
-              <span aria-hidden="true">★ {product.rating.average.toFixed(1)}</span>
+              <span aria-hidden="true">★ {ratingValue(context, product.rating.average)}</span>
             </span>
           ) : null}
         </div>

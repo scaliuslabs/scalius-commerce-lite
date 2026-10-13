@@ -11,7 +11,7 @@
 //   idle, load or first interaction) and mounts it on the element.
 
 import type { StorefrontIslandContext, StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
-import { DEFAULT_CURRENCY, formatMoney } from "@scalius/shared/currency";
+import { formatMoney, getCurrencyCode } from "@scalius/shared/currency";
 import { initQuickAddCards } from "@/components/cards/scripts/quick-add-card";
 
 type CartSummary = { count: number; total: number };
@@ -48,13 +48,6 @@ function onCart(listener: (cart: CartSummary) => void): () => void {
   return stopListening;
 }
 
-function money(amount: number): string {
-  return formatMoney(amount, {
-    symbol: window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol,
-    code: window.__CURRENCY_CODE__ || DEFAULT_CURRENCY.code,
-  });
-}
-
 function openCart(): void {
   document.dispatchEvent(new CustomEvent("open-cart"));
 }
@@ -87,9 +80,10 @@ function contextFor(element: Element): StorefrontIslandContext | null {
   return {
     pluginId,
     assets,
-    language: document.documentElement.lang.startsWith("bn") ? "bn" : "en",
-    currency: window.__CURRENCY_CODE__ || DEFAULT_CURRENCY.code,
-    formatMoney: money,
+    language: document.documentElement.lang || "en",
+    currency: getCurrencyCode(),
+    // The page's currency and symbol, as the store writes prices.
+    formatMoney: (amount) => formatMoney(amount),
     openCart,
     quickAdd,
     onCart,

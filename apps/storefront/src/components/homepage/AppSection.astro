@@ -32,6 +32,8 @@ let html: string | null = null;
 let base = "";
 let pluginId = "";
 let preview = false;
+/** The products the component was given (id to handle): its order-form embeds may name only these. */
+const embedProducts = new Map<string, string>();
 if (component) {
   const { byId, host } = await requestExtensions(Astro.locals, Astro.url);
   const extension = byId.get(component.pluginId);
@@ -46,6 +48,7 @@ if (component) {
     }));
     const products = new Map(component.lists.map((list) => [list.source, list.products.map((product) => {
       const card = product as ProductCardProduct;
+      embedProducts.set(card.id, card.slug);
       const model = productCardModel(card, {
         currencySymbol: currency.symbol,
         currencyCode: currency.code,
@@ -73,7 +76,7 @@ if (component) {
     still means the app intentionally has nothing to display. */}
 {libraryPreview && component && html === null && <template data-library-render-failed></template>}
 {component
-  ? html !== null && html.trim() !== "" && <AppComponent html={html} pluginId={pluginId} base={base} instanceId={section.id} preview={preview} />
+  ? html !== null && html.trim() !== "" && <AppComponent html={html} pluginId={pluginId} base={base} instanceId={section.id} preview={preview} products={embedProducts} />
   : (
     <section class="home-section w-full" data-app-section={section.settings.app}>
       <Container>

@@ -148,7 +148,7 @@ describe("splitCoreEmbeds", () => {
   it("cuts the markup at the store's order form, keeping the app's markup around it", () => {
     expect(splitCoreEmbeds(`<div class="a"><scalius-checkout data-product="linen-shirt" data-max-quantity="3" data-submit-label="Order &amp; pay"></scalius-checkout></div>`)).toEqual([
       { kind: "html", html: '<div class="a">' },
-      { kind: "checkout", slug: "linen-shirt", maxQuantity: 3, submitLabel: "Order & pay" },
+      { kind: "checkout", product: "linen-shirt", maxQuantity: 3, submitLabel: "Order & pay" },
       { kind: "html", html: "</div>" },
     ]);
   });

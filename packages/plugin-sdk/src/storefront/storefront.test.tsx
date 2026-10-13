@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { STOREFRONT_COMPONENT_ABI } from "@scalius/shared/plugins/storefront-protocol";
 import {
   CartCount,
+  Checkout,
   Image,
   Island,
   Price,
@@ -10,12 +11,18 @@ import {
   asset,
   defineStorefront,
   editable,
+  formatDate,
+  formatMoney,
+  formatNumber,
   html,
+  plural,
   quickAdd,
   raw,
   searchOpener,
   stickyHeader,
+  storeTime,
   storefrontDefinitionOf,
+  t,
   type HeaderProps,
   type ProductCardProps,
   type SectionProps,
@@ -167,5 +174,38 @@ describe("defineStorefront", () => {
   it("refuses async components", () => {
     const asyncModule = defineStorefront({ sections: { slow: async () => "x" } as never });
     expect(() => renderSection(asyncModule, "slow")).toThrow(/synchronously/);
+  });
+});
+
+describe("words, numbers and dates in the page's locale", () => {
+  const store = (language: string, locale: string, currency = "USD", timeZone = "America/New_York") => ({ store: { name: "x", currency, locale, language, timeZone } });
+
+  it("picks words by exact tag, then language, then English", () => {
+    const words = { en: "Shop", bn: "কিনুন", pt: "Comprar", "pt-BR": "Compre" };
+    expect(t(store("pt-BR", "pt-BR"), words)).toBe("Compre");
+    expect(t(store("pt-PT", "pt-PT"), words)).toBe("Comprar");
+    expect(t(store("fr", "fr-FR"), words)).toBe("Shop");
+    expect(t(store("bn", "bn-BD"), { en: "Shop", bn: "" })).toBe("Shop");
+  });
+
+  it("writes numbers, plurals and money as the store does", () => {
+    const reviews = { en: { one: "# review", other: "# reviews" }, bn: { other: "#টি রিভিউ" } };
+    expect(plural(store("en", "en-US"), 1, reviews)).toBe("1 review");
+    expect(plural(store("en", "en-US"), 1200, reviews)).toBe("1,200 reviews");
+    expect(plural(store("bn", "bn-BD"), 12, reviews)).toBe("১২টি রিভিউ");
+    expect(formatNumber(store("en", "en-BD"), 1234567)).toBe("12,34,567");
+    expect(formatNumber(store("bn", "bn-BD"), 4.5, { minimumFractionDigits: 1 })).toBe("৪.৫");
+    expect(formatMoney(store("en", "en-US"), 1250.5)).toBe("$1,250.50");
+  });
+
+  it("reads dates and merchant wall times in the store's time zone", () => {
+    expect(formatDate(store("en", "en-US"), Date.UTC(2026, 0, 1, 3), { dateStyle: "medium" })).toBe("Dec 31, 2025");
+    expect(storeTime(store("en", "en-US"), "2026-07-01", 9, 30)).toBe(Date.UTC(2026, 6, 1, 13, 30));
+    expect(storeTime(store("en", "en-US"), "2026-02-30")).toBeNull();
+  });
+
+  it("embeds the order form by product id, never by a URL a canonical path can change", () => {
+    expect(Checkout({ product: fixtureProductCard({ id: "prod_9", url: "/products/another" }) }).value).toBe('<scalius-checkout data-product="prod_9"></scalius-checkout>');
+    expect(Checkout({ product: null }).value).toBe("");
   });
 });

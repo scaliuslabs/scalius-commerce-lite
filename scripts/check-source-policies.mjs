@@ -41,7 +41,7 @@ export const policies = [
   {
     rule: "numbers, money, dates, lists and plurals are formatted through @scalius/shared/locale-format",
     why: "one Intl layer, keyed by the reader's language and the store's country (CLDR); a hard-coded locale (en-US, en-IN, en-GB) writes a store abroad in another country's format",
-    paths: [storefront, "apps/admin-v2/src", "apps/api/src", "packages/core/src", "packages/shared/src"],
+    paths: [storefront, "apps/admin-v2/src", "apps/api/src", "packages/core/src", "packages/shared/src", "packages/plugin-sdk/src", "plugins"],
     allow: {
       "packages/shared/src/locale-format.ts": "the layer itself",
       "packages/shared/src/locale-words.ts": "the layer's lists, plurals, relative times and units",

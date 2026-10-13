@@ -107,7 +107,8 @@ The SDK's primitives:
 - `stickyHeader()`: declare the actual sticky header box so core navigation and anchors reserve its space.
 - `editable(context, key)`: marks the element that shows a text setting, so the editor edits it in place (preview only; the published page has no marks).
 - `asset(context, "public/font.woff2")`: a public file's URL.
-- `t(context, { en, bn })`: the store's language.
+- `t(context, { en, bn, … })`: words in the page's language (exact BCP 47 tag, then its language, then English).
+- `formatNumber`, `plural(context, count, { en: { one: "# review", other: "# reviews" } })`, `formatMoney`, `formatDate`, `storeTime`: numbers, plurals, money and dates as the store writes them (`@scalius/shared/locale-format`); `context.store` carries the page's `language`, `locale` (language and the store's country), `currency` and `timeZone`, never a default.
 - `Checkout`: the core order form (below).
 
 JSX escapes every string. `raw(...)` passes HTML through; the output check still runs. Event handler attributes and functions as attributes are refused at render time.
@@ -184,7 +185,7 @@ on removal or mount failure; your other resources still need that cleanup.
 
 `<Checkout product={settings.product} maxQuantity={5} />` places the store's own order form in the app's markup: option picker, quantity, name, phone, address. It is the Bangladesh-style landing page: the buyer orders without leaving the page.
 
-- The storefront replaces the marker with `OrderForm.astro` (at most 2 per page).
+- The marker names the product by id (`data-product`), and only a product the section's settings gave it orders: the storefront replaces the marker with `OrderForm.astro` (at most 2 per page).
   The server render input contains no buyer form data. The resulting form belongs
   to core; trusted browser islands share its page and can access its DOM.
 - The form posts to `/checkout/quick`, the same cash-on-delivery pipeline as the product page's quick buy: stock, prices, the delivery quote, checkout functions and the order commit are the core's. The buyer confirms the total once and the order is placed.

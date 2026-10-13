@@ -1,20 +1,21 @@
 // Core embeds in app markup (docs/STOREFRONT-COMPONENTS.md "Core embeds"):
 // elements an app component places for the store to render its own surface
 // there, with its own data, rules and words. Today: `<scalius-checkout
-// data-product="<handle>" data-max-quantity data-submit-label>`, the store's
-// order form for a landing page. The markup around an embed is the app's;
-// the embed is the store's. A component holds at most `EMBEDS_MAX` embeds;
-// any beyond render nothing.
+// data-product="<product id>" data-max-quantity data-submit-label>`, the
+// store's order form for a landing page, for a product the component was
+// given (AppComponent.astro resolves the id; any other renders nothing).
+// The markup around an embed is the app's; the embed is the store's. A
+// component holds at most `EMBEDS_MAX` embeds; any beyond render nothing.
 
 export const EMBEDS_MAX = 2;
 
 export type MarkupPart =
   | { kind: "html"; html: string }
-  | { kind: "checkout"; slug: string; maxQuantity: number; submitLabel: string | null };
+  | { kind: "checkout"; product: string; maxQuantity: number; submitLabel: string | null };
 
 const EMBED = /<scalius-checkout\b([^>]*)>[\s\S]*?<\/scalius-checkout>/g;
 const ATTRIBUTE = /([a-z-]+)="([^"]*)"/g;
-const SLUG = /^[\p{L}\p{N}][\p{L}\p{N}_-]{0,199}$/u;
+const PRODUCT_ID = /^[A-Za-z0-9][A-Za-z0-9_:-]{0,127}$/;
 
 function decode(value: string): string {
   return value.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&amp;/g, "&");
@@ -30,13 +31,13 @@ export function splitCoreEmbeds(html: string): MarkupPart[] {
     parts.push({ kind: "html", html: html.slice(last, match.index) });
     last = match.index + match[0].length;
     const attributes = new Map([...match[1]!.matchAll(ATTRIBUTE)].map(([, name, value]) => [name!, decode(value!)]));
-    const slug = attributes.get("data-product")?.trim() ?? "";
-    if (embeds >= EMBEDS_MAX || !SLUG.test(slug)) continue;
+    const product = attributes.get("data-product")?.trim() ?? "";
+    if (embeds >= EMBEDS_MAX || !PRODUCT_ID.test(product)) continue;
     embeds += 1;
     const max = Number(attributes.get("data-max-quantity") ?? "5");
     parts.push({
       kind: "checkout",
-      slug,
+      product,
       maxQuantity: Number.isInteger(max) && max >= 1 ? Math.min(max, 10) : 5,
       submitLabel: attributes.get("data-submit-label")?.trim().slice(0, 60) || null,
     });
