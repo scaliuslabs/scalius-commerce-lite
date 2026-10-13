@@ -61,8 +61,6 @@ export interface PlanLimits {
   };
   /** Optional KV hints: D1 stays the authority, so a hint that is off costs a D1 read, never correctness. */
   readonly kv: {
-    /** Checkout status and receipt hints written after an order commits (and on a status poll that missed them). */
-    readonly checkoutRecoveryHints: boolean;
     /** The per-user permission snapshot cached for other isolates. */
     readonly permissionCache: boolean;
   };
@@ -130,7 +128,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       catalogRebuildChunk: 90,
       renditionsFromPublicReads: false,
     }),
-    kv: Object.freeze({ checkoutRecoveryHints: false, permissionCache: false }),
+    kv: Object.freeze({ permissionCache: false }),
     maintenance: Object.freeze({ slices: 4, queueSweeps: true, staleOrdersPerRun: 1, digitalUploadsPerState: 10, orphanAttachmentsPerRun: 10, limitScale: 0.2, inlineRenditionsPerRun: 1 }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8 }),
     plugins: Object.freeze({
@@ -156,7 +154,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       catalogRebuildChunk: 900,
       renditionsFromPublicReads: true,
     }),
-    kv: Object.freeze({ checkoutRecoveryHints: true, permissionCache: true }),
+    kv: Object.freeze({ permissionCache: true }),
     maintenance: Object.freeze({ slices: 1, queueSweeps: false, staleOrdersPerRun: 25, digitalUploadsPerState: 25, orphanAttachmentsPerRun: 50, limitScale: 1, inlineRenditionsPerRun: 240 }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90 }),
     plugins: Object.freeze({

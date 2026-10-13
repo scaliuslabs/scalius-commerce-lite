@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { errorResponseFromError } from "../../../utils/api-response";
+import { TEST_WORKER_VERSION, stubSettingsMirror } from "../../../testing/settings-mirror";
 import { storeDefaultsSettingsRoutes } from "./store-defaults";
 
 describe("store defaults and store setup routes", () => {
@@ -10,13 +11,14 @@ describe("store defaults and store setup routes", () => {
   let app: OpenAPIHono<{ Bindings: Env }>;
   let env: Env;
   const send = vi.fn(async () => undefined);
-  const put = vi.fn(async () => undefined);
+  let mirror: ReturnType<typeof stubSettingsMirror>;
 
   beforeEach(() => {
     const created = createSqliteD1Database();
     sqlite = created.sqlite;
+    mirror = stubSettingsMirror();
     env = {
-      CACHE: { get: vi.fn(async () => null), put, delete: vi.fn(async () => undefined) },
+      CF_VERSION_METADATA: { id: TEST_WORKER_VERSION },
       JOBS_QUEUE: { send },
     } as unknown as Env;
     app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
@@ -36,7 +38,7 @@ describe("store defaults and store setup routes", () => {
     sqlite.close();
     vi.restoreAllMocks();
     send.mockClear();
-    put.mockClear();
+    vi.unstubAllGlobals();
   });
 
   const call = async (method: string, path: string, body?: unknown) => {
@@ -54,7 +56,7 @@ describe("store defaults and store setup routes", () => {
 
     const saved = await call("POST", "/store-defaults", { expectedRevision: 0, timeZone: "Europe/London", unitSystem: "imperial" });
     expect(saved).toMatchObject({ status: 200, body: { data: { timeZone: "Europe/London", unitSystem: "imperial", weightUnit: "lb", revision: 1 } } });
-    expect(put).toHaveBeenCalledWith("settings:platform", expect.stringContaining("Europe/London"));
+    expect(mirror.read("settings:platform")).toContain("Europe/London");
 
     expect((await call("POST", "/store-defaults", { expectedRevision: 0, timeZone: "UTC" })).status).toBe(409);
     expect((await call("POST", "/store-defaults", { expectedRevision: 1, timeZone: "Mars/Olympus" })).status).toBe(400);
