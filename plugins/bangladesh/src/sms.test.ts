@@ -1,7 +1,6 @@
 // The Bangladesh SMS gateways over the SDK harness (the platform's runtime,
-// inputs and answers validated against the SMS port). The cases are core's
-// tests from before the move (port.contract, bdbulksms, gennet), so the
-// gateways answer exactly as the built-ins did. Gateway HTTP is scripted.
+// inputs and answers validated against the SMS port). Gateway HTTP is
+// scripted.
 import { describe, expect, it } from "vitest";
 import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
 import pack from "./index";

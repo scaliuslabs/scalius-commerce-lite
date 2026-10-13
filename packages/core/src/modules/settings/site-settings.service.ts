@@ -246,7 +246,7 @@ const themeVersionMetaSchema = z.object({
 type ThemeVersionMeta = z.infer<typeof themeVersionMetaSchema>;
 const NO_VERSION_META: ThemeVersionMeta = { changes: [], moreChanges: 0, note: null };
 
-/** Stored theme rows are read through the upgrade path; an unreadable one fails closed. */
+/** Stored theme rows are read strictly; an unreadable one fails closed. */
 function parseAuthoritativeThemeSettings(value: string): StorefrontThemeDocument {
   const theme = parseStoredStorefrontThemeDocument(value);
   if (!theme) {

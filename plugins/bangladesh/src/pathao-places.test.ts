@@ -1,7 +1,6 @@
-// Pathao's live places in the pack: the name rules and the dataset shape
-// (core's tests from before the move: location-names and
-// pathao-location-import), and the store's bounded, resumable refresh through
-// the place import port. Pathao's API and the import are scripted.
+// Pathao's live places in the pack: the name rules and the dataset shape, and
+// the store's bounded, resumable refresh through the place import port.
+// Pathao's API and the import are scripted.
 import { describe, expect, it } from "vitest";
 import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
 import pack from "./index";

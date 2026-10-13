@@ -1,8 +1,6 @@
 // SSLCommerz over the SDK harness (the platform's runtime, inputs and answers
-// validated against the payment port). The cases are core's SSLCommerz
-// adapter tests from before the move (gateway-kernel.test.ts), so the pack's
-// provider answers exactly as the built-in gateway did, plus the transaction
-// query the port asks of every hosted provider. SSLCommerz HTTP is scripted.
+// validated against the payment port), including the transaction query the
+// port asks of every hosted provider. SSLCommerz HTTP is scripted.
 import { describe, expect, it } from "vitest";
 import type { PaymentSessionInput } from "@scalius/plugin-sdk";
 import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";

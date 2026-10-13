@@ -178,7 +178,7 @@ function installStripePaymentFixture() {
   }));
   (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
     ...baseConfig, activeDefaultMethod: "stripe",
-    gateways: [{ id: "stripe", flow: "card", publishableKey: "pk_stable_host", testMode: true }, { id: "cod" }, { id: "sslcommerz", flow: "hosted" }],
+    gateways: [{ id: "stripe", flow: "card", publishableKey: "pk_stable_host", testMode: true }, { id: "cod" }, { id: "sslcommerz", name: "SSLCommerz", flow: "hosted" }],
   };
   return { cards, confirmCardPayment, createCard, stripe };
 }

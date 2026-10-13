@@ -57,8 +57,6 @@ export interface CheckoutConfig {
       min: number;
       max: number;
     };
-    /** @deprecated Transitional fallback for cached gateway configuration. */
-    sandbox?: boolean;
     [key: string]: unknown;
   }>;
   activeDefaultMethod?: string;

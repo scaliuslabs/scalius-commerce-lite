@@ -27,11 +27,10 @@ A Super Admin selects **Review and activate** in Apps. The pack asks for:
 - network access to the payment gateway's, couriers', SMS gateways' and checkers' hosts only;
 - the payment, courier, SMS and fraud check provider ports.
 
-Activation then does three things:
+Activation then does two things:
 
-1. It moves the keys that the store saved in core before the move (see [Keys saved before the pack](#keys-saved-before-the-pack)).
-2. It loads the places. It sends them in calls of 500, parents first, for at most 20 seconds. The hourly `places-sync` job finishes a load that did not complete. The **Bangladesh places** page (Settings) shows the progress and has **Load places now**.
-3. The next steps show in the setup step and on the places page: set up SSLCommerz in Settings → Payments, add Pathao or Steadfast in Settings → Shipping → Couriers, choose the SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations. Each one's keys are entered there, in its setup sheet.
+1. It loads the places. It sends them in calls of 500, parents first, for at most 20 seconds. The hourly `places-sync` job finishes a load that did not complete. The **Bangladesh places** page (Settings) shows the progress and has **Load places now**.
+2. The next steps show in the setup step and on the places page: set up SSLCommerz in Settings → Payments, add Pathao or Steadfast in Settings → Shipping → Couriers, choose the SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations. Each one's keys are entered there, in its setup sheet.
 
 ## Settings
 
@@ -66,12 +65,12 @@ Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPT
 
 ## SSLCommerz
 
-- The requests are the same as the built-in gateway sent (`src/sslcommerz.ts`): a session per attempt (`tran_id` is the platform's reference, `value_a`/`value_b` the payment type and the order), BDT only, 10 to 500,000 taka (`amountLimits`), the amount as sent (no codec).
+- A session per attempt (`src/sslcommerz.ts`) (`tran_id` is the platform's reference, `value_a`/`value_b` the payment type and the order), BDT only, 10 to 500,000 taka (`amountLimits`), the amount as sent (no codec).
 - SSLCommerz signs neither its IPN nor the buyer's return. A payment counts only after the validation API answers for its `val_id`, and only when that answer agrees with its transaction, order and payment type. A tampered or unfinished answer changes nothing.
 - A failed or cancelled return posts `tran_id` unsigned. The pack declares the field (`returnCorrelationField`); the platform releases the attempt it names without calling the pack.
 - `queryPayment` (the receipt page's "check payment") asks the transaction query by session key, then validates the payment it names, so the event is the IPN's.
 - A refund goes to the merchant refund API once per refund reference (`refund_trans_id`, at most 30 characters). A refusal or a lost answer is kept for reconciliation (`refundStatus` by `refund_ref_id`), never sent again.
-- New sessions use the platform's routes: IPN `/api/v1/webhooks/scalius.bangladesh:sslcommerz`, returns `/api/v1/payment/scalius.bangladesh:sslcommerz/{success,fail,cancel}`. The URLs SSLCommerz already holds (`/webhooks/sslcommerz`, `/payment/sslcommerz/*`, in the merchant panel and in sessions started before the move) reach the same provider: nothing to change in SSLCommerz's panel.
+- New sessions use the platform's routes: IPN `/api/v1/webhooks/scalius.bangladesh:sslcommerz`, returns `/api/v1/payment/scalius.bangladesh:sslcommerz/{success,fail,cancel}`.
 - **Test connection** runs one transaction query for a reference no payment has; SSLCommerz answers it only with working credentials.
 - The SSLCommerz mark in Settings → Payments is the pack's (`assets/sslcommerz.png`); the storefront shows a copy.
 
@@ -104,15 +103,12 @@ Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPT
 
 ## Limits and gaps
 
-- SSLCommerz's hash (`verify_sign`) is not checked, as before the move: the validation API is the authority. EMI is not offered (it was not before).
-- An IPN or return claimed before the move under `sslcommerz` and delivered again after it is claimed again under the pack's id; the payment's reference credits the order at most once.
-- GenNet must be on a `gennet.com.bd` subdomain. Before the move, any https address worked.
-- Delivery receipts, balance checks and per-message status are not implemented: the built-in gateways had none.
-- A courier's API address must be on its own host (`api-hermes.pathao.com`, `courier-api-sandbox.pathao.com`, `portal.packzy.com`). Before the move, any https address worked.
-- One Pathao and one Steadfast account per store (the pack's settings). A store with two rows of one courier moves the active row's keys; both rows then use the pack's courier.
-- Webhook IP allowlists (`config.allowedWebhookIps`) are gone: they never let a push in without a secret (Pathao's answer needs the secret; Steadfast's token falls back to the secret key).
-- A push answered as a duplicate before the move is applied once more after it (its claim was named by the old courier id); applying a state twice changes nothing.
-- A store with two saved rows of one checker type keeps the keys of the active row (else the newest). Both rows then point at the pack.
+- SSLCommerz's hash (`verify_sign`) is not checked: the validation API is the authority. EMI is not offered.
+- GenNet must be on a `gennet.com.bd` subdomain.
+- Delivery receipts, balance checks and per-message status are not implemented.
+- A courier's API address must be on its own host (`api-hermes.pathao.com`, `courier-api-sandbox.pathao.com`, `portal.packzy.com`).
+- One Pathao and one Steadfast account per store (the pack's settings).
+- Webhook IP allowlists are not supported: a push needs its secret (Pathao's answer needs the secret; Steadfast's token falls back to the secret key).
 
 ## Testing
 
@@ -120,7 +116,7 @@ Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPT
 pnpm exec vitest run plugins/bangladesh apps/api/src/plugins/bangladesh-pack.e2e.test.ts apps/api/src/plugins/bangladesh-couriers.e2e.test.ts apps/api/src/plugins/bangladesh-couriers.outcome.d1.test.ts apps/api/src/plugins/bangladesh-sslcommerz.e2e.test.ts
 ```
 
-- `src/*.test.ts` run the app over the SDK harness with scripted gateway and service answers. The cases are core's tests from before the move.
-- `bangladesh-pack.e2e.test.ts` runs the bundled pack on the migrated schema. It covers the handoff of saved keys, the 11,550-place seed, a sign-in code from the queue consumer, a fraud check, a second activation and an uninstall.
-- `bangladesh-couriers.e2e.test.ts` covers the couriers' fail-closed state before activation, the handoff of courier rows and shipments, the old webhook URLs, Pathao's place ids and once-only bulk booking. `bangladesh-couriers.outcome.d1.test.ts` runs core's booking-outcome cases (lost answers, refusals, Steadfast's lookup) through the pack.
-- `bangladesh-sslcommerz.e2e.test.ts` covers SSLCommerz's fail-closed state before activation, the handoff (keys, environment, checkout choice, open payments), a validated IPN at the old URL credited once, a tampered IPN, a cancel at the old return URL, and a refund of a payment made before the move.
+- `src/*.test.ts` run the app over the SDK harness with scripted gateway and service answers. The cases script the gateway and service answers.
+- `bangladesh-pack.e2e.test.ts` runs the bundled pack on the migrated schema. It covers the 11,550-place seed, a sign-in code from the queue consumer, a fraud check, a second activation and an uninstall.
+- `bangladesh-couriers.e2e.test.ts` covers the couriers' fail-closed state before activation, the webhook URLs, Pathao's place ids and once-only bulk booking. `bangladesh-couriers.outcome.d1.test.ts` runs core's booking-outcome cases (lost answers, refusals, Steadfast's lookup) through the pack.
+- `bangladesh-sslcommerz.e2e.test.ts` covers SSLCommerz's fail-closed state before activation, a validated IPN credited once, a tampered IPN, a cancel return, and a refund.
