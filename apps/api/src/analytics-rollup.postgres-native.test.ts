@@ -4,6 +4,8 @@ import { analyticsFactMeasureSql } from "@scalius/database/analytics-rollup";
 import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 import { createAnalyticsContext, getAnalyticsOverviewForRequest } from "@scalius/core/modules/analytics";
+import { pruneStaffAlerts } from "@scalius/core/modules/notifications";
+import { maintainDerivedProjections } from "./scheduled/derived-projections";
 import { createAnalyticsFixture, type AnalyticsFixture } from "../../../packages/core/src/modules/analytics/reports/reports.fixture";
 import { AUGUST } from "../../../packages/core/src/modules/analytics/reports/metrics.fixture-store";
 import { sourceOverviewPeriod } from "../../../packages/core/src/modules/analytics/reports/overview.source-oracle";
@@ -242,6 +244,12 @@ describe.runIf(nativePostgresUrl())("analytics rollup SERIALIZABLE concurrency",
         await sealEveryFactDay(pg.db);
         await parity();
       }
+      // The projection checks and retention run on PostgreSQL too: in step, nothing to repair.
+      expect(await maintainDerivedProjections(pg.db, { now: new Date("2026-10-01T00:00:00Z") })).toMatchObject({
+        analytics: { drift: 0 }, recommendations: { drift: 0 }, inbox: { drift: 0 } });
+      expect((await maintainDerivedProjections(pg.db, { rebuild: true })).done).toBe(true);
+      await parity();
+      expect(await pruneStaffAlerts(pg.db, Math.floor(Date.now() / 1000))).toEqual({ inbox: 0, alerts: 0 });
     } finally {
       fixture.close();
       log.mockRestore();
