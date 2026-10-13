@@ -1,7 +1,7 @@
 // src/modules/navigation/navigation.service.ts
 // All DB queries and business logic for the navigation domain.
 
-import { categories, collections, pages, products } from "@scalius/database/schema";
+import { categories, pages } from "@scalius/database/schema";
 import { and, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
@@ -12,7 +12,6 @@ import type {
     NavigationTargetItem,
     ResolvedNavigationItem,
 } from "@scalius/shared/navigation-target";
-import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 
 // ─────────────────────────────────────────
 // Types

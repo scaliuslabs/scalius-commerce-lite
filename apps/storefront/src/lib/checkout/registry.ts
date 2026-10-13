@@ -10,6 +10,3 @@ export function getGateway(id: string): GatewayHandler | undefined {
   return handlers.get(id);
 }
 
-export function getAllGateways(): GatewayHandler[] {
-  return Array.from(handlers.values());
-}

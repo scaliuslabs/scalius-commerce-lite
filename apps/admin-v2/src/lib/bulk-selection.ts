@@ -67,7 +67,3 @@ export function targetRows<T>(target: BulkTarget<T>): T[] {
   return target.kind === "rows" ? target.rows : [];
 }
 
-/** How many rows a target names (a lower bound when the list's count is capped). */
-export function targetCount<T>(target: BulkTarget<T>): number {
-  return target.kind === "rows" ? target.rows.length : target.count;
-}

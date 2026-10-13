@@ -69,10 +69,6 @@ export function settingChoices(schema: SettingsSchema, prefix = ""): SettingChoi
   });
 }
 
-export function settingAt(settings: unknown, path: string): unknown {
-  return path.split(".").reduce<unknown>((value, key) => (value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined), settings);
-}
-
 export function settingWith<Settings>(settings: Settings, path: string, value: unknown): Settings {
   const next = structuredClone(settings) as Record<string, unknown>;
   const keys = path.split(".");

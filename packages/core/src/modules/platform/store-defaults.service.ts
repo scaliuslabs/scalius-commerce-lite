@@ -13,7 +13,7 @@ import {
   type WeightUnit,
 } from "@scalius/shared/store-defaults";
 import { ValidationError } from "@scalius/core/errors";
-import type { SettingsDocumentWriteRequest, SettingsStoreKv } from "../../settings-store";
+import type { SettingsStoreKv } from "../../settings-store";
 import { readStoreCountry } from "../../utils/store-country";
 import { platformDocument } from "./document";
 
@@ -80,12 +80,3 @@ export async function saveStoreDefaults(
   return { ...storeDefaultsOf(saved.value), revision: saved.revision };
 }
 
-/** A validated store-defaults write for another domain's settings batch (`writeSettingsDocuments`). */
-export async function storeDefaultsWriteRequest(
-  db: Database,
-  patch: StoreDefaultsPatch,
-  kv: SettingsStoreKv | null | undefined,
-): Promise<SettingsDocumentWriteRequest<PlatformConfig>> {
-  const current = await getStoreDefaults(db);
-  return { document: platformDocument, patch: storeDefaultsPatch(current, patch), ctx: { kv } };
-}

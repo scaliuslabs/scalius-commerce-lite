@@ -68,17 +68,6 @@ export function metaobjectHandle(namespace: string, type: string): string {
   return `${namespace}.${type}`;
 }
 
-/** The namespace and type of a handle (`custom.faq`, `acme.loyalty.tiers`), or null. */
-export function parseMetaobjectHandle(handle: string): { namespace: string; type: string } | null {
-  const dot = handle.lastIndexOf(".");
-  if (dot <= 0) return null;
-  const namespace = handle.slice(0, dot);
-  const type = handle.slice(dot + 1);
-  if (!METAOBJECT_TYPE_PATTERN.test(type)) return null;
-  if (namespace !== METAOBJECT_MERCHANT_NAMESPACE && !/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/.test(namespace)) return null;
-  return { namespace, type };
-}
-
 /** The field that names entries: the declared one, else the first single-line text field. */
 export function metaobjectDisplayField(fields: readonly MetaobjectFieldDefinition[], displayField: string | null | undefined): string | null {
   if (displayField && fields.some((field) => field.key === displayField)) return displayField;

@@ -12,8 +12,8 @@ import {
 describe("order receipt localization boundaries", () => {
   it("localizes platform gateway copy while preserving provider identity", () => {
     const presentation = localizeOrderReceiptGatewayPresentation(
-      "sslcommerz",
-      getGatewayPresentation("sslcommerz", "SSLCommerz"),
+      "scalius.bangladesh:sslcommerz",
+      getGatewayPresentation("scalius.bangladesh:sslcommerz", "SSLCommerz"),
       BANGLA_CHECKOUT_LANGUAGE_DATA,
     );
 
@@ -28,7 +28,7 @@ describe("order receipt localization boundaries", () => {
     expect(formatOrderSuccessPaymentMethod(bkash, BANGLA_CHECKOUT_LANGUAGE_DATA, undefined, gateways)).toBe("bKash");
     // The app was turned off since: its provider id in words.
     expect(formatOrderSuccessPaymentMethod(bkash, BANGLA_CHECKOUT_LANGUAGE_DATA)).toBe("Bkash");
-    expect(formatOrderSuccessPaymentMethod("sslcommerz", BANGLA_CHECKOUT_LANGUAGE_DATA, undefined, gateways))
+    expect(formatOrderSuccessPaymentMethod("scalius.bangladesh:sslcommerz", BANGLA_CHECKOUT_LANGUAGE_DATA, undefined, gateways))
       .toBe(BANGLA_CHECKOUT_LANGUAGE_DATA.orderReceiptPaymentMethodSslcommerzText);
     expect(formatOrderSuccessPaymentMethod("unknown", BANGLA_CHECKOUT_LANGUAGE_DATA, undefined, gateways))
       .toBe(BANGLA_CHECKOUT_LANGUAGE_DATA.orderReceiptStatusNotAvailableText);

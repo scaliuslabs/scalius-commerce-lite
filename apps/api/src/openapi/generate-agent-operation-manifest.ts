@@ -135,25 +135,6 @@ export function assertOpenApiContractModuleFresh(
   }
 }
 
-export function assertAgentOperationManifestFresh(
-  document: AgentOperationOpenApiDocument,
-): void {
-  const expected = generateAgentOperationManifestSource(document);
-  let actual: string;
-  try {
-    actual = readFileSync(AGENT_OPERATION_MANIFEST_PATH, "utf8");
-  } catch {
-    throw new Error(
-      `Generated agent operation manifest is missing at ${AGENT_OPERATION_MANIFEST_PATH}.`,
-    );
-  }
-  if (actual !== expected) {
-    throw new Error(
-      "Generated agent operation manifest is stale. Regenerate it from the finalized OpenAPI contract.",
-    );
-  }
-}
-
 export function assertCliWorkflowResolverCoreFresh(): void {
   const expected = generateCliWorkflowResolverCoreSource();
   let actual: string;

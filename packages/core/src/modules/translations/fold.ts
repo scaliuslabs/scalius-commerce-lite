@@ -21,7 +21,6 @@ import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { BACKUP_MARKET_ID } from "@scalius/database/schema";
 import {
-  isSluggedResourceType,
   parseTranslationFields,
   presenceLocale,
   resolveTranslatedRecord,
@@ -244,11 +243,6 @@ export function parseLocalizedSlugs(value: unknown): Record<string, string> {
     if (separator === 2) slugs[item.slice(0, 2)] = item.slice(3);
   }
   return slugs;
-}
-
-/** Whether a resource type has localized handles (its reads fold alternates). */
-export function hasLocalizedSlugs(type: TranslatableResourceType): boolean {
-  return isSluggedResourceType(type);
 }
 
 /**

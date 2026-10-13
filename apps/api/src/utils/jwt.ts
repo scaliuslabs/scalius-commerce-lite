@@ -61,18 +61,6 @@ export async function verifyToken(
 }
 
 /**
- * Decode a JWT token without verification.
- */
-export function decodeToken(token: string): jwt.JwtPayload | string | null {
-  try {
-    return jwt.decode(token);
-  } catch (error: unknown) {
-    console.error("Error decoding JWT token:", error);
-    throw new Error("Failed to decode token");
-  }
-}
-
-/**
  * Check if a token is about to expire within `thresholdMinutes`.
  */
 export function isTokenExpiringSoon(

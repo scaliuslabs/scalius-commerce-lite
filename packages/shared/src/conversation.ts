@@ -24,8 +24,6 @@ export type ConversationMessageVisibility = (typeof CONVERSATION_MESSAGE_VISIBIL
 export const CONVERSATION_AUTHOR_TYPES = ["customer", "guest_receipt", "staff", "system"] as const;
 export type ConversationAuthorType = (typeof CONVERSATION_AUTHOR_TYPES)[number];
 
-export const CONVERSATION_ATTACHMENT_UPLOADER_TYPES = ["customer", "guest_receipt", "staff"] as const;
-
 export const CONVERSATION_ID_PREFIX = "cnv_";
 export const CONVERSATION_ATTACHMENT_ID_PREFIX = "att_";
 export const CONVERSATION_ATTACHMENT_R2_PREFIX = "private/conversations/";

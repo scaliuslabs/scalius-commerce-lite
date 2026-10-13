@@ -67,8 +67,6 @@ import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, Setti
 /** Saved secrets come back masked; sending the mask back keeps them. */
 const MASKED_VALUE = "••••••••••••";
 
-type AppsMessage = keyof (typeof appsMessages)["en"];
-
 function Mark({ provider, fallback }: { provider?: ProviderMarkId; fallback: ReactNode }) {
   return provider ? (
     <OfficialProviderMark provider={provider} size="sm" />

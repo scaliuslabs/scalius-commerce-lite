@@ -1,6 +1,6 @@
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { checkoutAttempts, orders } from "@scalius/database/schema";
 
 import { ConflictError, NotFoundError } from "@scalius/core/errors";

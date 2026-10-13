@@ -245,11 +245,6 @@ export async function matchPriceListSegments(
 /** The backup market's id (base prices). */
 export { BACKUP_MARKET_ID };
 
-/** The decimal places of a scope's currency. */
-export function scopeDecimalPlaces(scope: Pick<CheckoutPriceScope, "currencyCode">): number {
-    return getDecimalPlaces(scope.currencyCode);
-}
-
 // ---------------------------------------------------------------------------
 // The market a checkout prices in (MARKETS-DESIGN D5): cart validation, the
 // tax quote, the order and agent checkout price every line with

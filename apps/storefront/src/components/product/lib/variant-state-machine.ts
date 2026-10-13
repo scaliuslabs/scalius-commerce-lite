@@ -77,14 +77,6 @@ export function resolveExactVariantSelection(
   return variant ? { variant, selection: selectedValueMap(variant) } : null;
 }
 
-export function resolveExactAvailableVariantSelection(
-  variants: Variant[],
-  selection: VariantSelection | { variantId?: string | null },
-) {
-  const resolved = resolveExactVariantSelection(variants, selection);
-  return resolved && isVariantPurchasable(resolved.variant) ? resolved : null;
-}
-
 export function getVariantOptionAvailabilityMap(
   variants: Variant[],
   definitionId: string,

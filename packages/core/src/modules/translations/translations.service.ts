@@ -31,7 +31,6 @@ import {
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
   MENU_ITEM_PREFIX,
-  TABLE_SOURCES,
   pageTableSources,
   readMenuItems,
   readProductParts,
@@ -438,7 +437,3 @@ export async function deleteResourceTranslation(
   await safeBatch(db, writes as never);
 }
 
-/** Whether a type is backed by a table (payment methods are code). */
-export function isTableBackedType(type: TranslatableResourceType): boolean {
-  return TABLE_SOURCES[type] !== undefined;
-}

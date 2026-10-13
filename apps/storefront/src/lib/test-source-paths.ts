@@ -11,6 +11,3 @@ export function storefrontSourcePath(...segments: string[]): string {
   return resolve(storefrontRoot(), "src", ...segments);
 }
 
-export function storefrontRootPath(...segments: string[]): string {
-  return resolve(storefrontRoot(), ...segments);
-}

@@ -37,7 +37,6 @@ export function storefrontLandingPagesSchemaOf<Page extends z.ZodType>(page: Pag
 }
 
 export const storefrontLandingPageSchema = storefrontLandingPageSchemaOf(storefrontSectionListSchema);
-export const storefrontLandingPagesSchema = storefrontLandingPagesSchemaOf(storefrontLandingPageSchema);
 
 export type StorefrontLandingPage = z.infer<typeof storefrontLandingPageSchema>;
 
@@ -73,9 +72,4 @@ export type StorefrontPageTemplateValue = z.infer<typeof storefrontPageTemplateS
 /** Every template empty: the fixed part alone, as before templates had sections. */
 export function emptyStorefrontPageTemplates(): Record<StorefrontPageTemplate, StorefrontPageTemplateValue> {
   return Object.fromEntries(STOREFRONT_PAGE_TEMPLATES.map((kind) => [kind, { sections: [], main: 0 }])) as unknown as Record<StorefrontPageTemplate, StorefrontPageTemplateValue>;
-}
-
-/** A template's sections before and after its fixed part. */
-export function storefrontTemplateRegions<Section>(template: { sections: readonly Section[]; main: number }): { before: Section[]; after: Section[] } {
-  return { before: template.sections.slice(0, template.main), after: template.sections.slice(template.main) };
 }

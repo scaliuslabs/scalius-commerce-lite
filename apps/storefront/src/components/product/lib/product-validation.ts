@@ -95,37 +95,6 @@ export function isStockAvailable(
   };
 }
 
-/**
- * Get stock status category
- */
-export function getStockStatus(stock: number): {
-  status: "in_stock" | "low_stock" | "out_of_stock";
-  text: string;
-  canOrder: boolean;
-} {
-  if (stock > 50) {
-    return {
-      status: "in_stock",
-      text: "In Stock",
-      canOrder: true,
-    };
-  }
-
-  if (stock > 0) {
-    return {
-      status: "low_stock",
-      text: "Low Stock",
-      canOrder: true,
-    };
-  }
-
-  return {
-    status: "out_of_stock",
-    text: "Out of Stock",
-    canOrder: false,
-  };
-}
-
 export interface ProductData {
   id: string;
   slug: string;

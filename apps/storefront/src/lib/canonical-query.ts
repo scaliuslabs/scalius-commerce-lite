@@ -26,41 +26,6 @@ function appendSortedParams(
     .forEach(([key, value]) => params.append(key, value));
 }
 
-export function canonicalizeUrlSearchParams(
-  url: URL,
-  {
-    defaultParams = {},
-    ignoredParams = [],
-    dropEmptyValues = true,
-  }: {
-    defaultParams?: QueryDefaults;
-    ignoredParams?: readonly string[];
-    dropEmptyValues?: boolean;
-  } = {},
-): URL {
-  const canonicalUrl = new URL(url);
-  const ignored = new Set(ignoredParams);
-  const entries: Array<[string, string]> = [];
-  for (const [key, rawValue] of canonicalUrl.searchParams) {
-    const value = normalizeStorefrontCacheQueryValue(key, rawValue);
-    if (
-      ignored.has(key) ||
-      isStorefrontTrackingQueryParam(key) ||
-      (dropEmptyValues && value === "") ||
-      (Object.hasOwn(defaultParams, key) && value === String(defaultParams[key]))
-    ) {
-      continue;
-    }
-    entries.push([key, value]);
-  }
-
-  const params = new URLSearchParams();
-  appendSortedParams(params, entries);
-  canonicalUrl.search = params.toString();
-  canonicalUrl.hash = "";
-  return canonicalUrl;
-}
-
 export function buildCanonicalQueryString(
   values: Record<string, QueryValue>,
   { defaultParams = {} }: { defaultParams?: QueryDefaults } = {},

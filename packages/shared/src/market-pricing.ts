@@ -38,7 +38,7 @@
  * Promotions, bundles and app discounts apply after this, in today's order:
  * they see the resolved unit price as the line's catalogue price.
  */
-import { convertMinorAtRate, isFxRate, SAME_CURRENCY_FX_RATE } from "./money-chain";
+import { isFxRate, SAME_CURRENCY_FX_RATE } from "./money-chain";
 
 export const PRICE_LIST_KINDS = ["market", "segment", "sale"] as const;
 export type PriceListKind = (typeof PRICE_LIST_KINDS)[number];
@@ -65,9 +65,6 @@ export const MARKET_PRICE_ADJUSTMENT_MAX_BPS = 100_000;
 
 /** Rank of a kind in the precedence (higher wins). */
 const KIND_RANK: Readonly<Record<PriceListKind, number>> = { sale: 3, segment: 2, market: 1 };
-
-/** Lists a public (anonymous, cacheable) read may apply: never segment lists. */
-export const PUBLIC_PRICE_LIST_KINDS: readonly PriceListKind[] = ["market", "sale"];
 
 export function isPriceListKind(value: unknown): value is PriceListKind {
   return typeof value === "string" && (PRICE_LIST_KINDS as readonly string[]).includes(value);
@@ -209,11 +206,6 @@ export function maxBaseForFxPrice(marketMinor: number, conversion: FxConversion,
 export function minBaseForFxPrice(marketMinor: number, conversion: FxConversion, upperBound = 9_000_000_000_000): number {
   if (marketMinor <= 0) return 0;
   return maxBaseForFxPrice(marketMinor - 1, conversion, upperBound) + 1;
-}
-
-/** A converted amount between currencies without market rounding (reporting, previews). */
-export function convertAtMarketRate(amountMinor: number, rate: string, fromDecimalPlaces: number, toDecimalPlaces: number): number {
-  return convertMinorAtRate(amountMinor, rate, fromDecimalPlaces, toDecimalPlaces);
 }
 
 // ---------------------------------------------------------------------------

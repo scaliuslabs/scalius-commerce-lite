@@ -4,9 +4,7 @@ import {
   getFraudProvider,
   getFraudProviders,
   fraudLookup,
-  fraudLookupWithActiveProvider,
   saveFraudProvider,
-  testFraudProvider,
 } from "./fraud-checker.service";
 import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";

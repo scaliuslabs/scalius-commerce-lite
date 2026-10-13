@@ -76,11 +76,6 @@ export async function savePriceListPrices(id: string, body: SetPriceListPricesBo
   return (await apiData(putApiV1AdminPriceListsByIdPrices({ path: { id }, body }))).priceList;
 }
 
-/** After any write: every list, and this list's reads. */
-export function priceListWriteInvalidations(): Array<readonly unknown[]> {
-  return [priceListKeys.all];
-}
-
 export function useCreatePriceList() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -19,6 +19,3 @@ export function invalidateProductLookupQueries(queryClient: QueryClient) {
   });
 }
 
-export function invalidateCollectionLookupQueries(queryClient: QueryClient) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.collections.byIds() });
-}

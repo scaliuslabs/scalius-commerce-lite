@@ -13,8 +13,8 @@
  * loads everything else (avatars, the editing banner, field rings, the save
  * notice, focus reporting) a moment later, so no route pays for it up front.
  */
-import { createContext, lazy, Suspense, useEffect, useRef } from "react";
-import type { PresenceKeyPrefix, PresenceListPrefix, RealtimeChange, RealtimeTopic } from "@scalius/shared/realtime";
+import { createContext, lazy, Suspense } from "react";
+import type { PresenceKeyPrefix, PresenceListPrefix } from "@scalius/shared/realtime";
 import type { RealtimeConnection, RealtimeListener } from "./connection";
 import { setRealtimeOpen } from "../admin-query-client";
 
@@ -121,29 +121,6 @@ export function reportFocus(key: string, field: string | null, editing: boolean)
   connection?.focus(key, state.field, state.editing);
 }
 
-/** Calls `onChange` with the hub's notices for these topics. */
-export function useRealtimeChanges(topics: readonly RealtimeTopic[], onChange: (items: RealtimeChange[]) => void): void {
-  const callback = useRef(onChange);
-  callback.current = onChange;
-  const topicKey = topics.join(",");
-  useEffect(() => {
-    const wanted = new Set(topicKey.split(","));
-    return subscribeRealtime({
-      changes: (items) => {
-        const mine = items.filter((item) => wanted.has(item.topic));
-        if (mine.length > 0) callback.current(mine);
-      },
-    });
-  }, [topicKey]);
-}
-
-/** Calls `onResync` when the socket reopens after a gap (missed notices). */
-export function useRealtimeResync(onResync: () => void): void {
-  const callback = useRef(onResync);
-  callback.current = onResync;
-  useEffect(() => subscribeRealtime({ resync: () => callback.current() }), []);
-}
-
 // The shell's polls stop while the hub is open (lib/admin-query-client.ts).
 subscribeRealtime({ status: (next) => setRealtimeOpen(next === "open") });
 
@@ -158,7 +135,6 @@ export function realtimeUserId(): string | null {
  */
 export const PresenceScopeContext = createContext<string | null>(null);
 
-
 // ── Field keys ───────────────────────────────────────────────────────────
 // A field is named by its control's form `name` (or the nearest
 // `data-field`), the same in every browser and language. Generated ids
@@ -169,7 +145,6 @@ const FIELD_KEY = /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/;
 export function isFieldKey(value: unknown): value is string {
   return typeof value === "string" && FIELD_KEY.test(value);
 }
-
 
 // -- The visible parts, loaded after the first render --------------------
 

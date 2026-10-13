@@ -9,8 +9,6 @@ import { getConfiguredSdkClient } from "@/lib/api/transport";
 import { unwrapData } from "@/lib/api/unwrap";
 
 export const COMPARE_MAX = 4;
-/** The compare list in the buyer's browser (the tray script). */
-export const COMPARE_STORAGE_KEY = "scalius:compare";
 
 export interface CompareProduct {
   id: string;

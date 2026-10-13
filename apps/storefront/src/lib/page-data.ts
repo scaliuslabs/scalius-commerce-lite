@@ -35,12 +35,3 @@ export async function loadPageWithLayout<T>(
   return { layoutData, pageData };
 }
 
-/**
- * For pages that only need layout data (no page-specific data).
- * @returns Layout data or null if fetch fails
- */
-export async function loadLayoutOnly(): Promise<LayoutData | null> {
-  const layoutData = await getLayoutData();
-  setRuntimeImageCdnPolicy(layoutData?.media);
-  return layoutData;
-}

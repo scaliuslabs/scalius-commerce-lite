@@ -19,7 +19,7 @@ function makeRetryOrder(overrides: Partial<{
   balanceDue: number;
 }> = {}) {
   return {
-    paymentMethod: "sslcommerz",
+    paymentMethod: "scalius.bangladesh:sslcommerz",
     status: "incomplete",
     paymentStatus: "unpaid",
     totalAmount: 1200,
@@ -31,11 +31,11 @@ function makeRetryOrder(overrides: Partial<{
 
 describe("order success payment retry", () => {
   it("recognizes callback outcomes while allowing pending hosted payment continuation", () => {
-    expect(isRetryableHostedPaymentMethod("sslcommerz")).toBe(true);
+    expect(isRetryableHostedPaymentMethod("scalius.bangladesh:sslcommerz")).toBe(true);
     expect(isRetryableHostedPaymentMethod("stripe")).toBe(true);
     expect(isHostedPaymentRetryResult("cancelled")).toBe(true);
     expect(isHostedPaymentRetryResult("failed")).toBe(true);
-    expect(getOrderSuccessRetryEndpoint("sslcommerz")).toBe("/api/checkout/payment-session/sslcommerz");
+    expect(getOrderSuccessRetryEndpoint("scalius.bangladesh:sslcommerz")).toBe("/api/checkout/payment-session/scalius.bangladesh:sslcommerz");
     expect(getOrderSuccessRetryEndpoint("stripe")).toBe("/api/checkout/payment-session/stripe");
 
     expect(
@@ -75,15 +75,15 @@ describe("order success payment retry", () => {
         "payment_pending",
         "cancelled",
         [
-          { id: "sslcommerz" },
+          { id: "scalius.bangladesh:sslcommerz" },
           { id: "stripe" },
           { id: "cod" },
         ],
       ),
     ).toEqual([
       {
-        gateway: "sslcommerz",
-        endpoint: "/api/checkout/payment-session/sslcommerz",
+        gateway: "scalius.bangladesh:sslcommerz",
+        endpoint: "/api/checkout/payment-session/scalius.bangladesh:sslcommerz",
         current: true,
         label: "Pay online",
         requiresCardForm: false,
@@ -98,15 +98,15 @@ describe("order success payment retry", () => {
         "payment_issue",
         null,
         [
-          { id: "sslcommerz" },
+          { id: "scalius.bangladesh:sslcommerz" },
           { id: "stripe" },
           { id: "cod" },
         ],
       ),
     ).toEqual([
       {
-        gateway: "sslcommerz",
-        endpoint: "/api/checkout/payment-session/sslcommerz",
+        gateway: "scalius.bangladesh:sslcommerz",
+        endpoint: "/api/checkout/payment-session/scalius.bangladesh:sslcommerz",
         current: true,
         label: "Pay online",
         requiresCardForm: false,
@@ -156,7 +156,7 @@ describe("order success payment retry", () => {
           { id: "cod", name: "Cash on Delivery" },
           { id: bkash, name: "bKash" },
           { id: "scalius.nagad:nagad", name: "Nagad" },
-          { id: "sslcommerz", name: "SSLCommerz" },
+          { id: "scalius.bangladesh:sslcommerz", name: "SSLCommerz" },
         ],
       ),
     ).toEqual([
@@ -168,7 +168,7 @@ describe("order success payment retry", () => {
         label: "Nagad",
         requiresCardForm: false,
       },
-      { gateway: "sslcommerz", endpoint: "/api/checkout/payment-session/sslcommerz", current: false, label: "Pay online", requiresCardForm: false },
+      { gateway: "scalius.bangladesh:sslcommerz", endpoint: "/api/checkout/payment-session/scalius.bangladesh:sslcommerz", current: false, label: "Pay online", requiresCardForm: false },
     ]);
   });
 
@@ -224,14 +224,14 @@ describe("order success payment retry", () => {
     // Even a (hypothetical) unpaid gift_card order with money due offers no gateway.
     const order = makeRetryOrder({ paymentMethod: "gift_card", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 500 });
     expect(canRetryOrderSuccessPayment(order, "payment_issue", "failed")).toBe(false);
-    expect(getOrderSuccessRetryOptions(order, "payment_issue", "failed", [{ id: "gift_card" }, { id: "sslcommerz" }])).toEqual([]);
+    expect(getOrderSuccessRetryOptions(order, "payment_issue", "failed", [{ id: "gift_card" }, { id: "scalius.bangladesh:sslcommerz" }])).toEqual([]);
     // A card + gateway order keeps its gateway retry for the amount due.
-    expect(isRetryableHostedPaymentMethod("sslcommerz")).toBe(true);
+    expect(isRetryableHostedPaymentMethod("scalius.bangladesh:sslcommerz")).toBe(true);
     expect(getOrderSuccessRetryOptions(
-      makeRetryOrder({ paymentMethod: "sslcommerz", status: "incomplete", paymentStatus: "partial", paidAmount: 400, balanceDue: 800 }),
+      makeRetryOrder({ paymentMethod: "scalius.bangladesh:sslcommerz", status: "incomplete", paymentStatus: "partial", paidAmount: 400, balanceDue: 800 }),
       "payment_issue",
       null,
-      [{ id: "gift_card" }, { id: "sslcommerz" }],
-    ).map(({ gateway }) => gateway)).toEqual(["sslcommerz"]);
+      [{ id: "gift_card" }, { id: "scalius.bangladesh:sslcommerz" }],
+    ).map(({ gateway }) => gateway)).toEqual(["scalius.bangladesh:sslcommerz"]);
   });
 });

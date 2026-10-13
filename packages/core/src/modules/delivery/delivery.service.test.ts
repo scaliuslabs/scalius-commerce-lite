@@ -18,7 +18,6 @@ import {
   checkShipmentStatus,
   createShipment,
   deleteShipmentRecord,
-  getDeliveryProviderActionReadiness,
   saveDeliveryProvider,
   testDeliveryProvider,
 } from "./delivery.service";

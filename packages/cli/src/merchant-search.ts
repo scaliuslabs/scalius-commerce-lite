@@ -43,10 +43,6 @@ export function prefersReadOnlyMerchantResults(query: string): boolean {
   return !words(query).some((word) => MUTATION_WORDS.has(word));
 }
 
-export function matchesMerchantOperationQuery(searchableText: string, query: string): boolean {
-  return merchantOperationQueryScore(searchableText, query) !== null;
-}
-
 export function merchantOperationQueryScore(searchableText: string, query: string): number | null {
   const terms = words(query).filter((term) => !SEARCH_STOP_WORDS.has(term));
   if (terms.length === 0) return 0;

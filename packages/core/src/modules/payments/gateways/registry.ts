@@ -7,7 +7,7 @@
 // gateway: the kernel records it without a provider.
 //
 
-import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { ValidationError } from "@scalius/core/errors";
 import { getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { cashOnDeliveryIncrementMinor, isWholeUnitIncrement } from "@scalius/shared/currency-policy";
 import { toMinor } from "@scalius/shared/money";
