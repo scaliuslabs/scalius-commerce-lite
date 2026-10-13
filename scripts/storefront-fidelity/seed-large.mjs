@@ -33,7 +33,7 @@ const slugify = (s) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, 
 
 export function migrate(stateDir) {
   assertOwnedState(stateDir);
-  execFileSync(process.execPath, [wranglerBin(), "d1", "migrations", "apply", "scalius-commerce", "--local", "--persist-to", stateDir, "--config", "wrangler.local.jsonc"], {
+  execFileSync(process.execPath, [wranglerBin(), "d1", "migrations", "apply", "scalius-commerce-v2", "--local", "--persist-to", stateDir, "--config", "wrangler.local.jsonc"], {
     cwd: API_DIR, env: childEnv(), stdio: ["ignore", "ignore", "pipe"],
   });
 }

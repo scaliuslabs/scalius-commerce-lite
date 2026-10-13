@@ -26,9 +26,9 @@ describe("PostgreSQL SQLite-profile compiler", () => {
   it("omits bare index hints after explicit aliases without changing joins or binds", () => {
     const compiled = compileSqliteStatementForPostgres(
       "SELECT s.order_id FROM source AS s "
-        + "CROSS JOIN orders AS rec_co_order INDEXED BY orders_recommendation_id_buyers_idx "
+        + "CROSS JOIN orders AS rec_co_order INDEXED BY orders_example_idx "
         + "WHERE rec_co_order.id = s.order_id AND rec_co_order.status = ? "
-        + "AND EXISTS (SELECT 1 FROM orders AS rec_source_order indexed\nby\torders_recommendation_id_buyers_idx "
+        + "AND EXISTS (SELECT 1 FROM orders AS rec_source_order indexed\nby\torders_example_idx "
         + "WHERE rec_source_order.id = ?)",
       2,
     );
