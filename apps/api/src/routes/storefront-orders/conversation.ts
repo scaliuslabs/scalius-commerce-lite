@@ -61,7 +61,7 @@ async function receiptActor(
   bodyToken?: string,
 ): Promise<ConversationActor> {
   const token = c.req.header(RECEIPT_TOKEN_HEADER)?.trim() || bodyToken?.trim() || undefined;
-  await validateReceiptToken(c.env.CACHE, orderId, token, c.get("db"));
+  await validateReceiptToken(c.get("db"), orderId, token);
   return { kind: "guest_receipt", orderId };
 }
 

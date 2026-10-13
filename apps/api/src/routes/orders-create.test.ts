@@ -8,8 +8,6 @@ import { buildCheckoutStatusTokenFromRequestKey } from "@scalius/core/modules/ch
 import { ValidationError } from "../utils/api-error";
 import { errorResponseFromError } from "../utils/api-response";
 import {
-  getCheckoutStatusKvKey,
-  getReceiptTokenKvKey,
 } from "../utils/order-receipt-token";
 
 const DEFAULT_STATUS_REQUEST_KEY = `checkout_submit:v1:${"a".repeat(64)}`;
@@ -465,7 +463,6 @@ function createTestApp(options: {
 }
 
 function createStatusTestApp(options: {
-  kvStatus?: Record<string, unknown> | null;
   attempt?: {
     status: "committed" | "failed" | "processing";
     orderId: string;
@@ -478,13 +475,6 @@ function createStatusTestApp(options: {
   const statusToken = options.attempt?.requestKey
     ? buildCheckoutStatusTokenFromRequestKey(options.attempt.requestKey)
     : DEFAULT_STATUS_TOKEN;
-  const kv = {
-    get: vi.fn(async (key: string): Promise<string | null> => {
-      if (key !== await getCheckoutStatusKvKey(statusToken)) return null;
-      return options.kvStatus ? JSON.stringify(options.kvStatus) : null;
-    }),
-    put: vi.fn(async (_key: string, _value: string, _options?: { expirationTtl: number }) => undefined),
-  };
   const db = {
     select: vi.fn(() => {
       let selectedTable: unknown;
@@ -529,7 +519,7 @@ function createStatusTestApp(options: {
   });
   app.route("/orders", orderRoutes);
 
-  return { app, db, kv, statusToken };
+  return { app, db, statusToken };
 }
 
 function createWaitUntilContext() {
@@ -1156,14 +1146,9 @@ describe("authoritative tax quote", () => {
   });
 });
 
-// The recovery hints are the Paid profile's accelerator (kv.checkoutRecoveryHints);
-// the Free profile's behaviour is the describe after them.
-describe("checkout status recovery hints", () => {
-  beforeEach(() => { vi.stubGlobal("__SCALIUS_PLAN__", "paid"); });
-  afterEach(() => { vi.unstubAllGlobals(); });
-
-  it("rejects receipt proof in the status URL before KV or D1 reads", async () => {
-    const { app, db, kv } = createStatusTestApp({
+describe("checkout status", () => {
+  it("rejects receipt proof in the status URL before any D1 read", async () => {
+    const { app, db } = createStatusTestApp({
       attempt: {
         status: "committed",
         orderId: "order_1",
@@ -1171,11 +1156,7 @@ describe("checkout status recovery hints", () => {
       },
     });
 
-    const response = await app.request(
-      "/api/v1/orders/status/chk_status",
-      {},
-      { CACHE: kv } as never,
-    );
+    const response = await app.request("/api/v1/orders/status/chk_status", {}, {} as never);
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
@@ -1184,225 +1165,7 @@ describe("checkout status recovery hints", () => {
         message: "Invalid checkout status token",
       },
     });
-    expect(kv.get).not.toHaveBeenCalled();
     expect(db.select).not.toHaveBeenCalled();
-  });
-
-  it("repairs checkout status and receipt KV after a committed D1 fallback", async () => {
-    const { app, kv, statusToken } = createStatusTestApp({
-      orderExists: true,
-      attempt: {
-        status: "committed",
-        orderId: "order_1",
-        checkoutToken: "chk_status",
-      },
-    });
-    const executionCtx = createWaitUntilContext();
-
-    const response = await app.request(
-      `/api/v1/orders/status/${statusToken}`,
-      {},
-      { CACHE: kv } as never,
-      executionCtx as never,
-    );
-
-    expect(response.status).toBe(200);
-    const json = await response.json() as { data: Record<string, unknown> };
-    expect(json).toMatchObject({
-      success: true,
-      data: {
-        status: "completed",
-        orderId: "order_1",
-      },
-    });
-    expect(json.data).not.toHaveProperty("receiptToken");
-    expect(JSON.stringify(json)).not.toContain("chk_status");
-    expect(JSON.stringify(json)).not.toContain("chk_");
-    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
-    await executionCtx.waitUntil.mock.calls[0]?.[0];
-    const statusKey = await getCheckoutStatusKvKey(statusToken);
-    const receiptKey = await getReceiptTokenKvKey("chk_status");
-    const statusWrite = kv.put.mock.calls.find(([key]) => key === statusKey);
-    const receiptWrite = kv.put.mock.calls.find(([key]) => key === receiptKey);
-    expect(statusKey).not.toContain("chk_status");
-    expect(statusKey).not.toContain(statusToken);
-    expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
-      status: "completed",
-      orderId: "order_1",
-    });
-    expect(JSON.parse(String(statusWrite?.[1]))).not.toHaveProperty("receiptToken");
-    expect(String(statusWrite?.[1])).not.toContain("chk_status");
-    expect(String(statusWrite?.[1])).not.toContain("chk_");
-    expect(statusWrite?.[2]).toEqual({ expirationTtl: 86400 });
-    expect(receiptKey).not.toContain("chk_status");
-    expect(JSON.parse(String(receiptWrite?.[1]))).toEqual({ orderId: "order_1" });
-    expect(receiptWrite?.[2]).toEqual({ expirationTtl: 60 * 60 * 24 * 7 });
-  });
-
-  it("repairs success hints when a processing D1 attempt already has an order", async () => {
-    const { app, kv, statusToken } = createStatusTestApp({
-      attempt: {
-        status: "processing",
-        orderId: "order_1",
-        checkoutToken: "chk_status",
-      },
-      orderExists: true,
-    });
-    const executionCtx = createWaitUntilContext();
-
-    const response = await app.request(
-      `/api/v1/orders/status/${statusToken}`,
-      {},
-      { CACHE: kv } as never,
-      executionCtx as never,
-    );
-
-    expect(response.status).toBe(200);
-    const json = await response.json() as { data: Record<string, unknown> };
-    expect(json).toMatchObject({
-      success: true,
-      data: {
-        status: "completed",
-        orderId: "order_1",
-      },
-    });
-    expect(json.data).not.toHaveProperty("receiptToken");
-    expect(JSON.stringify(json)).not.toContain("chk_status");
-    expect(JSON.stringify(json)).not.toContain("chk_");
-    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
-    await executionCtx.waitUntil.mock.calls[0]?.[0];
-    const statusKey = await getCheckoutStatusKvKey(statusToken);
-    const receiptKey = await getReceiptTokenKvKey("chk_status");
-    expect(statusKey).not.toContain("chk_status");
-    expect(statusKey).not.toContain(statusToken);
-    expect(kv.put.mock.calls.map(([key]) => key)).toEqual(expect.arrayContaining([
-      statusKey,
-      receiptKey,
-    ]));
-  });
-
-  it("repairs stale processing KV when the order is already committed", async () => {
-    const { app, kv, statusToken } = createStatusTestApp({
-      kvStatus: {
-        status: "processing",
-        orderId: "order_1",
-        updatedAt: Date.now() - 60_000,
-      },
-      attempt: {
-        status: "processing",
-        orderId: "order_1",
-        checkoutToken: "chk_status",
-      },
-      orderExists: true,
-    });
-    const executionCtx = createWaitUntilContext();
-
-    const response = await app.request(
-      `/api/v1/orders/status/${statusToken}`,
-      {},
-      { CACHE: kv } as never,
-      executionCtx as never,
-    );
-
-    expect(response.status).toBe(200);
-    const json = await response.json() as { data: Record<string, unknown> };
-    expect(json).toMatchObject({
-      success: true,
-      data: {
-        status: "completed",
-        orderId: "order_1",
-      },
-    });
-    expect(json.data).not.toHaveProperty("receiptToken");
-    expect(JSON.stringify(json)).not.toContain("chk_status");
-    expect(JSON.stringify(json)).not.toContain("chk_");
-    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
-    await executionCtx.waitUntil.mock.calls[0]?.[0];
-    const statusKey = await getCheckoutStatusKvKey(statusToken);
-    const statusWrite = kv.put.mock.calls.find(([key]) => key === statusKey);
-    expect(statusKey).not.toContain("chk_status");
-    expect(statusKey).not.toContain(statusToken);
-    expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
-      status: "completed",
-      orderId: "order_1",
-    });
-    expect(JSON.parse(String(statusWrite?.[1]))).not.toHaveProperty("receiptToken");
-    expect(String(statusWrite?.[1])).not.toContain("chk_status");
-    expect(String(statusWrite?.[1])).not.toContain("chk_");
-  });
-
-  it("does not leak receipt proof from legacy checkout status KV rows", async () => {
-    const { app, kv, statusToken } = createStatusTestApp({
-      attempt: { status: "committed", orderId: "order_1", checkoutToken: "chk_status" },
-      orderExists: true,
-      kvStatus: {
-        status: "completed",
-        orderId: "order_1",
-        receiptToken: "chk_legacy_status",
-        checkoutToken: "chk_legacy_checkout",
-        updatedAt: Date.now() - 60_000,
-      },
-    });
-
-    const response = await app.request(
-      `/api/v1/orders/status/${statusToken}`,
-      {},
-      { CACHE: kv } as never,
-    );
-
-    expect(response.status).toBe(200);
-    const json = await response.json() as { data: Record<string, unknown> };
-    expect(json).toMatchObject({
-      success: true,
-      data: {
-        status: "completed",
-        orderId: "order_1",
-      },
-    });
-    expect(json.data).not.toHaveProperty("receiptToken");
-    expect(json.data).not.toHaveProperty("checkoutToken");
-    expect(JSON.stringify(json)).not.toContain("chk_");
-  });
-
-  it("repairs failed checkout status after a failed D1 fallback", async () => {
-    const { app, kv, statusToken } = createStatusTestApp({
-      attempt: {
-        status: "failed",
-        orderId: "order_1",
-        checkoutToken: "chk_status",
-        lastError: "Discount code has reached its usage limit",
-      },
-    });
-    const executionCtx = createWaitUntilContext();
-
-    const response = await app.request(
-      `/api/v1/orders/status/${statusToken}`,
-      {},
-      { CACHE: kv } as never,
-      executionCtx as never,
-    );
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      success: true,
-      data: {
-        status: "failed",
-        orderId: "order_1",
-        error: "Order creation failed. Please review your checkout and try again.",
-      },
-    });
-    expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
-    await executionCtx.waitUntil.mock.calls[0]?.[0];
-    const statusKey = await getCheckoutStatusKvKey(statusToken);
-    const statusWrite = kv.put.mock.calls.find(([key]) => key === statusKey);
-    expect(statusKey).not.toContain("chk_status");
-    expect(statusKey).not.toContain(statusToken);
-    expect(JSON.parse(String(statusWrite?.[1]))).toMatchObject({
-      status: "failed",
-      orderId: "order_1",
-      error: "Order creation failed. Please review your checkout and try again.",
-    });
-    expect(kv.put.mock.calls.some(([key]) => String(key).startsWith("order_receipt:"))).toBe(false);
   });
 });
 
@@ -1498,26 +1261,24 @@ describe("create order currency parity", () => {
   );
 });
 
-describe("checkout recovery hints on the Free profile", () => {
-  it("answers a poll from D1 alone: no KV read, no KV write", async () => {
-    const { app, kv, statusToken } = createStatusTestApp({
+describe("checkout status and commit without KV hints", () => {
+  it("answers a poll from D1 alone and never leaks receipt proof", async () => {
+    const { app, statusToken } = createStatusTestApp({
       attempt: { status: "committed", orderId: "order_1", checkoutToken: "chk_status" },
       orderExists: true,
-      // A hint that would say otherwise is never consulted.
-      kvStatus: { status: "failed", orderId: "order_1", error: "stale" },
     });
     const executionCtx = createWaitUntilContext();
 
-    const response = await app.request(`/api/v1/orders/status/${statusToken}`, {}, { CACHE: kv } as never, executionCtx as never);
+    const response = await app.request(`/api/v1/orders/status/${statusToken}`, {}, {} as never, executionCtx as never);
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ success: true, data: { status: "completed", orderId: "order_1" } });
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
+    const json = await response.json();
+    expect(json).toMatchObject({ success: true, data: { status: "completed", orderId: "order_1" } });
+    expect(JSON.stringify(json)).not.toContain("chk_");
     expect(executionCtx.waitUntil).not.toHaveBeenCalled();
   });
 
-  it("answers failed and processing attempts from D1 too, and works without a KV binding at all", async () => {
+  it("answers failed and processing attempts from D1 too, ", async () => {
     const failed = createStatusTestApp({ attempt: { status: "failed", orderId: "order_1", checkoutToken: "chk_status", lastError: "Out of stock" } });
     const failedResponse = await failed.app.request(`/api/v1/orders/status/${failed.statusToken}`, {}, {} as never);
     expect(await failedResponse.json()).toMatchObject({ data: { status: "failed", error: "Order creation failed. Please review your checkout and try again." } });
@@ -1548,9 +1309,7 @@ describe("checkout recovery hints on the Free profile", () => {
   });
 });
 
-describe("create order commit/KV ordering", () => {
-  beforeEach(() => { vi.stubGlobal("__SCALIUS_PLAN__", "paid"); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+describe("create order commit ordering", () => {
 
   it("rejects a changed authoritative quote before rate limiting or durable checkout writes", async () => {
     const { app, kv } = createTestApp();
@@ -1599,7 +1358,7 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
   });
 
-  it("commits the order before scheduling checkout recovery hints and side effects", async () => {
+  it("commits the order before side effects", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const waitUntilPromises: Promise<unknown>[] = [];
     mocks.createStorefrontOrder.mockResolvedValue({
@@ -1638,28 +1397,12 @@ describe("create order commit/KV ordering", () => {
 
       const responseText = await response.clone().text();
       expect(response.status, responseText).toBe(201);
-      expect(executionCtx.waitUntil).toHaveBeenCalledTimes(2);
+      expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
       await Promise.all(waitUntilPromises);
 
-      const statusKey = await getCheckoutStatusKvKey(DEFAULT_STATUS_TOKEN);
-      const receiptKey = await getReceiptTokenKvKey("chk_order_1");
-      const kvKeys = kv.put.mock.calls.map(([key]) => String(key));
-      const statusWrite = kv.put.mock.calls.find(([key]) => key === statusKey) as [string, string, unknown?] | undefined;
-      const receiptWrite = kv.put.mock.calls.find(([key]) => key === receiptKey) as [string, string, unknown?] | undefined;
       expect(calls[0]).toBe("commit");
-      expect(calls).toContain(`kv:${statusKey}`);
-      expect(calls).toContain(`kv:${receiptKey}`);
       expect(calls).toContain("side-effects");
-      expect(kvKeys).toEqual(expect.arrayContaining([statusKey, receiptKey]));
-      expect(statusKey).not.toContain("chk_order_1");
-      expect(statusKey).not.toContain(DEFAULT_STATUS_TOKEN);
-      expect(receiptKey).not.toContain("chk_order_1");
-      expect(JSON.stringify(kvKeys)).not.toContain("chk_order_1");
-      expect(String(statusWrite?.[1])).not.toContain("chk_order_1");
-      expect(String(statusWrite?.[1])).not.toContain("chk_");
-      expect(JSON.parse(String(statusWrite?.[1]))).not.toHaveProperty("receiptToken");
-      expect(String(receiptWrite?.[1])).not.toContain("chk_order_1");
-      expect(String(receiptWrite?.[1])).not.toContain("chk_");
+      expect(kv.put).not.toHaveBeenCalled();
       expect(JSON.stringify(consoleError.mock.calls)).not.toContain("chk_order_1");
       expect(JSON.stringify(consoleError.mock.calls)).not.toContain("chk_");
       expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledWith(
@@ -2117,24 +1860,12 @@ describe("create order commit/KV ordering", () => {
     );
 
     expect(response.status).toBe(500);
-    const statusKey = await getCheckoutStatusKvKey(DEFAULT_STATUS_TOKEN);
-    await vi.waitFor(() => {
-      expect(calls).toEqual([
-        "commit",
-        `kv:${statusKey}`,
-      ]);
-    });
-    expect(statusKey).not.toContain("chk_order_2");
+    expect(calls).toEqual(["commit"]);
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
-    const failedStatusWrite = kv.put.mock.calls.at(-1) as [string, string] | undefined;
-    expect(failedStatusWrite?.[0]).toBe(statusKey);
-    expect(JSON.parse(String(failedStatusWrite?.[1]))).toMatchObject({
-      status: "failed",
-      orderId: "order_2",
-    });
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
-  it("surfaces discount commit validation failures in checkout status and response body", async () => {
+  it("surfaces discount commit validation failures in the response body", async () => {
     const discountError = new ValidationError("Discount code has reached its usage limit");
     mocks.createStorefrontOrder.mockResolvedValue({
       checkoutToken: "chk_order_discount_limit",
@@ -2165,18 +1896,7 @@ describe("create order commit/KV ordering", () => {
       },
     });
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
-    const statusKey = await getCheckoutStatusKvKey(DEFAULT_STATUS_TOKEN);
-    await vi.waitFor(() => {
-      expect(kv.put).toHaveBeenCalled();
-    });
-    const failedStatusWrite = kv.put.mock.calls.at(-1) as [string, string] | undefined;
-    expect(failedStatusWrite?.[0]).toBe(statusKey);
-    expect(statusKey).not.toContain("chk_order_discount_limit");
-    expect(JSON.parse(String(failedStatusWrite?.[1]))).toMatchObject({
-      status: "failed",
-      orderId: "order_discount_limit",
-      error: "Discount code has reached its usage limit",
-    });
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects phones outside the configured include countries before payment settings, rate limits, or attempt creation", async () => {

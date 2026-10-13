@@ -70,7 +70,7 @@ app.openapi(createReceiptSupportRequestRoute, async (c) => {
   c.header("Pragma", "no-cache");
   c.header("Expires", "0");
 
-  await validateReceiptToken(c.env.CACHE, id, body.token, db);
+  await validateReceiptToken(db, id, body.token);
   await enforceBuyerWriteLimits(c, "support-request", { orderId: id });
   const result = await createReceiptOrderSupportRequest(db, id, {
     type: body.type,

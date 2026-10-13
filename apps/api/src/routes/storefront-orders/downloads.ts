@@ -132,7 +132,7 @@ export const revealResponses = {
 
 async function receiptAccess(c: Context<{ Bindings: Env }>, orderId: string): Promise<{ access: DigitalBuyerAccess; proof: string }> {
     const token = c.req.header(RECEIPT_TOKEN_HEADER)?.trim();
-    await validateReceiptToken(c.env.CACHE, orderId, token, c.get("db"));
+    await validateReceiptToken(c.get("db"), orderId, token);
     return { access: { kind: "receipt", orderId }, proof: token! };
 }
 

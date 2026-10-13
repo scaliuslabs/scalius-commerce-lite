@@ -24,7 +24,6 @@
 import { runWithReadObserver } from "@scalius/database/read-observer";
 import { createEventWriteObserver } from "./middleware/event-dispatch";
 import { getDb } from "@scalius/database/client";
-import { deleteKvHint, putKvHint } from "@scalius/shared/kv-hints";
 import type { CatalogQueueMessage } from "./utils/catalog-jobs";
 import {
   customerAuthOtpChallenges,
@@ -64,7 +63,6 @@ import {
   createAuthOtpProviderClientReference,
   getAuthOtpDeliveryRetryDelaySeconds,
   markAuthOtpDeliveryReceiptAccepted,
-  markAuthOtpDeliveryReceiptAcceptedByDeliveryKey,
   markAuthOtpDeliveryReceiptFailed,
   markAuthOtpDeliveryReceiptSkipped,
   markAuthOtpDeliveryReceiptSkippedByDeliveryKey,
@@ -117,24 +115,12 @@ class QueueRetryAfterError extends Error {
   }
 }
 
-type AuthOtpAcceptedHint = {
-  deliveryKey: string;
-  channel: AuthOtpDeliveryChannel;
-  provider: string;
-  providerMessageId?: string | null;
-  providerStatus?: string | null;
-  rawResponse?: string | null;
-  createdAt: number;
-};
-
 // Mirrors apps/api/wrangler*.jsonc for the `jobs` queue. Cloudflare delivers
 // the first attempt plus max_retries additional attempts before the DLQ.
 const JOBS_MAX_RETRIES = 5;
 const JOBS_TERMINAL_DELIVERY_ATTEMPT = JOBS_MAX_RETRIES + 1;
 const QUEUE_BATCH_CONCURRENCY_LIMIT = 3;
 const DLQ_BATCH_CONCURRENCY_LIMIT = 2;
-const AUTH_OTP_ACCEPTED_HINT_TTL_SECONDS = 24 * 60 * 60;
-const AUTH_OTP_ACCEPTED_HINT_PREFIX = "auth_otp:accepted:";
 
 function assertPaymentConfirmed(
   result: PaymentConfirmationResult,
@@ -560,14 +546,6 @@ async function markAuthOtpDeliveryReceiptSkippedWithRetries(
   await retryAuthOtpReceiptWrite(() => markAuthOtpDeliveryReceiptSkipped(db, receipt, reason, result));
 }
 
-async function markAuthOtpDeliveryReceiptAcceptedByKeyWithRetries(
-  db: ReturnType<typeof getDb>,
-  target: Parameters<typeof markAuthOtpDeliveryReceiptAcceptedByDeliveryKey>[1],
-  result: AuthOtpDeliveryReceiptResult,
-): Promise<"accepted" | "already_terminal"> {
-  return await retryAuthOtpReceiptWrite(() => markAuthOtpDeliveryReceiptAcceptedByDeliveryKey(db, target, result));
-}
-
 async function retryAuthOtpReceiptWrite<T>(
   operation: () => Promise<T>,
 ): Promise<T> {
@@ -587,87 +565,6 @@ async function retryAuthOtpReceiptWrite<T>(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function storeAuthOtpAcceptedHint(
-  env: Env,
-  target: { deliveryKey: string; channel: AuthOtpDeliveryChannel },
-  result: AuthOtpDeliveryReceiptResult,
-): Promise<void> {
-  const hint: AuthOtpAcceptedHint = {
-    deliveryKey: target.deliveryKey,
-    channel: target.channel,
-    provider: result.provider ?? target.channel,
-    providerMessageId: result.providerMessageId ?? null,
-    providerStatus: result.providerStatus ?? "accepted",
-    rawResponse: result.rawResponse ?? null,
-    createdAt: Math.floor(Date.now() / 1000),
-  };
-
-  // Written only when marking the delivery accepted failed after the provider
-  // took the message, so a retry does not send the code twice. Not written
-  // (no binding, KV refusing writes): the retry sends again, which costs one
-  // duplicate message and nothing else.
-  const stored = await putKvHint(
-    env.CACHE,
-    authOtpAcceptedHintKey(target.deliveryKey),
-    JSON.stringify(hint),
-    { expirationTtl: AUTH_OTP_ACCEPTED_HINT_TTL_SECONDS },
-  );
-  if (!stored) throw new Error("The accepted OTP recovery hint was not written");
-}
-
-async function recoverAuthOtpAcceptedDeliveryFromHint(
-  db: ReturnType<typeof getDb>,
-  env: Env,
-  target: Awaited<ReturnType<typeof createAuthOtpDeliveryTarget>>,
-): Promise<boolean> {
-  const hint = await readAuthOtpAcceptedHint(env, target.deliveryKey);
-  if (!hint) return false;
-
-  try {
-    const result = await markAuthOtpDeliveryReceiptAcceptedByKeyWithRetries(db, target, hint);
-    await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
-    console.warn(
-      `[Queue] Recovered accepted OTP delivery=${target.deliveryKey} channel=${target.channel} ` +
-        `recipientHashPrefix=${getAuthOtpRecipientHashPrefix(target.identifierHash)} status=${result}`,
-    );
-    return true;
-  } catch (error) {
-    throw new QueueRetryAfterError(
-      error instanceof Error ? error.message : String(error),
-      30,
-    );
-  }
-}
-
-async function readAuthOtpAcceptedHint(
-  env: Env,
-  deliveryKey: string,
-): Promise<AuthOtpAcceptedHint | null> {
-  if (!env.CACHE) return null;
-  const value = await env.CACHE.get(authOtpAcceptedHintKey(deliveryKey), "json");
-  if (!isAuthOtpAcceptedHint(value, deliveryKey)) return null;
-  return value;
-}
-
-async function deleteAuthOtpAcceptedHint(env: Env, deliveryKey: string): Promise<void> {
-  if (!(await deleteKvHint(env.CACHE, authOtpAcceptedHintKey(deliveryKey)))) {
-    console.warn(`[Queue] Accepted OTP recovery hint delivery=${deliveryKey} not deleted; it expires on its own`);
-  }
-}
-
-function authOtpAcceptedHintKey(deliveryKey: string): string {
-  return `${AUTH_OTP_ACCEPTED_HINT_PREFIX}${deliveryKey}`;
-}
-
-function isAuthOtpAcceptedHint(value: unknown, deliveryKey: string): value is AuthOtpAcceptedHint {
-  if (!value || typeof value !== "object") return false;
-  const record = value as Partial<AuthOtpAcceptedHint>;
-  if (record.deliveryKey !== deliveryKey) return false;
-  if (record.channel !== "email" && record.channel !== "sms" && record.channel !== "whatsapp") return false;
-  if (!record.provider || typeof record.provider !== "string") return false;
-  return true;
 }
 
 async function archivePaymentEventsDlqMessage(
@@ -696,21 +593,6 @@ async function archiveAuthOtpDlqMessage(
     identifier: resolvedPayload.identifier,
     otpExpiresAt: resolvedPayload.otpExpiresAt ?? null,
   });
-  const acceptedHint = await readAuthOtpAcceptedHint(env, target.deliveryKey);
-  if (acceptedHint) {
-    const acceptedStatus = await markAuthOtpDeliveryReceiptAcceptedByKeyWithRetries(
-      db,
-      target,
-      acceptedHint,
-    );
-    await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
-    console.warn(
-      `[Queue] Archived accepted auth OTP DLQ delivery=${target.deliveryKey} channel=${target.channel} ` +
-        `recipientHashPrefix=${getAuthOtpRecipientHashPrefix(target.identifierHash)} status=${acceptedStatus}`,
-    );
-    return { status: acceptedStatus };
-  }
-
   const status = await markAuthOtpDeliveryReceiptSkippedByDeliveryKey(
     db,
     target,
@@ -1236,9 +1118,6 @@ async function processAuthOtpQueueMessage(
       console.log(`[Queue] Skipped OTP delivery ${target.deliveryKey}: already ${claim.reason}`);
       return;
     }
-    if (await recoverAuthOtpAcceptedDeliveryFromHint(db, env, target)) {
-      return;
-    }
     throw new QueueRetryAfterError(
       `OTP delivery receipt ${target.deliveryKey} is ${claim.reason}`,
       claim.retryAfterSeconds ?? 30,
@@ -1263,16 +1142,9 @@ async function processAuthOtpQueueMessage(
     const result = await sendAuthOtpByChannel(resolvedPayload, code, target, db, env);
     try {
       await markAuthOtpDeliveryReceiptAcceptedWithRetries(db, claim.receipt, result);
-      // Only an earlier attempt can have left a recovery hint: the first one
-      // never costs a KV call (Workers Free allows 1,000 writes and deletes a day).
-      if (claim.receipt.attempts > 1) await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
     } catch (acceptedMarkError) {
-      await storeAuthOtpAcceptedHint(env, target, result).catch((hintError: unknown) => {
-        console.error(
-          `[Queue] Failed to store accepted OTP recovery hint delivery=${target.deliveryKey}:`,
-          hintError instanceof Error ? hintError.message : hintError,
-        );
-      });
+      // The retried D1 mark failed after the provider took the message. The
+      // receipt stays the authority; a later attempt may send one duplicate.
       throw new QueueRetryAfterError(
         acceptedMarkError instanceof Error ? acceptedMarkError.message : String(acceptedMarkError),
         getAuthOtpDeliveryRetryDelaySeconds(claim.receipt.attempts),

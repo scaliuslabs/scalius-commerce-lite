@@ -44,7 +44,7 @@ async function validateReceiptProof(
   body: { orderId: string; receiptToken?: string },
 ): Promise<string> {
   const receiptToken = body.receiptToken ?? (c.req.header(RECEIPT_TOKEN_HEADER)?.trim() || undefined);
-  await validateReceiptToken(c.env.CACHE, body.orderId, receiptToken, db);
+  await validateReceiptToken(db, body.orderId, receiptToken);
   if (!receiptToken) throw new Error("Receipt token validation returned without proof.");
   return receiptToken;
 }

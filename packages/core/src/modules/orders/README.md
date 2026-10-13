@@ -262,7 +262,7 @@ Cross-browser guest hosted-payment recovery is buyer-verified, not bearer-link b
 | POST | `/receipt/:id/support-requests` | `createReceiptOrderSupportRequest()` | Receipt-token cancellation, return, or refund request creation; writes the support-request ledger and enqueues merchant/admin notification only after proof validation |
 | POST | `/payment-recovery/send-otp` | `sendOrderPaymentRecoveryOtp()` | Public, generic response for buyer OTP delivery against an eligible hosted-payment recovery order |
 | POST | `/payment-recovery/verify-otp` | `verifyOrderPaymentRecoveryOtp()` | Service-authenticated storefront handoff that verifies OTP and returns raw receipt proof only to the storefront server proxy |
-| GET | `/status/:token` | KV/D1 status-token lookup | Poll checkout processing status with a non-bearer `cst_` token; `chk_` receipt proof is rejected in the URL |
+| GET | `/status/:token` | D1 status-token lookup | Poll checkout processing status with a non-bearer `cst_` token; `chk_` receipt proof is rejected in the URL |
 | POST | `/` | `createStorefrontOrder()` + `commitStorefrontOrderPayload()` | Synchronous idempotent order placement (returns `201` after D1 commit; `202` only for duplicate in-flight submits) |
 
 ## Dependencies

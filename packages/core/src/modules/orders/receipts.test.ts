@@ -118,7 +118,6 @@ describe("order receipts", () => {
       source: "order_receipts",
       orderId: "order_1",
       tokenHash,
-      shouldRepairKv: true,
     });
   });
 
@@ -165,7 +164,6 @@ describe("order receipts", () => {
     expect(result).toMatchObject({
       source: "checkout_attempts",
       orderId: "order_1",
-      shouldRepairKv: true,
     });
     expect(inserted).toHaveLength(1);
     expect(inserted[0]).toMatchObject({
@@ -195,7 +193,6 @@ describe("order receipts", () => {
     expect(result).toMatchObject({
       source: "checkout_attempts",
       orderId: "order_1",
-      shouldRepairKv: false,
     });
     expect(inserted).toHaveLength(0);
   });

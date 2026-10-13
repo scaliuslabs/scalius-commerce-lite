@@ -61,8 +61,6 @@ import {
     giftCardHandlesSchema,
     lazySessionCustomerId,
     persistedStorefrontVariantIdSchema,
-    scheduleCheckoutSuccessRecoveryHints,
-    scheduleCheckoutFailureStatusHint,
 } from "./shared";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -700,13 +698,6 @@ app.openapi(createOrderRoute, async (c) => {
         return null;
       });
       if (recoveredAttempt?.status === "replay") {
-        scheduleCheckoutSuccessRecoveryHints(
-          c.env,
-          recoveredAttempt.response.statusToken,
-          recoveredAttempt.response.receiptToken,
-          recoveredAttempt.response.orderId,
-          executionCtx,
-        );
         return created(c, recoveredAttempt.response);
       }
       if (recoveredAttempt?.status === "processing") {
@@ -720,26 +711,9 @@ app.openapi(createOrderRoute, async (c) => {
           },
         }, 202);
       }
-      scheduleCheckoutFailureStatusHint(
-        c.env,
-        checkoutAttempt.statusToken,
-        result.orderId,
-        commitError instanceof ValidationError
-          ? commitError.message
-          : "Order creation failed. Please try again.",
-        executionCtx,
-      );
       throw commitError;
     }
     diagnostics?.mark("commit");
-
-    scheduleCheckoutSuccessRecoveryHints(
-      c.env,
-      checkoutAttempt.statusToken,
-      result.checkoutToken,
-      result.orderId,
-      executionCtx,
-    );
 
     const postCommit = Promise.all([
       runStorefrontOrderPostCommitSideEffects(db, c.env, result.commitPayload),
