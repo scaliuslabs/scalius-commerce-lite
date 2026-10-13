@@ -104970,10 +104970,6 @@
                         "ledgerHealth": {
                           "type": "object",
                           "properties": {
-                            "legacyRows": {
-                              "type": "integer",
-                              "minimum": 0
-                            },
                             "v2Rows": {
                               "type": "integer",
                               "minimum": 0
@@ -104988,7 +104984,6 @@
                             }
                           },
                           "required": [
-                            "legacyRows",
                             "v2Rows",
                             "v2Variants",
                             "invalidV2Rows"

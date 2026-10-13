@@ -30665,7 +30665,6 @@ export type GetApiV1AdminInventoryResponses = {
                 lowStockCount: number;
             };
             ledgerHealth?: {
-                legacyRows: number;
                 v2Rows: number;
                 v2Variants: number;
                 invalidV2Rows: number;

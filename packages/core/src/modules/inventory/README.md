@@ -44,7 +44,7 @@ A v2 movement records the `pool`, the `reservation_generation`, `stock_version_b
 Types: `reserved`, `preorder_reserved`, `released`, `deducted`, `preorder_deducted`, `restored`, `adjusted`, `received`, `transfer_in` and `transfer_out`. Their counter effects follow the pool table above. `adjusted` moves `stock` (regular) or `preorder_stock` by the delta. `received` and `transfer_in` add to `stock`. `transfer_out` subtracts from it.
 
 - The trigger `inventory_movements_ledger_v2_insert_semantics` rejects a v2 row whose type and deltas disagree.
-- Version 1 rows have no counter facts. They are a boundary that cannot be folded. `getInventoryLedgerHealth()` counts v1 rows, v2 rows and invalid v2 rows. `foldInventoryLedgerV2()` replays events and throws `InventoryLedgerDiscontinuityError` on a gap.
+- `getInventoryLedgerHealth()` counts v2 rows and invalid v2 rows. `foldInventoryLedgerV2()` replays events and throws `InventoryLedgerDiscontinuityError` on a gap.
 - The reservation generation numbers one reserve-to-terminal cycle of an order and SKU. A restore uses the generation of the deduction it undoes.
 - A movement that a retry may repeat has a deterministic id (`reservation:<sha256>`, `transition:<sha256>`, `imov_<hash>`, `expiry_release:<order>:<variant>...`). A duplicate claim that matches counts as success. A mismatch fails closed.
 - Write order in one batch: guard statements, the movement `INSERT ... SELECT` gated on the SKU version, the CAS `UPDATE`, then the buyer-state refresh (`catalogBuyerStateRefreshStatementsForSkus`). A lost CAS aborts or compensates the whole batch, so a counter never changes without its movement.

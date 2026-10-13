@@ -103,8 +103,8 @@ export const inventoryMovements = sqliteTable("inventory_movements", {
     newStock: integer("new_stock").notNull(),
     notes: text("notes"),
     createdBy: text("created_by"),
-    // Ledger v2 fields are nullable for legacy rows. Every new production
-    // counter mutation writes a complete version edge and all counter deltas.
+    // Every production counter mutation writes a complete version edge and all
+    // counter deltas (ledger v2).
     ledgerVersion: integer("ledger_version").notNull().default(1),
     pool: text("pool"),
     reservationGeneration: integer("reservation_generation"),

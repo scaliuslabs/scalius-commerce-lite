@@ -232,7 +232,7 @@ export type ReservationBatchItem = {
   orderId?: string;
   /**
    * Stable idempotency namespace for strict reservation movement claims.
-   * Existing callers omit this and keep legacy random movement IDs.
+   * Callers that omit this get random movement IDs.
    */
   reservationKey?: string;
   /**
@@ -252,8 +252,8 @@ export interface ReserveStockBatchOptions {
   /**
    * Order identities proven to have no prior ledger edges. Checkout may set
    * this only for a new in-memory attempt whose attempt/order/inventory facts
-   * will share one transaction. Retried or legacy identities must read their
-   * existing generation.
+   * will share one transaction. Retried identities must read their existing
+   * generation.
    */
   freshOrderIds?: ReadonlySet<string>;
   /**
@@ -668,26 +668,6 @@ async function createReservationMovementId(input: {
   return `reservation:${hex}`;
 }
 
-async function loadReservationReleaseGeneration(
-  db: Database,
-  orderId: string,
-  variantId: string,
-): Promise<number> {
-  const result = await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(inventoryMovements)
-    .where(
-      and(
-        eq(inventoryMovements.orderId, orderId),
-        eq(inventoryMovements.variantId, variantId),
-        eq(inventoryMovements.type, "released"),
-      ),
-    )
-    .get();
-
-  return result?.count ?? 0;
-}
-
 async function loadReservationLedgerGeneration(
   db: Database,
   orderId: string,
@@ -733,11 +713,7 @@ async function loadReservationLedgerGeneration(
     return getNextReservationGeneration(balances);
   }
 
-  // Legacy deterministic reservation IDs used zero-based release counts.
-  // Keep that hash generation via (ledger generation - 1) so an in-flight
-  // pre-migration checkout replay resolves its existing claim instead of
-  // reserving twice.
-  return (await loadReservationReleaseGeneration(db, orderId, variantId)) + 1;
+  return 1;
 }
 
 async function buildReservationMovementClaims(
@@ -759,7 +735,8 @@ async function buildReservationMovementClaims(
         ? 1
         : await loadReservationLedgerGeneration(db, entry.orderId, entry.variantId, pool)
       : null;
-    const legacyHashGeneration = reservationGeneration == null
+    // The movement id hashes the zero-based generation.
+    const hashGeneration = reservationGeneration == null
       ? 0
       : reservationGeneration - 1;
     const id = entry.movementId
@@ -769,7 +746,7 @@ async function buildReservationMovementClaims(
             orderId: entry.orderId,
             variantId: entry.variantId,
             pool,
-            generation: legacyHashGeneration,
+            generation: hashGeneration,
           })
         : crypto.randomUUID());
 

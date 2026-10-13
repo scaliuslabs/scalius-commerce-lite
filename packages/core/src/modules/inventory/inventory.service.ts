@@ -276,7 +276,6 @@ export async function listInventoryMovements(db: Database, params: {
 
 export async function getInventoryLedgerHealth(db: Database) {
     const result = await db.select({
-        legacyRows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 1 THEN 1 ELSE 0 END), 0)`,
         v2Rows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 2 THEN 1 ELSE 0 END), 0)`,
         v2Variants: sql<number>`COUNT(DISTINCT CASE WHEN ${inventoryMovements.ledgerVersion} = 2 THEN ${inventoryMovements.variantId} END)`,
         invalidV2Rows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 2 AND (
@@ -297,7 +296,7 @@ export async function getInventoryLedgerHealth(db: Database) {
         ) THEN 1 ELSE 0 END), 0)`,
     }).from(inventoryMovements).get();
 
-    return result ?? { legacyRows: 0, v2Rows: 0, v2Variants: 0, invalidV2Rows: 0 };
+    return result ?? { v2Rows: 0, v2Variants: 0, invalidV2Rows: 0 };
 }
 
 export async function getInventoryLabelVariants(

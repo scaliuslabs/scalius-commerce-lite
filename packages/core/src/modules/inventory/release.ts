@@ -703,27 +703,7 @@ async function loadReleaseMovementStats(
       continue;
     }
 
-    const row = await db
-      .select({
-        reservedQuantity: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.type} IN ('reserved', 'preorder_reserved') THEN ${inventoryMovements.quantity} ELSE 0 END), 0)`,
-        releasedQuantity: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.type} = 'released' THEN -${inventoryMovements.quantity} ELSE 0 END), 0)`,
-        reservationGenerations: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.type} IN ('reserved', 'preorder_reserved') THEN 1 ELSE 0 END), 0)`,
-      })
-      .from(inventoryMovements)
-      .where(
-        and(
-          eq(inventoryMovements.orderId, orderId),
-          eq(inventoryMovements.variantId, entry.variantId),
-        ),
-      )
-      .get();
-
-    stats.set(entry.variantId, {
-      reservedQuantity: Number(row?.reservedQuantity ?? 0),
-      releasedQuantity: Number(row?.releasedQuantity ?? 0),
-      reservationGenerations: Number(row?.reservationGenerations ?? 0),
-      reservationGeneration: Math.max(1, Number(row?.reservationGenerations ?? 0)),
-    });
+    stats.set(entry.variantId, { reservedQuantity: 0, releasedQuantity: 0, reservationGenerations: 0, reservationGeneration: 1 });
   }
 
   return stats;

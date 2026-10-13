@@ -152,7 +152,6 @@ const inventoryMovementPageInfoSchema = z.object({
 });
 
 const inventoryLedgerHealthSchema = z.object({
-    legacyRows: z.number().int().nonnegative(),
     v2Rows: z.number().int().nonnegative(),
     v2Variants: z.number().int().nonnegative(),
     invalidV2Rows: z.number().int().nonnegative(),
