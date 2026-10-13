@@ -75,7 +75,10 @@ const SEEDS = process.env.DVC_SEED
   : Array.from({ length: Number(process.env.DVC_SEEDS ?? 1) }, (_, index) => `${process.env.DVC_SEED_PREFIX ?? "dvc"}-${index + Number(process.env.DVC_SEED_OFFSET ?? 0)}`);
 // A loaded machine slows the same steps down; DVC_TIMEOUT_MS gives them time
 // without weakening the check.
-const TIMEOUT = Number(process.env.DVC_TIMEOUT_MS ?? (MODE === "long" ? 24 * 3600_000 : 240_000));
+// A write's after-response work (notifications, events, recommendations,
+// rebuild chunks) runs inside each step since the queue retirement: about
+// 260 s for the slowest quick seed.
+const TIMEOUT = Number(process.env.DVC_TIMEOUT_MS ?? (MODE === "long" ? 24 * 3600_000 : 480_000));
 
 /**
  * `s4` (default): S4's production part cache end to end (the part reader's
