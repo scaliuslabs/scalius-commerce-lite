@@ -433,8 +433,8 @@ const pageStoreTimeZone = storeTimeZone();
     <slot name="preload" />
 
     {/* The Style's self-hosted fonts: the heading's Latin face preloads after
-        the page's LCP image hints; every face swaps over a metric-matched
-        fallback, so text never shifts. */}
+        the page's LCP image hints (not on phones); every face swaps over a
+        metric-matched fallback, so text never shifts. */}
     <ThemeFonts fonts={paint.fonts} preview={isThemePreview} />
 
     {/* Without JavaScript the phone menu and search buttons and the drawers'

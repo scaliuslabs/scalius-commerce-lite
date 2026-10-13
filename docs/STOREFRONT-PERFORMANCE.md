@@ -32,7 +32,7 @@ The batch carries at most 8 parts of at most 2,048 characters each (`MAX_STOREFR
 | Category | `storefront/layout`, `categories/<slug>/products?...` |
 | Collection | `storefront/layout`, `collections/<id>?...` |
 | Search | `storefront/layout`, `products?...&search=...` |
-| Cart shell | `storefront/layout`, `locations/cities`, `shipping-methods`, `checkout-languages/active`, `checkout/config` |
+| Cart shell | `storefront/layout`, `locations/cities`, `shipping-methods`, `checkout-languages/active`, `checkout/config`, `products/recommendations?limit=8` |
 | Checkout shell | `storefront/layout`, `checkout/config`, `checkout-languages/active` |
 
 Sources: `PAGE_PARTS` in `apps/api/src/storefront-render-budget.test.ts`. Installed apps draw inside these parts and add no call. The API sanitizes the drawn output and caches it under the `plg` and `plgs` dependency keys, so a hit runs no app code (`apps/api/src/plugins/storefront-render.ts`).
@@ -134,7 +134,7 @@ D1 budgets of a cold render, per page (seeded store; the home page uses every se
 | Category | 5 | 3 |
 | Collection | 6 | 3 |
 | Search | 5 | 2 |
-| Cart shell | 10 | 2 |
+| Cart shell | 13 | 2 |
 | Checkout shell | 7 | 2 |
 
 A product with 6 reviews may use 20 round trips in 3 waves. The budgets are the measured values (2026-10-14), so any new statement or wave fails the test.
@@ -301,4 +301,6 @@ Build output, the CSS inline limit, the preconnect `Link` header and the prefetc
 
 - Astro sessions are off (`session: false` in `apps/storefront/astro.config.mjs`), so the adapter adds no KV session driver.
 - Analytics scripts that run in Partytown load through a hashed bootstrap after first paint (`apps/storefront/integrations/deferred-partytown.mjs`). The Cloudflare Web Analytics beacon loads as a module script with `fetchpriority="low"` (`apps/storefront/src/lib/analytics-script-delivery.ts`).
+- The theme's heading face is preloaded only from 640 px (`media` on the preload in `ThemeFonts.astro`). On a phone on slow 4G the 47 KB preload shared the link with the render-blocking CSS and the LCP photo and cost 150 ms of LCP (A/B of the live home page, 5 runs each: 1,056 ms to 908-916 ms). Every face swaps over a metric-matched fallback, so CLS stays 0.
+- Content that buyers see at first paint is in the HTML, not fetched by a page script. The empty cart's "Popular now" products are drawn in the cached cart shell (one more batch part, lazy photos, so a full cart never fetches them). Fetched by the cart script, they were the phone LCP at 2.6 s; drawn in the shell, about 1.0 s in the same A/B.
 - The preconnect `Link` header stays a fixed CDN origin. A preconnect transfers no merchant bytes, so Cloudflare's URI-keyed Early Hints cache cannot serve stale price, stock or hero content.

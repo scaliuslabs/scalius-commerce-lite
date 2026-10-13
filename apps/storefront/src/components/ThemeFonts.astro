@@ -1,7 +1,9 @@
 ---
 // Self-hosted fonts for the theme's type pairing: the heading's Latin face
-// is preloaded, every face swaps in over a metric-matched fallback (no
-// layout shift). The CSS is built from constants only (lib/theme-fonts.ts).
+// is preloaded on screens from 640 px, every face swaps in over a
+// metric-matched fallback (no layout shift). A phone does not preload it: on
+// a slow link the preload took bandwidth from the render-blocking CSS and the
+// LCP photo (150 ms of phone LCP); the face loads once text needs it. The CSS is built from constants only (lib/theme-fonts.ts).
 // Under a theme editor preview the style is marked, so the editor's paint
 // route can replace it when the merchant picks other fonts.
 import type { ThemeFontAssets } from "@/lib/theme-fonts";
@@ -14,5 +16,5 @@ interface Props {
 const { fonts, preview = false } = Astro.props;
 ---
 
-{fonts.preload.map((href) => <link rel="preload" as="font" type="font/woff2" href={href} crossorigin="anonymous" />)}
+{fonts.preload.map((href) => <link rel="preload" as="font" type="font/woff2" href={href} media="(min-width: 640px)" crossorigin="anonymous" />)}
 {(fonts.css || preview) && <style is:inline set:html={fonts.css} data-theme-fonts={preview ? "" : undefined} />}

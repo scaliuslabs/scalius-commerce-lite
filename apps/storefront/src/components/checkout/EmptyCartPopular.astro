@@ -1,0 +1,59 @@
+---
+// An empty cart is not a dead end: the store's popular products, drawn in
+// the cached cart shell itself (one batch part). The section shows only while
+// the cart is empty (`group-data-[cart-state=empty]` on its container), and
+// its photos are lazy, so a full cart never fetches them. Drawn on the server,
+// they paint with the page instead of after the cart script and a browser
+// API read, which made them the phone's late LCP.
+import type { ProductRecommendations } from "@/lib/api";
+import { formatMoney } from "@/lib/currency";
+import { productImageSources } from "@/lib/product-media";
+import { capPhoneSizesDensity } from "@/lib/responsive-image";
+
+interface Props {
+  title: string;
+  recommendations: ProductRecommendations | null;
+  currencySymbol: string;
+  currencyCode: string;
+}
+
+const { title, recommendations, currencySymbol, currencyCode } = Astro.props;
+const products = recommendations?.products ?? [];
+// Two columns on a phone, four from `sm`: a DPR 3 phone fetches about 2x.
+const slot = { width: 240, sizes: capPhoneSizesDensity("(max-width: 639px) 44vw, 22vw"), maxWidth: 480 };
+---
+
+{products.length > 0 && (
+  <section aria-labelledby="cartEmptyPopularTitle">
+    <h2 id="cartEmptyPopularTitle" class="mb-3 text-base font-semibold text-foreground">{title}</h2>
+    <ul class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {products.map((product) => {
+        const image = productImageSources(product.imageUrl, slot);
+        return (
+          <li>
+            <a
+              href={`/products/${encodeURIComponent(product.slug)}`}
+              class="flex h-full flex-col rounded-lg border border-border bg-card p-2 transition-colors hover:border-foreground/30"
+            >
+              <img
+                src={image.src}
+                srcset={image.srcset}
+                sizes={image.sizes}
+                alt=""
+                width="240"
+                height="240"
+                loading="lazy"
+                decoding="async"
+                class="aspect-square w-full rounded-md bg-muted object-cover"
+              />
+              <span class="mt-2 line-clamp-2 text-sm font-medium leading-snug text-foreground">{product.name}</span>
+              <span class="mt-auto pt-1 text-sm font-semibold tabular-nums text-foreground">
+                {formatMoney(product.discountedPrice, { symbol: currencySymbol, code: currencyCode })}
+              </span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+)}

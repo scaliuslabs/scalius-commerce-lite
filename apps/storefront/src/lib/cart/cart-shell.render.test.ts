@@ -118,6 +118,13 @@ const LANGUAGE = {
 };
 const CITIES = [{ id: "city_dhaka", name: "Dhaka" }];
 const SHIPPING = { shippingMethods: [{ id: "ship_std", name: "Standard", fee: 60, kind: "delivery" }] };
+const POPULAR = {
+  reason: "popular",
+  products: [
+    { id: "p_linen", slug: "linen-shirt", name: "Linen shirt", imageUrl: "https://cdn.shop.test/media/linen.jpg/1600.webp", discountedPrice: 1250 },
+    { id: "p_belt", slug: "belt", name: "Belt", imageUrl: null, discountedPrice: 300 },
+  ],
+};
 const COD_CONFIG = {
   gateways: [{ id: "cod", name: "Cash on delivery", flow: "cod" }],
   guestCheckoutEnabled: true,
@@ -138,6 +145,7 @@ function reads(overrides: Reads = {}): Reads {
     "/api/v1/shipping-methods": { status: 200, body: envelope(SHIPPING) },
     "/api/v1/checkout-languages/active": { status: 200, body: envelope({ language: LANGUAGE }) },
     "/api/v1/checkout/config": { status: 200, body: envelope(COD_CONFIG) },
+    "/api/v1/products/recommendations": { status: 200, body: envelope(POPULAR) },
     ...overrides,
   };
 }
@@ -255,6 +263,29 @@ describe("the cart shell render", () => {
 
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatch(/^\/api\/v1\/storefront\/batch\?/);
+  });
+
+  it("draws the empty cart's popular products in the shell, with lazy photos a full cart never fetches", async () => {
+    const { html, calls } = await renderCart(new Request("https://shop.test/cart"));
+
+    expect(calls).toHaveLength(1);
+    const section = html.slice(html.indexOf('id="cartEmptyPopularTitle"'));
+    expect(section).toContain('href="/products/linen-shirt"');
+    expect(section).toContain("Linen shirt");
+    const photo = section.match(/<img[^>]*>/)?.[0] ?? "";
+    expect(photo).toMatch(/loading="lazy"/);
+    // A DPR 3 phone asks for about 2x pixels.
+    expect(photo).toMatch(/sizes="\(min-resolution: 2\.5dppx\) and \(max-width: 639px\)/);
+    // Shown only while the cart is empty.
+    expect(html.slice(0, html.indexOf('id="cartEmptyPopularTitle"'))).toMatch(/group-data-\[cart-state=empty\]:block[^>]*data-cart-empty-extras/);
+  });
+
+  it("leaves the popular products out when they could not be read", async () => {
+    const { html } = await renderCart(
+      new Request("https://shop.test/cart"),
+      reads({ "/api/v1/products/recommendations": { status: 503, body: JSON.stringify({ success: false }) } }),
+    );
+    expect(html).not.toContain('id="cartEmptyPopularTitle"');
   });
 
   it.each([

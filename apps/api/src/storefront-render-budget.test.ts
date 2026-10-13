@@ -55,7 +55,7 @@ const PAGE_D1_BUDGETS = {
   search: { roundTrips: 5, waves: 2 },
   collection: { roundTrips: 6, waves: 3 },
   landing: { roundTrips: 10, waves: 2 },
-  cart: { roundTrips: 10, waves: 2 },
+  cart: { roundTrips: 13, waves: 2 },
   checkout: { roundTrips: 7, waves: 2 },
 } as const;
 
@@ -84,7 +84,7 @@ const PAGE_PARTS: Record<keyof typeof PAGE_D1_BUDGETS, string[]> = {
   collection: ["/api/v1/storefront/layout", "/api/v1/collections/col_grid?page=1&limit=20&sort=newest"],
   landing: ["/api/v1/storefront/layout", "/api/v1/storefront/landing/eid", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
   // The buyer shells (cached like public pages; a signed-in buyer renders them live).
-  cart: ["/api/v1/storefront/layout", "/api/v1/locations/cities", "/api/v1/shipping-methods", "/api/v1/checkout-languages/active", "/api/v1/checkout/config"],
+  cart: ["/api/v1/storefront/layout", "/api/v1/locations/cities", "/api/v1/shipping-methods", "/api/v1/checkout-languages/active", "/api/v1/checkout/config", "/api/v1/products/recommendations?limit=8"],
   checkout: ["/api/v1/storefront/layout", "/api/v1/checkout/config", "/api/v1/checkout-languages/active"],
 };
 

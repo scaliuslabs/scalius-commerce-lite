@@ -1,5 +1,4 @@
 // src/lib/cart/client.ts
-import { showEmptyCartSuggestions } from "./empty-suggestions";
 import { billingQuoteFields } from "@/lib/checkout/billing-address";
 import {
   cartStore,
@@ -402,8 +401,6 @@ function syncCartPagePresentation(ready: boolean): void {
     root.dataset.cartState = !ready ? "loading" : hasItems ? "items" : "empty";
   }
   cartItems?.setAttribute("aria-busy", ready ? "false" : "true");
-  // A cart known to be empty offers something to shop instead of a dead end.
-  if (ready && !hasItems) void showEmptyCartSuggestions();
 
   const hideOperationalPanels = !ready || !hasItems;
   cartSummary?.classList.toggle("hidden", hideOperationalPanels);
