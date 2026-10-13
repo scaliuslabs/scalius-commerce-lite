@@ -16,6 +16,7 @@
       "ES2022",
       "DOM"
     ],
+    "module": "ESNext",
     "noEmit": true,
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/api.tsbuildinfo"
   },

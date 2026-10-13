@@ -287,6 +287,11 @@ A numbered page deeper than `maxOffset` is an empty page, reads no rows and gets
 
 A cache miss on a fresh API isolate pays module start-up on top of the render. A page is one batch, so a render pays for at most one isolate start, and API placement keeps isolates warm more often. The API loads route families lazily (`classifyPublicRuntimePath` in `apps/api/src/runtime/public-app.ts`): `config`, `catalog`, `content`, `buyer` and `proxy`. A render must not load the `buyer` family (orders, customer auth, agent contexts), so every batchable read, including `checkout/config`, lives in a read-only family. The generated payloads (`apps/api/src/generated/openapi-contract.gen.ts`, `agent-operations.gen.ts`) stay unevaluated outside their own routes. Splitting the API into more bundles does not help ([experiments](./PERFORMANCE-RELEASE.md#cold-start-experiments)), so the API stays one script.
 
+workerd compiles every uploaded byte when an isolate starts, and a large object or array literal costs far more than the same bytes as a string. Rules that keep the first view after a deploy fast:
+
+- Bundle a large dataset as text and parse it where it is used (`import(..., { with: { type: "text" } })`, as the Bangladesh pack loads its place directory). A JSON import becomes one literal that every API isolate compiles.
+- The storefront server build is minified (`vite.build.rolldownOptions.output.minify` in `apps/storefront/astro.config.mjs`); Astro turns `build.minify` off for it.
+
 ## Images
 
 - Uploads get WebP renditions at `media/<id>.<ext>/<w>.webp` on a fixed ladder (`MEDIA_VARIANT_WIDTHS` in `packages/shared/src/media-variants.ts`: 144 to 1600, each step at most 1.2 times the one below; master up to 2400). The dashboard browser pipeline or the API `IMAGES` binding renders them. No image transformation runs on the delivery path (the storefront image service is `passthrough`).

@@ -119,6 +119,21 @@ The first row's "after" is after the self-healing render job ran, 2 min 9 s afte
 
 ## Cold-start experiments
 
+### Worker isolate start in workerd (2026-10-14)
+
+Method: each built Worker in workerd 1.20261006 through Miniflare, a fresh runtime per run, no database, timed until it is ready, less the ready time of a trivial Worker (about 50 ms). The API bundle runs without its source map: Miniflare reads a 40 MB map at start-up and doubles the number. The storefront renders from API answers recorded once from the live demo. Median of 7 runs; the host was shared, so compare rows of one run only.
+
+| Worker | Uploaded JS | Isolate start | First home render |
+| --- | --- | --- | --- |
+| API, places dataset as a JSON import | 14.96 MB | 407-426 ms | not measured |
+| API, places dataset imported as text (`with { type: "text" }`, parsed when a seed runs) | 15.27 MB | 284-304 ms | not measured |
+| Storefront, server build unminified (Astro forces `build.minify: false`) | 4.6 MB in 271 modules | 155-170 ms | 62-67 ms |
+| Storefront, server build minified (`rolldownOptions.output.minify`) | 2.6 MB in 271 modules | 110-120 ms | 60-64 ms |
+
+- workerd paid about 120 ms to compile the 2.3 MB Bangladesh place directory as one array literal, although no request evaluates it. The same bytes as a string cost almost nothing. In Node the difference is about 15 ms, so measure start-up in workerd, not Node.
+- The 1.8 MB of agent operation schemas (an object literal) made no measurable difference as JSON strings. The 3 MB OpenAPI contract string and the remaining code still cost about 10 ms per MB; moving the contract out of the script is the next lever (about 35 ms).
+- A first page render on a fresh storefront isolate costs about 50 ms more than a warm one (zod schemas and the theme context compile on first use).
+
 ### API isolate start (2026-09-24)
 
 Method: the production API bundle (`wrangler deploy --dry-run`, 8.7 MB minified) imported into plain Node V8 with `cloudflare:*` imports stubbed and no database, so only module initialisation was timed. Median of three runs.
