@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 147,
-  name: "0147_kv_retirement",
+  version: 149,
+  name: "0149_strict_readers_reset",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -516,6 +516,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 147,
     name: "0147_kv_retirement",
     sourceSha256: "786ba414dbaf965411cc75b99f79007253d2bdcf1e7bc1423e7d04dc23158dd7",
+  },
+  {
+    version: 149,
+    name: "0149_strict_readers_reset",
+    sourceSha256: "baf742367eff349777d07762e938980de263094ac2721e7c6c027ab6f0510c25",
   },
 ] as const;
 

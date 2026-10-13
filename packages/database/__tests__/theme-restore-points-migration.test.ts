@@ -28,7 +28,7 @@ describe(`${NAME} over a populated store`, () => {
       INSERT INTO theme_settings (id, colors, revision) VALUES ('default', '{"version":8}', 3);
       INSERT INTO theme_settings_drafts (id, theme, revision, base_published_revision) VALUES ('default', '{"version":8}', 7, 3);
     `);
-    db.exec(compiledMigrationSql("d1", undefined, "0124_"));
+    db.exec(compiledMigrationSql("d1", "0125_", "0124_"));
     expect(db.prepare("SELECT revision FROM theme_settings_drafts").get()).toEqual({ revision: 7 });
     db.exec("INSERT INTO theme_restore_points (id, theme, draft_revision, reason) VALUES ('themerp_abcd1234', '{}', 7, 'restore')");
     expect(db.prepare("SELECT reason, draft_revision FROM theme_restore_points").get()).toEqual({ reason: "restore", draft_revision: 7 });

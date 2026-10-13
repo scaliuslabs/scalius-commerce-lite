@@ -1037,6 +1037,13 @@
       "when": 1791923663279,
       "tag": "0147_kv_retirement",
       "breakpoints": true
+    },
+    {
+      "idx": 149,
+      "version": "6",
+      "when": 1792000000000,
+      "tag": "0149_strict_readers_reset",
+      "breakpoints": true
     }
   ]
 }

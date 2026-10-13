@@ -72,7 +72,7 @@ describe(`${NAME} over a populated 0108 store`, () => {
       VALUES ('ord_old', 'Rahim', '+8801711111111', 'House 1', 'city', 'zone', 'confirmed')`);
     db.exec(`INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, unit_price_minor)
       VALUES ('item_old', 'ord_old', 'prod_a', 'var_a', 1, 'Kurta', 80000)`);
-    db.exec(compiledMigrationSql("d1", undefined, "0109_"));
+    db.exec(compiledMigrationSql("d1", "0110_", "0109_"));
     db.exec("PRAGMA foreign_keys = ON");
   });
   afterEach(() => db.close());
