@@ -34,7 +34,6 @@ const queue = { send: vi.fn(async () => undefined) };
 function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
     const env = {
-        CACHE: { id: "api-cache" },
         JOBS_QUEUE: queue,
         CREDENTIAL_ENCRYPTION_KEY: "credential-key",
     } as unknown as Env;

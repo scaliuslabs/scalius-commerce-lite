@@ -224,14 +224,6 @@ function createTestApp(options: {
     receiptOrderId: options.tokenOrderId,
     orderRowOverride: options.orderRowOverride,
   });
-  const kv = {
-    get: vi.fn().mockResolvedValue(
-      options.tokenOrderId
-        ? JSON.stringify({ orderId: options.tokenOrderId })
-        : null,
-    ),
-    put: vi.fn(async () => undefined),
-  };
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -243,7 +235,7 @@ function createTestApp(options: {
   });
   app.route("/orders", orderRoutes);
 
-  return { app, db, kv };
+  return { app, db };
 }
 
 describe("order receipt route", () => {
@@ -264,12 +256,12 @@ describe("order receipt route", () => {
   });
 
   it("does not expose raw order details by ID", async () => {
-    const { app, db, kv } = createTestApp({ tokenOrderId: "order_1" });
+    const { app, db } = createTestApp({ tokenOrderId: "order_1" });
 
     const response = await app.request(
       "/api/v1/orders/order_1",
       {},
-      { CACHE: kv } as never,
+      {} as never,
     );
     const document = orderRoutes.getOpenAPIDocument({
       openapi: "3.0.0",
@@ -278,7 +270,6 @@ describe("order receipt route", () => {
 
     expect(response.status).toBe(404);
     expect(db.select).not.toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
     expect(document.paths).not.toHaveProperty("/{id}");
     expect(document.paths).toHaveProperty("/receipt/{id}");
     expect(document.paths).toHaveProperty("/receipt/{id}/support-requests");
@@ -286,55 +277,51 @@ describe("order receipt route", () => {
   });
 
   it("does not expose a receipt by order ID alone", async () => {
-    const { app, db, kv } = createTestApp({ tokenOrderId: "order_1" });
+    const { app, db } = createTestApp({ tokenOrderId: "order_1" });
 
     const response = await app.request(
       "/api/v1/orders/receipt/order_1",
       {},
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(404);
-    expect(kv.get).not.toHaveBeenCalled();
     expect(db.select).not.toHaveBeenCalled();
   });
 
   it("does not accept receipt proof from a URL query token", async () => {
-    const { app, db, kv } = createTestApp({ tokenOrderId: "order_1" });
+    const { app, db } = createTestApp({ tokenOrderId: "order_1" });
 
     const response = await app.request(
       "/api/v1/orders/receipt/order_1?token=chk_valid",
       {},
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(404);
-    expect(kv.get).not.toHaveBeenCalled();
     expect(db.select).not.toHaveBeenCalled();
   });
 
   it("rejects a token that does not map to the requested order", async () => {
-    const { app, db, kv } = createTestApp({ tokenOrderId: "other_order" });
+    const { app, db } = createTestApp({ tokenOrderId: "other_order" });
 
     const response = await app.request(
       "/api/v1/orders/receipt/order_1",
       { headers: { "X-Receipt-Token": "chk_wrong" } },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(404);
     expect(db.select).toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("returns a minimal receipt DTO for a valid token", async () => {
-    const { app, kv } = createTestApp({ tokenOrderId: "order_1" });
+    const { app } = createTestApp({ tokenOrderId: "order_1" });
 
     const response = await app.request(
       "/api/v1/orders/receipt/order_1",
       { headers: { "X-Receipt-Token": "chk_valid" } },
-      { CACHE: kv } as never,
+      {} as never,
     );
     const body = await response.json() as {
       data?: { order?: Record<string, unknown> };
@@ -403,7 +390,7 @@ describe("order receipt route", () => {
   ])(
     "does not expose a buyer-visible balance for %s/%s orders",
     async (status, paymentStatus) => {
-      const { app, kv } = createTestApp({
+      const { app } = createTestApp({
         tokenOrderId: "order_1",
         orderRowOverride: {
           status,
@@ -416,7 +403,7 @@ describe("order receipt route", () => {
       const response = await app.request(
         "/api/v1/orders/receipt/order_1",
         { headers: { "X-Receipt-Token": "chk_valid" } },
-        { CACHE: kv } as never,
+        {} as never,
       );
       const body = await response.json() as {
         data?: { order?: { balanceDue?: number } };
@@ -428,7 +415,7 @@ describe("order receipt route", () => {
   );
 
   it("exposes the retryable balance for an incomplete failed hosted order", async () => {
-    const { app, kv } = createTestApp({
+    const { app } = createTestApp({
       tokenOrderId: "order_1",
       orderRowOverride: {
         status: "incomplete",
@@ -441,7 +428,7 @@ describe("order receipt route", () => {
     const response = await app.request(
       "/api/v1/orders/receipt/order_1",
       { headers: { "X-Receipt-Token": "chk_valid" } },
-      { CACHE: kv } as never,
+      {} as never,
     );
     const body = await response.json() as {
       data?: { order?: { balanceDue?: number } };
@@ -452,7 +439,7 @@ describe("order receipt route", () => {
   });
 
   it("falls back to D1 checkout attempts, and records receipt proof when the receipt row is missing", async () => {
-    const { app, db, kv } = createTestApp({
+    const { app, db } = createTestApp({
       tokenOrderId: null,
       attemptRow: { orderId: "order_1", status: "committed" },
     });
@@ -460,7 +447,7 @@ describe("order receipt route", () => {
     const response = await app.request(
       "/api/v1/orders/receipt/order_1",
       { headers: { "X-Receipt-Token": "chk_valid" } },
-      { CACHE: kv } as never,
+      {} as never,
     );
     const body = await response.json() as {
       data?: { order?: Record<string, unknown> };
@@ -469,15 +456,13 @@ describe("order receipt route", () => {
     expect(response.status).toBe(200);
     expect(body.data?.order?.id).toBe("order_1");
     expect(body.data?.order?.supportRequests).toEqual([supportRequest]);
-    expect(kv.get).not.toHaveBeenCalled();
     expect((db as unknown as { __inserts: unknown[] }).__inserts).toHaveLength(1);
     expect(JSON.stringify((db as unknown as { __inserts: unknown[] }).__inserts[0]))
       .not.toContain("chk_valid");
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("does not record receipt proof for a still-processing checkout attempt", async () => {
-    const { app, kv } = createTestApp({
+    const { app } = createTestApp({
       tokenOrderId: null,
       attemptRow: { orderId: "order_1", status: "processing" },
     });
@@ -485,7 +470,7 @@ describe("order receipt route", () => {
     const response = await app.request(
       "/api/v1/orders/receipt/order_1",
       { headers: { "X-Receipt-Token": "chk_valid" } },
-      { CACHE: kv } as never,
+      {} as never,
     );
     const body = await response.json() as {
       data?: { order?: Record<string, unknown> };
@@ -493,12 +478,10 @@ describe("order receipt route", () => {
 
     expect(response.status).toBe(200);
     expect(body.data?.order?.id).toBe("order_1");
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects receipt support requests when the token does not match", async () => {
-    const { app, db, kv } = createTestApp({ tokenOrderId: "other_order" });
+    const { app, db } = createTestApp({ tokenOrderId: "other_order" });
 
     const response = await app.request(
       "/api/v1/orders/receipt/order_1/support-requests",
@@ -511,19 +494,17 @@ describe("order receipt route", () => {
           reason: "Please cancel before shipment",
         }),
       },
-      { CACHE: kv, JOBS_QUEUE: { send: vi.fn() }, RL_STRICT: allowLimiter, RL_STANDARD: allowLimiter } as never,
+      { JOBS_QUEUE: { send: vi.fn() }, RL_STRICT: allowLimiter, RL_STANDARD: allowLimiter } as never,
     );
 
     expect(response.status).toBe(404);
     expect(db.select).toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
     expect(orderSupportMocks.createReceiptOrderSupportRequest).not.toHaveBeenCalled();
     expect(notificationMocks.enqueueOrderSupportRequestNotificationForOrder).not.toHaveBeenCalled();
   });
 
   it("creates receipt support requests with safe notification metadata", async () => {
-    const { app, db, kv } = createTestApp({ tokenOrderId: "order_1" });
+    const { app, db } = createTestApp({ tokenOrderId: "order_1" });
     const queue = { send: vi.fn() };
 
     const response = await app.request(
@@ -538,7 +519,7 @@ describe("order receipt route", () => {
           message: "Ordered by mistake.",
         }),
       },
-      { CACHE: kv, JOBS_QUEUE: queue, RL_STRICT: allowLimiter, RL_STANDARD: allowLimiter } as never,
+      { JOBS_QUEUE: queue, RL_STRICT: allowLimiter, RL_STANDARD: allowLimiter } as never,
     );
     const body = await response.json() as {
       data?: {

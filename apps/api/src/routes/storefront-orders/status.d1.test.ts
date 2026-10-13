@@ -13,17 +13,12 @@ const failure = "Order creation failed. Please review your checkout and try agai
 let sqlite: DatabaseSync;
 let app: OpenAPIHono<{ Bindings: Env }>;
 const queries = vi.fn();
-let hint: string | null;
-const kv = { get: vi.fn(async () => hint), put: vi.fn(async () => undefined) };
 
 beforeEach(() => {
   vi.stubGlobal("__SCALIUS_PLAN__", "paid");
   queries.mockClear();
   const store = createSqliteD1Database({ onQuery: queries });
   sqlite = store.sqlite;
-  hint = null;
-  kv.get.mockClear();
-  kv.put.mockClear();
   app = new OpenAPIHono<{ Bindings: Env }>();
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -58,7 +53,7 @@ function seedOrder(options: { status?: string; paymentStatus?: string; paid?: nu
 
 async function poll(token = statusToken) {
   const pending: Promise<unknown>[] = [];
-  const response = await app.request(`/orders/status/${token}`, {}, { CACHE: kv } as unknown as Env, {
+  const response = await app.request(`/orders/status/${token}`, {}, {} as unknown as Env, {
     waitUntil: (task: Promise<unknown>) => pending.push(task),
     passThroughOnException() {},
   } as never);
@@ -72,25 +67,21 @@ async function poll(token = statusToken) {
 }
 
 describe("durable checkout status authority", () => {
-  it.each(["completed", "processing", "failed"])("ignores a stale %s hint and its different order id", async (status) => {
+  it("reports a processing attempt with its committed order as completed", async () => {
     seedAttempt("processing");
     seedOrder();
-    hint = JSON.stringify({ status, orderId: "unrelated_order", receiptToken, error: "private@example.test" });
     const { response, body } = await poll();
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true, data: { status: "completed", orderId: "order_1" } });
     expect(queries).toHaveBeenCalledOnce();
-    expect(kv.get).not.toHaveBeenCalled();
   });
 
-  it.each(["unpaid", "failed", "refunded"])("expires a cleaned-up cancelled %s order despite a success hint", async (paymentStatus) => {
+  it.each(["unpaid", "failed", "refunded"])("expires a cleaned-up cancelled %s order", async (paymentStatus) => {
     seedAttempt("committed");
     seedOrder({ status: "cancelled", paymentStatus, deleted: true });
-    hint = JSON.stringify({ status: "completed", orderId: "order_1", receiptToken });
     const { response, body } = await poll();
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ success: true, data: { status: "expired", orderId: "order_1" } });
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -116,26 +107,22 @@ describe("durable checkout status authority", () => {
 
   it("returns a generic failure only for a failed attempt with no order", async () => {
     seedAttempt("failed");
-    hint = JSON.stringify({ status: "completed", orderId: "order_1" });
     const { response, body } = await poll();
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true, data: { status: "failed", orderId: "order_1", error: failure } });
   });
 
-  it.each(["committed", "processing", null])("does not interpret missing order/attempt as failure (%s)", async (status) => {
+  it.each(["committed", "processing", null])("does not interpret a missing order or attempt as failure (%s)", async (status) => {
     if (status) seedAttempt(status);
-    hint = "malformed hint is irrelevant";
     const { response, body } = await poll();
     expect(response.status).toBe(202);
     expect(body).toMatchObject({ data: { status: "processing" } });
     expect(queries).toHaveBeenCalledOnce();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
-  it("rejects receipt proof before any database or KV access", async () => {
+  it("rejects receipt proof before any database access", async () => {
     const { response } = await poll(receiptToken);
     expect(response.status).toBe(400);
     expect(queries).not.toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
   });
 });

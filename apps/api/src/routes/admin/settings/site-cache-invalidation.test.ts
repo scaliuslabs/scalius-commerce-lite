@@ -122,9 +122,7 @@ import { siteSettingsRoutes } from "./site";
 
 function createTestApp() {
   const db = { id: "db" };
-  const kv = { delete: vi.fn() };
   const env = {
-    CACHE: kv,
     STOREFRONT_URL: "https://storefront.example.com",
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
@@ -275,7 +273,7 @@ function createTestApp() {
     await next();
   });
   app.route("/admin/settings", siteSettingsRoutes);
-  return { app, env, kv };
+  return { app, env };
 }
 
 async function requestJson(

@@ -20,11 +20,7 @@ const db = { id: "db" };
 
 function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
-    const kv = {
-        put: vi.fn(async (_key: string, _value: string, _options?: unknown) => undefined),
-    };
     const env = {
-        CACHE: kv,
         STOREFRONT_URL: "https://shop.example.test",
     } as unknown as Env;
 
@@ -39,7 +35,7 @@ function createTestApp() {
     });
     app.route("/orders", adminOrdersRoutes);
 
-    return { app, env, kv };
+    return { app, env };
 }
 
 describe("admin order payment recovery link route", () => {
@@ -66,7 +62,7 @@ describe("admin order payment recovery link route", () => {
     });
 
     it("returns a clean buyer verification URL without minting receipt proof", async () => {
-        const { app, env, kv } = createTestApp();
+        const { app, env } = createTestApp();
 
         const response = await app.request(
             "/api/v1/admin/orders/order_1/payment-recovery-link",
@@ -94,11 +90,10 @@ describe("admin order payment recovery link route", () => {
         expect(body.data.url).not.toContain("receiptToken");
         expect(body.data).not.toHaveProperty("receiptToken");
         expect(body.data).not.toHaveProperty("tokenHash");
-        expect(kv.put).not.toHaveBeenCalled();
     });
 
     it("fails closed when STOREFRONT_URL is missing", async () => {
-        const { app, env, kv } = createTestApp();
+        const { app, env } = createTestApp();
         delete (env as { STOREFRONT_URL?: string }).STOREFRONT_URL;
 
         const response = await app.request(
@@ -113,6 +108,5 @@ describe("admin order payment recovery link route", () => {
         expect(response.status).toBe(503);
         expect(body.error?.code).toBe("SERVICE_UNAVAILABLE");
         expect(mocks.previewOrderPaymentRecoveryLink).not.toHaveBeenCalled();
-        expect(kv.put).not.toHaveBeenCalled();
     });
 });

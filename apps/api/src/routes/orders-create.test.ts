@@ -371,12 +371,6 @@ function createTestApp(options: {
   allowedCountriesMode?: "include" | "exclude";
 } = {}) {
   const calls: string[] = [];
-  const kv = {
-    get: vi.fn(async () => null),
-    put: vi.fn(async (key: string) => {
-      calls.push(`kv:${key}`);
-    }),
-  };
   const db = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
@@ -459,7 +453,7 @@ function createTestApp(options: {
   });
   app.route("/orders", orderRoutes);
 
-  return { app, db, kv, calls };
+  return { app, db, calls };
 }
 
 function createStatusTestApp(options: {
@@ -535,7 +529,7 @@ describe("cart validation preflight", () => {
     ["null", null],
     ["synthetic default", "default"],
   ])("rejects a %s variant at the cart-validation schema boundary", async (_label, variantId) => {
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
     const item: Record<string, unknown> = {
       productId: "product_1",
       quantity: 1,
@@ -550,7 +544,7 @@ describe("cart validation preflight", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: [item] }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -565,7 +559,7 @@ describe("cart validation preflight", () => {
         currencyCode,
         currencySymbol: currencyCode === "JPY" ? "¥" : "د.ك",
       });
-      const { app, kv } = createTestApp();
+      const { app } = createTestApp();
 
       const response = await app.request(
         "/api/v1/orders/cart-validation",
@@ -581,7 +575,7 @@ describe("cart validation preflight", () => {
             }],
           }),
         },
-        { CACHE: kv } as never,
+        {} as never,
       );
 
       expect(response.status, await response.clone().text()).toBe(200);
@@ -623,7 +617,7 @@ describe("cart validation preflight", () => {
       subtotalMinor: 0,
       hasFreeDeliveryProduct: false,
     });
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders/cart-validation",
@@ -643,7 +637,7 @@ describe("cart validation preflight", () => {
           ],
         }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(200);
@@ -663,7 +657,6 @@ describe("cart validation preflight", () => {
     });
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.validateStorefrontDeliveryPreflight).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("preflights selected delivery data when cart validation receives city and zone", async () => {
@@ -689,7 +682,7 @@ describe("cart validation preflight", () => {
       subtotalMinor: 10_000,
       hasFreeDeliveryProduct: false,
     });
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders/cart-validation",
@@ -713,7 +706,7 @@ describe("cart validation preflight", () => {
           shippingMethodId: "ship_1",
         }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(200);
@@ -739,7 +732,6 @@ describe("cart validation preflight", () => {
       expect.objectContaining({ valid: true }),
     );
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("surfaces stale delivery choices from cart validation without creating checkout side effects", async () => {
@@ -768,7 +760,7 @@ describe("cart validation preflight", () => {
     mocks.validateStorefrontDeliveryPreflight.mockRejectedValue(
       new ValidationError("A valid active shipping method is required for this order."),
     );
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders/cart-validation",
@@ -791,7 +783,7 @@ describe("cart validation preflight", () => {
           shippingMethodId: "ship_stale",
         }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -802,7 +794,6 @@ describe("cart validation preflight", () => {
       },
     });
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 });
 
@@ -861,7 +852,7 @@ describe("authoritative tax quote", () => {
         totalMinor: 6_300,
       },
     });
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders/tax-quote",
@@ -881,7 +872,7 @@ describe("authoritative tax quote", () => {
           shippingMethodId: "shipping_1",
         }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(200);
@@ -994,7 +985,7 @@ describe("authoritative tax quote", () => {
         shippingMinor,
         totalMinor,
       });
-      const { app, kv } = createTestApp();
+      const { app } = createTestApp();
 
       const response = await app.request(
         "/api/v1/orders/tax-quote",
@@ -1012,7 +1003,7 @@ describe("authoritative tax quote", () => {
             shippingMethodId: "shipping_1",
           }),
         },
-        { CACHE: kv } as never,
+        {} as never,
       );
 
       expect(response.status, await response.clone().text()).toBe(200);
@@ -1092,7 +1083,7 @@ describe("authoritative tax quote", () => {
       offers: [offer],
       rejectedCodes: [{ code: "EXTRA", reason: "minimum_quantity", message: "Add 1 more item to use EXTRA.", shortfallQuantity: 1 }],
     });
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders/tax-quote",
@@ -1111,7 +1102,7 @@ describe("authoritative tax quote", () => {
           customerPhone: "+8801712345678",
         }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(200);
@@ -1216,7 +1207,7 @@ describe("create order currency parity", () => {
         taxQuote: quote,
         commitPayload: { orderData: { id: `order_${currencyCode.toLowerCase()}` } },
       });
-      const { app, kv } = createTestApp();
+      const { app } = createTestApp();
 
       const response = await app.request(
         "/api/v1/orders",
@@ -1232,7 +1223,7 @@ describe("create order currency parity", () => {
             }],
           }),
         },
-        { CACHE: kv } as never,
+        {} as never,
       );
 
       expect(response.status, await response.clone().text()).toBe(201);
@@ -1261,7 +1252,7 @@ describe("create order currency parity", () => {
   );
 });
 
-describe("checkout status and commit without KV hints", () => {
+describe("checkout status and commit", () => {
   it("answers a poll from D1 alone and never leaks receipt proof", async () => {
     const { app, statusToken } = createStatusTestApp({
       attempt: { status: "committed", orderId: "order_1", checkoutToken: "chk_status" },
@@ -1293,26 +1284,24 @@ describe("checkout status and commit without KV hints", () => {
     expect(await committedResponse.json()).toMatchObject({ data: { status: "completed", orderId: "order_1" } });
   });
 
-  it("writes no KV hint after an order commits", async () => {
-    const { app, kv } = createTestApp();
+  it("runs the background work after an order commits", async () => {
+    const { app } = createTestApp();
     const executionCtx = createWaitUntilContext();
     const response = await app.request(
       "/api/v1/orders",
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(validOrderBody) },
-      { CACHE: kv } as never,
+      {} as never,
       executionCtx as never,
     );
     expect(response.status).toBe(201);
     await Promise.all(executionCtx.waitUntil.mock.calls.map(([task]) => task));
-    expect(kv.put).not.toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
   });
 });
 
 describe("create order commit ordering", () => {
 
   it("rejects a changed authoritative quote before rate limiting or durable checkout writes", async () => {
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
     const response = await app.request(
       "/api/v1/orders",
       {
@@ -1323,7 +1312,7 @@ describe("create order commit ordering", () => {
           expectedQuoteFingerprint: "taxq_vutsrqponmlkjihgfedcba",
         }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(409);
@@ -1341,7 +1330,7 @@ describe("create order commit ordering", () => {
 
   it("requires the quote fingerprint that the buyer reviewed", async () => {
     const { expectedQuoteFingerprint: _omitted, ...body } = validOrderBody;
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
     const response = await app.request(
       "/api/v1/orders",
       {
@@ -1349,7 +1338,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -1369,7 +1358,7 @@ describe("create order commit ordering", () => {
       taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_1" } },
     });
-    const { app, kv, calls } = createTestApp();
+    const { app, calls } = createTestApp();
     const executionCtx = {
       waitUntil: vi.fn((promise: Promise<unknown>) => {
         waitUntilPromises.push(promise);
@@ -1391,7 +1380,7 @@ describe("create order commit ordering", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(validOrderBody),
         },
-        { CACHE: kv } as never,
+        {} as never,
         executionCtx as never,
       );
 
@@ -1402,7 +1391,6 @@ describe("create order commit ordering", () => {
 
       expect(calls[0]).toBe("commit");
       expect(calls).toContain("side-effects");
-      expect(kv.put).not.toHaveBeenCalled();
       expect(JSON.stringify(consoleError.mock.calls)).not.toContain("chk_order_1");
       expect(JSON.stringify(consoleError.mock.calls)).not.toContain("chk_");
       expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledWith(
@@ -1453,7 +1441,7 @@ describe("create order commit ordering", () => {
   it("does not log raw checkout proof after the atomic commit", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
-      const { app, kv } = createTestApp();
+      const { app } = createTestApp();
 
       const response = await app.request(
         "/api/v1/orders",
@@ -1462,7 +1450,7 @@ describe("create order commit ordering", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(validOrderBody),
         },
-        { CACHE: kv } as never,
+        {} as never,
       );
 
       const responseText = await response.clone().text();
@@ -1492,7 +1480,7 @@ describe("create order commit ordering", () => {
       defaultMethod: "stripe",
     });
     mocks.limiter.limit.mockResolvedValue({ success: false });
-    const { app, kv } = createTestApp({
+    const { app } = createTestApp({
       guestCheckoutEnabled: false,
       checkoutMode: "gateways_only",
       partialPaymentEnabled: true,
@@ -1506,7 +1494,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     const json = await response.json() as { data: { orderId: string; receiptToken: string } };
@@ -1522,7 +1510,6 @@ describe("create order commit ordering", () => {
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("returns a pollable processing response for an active duplicate despite later policy changes", async () => {
@@ -1532,7 +1519,7 @@ describe("create order commit ordering", () => {
       statusToken: DEFAULT_STATUS_TOKEN,
     });
     mocks.limiter.limit.mockResolvedValue({ success: false });
-    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
+    const { app } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1541,7 +1528,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     const json = await response.json() as { data: { checkoutToken?: string; statusToken: string; orderId: string; status: string } };
@@ -1561,7 +1548,6 @@ describe("create order commit ordering", () => {
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("replays the winner when atomic commit arbitration loses a race", async () => {
@@ -1582,7 +1568,7 @@ describe("create order commit ordering", () => {
     mocks.commitStorefrontOrderPayload.mockRejectedValue(
       new ConflictError("Another checkout submit committed first."),
     );
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1591,7 +1577,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     const json = await response.json() as { data: { orderId: string; receiptToken: string } };
@@ -1616,7 +1602,7 @@ describe("create order commit ordering", () => {
     mocks.commitStorefrontOrderPayload.mockRejectedValue(
       new ConflictError("Another checkout submit committed first."),
     );
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1625,7 +1611,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     const json = await response.json() as { data: { checkoutToken?: string; statusToken: string; orderId: string; status: string } };
@@ -1641,7 +1627,6 @@ describe("create order commit ordering", () => {
     expect(mocks.resolveExistingCheckoutAttempt).toHaveBeenCalledTimes(2);
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects changed checkout details before policy, rate limiting, or order preparation", async () => {
@@ -1649,7 +1634,7 @@ describe("create order commit ordering", () => {
       new ConflictError("This checkout request was already used for different checkout details. Please refresh checkout and try again."),
     );
     mocks.limiter.limit.mockResolvedValue({ success: false });
-    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
+    const { app } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1658,7 +1643,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(409);
@@ -1669,7 +1654,6 @@ describe("create order commit ordering", () => {
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects stale cart items before policy, rate limiting, or atomic attempt creation", async () => {
@@ -1695,7 +1679,7 @@ describe("create order commit ordering", () => {
       hasFreeDeliveryProduct: false,
     });
     mocks.limiter.limit.mockResolvedValue({ success: false });
-    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
+    const { app } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1704,7 +1688,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -1733,7 +1717,6 @@ describe("create order commit ordering", () => {
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects stale delivery choices before policy, rate limiting, or atomic attempt creation", async () => {
@@ -1741,7 +1724,7 @@ describe("create order commit ordering", () => {
       new ValidationError("Selected zone is no longer available for the chosen city."),
     );
     mocks.limiter.limit.mockResolvedValue({ success: false });
-    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
+    const { app } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1750,7 +1733,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -1779,7 +1762,6 @@ describe("create order commit ordering", () => {
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("schedules availability purging only for a buyer-visible transition", async () => {
@@ -1806,7 +1788,7 @@ describe("create order commit ordering", () => {
       mocks.commitStorefrontOrderPayload.mockResolvedValue({
         availabilityTransitionVariantIds: ["variant_transition"],
       });
-      const { app, kv } = createTestApp();
+      const { app } = createTestApp();
 
       const response = await app.request(
         "/api/v1/orders",
@@ -1815,7 +1797,7 @@ describe("create order commit ordering", () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(validOrderBody),
         },
-        { CACHE: kv } as never,
+        {} as never,
       );
 
       const responseText = await response.clone().text();
@@ -1840,7 +1822,7 @@ describe("create order commit ordering", () => {
       taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_2" } },
     });
-    const { app, kv, calls } = createTestApp();
+    const { app, calls } = createTestApp();
     mocks.commitStorefrontOrderPayload.mockImplementation(async () => {
       calls.push("commit");
       throw new Error("commit unavailable");
@@ -1856,13 +1838,12 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(500);
     expect(calls).toEqual(["commit"]);
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("surfaces discount commit validation failures in the response body", async () => {
@@ -1875,7 +1856,7 @@ describe("create order commit ordering", () => {
       taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_discount_limit" } },
     });
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
     mocks.commitStorefrontOrderPayload.mockRejectedValue(discountError);
 
     const response = await app.request(
@@ -1885,7 +1866,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -1896,11 +1877,10 @@ describe("create order commit ordering", () => {
       },
     });
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects phones outside the configured include countries before payment settings, rate limits, or attempt creation", async () => {
-    const { app, kv } = createTestApp({
+    const { app } = createTestApp({
       allowedCountries: ["BD"],
       allowedCountriesMode: "include",
     });
@@ -1915,7 +1895,7 @@ describe("create order commit ordering", () => {
           customerPhone: "+14155552671",
         }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -1933,11 +1913,10 @@ describe("create order commit ordering", () => {
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects phones listed in configured exclude countries before payment settings, rate limits, or attempt creation", async () => {
-    const { app, kv } = createTestApp({
+    const { app } = createTestApp({
       allowedCountries: ["BD"],
       allowedCountriesMode: "exclude",
     });
@@ -1949,7 +1928,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -1964,11 +1943,10 @@ describe("create order commit ordering", () => {
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects guest checkout before rate limiting or order creation when merchant disables guests", async () => {
-    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
+    const { app } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -1977,7 +1955,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(401);
@@ -2006,7 +1984,7 @@ describe("create order commit ordering", () => {
       taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_3" } },
     });
-    const { app, db, kv } = createTestApp({ guestCheckoutEnabled: false });
+    const { app, db } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2018,7 +1996,7 @@ describe("create order commit ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     const responseText = await response.clone().text();
@@ -2037,7 +2015,7 @@ describe("create order commit ordering", () => {
       createdAt: Date.now(),
       expiresAt: Date.now() + 86_400_000,
     });
-    const { app, db, kv } = createTestApp({ guestCheckoutEnabled: true });
+    const { app, db } = createTestApp({ guestCheckoutEnabled: true });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2049,7 +2027,7 @@ describe("create order commit ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(201);
@@ -2103,7 +2081,7 @@ describe("create order commit ordering", () => {
       taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_session" } },
     });
-    const { app, kv } = createTestApp({ guestCheckoutEnabled: guests });
+    const { app } = createTestApp({ guestCheckoutEnabled: guests });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2115,7 +2093,7 @@ describe("create order commit ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(status);
@@ -2157,7 +2135,7 @@ describe("create order commit ordering", () => {
       taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_session_owner" } },
     });
-    const { app, db, kv } = createTestApp({ guestCheckoutEnabled: true });
+    const { app, db } = createTestApp({ guestCheckoutEnabled: true });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2169,7 +2147,7 @@ describe("create order commit ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     const responseText = await response.clone().text();
@@ -2208,7 +2186,7 @@ describe("create order commit ordering", () => {
       createdAt: Date.now(),
       expiresAt: Date.now() + 86_400_000,
     });
-    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
+    const { app } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2220,7 +2198,7 @@ describe("create order commit ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(201);
@@ -2255,7 +2233,7 @@ describe("create order commit ordering", () => {
       createdAt: Date.now(),
       expiresAt: Date.now() + 86_400_000,
     });
-    const { app, kv } = createTestApp({ guestCheckoutEnabled: false });
+    const { app } = createTestApp({ guestCheckoutEnabled: false });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2267,7 +2245,7 @@ describe("create order commit ordering", () => {
         },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(201);
@@ -2288,7 +2266,7 @@ describe("create order commit ordering", () => {
   });
 
   it("passes an empty phone on as null, for the shared contact rule to decide", async () => {
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2297,7 +2275,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...validOrderBody, customerPhone: "", customerEmail: "buyer@example.com" }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(201);
@@ -2318,7 +2296,7 @@ describe("create order commit ordering", () => {
   });
 
   it("rejects COD order creation when checkout mode is gateways only", async () => {
-    const { app, kv } = createTestApp({ checkoutMode: "gateways_only" });
+    const { app } = createTestApp({ checkoutMode: "gateways_only" });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2327,7 +2305,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -2340,7 +2318,7 @@ describe("create order commit ordering", () => {
       enabledMethods: ["stripe"],
       defaultMethod: "stripe",
     });
-    const { app, kv } = createTestApp({ checkoutMode: "guest_cod_only" });
+    const { app } = createTestApp({ checkoutMode: "guest_cod_only" });
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2349,7 +2327,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...validOrderBody, paymentMethod: "stripe" }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -2362,7 +2340,7 @@ describe("create order commit ordering", () => {
       enabledMethods: ["stripe"],
       defaultMethod: "stripe",
     });
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2371,7 +2349,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(503);
@@ -2385,7 +2363,7 @@ describe("create order commit ordering", () => {
       enabledMethods: encryptionKey === "jwt-fallback" ? ["scalius.bangladesh:sslcommerz"] : [],
       defaultMethod: encryptionKey === "jwt-fallback" ? "scalius.bangladesh:sslcommerz" : "cod",
     }));
-    const { app, db, kv } = createTestApp();
+    const { app, db } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2394,7 +2372,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...validOrderBody, paymentMethod: "scalius.bangladesh:sslcommerz" }),
       },
-      { CACHE: kv, JWT_SECRET: "jwt-fallback" } as never,
+      { JWT_SECRET: "jwt-fallback" } as never,
     );
 
     expect(response.status).toBe(503);
@@ -2411,7 +2389,6 @@ describe("create order commit ordering", () => {
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects SSLCommerz when the authoritative store currency is not BDT", async () => {
@@ -2423,7 +2400,7 @@ describe("create order commit ordering", () => {
       enabledMethods: ["scalius.bangladesh:sslcommerz"],
       defaultMethod: "scalius.bangladesh:sslcommerz",
     });
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2432,7 +2409,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...validOrderBody, paymentMethod: "scalius.bangladesh:sslcommerz" }),
       },
-      { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
+      { CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
     );
 
     expect(response.status).toBe(400);
@@ -2446,7 +2423,6 @@ describe("create order commit ordering", () => {
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -2491,7 +2467,7 @@ describe("create order commit ordering", () => {
       },
       commitPayload: { orderData: { id: "order_ssl_bounds" } },
     });
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2500,7 +2476,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...validOrderBody, paymentMethod: "scalius.bangladesh:sslcommerz" }),
       },
-      { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
+      { CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
     );
 
     expect(response.status).toBe(400);
@@ -2513,7 +2489,6 @@ describe("create order commit ordering", () => {
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("rejects SSLCommerz deposit amounts outside provider bounds before checkout writes", async () => {
@@ -2547,7 +2522,7 @@ describe("create order commit ordering", () => {
       taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_1" } },
     });
-    const { app, kv } = createTestApp({
+    const { app } = createTestApp({
       partialPaymentEnabled: true,
       partialPaymentAmount: 9.99,
     });
@@ -2559,7 +2534,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...validOrderBody, paymentMethod: "scalius.bangladesh:sslcommerz" }),
       },
-      { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
+      { CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
     );
 
     expect(response.status).toBe(400);
@@ -2572,7 +2547,6 @@ describe("create order commit ordering", () => {
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).toHaveBeenCalledOnce();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it("uses the recomputed committed quote after SSLCommerz precommit validation", async () => {
@@ -2594,7 +2568,7 @@ describe("create order commit ordering", () => {
       taxQuote: committedQuote,
       commitPayload: { orderData: { id: "order_ssl_recomputed", totalAmountMinor: 12_000 } },
     });
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2603,7 +2577,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...validOrderBody, paymentMethod: "scalius.bangladesh:sslcommerz" }),
       },
-      { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
+      { CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(201);
@@ -2628,7 +2602,7 @@ describe("create order commit ordering", () => {
   it("limits checkout IP on the standard tier and phone on the strict tier with store-scoped hashed keys", async () => {
     const standard = { limit: vi.fn(async () => ({ success: true })) };
     const strict = { limit: vi.fn(async () => ({ success: true })) };
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2638,7 +2612,6 @@ describe("create order commit ordering", () => {
         body: JSON.stringify(validOrderBody),
       },
       {
-        CACHE: kv,
         RL_STANDARD: standard,
         RL_STRICT: strict,
         PUBLIC_API_BASE_URL: "https://merchant-api.example",
@@ -2657,7 +2630,7 @@ describe("create order commit ordering", () => {
   it("rejects a checkout denied by the strict phone limiter before order writes", async () => {
     const standard = { limit: vi.fn(async () => ({ success: true })) };
     const strict = { limit: vi.fn(async () => ({ success: false })) };
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2667,7 +2640,6 @@ describe("create order commit ordering", () => {
         body: JSON.stringify(validOrderBody),
       },
       {
-        CACHE: kv,
         RL_STANDARD: standard,
         RL_STRICT: strict,
       } as never,
@@ -2682,7 +2654,7 @@ describe("create order commit ordering", () => {
 
   it("rate limits a new checkout after pure preparation but before order writes", async () => {
     mocks.limiter.limit.mockResolvedValue({ success: false });
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2691,7 +2663,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(429);
@@ -2702,7 +2674,7 @@ describe("create order commit ordering", () => {
   });
 
   it("rejects COD before commit when partial payment requires an online deposit", async () => {
-    const { app, kv } = createTestApp({
+    const { app } = createTestApp({
       partialPaymentEnabled: true,
       partialPaymentAmount: 50,
     });
@@ -2714,7 +2686,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -2723,7 +2695,7 @@ describe("create order commit ordering", () => {
   });
 
   it("rejects empty carts and non-integer quantities at the API boundary", async () => {
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const emptyCart = await app.request(
       "/api/v1/orders",
@@ -2732,7 +2704,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...validOrderBody, items: [] }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
     const fractionalQuantity = await app.request(
       "/api/v1/orders",
@@ -2744,7 +2716,7 @@ describe("create order commit ordering", () => {
           items: [{ ...validOrderBody.items[0], quantity: 1.5 }],
         }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
     const excessiveQuantity = await app.request(
       "/api/v1/orders",
@@ -2756,7 +2728,7 @@ describe("create order commit ordering", () => {
           items: [{ ...validOrderBody.items[0], quantity: 100 }],
         }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(emptyCart.status).toBe(400);
@@ -2767,7 +2739,7 @@ describe("create order commit ordering", () => {
   });
 
   it("rejects more discount codes than a buyer may combine at the checkout schema boundary", async () => {
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2779,7 +2751,7 @@ describe("create order commit ordering", () => {
           discountCodes: ["A1A", "B2B", "C3C", "D4D", "E5E", "F6F"],
         }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -2792,7 +2764,7 @@ describe("create order commit ordering", () => {
     ["null", null],
     ["synthetic default", "default"],
   ])("rejects a %s variant before checkout identity or D1 work", async (_label, variantId) => {
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
     const item = { ...validOrderBody.items[0] } as Record<string, unknown>;
     if (variantId === undefined) {
       delete item.variantId;
@@ -2807,7 +2779,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...validOrderBody, items: [item] }),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -2821,7 +2793,7 @@ describe("create order commit ordering", () => {
     mocks.validateStorefrontDeliveryPreflight.mockRejectedValue(
       new ValidationError("Selected zone is no longer available for the chosen city."),
     );
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2830,7 +2802,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     const responseText = await response.clone().text();
@@ -2841,7 +2813,6 @@ describe("create order commit ordering", () => {
         message: "Selected zone is no longer available for the chosen city.",
       },
     });
-    expect(kv.put).not.toHaveBeenCalled();
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
@@ -2850,7 +2821,7 @@ describe("create order commit ordering", () => {
   it("does not write checkout status or receipt proof when the cart product is unavailable", async () => {
     const unavailableError = new NotFoundError("Product product_1 not found or is inactive.");
     mocks.createStorefrontOrder.mockRejectedValue(unavailableError);
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders",
@@ -2859,7 +2830,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validOrderBody),
       },
-      { CACHE: kv } as never,
+      {} as never,
     );
 
     const responseText = await response.clone().text();
@@ -2870,7 +2841,6 @@ describe("create order commit ordering", () => {
         message: "Product product_1 not found or is inactive.",
       },
     });
-    expect(kv.put).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
   });
@@ -2913,12 +2883,12 @@ describe("old-storefront payloads against the Wave A API", () => {
   };
 
   it("creates an order from the old checkout body and answers with every old field", async () => {
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
     const response = await app.request("/api/v1/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(oldCheckoutBody),
-    }, { CACHE: kv } as never);
+    }, {} as never);
 
     expect(response.status, await response.clone().text()).toBe(201);
     const body = await response.json() as { data: Record<string, unknown> };
@@ -2931,7 +2901,7 @@ describe("old-storefront payloads against the Wave A API", () => {
   });
 
   it("quotes the old tax-quote body (address, method, no buyer inputs)", async () => {
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
     const response = await app.request("/api/v1/orders/tax-quote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2945,7 +2915,7 @@ describe("old-storefront payloads against the Wave A API", () => {
         discountCodes: [],
         customerPhone: "+8801712345678",
       }),
-    }, { CACHE: kv } as never);
+    }, {} as never);
     expect(response.status, await response.clone().text()).toBe(200);
     const body = await response.json() as { data: Record<string, unknown> };
     expect(body.data).toMatchObject({
@@ -2957,7 +2927,7 @@ describe("old-storefront payloads against the Wave A API", () => {
   });
 
   it("accepts the new shapes too: buyer inputs, and pickup without an address", async () => {
-    const { app, kv } = createTestApp();
+    const { app } = createTestApp();
     const response = await app.request("/api/v1/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2968,7 +2938,7 @@ describe("old-storefront payloads against the Wave A API", () => {
         zone: undefined,
         items: [{ ...oldCheckoutBody.items[0], properties: [{ key: "engraving", value: "Anika" }] }],
       }),
-    }, { CACHE: kv } as never);
+    }, {} as never);
     expect(response.status, await response.clone().text()).toBe(201);
     const [, input] = mocks.createStorefrontOrder.mock.calls[0]!;
     expect((input as { items: Array<Record<string, unknown>> }).items[0]).toMatchObject({
