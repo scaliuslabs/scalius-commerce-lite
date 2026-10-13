@@ -203,5 +203,33 @@ async function clearOrUndo(db: Database, userId: string, input: StaffAlertClearI
   return { summary: await readStaffAlertSummary(db, userId),
     ...(undo ? {} : { undo: { operationId: input.operationId, scopes: input.scopes.map((entry) => ({ ...entry, revision: entry.revision + 1 })) } }) };
 }
+/** Inbox rows kept per staff member: the bell pages back through at most these. */
+export const STAFF_ALERT_INBOX_KEEP = 1_000;
+/** An alert no inbox row shows is deleted after the notification retry window. */
+export const STAFF_ALERT_RETENTION_SECONDS = 30 * 86_400;
+
+/**
+ * Bounded retention, `limit` rows per table: inbox rows cleared beyond undo
+ * (at or below the scope's previous clear) or older than a staff member's
+ * newest STAFF_ALERT_INBOX_KEEP, then alerts left without an inbox row.
+ */
+export async function pruneStaffAlerts(db: Database, now: number, limit = 500): Promise<{ inbox: number; alerts: number }> {
+  const [inbox, alerts] = await safeBatch(db, [
+    db.delete(staffAlertInbox).where(sql`(user_id, seq) IN (SELECT * FROM (
+      SELECT i.user_id, i.seq FROM staff_alert_state s
+      JOIN staff_alert_inbox i ON i.user_id = s.user_id AND i.scope = s.scope AND i.seq <= s.previous_cleared_through
+      WHERE s.scope <> '*'
+      UNION ALL
+      SELECT i.user_id, i.seq FROM staff_alert_state s
+      JOIN staff_alert_inbox i ON i.user_id = s.user_id AND i.seq <= s.last_seq - ${STAFF_ALERT_INBOX_KEEP}
+      WHERE s.scope = '*') AS expired LIMIT ${limit})`).returning({ seq: staffAlertInbox.seq }),
+    db.delete(staffAlerts).where(sql`id IN (SELECT a.id FROM staff_alerts a
+      WHERE a.recorded_at < ${now - STAFF_ALERT_RETENTION_SECONDS}
+        AND NOT EXISTS (SELECT 1 FROM staff_alert_inbox i WHERE i.alert_id = a.id)
+      ORDER BY a.recorded_at LIMIT ${limit})`).returning({ id: staffAlerts.id }),
+  ]);
+  return { inbox: inbox.length, alerts: alerts.length };
+}
+
 export const clearStaffAlerts = (db: Database, userId: string, input: StaffAlertClearInput) => clearOrUndo(db, userId, input, false);
 export const undoStaffAlertsClear = (db: Database, userId: string, input: StaffAlertUndoInput) => clearOrUndo(db, userId, input, true);

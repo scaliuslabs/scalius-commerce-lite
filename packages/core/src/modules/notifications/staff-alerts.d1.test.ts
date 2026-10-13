@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { Database } from "@scalius/database/client";
 import { ConflictError, NotFoundError } from "@scalius/core/errors";
-import { clearStaffAlerts, markAllStaffAlertsRead, markStaffAlertRead, readStaffAlerts, readStaffAlertSummary, recordStaffAlert, undoStaffAlertsClear } from "./staff-alerts";
+import { clearStaffAlerts, markAllStaffAlertsRead, markStaffAlertRead, pruneStaffAlerts, readStaffAlerts, readStaffAlertSummary, recordStaffAlert, STAFF_ALERT_INBOX_KEEP, STAFF_ALERT_RETENTION_SECONDS, undoStaffAlertsClear } from "./staff-alerts";
 import { seedStaffAlerts, seedStaffAlertEvent } from "./testing/staff-alerts";
 
 let db: Database;
@@ -106,6 +106,33 @@ describe("durable staff alert inbox", () => {
     await undoStaffAlertsClear(db, "bell_a", cleared.undo!);
     expect((await readStaffAlerts(db, "bell_a")).items.map((item) => [item.seq,item.read])).toEqual([[3,false],[2,false],[1,true]]);
     await expect(clearStaffAlerts(db, "bell_a", input)).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("prunes only history no reader or Undo can reach, and alerts left without an inbox row", async () => {
+    await append("bell_one"); await append("bell_two", true); await append("bell_three");
+    // Alerts are recorded at database time; prune a month and a minute later.
+    const now = Math.floor(Date.now() / 1000) + STAFF_ALERT_RETENTION_SECONDS + 60;
+    // Nothing is cleared or beyond the kept window: nothing goes.
+    expect(await pruneStaffAlerts(db, now)).toEqual({ inbox: 0, alerts: 0 });
+    const shown = await readStaffAlertSummary(db, "bell_a");
+    const cleared = await clearStaffAlerts(db, "bell_a", { operationId: "clear_prune_01", through: shown.head, scopes: revisions(shown) });
+    // Undo can still restore the first clear: its rows stay.
+    expect(await pruneStaffAlerts(db, now)).toEqual({ inbox: 0, alerts: 0 });
+    await append("bell_four");
+    const again = await readStaffAlertSummary(db, "bell_a");
+    await clearStaffAlerts(db, "bell_a", { operationId: "clear_prune_02", through: again.head, scopes: revisions(again) });
+    // The first clear is now beyond Undo: bell_a's three oldest rows go; bell_b keeps its own,
+    // so only the conversation alert (bell_a's alone) is left without a row.
+    expect(await pruneStaffAlerts(db, now)).toEqual({ inbox: 3, alerts: 1 });
+    expect(sqlite.prepare("SELECT user_id, seq FROM staff_alert_inbox ORDER BY user_id, seq").all())
+      .toEqual([{ user_id: "bell_a", seq: 4 }, { user_id: "bell_b", seq: 1 }, { user_id: "bell_b", seq: 2 }, { user_id: "bell_b", seq: 3 }]);
+    expect(cleared.undo).toBeDefined();
+    // A staff member's history beyond the newest STAFF_ALERT_INBOX_KEEP rows goes, then alerts nobody holds.
+    sqlite.prepare("UPDATE staff_alert_state SET last_seq = last_seq + ? WHERE user_id = 'bell_b' AND scope = '*'").run(STAFF_ALERT_INBOX_KEEP);
+    expect(await pruneStaffAlerts(db, now)).toEqual({ inbox: 3, alerts: 2 });
+    expect(sqlite.prepare("SELECT id FROM staff_alerts").all()).toEqual([{ id: "bell_four" }]);
+    expect((await readStaffAlerts(db, "bell_a")).items).toEqual([]);
+    expect(await pruneStaffAlerts(db, now)).toEqual({ inbox: 0, alerts: 0 });
   });
 
   it("keeps an explicit read after Clear all and refuses an Undo that would cross it", async () => {
