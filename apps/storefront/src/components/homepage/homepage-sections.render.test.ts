@@ -947,7 +947,7 @@ describe("app sections", () => {
     };
     const draw = vi.spyOn(ExtensionHost.prototype, "render").mockResolvedValue(html);
     try {
-      const page = await requestRuntime.run({ layout: Promise.resolve({ appExtensions: [{
+      const page = await requestRuntime.run({ layout: Promise.resolve({ currency: { code: "BDT", symbol: "৳" }, appExtensions: [{
         pluginId: "acme.hello", version: "1.0.0", source: "bundled", release: "a".repeat(64),
         sections: ["greeting"], sectionSettings: { greeting: [] }, slots: [], islands: [], stylesheet: false, connect: [],
       }] } as unknown as import("@/lib/api/storefront").LayoutData) }, () => renderWith(sections, content, { headerLeadSectionId: "lead" }));
@@ -1023,14 +1023,16 @@ describe("the newsletter section", () => {
     const email = form.querySelector<HTMLInputElement>('input[name="email"]')!;
     expect([email.getAttribute("type"), email.getAttribute("autocomplete"), email.hasAttribute("required")]).toEqual(["email", "email", false]);
     expect(text(form.querySelector(`label[for="${email.id}"]`))).toBe("Email (optional)");
-    const whatsapp = form.querySelector<HTMLInputElement>('input[name="whatsapp"]')!;
-    expect([whatsapp.getAttribute("type"), whatsapp.hasAttribute("checked")]).toEqual(["checkbox", false]);
-    expect(text(form.querySelector(`label[for="${whatsapp.id}"]`))).toBe("Also send offers to this number on WhatsApp");
+    // One unchecked box per channel the form offers; none is pre-selected.
+    const channels = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="channel"]'));
+    expect(channels.map((box) => [box.getAttribute("type"), box.value, box.hasAttribute("checked")]))
+      .toEqual([["checkbox", "sms", false], ["checkbox", "email", false], ["checkbox", "whatsapp", false]]);
+    expect(channels.map((box) => text(box.closest("label")))).toEqual(["SMS", "Email", "WhatsApp"]);
 
     const button = form.querySelector('button[type="submit"]')!;
     expect(text(button)).toBe("Join");
     const consent = form.querySelector(`#${button.getAttribute("aria-describedby")}`)!;
-    expect(text(consent)).toBe("Get news and offers by SMS and email. Unsubscribe anytime.");
+    expect(text(consent)).toBe("Choose channels for news and offers. Unsubscribe anytime.");
 
     // The honeypot: off screen, out of the tab order and the accessibility tree.
     const trap = form.querySelector<HTMLInputElement>('input[name="company_website"]')!;
@@ -1051,8 +1053,8 @@ describe("the newsletter section", () => {
 
     const phoneOnly = (await renderIn([section("newsletter", "news", { email: "hidden" })], "en")).querySelector("form")!;
     expect(phoneOnly.querySelector('input[name="email"]')).toBeNull();
-    expect(phoneOnly.querySelector('input[name="whatsapp"]')).toBeNull();
-    expect(text(phoneOnly)).toContain("Get news and offers by SMS. Unsubscribe anytime.");
+    expect(Array.from(phoneOnly.querySelectorAll<HTMLInputElement>('input[name="channel"]')).map((box) => box.value)).toEqual(["sms"]);
+    expect(text(phoneOnly)).toContain("Choose channels for news and offers. Unsubscribe anytime.");
   });
 
   it("speaks Bangla in a Bangla store, merchant words first", async () => {
@@ -1063,7 +1065,9 @@ describe("the newsletter section", () => {
     expect(text(root.querySelector('label[for$="-phone"]'))).toBe("মোবাইল নম্বর");
     expect(text(root.querySelector('label[for$="-email"]'))).toBe("ইমেইল (ঐচ্ছিক)");
     expect(text(root.querySelector('button[type="submit"]'))).toBe("সাবস্ক্রাইব করুন");
-    expect(text(root)).toContain("এসএমএস ও ইমেইলে নতুন খবর ও অফার পাবেন। যেকোনো সময় আনসাবস্ক্রাইব করতে পারবেন।");
+    expect(text(root)).toContain("খবর ও অফার পেতে মাধ্যম বেছে নিন। যেকোনো সময় আনসাবস্ক্রাইব করতে পারবেন।");
+    expect(Array.from(root.querySelectorAll<HTMLInputElement>('input[name="channel"]')).map((box) => text(box.closest("label"))))
+      .toEqual(["এসএমএস", "ইমেইল", "হোয়াটসঅ্যাপ"]);
     // The script's outcome words are the page's language too.
     const copy = JSON.parse(root.querySelector("form")!.getAttribute("data-newsletter-copy")!) as { status: Record<string, { title: string }> };
     expect(copy.status.pending!.title).toBe("আপনার ইমেইল দেখুন");
