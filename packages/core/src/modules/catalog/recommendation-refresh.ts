@@ -5,7 +5,8 @@
 //   (recommendations.ts) once per product and stores its top 24 in
 //   `product_recommendations`. The queue message
 //   `catalog.recommendations.refresh` carries at most
-//   RECOMMENDATION_REFRESH_PRODUCTS_PER_MESSAGE products.
+//   RECOMMENDATION_REFRESH_PRODUCTS_PER_MESSAGE products. Only changed slots
+//   are written (D1 bills rows written): an unchanged list writes nothing.
 // - `recommendationRefreshTargets` is who to refresh after a catalogue
 //   write: the products, the products currently recommending them, and a
 //   bounded set of newest public peers in their categories.
@@ -100,9 +101,9 @@ export async function refreshProductRecommendations(
                       SELECT 1 FROM ${products} AS rec_target
                       WHERE rec_target.id = CAST(json_extract(entry.value, '$.id') AS TEXT)
                   )
-            `).onConflictDoUpdate({
+            `).onConflictDoNothing({
+                // Slots the delete kept are unchanged: no row, no trigger, no dependency advance.
                 target: [productRecommendations.productId, productRecommendations.position],
-                set: { computedAt: sql`unixepoch()` },
             }),
         ] as never);
         refreshed += 1;

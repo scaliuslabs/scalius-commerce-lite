@@ -323,6 +323,20 @@ describe("product recommendations", () => {
         expect(ids((await recordedRecommendations(["source"])).value)).toEqual(["older", "newer"]);
     });
 
+    it("writes no rows when a second refresh finds the same lists", async () => {
+        product({ id: "source", categoryId: "cat_shirts" });
+        product({ id: "older", categoryId: "cat_shirts", createdAt: NOW - 100 });
+        product({ id: "newer", categoryId: "cat_shirts", createdAt: NOW - 50 });
+        await rebuildCatalogProjections(db);
+        await refreshProductRecommendations(db, ["source", "older", "newer"]);
+        const stored = sqlite.prepare("SELECT COUNT(*) AS n FROM product_recommendations").get() as { n: number };
+        expect(stored.n).toBeGreaterThan(0);
+        const changes = () => (sqlite.prepare("SELECT total_changes() AS n").get() as { n: number }).n;
+        const before = changes();
+        await refreshProductRecommendations(db, ["source", "older", "newer"]);
+        expect(changes() - before).toBe(0);
+    });
+
     it("refreshes sales projections without invalidating unchanged visible counts", async () => {
         product({ id: "source" });
         order("01711000001", ["source"]);
