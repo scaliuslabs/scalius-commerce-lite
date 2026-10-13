@@ -5,6 +5,14 @@ import OAuthProvider, {
   type AuthRequest,
   type OAuthProviderOptions,
 } from "@cloudflare/workers-oauth-provider";
+import { getDb } from "@scalius/database/client";
+import {
+  deleteSystemKv,
+  getSystemKv,
+  listSystemKv,
+  purgeExpiredSystemKv,
+  putSystemKv,
+} from "@scalius/core/utils/system-kv";
 import { loadAgentAccessBackend } from "./backend";
 import {
   DASHBOARD_MCP_PATH,
@@ -228,27 +236,42 @@ export function createOAuthProviderOptions(envForTokenExchange: Env): OAuthProvi
 
 const OAUTH_KV_PREFIX = "oauth:";
 
+type OAuthKvPutOptions = { expiration?: number; expirationTtl?: number };
+
 /**
- * The OAuth provider library hard-codes `env.OAUTH_KV`. Hand it the store's
- * single CACHE namespace behind a fixed key prefix; `list()` strips the prefix
- * again because the library reads each listed `key.name` back.
+ * The OAuth provider library hard-codes a KV-shaped `env.OAUTH_KV`. Back it
+ * with `system_kv` rows under a fixed key prefix in the store's relational
+ * database, so a grant or a revocation holds the moment it is written. The
+ * library keys tokens by hash and encrypts grant props: no bearer secret is
+ * stored in clear. `list()` strips the prefix again because the library reads
+ * each listed `key.name` back.
  */
 export function withOAuthKv(env: Env): Env {
-  const kv = env.CACHE;
+  const db = getDb(env);
   const OAUTH_KV = {
-    get: (key: string, options?: unknown) => kv.get(OAUTH_KV_PREFIX + key, options as never),
-    put: (key: string, value: string, options?: Parameters<KVNamespace["put"]>[2]) =>
-      kv.put(OAUTH_KV_PREFIX + key, value, options),
-    delete: (key: string) => kv.delete(OAUTH_KV_PREFIX + key),
+    async get(key: string, options?: { type?: string } | string) {
+      const raw = await getSystemKv(db, OAUTH_KV_PREFIX + key);
+      const type = typeof options === "string" ? options : options?.type;
+      return raw !== null && type === "json" ? JSON.parse(raw) as unknown : raw;
+    },
+    async put(key: string, value: string, options: OAuthKvPutOptions = {}) {
+      const expiresAt = options.expiration
+        ?? (options.expirationTtl ? Math.floor(Date.now() / 1000) + options.expirationTtl : null);
+      await putSystemKv(db, OAUTH_KV_PREFIX + key, value, expiresAt);
+    },
+    delete: (key: string) => deleteSystemKv(db, OAUTH_KV_PREFIX + key),
     async list(options: { prefix?: string; limit?: number; cursor?: string } = {}) {
-      const page = await kv.list({ ...options, prefix: OAUTH_KV_PREFIX + (options.prefix ?? "") });
-      return {
-        ...page,
-        keys: page.keys.map((key) => ({ ...key, name: key.name.slice(OAUTH_KV_PREFIX.length) })),
-      };
+      const page = await listSystemKv(db, OAUTH_KV_PREFIX + (options.prefix ?? ""), {
+        limit: options.limit,
+        cursor: options.cursor ? OAUTH_KV_PREFIX + options.cursor : undefined,
+      });
+      const keys = page.keys.map((name) => ({ name: name.slice(OAUTH_KV_PREFIX.length) }));
+      return page.cursor
+        ? { keys, list_complete: false, cursor: page.cursor.slice(OAUTH_KV_PREFIX.length) }
+        : { keys, list_complete: true };
     },
   };
-  return { ...env, OAUTH_KV };
+  return { ...env, OAUTH_KV } as Env;
 }
 
 export function handleOAuthRequest(
@@ -259,8 +282,9 @@ export function handleOAuthRequest(
   return new OAuthProvider<Env>(createOAuthProviderOptions(env)).fetch(request, withOAuthKv(env), ctx);
 }
 
+/** Expired grants, tokens and clients (and other `system_kv` rows) are rows past `expires_at`. */
 export async function purgeExpiredOAuthData(env: Env): Promise<void> {
-  await new OAuthProvider<Env>(createOAuthProviderOptions(env)).purgeExpiredData(withOAuthKv(env));
+  await purgeExpiredSystemKv(getDb(env));
 }
 
 export async function completeOAuthAuthorization(
