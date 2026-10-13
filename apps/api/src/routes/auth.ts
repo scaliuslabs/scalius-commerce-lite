@@ -1,10 +1,10 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { generateToken, revokeToken, getTokenStats } from "../utils/jwt";
+import { generateToken, getTokenStats } from "../utils/jwt";
 import { authMiddleware } from "../middleware/auth";
 import { firebaseDocument } from "@scalius/core/modules/settings";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
-import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";
+import { successEnvelope, errorResponses } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 // Define the user type for type safety
@@ -137,37 +137,6 @@ const getMeRoute = createRoute({
 app.openapi(getMeRoute, (c) => {
   const user = c.get("user");
   return ok(c, { user });
-});
-
-// ─── POST /revoke ────────────────────────────────────────────────────────────
-
-const revokeRoute = createRoute({
-  method: "post",
-  path: "/revoke",
-  tags: ["Auth"],
-  summary: "Revoke current token",
-  responses: {
-    200: {
-      description: "Token revoked",
-      content: { "application/json": { schema: messageResponse } },
-    },
-    ...errorResponses,
-  },
-});
-
-app.openapi(revokeRoute, async (c) => {
-  const authHeader = c.req.header("Authorization") || null;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new UnauthorizedError("No valid token provided");
-  }
-
-  const token = authHeader.substring(7);
-  await revokeToken(token, c.env.CACHE);
-
-  return ok(c, {
-    message: "Token revoked successfully"
-  });
 });
 
 // ─── GET /token-stats ────────────────────────────────────────────────────────

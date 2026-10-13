@@ -46,8 +46,7 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
   }
 
   try {
-    // Verify token against the shared KV revocation list.
-    const decoded = (await verifyToken(token, { JWT_SECRET: c.env.JWT_SECRET, CACHE: c.env.CACHE })) as User;
+    const decoded = (await verifyToken(token, { JWT_SECRET: c.env.JWT_SECRET })) as User;
 
     // Store user info in context
     c.set("user", decoded);
@@ -55,7 +54,7 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     // Check if token needs to be refreshed
     const refreshedToken = await refreshTokenIfNeeded(
       token,
-      { JWT_SECRET: c.env.JWT_SECRET, CACHE: c.env.CACHE },
+      { JWT_SECRET: c.env.JWT_SECRET },
       5,
     );
 

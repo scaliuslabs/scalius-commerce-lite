@@ -15876,136 +15876,6 @@
         }
       }
     },
-    "/api/v1/auth/revoke": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Revoke current token",
-        "responses": {
-          "200": {
-            "description": "Token revoked",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "operationId": "system.auth_revoke.revoke",
-        "x-scalius-agent": {
-          "surface": "system",
-          "exposure": "excluded",
-          "principals": [
-            "internal"
-          ],
-          "risk": "security",
-          "openWorld": false,
-          "idempotency": "supported",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "exclusionReason": "Legacy service-JWT KV blacklist revocation; use agent credential self-revoke or agent-access grant management."
-        },
-        "x-scalius-rbac": {
-          "type": "public"
-        }
-      }
-    },
     "/api/v1/auth/token-stats": {
       "get": {
         "tags": [
@@ -16123,7 +15993,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "exclusionReason": "Legacy JWT secret and blacklist diagnostics; not merchant-visible functionality or agent authentication state."
+          "exclusionReason": "Legacy JWT secret diagnostics; not merchant-visible functionality or agent authentication state."
         },
         "x-scalius-rbac": {
           "type": "public"

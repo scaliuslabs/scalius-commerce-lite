@@ -3649,56 +3649,6 @@ export type GetApiV1AuthMeResponses = {
 
 export type GetApiV1AuthMeResponse = GetApiV1AuthMeResponses[keyof GetApiV1AuthMeResponses];
 
-export type PostApiV1AuthRevokeData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/auth/revoke';
-};
-
-export type PostApiV1AuthRevokeErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1AuthRevokeError = PostApiV1AuthRevokeErrors[keyof PostApiV1AuthRevokeErrors];
-
-export type PostApiV1AuthRevokeResponses = {
-    /**
-     * Token revoked
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-        };
-    };
-};
-
-export type PostApiV1AuthRevokeResponse = PostApiV1AuthRevokeResponses[keyof PostApiV1AuthRevokeResponses];
-
 export type GetApiV1AuthTokenStatsData = {
     body?: never;
     path?: never;
