@@ -10,7 +10,7 @@ import { eventOutbox } from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { PLUGIN_API_VERSION, pluginGrantKey, pluginGrantRequest, type PluginManifestInput } from "@scalius/shared/plugins";
 import { eq } from "drizzle-orm";
-import { toOutboxEvent, type EventsQueue, type OutboxEvent } from "../events";
+import { toOutboxEvent, type OutboxEvent } from "../events";
 import {
   PLUGIN_DELIVERY_MAX_ATTEMPTS,
   PluginError,
@@ -22,7 +22,7 @@ import {
   expireStalePluginCronRuns,
   failPluginEventDelivery,
   finishPluginCronRun,
-  flushDuePluginEventDeliveries,
+  listDuePluginEventDeliveries,
   installPlugin,
   latestPluginCronRuns,
   listPluginEventDeliveries,
@@ -55,10 +55,6 @@ function manifest(id: string, overrides: Partial<PluginManifestInput> = {}): Plu
     cron: [{ name: "nightly", schedule: "0 3 * * *" }],
     ...overrides,
   };
-}
-
-function queue(): EventsQueue & { send: ReturnType<typeof vi.fn>; sendBatch: ReturnType<typeof vi.fn> } {
-  return { send: vi.fn(async () => undefined), sendBatch: vi.fn(async () => undefined) } as never;
 }
 
 describe("plugin event deliveries", () => {
@@ -142,11 +138,10 @@ describe("plugin event deliveries", () => {
     if (last.status !== "claimed") throw new Error("expected a claim");
     expect(await failPluginEventDelivery(db, last.delivery, last.claimId, { error: "still failing", durationMs: 1 })).toEqual({ status: "exhausted", retryInSeconds: null });
 
-    const jobs = queue();
-    const retried = await retryPluginEventDelivery(db, "alpha.all", ids[1]!, jobs);
+    const retried = await retryPluginEventDelivery(db, "alpha.all", ids[1]!);
     expect(retried).toMatchObject({ status: "pending", attempts: 0, error: null });
-    expect(jobs.send).toHaveBeenCalledWith({ type: "plugins.deliver", deliveryId: ids[1] });
-    await expect(retryPluginEventDelivery(db, "alpha.all", ids[0]!, jobs)).rejects.toMatchObject({ pluginCode: "delivery.not_retryable" });
+    expect(await listDuePluginEventDeliveries(db, 10)).toContain(ids[1]);
+    await expect(retryPluginEventDelivery(db, "alpha.all", ids[0]!)).rejects.toMatchObject({ pluginCode: "delivery.not_retryable" });
 
     const page = await listPluginEventDeliveries(db, "alpha.all", { limit: 2 });
     // Newest first by id (time-sortable; ids minted in one millisecond order by their random tail).
@@ -155,7 +150,7 @@ describe("plugin event deliveries", () => {
     expect(page.nextCursor).toBe(newest[1]);
   });
 
-  it("releases a delivery without using its attempt, cancels for an inactive plugin, and the flush re-sends due rows", async () => {
+  it("releases a delivery without using its attempt, cancels for an inactive plugin, and the drain lists due rows", async () => {
     await activate("alpha.all", { events: ["order.*"] });
     const [message] = await pluginEventFanOutTarget.fanOut(db, await event());
     const deliveryId = (message as { deliveryId: string }).deliveryId;
@@ -165,17 +160,14 @@ describe("plugin event deliveries", () => {
     expect(sqlite.prepare("SELECT status, attempts FROM plugin_event_deliveries WHERE id = ?").get(deliveryId)).toEqual({ status: "failed", attempts: 0 });
 
     sqlite.prepare("UPDATE plugin_event_deliveries SET next_attempt_at = unixepoch() - 1 WHERE id = ?").run(deliveryId);
-    const jobs = queue();
-    expect(await flushDuePluginEventDeliveries({ db, queue: jobs })).toMatchObject({ scanned: 1, enqueued: 1 });
-    expect(jobs.sendBatch).toHaveBeenCalledWith([{ body: { type: "plugins.deliver", deliveryId } }]);
-    expect(sqlite.prepare("SELECT status FROM plugin_event_deliveries WHERE id = ?").get(deliveryId)).toEqual({ status: "queued" });
+    expect(await listDuePluginEventDeliveries(db, 10)).toEqual([deliveryId]);
 
     const again = await claimPluginEventDelivery(db, deliveryId);
     if (again.status !== "claimed") throw new Error("expected a claim");
     await cancelPluginEventDelivery(db, again.delivery, again.claimId, "The app is not active.");
     expect(sqlite.prepare("SELECT status FROM plugin_event_deliveries WHERE id = ?").get(deliveryId)).toEqual({ status: "cancelled" });
     await markPluginFailed(db, "alpha.all", "broken");
-    await expect(retryPluginEventDelivery(db, "alpha.all", deliveryId, jobs)).rejects.toMatchObject({ pluginCode: "installation.inactive" });
+    await expect(retryPluginEventDelivery(db, "alpha.all", deliveryId)).rejects.toMatchObject({ pluginCode: "installation.inactive" });
   });
 });
 

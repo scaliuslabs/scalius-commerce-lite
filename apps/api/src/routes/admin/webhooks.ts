@@ -26,7 +26,7 @@ import { OUTBOUND_URL_MAX_LENGTH } from "@scalius/shared/outbound-url";
 import { created, ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
-import { eventsQueue } from "../../events/flush";
+import { afterResponse, executionContextOf } from "../../background/after-response";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -421,7 +421,12 @@ const retryDeliveryRoute = createRoute({
 app.openapi(retryDeliveryRoute, async (c) => {
   noStore(c);
   const { id, deliveryId } = c.req.valid("param");
-  const delivery = await retryWebhookDelivery(c.get("db"), id, deliveryId, eventsQueue(c.env));
+  const db = c.get("db");
+  const delivery = await retryWebhookDelivery(db, id, deliveryId);
+  await afterResponse(c, "webhook retry", async () => {
+    const { sendEventDeliveries } = await import("../../events/dispatch");
+    await sendEventDeliveries(db, c.env, executionContextOf(c), [{ type: "webhooks.deliver", deliveryId }]);
+  });
   return ok(c, { delivery: deliveryResponse(delivery) });
 });
 

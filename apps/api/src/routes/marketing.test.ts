@@ -16,6 +16,12 @@ vi.mock("../middleware/auth", () => ({
     },
 }));
 
+// The route hands committed outbox ids to the sender; delivery is tested elsewhere.
+const sent = vi.hoisted(() => [] as unknown[]);
+vi.mock("../background/notification-sender", () => ({
+    notificationSender: () => async (outboxIds: readonly string[]) => { sent.push(...outboxIds); },
+}));
+
 const { marketingRoutes } = await import("./marketing");
 
 const SECRET = "test-master-secret-that-is-long-enough-123456";
@@ -28,7 +34,7 @@ function createApp(options: { limited?: boolean } = {}) {
     const { sqlite, db } = createSqliteD1Database();
     sqlite.exec(`INSERT INTO customers (id, name, phone, email, origin, account_claimed_at, phone_verified_at, email_verified_at)
         VALUES ('cust_acct', 'Karim', '+8801722222222', 'karim@example.com', 'account', 1, 1, 1)`);
-    const sent: unknown[] = [];
+    sent.length = 0;
     const limiter = { limit: async () => ({ success: !options.limited }) };
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
     app.onError((error, c) => {
@@ -41,7 +47,6 @@ function createApp(options: { limited?: boolean } = {}) {
             SCALIUS_SECRET: SECRET,
             RL_STRICT: limiter,
             RL_STANDARD: limiter,
-            JOBS_QUEUE: { send: async (message: unknown) => { sent.push(message); } },
         } as unknown as Env;
         await next();
     });
@@ -72,8 +77,10 @@ describe("storefront marketing routes", () => {
         expect(unknown).toEqual({ status: 200, body: { success: true, data: { result: "pending" } } });
         expect((await post("/subscribe", { channels: ["sms"], phone: "01766666666" })).body.data).toEqual({ result: "subscribed" });
         expect((await post("/subscribe", { channels: ["sms"], phone: "01766666666", website: "spam" })).status).toBe(400);
-        // Queue messages carry the outbox id only.
-        expect(sent.every((message) => JSON.stringify(Object.keys(message as object)) === '["type","outboxId"]')).toBe(true);
+        // The sender gets outbox ids only, never a contact.
+        expect(sent.length).toBeGreaterThan(0);
+        const outboxIds = (sqlite.prepare("SELECT id FROM notification_outbox").all() as { id: string }[]).map((row) => row.id);
+        expect(sent.every((id) => outboxIds.includes(id as string))).toBe(true);
         const pending = sqlite.prepare("SELECT customer_id, channel, state FROM customer_marketing_consents WHERE customer_id = 'cust_acct' ORDER BY channel").all();
         expect(pending).toEqual([
             { customer_id: "cust_acct", channel: "email", state: "pending" },

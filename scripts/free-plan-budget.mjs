@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// The Workers plan budget harness: what each operation costs in D1 queries,
-// queue messages and CPU, under the Free and the Paid profile, and
-// what a day of orders consumes of Workers Free's quotas.
+// The Workers plan budget harness: what each operation costs in D1 queries
+// and CPU (its after-response work included), under the Free and the Paid
+// profile, and what a day of orders consumes of Workers Free's quotas.
 //
 //   pnpm free-plan:budget                 run the Node tier (both profiles), print the tables
 //   pnpm free-plan:budget --workerd       also run the workerd tier (real CPU, Miniflare)
@@ -27,7 +27,6 @@ const root = resolve(import.meta.dirname, "..");
 
 /** Workers Free daily quotas (developers.cloudflare.com, checked 2026-10-03). */
 export const FREE_DAILY_QUOTAS = Object.freeze({
-  queueOperations: 10_000,
   d1RowsWritten: 100_000,
   d1RowsRead: 5_000_000,
   requests: 100_000,
@@ -35,8 +34,9 @@ export const FREE_DAILY_QUOTAS = Object.freeze({
 
 /**
  * What a day of orders is made of. Each order is a 3-line checkout commit with
- * every message it queues consumed, two tax quotes, a share of buyers who sign
- * in with a code, and page views; the cron runs 96 times regardless of orders.
+ * its after-response work, two tax quotes, a share of buyers who sign in with
+ * a code, and page views; the cron ticks every minute regardless of orders
+ * (the measured steady-state mean of an hour of ticks).
  */
 export const QUOTA_MODEL = Object.freeze({
   orders: 100,
@@ -46,7 +46,7 @@ export const QUOTA_MODEL = Object.freeze({
   pageViewsPerOrder: 20,
   /** Share of page views that miss the storefront's cache and render every part. */
   pageMissShare: 0.05,
-  cronRunsPerDay: 96,
+  cronTicksPerDay: 1_440,
   /** D1 "rows written" counts index entries too: rows changed (what SQLite reports) times this is the estimate. */
   indexWriteFactor: 3,
 });
@@ -101,16 +101,14 @@ export function dailyQuota(rows, options = {}) {
   };
   const order = need("order-lifecycle");
   const quote = need("checkout-20-quote");
-  const otp = sum(need("customer-otp-request"), need("queue-auth.send_otp"), need("customer-otp-verify"));
+  const otp = sum(need("customer-otp-request"), need("customer-otp-verify"));
   const hit = need("page-product-hit");
   const miss = need("page-product-miss");
   const views = sum(scale(hit, 1 - model.pageMissShare), scale(miss, model.pageMissShare));
   const perOrder = sum(order, scale(quote, model.quotesPerOrder), scale(otp, model.otpShare), scale(views, model.pageViewsPerOrder));
-  const cron = scale(need("cron-idle"), model.cronRunsPerDay);
+  const cron = scale(need("cron-idle"), model.cronTicksPerDay);
   const daily = sum(scale(perOrder, model.orders), cron);
-  const queueOperations = (daily.queueMessages ?? 0) * 3;
   const resources = {
-    queueOperations: { used: queueOperations, perOrder: (perOrder.queueMessages ?? 0) * 3, limit: FREE_DAILY_QUOTAS.queueOperations },
     d1RowsWritten: {
       used: (daily.d1RowsChanged ?? 0) * model.indexWriteFactor,
       perOrder: (perOrder.d1RowsChanged ?? 0) * model.indexWriteFactor,
@@ -132,12 +130,12 @@ const number = (value, digits = 0) => (Number.isFinite(value) ? value.toFixed(di
 export function renderCounterTable(plan, rows) {
   const lines = [
     `Plan profile: ${plan}`,
-    `${"operation".padEnd(34)} ${pad("cpu cold", 8)} ${pad("cpu warm", 8)} ${pad("D1 calls", 8)} ${pad("D1 stmts", 8)} ${pad("rows chg", 8)} ${pad("queue msgs", 10)} ${pad("fetch", 5)}`,
+    `${"operation".padEnd(34)} ${pad("cpu cold", 8)} ${pad("cpu warm", 8)} ${pad("D1 calls", 8)} ${pad("D1 stmts", 8)} ${pad("rows chg", 8)} ${pad("fetch", 5)}`,
   ];
   for (const row of rows) {
     const c = row.counters;
     lines.push(
-      `${row.id.padEnd(34)} ${pad(number(row.cold.cpuMs, 1), 8)} ${pad(number(row.warmCpuMs, 1), 8)} ${pad(c.d1Calls, 8)} ${pad(c.d1Statements, 8)} ${pad(c.d1RowsChanged, 8)} ${pad(c.queueMessages, 10)} ${pad(c.externalFetches, 5)}`,
+      `${row.id.padEnd(34)} ${pad(number(row.cold.cpuMs, 1), 8)} ${pad(number(row.warmCpuMs, 1), 8)} ${pad(c.d1Calls, 8)} ${pad(c.d1Statements, 8)} ${pad(c.d1RowsChanged, 8)} ${pad(c.externalFetches, 5)}`,
     );
   }
   return lines.join("\n");
@@ -146,7 +144,6 @@ export function renderCounterTable(plan, rows) {
 export function renderQuotaTable(plan, quota) {
   const { model, resources } = quota;
   const labels = {
-    queueOperations: "Queue operations",
     d1RowsWritten: "D1 rows written (est.)",
   };
   const lines = [
@@ -159,14 +156,14 @@ export function renderQuotaTable(plan, quota) {
     );
   }
   lines.push(
-    `Model: per order a 3-line checkout and its queued messages, ${model.quotesPerOrder} tax quotes, ${model.otpShare * 100}% sign-ins by code, ${model.pageViewsPerOrder} page views (${model.pageMissShare * 100}% cache misses); ${model.cronRunsPerDay} cron runs a day; D1 rows written = rows changed x ${model.indexWriteFactor} for index entries.`,
+    `Model: per order a 3-line checkout and its after-response work, ${model.quotesPerOrder} tax quotes, ${model.otpShare * 100}% sign-ins by code, ${model.pageViewsPerOrder} page views (${model.pageMissShare * 100}% cache misses); ${model.cronTicksPerDay} cron ticks a day; D1 rows written = rows changed x ${model.indexWriteFactor} for index entries.`,
   );
   return lines.join("\n");
 }
 
 /** Source of apps/api/src/testing/free-plan-budgets.ts from a report: each operation's measured counters. */
 export function budgetsSource(report) {
-  const keys = ["d1Calls", "d1Statements", "queueMessages", "externalFetches"];
+  const keys = ["d1Calls", "d1Statements", "externalFetches"];
   const block = (rows) => rows
     .map((row) => `    ${JSON.stringify(row.id)}: { ${keys.map((key) => `${key}: ${row.counters[key]}`).join(", ")} },`)
     .join("\n");

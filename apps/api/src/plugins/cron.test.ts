@@ -9,8 +9,7 @@ vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/fixt
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { deactivatePlugin, listPluginLogs, requirePluginInstallation } from "@scalius/core/modules/plugins";
-import { pendingPluginCronAppIds, runDuePluginCron } from "./cron";
-import { storeTimeZoneOf } from "../utils/store-time-zone";
+import { runDuePluginCron } from "./cron";
 import { installHello, pluginTestCtx, pluginTestEnv } from "./testing/fixtures";
 
 describe("plugin cron tick", () => {
@@ -50,30 +49,6 @@ describe("plugin cron tick", () => {
     const slotMs = nextHourAfter(activatedAt);
     expect(await tick(slotMs, { maxRuns: 0 })).toMatchObject({ due: 1, ran: 0, deferred: 1 });
     expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_cron_runs").get()).toEqual({ n: 0 });
-  });
-
-  it("an isolated app job cannot claim another app's due slot", async () => {
-    const nowMs = nextHourAfter(activatedAt);
-    expect(await runDuePluginCron({ db, env, ctx: pluginTestCtx(), nowMs, onlyPluginId: "other.app" }))
-      .toMatchObject({ due: 0, ran: 0 });
-    expect(await runDuePluginCron({ db, env, ctx: pluginTestCtx(), nowMs, onlyPluginId: "" }))
-      .toMatchObject({ due: 0, ran: 0 });
-    expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_cron_runs").get()).toEqual({ n: 0 });
-    expect(await runDuePluginCron({ db, env, ctx: pluginTestCtx(), nowMs, onlyPluginId: "acme.hello" }))
-      .toMatchObject({ due: 1, ran: 1 });
-    expect(await runDuePluginCron({ db, env, ctx: pluginTestCtx(), nowMs, onlyPluginId: "acme.hello" }))
-      .toMatchObject({ due: 1, ran: 0, skipped: 1 });
-  });
-
-  it("queues only unclaimed due slots, retaining catch-up and skipping subsequent ticks", async () => {
-    const nowMs = nextHourAfter(activatedAt);
-    const zone = storeTimeZoneOf(env);
-    expect(await pendingPluginCronAppIds(db, (activatedAt - 60) * 1000, zone)).toEqual([]);
-    // A missed first tick remains eligible at the next tick.
-    expect(await pendingPluginCronAppIds(db, nowMs + 15 * 60_000, zone)).toEqual(["acme.hello"]);
-    await tick(nowMs + 15 * 60_000);
-    expect(await pendingPluginCronAppIds(db, nowMs + 30 * 60_000, zone)).toEqual([]);
-    expect(await pendingPluginCronAppIds(db, nowMs + 60 * 60_000, zone)).toEqual(["acme.hello"]);
   });
 
   it("fails a run whose lease ran out so the job can run again, and skips inactive plugins", async () => {

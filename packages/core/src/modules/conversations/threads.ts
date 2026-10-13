@@ -47,9 +47,8 @@ import {
 } from "../../errors";
 import {
   buildNotificationOutboxInsert,
-  enqueueNotificationOutboxById,
   type NotificationInput,
-  type NotificationQueue,
+  type NotificationSender,
 } from "../notifications";
 import { listOrderSupportRequests } from "../orders";
 import { projectMessagesForBuyer } from "./projection";
@@ -360,18 +359,13 @@ export function planConversationAppend(
   return { statements, lines: planned, outboxIds };
 }
 
-/** Hands committed outbox rows to the queue; the scheduled flush retries any that fail. */
-export async function enqueueConversationNotifications(
-  db: Database,
-  queue: NotificationQueue | undefined,
+/** Hands committed outbox rows to the sender; the scheduled drain sends any it could not. */
+export async function sendConversationNotifications(
+  send: NotificationSender | undefined,
   outboxIds: readonly string[],
 ): Promise<void> {
-  if (!queue) return;
-  for (const outboxId of outboxIds) {
-    await enqueueNotificationOutboxById({ db, queue, outboxId }).catch((error: unknown) => {
-      console.error(`[conversations] Notification ${outboxId} not enqueued yet:`, error instanceof Error ? error.message : "unknown error");
-    });
-  }
+  if (!send || outboxIds.length === 0) return;
+  await send(outboxIds);
 }
 
 async function readMessageByClientKey(db: Database, conversationId: string, clientMessageKey: string) {
@@ -463,7 +457,7 @@ export async function postConversationMessage(
   db: Database,
   thread: ThreadRow,
   input: PostMessageInput,
-  options: { queue?: NotificationQueue } = {},
+  options: { send?: NotificationSender } = {},
 ): Promise<PostMessageResult> {
   const buyer = input.actor.kind !== "staff";
   const visibility = buyer ? "public" : (input.visibility ?? "public");
@@ -504,7 +498,7 @@ export async function postConversationMessage(
     const plan = planConversationAppend(db, current, [line], { notify: true });
     try {
       await db.batch(plan.statements as unknown as BatchStatements);
-      await enqueueConversationNotifications(db, options.queue, plan.outboxIds);
+      await sendConversationNotifications(options.send, plan.outboxIds);
       const [posted] = plan.lines;
       return { conversationId: thread.id, messageId: posted!.id, seq: posted!.seq, created: true };
     } catch (error) {
@@ -567,7 +561,7 @@ export async function postBuyerOrderMessage(
   db: Database,
   orderId: string,
   input: PostMessageInput,
-  options: { queue?: NotificationQueue } = {},
+  options: { send?: NotificationSender } = {},
 ): Promise<PostMessageResult> {
   await assertBuyerOrderAccess(db, input.actor, orderId);
   const thread = await getOrCreateOrderThread(db, orderId);
@@ -579,7 +573,7 @@ export async function postStaffOrderMessage(
   db: Database,
   orderId: string,
   input: PostMessageInput,
-  options: { queue?: NotificationQueue } = {},
+  options: { send?: NotificationSender } = {},
 ): Promise<PostMessageResult> {
   if (input.actor.kind !== "staff") throw new ForbiddenError("Staff only");
   const thread = await getOrCreateOrderThread(db, orderId);
@@ -594,7 +588,7 @@ export async function createStoreThread(
   db: Database,
   customerId: string,
   input: { subject: unknown; body: unknown; clientMessageKey?: string | null },
-  options: { queue?: NotificationQueue } = {},
+  options: { send?: NotificationSender } = {},
 ): Promise<PostMessageResult> {
   if (!await isVerifiedCustomerAccount(db, customerId)) {
     throw new ForbiddenError("Verify your phone or email to message the store.");
@@ -662,7 +656,7 @@ export async function createStoreThread(
     }),
     ...plan.statements,
   ] as BatchStatements);
-  await enqueueConversationNotifications(db, options.queue, plan.outboxIds);
+  await sendConversationNotifications(options.send, plan.outboxIds);
   const [posted] = plan.lines;
   return { conversationId: id, messageId: posted!.id, seq: posted!.seq, created: true };
 }

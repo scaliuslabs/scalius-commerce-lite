@@ -46,7 +46,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses, conflictResponse } from "../../schemas/responses";
-import { enqueueCatalogProjectionRebuild } from "../../utils/catalog-jobs";
+import { rebuildCatalogProjectionsAfterWrite } from "../../background/catalog";
 
 import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
 import { parseStoreDateOnlyBoundary } from "./order-date-filter";
@@ -770,9 +770,7 @@ app.openapi(defaultAlertLevelRoute, async (c) => {
     // including each product's stored card band: rebuild those off the
     // request path; database triggers advance the affected dependencies.
 
-    await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch((error: unknown) => {
-        console.warn("[inventory] projection rebuild enqueue failed", error instanceof Error ? error.name : "unknown");
-    });
+    await rebuildCatalogProjectionsAfterWrite(c, c.get("db"), "inventory");
     return ok(c, result);
 });
 

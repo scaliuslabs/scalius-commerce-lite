@@ -1,8 +1,9 @@
 // The one path every provider-authenticated payment fact takes into the
-// kernel: claim the provider event once in webhook_events, then enqueue a
-// single `payment.event` message. Webhooks, hosted buyer returns, and buyer
-// reconciliation all converge here, so a replay or a webhook racing the
-// buyer return is applied at most once.
+// kernel: claim the provider event once in webhook_events (with the event as
+// the row's payload), then apply it right after the response; the scheduled
+// drain retries a failed attempt from that row (background/payment-events.ts).
+// Webhooks, hosted buyer returns, and buyer reconciliation all converge here,
+// so a replay or a webhook racing the buyer return is applied at most once.
 
 import { eq } from "drizzle-orm";
 import type { Context } from "hono";
@@ -20,21 +21,9 @@ import {
 } from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { NotFoundError, ServiceUnavailableError, ValidationError } from "../../utils/api-error";
-import {
-  buildWebhookEventId,
-  claimWebhookEvent,
-  markWebhookEventFailed,
-  markWebhookEventQueued,
-} from "../../utils/webhook-idempotency";
+import { buildWebhookEventId, claimWebhookEvent } from "../../utils/webhook-idempotency";
+import { afterResponse, executionContextOf, type BackgroundCaller } from "../../background/after-response";
 import { withPaymentProviderDeadline } from "./payment-provider-deadline";
-
-export type PaymentEventQueueMessage = {
-  type: "payment.event";
-  provider: string;
-  /** The claimed webhook_events row this message completes. */
-  webhookEventId?: string;
-  event: PaymentEvent;
-};
 
 /** webhook_events.event_type per normalized event kind. */
 export const PAYMENT_EVENT_TYPES: Record<PaymentEvent["kind"], string> = {
@@ -45,54 +34,37 @@ export const PAYMENT_EVENT_TYPES: Record<PaymentEvent["kind"], string> = {
 };
 
 export type PaymentEventClaimResult =
-  | { status: "queued" }
-  | { status: "duplicate"; existingStatus: string }
-  | { status: "retry"; error: string };
+  | { status: "accepted" }
+  | { status: "duplicate"; existingStatus: string };
 
-export async function claimAndEnqueuePaymentEvent(input: {
+/** Claims the event once, then applies it after the response (`caller`'s execution context). */
+export async function claimAndApplyPaymentEvent(input: {
   db: Database;
-  queue?: Queue;
+  caller: BackgroundCaller & { env: Env };
   provider: string;
   event: PaymentEvent;
   source: string;
 }): Promise<PaymentEventClaimResult> {
   const { db, event } = input;
   const eventId = buildWebhookEventId(input.provider, event.eventType, event.eventId);
-  const result = {
-    source: input.source,
-    sourceEventId: event.eventId,
-    providerRef: event.providerRef,
-    secondaryRef: event.secondaryRef ?? null,
-  };
+  const payload = { provider: input.provider, event };
   const claim = await claimWebhookEvent(db, {
     id: eventId,
     provider: input.provider,
     eventType: PAYMENT_EVENT_TYPES[event.kind],
     orderId: event.orderId,
     status: "processing",
-    result,
+    result: { source: input.source, sourceEventId: event.eventId },
+    payload,
   });
   if (!claim.claimed) return { status: "duplicate", existingStatus: claim.existing?.status ?? "unknown" };
 
-  if (!input.queue) {
-    await markWebhookEventFailed(db, eventId, { ...result, error: "Queue not available" });
-    return { status: "retry", error: "Queue not available" };
-  }
-  const message: PaymentEventQueueMessage = {
-    type: "payment.event",
-    provider: input.provider,
-    webhookEventId: eventId,
-    event,
-  };
-  try {
-    await input.queue.send(message);
-    await markWebhookEventQueued(db, eventId, result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await markWebhookEventFailed(db, eventId, { ...result, error: message });
-    return { status: "retry", error: message };
-  }
-  return { status: "queued" };
+  const env = input.caller.env;
+  await afterResponse(input.caller, `${input.provider} payment event`, async () => {
+    const { applyClaimedPaymentEvent } = await import("../../background/payment-events");
+    await applyClaimedPaymentEvent(db, env, executionContextOf(input.caller), { id: eventId, attempts: 1, payload });
+  });
+  return { status: "accepted" };
 }
 
 /** The request as gateways read it: the exact body text, header names lowercased. */
@@ -144,6 +116,8 @@ export async function reconcileOrderPayment(input: {
   provider?: string;
   /** The request's gateways (built-in and app providers), read only when the order names an app's. */
   providers: PaymentProvidersSource;
+  /** Where the confirmed event is applied after the response. */
+  caller: BackgroundCaller & { env: Env };
 }): Promise<{ data: PaymentReconciliationResult; accepted: boolean }> {
   const order = await input.db.select({
     id: orders.id,
@@ -180,14 +154,13 @@ export async function reconcileOrderPayment(input: {
   }
   if (!query.event) return { data: { status: "pending", providerStatus: query.providerStatus }, accepted: false };
 
-  const claim = await claimAndEnqueuePaymentEvent({
+  const claim = await claimAndApplyPaymentEvent({
     db: input.db,
-    queue: input.env.JOBS_QUEUE,
+    caller: input.caller,
     provider: gateway.id,
     event: query.event,
     source: "buyer_receipt_reconciliation",
   });
-  if (claim.status === "retry") throw unavailable;
   if (claim.status === "duplicate") {
     return {
       data: { status: claim.existingStatus === "processed" ? "settled" : "scheduled", providerStatus: query.providerStatus },

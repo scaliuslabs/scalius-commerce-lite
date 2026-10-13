@@ -1037,6 +1037,13 @@
       "when": 1791923663279,
       "tag": "0147_kv_retirement",
       "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "6",
+      "when": 1791927869670,
+      "tag": "0148_queue_retirement",
+      "breakpoints": true
     }
   ]
 }

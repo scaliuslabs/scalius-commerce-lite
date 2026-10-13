@@ -24,7 +24,7 @@ import {
   normalizeContactEmail,
   selectContactCustomerCandidates,
 } from "../customers";
-import type { NotificationQueue } from "../notifications";
+import type { NotificationSender } from "../notifications";
 import { marketingConsentDocument, validateCustomerPhoneCountry } from "../settings";
 import {
     applyConsentChanges,
@@ -38,7 +38,7 @@ import type { MarketingLinkEnv } from "./links";
 
 export interface ConsentRuntime {
     env: MarketingLinkEnv;
-    queue?: NotificationQueue;
+    send?: NotificationSender;
 }
 
 const EMAIL = /^[^\s@<>()",;:]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}$/;
@@ -107,7 +107,7 @@ export async function subscribeToNewsletter(
             allowBlankGuestEmail: true,
         }] : []),
     ];
-    await applyConsentChanges(db, { customerId, changes, env: runtime.env, queue: runtime.queue });
+    await applyConsentChanges(db, { customerId, changes, env: runtime.env, send: runtime.send });
     return { result: input.channels.includes("email") && email && settings.emailDoubleOptIn ? "pending" : "subscribed" };
 }
 
@@ -203,7 +203,7 @@ export async function updateAccountMarketingPreferences(
             }
             : { channel, action: "unsubscribe", source: "account", actor: "buyer" });
     }
-    const results = await applyConsentChanges(db, { customerId, changes, env: runtime.env, queue: runtime.queue });
+    const results = await applyConsentChanges(db, { customerId, changes, env: runtime.env, send: runtime.send });
     return {
         ...(await getAccountMarketingPreferences(db, customerId)),
         confirmationRequested: results.some((result) => result.confirmationRequested),
@@ -237,7 +237,7 @@ export async function setCustomerMarketingConsent(
     const change: ConsentChange = input.state === "subscribed"
         ? { channel: input.channel, action: "subscribe", contact, source, actor: author.actor, actorId: author.actorId, note }
         : { channel: input.channel, action: "unsubscribe", source, actor: author.actor, actorId: author.actorId, note };
-    const [result] = await applyConsentChanges(db, { customerId, changes: [change], env: runtime.env, queue: runtime.queue });
+    const [result] = await applyConsentChanges(db, { customerId, changes: [change], env: runtime.env, send: runtime.send });
     return { consents: await getCustomerMarketingConsents(db, customerId), result: result! };
 }
 
@@ -275,7 +275,7 @@ export async function recordCheckoutMarketingConsent(
             signedInVerifiedEmail: account?.email ?? null,
         });
         if (changes.length === 0) return [];
-        return await applyConsentChanges(db, { customerId: input.customerId, changes, env: runtime.env, queue: runtime.queue });
+        return await applyConsentChanges(db, { customerId: input.customerId, changes, env: runtime.env, send: runtime.send });
     } catch (error) {
         console.warn(`[Marketing] Checkout consent not recorded: ${error instanceof Error ? error.name : "error"}`);
         return [];

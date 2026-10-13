@@ -111,29 +111,6 @@ interface ExecutionContext<Props = unknown> {
   readonly exports: WorkerExports;
 }
 
-// Cloudflare Queue binding types
-interface Queue<T = unknown> {
-  send(message: T, options?: { delaySeconds?: number }): Promise<void>;
-  sendBatch(messages: Array<{ body: T; delaySeconds?: number }>): Promise<void>;
-  /** The queue's backlog; the bulk lane reads it before fanning work out (utils/queue-lanes.ts). */
-  metrics?(): Promise<{ backlogCount: number; backlogBytes: number; oldestMessageTimestamp: number }>;
-}
-
-interface MessageBatch<T = unknown> {
-  readonly queue: string;
-  readonly messages: Message<T>[];
-  ackAll(): void;
-  retryAll(options?: { delaySeconds?: number }): void;
-}
-
-interface Message<T = unknown> {
-  readonly id: string;
-  readonly timestamp: Date;
-  readonly body: T;
-  ack(): void;
-  retry(options?: { delaySeconds?: number }): void;
-}
-
 // Durable Objects and hibernatable WebSockets: only what the realtime hub
 // (src/realtime/hub.ts) uses.
 interface HibernatableWebSocket {
@@ -211,8 +188,6 @@ interface Env {
   // WebSockets (src/realtime/hub.ts, docs/platform/REALTIME.md).
   REALTIME_HUB?: DurableObjectNamespace<import("./realtime/hub").RealtimeHub>;
 
-  // Producer for the single `jobs` queue (DLQ `jobs-dlq`); routed by payload.type.
-  JOBS_QUEUE: Queue;
   // The built dashboard SPA (apps/admin-v2/dist). Absent under `pnpm dev`,
   // where Vite serves the dashboard (src/dashboard/surface.ts).
   ASSETS?: { fetch(request: Request): Promise<Response> };
@@ -268,7 +243,6 @@ declare module "cloudflare:workers" {
     protected env: E;
     protected ctx: ExecutionContext<Props>;
     fetch?(request: Request): Promise<Response>;
-    queue?(batch: MessageBatch): Promise<void>;
   }
   export const env: Env;
   export abstract class DurableObject<E = unknown> {

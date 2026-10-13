@@ -15,7 +15,6 @@ import {
     createFolderSchema,
     createMediaFolder,
     deleteMediaFolder,
-    enqueueMediaVariantsJob,
     getMediaUploadSession,
     getMediaFile,
     initiateMediaUpload,
@@ -153,7 +152,6 @@ app.openapi(importUrlRoute, async (c) => {
         filename: input.filename,
         folderId: input.folderId,
     });
-    await enqueueMediaVariantsJob(c.env.JOBS_QUEUE, c.env.IMAGES, file);
     return created(c, { file });
 });
 
@@ -253,9 +251,8 @@ app.openapi(completeRoute, async (c) => {
         c.env.BUCKET,
         c.req.valid("query").variants === "server" ? c.env.IMAGES : undefined,
     );
-    // Whatever the browser pipeline does next, the server renders this
-    // upload's renditions shortly after if they are still missing.
-    await enqueueMediaVariantsJob(c.env.JOBS_QUEUE, c.env.IMAGES, file);
+    // Whatever the browser pipeline does next, the scheduled backfill renders
+    // this upload's renditions if they are still missing.
     return ok(c, { file });
 });
 

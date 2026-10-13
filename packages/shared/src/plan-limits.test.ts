@@ -11,18 +11,15 @@ const BEFORE_THE_PROFILE = {
   cpuMs: 30_000,
   /** better-auth's own `hashPassword`: scrypt N=16384, r=16, p=1. */
   scrypt: { N: 16_384, r: 16, p: 1 },
-  /** apps/api/wrangler.jsonc `queues.consumers[jobs].max_batch_size` and the DLQ consumer's. */
-  consumerBatchSize: 10,
-  dlqBatchSize: 10,
-  /** MEDIA_RENDITION_FANOUT_MAX_PER_RUN: media jobs enqueued by one 15-minute run. */
-  mediaFanOutPerRun: 1_000,
-  /** NIGHTLY_RECOMMENDATION_REFRESH_LIMIT. */
+  /** NIGHTLY_RECOMMENDATION_REFRESH_LIMIT: recommendation lists refreshed per day. */
   nightlyRecommendationRefreshLimit: 3_000,
   /** RECOMMENDATION_REFRESH_PRODUCTS_PER_MESSAGE and CATALOG_PROJECTION_REBUILD_CHUNK. */
   recommendationProductsPerMessage: 20,
   catalogRebuildChunk: 900,
   /** Every sweep ran its full limit, and the cron rendered up to MEDIA_RENDITION_BACKFILL_MAX_PER_RUN images itself. */
   sweepLimitScale: 1,
+  /** INVENTORY_EXPIRY_SWEEP_LIMIT at that scale. */
+  inventoryExpiryPerRun: 50,
   inlineRenditionsPerRun: 240,
   /** Apps: the manifest's own ceilings (cpuMs 200, wallMs 30 s) and PLUGIN_SANDBOX_SUBREQUESTS. */
   pluginCpuMs: 200,
@@ -79,22 +76,25 @@ describe("plan profile", () => {
       expect(paid.password.p).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.scrypt.p);
     });
 
-    it("queue batches and bulk throughput are no smaller", () => {
-      expect(paid.queue.consumerBatchSize).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.consumerBatchSize);
-      expect(paid.queue.dlqBatchSize).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.dlqBatchSize);
-      expect(paid.queue.bulkPageSize).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.mediaFanOutPerRun);
-      expect(paid.queue.bulkBacklogLimit).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.mediaFanOutPerRun);
-      expect(paid.queue.nightlyRecommendationRefreshLimit).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.nightlyRecommendationRefreshLimit);
-      expect(paid.queue.recommendationProductsPerMessage).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.recommendationProductsPerMessage);
-      expect(paid.queue.catalogRebuildChunk).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.catalogRebuildChunk);
+    it("catalogue background throughput is no smaller", () => {
+      // The rotation (every 15-minute sweep tick) refreshes at least as many lists a day as the nightly pass did.
+      expect(paid.background.recommendationRotationPerRun * 96).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.nightlyRecommendationRefreshLimit);
+      // A catalogue write refreshes at least one message's worth of products right after it.
+      expect(paid.background.recommendationProductsAfterWrite).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.recommendationProductsPerMessage);
+      expect(paid.background.catalogRebuildChunk).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.catalogRebuildChunk);
     });
 
     it("on-demand renditions stay on", () => {
-      expect(paid.queue.renditionsFromPublicReads).toBe(true);
+      // Bounded per read (each image holds its original in memory); the marker
+      // lets the next read continue with the others.
+      expect(paid.background.renditionsPerPublicRead).toBeGreaterThan(0);
     });
 
-    it("every sweep runs on every cron tick at its full limit", () => {
-      expect(paid.maintenance.slices).toBe(1);
+    it("every sweep runs every 15 minutes at its full limit", () => {
+      expect(paid.maintenance.sweepEveryMinutes).toBeLessThanOrEqual(15);
+      // At least every job of the rotation (apps/api/src/scheduled-maintenance.test.ts checks the length).
+      expect(paid.maintenance.sweepsPerTick).toBeGreaterThanOrEqual(32);
+      expect(paid.maintenance.inventoryExpiryPerRun).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.inventoryExpiryPerRun);
       expect(paid.maintenance.limitScale).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.sweepLimitScale);
       expect(paid.maintenance.inlineRenditionsPerRun).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.inlineRenditionsPerRun);
     });
@@ -103,17 +103,25 @@ describe("plan profile", () => {
   it("Free is never heavier than Paid, and fits Free's published limits", () => {
     const { free, paid } = { free: PLAN_LIMITS.free, paid: PLAN_LIMITS.paid };
     expect(free.cpuMs).toBeNull();
-    expect(free.queue.consumerBatchSize).toBeLessThanOrEqual(paid.queue.consumerBatchSize);
-    expect(free.queue.bulkPageSize).toBeLessThanOrEqual(paid.queue.bulkPageSize);
-    expect(free.queue.bulkBacklogLimit).toBeLessThanOrEqual(paid.queue.bulkBacklogLimit);
+    for (const key of Object.keys(paid.background) as Array<keyof typeof paid.background>) {
+      expect(free.background[key], key).toBeLessThanOrEqual(paid.background[key]);
+      expect(free.background[key] >= 0, key).toBe(true);
+    }
+    // Every drain makes progress on Free (renditions on reads are the one exception: Free leaves them to the backfill).
+    for (const key of ["eventsPerDrain", "deliveriesPerDrain", "notificationsPerDrain", "paymentEventsPerDrain", "autoFulfilPerRun", "pluginCronPerRun", "recommendationRotationPerRun", "catalogRebuildChunksPerDrain"] as const) {
+      expect(free.background[key], key).toBeGreaterThanOrEqual(1);
+    }
     expect(free.lists.countCap).toBeLessThanOrEqual(paid.lists.countCap);
     expect(free.lists.maxOffset).toBeLessThanOrEqual(paid.lists.maxOffset);
     expect(free.lists.bulkPerRowSlice).toBeLessThanOrEqual(paid.lists.bulkPerRowSlice);
     expect(paid.lists.bulkPerRowSlice).toBe(90);
-    expect(free.maintenance.slices).toBeGreaterThanOrEqual(paid.maintenance.slices);
-    expect(free.maintenance.limitScale).toBeLessThanOrEqual(paid.maintenance.limitScale);
-    expect(free.maintenance.limitScale).toBeGreaterThan(0);
-    expect(Number.isInteger(free.maintenance.slices) && free.maintenance.slices >= 1).toBe(true);
+    for (const key of ["sweepsPerTick", "inventoryExpiryPerRun", "staleOrdersPerRun", "digitalUploadsPerState", "orphanAttachmentsPerRun", "limitScale", "inlineRenditionsPerRun"] as const) {
+      expect(free.maintenance[key], key).toBeLessThanOrEqual(paid.maintenance[key]);
+      expect(free.maintenance[key], key).toBeGreaterThan(0);
+    }
+    // Free runs one small job a minute instead of every job each quarter hour.
+    expect(free.maintenance.sweepEveryMinutes).toBe(1);
+    expect(free.maintenance.sweepsPerTick).toBe(1);
     // A fixed Free CPU of 10 ms leaves no room for a memory-hard hash.
     expect(free.password.algorithm).toBe("pbkdf2-sha256");
   });
@@ -121,6 +129,6 @@ describe("plan profile", () => {
   it("is frozen", () => {
     expect(Object.isFrozen(PLAN_LIMITS)).toBe(true);
     expect(Object.isFrozen(PLAN_LIMITS.paid)).toBe(true);
-    expect(Object.isFrozen(PLAN_LIMITS.paid.queue)).toBe(true);
+    expect(Object.isFrozen(PLAN_LIMITS.paid.background)).toBe(true);
   });
 });

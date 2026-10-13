@@ -207,7 +207,7 @@ describe("admin order recovery lifecycle", () => {
     await expectRecovery("closed", "needs_attention");
   });
 
-  it.each(["processing", "queued", "failed", "manual_reconciliation", "processed"])("classifies closed payment webhook status %s", async (status) => {
+  it.each(["processing", "retrying", "failed", "manual_reconciliation", "processed"])("classifies closed payment webhook status %s", async (status) => {
     order("closed");
     attempt("closed");
     sqlite.prepare("INSERT INTO webhook_events (id, order_id, provider, event_type, status) VALUES ('event', 'closed', 'stripe', 'payment_intent.succeeded', ?)").run(status);

@@ -675,7 +675,7 @@ describe("App page", () => {
 
   it("lets managers send a failed event again", async () => {
     sdk.getApiV1AdminAppsByIdDeliveries.mockImplementation(() => ok({ deliveries: [delivery()], nextCursor: null }));
-    sdk.postApiV1AdminAppsByIdDeliveriesByDeliveryIdRetry.mockImplementation(() => ok({ delivery: delivery({ status: "queued" }) }));
+    sdk.postApiV1AdminAppsByIdDeliveriesByDeliveryIdRetry.mockImplementation(() => ok({ delivery: delivery({ status: "pending" }) }));
     await renderApp(detail({ status: "active" }), MANAGER);
     await vi.waitFor(() => expect(document.querySelector('button[aria-label^="Details for"]')).not.toBeNull());
     await click(document.querySelector<HTMLButtonElement>('button[aria-label^="Details for"]')!);

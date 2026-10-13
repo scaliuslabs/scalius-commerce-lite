@@ -3,8 +3,8 @@
 // `event_outbox` rows are written only by SQL triggers in the same
 // transaction as the domain write (scripts/event-outbox-triggers.ts): ids,
 // topic, the resource and thin PII-free facts. Dispatch mirrors the
-// notification outbox (pending → enqueueing → queued → processing →
-// dispatched | failed → dead_lettered); queue messages carry only ids.
+// notification outbox (pending → processing → dispatched | failed →
+// dead_lettered); the API dispatches after each write and on every cron tick.
 //
 // `webhook_subscriptions` are merchant endpoints (https only, SSRF-checked);
 // the signing secret is stored encrypted under CREDENTIAL_ENCRYPTION_KEY and
@@ -20,8 +20,6 @@ import { user } from "./auth";
 
 export const EVENT_OUTBOX_STATUSES = [
     "pending",
-    "enqueueing",
-    "queued",
     "processing",
     "dispatched",
     "failed",
@@ -45,13 +43,13 @@ export const eventOutbox = sqliteTable("event_outbox", {
     claimId: text("claim_id"),
     claimExpiresAt: integer("claim_expires_at"),
     lastError: text("last_error"),
+    /** Unused since 0148 (queue retirement); the Turso engine cannot drop the column. */
     queuedAt: integer("queued_at"),
     dispatchedAt: integer("dispatched_at"),
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
 }, (table) => [
     index("event_outbox_due_idx").on(table.status, table.nextAttemptAt),
     index("event_outbox_claim_idx").on(table.status, table.claimExpiresAt),
-    index("event_outbox_queued_idx").on(table.status, table.queuedAt),
     index("event_outbox_resource_idx").on(table.resourceType, table.resourceId, table.occurredAt),
     index("event_outbox_topic_idx").on(table.topic, table.occurredAt),
     index("event_outbox_occurred_idx").on(table.occurredAt),
@@ -106,8 +104,6 @@ export const webhookSubscriptions = sqliteTable("webhook_subscriptions", {
 
 export const WEBHOOK_DELIVERY_STATUSES = [
     "pending",
-    "enqueueing",
-    "queued",
     "processing",
     "succeeded",
     "failed",
@@ -132,6 +128,7 @@ export const webhookDeliveries = sqliteTable("webhook_event_deliveries", {
     nextAttemptAt: integer("next_attempt_at").notNull().default(UNIX_NOW),
     claimId: text("claim_id"),
     claimExpiresAt: integer("claim_expires_at"),
+    /** Unused since 0148 (queue retirement); the Turso engine cannot drop the column. */
     queuedAt: integer("queued_at"),
     lastAttemptAt: integer("last_attempt_at"),
     /** HTTP status of the last attempt; null when no response arrived. */
@@ -149,7 +146,6 @@ export const webhookDeliveries = sqliteTable("webhook_event_deliveries", {
         .where(sql`${table.eventId} IS NOT NULL`),
     index("webhook_event_deliveries_due_idx").on(table.status, table.nextAttemptAt),
     index("webhook_event_deliveries_claim_idx").on(table.status, table.claimExpiresAt),
-    index("webhook_event_deliveries_queued_idx").on(table.status, table.queuedAt),
     index("webhook_event_deliveries_subscription_created_idx").on(table.subscriptionId, table.createdAt),
     index("webhook_event_deliveries_event_idx").on(table.eventId).where(sql`${table.eventId} IS NOT NULL`),
     index("webhook_event_deliveries_created_idx").on(table.createdAt),

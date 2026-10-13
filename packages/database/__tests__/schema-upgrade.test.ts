@@ -755,6 +755,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 148,
+        name: "0148_queue_retirement",
+        sqliteStatements: 13,
+        postgresStatements: 13,
+      },
     ]);
   });
 
@@ -951,6 +957,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 145, name: "0145_conversation_search_cursor" },
           { version: 146, name: "0146_order_write_path" },
           { version: 147, name: "0147_kv_retirement" },
+          { version: 148, name: "0148_queue_retirement" },
         ],
       });
     } finally {

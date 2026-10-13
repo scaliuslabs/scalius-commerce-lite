@@ -14,10 +14,11 @@ import { syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilm
 import { NotFoundError } from "../../utils/api-error";
 
 import {
-  enqueueOrderStatusChangeNotification,
-  type EnqueueOrderNotificationResult,
+  sendOrderStatusChangeNotification,
+  type OrderNotificationResult,
   type OrderStatusChange,
-} from "../../utils/order-notification-queue";
+} from "../../utils/order-notifications";
+import { notificationSender } from "../../background/notification-sender";
 
 type RequestContext = {
   env: Env;
@@ -36,7 +37,7 @@ export type SyncedShipmentStatusResult = {
   payload: SyncedShipmentStatusPayload;
   previousStatus: string;
   orderStatusChange: OrderStatusChange | null | undefined;
-  notificationResult: EnqueueOrderNotificationResult | null;
+  notificationResult: OrderNotificationResult | null;
 };
 
 export async function checkAndSyncShipmentStatus(options: {
@@ -82,9 +83,9 @@ export async function checkAndSyncShipmentStatus(options: {
   await syncCourierFulfilmentFromShipment(db, shipment.id, updatedShipment.status);
   const orderStatusChange = orderSync?.statusChange ?? null;
 
-  const notificationResult = await enqueueOrderStatusChangeNotification({
+  const notificationResult = await sendOrderStatusChangeNotification({
     db,
-    queue: c.env.JOBS_QUEUE,
+    send: notificationSender(c),
     statusChange: orderStatusChange,
     trackingId:
       updatedShipment.trackingId ??

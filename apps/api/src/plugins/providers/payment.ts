@@ -213,7 +213,7 @@ export function requestPaymentProviders(c: RequestLike, forId?: string | null): 
 }
 
 /**
- * For work outside a request (scheduled reconciliation, queue consumers): a
+ * For work outside a request (scheduled reconciliation, background work): a
  * loader of the gateways, run at most once and only when called (an app
  * gateway is named), so a tick with only built-in work reads nothing.
  */

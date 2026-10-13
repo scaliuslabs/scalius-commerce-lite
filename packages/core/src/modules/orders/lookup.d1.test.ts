@@ -48,9 +48,9 @@ describe("track your order", () => {
       message: "We sent a code to b•••@example.test.",
       destination: "b•••@example.test",
       channel: "email",
-      queuePayload: { type: "auth.send_otp", purpose: "order_lookup", method: "email", channel: "email" },
+      otpDelivery: { purpose: "order_lookup", channel: "email" },
     });
-    expect(JSON.stringify(sent.queuePayload)).not.toMatch(/buyer@example|8801712000001|"code"|identifier/i);
+    expect(JSON.stringify(sent.otpDelivery)).not.toMatch(/buyer@example|8801712000001|"code"|identifier/i);
     const code = await deriveCustomerAuthOtpDeliveryCode({
       otpKey: sent.challengeKey!, deliveryKey: sent.deliveryKey!, encryptionKey: KEY,
     });

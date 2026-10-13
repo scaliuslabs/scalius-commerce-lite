@@ -18,7 +18,6 @@ export function pluginTestEnv(binding: D1Database, overrides: Record<string, unk
   return {
     DB: binding,
     RL_STANDARD: { limit: vi.fn(async () => ({ success: true })) },
-    JOBS_QUEUE: { send: vi.fn(async () => undefined), sendBatch: vi.fn(async () => undefined) },
     PUBLIC_API_BASE_URL: "https://api.shop.test",
     STOREFRONT_URL: "https://shop.test",
     BETTER_AUTH_URL: "https://admin.shop.test",
@@ -29,8 +28,21 @@ export function pluginTestEnv(binding: D1Database, overrides: Record<string, unk
   } as unknown as Env;
 }
 
+const backgroundWork: Promise<unknown>[] = [];
+
+/** A request context whose after-response work `settleBackground()` awaits. */
 export function pluginTestCtx(): ExecutionContext {
-  return { waitUntil: vi.fn(), passThroughOnException: vi.fn(), props: {}, exports: {} } as unknown as ExecutionContext;
+  return {
+    waitUntil: vi.fn((promise: Promise<unknown>) => { backgroundWork.push(promise); }),
+    passThroughOnException: vi.fn(),
+    props: {},
+    exports: {},
+  } as unknown as ExecutionContext;
+}
+
+/** Awaits every task the test contexts handed to `waitUntil`, including tasks those tasks start. */
+export async function settleBackground(): Promise<void> {
+  while (backgroundWork.length > 0) await Promise.allSettled(backgroundWork.splice(0));
 }
 
 export async function installHello(db: Database, sqlite: DatabaseSync): Promise<PluginInstallation> {

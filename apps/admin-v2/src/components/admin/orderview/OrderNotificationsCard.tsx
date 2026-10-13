@@ -49,7 +49,7 @@ function MessageRow({ orderId, message, canRetry }: {
   const turnedOff = notificationTurnedOff(message);
   const retrying = retryMutation.isPending && retryMutation.variables?.outboxId === message.id;
   const resending = resendMutation.isPending && resendMutation.variables?.outboxId === message.id;
-  const sentAt = formatOrderTimestamp(message.sentAt ?? message.queuedAt ?? message.createdAt);
+  const sentAt = formatOrderTimestamp(message.sentAt ?? message.createdAt);
 
   return (
     <li className="space-y-1 py-3">

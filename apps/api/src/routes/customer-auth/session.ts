@@ -1,5 +1,4 @@
 // Customer sign-in by OTP, the current session, and sign-out.
-import { enqueueAuthOtp } from "../../utils/otp-queue";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   sendOtp,
@@ -9,12 +8,10 @@ import {
   getSessionCookie,
   getCookieConfig,
   buildSetCookieHeader,
-  deleteCustomerAuthOtpChallenge,
   COOKIE_NAME,
   SESSION_TTL_SECONDS,
 } from "@scalius/core/modules/customers";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
-import { ServiceUnavailableError } from "../../utils/api-error";
 import {
   errorResponses,
   messageResponse,
@@ -26,6 +23,7 @@ import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../uti
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { getTrustedClientIp } from "../../utils/client-ip";
 import { customerAuthProfileSchema, setPrivateNoStoreHeaders } from "./shared";
+import { sendAuthOtp } from "../../background/otp-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -84,18 +82,7 @@ app.openapi(sendOtpRoute, async (c) => {
     appProviders: requestAppProviders(c),
   });
 
-  try {
-    await enqueueAuthOtp(c, result.queuePayload);
-  } catch (error) {
-    await deleteCustomerAuthOtpChallenge(db, {
-      otpKey: result.otpStorageKey,
-      deliveryKey: result.deliveryKey,
-    }).catch((deleteError: unknown) => {
-      console.error("[CustomerAuth] Failed to clear OTP challenge after queue handoff failure:", deleteError instanceof Error ? deleteError.name : typeof deleteError);
-    });
-    console.error("[CustomerAuth] Failed to enqueue OTP delivery:", error instanceof Error ? error.name : typeof error);
-    throw new ServiceUnavailableError("We couldn't send the code. Please try again.");
-  }
+  await sendAuthOtp(c, c.get("db"), result.otpDelivery);
 
   return ok(c, { message: result.message, resendAfterSeconds: result.resendAfterSeconds });
 });

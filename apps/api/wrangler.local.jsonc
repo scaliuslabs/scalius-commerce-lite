@@ -93,33 +93,12 @@
   "images": {
     "binding": "IMAGES"
   },
-  // One jobs queue; the consumer routes each message by payload.type (the Free
-  // profile's one message per invocation; see apps/api/wrangler.jsonc).
-  "queues": {
-    "producers": [
-      {
-        "binding": "JOBS_QUEUE",
-        "queue": "jobs"
-      }
-    ],
-    "consumers": [
-      {
-        "queue": "jobs",
-        "max_batch_size": 1,
-        "max_batch_timeout": 2,
-        "max_retries": 5,
-        "dead_letter_queue": "jobs-dlq"
-      },
-      {
-        "queue": "jobs-dlq",
-        "max_batch_size": 1,
-        "max_batch_timeout": 5,
-        "max_retries": 5
-      }
-    ]
-  },
+  // Background work has no queue: it drains durable rows right after the
+  // write that created them (`waitUntil`) and on this every-minute tick, which
+  // also runs the maintenance sweeps every 15 minutes
+  // (src/scheduled-maintenance.ts, src/scheduled/slices.ts).
   "triggers": {
-    "crons": ["*/15 * * * *"]
+    "crons": ["* * * * *"]
   },
   // Runtime configuration lives in the dashboard (Settings -> System ->
   // Platform, served by GET /api/v1/platform); scripts/dev.sh points the local

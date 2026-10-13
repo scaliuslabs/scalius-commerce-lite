@@ -17,6 +17,7 @@ import {
   warrantyClaimIdSchema,
 } from "../../schemas/warranty";
 import { UnauthorizedError } from "../../utils/api-error";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -102,7 +103,7 @@ app.openapi(createRoute({
     message: body.message ?? null,
     requestKey: body.requestKey ?? null,
     staffUserId: staffUserId(c),
-  }, { queue: c.env.JOBS_QUEUE });
+  }, { send: notificationSender(c) });
   return ok(c, { claim: presentStaffClaim(claim) });
 });
 

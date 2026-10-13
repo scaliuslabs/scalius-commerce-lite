@@ -14,8 +14,8 @@ import {
   WEBHOOK_RETRY_DELAYS_SECONDS,
   createWebhookSubscription,
   deleteWebhookSubscription,
-  flushDueWebhookDeliveries,
-  flushPendingEventOutbox,
+  dispatchPendingEvents,
+  listDueWebhookDeliveries,
   listRecentEvents,
   listWebhookDeliveries,
   maskResponseExcerpt,
@@ -29,26 +29,10 @@ import {
   updateWebhookSubscription,
   webhookRetryDelaySeconds,
   type EventFanOutTarget,
-  type EventsQueueMessage,
   type WebhookFetch,
 } from "./index";
 
 const ENCRYPTION_KEY = Buffer.from(Array.from({ length: 32 }, (_, index) => index + 1)).toString("base64");
-
-function queueRecorder() {
-  const sent: Array<{ body: EventsQueueMessage; delaySeconds?: number }> = [];
-  return {
-    sent,
-    queue: {
-      send: vi.fn(async (body: EventsQueueMessage, options?: { delaySeconds?: number }) => {
-        sent.push({ body, delaySeconds: options?.delaySeconds });
-      }),
-      sendBatch: vi.fn(async (messages: Array<{ body: EventsQueueMessage; delaySeconds?: number }>) => {
-        sent.push(...messages);
-      }),
-    },
-  };
-}
 
 function insertOrder(sqlite: DatabaseSync, id: string, status = "pending"): void {
   sqlite.prepare(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
@@ -72,19 +56,17 @@ describe("event outbox dispatch", () => {
   });
   afterEach(() => sqlite.close());
 
-  it("settles events in place, with no queue round trip, while nobody subscribes", async () => {
+  it("settles events in place while nobody subscribes", async () => {
     insertOrder(sqlite, "ord_1");
-    const { queue, sent } = queueRecorder();
-    const result = await flushPendingEventOutbox({ db, queue, targets: EVENT_FAN_OUT_TARGETS });
-    expect(result).toMatchObject({ scanned: 1, settledWithoutSubscribers: 1, enqueued: 0 });
-    expect(sent).toEqual([]);
+    const result = await dispatchPendingEvents({ db, targets: EVENT_FAN_OUT_TARGETS });
+    expect(result).toMatchObject({ scanned: 1, settledWithoutSubscribers: 1, dispatched: 0, deliveries: [] });
     expect(sqlite.prepare("SELECT status, dispatched_at IS NOT NULL AS done FROM event_outbox").all())
       .toEqual([{ status: "dispatched", done: 1 }]);
     // Nothing due: one read, nothing else.
-    await expect(flushPendingEventOutbox({ db, queue, targets: EVENT_FAN_OUT_TARGETS })).resolves.toMatchObject({ scanned: 0 });
+    await expect(dispatchPendingEvents({ db, targets: EVENT_FAN_OUT_TARGETS })).resolves.toMatchObject({ scanned: 0 });
   });
 
-  it("queues ids only, fans out once per subscription and event, and is idempotent on redelivery", async () => {
+  it("dispatches due events, fans out once per subscription and event, and is idempotent on redelivery", async () => {
     const { subscription } = await createWebhookSubscription(db, {
       url: "https://hooks.example.com/orders",
       topics: ["order.*"],
@@ -96,25 +78,23 @@ describe("event outbox dispatch", () => {
     insertOrder(sqlite, "ord_1");
     const [eventId] = eventIds(sqlite);
 
-    const { queue, sent } = queueRecorder();
-    expect(await flushPendingEventOutbox({ db, queue, targets: EVENT_FAN_OUT_TARGETS })).toMatchObject({ enqueued: 1 });
-    expect(sent).toEqual([{ body: { type: "events.dispatch", eventId } }]);
-    expect(sqlite.prepare("SELECT status FROM event_outbox").get()).toEqual({ status: "queued" });
-
-    sent.length = 0;
-    const first = await processEventDispatch({ db, eventId: eventId!, targets: EVENT_FAN_OUT_TARGETS, queue });
-    expect(first.status).toBe("dispatched");
+    const flushed = await dispatchPendingEvents({ db, targets: EVENT_FAN_OUT_TARGETS });
+    expect(flushed).toMatchObject({ scanned: 1, dispatched: 1 });
+    expect(sqlite.prepare("SELECT status FROM event_outbox").get()).toEqual({ status: "dispatched" });
     const deliveries = sqlite.prepare("SELECT id, subscription_id, event_id, topic, resource_type, resource_id, status FROM webhook_event_deliveries").all() as Array<Record<string, string>>;
     expect(deliveries).toHaveLength(1);
     expect(deliveries[0]).toMatchObject({ subscription_id: subscription.id, event_id: eventId, topic: "order.created", resource_type: "order", resource_id: "ord_1", status: "pending" });
-    expect(sent).toEqual([{ body: { type: "webhooks.deliver", deliveryId: deliveries[0]!.id } }]);
+    // Ids only: the drain sends the recorded delivery next.
+    expect(flushed.deliveries).toEqual([{ type: "webhooks.deliver", deliveryId: deliveries[0]!.id }]);
 
-    // A redelivered message for a dispatched event does nothing.
-    await expect(processEventDispatch({ db, eventId: eventId!, targets: EVENT_FAN_OUT_TARGETS, queue }))
+    // A dispatched event is never dispatched again.
+    await expect(processEventDispatch({ db, eventId: eventId!, targets: EVENT_FAN_OUT_TARGETS }))
       .resolves.toMatchObject({ status: "skipped", reason: "already_dispatched" });
-    // A crashed dispatch replayed by the sweep adds no duplicate delivery.
-    sqlite.exec("UPDATE event_outbox SET status = 'processing', claim_expires_at = unixepoch() - 1");
-    await processEventDispatch({ db, eventId: eventId!, targets: EVENT_FAN_OUT_TARGETS, queue });
+    // A dispatch whose invocation died is reclaimed once its lease ends and adds no duplicate delivery.
+    sqlite.exec("UPDATE event_outbox SET status = 'processing', claim_expires_at = unixepoch() + 60");
+    await expect(dispatchPendingEvents({ db, targets: EVENT_FAN_OUT_TARGETS })).resolves.toMatchObject({ scanned: 0 });
+    sqlite.exec("UPDATE event_outbox SET claim_expires_at = unixepoch() - 1");
+    await expect(dispatchPendingEvents({ db, targets: EVENT_FAN_OUT_TARGETS })).resolves.toMatchObject({ scanned: 1, dispatched: 1 });
     expect(sqlite.prepare("SELECT count(*) AS n FROM webhook_event_deliveries").get()).toEqual({ n: 1 });
   });
 
@@ -123,7 +103,7 @@ describe("event outbox dispatch", () => {
     sqlite.exec("UPDATE event_outbox SET occurred_at = occurred_at - 600");
     await createWebhookSubscription(db, { url: "https://hooks.example.com/x", topics: ["*"] }, { actorId: null, encryptionKey: ENCRYPTION_KEY });
     const [eventId] = eventIds(sqlite);
-    await processEventDispatch({ db, eventId: eventId!, targets: EVENT_FAN_OUT_TARGETS, queue: undefined });
+    await processEventDispatch({ db, eventId: eventId!, targets: EVENT_FAN_OUT_TARGETS });
     expect(sqlite.prepare("SELECT count(*) AS n FROM webhook_event_deliveries").get()).toEqual({ n: 0 });
   });
 
@@ -135,12 +115,12 @@ describe("event outbox dispatch", () => {
       hasSubscribers: async () => true,
       fanOut: async () => { throw new Error("subscriber store unavailable"); },
     };
-    const first = await processEventDispatch({ db, eventId: eventId!, targets: [broken], queue: undefined });
+    const first = await processEventDispatch({ db, eventId: eventId!, targets: [broken] });
     expect(first).toMatchObject({ status: "failed" });
     expect(sqlite.prepare("SELECT status, attempts, next_attempt_at > unixepoch() AS later FROM event_outbox").get())
       .toEqual({ status: "failed", attempts: 1, later: 1 });
     sqlite.exec(`UPDATE event_outbox SET attempts = ${MAX_EVENT_DISPATCH_ATTEMPTS - 1}, next_attempt_at = 0`);
-    await expect(processEventDispatch({ db, eventId: eventId!, targets: [broken], queue: undefined }))
+    await expect(processEventDispatch({ db, eventId: eventId!, targets: [broken] }))
       .resolves.toMatchObject({ status: "dead_lettered" });
   });
 
@@ -173,7 +153,7 @@ describe("webhook deliveries", () => {
     });
     insertOrder(sqlite, "ord_1");
     const [eventId] = eventIds(sqlite, "order.created");
-    await processEventDispatch({ db, eventId: eventId!, targets: EVENT_FAN_OUT_TARGETS, queue: undefined });
+    await processEventDispatch({ db, eventId: eventId!, targets: EVENT_FAN_OUT_TARGETS });
     const delivery = sqlite.prepare("SELECT id FROM webhook_event_deliveries").get() as { id: string };
     return { ...created, eventId: eventId!, deliveryId: delivery.id };
   }
@@ -214,15 +194,14 @@ describe("webhook deliveries", () => {
 
   it("retries failures on the backoff schedule, then exhausts after 8 attempts", async () => {
     const { deliveryId } = await deliveryFor();
-    const { queue, sent } = queueRecorder();
     const failing: WebhookFetch = async () => new Response("upstream down", { status: 503 });
-    const first = await processWebhookDelivery({ db, deliveryId, encryptionKey: ENCRYPTION_KEY, resolveRepresentation: representation, fetch: failing, queue });
+    const first = await processWebhookDelivery({ db, deliveryId, encryptionKey: ENCRYPTION_KEY, resolveRepresentation: representation, fetch: failing });
     expect(first).toMatchObject({ status: "failed", retryInSeconds: WEBHOOK_RETRY_DELAYS_SECONDS[0] });
-    expect(sent).toEqual([{ body: { type: "webhooks.deliver", deliveryId }, delaySeconds: 60 }]);
+    expect(sqlite.prepare("SELECT next_attempt_at - unixepoch() AS wait FROM webhook_event_deliveries").get()).toEqual({ wait: 60 });
     expect(sqlite.prepare("SELECT status, attempts, response_status, last_error FROM webhook_event_deliveries").get())
       .toEqual({ status: "failed", attempts: 1, response_status: 503, last_error: "http_503" });
 
-    // Not due yet: a message that arrives early does nothing.
+    // Not due yet: an early attempt does nothing.
     await expect(processWebhookDelivery({ db, deliveryId, encryptionKey: ENCRYPTION_KEY, resolveRepresentation: representation, fetch: failing }))
       .resolves.toMatchObject({ status: "skipped", reason: "not_due" });
 
@@ -304,24 +283,24 @@ describe("webhook deliveries", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("re-enqueues due retries and lost messages from the scheduled flush", async () => {
+  it("lists due retries and deliveries whose invocation died for the scheduled drain", async () => {
     const { deliveryId } = await deliveryFor();
-    const { queue, sent } = queueRecorder();
-    expect(await flushDueWebhookDeliveries({ db, queue })).toMatchObject({ scanned: 1, enqueued: 1 });
-    expect(sent).toEqual([{ body: { type: "webhooks.deliver", deliveryId } }]);
-    expect(await flushDueWebhookDeliveries({ db, queue })).toMatchObject({ scanned: 0 });
-    sqlite.exec("UPDATE webhook_event_deliveries SET queued_at = unixepoch() - 3600");
-    expect(await flushDueWebhookDeliveries({ db, queue })).toMatchObject({ scanned: 1, enqueued: 1 });
+    expect(await listDueWebhookDeliveries(db, 10)).toEqual([deliveryId]);
+    sqlite.exec("UPDATE webhook_event_deliveries SET status = 'processing', claim_expires_at = unixepoch() + 60");
+    expect(await listDueWebhookDeliveries(db, 10)).toEqual([]);
+    sqlite.exec("UPDATE webhook_event_deliveries SET claim_expires_at = unixepoch() - 1");
+    expect(await listDueWebhookDeliveries(db, 10)).toEqual([deliveryId]);
+    sqlite.exec("UPDATE webhook_event_deliveries SET status = 'failed', next_attempt_at = unixepoch() + 60");
+    expect(await listDueWebhookDeliveries(db, 10)).toEqual([]);
   });
 
   it("retries an exhausted delivery on request and lists deliveries newest first", async () => {
     const { subscription, deliveryId } = await deliveryFor();
     sqlite.exec(`UPDATE webhook_event_deliveries SET status = 'exhausted', attempts = ${WEBHOOK_MAX_ATTEMPTS}`);
-    const { queue, sent } = queueRecorder();
-    const retried = await retryWebhookDelivery(db, subscription.id, deliveryId, queue);
+    const retried = await retryWebhookDelivery(db, subscription.id, deliveryId);
     expect(retried).toMatchObject({ status: "pending", attempts: 0 });
-    expect(sent).toEqual([{ body: { type: "webhooks.deliver", deliveryId }, delaySeconds: undefined }]);
-    await expect(retryWebhookDelivery(db, subscription.id, deliveryId, queue)).rejects.toThrow(/Only failed/);
+    expect(await listDueWebhookDeliveries(db, 10)).toEqual([deliveryId]);
+    await expect(retryWebhookDelivery(db, subscription.id, deliveryId)).rejects.toThrow(/Only failed/);
     const page = await listWebhookDeliveries(db, subscription.id, {});
     expect(page.deliveries.map((delivery) => delivery.id)).toEqual([deliveryId]);
     await expect(listWebhookDeliveries(db, "whs_missing", {})).rejects.toThrow(/not found/);
@@ -342,8 +321,7 @@ describe("webhook deliveries", () => {
     expect(signed).toBe(true);
     expect(view).toMatchObject({ kind: "test", status: "failed", responseStatus: 500, maxAttempts: 1, nextAttemptAt: null });
     expect(sqlite.prepare("SELECT failure_streak FROM webhook_subscriptions").get()).toEqual({ failure_streak: 0 });
-    const { queue } = queueRecorder();
-    expect(await flushDueWebhookDeliveries({ db, queue })).toMatchObject({ scanned: 1 }); // only the event delivery
+    expect(await listDueWebhookDeliveries(db, 10)).toHaveLength(1); // only the event delivery
   });
 
   it("prunes settled events and terminal deliveries past retention", async () => {

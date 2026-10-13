@@ -116,7 +116,6 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
       compatibilityDate: COMPATIBILITY_DATE,
       compatibilityFlags: COMPATIBILITY_FLAGS,
       r2Buckets: ["BUCKET"],
-      queueProducers: { JOBS_QUEUE: { queueName: "jobs" } },
       bindings: { SCALIUS_SECRET: STORE.masterSecret, CREDENTIAL_ENCRYPTION_KEY: CREDENTIAL_KEY },
       serviceBindings: {
         DB_PROXY: async (request: Request) => {
@@ -246,20 +245,21 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
     await record("workerd-otp-request", "Customer OTP request", 5, (index) => json(`${STORE.api}/api/v1/customer-auth/send-otp`, { method: "email", identifier: `buyer${index}@shop.test` }, { "CF-Connecting-IP": `203.0.113.${index + 1}` }));
   });
 
-  it("cron maintenance, then a catalogue queue job", async () => {
+  it("cron maintenance, then a drain tick running a requested projection rebuild", async () => {
     const worker = await mf.getWorker();
     const timings: Timing[] = [];
     for (let index = 0; index < 4; index += 1) {
-      await worker.scheduled({ cron: "*/15 * * * *", scheduledTime: new Date(Date.parse("2026-10-03T10:15:00Z") + index * 900_000) });
+      await worker.scheduled({ cron: "* * * * *", scheduledTime: new Date(Date.parse("2026-10-03T10:15:00Z") + index * 900_000) });
       timings.push(await last());
     }
-    rows.push({ id: "workerd-cron", label: "Cron maintenance run (idle store)", cold: timings[0]!, warm: timings.slice(1) });
-    const queued: Timing[] = [];
+    rows.push({ id: "workerd-cron", label: "Cron maintenance run (idle store, sweep tick)", cold: timings[0]!, warm: timings.slice(1) });
+    const drained: Timing[] = [];
     for (let index = 0; index < 3; index += 1) {
-      await worker.queue("jobs", [{ id: `m${index}`, timestamp: new Date(), attempts: 1, body: { type: "catalog.projections.rebuild", afterProductId: null } }]);
-      queued.push(await last());
+      created.sqlite.exec("INSERT INTO system_kv (key, value) VALUES ('catalog:projections:rebuild-cursor', '') ON CONFLICT(key) DO UPDATE SET value = ''");
+      await worker.scheduled({ cron: "* * * * *", scheduledTime: new Date(Date.parse("2026-10-03T10:16:00Z") + index * 60_000) });
+      drained.push(await last());
     }
-    rows.push({ id: "workerd-queue-rebuild", label: "Queue batch: catalog.projections.rebuild", cold: queued[0]!, warm: queued.slice(1) });
+    rows.push({ id: "workerd-drain-rebuild", label: "Drain tick: catalogue projection rebuild chunk", cold: drained[0]!, warm: drained.slice(1) });
   });
 });
 

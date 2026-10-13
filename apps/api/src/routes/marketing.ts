@@ -23,6 +23,7 @@ import { RateLimitError } from "../utils/api-error";
 import { getTrustedClientIp } from "../utils/client-ip";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { isWithinRateLimit } from "../utils/rate-limit";
+import { notificationSender } from "../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -62,7 +63,7 @@ app.openapi(subscribeRoute, async (c) => {
     }
     const result = await subscribeToNewsletter(c.get("db"), c.req.valid("json"), {
         env: c.env as never,
-        queue: c.env.JOBS_QUEUE,
+        send: notificationSender(c),
         ip,
         rateLimitKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     });

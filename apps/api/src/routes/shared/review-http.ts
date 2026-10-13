@@ -18,6 +18,7 @@ import { RateLimitError } from "../../utils/api-error";
 import { getTrustedClientIp } from "../../utils/client-ip";
 import { isWithinRateLimit } from "../../utils/rate-limit";
 import type { editReviewBodySchema, submitReviewBodySchema } from "../../schemas/reviews";
+import { notificationSender } from "../../background/notification-sender";
 
 /**
  * Every review write passes both limiters: RL_STRICT per buyer (customer or
@@ -60,7 +61,7 @@ export async function submitBuyerReview(
     title: body.title,
     body: body.body,
     displayName: body.displayName,
-  }, { queue: c.env.JOBS_QUEUE });
+  }, { send: notificationSender(c) });
 }
 
 /** Edit (rating, title, text, name) or `withdraw: true`, guarded by the review version. */
@@ -82,5 +83,5 @@ export async function patchBuyerReview(
     title: body.title,
     body: body.body,
     displayName: body.displayName,
-  }, { queue: c.env.JOBS_QUEUE });
+  }, { send: notificationSender(c) });
 }

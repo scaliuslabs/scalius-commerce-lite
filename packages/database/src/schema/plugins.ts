@@ -211,8 +211,6 @@ export const pluginLogEntries = sqliteTable("plugin_log_entries", {
 
 export const PLUGIN_EVENT_DELIVERY_STATUSES = [
     "pending",
-    "enqueueing",
-    "queued",
     "processing",
     "succeeded",
     "failed",
@@ -240,6 +238,7 @@ export const pluginEventDeliveries = sqliteTable("plugin_event_deliveries", {
     nextAttemptAt: integer("next_attempt_at").notNull().default(UNIX_NOW),
     claimId: text("claim_id"),
     claimExpiresAt: integer("claim_expires_at"),
+    /** Unused since 0148 (queue retirement); the Turso engine cannot drop the column. */
     queuedAt: integer("queued_at"),
     lastAttemptAt: integer("last_attempt_at"),
     durationMs: integer("duration_ms"),
@@ -254,7 +253,6 @@ export const pluginEventDeliveries = sqliteTable("plugin_event_deliveries", {
         .where(sql`${table.eventId} IS NOT NULL`),
     index("plugin_event_deliveries_due_idx").on(table.status, table.nextAttemptAt),
     index("plugin_event_deliveries_claim_idx").on(table.status, table.claimExpiresAt),
-    index("plugin_event_deliveries_queued_idx").on(table.status, table.queuedAt),
     index("plugin_event_deliveries_plugin_idx").on(table.pluginId, table.id),
     index("plugin_event_deliveries_plugin_status_idx").on(table.pluginId, table.status, table.claimExpiresAt),
     index("plugin_event_deliveries_event_idx").on(table.eventId).where(sql`${table.eventId} IS NOT NULL`),

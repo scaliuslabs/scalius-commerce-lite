@@ -7,26 +7,23 @@ export {
   buildNotificationOutboxInsert,
   claimNotificationOutboxForProcessing,
   createNotificationOutboxInsertValues,
-  enqueueNotificationOutboxById,
-  flushPendingNotificationOutbox,
+  listDueNotificationOutbox,
   markNotificationOutboxDeadLettered,
   markNotificationOutboxProcessingFailed,
   markNotificationOutboxSent,
   parseNotificationPayload,
-  recordAndEnqueueNotification,
+  recordAndSendNotification,
   sanitizeNotificationData,
   serializeNotificationPayload,
 } from "./notification-outbox";
 export type {
   ClaimedNotificationOutbox,
-  NotificationBatchQueue,
   NotificationData,
   NotificationInput,
   NotificationOutboxStatus,
   NotificationPayload,
-  NotificationQueue,
-  NotificationQueueMessage,
-  RecordAndEnqueueNotificationResult,
+  NotificationSender,
+  RecordNotificationResult,
 } from "./notification-outbox";
 export {
   buildClearNotificationProviderBlocksStatement,
@@ -56,14 +53,9 @@ export {
   buildOrderStatusNotificationDedupeKey,
   buildSupportRequestStatusUpdatedNotificationDedupeKey,
   buildSupportRequestSubmittedNotificationDedupeKey,
-  claimOrderNotificationOutboxForProcessing,
   createOrderNotificationOutboxInsertValues,
-  enqueueOrderNotificationOutboxById,
   listOrderNotificationOutboxForOrder,
-  markOrderNotificationOutboxDeadLettered,
-  markOrderNotificationOutboxProcessingFailed,
-  markOrderNotificationOutboxSent,
-  recordAndEnqueueOrderNotification,
+  recordAndSendOrderNotification,
   resendTerminalOrderNotificationOutboxById,
   retryFailedOrderNotificationOutboxById,
 } from "./order-notification-outbox";
@@ -80,9 +72,6 @@ export type {
   OrderNotificationDeliveryReceiptView,
   OrderNotificationOutboxView,
   OrderNotificationOutboxStatus,
-  OrderNotificationQueue,
-  OrderNotificationQueueMessage,
-  RecordAndEnqueueOrderNotificationResult,
 } from "./order-notification-outbox";
 export { sendStaffOrderEmails } from "./notifications.service";
 // The dispatch kit other senders build on (customer marketing): a delivery

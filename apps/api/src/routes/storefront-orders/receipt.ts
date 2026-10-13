@@ -18,7 +18,6 @@ import {
   ORDER_LOOKUP_NOT_FOUND_MESSAGE,
   sendOrderLookupOtp,
   verifyOrderLookupOtp,
-  deleteOrderPaymentRecoveryChallenge,
   getReceiptOrderSupportRequestStateForOrder,
   findOrderConversationId,
   listBuyerOrderFulfilments,
@@ -39,7 +38,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { publishedMediaObjectKey } from "@scalius/core/modules/media-references";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
-import { NotFoundError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../../utils/api-error";
+import { NotFoundError, RateLimitError, UnauthorizedError } from "../../utils/api-error";
 import { isWithinRateLimit } from "../../utils/rate-limit";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
@@ -66,6 +65,7 @@ import {
   CUSTOMER_SESSION_HEADER,
   getCustomerSessionTokenFromRequest,
 } from "./shared";
+import { sendAuthOtp } from "../../background/otp-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -371,18 +371,7 @@ app.openapi(sendOrderLookupOtpRoute, async (c) => {
     credentialEncryptionKey: getCredentialEncryptionKey(env),
     appProviders: requestAppProviders(c),
   });
-  try {
-    await c.env.JOBS_QUEUE.send(result.queuePayload);
-  } catch (error) {
-    if (result.challengeKey && result.deliveryKey) {
-      await deleteOrderPaymentRecoveryChallenge(db, {
-        challengeKey: result.challengeKey,
-        deliveryKey: result.deliveryKey,
-      }).catch(() => undefined);
-    }
-    console.error("[Orders] Failed to enqueue order lookup code:", error instanceof Error ? error.name : typeof error);
-    throw new ServiceUnavailableError("We couldn't send the code. Please try again.");
-  }
+  await sendAuthOtp(c, c.get("db"), result.otpDelivery);
   return ok(c, {
     message: result.message,
     destination: result.destination,

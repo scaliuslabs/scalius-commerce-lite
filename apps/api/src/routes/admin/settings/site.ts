@@ -60,7 +60,7 @@ import {
 } from "@scalius/core/modules/catalog";
 
 import { ok } from "../../../utils/api-response";
-import { enqueueCatalogProjectionRebuild } from "../../../utils/catalog-jobs";
+import { rebuildCatalogProjectionsAfterWrite } from "../../../background/catalog";
 import {
   successEnvelope,
   errorResponses,
@@ -193,9 +193,7 @@ app.openapi(saveCurrencyRoute, async (c) => {
   // increment: rebuild the catalogue projections off the request path; the
   // database triggers advance the dependencies whose prices change.
   if (currencyChanged && await resetBackupPriceIncrement(db, value.currencyCode, before.priceIncrementMinor)) {
-    await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch((error: unknown) => {
-      console.warn("[settings] projection rebuild enqueue failed", error instanceof Error ? error.name : "unknown");
-    });
+    await rebuildCatalogProjectionsAfterWrite(c, c.get("db"), "settings");
   }
 
   return ok(c, { message: "Currency settings saved successfully", revision });

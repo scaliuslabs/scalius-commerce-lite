@@ -20,10 +20,8 @@ import { createFakeGateway, FAKE_GATEWAY_ID, type FakeGatewayState } from "@scal
 import type { PaymentProviders } from "@scalius/core/modules/payments";
 
 import { errorResponseFromError } from "../../utils/api-response";
-import { handleQueueBatch } from "../../queue-consumer";
 import { paymentWebhookRoutes } from "../webhooks/payments";
 import { paymentRoutes } from "./payment-routes";
-import type { PaymentEventQueueMessage } from "./payment-events";
 
 const CREDENTIAL_ENCRYPTION_KEY = btoa("p".repeat(32));
 const RECEIPT = "chk_receipt_token_for_tests";
@@ -31,7 +29,6 @@ const RECEIPT = "chk_receipt_token_for_tests";
 let sqlite: DatabaseSync;
 let db: Database;
 let binding: D1Database;
-let sent: PaymentEventQueueMessage[];
 let env: Env;
 const fetchMock = vi.fn();
 
@@ -95,13 +92,11 @@ beforeEach(() => {
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   ({ sqlite, db, binding } = createSqliteD1Database());
-  sent = [];
   env = {
     CREDENTIAL_ENCRYPTION_KEY,
     DB: binding,
     STOREFRONT_URL: "https://shop.example.test",
     PUBLIC_API_BASE_URL: "https://api.example.test",
-    JOBS_QUEUE: { send: vi.fn(async (message: PaymentEventQueueMessage) => { sent.push(message); }) },
   } as unknown as Env;
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
@@ -228,15 +223,16 @@ describe("an app gateway: webhooks, returns, and queue application", () => {
 
     await expect((await webhook(app, event)).json()).resolves.toEqual({ received: true });
     await expect((await webhook(app, event)).json()).resolves.toMatchObject({ received: true, duplicate: true });
-    expect(sent).toEqual([{
-      type: "payment.event",
-      provider: FAKE_GATEWAY_ID,
-      // The claim id keeps the provider id's shape in the claim alphabet.
-      webhookEventId: "acme-fake:pay:charge:evt_1",
-      event,
-    }]);
-    expect(sqlite.prepare("SELECT event_type, status FROM webhook_events").get())
-      .toEqual({ event_type: "payment.confirmed", status: "queued" });
+    // The claim keeps the provider id's shape in the claim alphabet and the
+    // event as its payload; without an execution context it is applied before
+    // the response.
+    expect(sqlite.prepare("SELECT id, event_type, status, attempts, payload FROM webhook_events").get()).toEqual({
+      id: "acme-fake:pay:charge:evt_1",
+      event_type: "payment.confirmed",
+      status: "processed",
+      attempts: 1,
+      payload: JSON.stringify({ provider: FAKE_GATEWAY_ID, event }),
+    });
     expect((await post(app, "/webhooks/unknownpay", event)).status).toBe(404);
   });
 
@@ -253,25 +249,11 @@ describe("an app gateway: webhooks, returns, and queue application", () => {
     expect(buyerReturn.status).toBe(302);
     expect(buyerReturn.headers.get("location"))
       .toBe(`https://shop.example.test/order-success?orderId=order_1&payment=${encodeURIComponent(FAKE_GATEWAY_ID)}&paymentType=full`);
-    await webhook(app, event);
-    expect(sent).toHaveLength(1);
+    await expect((await webhook(app, event)).json()).resolves.toMatchObject({ duplicate: true });
 
-    // A provider resend under a different event id reaches the queue too; the
-    // kernel still credits the provider reference once.
+    // A provider resend under a different event id is claimed too; the kernel
+    // still credits the provider reference once.
     await webhook(app, { ...event, eventId: "evt_resend" });
-    expect(sent).toHaveLength(2);
-    // Both messages are delivered concurrently; the loser of the provider-ref
-    // claim is retried by the queue and then sees the payment already applied.
-    const deliver = async (bodies: PaymentEventQueueMessage[]) => {
-      const messages = bodies.map((body, index) => ({
-        id: `m${index}`, timestamp: new Date(), attempts: 1, body, ack: vi.fn(), retry: vi.fn(),
-      }));
-      await handleQueueBatch({ queue: "jobs", messages, ackAll: vi.fn(), retryAll: vi.fn() } as never, env);
-      return messages.filter((message) => message.retry.mock.calls.length > 0).map((message) => message.body);
-    };
-    const retried = await deliver(sent);
-    expect(retried.length).toBeLessThanOrEqual(1);
-    expect(await deliver(retried)).toEqual([]);
 
     expect(sqlite.prepare("SELECT status, payment_status, paid_amount_minor FROM orders").get())
       .toEqual({ status: OrderStatus.PENDING, payment_status: PaymentStatus.PAID, paid_amount_minor: 150_000 });

@@ -1,10 +1,22 @@
-import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, lte, or, sql } from "drizzle-orm";
 import { webhookEvents } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { onlinePaymentMethodCondition } from "@scalius/core/modules/payments";
 
-export type WebhookEventStatus = "processing" | "queued" | "processed" | "failed" | "manual_reconciliation";
+/**
+ * `retrying`: a payment event whose last attempt failed, due again at
+ * `next_attempt_at`. `failed` is terminal (retries exhausted, or a courier
+ * event that failed); a provider re-sending the same event reclaims it.
+ */
+export type WebhookEventStatus = "processing" | "retrying" | "processed" | "failed" | "manual_reconciliation";
 export const DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS = 5 * 60;
+/** Attempts a payment event gets (the first plus five retries) before it is `failed`. */
+export const PAYMENT_EVENT_MAX_ATTEMPTS = 6;
+
+/** Backoff after attempt n fails: 1, 2, 4, 8, 16 minutes. */
+export function paymentEventRetryDelaySeconds(attempts: number): number {
+  return 60 * 2 ** (Math.max(1, Math.min(attempts, PAYMENT_EVENT_MAX_ATTEMPTS)) - 1);
+}
 /**
  * Webhook events of payment gateways (built-in and app providers): an app
  * courier's tracking events share the provider id shape, never the
@@ -17,33 +29,6 @@ export function paymentWebhookEventCondition() {
   )!;
 }
 
-export interface StaleQueuedWebhookSweepResult {
-  scanned: number;
-  failed: number;
-  limit: number;
-  hasMore: boolean;
-}
-
-export interface PaymentWebhookDlqEvidence {
-  webhookEventId?: string | null;
-  fallbackEventId: string;
-  provider: string;
-  eventType: string;
-  orderId: string | null;
-  queueMessageId: string;
-  queueType: string;
-  attempts: number;
-  observedAtSeconds: number;
-  messageTimestampSeconds: number | null;
-  payment: Record<string, unknown>;
-}
-
-export interface PaymentWebhookDlqRecordResult {
-  id: string;
-  status: "failed" | "processed" | "manual_reconciliation";
-  inserted: boolean;
-}
-
 export interface WebhookEventClaim {
   id: string;
   provider: string;
@@ -51,6 +36,8 @@ export interface WebhookEventClaim {
   orderId?: string | null;
   status?: WebhookEventStatus;
   result?: unknown;
+  /** Payment events: what a retry applies (the normalized provider event; ids, refs and amounts only). */
+  payload?: unknown;
 }
 
 export interface WebhookEventClaimResult {
@@ -106,6 +93,8 @@ export async function claimWebhookEvent(
       orderId: claim.orderId ?? null,
       status,
       result: serializeResult(claim.result),
+      payload: serializeResult(claim.payload),
+      attempts: claim.payload === undefined ? 0 : 1,
       processedAt: sql`unixepoch()`,
     });
 
@@ -134,6 +123,9 @@ export async function claimWebhookEvent(
           status,
           orderId: claim.orderId ?? existing.orderId,
           result: serializeResult(claim.result),
+          payload: serializeResult(claim.payload),
+          attempts: claim.payload === undefined ? 0 : 1,
+          nextAttemptAt: null,
           processedAt: sql`unixepoch()`,
         })
         .where(and(
@@ -156,6 +148,9 @@ export async function claimWebhookEvent(
           status,
           orderId: claim.orderId ?? existing.orderId,
           result: serializeResult(claim.result),
+          payload: serializeResult(claim.payload),
+          attempts: claim.payload === undefined ? 0 : 1,
+          nextAttemptAt: null,
           processedAt: sql`unixepoch()`,
         })
         .where(and(
@@ -172,14 +167,6 @@ export async function claimWebhookEvent(
 
     return { claimed: false, existing: existing ?? null };
   }
-}
-
-export async function markWebhookEventQueued(
-  db: Database,
-  id: string,
-  result?: unknown,
-): Promise<void> {
-  await markWebhookEvent(db, id, "queued", result);
 }
 
 export async function markWebhookEventProcessed(
@@ -206,103 +193,61 @@ export async function markWebhookEventManualReconciliation(
   await markWebhookEvent(db, id, "manual_reconciliation", result);
 }
 
-export async function failStaleQueuedPaymentWebhookEvents(
+/**
+ * Records a failed payment-event attempt: due again after the backoff, or
+ * `failed` once its attempts are spent (the dead-letter state the order page
+ * shows as "failed after every retry").
+ */
+export async function markPaymentEventAttemptFailed(
   db: Database,
-  cutoffSeconds: number,
-  options: { limit?: number } = {},
-): Promise<StaleQueuedWebhookSweepResult> {
-  const limit = Math.max(1, Math.min(options.limit ?? 25, 100));
-  const cutoffDate = new Date(cutoffSeconds * 1000);
-  const candidates = await db
-    .select({
-      id: webhookEvents.id,
-      provider: webhookEvents.provider,
-      eventType: webhookEvents.eventType,
-      orderId: webhookEvents.orderId,
-      processedAt: webhookEvents.processedAt,
-    })
-    .from(webhookEvents)
-    .where(and(
-      eq(webhookEvents.status, "queued"),
-      paymentWebhookEventCondition(),
-      lte(webhookEvents.processedAt, cutoffDate),
-    ))
-    .limit(limit + 1);
-
-  const targetRows = candidates.slice(0, limit);
-  if (targetRows.length === 0) {
-    return { scanned: 0, failed: 0, limit, hasMore: false };
-  }
-
-  const sweptAtSeconds = Math.floor(Date.now() / 1000);
-  const result = {
-    reason: "stale_queued_payment_webhook",
-    cutoffSeconds,
-    sweptAtSeconds,
-    count: targetRows.length,
-  };
-  const updated = await db
-    .update(webhookEvents)
-    .set({
-      status: "failed",
-      result: JSON.stringify(result),
-      processedAt: sql`unixepoch()`,
-    })
-    .where(and(
-      eq(webhookEvents.status, "queued"),
-      inArray(webhookEvents.id, targetRows.map((row) => row.id)),
-    ))
-    .returning({ id: webhookEvents.id });
-
-  return {
-    scanned: targetRows.length,
-    failed: updated.length,
-    limit,
-    hasMore: candidates.length > limit,
-  };
-}
-
-export async function recordPaymentWebhookDlqEvidence(
-  db: Database,
-  evidence: PaymentWebhookDlqEvidence,
-): Promise<PaymentWebhookDlqRecordResult> {
-  const id = evidence.webhookEventId ?? evidence.fallbackEventId;
-  const existing = await db
-    .select({
-      id: webhookEvents.id,
-      status: webhookEvents.status,
-      result: webhookEvents.result,
-    })
-    .from(webhookEvents)
-    .where(eq(webhookEvents.id, id))
-    .get();
-
-  const nextStatus = resolveDlqStatus(existing?.status);
-  const result = serializePaymentWebhookDlqEvidence(evidence, existing?.status ?? null, existing?.result ?? null);
-
-  if (!existing) {
-    await db.insert(webhookEvents).values({
-      id,
-      provider: evidence.provider,
-      eventType: evidence.eventType,
-      orderId: evidence.orderId,
-      status: nextStatus,
-      result,
-      processedAt: sql`unixepoch()`,
-    });
-    return { id, status: nextStatus, inserted: true };
-  }
-
+  id: string,
+  attempts: number,
+  error: string,
+): Promise<"retrying" | "failed"> {
+  const exhausted = attempts >= PAYMENT_EVENT_MAX_ATTEMPTS;
   await db
     .update(webhookEvents)
-    .set({
-      status: nextStatus,
-      result,
-      processedAt: sql`unixepoch()`,
-    })
+    .set(exhausted
+      ? { status: "failed", nextAttemptAt: null, result: JSON.stringify({ reason: "retries_exhausted", attempts, error }), processedAt: sql`unixepoch()` }
+      : { status: "retrying", nextAttemptAt: sql`unixepoch() + ${paymentEventRetryDelaySeconds(attempts)}`, result: JSON.stringify({ attempts, error }), processedAt: sql`unixepoch()` })
     .where(eq(webhookEvents.id, id));
+  return exhausted ? "failed" : "retrying";
+}
 
-  return { id, status: nextStatus, inserted: false };
+/** Payment events due again, or whose attempt died with its invocation (lease expired). */
+function duePaymentEventCondition(leaseSeconds = DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS) {
+  return and(
+    isNotNull(webhookEvents.payload),
+    or(
+      and(eq(webhookEvents.status, "retrying"), lte(webhookEvents.nextAttemptAt, sql`unixepoch()`)),
+      and(eq(webhookEvents.status, "processing"), lte(webhookEvents.processedAt, sql`unixepoch() - ${leaseSeconds}`)),
+    ),
+  );
+}
+
+export async function listDuePaymentEvents(db: Database, limit: number): Promise<string[]> {
+  const rows = await db
+    .select({ id: webhookEvents.id })
+    .from(webhookEvents)
+    .where(duePaymentEventCondition())
+    .orderBy(asc(webhookEvents.processedAt))
+    .limit(Math.max(1, Math.min(limit, 100)))
+    .all();
+  return rows.map((row) => row.id);
+}
+
+/** Claims one due payment event for an attempt (counted at claim); null when another drain has it. */
+export async function claimDuePaymentEvent(
+  db: Database,
+  id: string,
+): Promise<{ id: string; provider: string; payload: string; attempts: number } | null> {
+  const rows = await db
+    .update(webhookEvents)
+    .set({ status: "processing", attempts: sql`${webhookEvents.attempts} + 1`, processedAt: sql`unixepoch()` })
+    .where(and(eq(webhookEvents.id, id), duePaymentEventCondition()))
+    .returning({ id: webhookEvents.id, provider: webhookEvents.provider, payload: webhookEvents.payload, attempts: webhookEvents.attempts });
+  const row = rows[0];
+  return row?.payload ? { id: row.id, provider: row.provider, payload: row.payload, attempts: Number(row.attempts) } : null;
 }
 
 async function markWebhookEvent(
@@ -321,37 +266,3 @@ async function markWebhookEvent(
     .where(eq(webhookEvents.id, id));
 }
 
-function resolveDlqStatus(status: string | null | undefined): "failed" | "processed" | "manual_reconciliation" {
-  if (status === "processed" || status === "manual_reconciliation") return status;
-  return "failed";
-}
-
-function serializePaymentWebhookDlqEvidence(
-  evidence: PaymentWebhookDlqEvidence,
-  previousStatus: string | null,
-  previousResult: string | null,
-): string {
-  return JSON.stringify({
-    reason: "payment_events_dlq",
-    queueMessageId: evidence.queueMessageId,
-    queueType: evidence.queueType,
-    orderId: evidence.orderId,
-    attempts: evidence.attempts,
-    observedAtSeconds: evidence.observedAtSeconds,
-    messageTimestampSeconds: evidence.messageTimestampSeconds,
-    provider: evidence.provider,
-    eventType: evidence.eventType,
-    payment: evidence.payment,
-    previousStatus,
-    previousResult: parseStoredWebhookResult(previousResult),
-  });
-}
-
-function parseStoredWebhookResult(result: string | null): unknown {
-  if (!result) return null;
-  try {
-    return JSON.parse(result) as unknown;
-  } catch {
-    return result;
-  }
-}

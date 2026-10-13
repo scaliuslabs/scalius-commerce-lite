@@ -17,12 +17,6 @@ import { buildFulfilmentInsertStatements, deriveOrderFulfilmentStatus } from "./
 import { applyOrderStatusChange, listOrderHolds } from "../orders";
 import { type AutoFulfilMode, checkoutDocument } from "../settings";
 
-/** Queue message: hand an order's automatic lines over (ids only, no buyer data). */
-export interface OrderAutoFulfilQueueMessage {
-    type: "order.auto_fulfil";
-    orderId: string;
-}
-
 const SETTLED_PAYMENT_STATUSES = [PaymentStatus.PAID, PaymentStatus.PARTIALLY_REFUNDED];
 const CLOSED_ORDER_STATUSES = [
     OrderStatus.CANCELLED,
@@ -68,7 +62,7 @@ async function readAutoFulfilMode(db: Database): Promise<AutoFulfilMode> {
 /**
  * Hands every settled order's automatic lines over, idempotently: one
  * fulfilment per type (request key `auto:<type>`), whose unique index makes
- * retries and concurrent queue deliveries safe. Only after settlement (F10),
+ * retries and concurrent runs safe. Only after settlement (F10),
  * and in `after_confirmation` mode only once staff confirmed the order.
  */
 export async function autoFulfilOrder(
@@ -238,12 +232,13 @@ export async function sweepAutoFulfilment(
     db: Database,
     registry: FulfillerRegistry = FULFILLER_REGISTRY,
     runtime: AutoFulfilRuntime = {},
-): Promise<{ scanned: number; fulfilled: number; failed: number }> {
+    page: { limit?: number; afterOrderId?: string } = {},
+): Promise<{ scanned: number; fulfilled: number; failed: number; lastOrderId: string | null }> {
     // Nothing can be handed over without a registered automatic fulfiller.
     if (!AUTO_FULFILLMENT_TYPES.some((type) => autoFulfillerFor(type, registry))) {
-        return { scanned: 0, fulfilled: 0, failed: 0 };
+        return { scanned: 0, fulfilled: 0, failed: 0, lastOrderId: null };
     }
-    const orderIds = await listOrdersAwaitingAutoFulfil(db);
+    const orderIds = await listOrdersAwaitingAutoFulfil(db, page.limit, undefined, page.afterOrderId);
     let fulfilled = 0;
     let failed = 0;
     for (const orderId of orderIds) {
@@ -255,5 +250,5 @@ export async function sweepAutoFulfilment(
             console.error(`[auto-fulfil] order ${orderId.slice(0, 12)} failed:`, error instanceof Error ? error.message : "unknown error");
         }
     }
-    return { scanned: orderIds.length, fulfilled, failed };
+    return { scanned: orderIds.length, fulfilled, failed, lastOrderId: orderIds.at(-1) ?? null };
 }

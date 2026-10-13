@@ -1,6 +1,6 @@
 // src/lib/inventory/expiry.ts
 // Reservation timeout logic: releases orphaned/expired reservations.
-// Designed to be called from a queue consumer or cron trigger.
+// Designed to be called from the cron's sweep rotation.
 
 import { catalogBuyerStateRefreshStatementsForSkus, effectiveLowStockThresholdSql } from "../products";
 import { eq, and, sql, lt } from "drizzle-orm";
@@ -152,7 +152,7 @@ function isDuplicateExpiryReleaseClaimError(err: unknown): boolean {
  * double-release, because released reservations get a matching "released"
  * movement that excludes them from future sweeps.
  *
- * Designed to be called from a Cloudflare Queue consumer or Cron Trigger.
+ * Called from the cron's sweep rotation.
  *
  * @param db - Drizzle database instance
  * @param maxAgeMinutes - Maximum age in minutes before a reservation expires (default: 30)

@@ -1,4 +1,7 @@
-// Real Worker/D1 integration budget for bounded scheduled maintenance jobs.
+// Real Worker/D1 integration budget for bounded scheduled maintenance: a Free
+// tick runs the drains and one job of the sweep rotation inline, so every
+// tick of a whole rotation (and each job) must fit Workers Free's 50 D1
+// queries, with busy work due.
 // Isolated migrated SQLite; never uses the running developer store or providers.
 import "@hono/zod-openapi";
 import { writeFileSync } from "node:fs";
@@ -14,14 +17,13 @@ import {
   seedMediaBacklog,
 } from "./testing/free-plan-seed";
 import { readMaintenanceCursor } from "./scheduled/cursor";
-import { runQueuedMaintenance } from "./scheduled-maintenance";
+import { DRAIN_TICK_MS, MAINTENANCE_SWEEPS, type SweepContext } from "./scheduled-maintenance";
 import { PLAN_LIMITS } from "@scalius/shared/plan-limits";
 import { processPaymentConfirmed, processRefund, REFUND_OBSERVED_EVENT_TYPE } from "@scalius/core/modules/payments";
 import { createFakeGateway, FAKE_GATEWAY_ID } from "../../../packages/core/src/modules/payments/gateways/testing";
 import * as paymentProviders from "./plugins/providers/payment";
 
 const report: Record<string, unknown> = {};
-const pluginId = "test.maintenance";
 const clock = 1_800_014_400;
 const hour = Math.floor((clock * 1000) / 3_600_000) * 3_600_000;
 let store: FreePlanStore;
@@ -39,42 +41,21 @@ function seedBusyWork() {
     seedNotification(`pending_${prefix}_${index}`);
 }
 
-async function measureQueuedMaintenance(from: number) {
-  const jobs = [];
-  for (let index = from; index < store.meter.queue.sent.length; index += 1) {
-    const body = store.meter.queue.sent[index]!.body as Record<string, unknown>;
-    if (body.type !== "maintenance.sweep" && body.type !== "order.auto_fulfil")
-      continue;
-    let acked = 0;
-    let retried = 0;
-    const result = await store.meter.measure(() =>
-      store.worker.queue({
-        queue: "jobs",
-        metadata: { metrics: { backlogCount: 1, backlogBytes: 0 } },
-        messages: [
-          {
-            id: `maintenance_${index}`,
-            timestamp: new Date(),
-            attempts: 1,
-            body,
-            ack() {
-              acked += 1;
-            },
-            retry() {
-              retried += 1;
-            },
-          },
-        ],
-        ackAll() {},
-        retryAll() {},
-      }),
-    );
-    jobs.push({ name: body.name ?? body.type, ...result.counters });
-    expect(acked).toBe(1);
-    expect(retried).toBe(0);
-    expect.soft(result.counters.d1Calls).toBeLessThanOrEqual(50);
-  }
-  return jobs;
+/** One sweep, run as its tick runs it, measured as one invocation. */
+async function runSweep(name: string) {
+  const sweep = MAINTENANCE_SWEEPS.find((item) => item.name === name);
+  if (!sweep) throw new Error(`no sweep ${name}`);
+  const env = store.worker.env;
+  const context = {
+    db: getDb(env),
+    env,
+    executionCtx: store.meter.ctx,
+    runContext: { runId: "budget", startedAt: Date.now(), cron: "test", scheduledTime: "test", scheduledAt: hour },
+    timed: <T>(_operation: string, fn: () => Promise<T>) => fn(),
+  } as unknown as SweepContext;
+  const result = await store.meter.measure(() => sweep.run(context));
+  expect.soft(result.counters.d1Calls, name).toBeLessThanOrEqual(50);
+  return { name, ...result.counters };
 }
 
 beforeAll(async () => {
@@ -106,16 +87,15 @@ afterAll(() => {
 });
 
 describe("Free maintenance integration budget", () => {
-  it("measures cold initialization and all busy maintenance slices through the real Worker", async () => {
+  it("measures cold initialization and every busy tick of a rotation through the real Worker", async () => {
     const cron = (time: number) =>
       store.worker.scheduled({
-        cron: "*/15 * * * *",
+        cron: "* * * * *",
         scheduledTime: time,
         noRetry() {},
       } as ScheduledController);
     const cold = await store.meter.measure(() => cron(hour));
     report.cold = cold.counters;
-    report.coldJobs = await measureQueuedMaintenance(0);
     // Real eligible legacy reservations and stale online orders make the
     // existing slice work non-empty instead of proving only the new domains.
     for (let i = 1; i <= 12; i += 1) {
@@ -163,39 +143,36 @@ describe("Free maintenance integration budget", () => {
           );
     }
     const errors = vi.spyOn(console, "error");
-    const slices = [];
-    for (let slice = 0; slice < 4; slice += 1) {
+    // One minute per job: the whole rotation, each minute with busy work due.
+    const ticks = [];
+    for (let minute = 1; minute <= MAINTENANCE_SWEEPS.length; minute += 1) {
       seedBusyWork();
-      const queueStart = store.meter.queue.sent.length;
-      const result = await store.meter.measure(() =>
-        cron(hour + slice * 900_000),
-      );
-      const jobs = await measureQueuedMaintenance(queueStart);
-      expect(result.counters.queueTypes.notification).toBeGreaterThanOrEqual(
-        40,
-      );
-      slices.push({
-        slice,
-        jobs,
-        ...result.counters,
-      });
+      const pendingBefore = (store.sqlite.prepare("SELECT count(*) AS n FROM notification_outbox WHERE status = 'pending'").get() as { n: number }).n;
+      const result = await store.meter.measure(() => cron(hour + minute * DRAIN_TICK_MS));
+      // The tick's notification drain took its bounded share of the due rows.
+      const pendingAfter = (store.sqlite.prepare("SELECT count(*) AS n FROM notification_outbox WHERE status = 'pending'").get() as { n: number }).n;
+      expect(pendingBefore - pendingAfter).toBe(PLAN_LIMITS.free.background.notificationsPerDrain);
+      ticks.push({ minute, ...result.counters });
     }
-    report.maintenance = slices;
+    // The 02:00 store-time minute (20:00 UTC for Dhaka) runs only the nightly pass.
+    const nightlyAt = Date.UTC(2027, 0, 15, 20, 0);
+    const logs = vi.spyOn(console, "log");
+    const nightly = await store.meter.measure(() => cron(nightlyAt));
+    expect(logs.mock.calls.some((args) => String(args[0]).startsWith("[scheduled] Nightly catalogue"))).toBe(true);
+    logs.mockRestore();
+    ticks.push({ minute: "nightly", ...nightly.counters });
+    report.maintenance = ticks;
     expect(
       errors.mock.calls.filter((args) =>
         args.some((arg) => String(arg).includes("scheduled_operation_failed")),
       ),
     ).toEqual([]);
     errors.mockRestore();
-    console.log(
-      "FREE_MAINTENANCE",
-      JSON.stringify({ cold: cold.counters, slices }),
-    );
-    for (const item of [cold.counters, ...slices])
+    for (const item of [cold.counters, ...ticks])
       expect.soft(item.d1Calls).toBeLessThanOrEqual(50);
   }, 120_000);
 
-  it("keeps cursor progress under stale writers and mixed maintenance batches", async () => {
+  it("keeps cursor progress under stale writers", async () => {
     const db = getDb(store.meter.bindings as Env);
     const first = await readMaintenanceCursor(db, "cursor-witness");
     await first.save({ rows: "a" });
@@ -206,58 +183,11 @@ describe("Free maintenance integration budget", () => {
     expect((await readMaintenanceCursor(db, "cursor-witness")).value.rows).toBe(
       "z",
     );
-    const outcomes = { acked: [] as number[], retried: [] as number[] };
-    const result = await store.meter.measure(() =>
-      store.worker.queue({
-        queue: "jobs",
-        metadata: { metrics: { backlogCount: 3, backlogBytes: 0 } },
-        messages: [0, 1, 2].map((index) => ({
-          id: `mixed_${index}`,
-          timestamp: new Date(),
-          attempts: 1,
-          body: {
-            type: "maintenance.sweep",
-            name: "digital_upload_sweep",
-            scheduledAt: hour,
-          },
-          ack() {
-            outcomes.acked.push(index);
-          },
-          retry() {
-            outcomes.retried.push(index);
-          },
-        })),
-        ackAll() {},
-        retryAll() {},
-      }),
-    );
-    expect(outcomes).toEqual({ acked: [0], retried: [1, 2] });
-    expect(result.counters.d1Calls).toBeLessThanOrEqual(50);
-    expect(PLAN_LIMITS.free.queue.consumerBatchSize).toBe(1);
     expect(PLAN_LIMITS.paid.maintenance).toMatchObject({
-      queueSweeps: false,
       staleOrdersPerRun: 25,
       digitalUploadsPerState: 25,
       orphanAttachmentsPerRun: 50,
     });
-    for (const invalid of [
-      { pluginId: "", scheduledAt: hour },
-      { pluginId: " ", scheduledAt: hour },
-      { pluginId: 3, scheduledAt: hour },
-      { pluginId, scheduledAt: Number.NaN },
-    ]) {
-      let retried = 0;
-      await store.worker.queue({
-        queue: "jobs",
-        metadata: { metrics: { backlogCount: 1, backlogBytes: 0 } },
-        messages: [{ id: "invalid_app_job", timestamp: new Date(), attempts: 1,
-          body: { type: "plugins.cron", ...invalid },
-          ack() { throw new Error("Invalid app job must not be acknowledged"); },
-          retry() { retried++; } }],
-        ackAll() {}, retryAll() {},
-      });
-      expect(retried).toBe(1);
-    }
   });
 
   it("advances past a poison stale order and wraps without losing it", async () => {
@@ -266,13 +196,8 @@ describe("Free maintenance integration budget", () => {
       UPDATE orders SET status='incomplete',payment_method='stripe',payment_status='unpaid',created_at=1 WHERE id IN ('ord_seed_81','ord_seed_82');
       CREATE TRIGGER budget_poison_stale BEFORE UPDATE ON orders WHEN OLD.id='ord_seed_81' AND NEW.status='cancelled' BEGIN SELECT RAISE(ABORT,'budget poison'); END;
     `);
-    const job = {
-      type: "maintenance.sweep" as const,
-      name: "stale_incomplete_order_cleanup",
-      scheduledAt: hour,
-    };
-    await runQueuedMaintenance(store.worker.env, store.meter.ctx, job);
-    await runQueuedMaintenance(store.worker.env, store.meter.ctx, job);
+    await runSweep("stale_incomplete_order_cleanup");
+    await runSweep("stale_incomplete_order_cleanup");
     expect(
       store.sqlite
         .prepare(
@@ -288,7 +213,7 @@ describe("Free maintenance integration budget", () => {
     // Dropping the poison makes a later wrapped scan recover the same row.
     store.sqlite.exec("DROP TRIGGER budget_poison_stale");
     for (let tick = 0; tick < 10; tick += 1)
-      await runQueuedMaintenance(store.worker.env, store.meter.ctx, job);
+      await runSweep("stale_incomplete_order_cleanup");
     expect(
       store.sqlite
         .prepare(
@@ -298,27 +223,21 @@ describe("Free maintenance integration budget", () => {
     ).toEqual({ archived: 1 });
   });
 
-  it("preserves five stale candidates per hourly tick through sequential bounded jobs", async () => {
+  it("repairs one bounded page of stale orders per sweep tick, past a poison row", async () => {
     store.sqlite.exec(`
       DELETE FROM settings WHERE category='maintenance' AND key='stale-orders';
       UPDATE orders SET status='incomplete',payment_method='stripe',payment_status='unpaid',created_at=1,deleted_at=NULL
         WHERE id IN ('ord_seed_71','ord_seed_72','ord_seed_73','ord_seed_74','ord_seed_75','ord_seed_76');
       CREATE TRIGGER budget_poison_chain BEFORE UPDATE ON orders WHEN OLD.id='ord_seed_71' AND NEW.status='cancelled' BEGIN SELECT RAISE(ABORT,'budget poison'); END;
     `);
-    const start = store.meter.queue.sent.length;
-    await store.worker.env.JOBS_QUEUE!.send({ type: "maintenance.sweep", name: "stale_incomplete_order_cleanup", scheduledAt: hour, remaining: 5 });
-    const samples = await measureQueuedMaintenance(start);
-    expect(samples).toHaveLength(5);
-    expect(store.sqlite.prepare("SELECT count(*) AS n FROM orders WHERE id BETWEEN 'ord_seed_72' AND 'ord_seed_75' AND deleted_at IS NOT NULL").get()).toEqual({ n: 4 });
-    expect(store.sqlite.prepare("SELECT status FROM orders WHERE id='ord_seed_76'").get()).toEqual({ status: "incomplete" });
-    report.staleContinuation = samples;
+    const samples = [];
+    for (let tick = 0; tick < 5; tick += 1) samples.push(await runSweep("stale_incomplete_order_cleanup"));
+    const perRun = PLAN_LIMITS.free.maintenance.staleOrdersPerRun;
+    expect(store.sqlite.prepare("SELECT count(*) AS n FROM orders WHERE id BETWEEN 'ord_seed_72' AND 'ord_seed_76' AND deleted_at IS NOT NULL").get())
+      .toEqual({ n: Math.min(5, 5 * perRun - 1) });
+    expect(store.sqlite.prepare("SELECT status FROM orders WHERE id='ord_seed_71'").get()).toEqual({ status: "incomplete" });
+    report.staleOrders = samples;
     store.sqlite.exec("DROP TRIGGER budget_poison_chain");
-    const second = store.meter.queue.sent.length;
-    await store.worker.env.JOBS_QUEUE!.send({ type: "maintenance.sweep", name: "stale_incomplete_order_cleanup", scheduledAt: hour, remaining: 5 });
-    await measureQueuedMaintenance(second);
-    expect(store.sqlite.prepare("SELECT deleted_at IS NOT NULL AS archived FROM orders WHERE id='ord_seed_76'").get()).toEqual({ archived: 1 });
-    for (const remaining of [0, -1, 6, 1.5, Number.NaN])
-      await expect(runQueuedMaintenance(store.worker.env, store.meter.ctx, { type: "maintenance.sweep", name: "stale_incomplete_order_cleanup", scheduledAt: hour, remaining })).rejects.toThrow("Invalid maintenance continuation");
   });
 
   it("advances upload and orphan cursors past failed rows and retries them after wrapping", async () => {
@@ -336,7 +255,7 @@ describe("Free maintenance integration budget", () => {
     store.sqlite.exec("CREATE TRIGGER budget_poison_upload BEFORE UPDATE ON digital_asset_uploads WHEN OLD.id='uploading_poison_0' BEGIN SELECT RAISE(ABORT,'budget poison'); END");
     for (const name of ["conversation_attachment_sweep", "digital_upload_sweep"]) {
       for (let tick = 0; tick < 2; tick += 1)
-        await runQueuedMaintenance(store.worker.env, store.meter.ctx, { type: "maintenance.sweep", name, scheduledAt: hour });
+        await runSweep(name);
     }
     expect(store.sqlite.prepare("SELECT status FROM digital_asset_uploads WHERE id='uploading_poison_1'").get()).toEqual({ status: "aborted" });
     expect(store.sqlite.prepare("SELECT status FROM digital_asset_uploads WHERE id='uploading_poison_0'").get()).toEqual({ status: "uploading" });
@@ -344,7 +263,7 @@ describe("Free maintenance integration budget", () => {
     store.sqlite.exec("DROP TRIGGER budget_poison_attachment; DROP TRIGGER budget_poison_upload");
     for (const name of ["conversation_attachment_sweep", "digital_upload_sweep"])
       for (let tick = 0; tick < 3; tick += 1)
-        await runQueuedMaintenance(store.worker.env, store.meter.ctx, { type: "maintenance.sweep", name, scheduledAt: hour });
+        await runSweep(name);
     expect(store.sqlite.prepare("SELECT status FROM digital_asset_uploads WHERE id='uploading_poison_0'").get()).toEqual({ status: "aborted" });
     expect(store.sqlite.prepare("SELECT count(*) AS n FROM conversation_attachments WHERE id='att_poison_0000'").get()).toEqual({ n: 0 });
   });
@@ -370,17 +289,12 @@ describe("Free maintenance integration budget", () => {
           fake.state.refundStatus = { outcome, providerStatus: outcome === "accepted" ? "refunded" : outcome };
           store.sqlite.prepare("UPDATE refund_attempts SET next_probe_at=0 WHERE order_id=?").run(orderId);
         }
-        const from = store.meter.queue.sent.length;
-        await store.worker.env.JOBS_QUEUE!.send({ type: "maintenance.sweep", name, scheduledAt: hour });
-        const [sample] = await measureQueuedMaintenance(from);
-        samples.push({ outcome, ...sample });
+        samples.push({ outcome, ...(await runSweep(name)) });
         const payment = store.sqlite.prepare("SELECT payment_status FROM orders WHERE id=?").get(orderId);
         expect(payment).toEqual({ payment_status: outcome === "accepted" ? "refunded" : outcome === "external" ? "partially_refunded" : "paid" });
       }
       const before = store.sqlite.prepare("SELECT count(*) AS n FROM order_payments WHERE payment_type='refund' AND status='succeeded'").get();
-      const from = store.meter.queue.sent.length;
-      await store.worker.env.JOBS_QUEUE!.send({ type: "maintenance.sweep", name: "external_refund_reconciliation", scheduledAt: hour });
-      samples.push({ outcome: "replay", ...(await measureQueuedMaintenance(from))[0] });
+      samples.push({ outcome: "replay", ...(await runSweep("external_refund_reconciliation")) });
       expect(store.sqlite.prepare("SELECT count(*) AS n FROM order_payments WHERE payment_type='refund' AND status='succeeded'").get()).toEqual(before);
       report.refundReconciliation = { samples, scope: "Real core and Worker; inert registered adapter replaces app loading/provider effects. Third-party runtime work is excluded." };
     } finally {
@@ -388,7 +302,7 @@ describe("Free maintenance integration budget", () => {
     }
   });
 
-  it("fans out beyond poisoned automatic orders and measures the real consumer and replay", async () => {
+  it("walks past poisoned automatic orders a bounded page per tick and fulfils the healthy one once", async () => {
     store.sqlite.exec(`
       INSERT INTO products(id,name,slug,price_minor,is_active) VALUES ('p_auto_budget','File','auto-budget',50000,1);
       INSERT INTO product_variants(id,product_id,sku,price_minor,stock,is_default,track_inventory,fulfillment_kind) VALUES ('v_auto_budget','p_auto_budget','AUTO-BUDGET',50000,0,1,0,'digital');
@@ -413,58 +327,13 @@ describe("Free maintenance integration budget", () => {
         )
         .run(`item_${id}`, id);
     }
-    const job = {
-      type: "maintenance.sweep" as const,
-      name: "auto_fulfil_sweep",
-      scheduledAt: hour,
-    };
-    const start = store.meter.queue.sent.length;
-    await runQueuedMaintenance(store.worker.env, store.meter.ctx, job);
-    await runQueuedMaintenance(store.worker.env, store.meter.ctx, job);
-    const selected = store.meter.queue.sent
-      .slice(start)
-      .map((entry) => entry.body as { type: string; orderId?: string });
-    expect(
-      selected
-        .filter((body) => body.type === "order.auto_fulfil")
-        .map((body) => body.orderId),
-    ).toContain("auto_z_good");
+    store.sqlite.exec("DELETE FROM settings WHERE category='maintenance' AND key='auto-fulfil'");
+    // One bounded page per sweep tick: the cursor walks past the poison orders
+    // (each fails without stopping the run) to the healthy one, then wraps.
     const samples = [];
-    for (const orderId of ["auto_poison_00", "auto_z_good", "auto_z_good"]) {
-      let acked = 0,
-        retried = 0;
-      const result = await store.meter.measure(() =>
-        store.worker.queue({
-          queue: "jobs",
-          metadata: { metrics: { backlogCount: 1, backlogBytes: 0 } },
-          messages: [
-            {
-              id: `auto_${orderId}`,
-              timestamp: new Date(),
-              attempts: 1,
-              body: { type: "order.auto_fulfil", orderId },
-              ack() {
-                acked++;
-              },
-              retry() {
-                retried++;
-              },
-            },
-          ],
-          ackAll() {},
-          retryAll() {},
-        }),
-      );
-      expect({ acked, retried }).toEqual(
-        orderId.includes("poison")
-          ? { acked: 0, retried: 1 }
-          : { acked: 1, retried: 0 },
-      );
-      expect(result.counters.d1Calls).toBeLessThanOrEqual(50);
-      samples.push({
-        outcome: orderId.includes("poison") ? "poison" : "success-or-replay",
-        ...result.counters,
-      });
+    for (let tick = 0; tick < 14; tick += 1) {
+      const sample = await runSweep("auto_fulfil_sweep");
+      samples.push({ tick, ...sample });
     }
     report.autoFulfil = samples;
     expect(

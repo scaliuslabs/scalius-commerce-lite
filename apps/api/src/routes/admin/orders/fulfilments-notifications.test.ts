@@ -5,8 +5,8 @@ const mocks = vi.hoisted(() => ({
     recordOrderFulfilment: vi.fn(),
     recordOrderEvent: vi.fn(),
 
-    enqueueOrderStatusChangeNotification: vi.fn(),
-    enqueueOrderNotificationsForStatus: vi.fn(),
+    sendOrderStatusChangeNotification: vi.fn(),
+    sendOrderNotificationsForStatus: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/fulfilment", async (importOriginal) => {
@@ -25,25 +25,22 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
     };
 });
 
-vi.mock("../../../utils/order-notification-queue", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../../../utils/order-notification-queue")>();
+vi.mock("../../../utils/order-notifications", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("../../../utils/order-notifications")>();
     return {
         ...actual,
-        enqueueOrderStatusChangeNotification: mocks.enqueueOrderStatusChangeNotification,
-        enqueueOrderNotificationsForStatus: mocks.enqueueOrderNotificationsForStatus,
+        sendOrderStatusChangeNotification: mocks.sendOrderStatusChangeNotification,
+        sendOrderNotificationsForStatus: mocks.sendOrderNotificationsForStatus,
     };
 });
 
 import { adminOrderFulfilmentRoutes } from "./fulfilments";
 
 const db = { id: "db" };
-const queue = { send: vi.fn(async () => undefined) };
 
 function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
-    const env = {
-        JOBS_QUEUE: queue,
-    } as unknown as Env;
+    const env = {} as unknown as Env;
 
     app.use("*", async (c, next) => {
         c.set("db", db as never);
@@ -90,11 +87,11 @@ describe("admin own-rider fulfilment notifications", () => {
         vi.clearAllMocks();
 
         mocks.recordOrderEvent.mockResolvedValue(undefined);
-        mocks.enqueueOrderStatusChangeNotification.mockResolvedValue({ orderId: "order_1", enqueued: true });
-        mocks.enqueueOrderNotificationsForStatus.mockResolvedValue(undefined);
+        mocks.sendOrderStatusChangeNotification.mockResolvedValue({ orderId: "order_1", enqueued: true });
+        mocks.sendOrderNotificationsForStatus.mockResolvedValue(undefined);
     });
 
-    it("enqueues a shipped notification when the last parcel moves the order to shipped", async () => {
+    it("sends a shipped notification when the last parcel moves the order to shipped", async () => {
         mocks.recordOrderFulfilment.mockResolvedValue(sent({
             statusChange: { orderId: "order_1", previousStatus: "confirmed", newStatus: "shipped", version: 7 },
         }));
@@ -104,14 +101,14 @@ describe("admin own-rider fulfilment notifications", () => {
 
         expect(response.status).toBe(201);
 
-        expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
+        expect(mocks.sendOrderStatusChangeNotification).toHaveBeenCalledWith({
             db,
-            queue,
+            send: expect.any(Function),
             statusChange: { orderId: "order_1", previousStatus: "confirmed", newStatus: "shipped", version: 7 },
             trackingId: "TRK-1",
             source: "orders-fulfilment",
         });
-        expect(mocks.enqueueOrderNotificationsForStatus).not.toHaveBeenCalled();
+        expect(mocks.sendOrderNotificationsForStatus).not.toHaveBeenCalled();
 
         const body = await response.json() as { data: Record<string, unknown> };
         expect(body.data).toMatchObject({ shipmentId: "shp_1", fulfillmentStatus: "complete", replayed: false });
@@ -130,8 +127,8 @@ describe("admin own-rider fulfilment notifications", () => {
         const response = await post(app, env);
 
         expect(response.status).toBe(201);
-        expect(mocks.enqueueOrderStatusChangeNotification).not.toHaveBeenCalled();
-        expect(mocks.enqueueOrderNotificationsForStatus).toHaveBeenCalledWith(expect.objectContaining({
+        expect(mocks.sendOrderStatusChangeNotification).not.toHaveBeenCalled();
+        expect(mocks.sendOrderNotificationsForStatus).toHaveBeenCalledWith(expect.objectContaining({
             orderIds: ["order_1"],
             newStatus: "shipped",
             trackingByOrderId: { order_1: "TRK-1" },
@@ -147,7 +144,7 @@ describe("admin own-rider fulfilment notifications", () => {
 
         expect(response.status).toBe(201);
         expect(mocks.recordOrderEvent).not.toHaveBeenCalled();
-        expect(mocks.enqueueOrderStatusChangeNotification).not.toHaveBeenCalled();
-        expect(mocks.enqueueOrderNotificationsForStatus).not.toHaveBeenCalled();
+        expect(mocks.sendOrderStatusChangeNotification).not.toHaveBeenCalled();
+        expect(mocks.sendOrderNotificationsForStatus).not.toHaveBeenCalled();
     });
 });

@@ -27,8 +27,8 @@ import { queryKeys } from "~/lib/query-keys";
 import { deliveryStatusVariant, formatDuration, formatWhen, topicLabel } from "../settings/webhooks/webhook-format";
 import { LOG_LEVEL_VARIANT } from "./app-status";
 
-/** The statuses a merchant filters by (`enqueueing` is a moment inside "Queued"). */
-const FILTERS = ["succeeded", "failed", "exhausted", "cancelled", "pending", "queued", "processing"] as const satisfies readonly AppDeliveryStatus[];
+/** The statuses a merchant filters by. */
+const FILTERS = ["succeeded", "failed", "exhausted", "cancelled", "pending", "processing"] as const satisfies readonly AppDeliveryStatus[];
 const COLUMNS = 6;
 
 /** A failed read, the first load, or the end of the list: shared by both tabs. */

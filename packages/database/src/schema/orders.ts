@@ -1116,6 +1116,12 @@ export const webhookEvents = sqliteTable("webhook_events", {
     orderId: text("order_id"),
     status: text("status").notNull().default("processed"),
     result: text("result"),
+    /** Payment events: the normalized provider event a retry applies (ids, refs and amounts; no buyer data). */
+    payload: text("payload"),
+    /** Payment events: attempts made, counted at claim. */
+    attempts: integer("attempts").notNull().default(0),
+    /** Payment events in `retrying`: when the next attempt is due (epoch seconds). */
+    nextAttemptAt: integer("next_attempt_at"),
     processedAt: integer("processed_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),

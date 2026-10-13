@@ -19,9 +19,9 @@ import { updateAdminOrderSupportRequestStatus } from "@scalius/core/modules/conv
 import { orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import {
-    enqueueOrderNotificationMessage,
-    enqueueOrderSupportRequestNotificationForOrder,
-} from "../../utils/order-notification-queue";
+    sendOrderNotification,
+    sendOrderSupportRequestNotification,
+} from "../../utils/order-notifications";
 
 import { ok } from "../../utils/api-response";
 import {
@@ -33,6 +33,7 @@ import { orderSupportRequestSchema } from "../../schemas/entities";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { hasPermission } from "@scalius/core/auth/rbac/helpers";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -149,9 +150,9 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
         });
     }
     if (result.statusChanged && !cancelledForRequest) {
-        await enqueueOrderSupportRequestNotificationForOrder({
+        await sendOrderSupportRequestNotification({
             db,
-            queue: c.env.JOBS_QUEUE,
+            send: notificationSender(c),
             orderId,
             requestId: result.request.id,
             notificationType: "support_request_status_updated",
@@ -198,16 +199,11 @@ async function cancelOrderForRequest(
         data: { from: before.status, to: "cancelled", reason: "customer_request" },
     });
     if (result.notification) {
-        await enqueueOrderNotificationMessage({
+        await sendOrderNotification({
             db,
-            queue: c.env.JOBS_QUEUE,
-            message: {
-                type: "order.notification",
-                orderId: result.notification.orderId,
-                customerEmail: result.notification.customerEmail,
-                customerName: result.notification.customerName,
-                notificationType: result.notification.notificationType,
-            },
+            send: notificationSender(c),
+            orderId: result.notification.orderId,
+            notificationType: result.notification.notificationType,
             dedupeKey: result.notification.dedupeKey ?? `order_status:${orderId}:${result.notification.notificationType}`,
             source: "orders-support-request-cancel",
         });

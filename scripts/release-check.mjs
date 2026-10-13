@@ -1612,11 +1612,7 @@ async function checkApiOps(options, {
     "--samples", String(RELEASE_READYZ_SAMPLES),
     "--timeout-ms", String(options.timeoutMs),
   ];
-  if (options.skipWrangler) {
-    opsArgs.push("--skip-wrangler");
-  } else {
-    opsArgs.push("--queues");
-  }
+  if (options.skipWrangler) opsArgs.push("--skip-wrangler");
 
   const opsOptions = parseOpsCheckArgs(opsArgs, {
     defaultApiBaseUrl: options.apiBaseUrl,
@@ -1636,14 +1632,10 @@ async function checkApiOps(options, {
   const deploymentSummary = deployment?.status === "skipped"
     ? "deployment skipped"
     : `deployment ${deployment?.versionId ?? "unknown"}`;
-  const queues = result.checks.queues;
-  const queueSummary = queues?.status === "skipped"
-    ? "queues skipped"
-    : `queues ${queues?.queueCount ?? 0} checked`;
   logger?.log(
     `PASS API ops: health ${result.checks.health.statusCode}, ` +
     `readyz ${result.checks.readyz.readyCount}/${result.checks.readyz.sampleCount}, ` +
-    `openapi ${result.checks.openapi.pathCount} paths, ${deploymentSummary}, ${queueSummary}.`,
+    `openapi ${result.checks.openapi.pathCount} paths, ${deploymentSummary}.`,
   );
 
   return {
@@ -1654,9 +1646,6 @@ async function checkApiOps(options, {
     openApiPathCount: result.checks.openapi.pathCount,
     deploymentStatus: deployment?.status ?? "passed",
     deploymentVersionId: deployment?.versionId ?? null,
-    queueStatus: queues?.status ?? "unknown",
-    queueCount: queues?.queueCount ?? 0,
-    queues,
     monitoringConfigStatus: result.checks.monitoringConfig.status,
     warnings: result.warnings,
     requiredActions: result.requiredActions,

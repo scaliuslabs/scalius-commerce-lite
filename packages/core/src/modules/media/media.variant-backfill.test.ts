@@ -4,9 +4,6 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     backfillMissingMediaVariants,
-    enqueueMediaVariantsBacklog,
-    enqueueMediaVariantsJob,
-    MEDIA_VARIANTS_JOB_DELAY_SECONDS,
     renderMissingMediaVariants,
     updateMediaFile,
 } from "./media.service";
@@ -53,7 +50,7 @@ function storage(options: { onInfo?: (source: string) => Promise<void> | void } 
     return { objects, bucket, images, transforms, infos };
 }
 
-describe("media rendition backfill and delayed render job", () => {
+describe("media rendition backfill and the single-image render", () => {
     let db: Database;
     let sqlite: DatabaseSync;
     let store: ReturnType<typeof storage>;
@@ -122,32 +119,6 @@ describe("media rendition backfill and delayed render job", () => {
             store.transforms.length = 0;
             await expect(run()).resolves.toEqual({ scanned: 0, generated: 0, failed: 0, hasMore: false });
             expect(store.transforms).toEqual([]);
-        });
-
-        it("fans the backlog beyond the inline share out to the queue in batches of 100, oldest first", async () => {
-            for (let index = 0; index < 260; index += 1) {
-                seed(`media_fanout_${String(index).padStart(3, "0")}`, { touchedMinutesAgo: 2_000 - index });
-            }
-            seed("media_fresh_upload", { touchedMinutesAgo: 1 });
-            seed("media_done_already", { variantWidth: 700 });
-            const batches: Array<Array<{ body: { type: string; mediaId: string }; delaySeconds?: number }>> = [];
-            const queue = { sendBatch: vi.fn(async (messages: Array<{ body: { type: string; mediaId: string }; delaySeconds?: number }>) => {
-                batches.push([...messages]);
-            }) };
-
-            await expect(enqueueMediaVariantsBacklog(db, queue, { skip: 40, limit: 150 }))
-                .resolves.toEqual({ queued: 150, hasMore: true });
-            expect(batches.map((batch) => batch.length)).toEqual([100, 50]);
-            expect(batches[0]![0]).toEqual({ body: { type: "media.render_variants", mediaId: "media_fanout_040" }, delaySeconds: 0 });
-            expect(batches[1]!.at(-1)!.body.mediaId).toBe("media_fanout_189");
-
-            batches.length = 0;
-            await expect(enqueueMediaVariantsBacklog(db, queue, { skip: 240, limit: 1_000 }))
-                .resolves.toEqual({ queued: 20, hasMore: false });
-            // Fresh uploads wait for their own pipeline; done images never queue.
-            expect(batches.flat().map((message) => message.body.mediaId)).not.toContain("media_fresh_upload");
-            expect(batches.flat().map((message) => message.body.mediaId)).not.toContain("media_done_already");
-            expect(await enqueueMediaVariantsBacklog(db, queue, { skip: 300, limit: 1_000 })).toEqual({ queued: 0, hasMore: false });
         });
 
         it("drains a backlog larger than one candidate page in a single run when under budget", async () => {
@@ -243,7 +214,7 @@ describe("media rendition backfill and delayed render job", () => {
         });
     });
 
-    describe("delayed render job", () => {
+    describe("single-image render (after a public read)", () => {
         it("renders a fresh upload once and skips it on every later delivery", async () => {
             seed("media_fresh_upload", { touchedMinutesAgo: 2 });
 
@@ -272,43 +243,6 @@ describe("media rendition backfill and delayed render job", () => {
 
             await expect(renderMissingMediaVariants(db, "media_broken_upload", store.bucket, store.images)).resolves.toBe("failed");
             expect(row("media_broken_upload")).toMatchObject({ variant_width: null, version: 1 });
-        });
-    });
-
-    describe("upload completion enqueue", () => {
-        const image = { id: "media_new", kind: "image", mimeType: "image/jpeg", variantWidth: null };
-
-        it("enqueues exactly one delayed render for an original-only still image", async () => {
-            const queue = { send: vi.fn(async () => undefined) };
-
-            await expect(enqueueMediaVariantsJob(queue, store.images, image)).resolves.toBe(true);
-            expect(queue.send).toHaveBeenCalledTimes(1);
-            expect(queue.send).toHaveBeenCalledWith(
-                { type: "media.render_variants", mediaId: "media_new" },
-                { delaySeconds: MEDIA_VARIANTS_JOB_DELAY_SECONDS },
-            );
-        });
-
-        it("enqueues nothing for rendered media, GIFs, videos, or without the Images binding", async () => {
-            const queue = { send: vi.fn(async () => undefined) };
-
-            for (const file of [
-                { ...image, variantWidth: 700 },
-                { ...image, mimeType: "image/gif" },
-                { ...image, kind: "video", mimeType: "video/mp4" },
-            ]) {
-                await expect(enqueueMediaVariantsJob(queue, store.images, file)).resolves.toBe(false);
-            }
-            await expect(enqueueMediaVariantsJob(queue, undefined, image)).resolves.toBe(false);
-            await expect(enqueueMediaVariantsJob(undefined, store.images, image)).resolves.toBe(false);
-            expect(queue.send).not.toHaveBeenCalled();
-        });
-
-        it("never fails the committed upload when the queue rejects", async () => {
-            const queue = { send: vi.fn(async () => { throw new Error("queue down"); }) };
-
-            await expect(enqueueMediaVariantsJob(queue, store.images, image)).resolves.toBe(false);
-            expect(console.warn).toHaveBeenCalledWith("[media] rendition job enqueue failed", { mediaId: "media_new", error: "Error" });
         });
     });
 });

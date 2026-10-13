@@ -1,6 +1,6 @@
 /**
  * A seeded store behind the metered bindings, driven through the real
- * `ApiWorker` (fetch, queue and scheduled entrypoints). Test-only; used by
+ * `ApiWorker` (fetch and scheduled entrypoints). Test-only; used by
  * the Workers Free plan budget (apps/api/src/free-plan-budget.test.ts).
  */
 import { eq } from "drizzle-orm";
@@ -28,7 +28,6 @@ export interface TestWorker {
   env: Env;
   ctx: ExecutionContext;
   fetch(request: Request): Promise<Response>;
-  queue(batch: MessageBatch<Record<string, unknown>>): Promise<void>;
   scheduled(controller: ScheduledController): Promise<void>;
 }
 

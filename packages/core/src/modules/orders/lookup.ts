@@ -14,12 +14,12 @@ import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-polic
 import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import {
-  buildOtpQueuePayload,
+  buildOtpDelivery,
   chooseOrderCodeChannel,
   createAuthOtpDeliveryKey,
   deriveCustomerAuthOtpDeliveryCode,
   enforceOtpSendRateLimits,
-  type OtpQueuePayload,
+  type OtpDelivery,
 } from "../customers";
 import {
     consumeLatestOrderOtpChallenge,
@@ -66,7 +66,7 @@ export interface SendOrderLookupOtpResult {
     destination: string;
     channel: CustomerAuthOtpChannel;
     resendAfterSeconds: number;
-    queuePayload: OtpQueuePayload;
+    otpDelivery: OtpDelivery;
     challengeKey?: string;
     deliveryKey?: string;
 }
@@ -149,12 +149,11 @@ export async function sendOrderLookupOtp(
         destination,
         channel,
         resendAfterSeconds: Math.max(0, challenge.resendAvailableAt - nowSeconds),
-        queuePayload: buildOtpQueuePayload({
+        otpDelivery: buildOtpDelivery({
             channel,
             purpose: ORDER_LOOKUP_PURPOSE,
             challengeKey,
             deliveryKey,
-            otpExpiresAt: challenge.expiresAt,
         }),
         challengeKey,
         deliveryKey,

@@ -13,7 +13,7 @@ import {
   getStoreSetupStatus,
 } from "@scalius/core/modules/onboarding";
 import { ok } from "../../../utils/api-response";
-import { enqueueCatalogProjectionRebuild } from "../../../utils/catalog-jobs";
+import { rebuildCatalogProjectionsAfterWrite } from "../../../background/catalog";
 import { successEnvelope, conflictResponse, errorResponses } from "../../../schemas/responses";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -175,9 +175,7 @@ app.openapi(applyStoreSetupRoute, async (c) => {
   // Card prices follow the price increment (cents instead of whole taka):
   // rebuild the catalogue projections off the request path.
   if (result.priceIncrementChanged) {
-    await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch((error: unknown) => {
-      console.warn("[store-setup] projection rebuild enqueue failed", error instanceof Error ? error.name : "unknown");
-    });
+    await rebuildCatalogProjectionsAfterWrite(c, c.get("db"), "store-setup");
   }
   c.header("Cache-Control", "private, no-store");
   return ok(c, result.values);

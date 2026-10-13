@@ -133,7 +133,8 @@ describe(`${NAME} over a populated 0107 database`, () => {
     expect(receiptsSql).not.toContain("__new_");
     expect(db.prepare("SELECT count(*) AS n FROM sqlite_schema WHERE name LIKE '__new_%'").get()).toEqual({ n: 0 });
     const indexes = db.prepare("SELECT name FROM sqlite_schema WHERE type = 'index' AND tbl_name IN ('notification_outbox', 'notification_delivery_receipts') AND sql IS NOT NULL").all();
-    expect(indexes).toHaveLength(17);
+    // 0148 dropped notification_outbox_queued_idx (no queue).
+    expect(indexes).toHaveLength(16);
     // The customer subject is admitted; an unknown one is still refused.
     db.exec(`INSERT INTO notification_outbox (id, dedupe_key, subject_type, subject_id, audience, notification_type, source, payload)
       VALUES ('nob_3', 'marketing:cust_a:optin:1', 'customer', 'cust_a', 'customer', 'marketing_opt_in', 'newsletter', '{}')`);

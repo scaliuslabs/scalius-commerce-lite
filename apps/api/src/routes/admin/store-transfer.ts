@@ -15,7 +15,6 @@ import {
   INVENTORY_EXPORT_PAGE_MAX,
   PRODUCT_EXPORT_PAGE_MAX,
 } from "@scalius/core/modules/store-transfer";
-import { enqueueMediaVariantsJob } from "@scalius/core/modules/media";
 import { productImageBatchSchema, productImportBatchSchema } from "@scalius/shared/store-transfer/products";
 import { customerImportBatchSchema } from "@scalius/shared/store-transfer/customers";
 import { inventoryImportBatchSchema } from "@scalius/shared/store-transfer/inventory";
@@ -24,6 +23,7 @@ import { ok } from "../../utils/api-response";
 import { ApiError } from "../../utils/api-error";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { importMediaFromUrl } from "./media-url-import";
+import { notificationSender } from "../../background/notification-sender";
 
 /** Largest import request body (the agent manifest declares the same ceiling). */
 export const IMPORT_REQUEST_MAX_BYTES = 1024 * 1024;
@@ -188,8 +188,7 @@ importApp.openapi(productImagesRoute, async (c) => {
   const response = await importProductImages(db, batch, {
     importMedia: async ({ sourceUrl, mediaId, filename }) => {
       const file = await importMediaFromUrl({ db, bucket: c.env.BUCKET, sourceUrl, mediaId, ...(filename ? { filename } : {}) });
-      // Renditions are made in the background rather than inside the import request.
-      await enqueueMediaVariantsJob(c.env.JOBS_QUEUE, c.env.IMAGES, file).catch(() => false);
+      // The scheduled backfill renders its renditions, never this import request.
       return { id: file.id, kind: file.kind };
     },
   });
@@ -215,7 +214,7 @@ importApp.openapi(customersRoute, async (c) => {
   assertBodySize(c);
   const batch = c.req.valid("json");
   requireImportPermissions(c, CUSTOMER_MODE_PERMISSIONS[batch.mode]);
-  return ok(c, await importCustomers(c.get("db"), batch, { actorId: staffId(c), env: c.env, queue: c.env.JOBS_QUEUE }));
+  return ok(c, await importCustomers(c.get("db"), batch, { actorId: staffId(c), env: c.env, send: notificationSender(c) }));
 });
 
 const inventoryRoute = createRoute({

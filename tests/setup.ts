@@ -2,8 +2,6 @@
 // Shared test helpers: mock factories, seed data generators.
 // Unit tests mock the DB at the drizzle level; integration tests use miniflare.
 
-import { vi } from "vitest";
-
 // ---------------------------------------------------------------------------
 // Mock DB factory
 // ---------------------------------------------------------------------------
@@ -82,61 +80,6 @@ export function createMockDb(overrides: {
   };
 
   return db;
-}
-
-// ---------------------------------------------------------------------------
-// Mock Cloudflare environment
-// ---------------------------------------------------------------------------
-
-export function createMockEnv() {
-  return {
-    DB: createMockD1(),
-    KV: createMockKV(),
-    R2: createMockR2(),
-    QUEUE: createMockQueue(),
-  };
-}
-
-function createMockD1() {
-  return {
-    prepare: vi.fn().mockReturnValue({
-      bind: vi.fn().mockReturnThis(),
-      run: vi.fn().mockResolvedValue({ results: [] }),
-      first: vi.fn().mockResolvedValue(null),
-      all: vi.fn().mockResolvedValue({ results: [] }),
-    }),
-    batch: vi.fn().mockResolvedValue([]),
-    exec: vi.fn().mockResolvedValue(undefined),
-  };
-}
-
-function createMockKV() {
-  const store = new Map<string, string>();
-  return {
-    get: vi.fn(async (key: string) => store.get(key) ?? null),
-    put: vi.fn(async (key: string, value: string) => { store.set(key, value); }),
-    delete: vi.fn(async (key: string) => { store.delete(key); }),
-    list: vi.fn(async () => ({ keys: [...store.keys()].map(name => ({ name })) })),
-    _store: store,
-  };
-}
-
-function createMockR2() {
-  return {
-    get: vi.fn().mockResolvedValue(null),
-    put: vi.fn().mockResolvedValue(undefined),
-    delete: vi.fn().mockResolvedValue(undefined),
-    list: vi.fn().mockResolvedValue({ objects: [] }),
-  };
-}
-
-function createMockQueue() {
-  const messages: unknown[] = [];
-  return {
-    send: vi.fn(async (msg: unknown) => { messages.push(msg); }),
-    sendBatch: vi.fn(async (msgs: unknown[]) => { messages.push(...msgs); }),
-    _messages: messages,
-  };
 }
 
 // ---------------------------------------------------------------------------

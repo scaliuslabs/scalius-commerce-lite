@@ -52,9 +52,10 @@ describe("OTP delivery receipt helpers", () => {
   });
 
   it("uses bounded exponential delivery retry delays", () => {
-    expect(getAuthOtpDeliveryRetryDelaySeconds(1)).toBe(30);
-    expect(getAuthOtpDeliveryRetryDelaySeconds(2)).toBe(60);
-    expect(getAuthOtpDeliveryRetryDelaySeconds(8)).toBe(3_600);
-    expect(getAuthOtpDeliveryRetryDelaySeconds(99)).toBe(3_600);
+    expect(getAuthOtpDeliveryRetryDelaySeconds(1)).toBe(2);
+    expect(getAuthOtpDeliveryRetryDelaySeconds(2)).toBe(6);
+    expect(getAuthOtpDeliveryRetryDelaySeconds(3)).toBe(18);
+    expect(getAuthOtpDeliveryRetryDelaySeconds(8)).toBe(60);
+    expect(getAuthOtpDeliveryRetryDelaySeconds(99)).toBe(60);
   });
 });

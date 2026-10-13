@@ -26,6 +26,8 @@ export async function readMaintenanceCursor(db: Database, key: string) {
     value,
     async save(next: Record<string, string | null | undefined>) {
       const serialized = JSON.stringify(next);
+      // An unchanged position (an idle store) writes nothing.
+      if (row ? row.value === serialized : Object.values(next).every((value) => value == null)) return true;
       if (row) {
         const updated = await db
           .update(settings)

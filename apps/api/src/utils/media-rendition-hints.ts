@@ -3,29 +3,27 @@
  *
  * A published media URL is the largest WebP rendition
  * (`media/<id>.<ext>/<w>.webp`) once renditions exist, else the original
- * (`media/<id>.<ext>`). When a public read renders a still original, its
- * media id is queued for the `media.render_variants` job with no delay, so a
- * failed upload-time render, an image the backfill has not reached yet, or
- * one the rendition ladder migration (0094) sent back to its original gets
- * renditions within seconds of a buyer seeing its placeholder. The job skips media
- * that are already done or cannot have renditions, and bumps the cache
- * generation when it renders, which replaces the original everywhere.
+ * (`media/<id>.<ext>`). When a public read renders a still original, the
+ * image's renditions are rendered right after the response, so an image the
+ * browser upload pipeline did not finish, or one the backfill has not reached
+ * yet, gets renditions within seconds of a buyer seeing its placeholder. The
+ * render skips media that are already done or cannot have renditions, and
+ * advances the media dependency when it renders, which replaces the original
+ * everywhere.
  *
  * Bounded: only reads that were rendered (cache misses), only the first
- * `MAX_BODY_BYTES` of a body, at most `MAX_IDS_PER_READ` ids (a listing
- * page's cards), and one queue message per id per `HINT_TTL_SECONDS` (a
- * per-colo Cache API marker keyed by Worker version; a hint, never authority).
- * Never throws.
+ * `MAX_BODY_BYTES` of a body, at most the plan's `renditionsPerPublicRead`
+ * images, and one render per id per `HINT_TTL_SECONDS` (a per-colo Cache API
+ * marker keyed by Worker version; a hint, never authority). Never throws.
  */
 
 import { readWorkerVersion } from "@scalius/shared/cache-generation";
 import { planLimits } from "@scalius/shared/plan-limits";
-import type { MediaVariantsQueue } from "@scalius/core/modules/media";
 
 const MARKER_CACHE_NAME = "scalius-media-rendition-hints";
-/** One enqueue per media id per cron period: the backfill runs every 15 minutes. */
+/** One render per media id per sweep period: the backfill runs every 15 minutes. */
 export const MEDIA_RENDITION_HINT_TTL_SECONDS = 15 * 60;
-/** A listing page's first cards: 24 marker reads and at most 24 queue sends per rendered read. */
+/** A listing page's first cards: the ids one rendered read considers. */
 export const MEDIA_RENDITION_HINT_MAX_IDS_PER_READ = 24;
 const MAX_BODY_BYTES = 512 * 1024;
 
@@ -89,7 +87,7 @@ function maskMediaId(id: string): string {
 
 export interface MediaRenditionHintEnv {
   CF_VERSION_METADATA?: { id?: unknown } | null;
-  JOBS_QUEUE?: MediaVariantsQueue;
+  BUCKET: R2Bucket;
   IMAGES?: ImagesBinding;
 }
 
@@ -109,46 +107,45 @@ async function openMarker(env: MediaRenditionHintEnv) {
 }
 
 /**
- * Queues the rendition job for each still original in `response` (a clone
- * the caller no longer needs). Returns the ids it queued.
+ * Renders the renditions of the first still originals in `response` (a clone
+ * the caller no longer needs) that no read in this colo started recently, at
+ * most `planLimits().background.renditionsPerPublicRead`. Runs after the
+ * response. Returns the ids it rendered or tried.
  */
-export async function queueRenditionsForRenderedOriginals(
+export async function renderRenditionsForRenderedOriginals(
   response: Response,
   env: MediaRenditionHintEnv,
 ): Promise<string[]> {
   try {
-    const queue = env.JOBS_QUEUE;
+    const limit = planLimits().background.renditionsPerPublicRead;
     const marker = await openMarker(env);
-    // Without Images nothing could render the job; the queue drops it. Where
-    // the plan profile leaves renditions to the scheduled backfill (Workers
-    // Free: a queue message per image on the buyer's path), a read
-    // queues nothing.
-    if (!queue || !marker || !env.IMAGES || !planLimits().queue.renditionsFromPublicReads) {
+    // Without Images nothing could render; where the plan profile leaves
+    // renditions to the scheduled backfill (Workers Free), a read renders nothing.
+    if (!marker || !env.IMAGES || limit < 1) {
       await response.body?.cancel().catch(() => undefined);
       return [];
     }
     const refs = findStillOriginalMedia(await readBoundedText(response));
     if (refs.length === 0) return [];
-    const { enqueueMediaVariantsJob } = await import("@scalius/core/modules/media");
-    const images = env.IMAGES;
-    // All ids at once: a card waits on this render, so no id queues behind another.
-    const outcomes = await Promise.all(refs.map(async (ref) => {
-      if (await marker.seen(ref.id).catch(() => false)) return null;
-      const sent = await enqueueMediaVariantsJob(queue, images, {
-        id: ref.id,
-        kind: "image",
-        mimeType: ref.mimeType,
-        variantWidth: null,
-      }, { delaySeconds: 0 });
-      if (!sent) return null;
+    const [{ renderMissingMediaVariants }, { getDb }] = await Promise.all([
+      import("@scalius/core/modules/media"),
+      import("@scalius/database/client"),
+    ]);
+    const db = getDb(env as unknown as Env);
+    const rendered: string[] = [];
+    for (const ref of refs) {
+      if (rendered.length >= limit) break;
+      if (await marker.seen(ref.id).catch(() => false)) continue;
+      // Marked first: a parallel read in this colo does not render it too.
       await marker.mark(ref.id).catch(() => undefined);
-      return ref.id;
-    }));
-    const queued = outcomes.filter((id): id is string => id !== null);
-    if (queued.length > 0) {
-      console.log("[media] rendition jobs queued from a public read", { count: queued.length, first: maskMediaId(queued[0]!) });
+      // Updating the media row advances its dependency in the same transaction.
+      await renderMissingMediaVariants(db, ref.id, env.BUCKET, env.IMAGES);
+      rendered.push(ref.id);
     }
-    return queued;
+    if (rendered.length > 0) {
+      console.log("[media] renditions rendered after a public read", { count: rendered.length, first: maskMediaId(rendered[0]!) });
+    }
+    return rendered;
   } catch {
     return [];
   }

@@ -1,9 +1,8 @@
-// The `plugins.deliver` consumer (docs/platform/PLUGINS.md, "Extension
-// points" 1): claims one plugin event delivery, hands the event envelope to
-// the plugin through the host, and records the outcome. Retries, the
-// dead-letter state and the in-flight cap live in the delivery row
-// (@scalius/core/modules/plugins, event-deliveries.ts); this file adds the
-// host and the queue.
+// Sends one plugin event delivery (docs/platform/PLUGINS.md, "Extension
+// points" 1): claims it, hands the event envelope to the plugin through the
+// host, and records the outcome. Retries, the dead-letter state and the
+// in-flight cap live in the delivery row (@scalius/core/modules/plugins,
+// event-deliveries.ts): a drain that finds the row due sends it again.
 //
 // What a plugin receives: `{ id, topic, apiVersion, occurredAt, resource,
 // facts }`, the webhook body without `data` (a plugin reads the current
@@ -13,20 +12,17 @@
 import type { Database } from "@scalius/database/client";
 import { eventOutbox } from "@scalius/database/schema";
 import {
-  PLUGIN_DELIVERY_BUSY_DELAY_SECONDS,
   cancelPluginEventDelivery,
   claimPluginEventDelivery,
   completePluginEventDelivery,
   failPluginEventDelivery,
   getPluginInstallation,
-  pluginDeliveryQueueDelay,
   releasePluginEventDelivery,
 } from "@scalius/core/modules/plugins";
 import { toOutboxEvent, type OutboxEvent } from "@scalius/core/modules/events";
 import { EVENTS_API_VERSION, topicMatchesAnyFilter } from "@scalius/shared/events";
 import type { PluginEvent } from "@scalius/plugin-sdk";
 import { eq } from "drizzle-orm";
-import { eventsQueue } from "../events/flush";
 import type { PluginHostOptions } from "./host";
 
 /** A delivery the host just updated in place is sent again after this long. */
@@ -58,13 +54,12 @@ export async function processPluginEventDelivery(options: {
   loaderFor?: PluginHostOptions["loaderFor"];
 }): Promise<PluginDeliveryOutcome> {
   const { db, env, deliveryId } = options;
-  const queue = eventsQueue(env);
   const claim = await claimPluginEventDelivery(db, deliveryId);
   if (claim.status === "skipped") return { status: "skipped", deliveryId, reason: claim.reason };
   if (claim.status === "busy") {
-    // The plugin has as many deliveries in flight as it may: try shortly.
-    await queue?.send({ type: "plugins.deliver", deliveryId }, { delaySeconds: PLUGIN_DELIVERY_BUSY_DELAY_SECONDS }).catch(() => undefined);
-    return { status: "busy", deliveryId, retryInSeconds: PLUGIN_DELIVERY_BUSY_DELAY_SECONDS };
+    // The plugin has as many deliveries in flight as it may: the row stays
+    // due and the next drain sends it.
+    return { status: "busy", deliveryId, retryInSeconds: null };
   }
   const { delivery, claimId } = claim;
 
@@ -96,7 +91,6 @@ export async function processPluginEventDelivery(options: {
     // The host just brought the installation in step with the deployed
     // code: not the plugin's attempt. The next one runs the new version.
     await releasePluginEventDelivery(db, delivery, claimId, { delaySeconds: OUTDATED_RETRY_SECONDS, reason: outcome.error ?? "The app was updated." });
-    await queue?.send({ type: "plugins.deliver", deliveryId }, { delaySeconds: OUTDATED_RETRY_SECONDS }).catch(() => undefined);
     return { status: "released", deliveryId, retryInSeconds: OUTDATED_RETRY_SECONDS };
   }
   if (outcome.failure === "inactive") {
@@ -104,9 +98,5 @@ export async function processPluginEventDelivery(options: {
     return { status: "cancelled", deliveryId, retryInSeconds: null };
   }
   const failed = await failPluginEventDelivery(db, delivery, claimId, { error: outcome.error ?? "The app failed.", durationMs });
-  if (failed.retryInSeconds !== null) {
-    // The scheduled flush finds the due row if this send is lost.
-    await queue?.send({ type: "plugins.deliver", deliveryId }, { delaySeconds: pluginDeliveryQueueDelay(failed.retryInSeconds) }).catch(() => undefined);
-  }
   return { status: failed.status, deliveryId, retryInSeconds: failed.retryInSeconds };
 }

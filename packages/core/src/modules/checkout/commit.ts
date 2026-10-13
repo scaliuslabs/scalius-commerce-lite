@@ -45,7 +45,7 @@ import {
 import {
   buildOrderCreatedNotificationDedupeKey,
   createOrderNotificationOutboxInsertValues,
-  type OrderNotificationQueue,
+  type NotificationSender,
 } from "../notifications";
 import { shouldCreateOrderCreatedNotification } from "./created-notification-policy";
 import {
@@ -79,7 +79,8 @@ import {
 type ReservationPool = "regular" | "preorder" | "backorder";
 
 export interface StorefrontOrderCommitRuntime {
-    JOBS_QUEUE?: OrderNotificationQueue;
+    /** Sends the order_created notification right after the commit. */
+    sendNotifications?: NotificationSender;
     STOREFRONT_URL?: string;
     CREDENTIAL_ENCRYPTION_KEY?: string;
 }
@@ -547,8 +548,6 @@ function buildOrderWriteBatch(
             db.insert(notificationOutbox).values(createOrderNotificationOutboxInsertValues({
                 dedupeKey: buildOrderCreatedNotificationDedupeKey(od.id),
                 orderId: od.id,
-                customerEmail: od.customerEmail ?? undefined,
-                customerName: od.customerName,
                 notificationType: "order_created",
                 source: "storefront-order",
             })),

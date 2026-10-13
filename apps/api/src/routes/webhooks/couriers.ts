@@ -33,13 +33,14 @@ import {
 } from "@scalius/shared/plugins/providers";
 import { requestCourierProviders } from "../../plugins/providers/courier";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
-import { enqueueOrderStatusChangeNotification } from "../../utils/order-notification-queue";
+import { sendOrderStatusChangeNotification } from "../../utils/order-notifications";
 import {
   buildWebhookEventId,
   claimWebhookEvent,
   markWebhookEventFailed,
   markWebhookEventProcessed,
 } from "../../utils/webhook-idempotency";
+import { notificationSender } from "../../background/notification-sender";
 
 type ShipmentRow = typeof deliveryShipments.$inferSelect;
 
@@ -244,9 +245,9 @@ export async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courie
     await syncCourierFulfilmentFromShipment(db, shipment.id, tracking.status);
     const statusResult = await updateOrderStatusFromShipment(db, shipment.id, tracking.status);
     await syncCourierFulfilmentFromShipment(db, shipment.id, tracking.status);
-    await enqueueOrderStatusChangeNotification({
+    await sendOrderStatusChangeNotification({
       db,
-      queue: c.env.JOBS_QUEUE,
+      send: notificationSender(c),
       statusChange: statusResult?.statusChange ?? null,
       trackingId: shipment.trackingId,
       source: "courier-webhook",

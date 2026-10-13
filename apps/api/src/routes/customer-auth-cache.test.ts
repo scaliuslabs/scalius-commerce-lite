@@ -8,7 +8,7 @@ import { ServiceUnavailableError, ValidationError } from "../utils/api-error";
 const mocks = vi.hoisted(() => ({
   sendOtp: vi.fn(),
   verifyOtp: vi.fn(),
-  deleteCustomerAuthOtpChallenge: vi.fn(),
+  sendAuthOtp: vi.fn(),
   getCustomerBySession: vi.fn(),
   updateCustomerProfile: vi.fn(),
   getCustomerOrders: vi.fn(),
@@ -29,11 +29,12 @@ const mocks = vi.hoisted(() => ({
   validateReceiptToken: vi.fn(),
 }));
 
+vi.mock("../background/otp-sender", () => ({ sendAuthOtp: mocks.sendAuthOtp }));
+
 vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/customers")>()),
   sendOtp: mocks.sendOtp,
   verifyOtp: mocks.verifyOtp,
-  deleteCustomerAuthOtpChallenge: mocks.deleteCustomerAuthOtpChallenge,
   getCustomerBySession: mocks.getCustomerBySession,
   deleteCustomerSession: vi.fn(),
   updateCustomerProfile: mocks.updateCustomerProfile,
@@ -152,9 +153,8 @@ describe("customer auth private cache policy", () => {
     mocks.sendOtp.mockResolvedValue({
       message: "We sent you a code.",
       resendAfterSeconds: 60,
-      otpStorageKey: "cust_otp:email:opaque_hash",
       deliveryKey: "otp_delivery_1",
-      queuePayload: { type: "auth.send_otp", challengeKey: "cust_otp:email:opaque_hash", deliveryKey: "otp_delivery_1" },
+      otpDelivery: { purpose: "customer_login", challengeKey: "cust_otp:email:opaque_hash", deliveryKey: "otp_delivery_1", channel: "email" },
     });
     mocks.verifyOtp.mockResolvedValue({
       status: "signed_in",
@@ -532,7 +532,6 @@ describe("customer auth private cache policy", () => {
   it("sends one code request shape for new and returning buyers and returns the resend wait", async () => {
     const app = createTestApp();
     const env = {
-      JOBS_QUEUE: { send: vi.fn(async () => undefined) },
     } as never;
 
     const response = await app.request(
@@ -550,6 +549,10 @@ describe("customer auth private cache policy", () => {
       expect.anything(),
       expect.objectContaining({ method: "email", channel: "email", identifier: "buyer@example.com" }),
     );
+    // The code goes out after the response, from references only.
+    expect(mocks.sendAuthOtp).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+      purpose: "customer_login", challengeKey: "cust_otp:email:opaque_hash", deliveryKey: "otp_delivery_1", channel: "email",
+    });
     await expect(response.json()).resolves.toEqual({
       success: true,
       data: { message: "We sent you a code.", resendAfterSeconds: 60 },
@@ -602,8 +605,7 @@ describe("customer auth private cache policy", () => {
       },
       {
         PUBLIC_API_BASE_URL: "https://api.scalius.com",
-        JOBS_QUEUE: { send: vi.fn(async () => undefined) },
-      } as never,
+        } as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
@@ -634,8 +636,7 @@ describe("customer auth private cache policy", () => {
       },
       {
         PUBLIC_API_BASE_URL: "https://api.scalius.com",
-        JOBS_QUEUE: { send: vi.fn(async () => undefined) },
-      } as never,
+        } as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
@@ -666,8 +667,7 @@ describe("customer auth private cache policy", () => {
       },
       {
         PUBLIC_API_BASE_URL: "http://localhost:8787",
-        JOBS_QUEUE: { send: vi.fn(async () => undefined) },
-      } as never,
+        } as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
@@ -1146,63 +1146,4 @@ describe("customer auth private cache policy", () => {
     expect(mocks.createSSLCommerzPaymentSession).not.toHaveBeenCalled();
   });
 
-  it("clears OTP challenge state when queue handoff fails", async () => {
-    const app = createTestApp();
-    const queueSend = vi.fn().mockRejectedValue(new Error("queue down"));
-    mocks.deleteCustomerAuthOtpChallenge.mockResolvedValue(undefined);
-    mocks.sendOtp.mockResolvedValue({
-      success: true,
-      message: "Verification code sent to your email",
-      otpStorageKey: "cust_otp:email:opaque_hash",
-      deliveryKey: "otp_delivery_1",
-      queuePayload: {
-        type: "auth.send_otp",
-        challengeKey: "cust_otp:email:opaque_hash",
-        deliveryKey: "otp_delivery_1",
-        purpose: "customer_login",
-        otpExpiresAt: 4_102_444_800,
-        method: "email",
-        allowedMethod: "email",
-      },
-    });
-
-    const response = await app.request(
-      "/api/v1/customer-auth/send-otp",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          method: "email",
-          identifier: "Buyer@Example.com",
-          name: "Buyer",
-        }),
-      },
-      {
-        JOBS_QUEUE: { send: queueSend },
-      } as never,
-    );
-
-    expect(response.status).toBe(503);
-    expect(queueSend).toHaveBeenCalledWith(expect.objectContaining({
-      type: "auth.send_otp",
-      challengeKey: "cust_otp:email:opaque_hash",
-      deliveryKey: "otp_delivery_1",
-    }));
-    expect(JSON.stringify(queueSend.mock.calls[0]?.[0])).not.toContain("buyer@example.com");
-    expect(JSON.stringify(queueSend.mock.calls[0]?.[0])).not.toContain("Buyer");
-    expect(JSON.stringify(queueSend.mock.calls[0]?.[0])).not.toContain("123456");
-    expect(mocks.deleteCustomerAuthOtpChallenge).toHaveBeenCalledWith(
-      {},
-      {
-        otpKey: "cust_otp:email:opaque_hash",
-        deliveryKey: "otp_delivery_1",
-      },
-    );
-    await expect(response.json()).resolves.toMatchObject({
-      success: false,
-      error: {
-        code: "SERVICE_UNAVAILABLE",
-      },
-    });
-  });
 });

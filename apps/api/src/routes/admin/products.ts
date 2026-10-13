@@ -57,7 +57,7 @@ import {
 } from "../../schemas/entities";
 import { productMerchandisingSectionResponseSchemas } from "../../schemas/product-merchandising";
 
-import { scheduleRecommendationRefreshAfterWrite } from "../../utils/catalog-jobs";
+import { refreshRecommendationsAfterWrite } from "../../background/catalog";
 import { assertCanWriteCosts, presentSkuCost, presentSkuCosts, productWriteSetsCosts } from "./cost-access";
 import { products } from "@scalius/database/schema";
 import { appListQuerySchema, appListValuesSchema, planAppList } from "../../plugins/list-columns";
@@ -593,7 +593,7 @@ app.openapi(createProductRoute, async (c) => {
     assertCanWriteCosts(c, productWriteSetsCosts(data));
     const result = await createProduct(db, data);
 
-    scheduleRecommendationRefreshAfterWrite(c, db, [result.id]);
+    await refreshRecommendationsAfterWrite(c, db, [result.id]);
     return created(c, result);
 });
 
@@ -688,7 +688,7 @@ app.openapi(createRoute({
     const claims = slice ? slice.claims : data.products!;
     const { outcomes } = claims.length > 0 ? await bulkRestoreProducts(db, claims) : { outcomes: [] };
     const restored = outcomes.filter((outcome) => outcome.status === "restored").map((outcome) => outcome.id);
-    if (restored.length > 0) scheduleRecommendationRefreshAfterWrite(c, db, restored);
+    if (restored.length > 0) await refreshRecommendationsAfterWrite(c, db, restored);
     return ok(c, {
         outcomes,
         ...(slice ? { matching: { processed: restored.length, skipped: outcomes.length - restored.length, next: slice.next } satisfies MatchingResult } : {}),
@@ -739,7 +739,7 @@ app.openapi(bulkUpdateRoute, async (c) => {
     const claims = slice ? slice.claims : listed!;
     const result = claims.length > 0 ? await bulkUpdateProducts(db, claims, changes) : { products: [], skipped: [] };
     if (result.products.length > 0) {
-        scheduleRecommendationRefreshAfterWrite(c, db, result.products.map((product) => product.id));
+        await refreshRecommendationsAfterWrite(c, db, result.products.map((product) => product.id));
     }
     return ok(c, {
         ...result,
@@ -781,7 +781,7 @@ app.openapi(createRoute({
         return ok(c, { productIds: [], channelIds: input.channelIds, matching: { processed: 0, skipped: 0, next: null } });
     }
     const result = await setProductPublications(db, { ...input, productIds: ids });
-    scheduleRecommendationRefreshAfterWrite(c, db, result.productIds);
+    await refreshRecommendationsAfterWrite(c, db, result.productIds);
     return ok(c, {
         ...result,
         ...(slice ? { matching: { processed: result.productIds.length, skipped: 0, next: slice.next } satisfies MatchingResult } : {}),
@@ -810,7 +810,7 @@ app.openapi(createRoute({
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const salesChannelIds = await setProductChannels(db, id, c.req.valid("json").channelIds);
-    scheduleRecommendationRefreshAfterWrite(c, db, [id]);
+    await refreshRecommendationsAfterWrite(c, db, [id]);
     return ok(c, { salesChannelIds });
 });
 
@@ -946,7 +946,7 @@ app.openapi(updateProductSectionRoute, async (c) => {
         const result = await updateProductSemanticSection(db, id, patch);
         if (!result) throw new NotFoundError("Product not found");
 
-        scheduleRecommendationRefreshAfterWrite(c, db, [id]);
+        await refreshRecommendationsAfterWrite(c, db, [id]);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -1015,7 +1015,7 @@ app.openapi(updateProductRoute, async (c) => {
     try {
         const result = await updateProduct(db, id, data, c.get("user")?.id);
 
-        scheduleRecommendationRefreshAfterWrite(c, db, [id]);
+        await refreshRecommendationsAfterWrite(c, db, [id]);
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -1084,7 +1084,7 @@ app.openapi(restoreProductRoute, async (c) => {
     const { expectedAggregateRevision } = c.req.valid("query");
     const result = await restoreProduct(db, id, expectedAggregateRevision);
 
-    scheduleRecommendationRefreshAfterWrite(c, db, [id]);
+    await refreshRecommendationsAfterWrite(c, db, [id]);
     return ok(c, result);
 });
 
@@ -1285,7 +1285,7 @@ app.openapi(saveOptionMatrixRoute, async (c) => {
     const user = c.get("user");
     const result = await saveProductOptionMatrix(db, id, c.req.valid("json"), user?.id);
 
-    scheduleRecommendationRefreshAfterWrite(c, db, [id]);
+    await refreshRecommendationsAfterWrite(c, db, [id]);
     return ok(c, result);
 });
 

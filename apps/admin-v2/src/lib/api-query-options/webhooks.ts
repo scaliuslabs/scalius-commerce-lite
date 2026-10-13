@@ -33,8 +33,6 @@ export type WebhookUpdate = NonNullable<PatchApiV1AdminWebhooksByIdData["body"]>
 export type WebhookDeliveryStatus = WebhookDelivery["status"];
 export const WEBHOOK_DELIVERY_STATUSES = [
   "pending",
-  "enqueueing",
-  "queued",
   "processing",
   "succeeded",
   "failed",

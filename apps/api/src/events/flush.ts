@@ -1,23 +1,18 @@
-// The post-write flush: only the core events and plugin persistence modules,
+// The post-write drain: only the core events and plugin persistence modules,
 // no representations or plugin host, so the middleware's lazy import stays
-// small. It also tells the realtime hub what moved (realtime/publish.ts).
+// small while nobody listens. Deliveries the dispatched events recorded are
+// sent by events/dispatch.ts, loaded only then. It also tells the realtime
+// hub what moved (realtime/publish.ts).
 import type { Database } from "@scalius/database/client";
 import {
-  flushPendingEventOutbox,
+  dispatchPendingEvents,
   type EventFlushResult,
-  type EventsQueue,
   type OutboxEvent,
 } from "@scalius/core/modules/events";
+import { planLimits } from "@scalius/shared/plan-limits";
 import type { RealtimeChange, RealtimeTopic } from "@scalius/shared/realtime";
 import { changesForEvent, publishRealtime, tableChanges } from "../realtime/publish";
 import { API_EVENT_FAN_OUT_TARGETS } from "./targets";
-
-/** Events handed to the queue right after a write (the scheduled sweep takes the rest). */
-export const POST_WRITE_EVENT_FLUSH_LIMIT = 50;
-
-export function eventsQueue(env: Env): EventsQueue | undefined {
-  return env.JOBS_QUEUE as unknown as EventsQueue | undefined;
-}
 
 /** Flush observer that sends the moved events to the realtime hub, with any table-level notices, in one RPC. */
 export function realtimeFlushObserver(env: Env, tableTopics: Iterable<RealtimeTopic> = []) {
@@ -30,28 +25,37 @@ export function realtimeFlushObserver(env: Env, tableTopics: Iterable<RealtimeTo
   };
   return {
     onFlushed: publish,
-    /** Table notices still owed when the flush moved no event. */
+    /** Table notices still owed when the drain moved no event. */
     finish: async () => {
       if (!published) await publishRealtime(env, extra);
     },
   };
 }
 
-/** After a write: hand that write's events to the queue (or settle them when nobody listens). */
+/**
+ * After a write: dispatch that write's events (or settle them when nobody
+ * listens) and send the deliveries they recorded, within this plan's drain
+ * limits. The scheduled tick takes whatever is left.
+ */
 export async function flushEventsAfterWrite(
   db: Database,
   env: Env,
+  ctx: ExecutionContext,
   options: { tableTopics?: Iterable<RealtimeTopic> } = {},
 ): Promise<EventFlushResult> {
   const realtime = realtimeFlushObserver(env, options.tableTopics);
   try {
-    return await flushPendingEventOutbox({
+    const result = await dispatchPendingEvents({
       db,
-      queue: eventsQueue(env),
       targets: API_EVENT_FAN_OUT_TARGETS,
-      limit: POST_WRITE_EVENT_FLUSH_LIMIT,
+      limit: planLimits().background.eventsPerDrain,
       onFlushed: realtime.onFlushed,
     });
+    if (result.deliveries.length > 0) {
+      const { sendEventDeliveries } = await import("./dispatch");
+      await sendEventDeliveries(db, env, ctx, result.deliveries.slice(0, planLimits().background.deliveriesPerDrain));
+    }
+    return result;
   } finally {
     await realtime.finish();
   }

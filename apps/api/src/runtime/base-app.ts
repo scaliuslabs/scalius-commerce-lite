@@ -72,8 +72,8 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
     );
   });
 
-  // A mutating request that wrote an evented table hands its outbox rows to
-  // the queue after the response (COMMERCE-HOOKS H3).
+  // A mutating request that wrote an evented table dispatches its outbox rows
+  // after the response (COMMERCE-HOOKS H3).
   app.use("*", eventDispatchMiddleware);
 
   app.use("*", async (c, next) => {

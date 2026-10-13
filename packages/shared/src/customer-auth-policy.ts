@@ -333,9 +333,3 @@ export function orderCodeChannels(
   });
 }
 
-/** Queue consumers still route WhatsApp by this legacy method name. */
-export function channelToAllowedMethod(channel: CustomerAuthOtpChannel): string {
-  if (channel === "whatsapp") return "whatsapp_otp";
-  if (channel === "sms") return "sms_otp";
-  return "email";
-}

@@ -54,7 +54,7 @@ import { ConflictError, ForbiddenError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
-import { eventsQueue } from "../../events/flush";
+import { afterResponse, executionContextOf } from "../../background/after-response";
 import { BUNDLED_PLUGINS } from "../../plugins/bundled.gen";
 import { PLUGIN_CATALOG } from "../../plugins/catalog.gen";
 import {
@@ -1038,7 +1038,12 @@ const retryRoute = createRoute({
 app.openapi(retryRoute, async (c) => {
   noStore(c);
   const { id, deliveryId } = c.req.valid("param");
-  const delivery = await retryPluginEventDelivery(c.get("db"), id, deliveryId, eventsQueue(c.env));
+  const db = c.get("db");
+  const delivery = await retryPluginEventDelivery(db, id, deliveryId);
+  await afterResponse(c, "app delivery retry", async () => {
+    const { sendEventDeliveries } = await import("../../events/dispatch");
+    await sendEventDeliveries(db, c.env, executionContextOf(c), [{ type: "plugins.deliver", deliveryId }]);
+  });
   return ok(c, { delivery: deliveryResponse(delivery) });
 });
 

@@ -166,10 +166,8 @@ describe("order payment recovery OTP service", () => {
       queued: true,
       channel: "sms",
       method: "phone",
-      queuePayload: {
-        type: "auth.send_otp",
+      otpDelivery: {
         purpose: "order_payment_recovery",
-        method: "phone",
         channel: "sms",
       },
     });
@@ -197,13 +195,13 @@ describe("order payment recovery OTP service", () => {
     expect(persistedJson).not.toContain("buyer@example.com");
     expect(persistedJson).not.toContain("Buyer");
     expect(persistedJson).not.toContain(derivedCode);
-    expect(result.queuePayload).not.toHaveProperty("code");
-    expect(result.queuePayload).not.toHaveProperty("identifier");
-    expect(result.queuePayload).not.toHaveProperty("name");
-    expect(JSON.stringify(result.queuePayload)).not.toContain(derivedCode);
-    expect(JSON.stringify(result.queuePayload)).not.toContain("+8801775528888");
-    expect(JSON.stringify(result.queuePayload)).not.toContain("Buyer");
-    expect(result.queuePayload).toMatchObject({
+    expect(result.otpDelivery).not.toHaveProperty("code");
+    expect(result.otpDelivery).not.toHaveProperty("identifier");
+    expect(result.otpDelivery).not.toHaveProperty("name");
+    expect(JSON.stringify(result.otpDelivery)).not.toContain(derivedCode);
+    expect(JSON.stringify(result.otpDelivery)).not.toContain("+8801775528888");
+    expect(JSON.stringify(result.otpDelivery)).not.toContain("Buyer");
+    expect(result.otpDelivery).toMatchObject({
       challengeKey: result.challengeKey,
       deliveryKey: result.deliveryKey,
     });

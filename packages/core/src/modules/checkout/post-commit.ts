@@ -1,7 +1,7 @@
 // Side effects that run after a storefront order commits.
 import type { Database } from "@scalius/database/client";
 import { processExistingMetaPurchaseOutboxForOrder } from "../../integrations/meta/purchase-outbox";
-import { buildOrderCreatedNotificationDedupeKey, recordAndEnqueueOrderNotification } from "../notifications";
+import { buildOrderCreatedNotificationDedupeKey, recordAndSendOrderNotification } from "../notifications";
 import type { StorefrontOrderCommitPayload } from "../orders";
 import { type StorefrontOrderCommitRuntime, wantsOrderCreatedNotification } from "./commit";
 
@@ -27,21 +27,19 @@ export async function runStorefrontOrderPostCommitSideEffects(
     }
 
     try {
-        const notificationResult = await recordAndEnqueueOrderNotification({
+        const notificationResult = await recordAndSendOrderNotification({
             db,
-            queue: env?.JOBS_QUEUE,
+            send: env?.sendNotifications,
             notification: {
                 dedupeKey: buildOrderCreatedNotificationDedupeKey(payload.orderData.id),
                 orderId: payload.orderData.id,
-                customerEmail: payload.orderData.customerEmail ?? undefined,
-                customerName: payload.orderData.customerName,
                 notificationType: "order_created",
                 source: "storefront-order",
             },
         });
         if (!notificationResult.enqueued) {
             console.warn(
-                `[orders/commit] order_created notification for ${payload.orderData.id} recorded but not enqueued: ${notificationResult.skippedReason}`,
+                `[orders/commit] order_created notification for ${payload.orderData.id} recorded, left to the scheduled drain: ${notificationResult.skippedReason}`,
             );
         }
     } catch (error) {

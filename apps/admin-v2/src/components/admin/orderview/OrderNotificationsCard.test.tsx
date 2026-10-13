@@ -28,7 +28,7 @@ const en = orderDetailMessages.en;
 
 const outbox = (overrides: Record<string, unknown>) => ({
   id: "out_1", notificationType: "order_confirmed", status: "sent", lastError: null,
-  queuedAt: 1_783_000_000, sentAt: 1_783_000_010, createdAt: 1_783_000_000, receipts: [], ...overrides,
+  sentAt: 1_783_000_010, createdAt: 1_783_000_000, receipts: [], ...overrides,
 });
 const emailSent = {
   id: "rcpt_1", channel: "email", status: "accepted", recipientMasked: "r***@example.com", lastError: null, providerStatus: null,

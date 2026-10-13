@@ -7,9 +7,9 @@ import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
   archiveStaleIncompleteOrders,
 } from "@scalius/core/modules/orders";
-import { flushPendingNotificationOutbox, pruneStaffAlerts } from "@scalius/core/modules/notifications";
+import { pruneStaffAlerts } from "@scalius/core/modules/notifications";
 import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
-import { sweepAutoFulfilment, listOrdersAwaitingAutoFulfil } from "@scalius/core/modules/fulfilment";
+import { sweepAutoFulfilment } from "@scalius/core/modules/fulfilment";
 import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import {
@@ -22,31 +22,27 @@ import {
   pruneExpiredIdentityHandoffEvents,
 } from "@scalius/core/auth";
 import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
-import { backfillMissingMediaVariants, enqueueMediaVariantsBacklog } from "@scalius/core/modules/media";
+import { backfillMissingMediaVariants } from "@scalius/core/modules/media";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
-import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { appPaymentProvidersLoader } from "./plugins/providers/payment";
-import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
-import { bulkQueueState } from "./utils/queue-lanes";
-import { maintenanceSliceDue, type SweepSlice } from "./scheduled/slices";
+import { sendOrderRefundNotification } from "./utils/order-notifications";
+import { dueSweepIndexes, firstSweepRunOfHour } from "./scheduled/slices";
 import {
   isNightlyCatalogTick,
-  queuePostDeployProjectionRebuild,
+  requestPostDeployProjectionRebuild,
   runNightlyCatalogMaintenance,
 } from "./scheduled/catalog-projections";
+import { drainCatalogProjectionRebuild, rotateRecommendations } from "./background/catalog";
 import { readMaintenanceCursor } from "./scheduled/cursor";
 import { maintainDerivedProjections } from "./scheduled/derived-projections";
 import { storeTimeZoneOf } from "./utils/store-time-zone";
 
-export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
 export const STALE_INCOMPLETE_ORDER_SWEEP_LIMIT = 25;
 export const STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES = 60;
 export const ABANDONED_CHECKOUT_SWEEP_LIMIT = 100;
 export const ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
-/** Due outbox rows per run, sent by `sendBatch` (Wave B §11.3): 19,200/day at the 15-minute cron. */
-export const ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT = 200;
 /** Due review requests turned into outbox rows per run (Wave B §2.3). */
 export const REVIEW_REQUEST_SWEEP_LIMIT = 100;
 export const META_PURCHASE_OUTBOX_SWEEP_LIMIT = 25;
@@ -57,39 +53,20 @@ export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
 export const EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
-export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
-export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
 /**
  * Rendition backfill budget. Each image costs one R2 read, one Images info
  * call, up to thirteen Images transforms and R2 writes, and a few D1 queries: a
  * few seconds of wall time but little Worker CPU (the transforms run in the
- * Images service). The backfill runs last and starts no new image once the
- * run is this old, so the run ends well inside the 15-minute cron wall limit
- * and before the next 15-minute tick starts. How many images a run renders
- * itself is `planLimits().maintenance.inlineRenditionsPerRun` (a CPU guard).
+ * Images service). The backfill starts no new image once the run is this
+ * old, so the run ends well inside the 15-minute cron wall limit and before
+ * the job's next turn. How many images a run renders itself is
+ * `planLimits().maintenance.inlineRenditionsPerRun` (a CPU guard).
  */
 export const MEDIA_RENDITION_BACKFILL_DEADLINE_MS = 10 * 60 * 1_000;
 /** Two originals (up to 20 MB each) in memory at once, two D1 connections. */
 export const MEDIA_RENDITION_BACKFILL_CONCURRENCY = 2;
 
-/**
- * With the jobs queue, the rendition backlog is fanned out instead of rendered
- * inline two at a time: one page of jobs per run
- * (`planLimits().queue.bulkPageSize`, sent in `sendBatch` calls of 100, the
- * Queues per-call limit), and only as many as fit under the plan's bulk backlog
- * limit (utils/queue-lanes.ts), so urgent messages never wait behind a large
- * fan-out. Queue consumers render them in parallel (Queues runs up to 250
- * concurrent consumer invocations), so on a plan with a large page a large
- * backlog (the 0094 ladder migration sends every image back to its original) is
- * re-rendered within minutes. Each job bumps the generation when it renders.
- * Each image is up to thirteen Images transforms (the 1.2x ladder): 1,000
- * images are 13,000 unique transformations, billed per unique transformation
- * per month (5,000 included; a free account stops transforming beyond that
- * and its cards keep their placeholders until the allowance resets). New
- * dashboard uploads encode their ladder in the browser and cost none.
- */
-
-export { MAINTENANCE_TICK_MS, maintenanceSliceDue, maintenanceTick } from "./scheduled/slices";
+export { DRAIN_TICK_MS, dueSweepIndexes, firstSweepRunOfHour, sweepPeriodMinutes } from "./scheduled/slices";
 
 type ScheduledMaintenanceMetadata = {
   cron?: string;
@@ -102,7 +79,6 @@ type ScheduledRunContext = {
   cron: string;
   scheduledTime: string;
   scheduledAt: number | undefined;
-  remaining?: number;
 };
 
 /** A sweep's row limit under the plan: the full limit on Paid, a fraction on Free. */
@@ -151,9 +127,8 @@ async function timedScheduledOperation<T>(
   }
 }
 
-async function enqueueReconciledRefundNotifications(
+async function recordReconciledRefundNotifications(
   db: ReturnType<typeof getDb>,
-  env: Env,
   notifications: Array<{
     orderId: string;
     notificationType: "refund_processing" | "refund_failed" | "order_refunded" | "order_partially_refunded";
@@ -163,9 +138,10 @@ async function enqueueReconciledRefundNotifications(
   }>,
 ): Promise<void> {
   for (const notification of notifications) {
-    const result = await enqueueOrderRefundNotificationForOrder({
+    const result = await sendOrderRefundNotification({
       db,
-      queue: env.JOBS_QUEUE,
+      // The notification drain sends it on the next tick.
+      send: undefined,
       orderId: notification.orderId,
       notificationType: notification.notificationType,
       dedupeKey: notification.dedupeKey,
@@ -176,10 +152,10 @@ async function enqueueReconciledRefundNotifications(
       },
     });
 
-    if (!result.enqueued) {
+    if (result.skippedReason === "record_failed" || result.skippedReason === "order_missing") {
       console.log(
         `[scheduled] Reconciled refund notification for order ${notification.orderId} ` +
-          `recorded but not enqueued: ${result.skippedReason}`,
+          `not recorded: ${result.skippedReason}`,
       );
     }
   }
@@ -220,29 +196,25 @@ export interface SweepContext {
 
 export interface MaintenanceSweep {
   name: string;
-  slice: SweepSlice;
-  /** Row-by-row or app work uses a separate existing jobs invocation on limited profiles. */
-  queueOnLimitedPlan?: boolean;
   run(context: SweepContext): Promise<void>;
 }
 
 /**
- * Each sweep is isolated: one that keeps failing (logged by `timed`) must not
- * starve the sweeps after it, above all the rendition backfill that runs last.
- * The run still fails with the first error once everything has run. Slices
- * hold the sweeps that fit together within a Free invocation (about 12 D1
- * queries and 3 ms of CPU each, measured: scripts/free-plan-budget.mjs).
+ * The sweep rotation (scheduled/slices.ts): Paid runs every job every 15
+ * minutes; Free runs one job a minute beside the drains, so each job and the
+ * drains together fit 50 D1 queries (apps/api/src/maintenance-budget.test.ts).
+ * Each job is isolated: one that keeps failing (logged by `timed`) must not
+ * starve the jobs after it. The run still fails with the first error once
+ * everything has run.
  */
 export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
-    // A reservation expires after 30 minutes; stock waits at most one more tick on Paid, one hour on Free.
+    // A reservation expires after 30 minutes; stock waits at most one more rotation.
     name: "inventory_expiry_sweep",
-    queueOnLimitedPlan: true,
-    slice: 0,
     async run({ db, timed }) {
       const result = await timed("inventory_expiry_sweep", () =>
         releaseExpiredReservations(db, 30, {
-          limit: scaled(INVENTORY_EXPIRY_SWEEP_LIMIT),
+          limit: planLimits().maintenance.inventoryExpiryPerRun,
         }),
       );
       console.log(
@@ -253,12 +225,11 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
+    // Each order is a bounded repair (inventory, gift cards), a few per run on Free.
     name: "stale_incomplete_order_cleanup",
-    queueOnLimitedPlan: true,
-    slice: 1,
-    async run({ db, env, runContext, timed }) {
+    async run({ db, timed }) {
       const staleIncompleteCutoff = Math.floor(Date.now() / 1000) - STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES * 60;
-      const cursor = planLimits().maintenance.queueSweeps ? await readMaintenanceCursor(db, "stale-orders") : null;
+      const cursor = await readMaintenanceCursor(db, "stale-orders");
       const staleIncompleteOrders = await timed("stale_incomplete_order_cleanup", () =>
         archiveStaleIncompleteOrders(db, staleIncompleteCutoff, {
           limit: planLimits().maintenance.staleOrdersPerRun,
@@ -266,15 +237,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
           afterGiftCardOrderId: cursor?.value.giftCards,
         }),
       );
-      const advanced = await cursor?.save({ orders: staleIncompleteOrders.lastOrderId, giftCards: staleIncompleteOrders.lastGiftCardOrderId });
-      // Preserve five candidates/hour on Free, with one bounded invocation
-      // each. Only the cursor CAS winner continues; failed sends replay safely.
-      if (advanced && (runContext.remaining ?? 1) > 1
-        && (staleIncompleteOrders.lastOrderId || staleIncompleteOrders.lastGiftCardOrderId)) {
-        if (!env.JOBS_QUEUE) throw new Error("Stale order continuation requires the jobs queue");
-        await env.JOBS_QUEUE.send({ type: "maintenance.sweep", name: "stale_incomplete_order_cleanup",
-          scheduledAt: runContext.scheduledAt ?? runContext.startedAt, remaining: runContext.remaining! - 1 });
-      }
+      await cursor.save({ orders: staleIncompleteOrders.lastOrderId, giftCards: staleIncompleteOrders.lastGiftCardOrderId });
       if (
         staleIncompleteOrders.found > 0 ||
         staleIncompleteOrders.failed > 0 ||
@@ -290,7 +253,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "abandoned_checkout_cleanup",
-    slice: 1,
     async run({ db, timed }) {
       const abandonedCheckoutCleanup = await timed("abandoned_checkout_cleanup", () =>
         cleanupStaleAbandonedCheckouts(db, Math.floor(Date.now() / 1000), {
@@ -319,7 +281,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // Due review requests become outbox rows before the next notification flush sends them.
     name: "review_request_sweep",
-    slice: 1,
     async run({ db, timed }) {
       const reviewRequests = await timed("review_request_sweep", () =>
         sweepReviewRequests(db, { limit: scaled(REVIEW_REQUEST_SWEEP_LIMIT) }),
@@ -337,22 +298,14 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     // an automatic fulfiller. The mail it queues (keys, gift cards, the staff
     // key-exhausted alert) goes out with the next notification flush.
     name: "auto_fulfil_sweep",
-    queueOnLimitedPlan: true,
-    slice: 1,
     async run({ db, env, timed }) {
-      if (planLimits().maintenance.queueSweeps) {
-        if (!env.JOBS_QUEUE) throw new Error("Automatic fulfilment requires the jobs queue on this profile");
-        const cursor = await readMaintenanceCursor(db, "auto-fulfil");
-        const ids = await listOrdersAwaitingAutoFulfil(db, Math.min(50, planLimits().queue.bulkPageSize), undefined, cursor.value.orders);
-        if (ids.length > 0) await env.JOBS_QUEUE.sendBatch(ids.map((orderId) => ({ body: { type: "order.auto_fulfil" as const, orderId } })));
-        // Advance only after handoff; poison orders are retried on wrap without
-        // keeping a later healthy order permanently behind them.
-        await cursor.save({ orders: ids.at(-1) ?? null });
-        return;
-      }
+      // A cursor walks the awaiting orders, so a poison order is retried on
+      // wrap without keeping a later healthy order behind it.
+      const cursor = await readMaintenanceCursor(db, "auto-fulfil");
       const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db, undefined, {
         credentialEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-      }));
+      }, { limit: planLimits().background.autoFulfilPerRun, afterOrderId: cursor.value.orders }));
+      await cursor.save({ orders: autoFulfil.lastOrderId });
       if (autoFulfil.scanned > 0 || autoFulfil.failed > 0) {
         console.log(
           `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +
@@ -362,41 +315,14 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
-    // Every tick: an order or staff notification a buyer waits for.
-    name: "notification_outbox_flush",
-    slice: "every",
-    async run({ db, env, timed }) {
-      const notificationOutbox = await timed("notification_outbox_flush", () =>
-        flushPendingNotificationOutbox({
-          db,
-          queue: env.JOBS_QUEUE,
-          limit: scaled(ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT),
-        }),
-      );
-      if (
-        notificationOutbox.scanned > 0 ||
-        notificationOutbox.failed > 0 ||
-        notificationOutbox.staleQueued > 0
-      ) {
-        console.log(
-          `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
-            `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, ` +
-            `skipped=${notificationOutbox.skipped}, staleQueued=${notificationOutbox.staleQueued}`,
-        );
-      }
-    },
-  },
-  {
     // Conversation images uploaded but never attached within an hour.
     name: "conversation_attachment_sweep",
-    queueOnLimitedPlan: true,
-    slice: 2,
     async run({ db, env, timed }) {
-      const cursor = planLimits().maintenance.queueSweeps ? await readMaintenanceCursor(db, "orphan-attachments") : null;
+      const cursor = await readMaintenanceCursor(db, "orphan-attachments");
       const orphanAttachments = await timed("conversation_attachment_sweep", () =>
-        sweepOrphanConversationAttachments(db, env.BUCKET, { limit: planLimits().maintenance.orphanAttachmentsPerRun, afterId: cursor?.value.rows }),
+        sweepOrphanConversationAttachments(db, env.BUCKET, { limit: planLimits().maintenance.orphanAttachmentsPerRun, afterId: cursor.value.rows }),
       );
-      await cursor?.save({ rows: orphanAttachments.lastId });
+      await cursor.save({ rows: orphanAttachments.lastId });
       if (orphanAttachments.scanned > 0) {
         console.log(
           `[scheduled] Conversation attachment sweep: scanned=${orphanAttachments.scanned}, deleted=${orphanAttachments.deleted}`,
@@ -407,18 +333,16 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // Digital file uploads abandoned for 24 hours (Wave B §3.1).
     name: "digital_upload_sweep",
-    queueOnLimitedPlan: true,
-    slice: 2,
     async run({ db, env, timed }) {
-      const cursor = planLimits().maintenance.queueSweeps ? await readMaintenanceCursor(db, "digital-uploads") : null;
+      const cursor = await readMaintenanceCursor(db, "digital-uploads");
       const digitalUploads = await timed("digital_upload_sweep", () =>
         sweepDigitalUploads(db, env.BUCKET, {
           limit: planLimits().maintenance.digitalUploadsPerState,
-          afterUploadingId: cursor?.value.uploading,
-          afterReplacedId: cursor?.value.replaced,
+          afterUploadingId: cursor.value.uploading,
+          afterReplacedId: cursor.value.replaced,
         }),
       );
-      await cursor?.save({ uploading: digitalUploads.lastUploadingId, replaced: digitalUploads.lastReplacedId });
+      await cursor.save({ uploading: digitalUploads.lastUploadingId, replaced: digitalUploads.lastReplacedId });
       if (digitalUploads.aborted > 0) {
         console.log(`[scheduled] Digital upload sweep: aborted=${digitalUploads.aborted}`);
       }
@@ -426,8 +350,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "meta_purchase_outbox_flush",
-    queueOnLimitedPlan: true,
-    slice: 2,
     async run({ db, env, timed }) {
       const metaPurchaseOutbox = await timed("meta_purchase_outbox_flush", () =>
         flushPendingMetaPurchaseOutbox({
@@ -453,8 +375,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "refund_attempt_reconciliation",
-    queueOnLimitedPlan: true,
-    slice: 0,
     async run({ db, env, timed }) {
       const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
         reconcileDueRefundAttempts(db, {
@@ -464,8 +384,8 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         }),
       );
       if (refundReconciliation.refundNotifications.length > 0) {
-        await timed("refund_reconciliation_notification_enqueue", () =>
-          enqueueReconciledRefundNotifications(db, env, refundReconciliation.refundNotifications),
+        await timed("refund_reconciliation_notification_record", () =>
+          recordReconciledRefundNotifications(db, refundReconciliation.refundNotifications),
         );
       }
       if (
@@ -487,8 +407,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "external_refund_reconciliation",
-    queueOnLimitedPlan: true,
-    slice: 0,
     async run({ db, env, timed }) {
       const externalRefunds = await timed("external_refund_reconciliation", () =>
         reconcileExternalRefundWebhooks(db, {
@@ -498,8 +416,8 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         }),
       );
       if (externalRefunds.refundNotifications.length > 0) {
-        await timed("external_refund_notification_enqueue", () =>
-          enqueueReconciledRefundNotifications(db, env, externalRefunds.refundNotifications),
+        await timed("external_refund_notification_record", () =>
+          recordReconciledRefundNotifications(db, externalRefunds.refundNotifications),
         );
       }
       if (
@@ -520,34 +438,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
-    name: "stale_queued_payment_webhook_sweep",
-    slice: 0,
-    async run({ db, timed }) {
-      const staleQueuedPaymentWebhookCutoff =
-        Math.floor(Date.now() / 1000) - STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES * 60;
-      const staleQueuedPaymentWebhooks = await timed("stale_queued_payment_webhook_sweep", () =>
-        failStaleQueuedPaymentWebhookEvents(
-          db,
-          staleQueuedPaymentWebhookCutoff,
-          { limit: scaled(STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT) },
-        ),
-      );
-      if (
-        staleQueuedPaymentWebhooks.scanned > 0 ||
-        staleQueuedPaymentWebhooks.failed > 0 ||
-        staleQueuedPaymentWebhooks.hasMore
-      ) {
-        console.log(
-          `[scheduled] Stale queued payment webhook sweep: scanned=${staleQueuedPaymentWebhooks.scanned}, ` +
-            `failed=${staleQueuedPaymentWebhooks.failed}, limit=${staleQueuedPaymentWebhooks.limit}, ` +
-            `hasMore=${staleQueuedPaymentWebhooks.hasMore}`,
-        );
-      }
-    },
-  },
-  {
     name: "customer_auth_otp_challenge_cleanup",
-    slice: 2,
     async run({ db, timed }) {
       const customerAuthOtpCleanup = await timed("customer_auth_otp_challenge_cleanup", () =>
         cleanupExpiredCustomerAuthOtpChallenges(db, Math.floor(Date.now() / 1000), {
@@ -565,7 +456,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "order_payment_recovery_otp_cleanup",
-    slice: 2,
     async run({ db, timed }) {
       const paymentRecoveryOtpCleanup = await timed("order_payment_recovery_otp_cleanup", () =>
         cleanupExpiredOrderPaymentRecoveryChallenges(db, Math.floor(Date.now() / 1000), {
@@ -583,7 +473,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "customer_auth_otp_rate_limit_cleanup",
-    slice: 3,
     async run({ db, timed }) {
       const customerAuthOtpRateLimitCleanup = await timed("customer_auth_otp_rate_limit_cleanup", () =>
         cleanupExpiredCustomerAuthOtpRateLimits(db, Math.floor(Date.now() / 1000), {
@@ -601,7 +490,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "customer_session_cleanup",
-    slice: 3,
     async run({ db, timed }) {
       const customerSessionCleanup = await timed("customer_session_cleanup", () =>
         cleanupExpiredCustomerSessions(db, Math.floor(Date.now() / 1000), {
@@ -619,7 +507,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "scanner_token_claim_cleanup",
-    slice: 3,
     async run({ db, timed }) {
       const scannerTokenClaimsCleanup = await timed("scanner_token_claim_cleanup", () =>
         cleanupExpiredScannerTokenClaims(db, {
@@ -639,7 +526,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // Finished UTC days become analytics buckets; until then reports read their facts.
     name: "analytics_seal",
-    slice: 2,
     async run({ db, timed }) {
       const sealed = await timed("analytics_seal", () => sealAnalyticsDays(db));
       if (sealed > 0) console.log(`[scheduled] Analytics seal: days=${sealed}`);
@@ -648,7 +534,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // Bell history no reader or Undo can reach, and alerts no inbox row shows.
     name: "staff_alert_retention",
-    slice: 3,
     async run({ db, timed }) {
       const pruned = await timed("staff_alert_retention", () => pruneStaffAlerts(db, Math.floor(Date.now() / 1000)));
       if (pruned.inbox > 0 || pruned.alerts > 0) {
@@ -660,7 +545,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     // Identity handoff audit rows double as the single-use token ledger; they
     // are retained for 90 days after the token expired, then pruned by index.
     name: "identity_handoff_audit_prune",
-    slice: 3,
     async run({ db, timed }) {
       const handoffEventsPruned = await timed("identity_handoff_audit_prune", () =>
         pruneExpiredIdentityHandoffEvents(db),
@@ -671,32 +555,8 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
-    // Event outbox (COMMERCE-HOOKS H3): the at-least-once backstop for events
-    // no post-write flush handed over, due webhook retries, then retention.
-    // Every tick: a merchant's webhook consumer is waiting on it.
-    name: "event_outbox_maintenance",
-    slice: "every",
-    async run({ db, env, timed }) {
-      const { runScheduledEventMaintenance } = await import("./events/dispatch");
-      const events = await timed("event_outbox_maintenance", () => runScheduledEventMaintenance(db, env));
-      if (
-        events.events.scanned > 0
-        || events.deliveries.scanned > 0
-        || events.pluginDeliveries.scanned > 0
-      ) {
-        console.log(
-          `[scheduled] Event outbox: scanned=${events.events.scanned}, enqueued=${events.events.enqueued}, ` +
-            `settledWithoutSubscribers=${events.events.settledWithoutSubscribers}, failed=${events.events.failed}, ` +
-            `deliveriesScanned=${events.deliveries.scanned}, deliveriesEnqueued=${events.deliveries.enqueued}, ` +
-            `pluginDeliveriesScanned=${events.pluginDeliveries.scanned}, pluginDeliveriesEnqueued=${events.pluginDeliveries.enqueued}`,
-        );
-      }
-    },
-  },
-  {
     // Retention of settled events and deliveries, after the dispatch sweep.
     name: "event_outbox_retention",
-    slice: 3,
     async run({ db, timed }) {
       const { runScheduledEventRetention } = await import("./events/dispatch");
       const pruned = await timed("event_outbox_retention", () => runScheduledEventRetention(db));
@@ -710,16 +570,14 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     // Plugins (docs/platform/PLUGINS.md): bundled installations in step with
-    // the deployed code, then due cron slots (each claimed once). Every tick:
-    // a plugin's schedule is the merchant's, not ours to thin out.
+    // the deployed code, then due cron slots (each claimed once). Every sweep
+    // tick: a plugin's schedule is the merchant's, not ours to thin out.
     name: "plugin_maintenance",
-    queueOnLimitedPlan: true,
-    slice: "every",
     async run({ db, env, executionCtx, runContext, timed }) {
       const { runScheduledPluginMaintenance } = await import("./plugins/scheduled");
       const plugins = await timed("plugin_maintenance", () =>
         runScheduledPluginMaintenance(db, env, executionCtx, runContext.scheduledAt, {
-          nightly: isNightlyCatalogTick(runContext.scheduledAt, storeTimeZoneOf(env)),
+          fxDue: firstSweepRunOfHour(runContext.scheduledAt, MAINTENANCE_SWEEPS.length),
         }));
       const { bundled, cron, fx } = plugins;
       if (fx && fx.markets > 0) {
@@ -735,35 +593,96 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
       }
     },
   },
+  {
+    // Every public product's recommendations in turn (background/catalog.ts).
+    name: "recommendation_rotation",
+    async run({ db, timed }) {
+      const refreshed = await timed("recommendation_rotation", () => rotateRecommendations(db));
+      if (refreshed > 0) console.log(`[scheduled] Recommendation rotation: refreshed=${refreshed}`);
+    },
+  },
+  {
+    // The first run of a new API version heals writes the previous version
+    // committed after the migration (scheduled/catalog-projections.ts).
+    name: "post_deploy_projection_rebuild",
+    async run({ env, timed }) {
+      const requested = await timed("post_deploy_projection_rebuild", () => requestPostDeployProjectionRebuild(env));
+      if (requested) console.log("[scheduled] Requested the post-deploy catalogue projection rebuild");
+    },
+  },
+  {
+    // Images that still publish only their original get WebP renditions until
+    // none are left, the run's time budget is spent or the plan's per-run
+    // limit is reached. Without the IMAGES binding nothing can render.
+    name: "media_rendition_backfill",
+    async run({ db, env, runContext, timed }) {
+      const images = env.IMAGES;
+      if (!images) return;
+      const renditions = await timed("media_rendition_backfill", () =>
+        backfillMissingMediaVariants(db, env.BUCKET, images, {
+          deadline: runContext.startedAt + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
+          concurrency: MEDIA_RENDITION_BACKFILL_CONCURRENCY,
+          maxImages: planLimits().maintenance.inlineRenditionsPerRun,
+        }),
+      );
+      if (renditions.scanned > 0) {
+        console.log(
+          `[scheduled] Media rendition backfill: scanned=${renditions.scanned}, ` +
+            `generated=${renditions.generated}, failed=${renditions.failed}, hasMore=${renditions.hasMore}`,
+        );
+      }
+    },
+  },
+  {
+    // Agent access: expired OAuth grants and tokens, sealed artifacts and
+    // browser handoffs. Cleanup, never on a buyer's path; each part retries
+    // on the next turn.
+    name: "agent_access_housekeeping",
+    async run({ db, env }) {
+      const parts: Array<() => Promise<unknown>> = [
+        async () => (await import("./agent-access/oauth")).purgeExpiredOAuthData(env),
+        async () => (await import("./agent-access/artifact-delivery")).purgeExpiredAgentArtifacts(env),
+        async () => (await import("./agent-access/browser-handoffs")).expireAgentBrowserHandoffs(db),
+      ];
+      for (const part of parts) await part().catch(() => undefined);
+    },
+  },
 ];
 
-export interface MaintenanceQueueMessage {
-  type: "maintenance.sweep";
-  name: string;
-  scheduledAt: number;
-  /** Stale-order scan continuation only; absent legacy jobs process one page. */
-  remaining?: number;
-}
-
-/** Replays re-read durable domain state; a failed/DLQ job is also retried by its next scheduled tick. */
-export async function runQueuedMaintenance(
-  env: Env,
-  executionCtx: ExecutionContext | undefined,
-  message: MaintenanceQueueMessage,
-): Promise<void> {
-  const sweep = MAINTENANCE_SWEEPS.find((item) => item.name === message.name && item.queueOnLimitedPlan);
-  if (!sweep || !Number.isFinite(message.scheduledAt)) throw new Error("Invalid maintenance job");
-  if (message.remaining !== undefined && (message.name !== "stale_incomplete_order_cleanup"
-    || !Number.isInteger(message.remaining) || message.remaining < 1
-    || message.remaining > scaled(STALE_INCOMPLETE_ORDER_SWEEP_LIMIT))) throw new Error("Invalid maintenance continuation");
-  const runContext = createScheduledRunContext({ cron: "queued", scheduledTime: message.scheduledAt });
-  runContext.remaining = message.remaining ?? 1;
-  const timed: SweepContext["timed"] = (name, fn) => timedScheduledOperation(runContext, name, fn);
-  const pending: Promise<unknown>[] = [];
-  const context = executionCtx ?? { waitUntil: (promise: Promise<unknown>) => { pending.push(promise); }, passThroughOnException() {} } as ExecutionContext;
-  await sweep.run({ db: getDb(env), env, executionCtx: context, runContext, timed });
-  for (const promise of pending) await promise;
-}
+/**
+ * Every tick (every minute): the background drains. Each takes its plan's
+ * bounded share of due rows (notifications, events and their deliveries,
+ * payment-event retries, a requested projection rebuild) and leaves the rest
+ * for the next tick. The first attempt of each happened right after the
+ * write that created it; these are the retries and the backstop.
+ */
+export const BACKGROUND_DRAINS: ReadonlyArray<{ name: string; run(context: SweepContext): Promise<unknown> }> = [
+  {
+    name: "notification_drain",
+    async run({ db, env }) {
+      const { drainNotificationOutbox } = await import("./background/notifications");
+      return drainNotificationOutbox(db, env);
+    },
+  },
+  {
+    name: "event_drain",
+    async run({ db, env, executionCtx }) {
+      const { runScheduledEventMaintenance } = await import("./events/dispatch");
+      return runScheduledEventMaintenance(db, env, executionCtx);
+    },
+  },
+  {
+    name: "payment_event_drain",
+    async run({ db, env, executionCtx }) {
+      const { drainPaymentEvents } = await import("./background/payment-events");
+      return drainPaymentEvents(db, env, executionCtx);
+    },
+  },
+  {
+    name: "projection_rebuild_drain",
+    run: ({ db }) => drainCatalogProjectionRebuild(db),
+  },
+];
 
 async function runScheduledMaintenanceInner(
   env: Env,
@@ -774,110 +693,54 @@ async function runScheduledMaintenanceInner(
   const timed = <T>(operation: string, fn: () => Promise<T>) =>
     timedScheduledOperation(runContext, operation, fn);
   const failures: unknown[] = [];
-  const isolated = async (sweep: () => Promise<void>) => {
+  const isolated = async (sweep: () => Promise<unknown>) => {
     try {
       await sweep();
     } catch (error) {
       failures.push(error);
     }
   };
-
-  const slices = planLimits().maintenance.slices;
   const context: SweepContext = { db, env, executionCtx, runContext, timed };
-  const queued: MessageSendRequest<MaintenanceQueueMessage>[] = [];
-  for (const sweep of MAINTENANCE_SWEEPS) {
-    if (!maintenanceSliceDue(runContext.scheduledAt, sweep.slice, slices)) continue;
-    if (planLimits().maintenance.queueSweeps && sweep.queueOnLimitedPlan) {
-      queued.push({ body: { type: "maintenance.sweep", name: sweep.name, scheduledAt: runContext.scheduledAt ?? runContext.startedAt,
-        ...(sweep.name === "stale_incomplete_order_cleanup" ? { remaining: scaled(STALE_INCOMPLETE_ORDER_SWEEP_LIMIT) } : {}) } });
-    } else {
-      await isolated(() => sweep.run(context));
-    }
-  }
-  if (queued.length > 0) await isolated(async () => {
-    if (!env.JOBS_QUEUE) throw new Error("Maintenance requires the jobs queue on this profile");
-    await env.JOBS_QUEUE.sendBatch(queued);
-  });
 
-  // The first tick of a new API version heals writes the previous version
-  // committed after the migration (scheduled/catalog-projections.ts).
-  const postDeployRebuild = await timed("post_deploy_projection_rebuild", () =>
-    queuePostDeployProjectionRebuild(env)).catch(() => false);
-  if (postDeployRebuild) console.log("[scheduled] Queued the post-deploy catalogue projection rebuild");
-
-  // Once a day: sales stats, the queued projection rebuild and a bounded
-  // recommendation refresh (scheduled/catalog-projections.ts).
+  // Once a day (the 02:00 store-time minute) the nightly pass has the
+  // invocation to itself; the drains and the rotation continue next minute.
   if (isNightlyCatalogTick(runContext.scheduledAt, storeTimeZoneOf(env))) {
-    // Logged by `timed`; a failure must not block the media backfill below.
-    const nightly = await timed("nightly_catalog_maintenance", () =>
-      runNightlyCatalogMaintenance(db, env, runContext.scheduledAt!),
-    ).catch(() => null);
-    if (nightly) {
-      console.log(
-        `[scheduled] Nightly catalogue: salesStatsProducts=${nightly.salesStatsProducts}, ` +
-          `recommendationMessages=${nightly.recommendationMessages}, rebuildQueued=${nightly.rebuildQueued}`,
-      );
-    }
-    // A sampled drift check of the derived projections, repaired in place.
-    const projections = await timed("derived_projection_check", () => maintainDerivedProjections(db)).catch(() => null);
-    if (projections && (projections.analytics.drift || projections.recommendations.drift || projections.inbox.drift)) {
-      console.log(
-        `[scheduled] Derived projections repaired: analytics=${projections.analytics.drift}, ` +
-          `recommendations=${projections.recommendations.drift}, inbox=${projections.inbox.drift}`,
-      );
-    }
+    await isolated(() => runNightlyPass(context));
+    if (failures.length > 0) throw failures[0];
+    return;
   }
 
-  // Images that still publish only their original get WebP renditions until
-  // none are left or the run's time budget is spent. Rendition URLs replace
-  // the published image URLs, so one generation bump per run that saved any.
-  // Runs even when a sweep above failed, and in its own slice on a plan that
-  // rotates them. Without the IMAGES binding nothing can render.
-  if (maintenanceSliceDue(runContext.scheduledAt, 3, slices)) {
-    await isolated(() => renderRenditionBacklog(context));
+  // Every tick: the background drains, each isolated.
+  for (const drain of BACKGROUND_DRAINS) {
+    await isolated(() => timed(drain.name, () => drain.run(context)));
+  }
+
+  // A sweep tick: the rotation's next jobs (every job on Paid or a manual run).
+  for (const index of dueSweepIndexes(runContext.scheduledAt, MAINTENANCE_SWEEPS.length)) {
+    const sweep = MAINTENANCE_SWEEPS[index]!;
+    await isolated(() => sweep.run(context));
   }
 
   if (failures.length > 0) throw failures[0];
 }
 
-/**
- * The rendition backlog: one page of queue jobs, as many as the bulk lane has
- * room for. Only a missing queue, a failing one or one with nothing to take renders inline, and then no more
- * than the plan's inline limit (a full queue is a reason to wait, not to do
- * the queue's work in the cron).
- */
-async function renderRenditionBacklog({ db, env, runContext, timed }: SweepContext): Promise<void> {
-  const images = env.IMAGES;
-  if (!images) return;
-  const limits = planLimits();
-  const queue = env.JOBS_QUEUE;
-  if (queue) {
-    const state = await bulkQueueState(queue, limits.queue);
-    if (state.capacity === 0) {
-      console.log(`[scheduled] Media rendition backlog: queue busy (backlog=${state.backlog ?? "unknown"}), waiting for the next tick`);
-      return;
-    }
-    // Jobs already queued are the oldest candidates: start behind them.
-    const fanout = await timed("media_rendition_fanout", () =>
-      enqueueMediaVariantsBacklog(db, queue, { skip: state.backlog ?? 0, limit: state.capacity }),
-    ).catch(() => null);
-    if (fanout && fanout.queued > 0) {
-      console.log(`[scheduled] Media rendition backlog: queued=${fanout.queued}, hasMore=${fanout.hasMore}`);
-      return;
-    }
-  }
-  // No queue, or it refused the backlog: render inline.
-  const renditions = await timed("media_rendition_backfill", () =>
-    backfillMissingMediaVariants(db, env.BUCKET, images, {
-      deadline: runContext.startedAt + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
-      concurrency: MEDIA_RENDITION_BACKFILL_CONCURRENCY,
-      maxImages: limits.maintenance.inlineRenditionsPerRun,
-    }),
+/** Sales stats, a projection rebuild request, sold products' recommendations, app storage sizes and a sampled drift check. */
+async function runNightlyPass({ db, runContext, timed }: SweepContext): Promise<void> {
+  const nightly = await timed("nightly_catalog_maintenance", () =>
+    runNightlyCatalogMaintenance(db, runContext.scheduledAt!),
   );
-  if (renditions.scanned > 0) {
+  console.log(
+    `[scheduled] Nightly catalogue: salesStatsProducts=${nightly.salesStatsProducts}, ` +
+      `soldRecommendations=${nightly.soldRecommendations}`,
+  );
+  const { measurePluginStorage } = await import("./plugins/scheduled");
+  await timed("plugin_storage_measure", () => measurePluginStorage(db));
+  // A sampled drift check of the derived projections, repaired in place.
+  const projections = await timed("derived_projection_check", () => maintainDerivedProjections(db));
+  if (projections.analytics.drift || projections.recommendations.drift || projections.inbox.drift) {
     console.log(
-      `[scheduled] Media rendition backfill: scanned=${renditions.scanned}, ` +
-        `generated=${renditions.generated}, failed=${renditions.failed}, hasMore=${renditions.hasMore}`,
+      `[scheduled] Derived projections repaired: analytics=${projections.analytics.drift}, ` +
+        `recommendations=${projections.recommendations.drift}, inbox=${projections.inbox.drift}`,
     );
   }
 }

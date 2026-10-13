@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PLAN_LIMITS } from "@scalius/shared/plan-limits";
+
+const mocks = vi.hoisted(() => ({ renderMissingMediaVariants: vi.fn() }));
+vi.mock("@scalius/core/modules/media", () => ({ renderMissingMediaVariants: mocks.renderMissingMediaVariants }));
+vi.mock("@scalius/database/client", () => ({ getDb: () => ({ id: "db" }) }));
 
 import {
   MEDIA_RENDITION_HINT_MAX_IDS_PER_READ,
   findStillOriginalMedia,
-  queueRenditionsForRenderedOriginals,
+  renderRenditionsForRenderedOriginals,
 } from "./media-rendition-hints";
 
 const CDN = "https://cdn.example.com";
@@ -21,11 +26,9 @@ function fakeEnv(seen: string[] = []) {
     }),
   };
   vi.stubGlobal("caches", { open: vi.fn(async () => cache) });
-  const queue = { send: vi.fn(async () => undefined) };
   return {
-    env: { CF_VERSION_METADATA: { id: "v1" }, JOBS_QUEUE: queue, IMAGES: {} as ImagesBinding },
+    env: { CF_VERSION_METADATA: { id: "v1" }, BUCKET: {} as R2Bucket, IMAGES: {} as ImagesBinding },
     cache,
-    queue,
   };
 }
 
@@ -62,77 +65,70 @@ describe("findStillOriginalMedia", () => {
   });
 });
 
-// Queueing a rendition from a public read (and its Cache API dedupe marker) is the
-// Paid profile's behaviour (queue.renditionsFromPublicReads); the Free
+// Rendering from a public read (with its Cache API dedupe marker) is the Paid
+// profile's behaviour (background.renditionsPerPublicRead); the Free
 // profile's is the describe after this one.
-describe("queueRenditionsForRenderedOriginals", () => {
-  beforeEach(() => { vi.stubGlobal("__SCALIUS_PLAN__", "paid"); });
+describe("renderRenditionsForRenderedOriginals", () => {
+  beforeEach(() => {
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
+    mocks.renderMissingMediaVariants.mockReset().mockResolvedValue("generated");
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it("queues the render job at once, once per original, and marks it in the Cache API with a short TTL", async () => {
+  it("renders at once, once per original, marks it in the Cache API with a short TTL, and stops at the per-read limit", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const { env, cache, queue } = fakeEnv();
+    const { env, cache } = fakeEnv();
     const read = body({ imageUrl: `${CDN}/media/media_legacy01.jpg`, hover: `${CDN}/media/media_done0001.jpg/960.webp` });
 
-    expect(await queueRenditionsForRenderedOriginals(read, env)).toEqual(["media_legacy01"]);
-    expect(queue.send).toHaveBeenCalledWith(
-      { type: "media.render_variants", mediaId: "media_legacy01" },
-      { delaySeconds: 0 },
-    );
+    expect(await renderRenditionsForRenderedOriginals(read, env)).toEqual(["media_legacy01"]);
+    expect(mocks.renderMissingMediaVariants).toHaveBeenCalledWith(expect.anything(), "media_legacy01", env.BUCKET, env.IMAGES);
     expect(cache.put).toHaveBeenCalledWith(markerUrl("media_legacy01"), expect.any(Response));
     const marker = cache.put.mock.calls[0]![1] as Response;
     expect(marker.headers.get("Cache-Control")).toBe("max-age=900");
-    // One masked line per enqueue; never the full id.
+    // One masked line per read; never the full id.
     expect(console.log).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(vi.mocked(console.log).mock.calls[0])).not.toContain("media_legacy01");
 
-    // A listing's worth of originals queues together, one masked line in all.
-    vi.mocked(console.log).mockClear();
+    // A listing's worth of originals renders the plan's share; the next read continues.
+    const limit = PLAN_LIMITS.paid.background.renditionsPerPublicRead;
     const many = Array.from({ length: 30 }, (_, index) => `${CDN}/media/media_card${String(index).padStart(4, "0")}.jpg`);
-    expect(await queueRenditionsForRenderedOriginals(body(many), env)).toHaveLength(MEDIA_RENDITION_HINT_MAX_IDS_PER_READ);
-    expect(console.log).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(vi.mocked(console.log).mock.calls[0])).not.toContain("media_card0000");
-    queue.send.mockClear();
+    const first = await renderRenditionsForRenderedOriginals(body(many), env);
+    expect(first).toHaveLength(limit);
+    const second = await renderRenditionsForRenderedOriginals(body(many), env);
+    expect(second).toHaveLength(limit);
+    expect(second.some((id) => first.includes(id))).toBe(false);
+    mocks.renderMissingMediaVariants.mockClear();
 
     // A second read inside the TTL is deduplicated by the marker.
-    await queueRenditionsForRenderedOriginals(body({ imageUrl: `${CDN}/media/media_legacy01.jpg` }), env);
-    expect(queue.send).not.toHaveBeenCalled();
+    await renderRenditionsForRenderedOriginals(body({ imageUrl: `${CDN}/media/media_legacy01.jpg` }), env);
+    expect(mocks.renderMissingMediaVariants).not.toHaveBeenCalled();
   });
 
-  it("does nothing for reads without originals, or without the queue, Worker version or Images binding", async () => {
-    const { env, queue } = fakeEnv();
-    expect(await queueRenditionsForRenderedOriginals(body({ imageUrl: `${CDN}/media/media_done0001.jpg/960.webp` }), env)).toEqual([]);
-    for (const missing of ["IMAGES", "JOBS_QUEUE", "CF_VERSION_METADATA"] as const) {
+  it("does nothing for reads without originals, or without the Worker version or Images binding, and never throws", async () => {
+    const { env, cache } = fakeEnv();
+    expect(await renderRenditionsForRenderedOriginals(body({ imageUrl: `${CDN}/media/media_done0001.jpg/960.webp` }), env)).toEqual([]);
+    for (const missing of ["IMAGES", "CF_VERSION_METADATA"] as const) {
       const partial = { ...env, [missing]: undefined };
-      expect(await queueRenditionsForRenderedOriginals(body({ u: `${CDN}/media/media_legacy01.jpg` }), partial)).toEqual([]);
+      expect(await renderRenditionsForRenderedOriginals(body({ u: `${CDN}/media/media_legacy01.jpg` }), partial)).toEqual([]);
     }
-    expect(queue.send).not.toHaveBeenCalled();
-  });
-
-  it("leaves no marker when the queue rejects, so the next read retries, and never throws", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const { env, cache, queue } = fakeEnv();
-    queue.send.mockRejectedValueOnce(new Error("queue down"));
-
-    expect(await queueRenditionsForRenderedOriginals(body({ u: `${CDN}/media/media_legacy01.jpg` }), env)).toEqual([]);
-    expect(cache.put).not.toHaveBeenCalled();
+    expect(mocks.renderMissingMediaVariants).not.toHaveBeenCalled();
 
     cache.match.mockRejectedValueOnce(new Error("cache down"));
-    await expect(queueRenditionsForRenderedOriginals(body({ u: `${CDN}/media/media_legacy01.jpg` }), env)).resolves.toBeDefined();
+    await expect(renderRenditionsForRenderedOriginals(body({ u: `${CDN}/media/media_legacy01.jpg` }), env)).resolves.toBeDefined();
   });
 });
 
-describe("queueRenditionsForRenderedOriginals on the Free profile", () => {
+describe("renderRenditionsForRenderedOriginals on the Free profile", () => {
   afterEach(() => { vi.unstubAllGlobals(); });
-  it("queues nothing and touches neither the marker nor the queue: the scheduled backfill renders", async () => {
-    const { env, cache, queue } = fakeEnv();
+  it("renders nothing and touches no marker: the scheduled backfill renders", async () => {
+    const { env, cache } = fakeEnv();
     const read = body({ imageUrl: `${CDN}/media/media_legacy01.jpg` });
 
-    expect(await queueRenditionsForRenderedOriginals(read, env)).toEqual([]);
-    expect(queue.send).not.toHaveBeenCalled();
+    expect(await renderRenditionsForRenderedOriginals(read, env)).toEqual([]);
+    expect(mocks.renderMissingMediaVariants).not.toHaveBeenCalled();
     expect(cache.match).not.toHaveBeenCalled();
     expect(cache.put).not.toHaveBeenCalled();
   });

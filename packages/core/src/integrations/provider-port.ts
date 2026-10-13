@@ -6,7 +6,7 @@
 // send and check through it and never ask which kind they got.
 //
 // Only the API can run an app (it owns the plugin host), so it hands core an
-// `AppProviders` lookup for the request or queue message. Core asks it only
+// `AppProviders` lookup for the request or background run. Core asks it only
 // when the saved choice names an app, so a store that uses built-in providers
 // reads no plugin table. Without a lookup an app choice fails closed: not
 // ready, nothing sent.
@@ -81,7 +81,7 @@ export type AppProviderChoice<K extends AppProviderKind> =
   | { provider: BoundProvider<K>; issue: null }
   | { provider: null; issue: string };
 
-/** The app providers one request (or queue message) can reach. */
+/** The app providers one request (or background run) can reach. */
 export interface AppProviders {
   /**
    * The app provider `id` names, when the app is installed, active, approved

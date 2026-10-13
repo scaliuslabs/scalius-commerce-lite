@@ -10,14 +10,14 @@ import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-polic
 import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import {
-  buildOtpQueuePayload,
+  buildOtpDelivery,
   chooseOrderCodeChannel,
   createAuthOtpDeliveryKey,
   deriveCustomerAuthOtpDeliveryCode,
   enforceOtpSendRateLimits,
   maskOtpIdentifier,
   OTP_LOCKED_MESSAGE,
-  type OtpQueuePayload,
+  type OtpDelivery,
 } from "../customers";
 import { createOrderPaymentRecoveryLink, previewOrderPaymentRecoveryLink } from "./admin/recovery-link";
 import {
@@ -55,7 +55,7 @@ export interface SendOrderPaymentRecoveryOtpResult {
     /** Short number shown to the buyer ("#1001"), once a code was sent. */
     orderNumber?: number | null;
     resendAfterSeconds?: number;
-    queuePayload?: OtpQueuePayload;
+    otpDelivery?: OtpDelivery;
     challengeKey?: string;
     deliveryKey?: string;
 }
@@ -162,12 +162,11 @@ export async function sendOrderPaymentRecoveryOtp(
         destination,
         orderNumber: order.orderNumber,
         resendAfterSeconds: Math.max(0, challenge.resendAvailableAt - nowSeconds),
-        queuePayload: buildOtpQueuePayload({
+        otpDelivery: buildOtpDelivery({
             channel,
             purpose: ORDER_PAYMENT_RECOVERY_PURPOSE,
             challengeKey: challenge.challengeKey,
             deliveryKey,
-            otpExpiresAt: challenge.expiresAt,
         }),
         challengeKey: challenge.challengeKey,
         deliveryKey,
@@ -253,18 +252,6 @@ export async function consumeLatestOrderOtpChallenge(
         codeHash,
         nowSeconds: input.nowSeconds,
     });
-}
-
-export async function deleteOrderPaymentRecoveryChallenge(
-    db: Database,
-    input: { challengeKey: string; deliveryKey: string },
-): Promise<void> {
-    await db.delete(orderPaymentRecoveryChallenges)
-        .where(and(
-            eq(orderPaymentRecoveryChallenges.challengeKey, input.challengeKey),
-            eq(orderPaymentRecoveryChallenges.deliveryKey, input.deliveryKey),
-            eq(orderPaymentRecoveryChallenges.status, "pending"),
-        ));
 }
 
 export async function cleanupExpiredOrderPaymentRecoveryChallenges(

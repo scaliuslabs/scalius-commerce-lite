@@ -17,13 +17,11 @@ vi.mock("@scalius/core/modules/notifications", async (importOriginal) => {
 import { adminOrdersRoutes } from "./orders";
 
 const db = { id: "db" };
-const queue = { send: vi.fn(async () => undefined) };
 
 function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
     const env = {
-        JOBS_QUEUE: queue,
-    } as unknown as Env;
+            } as unknown as Env;
 
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
@@ -67,7 +65,7 @@ describe("admin order notification routes", () => {
         expect(response.status).toBe(200);
         expect(mocks.resendTerminalOrderNotificationOutboxById).toHaveBeenCalledWith({
             db,
-            queue,
+            send: expect.any(Function),
             orderId: "order_1",
             outboxId: "outbox_1",
             resendRequestId: "resend_req_1",

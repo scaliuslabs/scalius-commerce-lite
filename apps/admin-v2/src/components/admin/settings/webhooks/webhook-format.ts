@@ -55,5 +55,5 @@ export function deliveryStatusVariant(status: WebhookDeliveryStatus): BadgeVaria
 
 /** Still on its way: the result isn't known yet. */
 export function isDeliveryInFlight(status: WebhookDeliveryStatus): boolean {
-  return status === "pending" || status === "enqueueing" || status === "queued" || status === "processing";
+  return status === "pending" || status === "processing";
 }

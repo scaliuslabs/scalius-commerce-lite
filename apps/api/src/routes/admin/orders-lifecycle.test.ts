@@ -13,7 +13,7 @@ import { adminOrdersRoutes } from "./orders";
 describe("admin order lifecycle routes", () => {
     let sqlite: DatabaseSync;
     let app: OpenAPIHono<{ Bindings: Env }>;
-    const env = { JOBS_QUEUE: undefined } as unknown as Env;
+    const env = {} as unknown as Env;
 
     beforeEach(() => {
         const created = createSqliteD1Database();

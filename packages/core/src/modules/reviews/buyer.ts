@@ -24,8 +24,7 @@ import {
 import { AppError, ConflictError, RateLimitError, ValidationError } from "../../errors";
 import {
   buildNotificationOutboxInsert,
-  enqueueNotificationOutboxById,
-  type NotificationQueue,
+  type NotificationSender,
 } from "../notifications";
 import type { ReviewStatus } from "./browser";
 import { findReviewableLineForProduct, readBuyerLine } from "./lines";
@@ -84,8 +83,8 @@ export interface EditReviewInput {
 }
 
 export interface ReviewWriteOptions {
-  /** Hands a staff "review waiting" row to the queue at once (else the scheduled flush sends it). */
-  queue?: NotificationQueue;
+  /** Sends a staff "review waiting" row at once (else the scheduled drain sends it). */
+  send?: NotificationSender;
 }
 
 export interface ReviewWriteResult {
@@ -293,14 +292,9 @@ function reviewPendingOutbox(db: Database, review: { id: string; orderId: string
   });
 }
 
-async function handOver(db: Database, queue: NotificationQueue | undefined, outboxId: string | null): Promise<void> {
-  if (!queue || !outboxId) return;
-  try {
-    await enqueueNotificationOutboxById({ db, queue, outboxId });
-  } catch (error) {
-    // The scheduled flush sends it; ids only in the log.
-    console.warn(`[Reviews] Staff alert ${outboxId} left for the scheduled flush:`, error instanceof Error ? error.name : "error");
-  }
+async function handOver(send: NotificationSender | undefined, outboxId: string | null): Promise<void> {
+  if (!send || !outboxId) return;
+  await send([outboxId]);
 }
 
 /**
@@ -390,7 +384,7 @@ export async function submitReview(
     }
     throw error;
   }
-  await handOver(db, options.queue, staffAlert?.outboxId ?? null);
+  await handOver(options.send, staffAlert?.outboxId ?? null);
   return { review: await getBuyerReview(db, buyer, id), created: true, published: status === "published" };
 }
 
@@ -472,7 +466,7 @@ export async function editReview(
     ? (await safeBatch(db, [update, staffAlert.statement] as const))[0]
     : await update;
   if (updated.length === 0) throw new ConflictError("This review changed since you opened it. Reload and try again.");
-  await handOver(db, options.queue, staffAlert?.outboxId ?? null);
+  await handOver(options.send, staffAlert?.outboxId ?? null);
   return { review: await getBuyerReview(db, buyer, current.id), created: false, published: status === "published" };
 }
 

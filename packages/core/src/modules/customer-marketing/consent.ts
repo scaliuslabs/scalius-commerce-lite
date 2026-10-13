@@ -49,8 +49,7 @@ import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
   createNotificationOutboxInsertValues,
-  enqueueNotificationOutboxById,
-  type NotificationQueue,
+  type NotificationSender,
 } from "../notifications";
 import { deriveOptInToken, hashOptInToken, newOptInNonce, type MarketingLinkEnv } from "./links";
 
@@ -323,7 +322,7 @@ function optInOutboxStatement(db: Database, customerId: string, nonce: string, c
 
 export interface PreparedConsentChanges {
     statements: unknown[];
-    /** Outbox rows to hand to the queue after commit (written only if their request was). */
+    /** Outbox rows to send after commit (written only if their request was). */
     outboxIds: string[];
     /** Read each change's result from the batch results (index into the batch). */
     resultIndexes: Array<{ channel: MarketingChannel; index: number; pending: boolean }>;
@@ -381,26 +380,16 @@ export function readConsentChangeResults(prepared: PreparedConsentChanges, resul
     });
 }
 
-/** Hands opt-in outbox rows to the queue after commit (the scheduled flush is the backstop). */
-export async function enqueueConsentNotifications(db: Database, queue: NotificationQueue | undefined, outboxIds: readonly string[]): Promise<void> {
-    if (!queue) return;
-    for (const outboxId of outboxIds) {
-        await enqueueNotificationOutboxById({ db, queue, outboxId }).catch((error: unknown) => {
-            console.warn(`[Marketing] Opt-in ${outboxId} not enqueued yet: ${error instanceof Error ? error.name : "error"}`);
-        });
-    }
-}
-
-/** Applies consent changes for one customer in one batch and queues any confirmation e-mail. */
+/** Applies consent changes for one customer in one batch and sends any confirmation e-mail. */
 export async function applyConsentChanges(
     db: Database,
-    input: { customerId: string; changes: readonly ConsentChange[]; env: MarketingLinkEnv; queue?: NotificationQueue; at?: number },
+    input: { customerId: string; changes: readonly ConsentChange[]; env: MarketingLinkEnv; send?: NotificationSender; at?: number },
 ): Promise<ConsentChangeResult[]> {
     if (input.changes.length === 0) return [];
     const prepared = await prepareConsentChanges(db, input);
     const results = await safeBatch(db, prepared.statements as unknown as Parameters<typeof safeBatch>[1]) as unknown as unknown[];
     const outcome = readConsentChangeResults(prepared, results);
-    await enqueueConsentNotifications(db, input.queue, prepared.outboxIds);
+    if (input.send && prepared.outboxIds.length > 0) await input.send(prepared.outboxIds);
     return outcome;
 }
 

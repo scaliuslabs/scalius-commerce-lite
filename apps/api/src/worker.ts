@@ -8,7 +8,6 @@ import {
   redirectPlaintextRequest,
 } from "@scalius/shared/http-security";
 import {
-  DATABASE_MIGRATION_RETRY_AFTER_SECONDS,
   createDatabaseMigrationFreezeResponse,
   isDatabaseMigrationFrozen,
 } from "@scalius/shared/database-migration-freeze";
@@ -192,21 +191,7 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
     return fetchApiApp(request, env, this.ctx);
   }
 
-  // Queues: payment events, OTP, notifications
-  async queue(batch: MessageBatch<Record<string, unknown>>) {
-    if (isDatabaseMigrationFrozen(this.env) || !hasMasterSecret(this.env)) {
-      batch.retryAll({
-        delaySeconds: DATABASE_MIGRATION_RETRY_AFTER_SECONDS,
-      });
-      return;
-    }
-
-    const env = await composeApiRuntimeEnv(this.env);
-    const { handleQueueBatch } = await import("./queue-consumer");
-    return handleQueueBatch(batch as Parameters<typeof handleQueueBatch>[0], env, this.ctx);
-  }
-
-  // Cron: release orphaned reservations, archive stale incomplete online orders, and flush outboxes.
+  // Cron (every minute): background drains and the sweep rotation (scheduled/slices.ts).
   async scheduled(controller: ScheduledController): Promise<void> {
     if (isDatabaseMigrationFrozen(this.env) || !hasMasterSecret(this.env)) return;
 
@@ -216,31 +201,5 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       cron: controller.cron,
       scheduledTime: controller.scheduledTime,
     });
-    // Agent-access housekeeping rides the last slice (every tick where the
-    // plan runs one slice): it is cleanup, never on a buyer's path.
-    const { maintenanceSliceDue } = await import("./scheduled/slices");
-    if (!maintenanceSliceDue(controller.scheduledTime, 3)) return;
-    try {
-      const { purgeExpiredOAuthData } = await import("./agent-access/oauth");
-      await purgeExpiredOAuthData(env);
-    } catch {
-      // OAuth protocol storage cleanup is retryable maintenance. It must not
-      // hide successful commerce recovery work from this scheduled run.
-    }
-    try {
-      const { purgeExpiredAgentArtifacts } = await import("./agent-access/artifact-delivery");
-      await purgeExpiredAgentArtifacts(env);
-    } catch {
-      // Artifact expiry and object cleanup retry on the next scheduled run and
-      // never hide successful commerce maintenance.
-    }
-    try {
-      const { getDb } = await import("@scalius/database/client");
-      const { expireAgentBrowserHandoffs } = await import("./agent-access/browser-handoffs");
-      await expireAgentBrowserHandoffs(getDb(env));
-    } catch {
-      // Browser handoffs expire in five minutes and are one-use. Relational
-      // cleanup is retryable and must not hide successful commerce work.
-    }
   }
 }

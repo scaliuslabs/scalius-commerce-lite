@@ -28,9 +28,6 @@ interface Env {
     }): Promise<{ messageId: string }>;
   };
 
-  // Order notification fan-out (modules/checkout/post-commit.ts).
-  JOBS_QUEUE: Queue;
-
   // Passed through to `getDb(env)` / `resolveDatabaseConfiguration(env)`.
   DB?: D1Database;
 

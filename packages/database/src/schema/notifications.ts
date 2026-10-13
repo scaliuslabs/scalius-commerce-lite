@@ -35,6 +35,7 @@ export const notificationOutbox = sqliteTable("notification_outbox", {
     claimId: text("claim_id"),
     claimExpiresAt: integer("claim_expires_at"),
     lastError: text("last_error"),
+    /** Unused since 0148 (queue retirement); the Turso engine cannot drop the column. */
     queuedAt: integer("queued_at"),
     sentAt: integer("sent_at"),
     createdAt: integer("created_at").notNull().default(UNIX_NOW),
@@ -43,7 +44,6 @@ export const notificationOutbox = sqliteTable("notification_outbox", {
     uniqueIndex("notification_outbox_dedupe_key_unique").on(table.dedupeKey),
     index("notification_outbox_pending_idx").on(table.status, table.nextAttemptAt, table.createdAt),
     index("notification_outbox_claim_idx").on(table.status, table.claimExpiresAt),
-    index("notification_outbox_queued_idx").on(table.status, table.queuedAt, table.createdAt),
     index("notification_outbox_subject_idx").on(table.subjectType, table.subjectId),
     index("notification_outbox_order_id_idx")
         .on(table.orderId)

@@ -56,6 +56,7 @@ import { customerSummarySchema } from "../../schemas/entities";
 import { matchingResultSchema, matchingSchema, requireOneSelection, type MatchingResult } from "../../schemas/bulk-matching";
 import { appListQuerySchema, planAppList } from "../../plugins/list-columns";
 import { BULK_MATCHING_SLICE, readMatchingCursor } from "@scalius/core/utils/bulk-matching";
+import { notificationSender } from "../../background/notification-sender";
 
 const listFilterQuery = {
     tag: z.string().max(200).optional().openapi({ description: "Customers with this tag" }),
@@ -604,7 +605,7 @@ app.openapi(updateMarketingRoute, async (c) => {
     const plugin = pluginId(c);
     await setCustomerMarketingConsent(db, id, c.req.valid("json"), plugin
         ? { actor: "plugin", actorId: plugin }
-        : { actor: "staff", actorId: staffId(c) }, { env: c.env as never, queue: c.env.JOBS_QUEUE });
+        : { actor: "staff", actorId: staffId(c) }, { env: c.env as never, send: notificationSender(c) });
     return ok(c, await marketingPayload(db, id));
 });
 

@@ -1,14 +1,14 @@
 /**
  * Test-only meter for the Workers Free plan budget (scripts/free-plan-budget.mjs).
  *
- * It wraps the bindings a Worker invocation touches (D1, R2, the jobs
- * queue, `fetch`) in counters and records the CPU the invocation spent. The
- * Free plan limits it measures against:
+ * It wraps the bindings a Worker invocation touches (D1, R2, the Cache API,
+ * `fetch`) in counters and records the CPU the invocation spent, its
+ * after-response work (`waitUntil`) included. The Free plan limits it
+ * measures against:
  *
- * - 10 ms CPU per invocation (HTTP, queue consumer, cron);
+ * - 10 ms CPU per invocation (HTTP, cron);
  * - 50 external subrequests and 1,000 Cloudflare-service subrequests;
- * - 50 D1 queries (one `batch()` is one query);
- * - 10,000 Queues operations per day (a message is a write, a read and a delete).
+ * - 50 D1 queries (one `batch()` is one query).
  *
  * CPU is `process.cpuUsage()` around the operation minus the CPU the embedded
  * SQLite engine spent inside the D1 shim: on Workers the database runs
@@ -33,12 +33,8 @@ export interface FreePlanCounters {
   r2Ops: number;
   /** Cache API `match`/`put`/`delete` calls (each is a subrequest). */
   cacheOps: number;
-  /** Calls on other service bindings (EMAIL, IMAGES, Queue `metrics()`). */
+  /** Calls on other service bindings (EMAIL, IMAGES). */
   serviceCalls: number;
-  /** `JOBS_QUEUE.send/sendBatch` calls and the messages they carried. */
-  queueCalls: number;
-  queueMessages: number;
-  queueTypes: Record<string, number>;
   /** `fetch()` calls to a non-Cloudflare origin (Free: 50 per invocation). */
   externalFetches: number;
   /** `waitUntil` tasks the invocation scheduled (awaited inside the measurement). */
@@ -48,19 +44,13 @@ export interface FreePlanCounters {
 export function emptyCounters(): FreePlanCounters {
   return {
     cpuMs: 0, wallMs: 0, d1Calls: 0, d1Statements: 0, d1RowsChanged: 0,
-    r2Ops: 0, cacheOps: 0, serviceCalls: 0,
-    queueCalls: 0, queueMessages: 0, queueTypes: {}, externalFetches: 0, waitUntilTasks: 0,
+    r2Ops: 0, cacheOps: 0, serviceCalls: 0, externalFetches: 0, waitUntilTasks: 0,
   };
 }
 
-/** Subrequests to Cloudflare services (Free: 1,000): D1, R2, Cache API and Queues calls. */
+/** Subrequests to Cloudflare services (Free: 1,000): D1, R2, Cache API and other service calls. */
 export function internalSubrequests(counters: FreePlanCounters): number {
-  return counters.d1Calls + counters.r2Ops + counters.cacheOps + counters.serviceCalls + counters.queueCalls;
-}
-
-/** Queues operations (Free: 10,000 per day): write, read and delete of every message. */
-export function queueOperations(counters: FreePlanCounters): number {
-  return counters.queueMessages * 3;
+  return counters.d1Calls + counters.r2Ops + counters.cacheOps + counters.serviceCalls;
 }
 
 const cpuMicros = (usage: NodeJS.CpuUsage): number => usage.user + usage.system;
@@ -173,45 +163,6 @@ export function meterR2(counters: () => FreePlanCounters): R2Bucket {
   return bucket as unknown as R2Bucket;
 }
 
-// ── Queue ───────────────────────────────────────────────────────────────────
-
-export interface MeteredQueue {
-  readonly sent: Array<{ body: unknown; delaySeconds?: number }>;
-  /** What `metrics()` reports as `backlogCount`; tests set it to model a busy queue. */
-  backlogCount: number;
-  metrics(): Promise<{ backlogCount: number; backlogBytes: number; oldestMessageTimestamp: number }>;
-  send(body: unknown, options?: { delaySeconds?: number }): Promise<void>;
-  sendBatch(messages: Iterable<{ body: unknown; delaySeconds?: number }>, options?: { delaySeconds?: number }): Promise<void>;
-}
-
-export function meterQueue(counters: () => FreePlanCounters): MeteredQueue {
-  const sent: MeteredQueue["sent"] = [];
-  const record = (body: unknown, delaySeconds?: number): void => {
-    const c = counters();
-    c.queueMessages += 1;
-    const type = String((body as { type?: unknown } | null)?.type ?? "unknown");
-    c.queueTypes[type] = (c.queueTypes[type] ?? 0) + 1;
-    sent.push({ body, delaySeconds });
-  };
-  const queue: MeteredQueue = {
-    sent,
-    backlogCount: 0,
-    async metrics() {
-      counters().serviceCalls += 1;
-      return { backlogCount: queue.backlogCount, backlogBytes: queue.backlogCount * 200, oldestMessageTimestamp: 0 };
-    },
-    async send(body, options) {
-      counters().queueCalls += 1;
-      record(body, options?.delaySeconds);
-    },
-    async sendBatch(messages, options) {
-      counters().queueCalls += 1;
-      for (const message of messages) record(message.body, message.delaySeconds ?? options?.delaySeconds);
-    },
-  };
-  return queue;
-}
-
 // ── Cache API ───────────────────────────────────────────────────────────────
 
 export interface MeteredCache {
@@ -248,9 +199,8 @@ export function meterService<T extends object>(binding: T, counters: () => FreeP
 // ── The meter ───────────────────────────────────────────────────────────────
 
 export interface FreePlanMeter {
-  /** Spread into an `Env`: DB, BUCKET, JOBS_QUEUE and the two rate limiters. */
-  readonly bindings: Pick<Env, "DB" | "BUCKET" | "JOBS_QUEUE" | "RL_STRICT" | "RL_STANDARD">;
-  readonly queue: MeteredQueue;
+  /** Spread into an `Env`: DB, BUCKET and the two rate limiters. */
+  readonly bindings: Pick<Env, "DB" | "BUCKET" | "RL_STRICT" | "RL_STANDARD">;
   /** `caches.default` for the duration of every measurement. */
   readonly cache: MeteredCache;
   /**
@@ -285,7 +235,6 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
   const clock: EngineClock = { engineMicros: 0 };
   const pending: Promise<unknown>[] = [];
   const limiter = { limit: async () => ({ success: true }) };
-  const queue = meterQueue(counters);
   const cache = meterCache(counters);
   const named = new Map<string, MeteredCache>();
   const caches = {
@@ -303,7 +252,6 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
   const bindings = {
     DB: meterD1(options.d1, counters, clock),
     BUCKET: meterR2(counters),
-    JOBS_QUEUE: queue,
     RL_STRICT: limiter,
     RL_STANDARD: limiter,
   } as unknown as FreePlanMeter["bindings"];
@@ -317,7 +265,6 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
 
   return {
     bindings,
-    queue,
     cache,
     caches,
     service: (binding) => meterService(binding, counters),

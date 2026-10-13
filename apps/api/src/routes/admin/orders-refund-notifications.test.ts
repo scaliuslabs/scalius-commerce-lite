@@ -4,14 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
     processRefund: vi.fn(),
     reconcileRefundAttemptForOrder: vi.fn(),
-
-    enqueueOrderRefundNotificationForOrder: vi.fn(),
-    enqueueNotificationOutboxById: vi.fn(),
+    sendNotifications: vi.fn(async () => undefined),
+    sendOrderRefundNotification: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@scalius/core/modules/notifications")>()),
-    enqueueNotificationOutboxById: mocks.enqueueNotificationOutboxById,
 }));
 
 vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
@@ -20,8 +18,10 @@ vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
     reconcileRefundAttemptForOrder: mocks.reconcileRefundAttemptForOrder,
 }));
 
-vi.mock("../../utils/order-notification-queue", () => ({
-    enqueueOrderRefundNotificationForOrder: mocks.enqueueOrderRefundNotificationForOrder,
+vi.mock("../../background/notification-sender", () => ({ notificationSender: () => mocks.sendNotifications }));
+
+vi.mock("../../utils/order-notifications", () => ({
+    sendOrderRefundNotification: mocks.sendOrderRefundNotification,
 }));
 
 import { PartialRefundProcessedError } from "@scalius/core/modules/payments";
@@ -29,14 +29,12 @@ import { errorResponseFromError } from "../../utils/api-response";
 import { adminOrdersRefundRoutes } from "./orders-refund";
 
 const db = { id: "db" };
-const queue = { send: vi.fn(async () => undefined) };
 
 function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
     const env = {
         CACHE: { id: "api-cache" },
-        JOBS_QUEUE: queue,
-        CREDENTIAL_ENCRYPTION_KEY: "credential-key",
+                CREDENTIAL_ENCRYPTION_KEY: "credential-key",
     } as unknown as Env;
 
     app.use("*", async (c, next) => {
@@ -63,7 +61,7 @@ describe("admin refund notification routes", () => {
             refundNotifications: [],
         });
 
-        mocks.enqueueOrderRefundNotificationForOrder.mockResolvedValue({ orderId: "order_1", enqueued: true });
+        mocks.sendOrderRefundNotification.mockResolvedValue({ orderId: "order_1", enqueued: true });
     });
 
     it("enqueues a customer refund notification after a full direct refund", async () => {
@@ -91,9 +89,9 @@ describe("admin refund notification routes", () => {
 
         expect(response.status).toBe(200);
 
-        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
+        expect(mocks.sendOrderRefundNotification).toHaveBeenCalledWith({
             db,
-            queue,
+            send: expect.any(Function),
             orderId: "order_1",
             notificationType: "order_refunded",
             dedupeKey: "refund:order_1:refund_order_1_4:full",
@@ -127,7 +125,7 @@ describe("admin refund notification routes", () => {
 
         expect(response.status).toBe(200);
         expect(mocks.processRefund).toHaveBeenCalledWith(db, expect.objectContaining({ requestKey }), "credential-key", expect.any(Function));
-        expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
+        expect(mocks.sendOrderRefundNotification).not.toHaveBeenCalled();
 
         const body = await response.json() as { data: Record<string, unknown> };
         expect(body.data).toMatchObject({ replayed: true, amount: 500.5, notificationCount: 0 });
@@ -193,7 +191,6 @@ describe("admin refund notification routes", () => {
                 amount: 500,
             },
         });
-        mocks.enqueueNotificationOutboxById.mockResolvedValue({ outboxId: "outbox_gc_1", enqueued: true });
         const { app, env } = createTestApp();
 
         const response = await app.request("/api/v1/admin/orders/order_1/refund", {
@@ -209,7 +206,7 @@ describe("admin refund notification routes", () => {
             "credential-key",
             expect.any(Function),
         );
-        expect(mocks.enqueueNotificationOutboxById).toHaveBeenCalledWith({ db, queue, outboxId: "outbox_gc_1" });
+        expect(mocks.sendNotifications).toHaveBeenCalledWith(["outbox_gc_1"]);
         const body = await response.json() as { data: Record<string, unknown> };
         expect(body.data).toMatchObject({
             settlement: "store_credit",
@@ -250,7 +247,7 @@ describe("admin refund notification routes", () => {
             },
         });
 
-        mocks.enqueueOrderRefundNotificationForOrder.mockRejectedValueOnce(new Error("queue unavailable"));
+        mocks.sendOrderRefundNotification.mockRejectedValueOnce(new Error("queue unavailable"));
         const { app, env } = createTestApp();
 
         const response = await app.request("/api/v1/admin/orders/order_1/refund", {
@@ -301,18 +298,18 @@ describe("admin refund notification routes", () => {
 
         expect(response.status).toBe(503);
 
-        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
+        expect(mocks.sendOrderRefundNotification).toHaveBeenNthCalledWith(1, {
             db,
-            queue,
+            send: expect.any(Function),
             orderId: "order_1",
             notificationType: "order_partially_refunded",
             dedupeKey: "refund-reconcile:order_1:rfa_refund_order_1_3_1:partial",
             source: "orders-refund-partial-failure",
             data: { amount: 70, gateway: "stripe", refundId: "refund_balance" },
         });
-        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(2, {
+        expect(mocks.sendOrderRefundNotification).toHaveBeenNthCalledWith(2, {
             db,
-            queue,
+            send: expect.any(Function),
             orderId: "order_1",
             notificationType: "refund_processing",
             dedupeKey: "refund:order_1:refund_order_1_3:processing",
@@ -352,9 +349,9 @@ describe("admin refund notification routes", () => {
             { encryptionKey: "credential-key", providers: expect.any(Function) },
         );
 
-        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
+        expect(mocks.sendOrderRefundNotification).toHaveBeenCalledWith({
             db,
-            queue,
+            send: expect.any(Function),
             orderId: "order_1",
             notificationType: "order_partially_refunded",
             dedupeKey: "refund-reconcile:order_1:rfa_1:partial",
@@ -387,6 +384,6 @@ describe("admin refund notification routes", () => {
 
         expect(response.status).toBe(404);
 
-        expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
+        expect(mocks.sendOrderRefundNotification).not.toHaveBeenCalled();
     });
 });

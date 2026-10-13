@@ -28,7 +28,7 @@ import { createPaymentSession, isPaymentSessionProcessingResult } from "./paymen
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment-session-response";
 import { withPaymentProviderDeadline } from "./payment-provider-deadline";
 import {
-  claimAndEnqueuePaymentEvent,
+  claimAndApplyPaymentEvent,
   loadCallbackSettings,
   reconcileOrderPayment,
   toGatewayRequest,
@@ -159,6 +159,7 @@ app.openapi(reconcileRoute, async (c) => {
     orderId: body.orderId,
     provider,
     providers: () => requestPaymentProviders(c),
+    caller: c,
   });
   return accepted ? c.json({ success: true as const, data }, 202) : ok(c, data);
 });
@@ -246,9 +247,9 @@ async function handleSuccessReturn(c: ReturnContext): Promise<Response> {
           (signal) => gateway.verifyReturn!(request, { settings: loaded.settings, signal }),
         );
         if (verification.status === "event" && verification.event.kind === "confirmed") {
-          await claimAndEnqueuePaymentEvent({
+          await claimAndApplyPaymentEvent({
             db,
-            queue: c.env.JOBS_QUEUE,
+            caller: c,
             provider: gateway.id,
             event: verification.event,
             source: "buyer_return",
@@ -316,7 +317,7 @@ async function handleAuthenticatedReturn(c: ReturnContext, gateway: PaymentGatew
       const event = verification.event;
       orderId = event.orderId;
       if (event.kind === "confirmed") {
-        await claimAndEnqueuePaymentEvent({ db, queue: c.env.JOBS_QUEUE, provider: gateway.id, event, source: "buyer_return" });
+        await claimAndApplyPaymentEvent({ db, caller: c, provider: gateway.id, event, source: "buyer_return" });
       } else if ((event.kind === "failed" || event.kind === "cancelled") && event.correlationId) {
         const parsed = parsePaymentCorrelationId(event.correlationId);
         if (parsed.paymentType && parsed.orderId === event.orderId) {

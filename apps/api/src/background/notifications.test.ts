@@ -25,23 +25,20 @@ vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
   sendStaffAlertNotification: mocks.sendStaffAlertNotification,
 }));
 
-vi.mock("./notification-content/digital", () => ({ resolveDigitalDeliveryContent: mocks.resolveDigitalDeliveryContent }));
-vi.mock("./notification-content/review-request", () => ({ resolveReviewRequestContent: mocks.resolveReviewRequestContent }));
-vi.mock("./notification-content/gift-card", () => ({ resolveGiftCardIssuedContent: mocks.resolveGiftCardIssuedContent }));
+vi.mock("../notification-content/digital", () => ({ resolveDigitalDeliveryContent: mocks.resolveDigitalDeliveryContent }));
+vi.mock("../notification-content/review-request", () => ({ resolveReviewRequestContent: mocks.resolveReviewRequestContent }));
+vi.mock("../notification-content/gift-card", () => ({ resolveGiftCardIssuedContent: mocks.resolveGiftCardIssuedContent }));
 
 import {
-  recordAndEnqueueNotification,
-  recordAndEnqueueOrderNotification,
+  recordAndSendNotification,
+  recordAndSendOrderNotification,
 } from "@scalius/core/modules/notifications";
 import type { NotificationType } from "@scalius/core/modules/notifications/browser";
-import {
-  archiveNotificationDlqMessage,
-  processNotificationMessage,
-} from "./queue-notifications";
+import { deliverNotification, drainNotificationOutbox } from "./notifications";
 
 const ORDER_ID = "ORDER_QUEUE_0001";
 
-describe("notification queue messages (outbox id only)", () => {
+describe("notification delivery (outbox id only)", () => {
   let sqlite: DatabaseSync;
   let db: Database;
   const env = { PUBLIC_API_BASE_URL: "https://api.shop.test" } as unknown as Env;
@@ -67,14 +64,12 @@ describe("notification queue messages (outbox id only)", () => {
   afterEach(() => sqlite.close());
 
   async function recordOrderRow(data?: Record<string, unknown>) {
-    const result = await recordAndEnqueueOrderNotification({
+    const result = await recordAndSendOrderNotification({
       db,
-      queue: { send: vi.fn() },
+      send: undefined,
       notification: {
         dedupeKey: `order_status:${ORDER_ID}:shipped`,
         orderId: ORDER_ID,
-        customerEmail: "stale@example.test",
-        customerName: "Stale Name",
         notificationType: "order_shipped",
         source: "test",
         data,
@@ -87,7 +82,7 @@ describe("notification queue messages (outbox id only)", () => {
 
   it("resolves the order contact at send time, dispatches like order.notification, and marks the row sent", async () => {
     const outboxId = await recordOrderRow({ trackingId: "PX-1" });
-    await processNotificationMessage({ type: "notification", outboxId }, db, env);
+    await deliverNotification(outboxId, db, env);
 
     expect(mocks.sendOrderNotificationEmail).toHaveBeenCalledWith(
       "saved@example.test",
@@ -109,7 +104,7 @@ describe("notification queue messages (outbox id only)", () => {
     expect(status()).toBe("sent");
 
     // A replay of the same message is a no-op.
-    await processNotificationMessage({ type: "notification", outboxId }, db, env);
+    await deliverNotification(outboxId, db, env);
     expect(mocks.sendOrderNotificationEmail).toHaveBeenCalledTimes(1);
   });
 
@@ -119,14 +114,14 @@ describe("notification queue messages (outbox id only)", () => {
       hasRetryableFailure: true,
     });
     const outboxId = await recordOrderRow();
-    await expect(processNotificationMessage({ type: "notification", outboxId }, db, env)).resolves.toBeUndefined();
+    await expect(deliverNotification(outboxId, db, env)).resolves.toBeUndefined();
     expect(status()).toBe("failed");
   });
 
   it("dead-letters rows whose subject has no sender", async () => {
     const outboxId = await recordOrderRow();
     sqlite.exec("UPDATE notification_outbox SET notification_type = 'digital_delivered'");
-    await processNotificationMessage({ type: "notification", outboxId }, db, env);
+    await deliverNotification(outboxId, db, env);
     expect(status()).toBe("dead_lettered");
     expect(mocks.sendOrderNotificationEmail).not.toHaveBeenCalled();
   });
@@ -134,13 +129,13 @@ describe("notification queue messages (outbox id only)", () => {
   it("dead-letters a stored retired campaign subject without dispatching or retrying", async () => {
     const outboxId = await recordOrderRow();
     sqlite.exec("UPDATE notification_outbox SET subject_type = 'marketing_run', subject_id = 'retired_run', order_id = NULL");
-    await processNotificationMessage({ type: "notification", outboxId }, db, env);
+    await deliverNotification(outboxId, db, env);
     expect(status()).toBe("dead_lettered");
     expect(mocks.sendOrderNotificationEmail).not.toHaveBeenCalled();
     expect(mocks.sendOrderNotification).not.toHaveBeenCalled();
     expect(mocks.sendStaffOrderEmails).not.toHaveBeenCalled();
     expect(mocks.sendResolvedNotification).not.toHaveBeenCalled();
-    await processNotificationMessage({ type: "notification", outboxId }, db, env);
+    await deliverNotification(outboxId, db, env);
     expect(status()).toBe("dead_lettered");
   });
 
@@ -151,9 +146,9 @@ describe("notification queue messages (outbox id only)", () => {
     notificationType: NotificationType;
     data?: Record<string, unknown>;
   }) {
-    const result = await recordAndEnqueueNotification({
+    const result = await recordAndSendNotification({
       db,
-      queue: undefined,
+      send: undefined,
       notification: { audience: "customer", ...input, dedupeKey: crypto.randomUUID(), source: "test" },
     });
     return result.outboxId;
@@ -167,7 +162,7 @@ describe("notification queue messages (outbox id only)", () => {
     ["gift_card", "gc_0001", "gift_card_issued", null],
   ] as const)("ends a %s %s row whose resolver has nothing to send: sent, one skipped receipt, no retry", async (subjectType, subjectId, notificationType, orderId) => {
     const outboxId = await recordRow({ subjectType, subjectId, notificationType, data: { fulfillmentId: "ful_1" } });
-    await processNotificationMessage({ type: "notification", outboxId }, db, env);
+    await deliverNotification(outboxId, db, env);
 
     expect(status()).toBe("sent");
     expect(receipts()).toEqual([{ subject_type: subjectType, subject_id: subjectId, order_id: orderId, status: "skipped", last_error: "nothing_to_send" }]);
@@ -180,7 +175,7 @@ describe("notification queue messages (outbox id only)", () => {
     mocks.resolveReviewRequestContent.mockResolvedValue({ review_products: "Cotton panjabi", review_link: "https://shop.test/account/orders/x#reviews" });
     sqlite.exec(`UPDATE orders SET order_number = 1057 WHERE id = '${ORDER_ID}'`);
     const outboxId = await recordRow({ subjectType: "order", subjectId: ORDER_ID, notificationType: "review_request" });
-    await processNotificationMessage({ type: "notification", outboxId }, db, env);
+    await deliverNotification(outboxId, db, env);
 
     expect(mocks.resolveReviewRequestContent).toHaveBeenCalledWith(db, env, { orderId: ORDER_ID, data: {} });
     expect(mocks.sendResolvedNotification).toHaveBeenCalledWith(db, {
@@ -212,7 +207,7 @@ describe("notification queue messages (outbox id only)", () => {
       hasRetryableFailure: true,
     });
     const outboxId = await recordRow({ subjectType: "gift_card", subjectId: "gc_0001", notificationType: "gift_card_issued" });
-    await processNotificationMessage({ type: "notification", outboxId }, db, env);
+    await deliverNotification(outboxId, db, env);
 
     expect(mocks.sendResolvedNotification).toHaveBeenCalledWith(db, expect.objectContaining({
       subjectType: "gift_card",
@@ -227,7 +222,7 @@ describe("notification queue messages (outbox id only)", () => {
 
   it("routes staff alerts to the staff dispatcher and dead-letters an unknown gift-card type", async () => {
     const alert = await recordRow({ subjectType: "order", subjectId: ORDER_ID, audience: "staff", notificationType: "digital_keys_exhausted" });
-    await processNotificationMessage({ type: "notification", outboxId: alert }, db, env);
+    await deliverNotification(alert, db, env);
     expect(mocks.sendStaffAlertNotification).toHaveBeenCalledWith(
       db,
       { outboxId: alert, orderId: ORDER_ID, notificationType: "digital_keys_exhausted" },
@@ -237,18 +232,39 @@ describe("notification queue messages (outbox id only)", () => {
 
     sqlite.exec("DELETE FROM notification_outbox");
     const wrong = await recordRow({ subjectType: "gift_card", subjectId: "gc_0001", notificationType: "review_request" });
-    await processNotificationMessage({ type: "notification", outboxId: wrong }, db, env);
+    await deliverNotification(wrong, db, env);
     expect(status()).toBe("dead_lettered");
     expect(mocks.resolveGiftCardIssuedContent).not.toHaveBeenCalled();
   });
 
-  it("archives an exhausted notification message into its outbox row without sending", async () => {
+  it("drains due rows on the tick, and a failed row backs off until it is dead-lettered", async () => {
     const outboxId = await recordOrderRow();
-    const msg = { id: "m1", attempts: 6, body: { type: "notification", outboxId } } as unknown as Message<{ type: "notification"; outboxId: string }>;
-    expect(await archiveNotificationDlqMessage(msg, db)).toEqual({ status: "outbox_failed", outboxId });
-    const row = sqlite.prepare("SELECT status, last_error FROM notification_outbox").get() as Record<string, string>;
-    expect(row.status).toBe("dead_lettered");
-    expect(row.last_error).toMatch(/^notification_dlq_terminal/);
-    expect(mocks.sendOrderNotificationEmail).not.toHaveBeenCalled();
+    mocks.sendOrderNotificationEmail.mockResolvedValue({ outcomes: [{ channel: "email", provider: "x", retryable: true }], hasRetryableFailure: true });
+    await expect(drainNotificationOutbox(db, env)).resolves.toEqual({ scanned: 1 });
+    const failed = sqlite.prepare("SELECT status, attempts, next_attempt_at - unixepoch() AS wait FROM notification_outbox").get() as Record<string, number | string>;
+    expect(failed).toMatchObject({ status: "failed", attempts: 1 });
+    expect(Number(failed.wait)).toBeGreaterThanOrEqual(55);
+    // Not due: the next tick leaves it alone.
+    await expect(drainNotificationOutbox(db, env)).resolves.toEqual({ scanned: 0 });
+    // Due again after each backoff, until the eighth attempt dead-letters it.
+    for (let attempt = 2; attempt <= 8; attempt += 1) {
+      sqlite.exec("UPDATE notification_outbox SET next_attempt_at = unixepoch() - 1");
+      await drainNotificationOutbox(db, env);
+    }
+    expect(sqlite.prepare("SELECT status, attempts FROM notification_outbox").get()).toEqual({ status: "dead_lettered", attempts: 8 });
+    expect(String((sqlite.prepare("SELECT last_error FROM notification_outbox").get() as { last_error: string }).last_error)).toMatch(/^notification_attempt_limit_reached/);
+    sqlite.exec("UPDATE notification_outbox SET next_attempt_at = unixepoch() - 1");
+    await expect(drainNotificationOutbox(db, env)).resolves.toEqual({ scanned: 0 });
+    expect(outboxId).toMatch(/^ono_/);
+  });
+
+  it("reclaims a row whose sending invocation died once its lease ends", async () => {
+    const outboxId = await recordOrderRow();
+    sqlite.exec("UPDATE notification_outbox SET status = 'processing', claim_id = 'dead', claim_expires_at = unixepoch() + 60");
+    await expect(drainNotificationOutbox(db, env)).resolves.toEqual({ scanned: 0 });
+    sqlite.exec("UPDATE notification_outbox SET claim_expires_at = unixepoch() - 1");
+    await expect(drainNotificationOutbox(db, env)).resolves.toEqual({ scanned: 1 });
+    expect(status()).toBe("sent");
+    expect(outboxId).toMatch(/^ono_/);
   });
 });

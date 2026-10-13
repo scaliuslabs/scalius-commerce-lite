@@ -9,8 +9,7 @@ describe("formatPaymentWebhookIssue", () => {
       eventType: "payment_intent.succeeded",
       status: "manual_reconciliation",
       result: JSON.stringify({
-        queueType: "payment.stripe.confirmed",
-        queueMessageId: "msg_1",
+        attempts: 1,
         error: "Cannot pay a cancelled order",
         internalOnly: "not surfaced",
       }),
@@ -22,64 +21,38 @@ describe("formatPaymentWebhookIssue", () => {
       reason: "manual_reconciliation",
       message: "Payment webhook needs manual reconciliation: Cannot pay a cancelled order",
       error: "Cannot pay a cancelled order",
-      queueType: "payment.stripe.confirmed",
-      queueMessageId: "msg_1",
     });
     expect(JSON.stringify(issue)).not.toContain("internalOnly");
   });
 
-  it("uses recovery copy for stale queued payment webhooks", () => {
-    const issue = formatPaymentWebhookIssue({
-      id: "sslcommerz:ipn:tran:val",
-      provider: "sslcommerz",
-      eventType: "ipn",
-      status: "failed",
-      result: JSON.stringify({
-        reason: "stale_queued_payment_webhook",
-        cutoffSeconds: 1_800,
-      }),
-      processedAt: 1_900,
-    });
-
-    expect(issue.status).toBe("failed");
-    expect(issue.reason).toBe("stale");
-    expect(issue.message).toContain("did not finish within six hours");
-    expect(issue.error).toBeNull();
-  });
-
-  it("uses dead-letter queue copy for exhausted payment webhook deliveries", () => {
+  it("uses dead-letter copy for a payment event whose retries are spent", () => {
     const issue = formatPaymentWebhookIssue({
       id: "stripe:payment_intent.succeeded:evt_dlq",
       provider: "stripe",
       eventType: "payment_intent.succeeded",
       status: "failed",
-      result: JSON.stringify({
-        reason: "payment_events_dlq",
-        queueType: "payment.stripe.confirmed",
-        queueMessageId: "msg_dlq",
-      }),
+      result: JSON.stringify({ reason: "retries_exhausted", attempts: 6, error: "D1 batch failed" }),
       processedAt: 1_900,
     });
 
     expect(issue.status).toBe("failed");
     expect(issue.reason).toBe("dead_letter");
-    expect(issue.message).toContain("dead-letter queue");
-    expect(issue.queueType).toBe("payment.stripe.confirmed");
-    expect(issue.queueMessageId).toBe("msg_dlq");
+    expect(issue.message).toContain("failed after every retry");
+    expect(issue.error).toBe("D1 batch failed");
   });
 
-  it("falls back safely when legacy failed rows store plain text", () => {
+  it("falls back safely when a result is plain text", () => {
     const issue = formatPaymentWebhookIssue({
       id: "sslcommerz:ipn:evt_1",
       provider: "sslcommerz",
       eventType: "ipn",
       status: "failed",
-      result: "Queue not available",
+      result: "validation unavailable",
       processedAt: 1_900,
     });
 
     expect(issue.reason).toBe("failed");
-    expect(issue.message).toBe("Payment webhook processing failed: Queue not available");
-    expect(issue.error).toBe("Queue not available");
+    expect(issue.message).toBe("Payment webhook processing failed: validation unavailable");
+    expect(issue.error).toBe("validation unavailable");
   });
 });

@@ -30,7 +30,7 @@ import { readAcceptedCustomerCountries } from "../settings";
 import { customerAddressColumns, resolveAddressFromRows, type AddressValidationError } from "../customers";
 import {
   type ConsentChange,
-  enqueueConsentNotifications,
+  type ConsentRuntime,
   type MarketingLinkEnv,
   prepareConsentChanges,
   type PreparedConsentChanges,
@@ -65,8 +65,8 @@ export interface CustomerImportResponse {
 export interface CustomerImportContext {
   actorId?: string | null;
   env: MarketingLinkEnv;
-  /** Where consent confirmations would be queued (imports subscribe directly, so none are). */
-  queue?: Parameters<typeof enqueueConsentNotifications>[1];
+  /** Where consent confirmations would be sent (imports subscribe directly, so none are). */
+  send?: ConsentRuntime["send"];
   budget?: ImportBudget;
 }
 
@@ -328,7 +328,7 @@ export async function importCustomers(
         result.subscribed = readConsentChangeResults(write.consent, outcome.slice(offset, offset + write.statements.length))
           .filter((change) => change.changed)
           .map((change) => change.channel).filter((channel): channel is (typeof MARKETING_CONTACT_CHANNELS)[number] => channel !== "push");
-        await enqueueConsentNotifications(db, context.queue, write.consent.outboxIds);
+        if (context.send && write.consent.outboxIds.length > 0) await context.send(write.consent.outboxIds);
       }
       offset += write.statements.length;
     }

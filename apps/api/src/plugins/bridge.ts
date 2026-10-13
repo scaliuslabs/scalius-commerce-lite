@@ -330,7 +330,7 @@ export class PluginBridgeHost implements PluginBridgeApi {
       }
       const timeoutMs = rawTimeout as number;
       // A provider operation runs only when the platform calls it (a send, a
-      // lookup, a booking), paced by the queue or request that needs it, so its
+      // lookup, a booking), paced by the request or background run that needs it, so its
       // calls to its own provider are not the app's to limit: an SMS gateway
       // must keep up with a burst of sign-in codes.
       if (!this.props.provider && !(await pluginWithinRateLimit(this.runtime.env, "http", this.pluginId))) {

@@ -1,5 +1,5 @@
 // src/modules/checkout/prepare.ts
-// Storefront order creation — validates and prepares orders for queue dispatch.
+// Storefront order creation — validates and prepares orders for the commit.
 
 import { defaultOrderSalesChannelId } from "@scalius/shared/sales-channels";
 import type { Database } from "@scalius/database/client";

@@ -30,6 +30,7 @@ import {
 } from "../../utils/conversation-http";
 import { UnauthorizedError } from "../../utils/api-error";
 import { requireCustomerSession, setPrivateNoStoreHeaders } from "./shared";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -112,7 +113,7 @@ app.openapi(createRoute({
     clientKey: body.clientKey,
     attachmentIds: body.attachmentIds,
     quantity: body.quantity,
-  }, { queue: c.env.JOBS_QUEUE });
+  }, { send: notificationSender(c) });
   return created(c, opened);
 });
 

@@ -12171,8 +12171,6 @@
             "type": "string",
             "enum": [
               "pending",
-              "enqueueing",
-              "queued",
               "processing",
               "succeeded",
               "failed",
@@ -14212,8 +14210,6 @@
             "type": "string",
             "enum": [
               "pending",
-              "enqueueing",
-              "queued",
               "processing",
               "succeeded",
               "failed",
@@ -166686,7 +166682,6 @@
                                 "type": "string",
                                 "enum": [
                                   "manual_reconciliation",
-                                  "stale",
                                   "dead_letter",
                                   "failed"
                                 ]
@@ -166695,14 +166690,6 @@
                                 "type": "string"
                               },
                               "error": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "queueType": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "queueMessageId": {
                                 "type": "string",
                                 "nullable": true
                               },
@@ -166725,8 +166712,6 @@
                               "reason",
                               "message",
                               "error",
-                              "queueType",
-                              "queueMessageId",
                               "processedAt"
                             ]
                           }
@@ -166947,17 +166932,6 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "queuedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
-                              },
                               "sentAt": {
                                 "anyOf": [
                                   {
@@ -167148,7 +167122,6 @@
                               "attempts",
                               "nextAttemptAt",
                               "lastError",
-                              "queuedAt",
                               "sentAt",
                               "createdAt",
                               "updatedAt",
@@ -203424,8 +203397,6 @@
               "type": "string",
               "enum": [
                 "pending",
-                "enqueueing",
-                "queued",
                 "processing",
                 "succeeded",
                 "failed",
@@ -206677,8 +206648,6 @@
               "type": "string",
               "enum": [
                 "pending",
-                "enqueueing",
-                "queued",
                 "processing",
                 "succeeded",
                 "failed",

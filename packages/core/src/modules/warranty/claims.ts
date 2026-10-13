@@ -45,7 +45,7 @@ import { and, desc, eq, inArray, isNull, lt, or, sql, type SQL } from "drizzle-o
 import { nanoid } from "nanoid";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors";
 import {
-  enqueueConversationNotifications,
+  sendConversationNotifications,
   planConversationAppend,
   readThread,
   stageConversationAttachment,
@@ -74,8 +74,8 @@ const CLAIM_VERSION_GUARD = "WARRANTY_CLAIM_CHANGED";
 const APPEND_ATTEMPTS = 3;
 const CLAIM_LIST_PAGE = 25;
 
-/** The notification queue the conversation outbox rows are handed to. */
-type NotificationQueue = NonNullable<Parameters<typeof enqueueConversationNotifications>[1]>;
+/** The sender the conversation outbox rows are handed to. */
+type NotificationSender = NonNullable<Parameters<typeof sendConversationNotifications>[0]>;
 
 /** Who opens a claim. Buyers are proven by the route (session or receipt proof). */
 export type ClaimActor = ConversationActor;
@@ -314,7 +314,7 @@ function activeWarrantyGuard(db: Database, warrantyId: string, staff: boolean) {
 export async function openWarrantyClaim(
   db: Database,
   input: OpenClaimInput,
-  options: { queue?: NotificationQueue; now?: number } = {},
+  options: { send?: NotificationSender; now?: number } = {},
 ): Promise<OpenClaimResult> {
   const clientKey = normalizeClientKey(input.clientKey);
   const body = normalizeConversationBody(input.description);
@@ -401,7 +401,7 @@ export async function openWarrantyClaim(
 
     try {
       await safeBatch(db, statements as unknown as readonly BatchStatement[]);
-      await enqueueConversationNotifications(db, options.queue, plan.outboxIds);
+      await sendConversationNotifications(options.send, plan.outboxIds);
       return { claimId, conversationId: threadId, orderId: warranty.orderId, status: "open", created: true };
     } catch (error) {
       if (isBatchGuardError(error, WARRANTY_INACTIVE_GUARD)) {
@@ -448,7 +448,7 @@ export async function updateWarrantyClaim(
   db: Database,
   claimId: string,
   input: UpdateClaimInput,
-  options: { queue?: NotificationQueue } = {},
+  options: { send?: NotificationSender } = {},
 ): Promise<StaffWarrantyClaim> {
   if (!isWarrantyClaimStatus(input.status)) throw new ValidationError("Choose a claim status.", { field: "status" });
   const resolution = input.status === "resolved" ? input.resolution ?? null : null;
@@ -515,7 +515,7 @@ export async function updateWarrantyClaim(
         }).where(and(eq(warrantyClaims.id, claimId), eq(warrantyClaims.version, input.version))),
         ...plan.statements,
       ] as unknown as readonly BatchStatement[]);
-      await enqueueConversationNotifications(db, options.queue, plan.outboxIds);
+      await sendConversationNotifications(options.send, plan.outboxIds);
       return getWarrantyClaim(db, claimId);
     } catch (error) {
       if (isBatchGuardError(error, CLAIM_VERSION_GUARD)) throw staleClaim();

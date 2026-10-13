@@ -8,9 +8,9 @@ import {
   emptyCounters,
   internalSubrequests,
   median,
-  queueOperations,
   type FreePlanCounters,
 } from "./testing/free-plan-meter";
+import { refreshProductRecommendations } from "@scalius/core/modules/catalog";
 import { DVC_AUDIT_RATE } from "./public-read";
 import { STORE, createFreePlanStore, type FreePlanStore } from "./testing/free-plan-store";
 import { cartItems, seedCatalog, seedMediaBacklog, seedOrders } from "./testing/free-plan-seed";
@@ -20,8 +20,8 @@ import { BUDGETS, type Budget } from "./testing/free-plan-budgets";
  * The Workers plan budget of the operations a store depends on, measured through
  * the real Worker entrypoints under BOTH plan profiles (scripts/free-plan-budget.mjs
  * prints the table; docs/FREE-PLAN.md explains the limits). The gate asserts what
- * is deterministic: D1 round trips and statements, KV reads and writes, queue
- * messages and external subrequests, against `testing/free-plan-budgets.ts` and
+ * is deterministic: D1 round trips and statements and external subrequests
+ * (after-response work included), against `testing/free-plan-budgets.ts` and
  * Free's absolute ceilings. CPU is recorded for the report (it moves with the
  * machine; the workerd tier, free-plan-workerd.test.ts, measures it where it is
  * real).
@@ -58,10 +58,8 @@ function worst(results: FreePlanCounters[]): FreePlanCounters {
   const out = emptyCounters();
   for (const counters of results) {
     for (const key of Object.keys(out) as Array<keyof FreePlanCounters>) {
-      if (key === "queueTypes") continue;
       (out[key] as number) = Math.max(out[key] as number, counters[key] as number);
     }
-    out.queueTypes = counters.queueTypes;
   }
   return out;
 }
@@ -70,7 +68,6 @@ function mean(results: FreePlanCounters[]): FreePlanCounters {
   const out = emptyCounters();
   for (const counters of results) {
     for (const key of Object.keys(out) as Array<keyof FreePlanCounters>) {
-      if (key === "queueTypes") continue;
       (out[key] as number) += (counters[key] as number) / results.length;
     }
   }
@@ -141,7 +138,6 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     const actual: Budget = {
       d1Calls: counters.d1Calls,
       d1Statements: counters.d1Statements,
-      queueMessages: counters.queueMessages,
       externalFetches: counters.externalFetches,
     };
     for (const [key, max] of Object.entries(budget ?? {}) as Array<[keyof Budget, number]>) {
@@ -199,28 +195,16 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
 
   const CRON_TIME = Date.parse("2026-10-03T10:15:00Z");
   const NIGHTLY_TIME = Date.parse("2026-10-03T20:00:00Z");
-  /** Tick `n` of an hour that starts on a slice boundary: the four ticks together run every Free slice. */
   const cron = (scheduledTime: number) =>
-    store.worker.scheduled({ cron: "*/15 * * * *", scheduledTime, noRetry: () => undefined } as unknown as ScheduledController);
-  const hour = Math.floor(CRON_TIME / (4 * 900_000)) * 4 * 900_000;
+    store.worker.scheduled({ cron: "* * * * *", scheduledTime, noRetry: () => undefined } as unknown as ScheduledController);
+  /** An hour of cron ticks, one a minute: Free runs every job of the rotation in it at least twice, Paid every job four times. */
+  const hour = Math.floor(CRON_TIME / 3_600_000) * 3_600_000;
+  const minuteOfHour = (index: number) => cron(hour + index * 60_000);
 
   function withImages<T>(work: () => Promise<T>): Promise<T> {
     const previous = store.worker.env;
     store.worker.env = { ...previous, IMAGES: store.meter.service({ info: async () => ({}), input: () => ({}) }) } as unknown as Env;
     return work().finally(() => { store.worker.env = previous; });
-  }
-
-  function queueBatch(bodies: unknown[], queue = "jobs") {
-    const outcome = { acked: 0, retried: 0 };
-    const messages = bodies.map((body, index) => ({
-      id: `msg_${index}`,
-      timestamp: new Date(),
-      body,
-      attempts: 1,
-      ack: () => { outcome.acked += 1; },
-      retry: () => { outcome.retried += 1; },
-    }));
-    return { batch: { queue, messages, ackAll: () => undefined, retryAll: () => undefined } as unknown as MessageBatch<Record<string, unknown>>, outcome };
   }
 
   let randomSpy: ReturnType<typeof vi.spyOn> | undefined;
@@ -294,7 +278,9 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
         "CF-Connecting-IP": `198.51.100.${index + 1}`,
       }));
       expect(response.status).toBe(200);
-      pendingChallenge.set(email, store.meter.queue.sent[store.meter.queue.sent.length - 1]!.body as { challengeKey: string; deliveryKey: string });
+      const challenge = store.sqlite.prepare("SELECT otp_key AS challengeKey, delivery_key AS deliveryKey FROM customer_auth_otp_challenges ORDER BY created_at DESC, rowid DESC LIMIT 1")
+        .get() as { challengeKey: string; deliveryKey: string };
+      pendingChallenge.set(email, { ...challenge });
     });
     expectWithin(verify);
   });
@@ -367,89 +353,39 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     expectWithin(m);
   });
 
-  // ── Background work: the cron, then every queue job type ────────────────────
+  // ── Background work: the cron's ticks ─────────────────────────────────────────
 
-  it("cron maintenance: every slice of the rotation idle, a busy store with a 1,200-image rendition backlog, and the nightly tick", async () => {
-    // Four consecutive ticks: on Free each runs another slice, on Paid each runs everything.
-    const idle = await run("cron-idle", "Cron maintenance run (idle store, worst tick of the rotation)", 8, (index) => cron(hour + index * 900_000), undefined, 4);
+  it("cron ticks: an idle hour, an hour with a 1,200-image rendition backlog, and the nightly tick", async () => {
+    // A store in its steady state already has every product's recommendations: the
+    // rotation then rewrites only lists that changed (the first lap is a one-off fill).
+    const productIds = (store.sqlite.prepare("SELECT id FROM products").all() as Array<{ id: string }>).map((row) => row.id);
+    await refreshProductRecommendations(store.db, productIds);
+    // The first hour warms the rotation's cursors and first-run writes; the second is the steady state.
+    const idle = await run("cron-idle", "Cron tick (idle store, worst minute of an hour)", 120, (index) => minuteOfHour(index), undefined, 60);
     expectWithin(idle);
     seedMediaBacklog(store.sqlite, 1200);
-    const busy = await run("cron-busy", "Cron maintenance run (1,200 images missing renditions, worst tick)", 4, (index) => withImages(() => cron(hour + 4 * 900_000 + index * 900_000)));
+    const busy = await run("cron-busy", "Cron tick (1,200 images missing renditions, worst minute of an hour)", 60, (index) => withImages(() => minuteOfHour(120 + index)));
     expectWithin(busy);
-    const nightly = await run("cron-nightly", "Cron maintenance run (nightly catalogue tick)", 2, () => cron(NIGHTLY_TIME));
+    const nightly = await run("cron-nightly", "Cron tick (the nightly pass)", 2, () => cron(NIGHTLY_TIME));
     expectWithin(nightly);
   });
 
-  it("queue consumer: one batch per job type, at this plan's batch size", async () => {
-    const byType = new Map<string, unknown[]>();
-    for (const { body } of store.meter.queue.sent) {
-      const type = String((body as { type?: unknown }).type);
-      byType.set(type, [...(byType.get(type) ?? []), body]);
-    }
-    const produced = Object.fromEntries([...byType].map(([type, bodies]) => [type, bodies.length]));
-    console.log(`[budget:${plan}] produced queue messages by type:`, JSON.stringify(produced));
-    expect(byType.has("auth.send_otp")).toBe(true);
-    for (const [type, bodies] of byType) {
-      const size = Math.min(limits.queue.consumerBatchSize, bodies.length);
-      let outcome = { acked: 0, retried: 0 };
-      const m = await run(`queue-${type}`, `Queue batch: ${type} (${size} message${size === 1 ? "" : "s"})`, 2, async (index) => {
-        const sample = bodies.slice((index * size) % bodies.length).concat(bodies).slice(0, size);
-        const { batch, outcome: result } = queueBatch(sample);
-        outcome = result;
-        await store.worker.queue(batch);
-      });
-      expect(outcome.acked + outcome.retried, `${type} messages are all settled`).toBe(size);
-      expectWithin(m);
-    }
+  it("drain ticks with due notifications and a requested projection rebuild", async () => {
+    const busy = await run("drain-busy", "Cron tick (due notifications, a projection rebuild chunk)", 2, (index) => minuteOfHour(181 + index), async () => {
+      store.sqlite.exec("UPDATE notification_outbox SET status = 'pending', next_attempt_at = 0, claim_id = NULL WHERE status <> 'sent'");
+      store.sqlite.exec("INSERT INTO system_kv (key, value) VALUES ('catalog:projections:rebuild-cursor', '') ON CONFLICT(key) DO UPDATE SET value = ''");
+    });
+    expectWithin(busy);
   });
 
-  it("an order's lifecycle: a 3-line checkout commit and every message it produced (the cron is a fixed daily cost)", async () => {
-    store.meter.queue.sent.length = 0;
+  it("an order's lifecycle: a 3-line checkout commit and everything it starts after the response (the cron is a fixed daily cost)", async () => {
     const { quoteFingerprint } = await taxQuote(3);
-    const total = emptyCounters();
-    const add = (counters: FreePlanCounters) => {
-      for (const key of Object.keys(total) as Array<keyof FreePlanCounters>) {
-        if (key === "queueTypes") continue;
-        (total[key] as number) += counters[key] as number;
-      }
-    };
-    const commit = await run("order-3-line-commit", "Checkout commit (3 lines)", 2, async () => {
-      store.meter.queue.sent.length = 0;
+    const commit = await run("order-3-line-commit", "Checkout commit (3 lines), its notification and events after the response", 2, async () => {
       await placeOrder(3, quoteFingerprint);
     });
     expectWithin(commit);
-    add(commit.counters);
-    // Every message the commit queued is consumed, one batch at a time at this plan's batch size.
-    let consumed = 0;
-    for (let round = 0; round < 6; round += 1) {
-      const pending = store.meter.queue.sent.slice(consumed).map(({ body }) => body);
-      if (pending.length === 0) break;
-      consumed = store.meter.queue.sent.length;
-      for (let start = 0; start < pending.length; start += limits.queue.consumerBatchSize) {
-        const { batch } = queueBatch(pending.slice(start, start + limits.queue.consumerBatchSize));
-        add((await store.meter.measure(() => store.worker.queue(batch))).counters);
-      }
-    }
-    const measurement: Measurement = {
-      id: "order-lifecycle",
-      label: "One 3-line order: checkout commit + consuming every message it queued",
-      runs: 1,
-      cold: total,
-      warmCpuMs: total.cpuMs,
-      mean: total,
-      counters: {
-        ...total,
-        queueMessages: store.meter.queue.sent.length,
-        queueTypes: store.meter.queue.sent.reduce<Record<string, number>>((types, { body }) => {
-          const type = String((body as { type?: unknown }).type);
-          types[type] = (types[type] ?? 0) + 1;
-          return types;
-        }, {}),
-      },
-    };
-    measurements.push(measurement);
-    expect(queueOperations(measurement.counters), "queue operations of one order").toBe(store.meter.queue.sent.length * 3);
-    // Summed over several invocations: the per-invocation ceilings do not apply.
-    expectWithin(measurement, { invocation: false });
+    // One invocation now: the commit and its after-response work.
+    measurements.push({ ...commit, id: "order-lifecycle", label: "One 3-line order: checkout commit + its after-response work" });
+    expectWithin({ ...commit, id: "order-lifecycle" });
   });
 });

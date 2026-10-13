@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   assertNoActivePaymentSessionAttempt: vi.fn(),
   updateOrderStatusFromShipment: vi.fn(),
 
-  enqueueOrderStatusChangeNotification: vi.fn(),
+  sendOrderStatusChangeNotification: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
@@ -36,8 +36,8 @@ vi.mock("@scalius/core/modules/order-kernel", async (importOriginal) => ({
   assertNoActivePaymentSessionAttempt: mocks.assertNoActivePaymentSessionAttempt,
 }));
 
-vi.mock("../../utils/order-notification-queue", () => ({
-  enqueueOrderStatusChangeNotification: mocks.enqueueOrderStatusChangeNotification,
+vi.mock("../../utils/order-notifications", () => ({
+  sendOrderStatusChangeNotification: mocks.sendOrderStatusChangeNotification,
 }));
 
 import type { CourierProvidersSource } from "@scalius/core/modules/delivery";
@@ -80,7 +80,7 @@ describe("admin shipment status sync helper", () => {
     mocks.assertNoActiveRefundAttempt.mockResolvedValue(undefined);
     mocks.assertNoActivePaymentSessionAttempt.mockResolvedValue(undefined);
 
-    mocks.enqueueOrderStatusChangeNotification.mockResolvedValue({ enqueued: true });
+    mocks.sendOrderStatusChangeNotification.mockResolvedValue({ enqueued: true });
   });
 
   it("syncs order status and notifications after provider status checks", async () => {
@@ -98,7 +98,6 @@ describe("admin shipment status sync helper", () => {
       version: 3,
     };
     const { db } = createDbMock();
-    const queue = { send: vi.fn() };
 
     mocks.checkShipmentStatus.mockResolvedValue({
       shipmentId: "ship_1",
@@ -121,7 +120,7 @@ describe("admin shipment status sync helper", () => {
       shipment: initialShipment,
       encryptionKey: "credential-key",
       couriers,
-      c: { env: { JOBS_QUEUE: queue } as unknown as Env },
+      c: { env: {} as unknown as Env },
       source: "orders-shipment-status",
     });
 
@@ -137,9 +136,9 @@ describe("admin shipment status sync helper", () => {
       "delivered",
     );
 
-    expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
+    expect(mocks.sendOrderStatusChangeNotification).toHaveBeenCalledWith({
       db,
-      queue,
+      send: expect.any(Function),
       statusChange: orderStatusChange,
       trackingId: "track_new",
       source: "orders-shipment-status",
@@ -164,13 +163,13 @@ describe("admin shipment status sync helper", () => {
       db: db as never,
       shipment: shipment(),
       couriers: vi.fn(async () => { throw new Error("no app couriers"); }),
-      c: { env: { JOBS_QUEUE: { send: vi.fn() } } as unknown as Env },
+      c: { env: { } as unknown as Env },
       source: "orders-shipment-status",
     })).rejects.toThrow("active refund operation");
 
     expect(mocks.checkShipmentStatus).not.toHaveBeenCalled();
     expect(mocks.updateOrderStatusFromShipment).not.toHaveBeenCalled();
 
-    expect(mocks.enqueueOrderStatusChangeNotification).not.toHaveBeenCalled();
+    expect(mocks.sendOrderStatusChangeNotification).not.toHaveBeenCalled();
   });
 });

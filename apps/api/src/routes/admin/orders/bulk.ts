@@ -20,15 +20,16 @@ import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { requestCourierProviders } from "../../../plugins/providers/courier";
 
 import {
-    enqueueOrderNotificationMessage,
-    enqueueOrderNotificationsForStatus,
-} from "../../../utils/order-notification-queue";
+    sendOrderNotification,
+    sendOrderNotificationsForStatus,
+} from "../../../utils/order-notifications";
 import {
     adminWriteErrorResponses,
     type AdminRouteContext,
     type AdminRouteHandler,
     bulkRequestKeySchema,
 } from "./shared";
+import { notificationSender } from "../../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -179,9 +180,9 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
         });
     }
 
-    await enqueueOrderNotificationsForStatus({
+    await sendOrderNotificationsForStatus({
         db,
-        queue: c.env.JOBS_QUEUE,
+        send: notificationSender(c),
         orderIds: newlyShippedResults.map((result) => result.orderId),
         newStatus: "shipped",
         trackingByOrderId: Object.fromEntries(
@@ -247,16 +248,11 @@ app.openapi(bulkConfirmRoute, async (c) => {
         if (!result.success || !result.update) continue;
         const notification = result.update.notification;
         if (notification) {
-            await enqueueOrderNotificationMessage({
+            await sendOrderNotification({
                 db,
-                queue: c.env.JOBS_QUEUE,
-                message: {
-                    type: "order.notification",
-                    orderId: notification.orderId,
-                    customerEmail: notification.customerEmail,
-                    customerName: notification.customerName,
-                    notificationType: notification.notificationType,
-                },
+                send: notificationSender(c),
+                orderId: notification.orderId,
+                notificationType: notification.notificationType,
                 dedupeKey: notification.dedupeKey ?? `order_status:${result.orderId}:${notification.notificationType}`,
                 source: "orders-bulk-confirm",
             });
@@ -313,9 +309,9 @@ app.openapi(bulkFulfillRoute, async (c) => {
             },
         });
     }
-    await enqueueOrderNotificationsForStatus({
+    await sendOrderNotificationsForStatus({
         db,
-        queue: c.env.JOBS_QUEUE,
+        send: notificationSender(c),
         orderIds: results.filter((result) => result.shipment?.statusChange).map((result) => result.orderId),
         newStatus: "shipped",
         dedupeKeyByOrderId: Object.fromEntries(results

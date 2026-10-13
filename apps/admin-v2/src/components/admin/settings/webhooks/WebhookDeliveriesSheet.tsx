@@ -25,8 +25,8 @@ import {
 } from "~/lib/api-query-options/webhooks";
 import { deliveryStatusVariant, formatDuration, formatWhen, topicLabel } from "./webhook-format";
 
-/** The statuses a merchant filters by (`enqueueing` is a moment inside "Queued"). */
-const FILTERS = ["succeeded", "failed", "exhausted", "cancelled", "pending", "queued", "processing"] as const satisfies readonly WebhookDeliveryStatus[];
+/** The statuses a merchant filters by. */
+const FILTERS = ["succeeded", "failed", "exhausted", "cancelled", "pending", "processing"] as const satisfies readonly WebhookDeliveryStatus[];
 const COLUMNS = 7;
 
 function DeliveryDetails({ delivery, canRetry, retrying, onRetry }: {

@@ -95,7 +95,6 @@ const LIMITER = { limit: async () => ({ success: true }) };
 const ENV = {
   RL_STANDARD: LIMITER,
   RL_STRICT: LIMITER,
-  JOBS_QUEUE: { send: async () => undefined, sendBatch: async () => undefined },
   JWT_SECRET: "checkout-budget-secret-0123456789abcdef",
   SCALIUS_SECRET: "checkout-budget-master-secret-0123456789abcdefghijklmnop",
   CREDENTIAL_ENCRYPTION_KEY: PLUGIN_TEST_CREDENTIAL_KEY,

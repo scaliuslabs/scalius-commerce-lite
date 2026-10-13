@@ -11,7 +11,7 @@ import {
 } from "@scalius/core/modules/payments";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { requestPaymentProviders } from "../../plugins/providers/payment";
-import { enqueueNotificationOutboxById } from "@scalius/core/modules/notifications";
+import type { NotificationSender } from "@scalius/core/modules/notifications";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -23,9 +23,10 @@ import {
 } from "../../schemas/responses";
 
 import {
-    enqueueOrderRefundNotificationForOrder,
-    enqueueOrderStatusChangeNotification,
-} from "../../utils/order-notification-queue";
+    sendOrderRefundNotification,
+    sendOrderStatusChangeNotification,
+} from "../../utils/order-notifications";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -86,9 +87,9 @@ const adminRefundRecoveryErrorResponses = {
     404: errorResponses[404],
 } as const;
 
-async function enqueueRefundNotification(options: {
+async function notifyRefundResult(options: {
     db: Database;
-    queue: Env["JOBS_QUEUE"] | undefined;
+    send: NotificationSender | undefined;
     orderId: string;
     result: {
         gateway: string;
@@ -105,9 +106,9 @@ async function enqueueRefundNotification(options: {
 }) {
     const notification = options.result.refundNotification;
     if (!notification) return;
-    await enqueueRefundNotificationFact({
+    await notifyRefundFact({
         db: options.db,
-        queue: options.queue,
+        send: options.send,
         orderId: options.orderId,
         gateway: options.result.gateway,
         notification,
@@ -116,9 +117,9 @@ async function enqueueRefundNotification(options: {
     });
 }
 
-async function enqueueRefundNotificationFact(options: {
+async function notifyRefundFact(options: {
     db: Database;
-    queue: Env["JOBS_QUEUE"] | undefined;
+    send: NotificationSender | undefined;
     orderId: string;
     gateway?: string;
     notification: RefundNotificationFact | {
@@ -131,9 +132,9 @@ async function enqueueRefundNotificationFact(options: {
     storeCreditLast4?: string;
     source: string;
 }) {
-    await enqueueOrderRefundNotificationForOrder({
+    await sendOrderRefundNotification({
         db: options.db,
-        queue: options.queue,
+        send: options.send,
         orderId: options.orderId,
         notificationType: options.notification.notificationType,
         dedupeKey: options.notification.dedupeKey,
@@ -149,7 +150,7 @@ async function enqueueRefundNotificationFact(options: {
 
 async function recordPartialRefundProcessedSideEffects(options: {
     db: Database;
-    queue: Env["JOBS_QUEUE"] | undefined;
+    send: NotificationSender | undefined;
     error: PartialRefundProcessedError;
     source: string;
     statusSource?: string;
@@ -157,17 +158,17 @@ async function recordPartialRefundProcessedSideEffects(options: {
     try {
 
         if (options.error.statusChange && options.statusSource) {
-            await enqueueOrderStatusChangeNotification({
+            await sendOrderStatusChangeNotification({
                 db: options.db,
-                queue: options.queue,
+                send: options.send,
                 statusChange: options.error.statusChange,
                 source: options.statusSource,
             });
         }
         for (const notification of options.error.refundNotifications) {
-            await enqueueRefundNotificationFact({
+            await notifyRefundFact({
                 db: options.db,
-                queue: options.queue,
+                send: options.send,
                 orderId: notification.orderId,
                 gateway: options.error.gateway,
                 notification,
@@ -181,7 +182,7 @@ async function recordPartialRefundProcessedSideEffects(options: {
 
 async function recordReconciledRefundAttemptSideEffects(options: {
     db: Database;
-    queue: Env["JOBS_QUEUE"] | undefined;
+    send: NotificationSender | undefined;
     notifications: RefundNotificationFact[];
 }): Promise<{ notificationCount: number; sideEffectErrors: number }> {
     let notificationCount = 0;
@@ -189,9 +190,9 @@ async function recordReconciledRefundAttemptSideEffects(options: {
 
     for (const notification of options.notifications) {
         try {
-            await enqueueRefundNotificationFact({
+            await notifyRefundFact({
                 db: options.db,
-                queue: options.queue,
+                send: options.send,
                 orderId: notification.orderId,
                 notification,
                 source: "orders-refund-reconciliation",
@@ -199,7 +200,7 @@ async function recordReconciledRefundAttemptSideEffects(options: {
             notificationCount += 1;
         } catch (error: unknown) {
             sideEffectErrors += 1;
-            console.error("[orders-refund] Refund reconciliation notification enqueue failed after local commit:", error);
+            console.error("[orders-refund] Refund reconciliation notification failed after local commit:", error);
         }
     }
 
@@ -208,7 +209,7 @@ async function recordReconciledRefundAttemptSideEffects(options: {
 
 async function recordDirectRefundSideEffects(options: {
     db: Database;
-    queue: Env["JOBS_QUEUE"] | undefined;
+    send: NotificationSender | undefined;
     orderId: string;
     result: Awaited<ReturnType<typeof processRefund>>;
 }): Promise<{ notificationCount: number; sideEffectErrors: number }> {
@@ -217,9 +218,9 @@ async function recordDirectRefundSideEffects(options: {
 
     if (options.result.refundNotification) {
         try {
-            await enqueueRefundNotification({
+            await notifyRefundResult({
                 db: options.db,
-                queue: options.queue,
+                send: options.send,
                 orderId: options.orderId,
                 result: options.result,
                 source: "orders-refund",
@@ -227,7 +228,7 @@ async function recordDirectRefundSideEffects(options: {
             notificationCount += 1;
         } catch (error: unknown) {
             sideEffectErrors += 1;
-            console.error("[orders-refund] Direct refund notification enqueue failed after local commit:", error);
+            console.error("[orders-refund] Direct refund notification failed after local commit:", error);
         }
     }
 
@@ -235,25 +236,17 @@ async function recordDirectRefundSideEffects(options: {
 }
 
 /**
- * Hands the store-credit card's `gift_card_issued` row (committed with the
- * refund) to the queue. A failure leaves it for the scheduled outbox flush.
+ * Sends the store-credit card's `gift_card_issued` row (committed with the
+ * refund). A failure leaves it for the scheduled drain.
  */
-async function enqueueStoreCreditNotification(options: {
+async function sendStoreCreditNotification(options: {
     db: Database;
-    queue: Env["JOBS_QUEUE"] | undefined;
+    send: NotificationSender | undefined;
     outboxId: string | undefined;
 }): Promise<{ notificationCount: number; sideEffectErrors: number }> {
-    if (!options.outboxId || !options.queue) return { notificationCount: 0, sideEffectErrors: 0 };
-    try {
-        await enqueueNotificationOutboxById({ db: options.db, queue: options.queue, outboxId: options.outboxId });
-        return { notificationCount: 1, sideEffectErrors: 0 };
-    } catch (error: unknown) {
-        console.error(
-            "[orders-refund] Store-credit notification not enqueued yet; the outbox flush will retry:",
-            error instanceof Error ? error.message : "unknown error",
-        );
-        return { notificationCount: 0, sideEffectErrors: 1 };
-    }
+    if (!options.outboxId || !options.send) return { notificationCount: 0, sideEffectErrors: 0 };
+    await options.send([options.outboxId]);
+    return { notificationCount: 1, sideEffectErrors: 0 };
 }
 
 function publicRefundResult<T extends {
@@ -342,7 +335,7 @@ app.openapi(refundOrderRoute, async (c) => {
         if (error instanceof PartialRefundProcessedError) {
             await recordPartialRefundProcessedSideEffects({
                 db,
-                queue: c.env.JOBS_QUEUE,
+                send: notificationSender(c),
                 error,
                 source: "orders-refund-partial-failure",
             });
@@ -375,13 +368,13 @@ app.openapi(refundOrderRoute, async (c) => {
     }
     const sideEffects = await recordDirectRefundSideEffects({
         db,
-        queue: c.env.JOBS_QUEUE,
+        send: notificationSender(c),
         orderId,
         result,
     });
-    const storeCreditSideEffects = await enqueueStoreCreditNotification({
+    const storeCreditSideEffects = await sendStoreCreditNotification({
         db,
-        queue: c.env.JOBS_QUEUE,
+        send: notificationSender(c),
         outboxId: result.storeCredit?.notificationOutboxId,
     });
     return ok(c, {
@@ -432,7 +425,7 @@ app.openapi(reconcileRefundAttemptRoute, async (c) => {
 
     const sideEffects = await recordReconciledRefundAttemptSideEffects({
         db,
-        queue: c.env.JOBS_QUEUE,
+        send: notificationSender(c),
         notifications: result.refundNotifications,
     });
 

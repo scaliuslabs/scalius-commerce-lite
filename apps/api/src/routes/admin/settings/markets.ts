@@ -17,7 +17,7 @@ import { assertAppProviderInstalled, requestAppProviders } from "../../../plugin
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import { created, ok } from "../../../utils/api-response";
-import { enqueueCatalogProjectionRebuild } from "../../../utils/catalog-jobs";
+import { rebuildCatalogProjectionsAfterWrite } from "../../../background/catalog";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 import { createMarketSchema, marketPricingInput, marketRecordSchema, presentMarket, updateMarketSchema } from "../../../schemas/markets";
 
@@ -151,9 +151,7 @@ app.openapi(createRoute({
   const { market, priceIncrementChanged } = await updateMarket(db, id, { ...body, ...pricing }, { chargeable });
   if (priceIncrementChanged) {
     // Card prices in the catalogue projections round to the increment.
-    await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch((error: unknown) => {
-      console.warn("[markets] projection rebuild enqueue failed", error instanceof Error ? error.name : "unknown");
-    });
+    await rebuildCatalogProjectionsAfterWrite(c, c.get("db"), "markets");
   }
   return ok(c, { market: presentMarket(market) });
 });

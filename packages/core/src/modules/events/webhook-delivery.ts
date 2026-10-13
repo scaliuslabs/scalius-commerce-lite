@@ -35,9 +35,8 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors";
 import {
   toOutboxEvent,
+  type EventDelivery,
   type EventFanOutTarget,
-  type EventsQueue,
-  type EventsQueueMessage,
   type OutboxEvent,
 } from "./event-outbox";
 import { parseStoredTopicFilters, readWebhookSecret } from "./webhook-subscriptions";
@@ -53,13 +52,8 @@ export const WEBHOOK_RESPONSE_EXCERPT_LENGTH = 256;
 /** Bodies above this send `data: null` with `dataOmitted: "too_large"`. */
 export const WEBHOOK_MAX_BODY_BYTES = 512 * 1024;
 const PROCESSING_LEASE_SECONDS = 120;
-const ENQUEUE_LEASE_SECONDS = 5 * 60;
-const STALE_QUEUED_SECONDS = 30 * 60;
 const MAX_ERROR_LENGTH = 500;
-/** Queues delays a message by at most 12 hours. */
-const MAX_QUEUE_DELAY_SECONDS = 43_200;
 const NEVER = 253_402_300_799;
-export const DELIVERY_FLUSH_BATCH_SIZE = 50;
 export const MAX_DELIVERY_FLUSH_LIMIT = 200;
 const USER_AGENT = "Scalius-Webhooks/1.0";
 
@@ -266,7 +260,7 @@ export const webhookFanOutTarget: EventFanOutTarget = {
       .from(webhookDeliveries)
       .where(and(eq(webhookDeliveries.eventId, event.id), eq(webhookDeliveries.status, "pending")))
       .all();
-    return pending.map((row): EventsQueueMessage => ({ type: "webhooks.deliver", deliveryId: row.id }));
+    return pending.map((row): EventDelivery => ({ type: "webhooks.deliver", deliveryId: row.id }));
   },
 };
 
@@ -277,8 +271,7 @@ function deliveryClaimableCondition() {
     eq(webhookDeliveries.kind, "event"),
     or(
       and(inArray(webhookDeliveries.status, ["pending", "failed"]), lte(webhookDeliveries.nextAttemptAt, sql`unixepoch()`)),
-      and(inArray(webhookDeliveries.status, ["enqueueing", "processing"]), lte(webhookDeliveries.claimExpiresAt, sql`unixepoch()`)),
-      and(eq(webhookDeliveries.status, "queued"), lte(webhookDeliveries.queuedAt, sql`unixepoch() - ${STALE_QUEUED_SECONDS}`)),
+      and(eq(webhookDeliveries.status, "processing"), lte(webhookDeliveries.claimExpiresAt, sql`unixepoch()`)),
     ),
   );
 }
@@ -288,7 +281,7 @@ export type WebhookDeliveryOutcome =
   | { status: "skipped"; deliveryId: string; reason: "missing" | "not_due" };
 
 /**
- * The `webhooks.deliver` consumer: claims the delivery, builds and signs the
+ * Sends one delivery: claims it, builds and signs the
  * body, POSTs it, records the attempt and the endpoint's health, and returns
  * when to retry. Only infrastructure errors (the database) throw.
  */
@@ -297,7 +290,6 @@ export async function processWebhookDelivery(options: {
   deliveryId: string;
   encryptionKey: string | undefined;
   resolveRepresentation: WebhookRepresentationResolver;
-  queue?: EventsQueue;
   fetch?: WebhookFetch;
   onSubscriptionDisabled?: (subscription: { id: string; url: string }) => Promise<void>;
 }): Promise<WebhookDeliveryOutcome> {
@@ -313,15 +305,7 @@ export async function processWebhookDelivery(options: {
       attempts: sql`${webhookDeliveries.attempts} + 1`,
       updatedAt: sql`unixepoch()`,
     })
-    .where(and(
-      eq(webhookDeliveries.id, deliveryId),
-      eq(webhookDeliveries.kind, "event"),
-      or(
-        eq(webhookDeliveries.status, "queued"),
-        and(inArray(webhookDeliveries.status, ["pending", "failed"]), lte(webhookDeliveries.nextAttemptAt, sql`unixepoch()`)),
-        and(inArray(webhookDeliveries.status, ["enqueueing", "processing"]), lte(webhookDeliveries.claimExpiresAt, sql`unixepoch()`)),
-      ),
-    ))
+    .where(and(eq(webhookDeliveries.id, deliveryId), deliveryClaimableCondition()))
     .returning();
   const delivery = claimed[0];
   if (!delivery) {
@@ -496,84 +480,21 @@ async function recordFailure(
     }
   }
 
-  if (retryInSeconds !== null && options.queue && !subscriptionDisabled) {
-    await options.queue
-      .send({ type: "webhooks.deliver", deliveryId: delivery.id }, { delaySeconds: Math.min(retryInSeconds, MAX_QUEUE_DELAY_SECONDS) })
-      .catch(() => undefined); // The scheduled flush finds the due row.
-  }
   return { status: exhausted ? "exhausted" : "failed", deliveryId: delivery.id, subscriptionDisabled, retryInSeconds };
 }
 
-/** `jobs-dlq`: an exhausted `webhooks.deliver` message leaves the row for the flush, which owns retries. */
-export async function releaseWebhookDeliveryFromQueue(db: Database, deliveryId: string, reason: string): Promise<boolean> {
-  const rows = await db
-    .update(webhookDeliveries)
-    .set({
-      status: "failed",
-      claimId: null,
-      claimExpiresAt: null,
-      lastError: normalizeError(reason),
-      nextAttemptAt: sql`unixepoch() + 300`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(and(
-      eq(webhookDeliveries.id, deliveryId),
-      inArray(webhookDeliveries.status, ["pending", "enqueueing", "queued", "processing"]),
-    ))
-    .returning({ id: webhookDeliveries.id });
-  return rows.length > 0;
-}
+// ── Scheduled drain ───────────────────────────────────────────────────────
 
-// ── Scheduled flush ───────────────────────────────────────────────────────
-
-/** Re-enqueues due retries, expired leases and lost messages (`webhooks.deliver`, id only). */
-export async function flushDueWebhookDeliveries(options: {
-  db: Database;
-  queue: EventsQueue | undefined;
-  limit?: number;
-}): Promise<{ scanned: number; enqueued: number; failed: number; skipped: number }> {
-  const result = { scanned: 0, enqueued: 0, failed: 0, skipped: 0 };
-  if (!options.queue) return result;
-  const { db, queue } = options;
-  const limit = Math.max(1, Math.min(options.limit ?? DELIVERY_FLUSH_BATCH_SIZE, MAX_DELIVERY_FLUSH_LIMIT));
+/** Due retries and expired leases, oldest first: the ids a drain sends next. */
+export async function listDueWebhookDeliveries(db: Database, limit = MAX_DELIVERY_FLUSH_LIMIT): Promise<string[]> {
   const due = await db
     .select({ id: webhookDeliveries.id })
     .from(webhookDeliveries)
     .where(deliveryClaimableCondition())
     .orderBy(asc(webhookDeliveries.nextAttemptAt), asc(webhookDeliveries.id))
-    .limit(limit)
+    .limit(Math.max(1, Math.min(limit, MAX_DELIVERY_FLUSH_LIMIT)))
     .all();
-  result.scanned = due.length;
-  for (let start = 0; start < due.length; start += DELIVERY_FLUSH_BATCH_SIZE) {
-    const ids = due.slice(start, start + DELIVERY_FLUSH_BATCH_SIZE).map((row) => row.id);
-    const claimId = `whc_${crypto.randomUUID().replace(/-/g, "")}`;
-    const claimed = await db
-      .update(webhookDeliveries)
-      .set({ status: "enqueueing", claimId, claimExpiresAt: sql`unixepoch() + ${ENQUEUE_LEASE_SECONDS}`, updatedAt: sql`unixepoch()` })
-      .where(and(inArray(webhookDeliveries.id, ids), deliveryClaimableCondition()))
-      .returning({ id: webhookDeliveries.id });
-    result.skipped += ids.length - claimed.length;
-    if (claimed.length === 0) continue;
-    try {
-      await queue.sendBatch(claimed.map((row) => ({ body: { type: "webhooks.deliver" as const, deliveryId: row.id } })));
-    } catch (error) {
-      result.failed += claimed.length;
-      await db
-        .update(webhookDeliveries)
-        .set({ status: "failed", claimId: null, claimExpiresAt: null, nextAttemptAt: sql`unixepoch() + 60`, updatedAt: sql`unixepoch()` })
-        .where(and(inArray(webhookDeliveries.id, claimed.map((row) => row.id)), eq(webhookDeliveries.claimId, claimId)))
-        .catch(() => undefined);
-      console.warn("[webhooks] Delivery flush send failed:", normalizeError(error));
-      continue;
-    }
-    result.enqueued += claimed.length;
-    await db
-      .update(webhookDeliveries)
-      .set({ status: "queued", claimId: null, claimExpiresAt: null, queuedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
-      .where(and(inArray(webhookDeliveries.id, claimed.map((row) => row.id)), eq(webhookDeliveries.claimId, claimId)))
-      .catch(() => undefined);
-  }
-  return result;
+  return due.map((row) => row.id);
 }
 
 // ── Admin actions and reads ───────────────────────────────────────────────
@@ -600,7 +521,7 @@ export interface WebhookDeliveryView {
 }
 
 export function toWebhookDeliveryView(row: WebhookDelivery): WebhookDeliveryView {
-  const waiting = row.status === "pending" || row.status === "failed" || row.status === "queued" || row.status === "enqueueing";
+  const waiting = row.status === "pending" || row.status === "failed";
   return {
     id: row.id,
     subscriptionId: row.subscriptionId,
@@ -652,12 +573,11 @@ export async function listWebhookDeliveries(db: Database, subscriptionId: string
   };
 }
 
-/** Staff "Retry": a failed, exhausted or cancelled event delivery starts a fresh retry cycle now. */
+/** Staff "Retry": a failed, exhausted or cancelled event delivery starts a fresh retry cycle now (the caller sends it). */
 export async function retryWebhookDelivery(
   db: Database,
   subscriptionId: string,
   deliveryId: string,
-  queue: EventsQueue | undefined,
 ): Promise<WebhookDeliveryView> {
   const subscription = await db
     .select({ status: webhookSubscriptions.status })
@@ -694,7 +614,6 @@ export async function retryWebhookDelivery(
     if (!existing) throw new NotFoundError("Delivery not found");
     throw new ValidationError("Only failed, exhausted or cancelled event deliveries can be retried.");
   }
-  await queue?.send({ type: "webhooks.deliver", deliveryId }).catch(() => undefined);
   return toWebhookDeliveryView(rows[0]);
 }
 

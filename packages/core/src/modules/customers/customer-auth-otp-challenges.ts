@@ -268,18 +268,6 @@ export async function extendPendingCustomerAuthOtpChallenge(
         ));
 }
 
-export async function deleteCustomerAuthOtpChallenge(
-    db: Database,
-    input: { otpKey: string; deliveryKey: string },
-): Promise<void> {
-    await db.delete(customerAuthOtpChallenges)
-        .where(and(
-            eq(customerAuthOtpChallenges.otpKey, input.otpKey),
-            eq(customerAuthOtpChallenges.deliveryKey, input.deliveryKey),
-            eq(customerAuthOtpChallenges.status, "pending"),
-        ));
-}
-
 export async function cleanupExpiredCustomerAuthOtpChallenges(
     db: Database,
     nowSeconds = Math.floor(Date.now() / 1000),

@@ -11,6 +11,7 @@ import { created } from "../../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 import { presentStaffClaim, staffOpenClaimBodySchema, staffWarrantyClaimSchema } from "../../../schemas/warranty";
 import { UnauthorizedError } from "../../../utils/api-error";
+import { notificationSender } from "../../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -47,7 +48,7 @@ app.openapi(createRoute({
     clientKey: body.requestKey,
     quantity: body.quantity,
     orderId,
-  }, { queue: c.env.JOBS_QUEUE });
+  }, { send: notificationSender(c) });
   return created(c, { claim: presentStaffClaim(await getWarrantyClaim(db, opened.claimId)) });
 });
 

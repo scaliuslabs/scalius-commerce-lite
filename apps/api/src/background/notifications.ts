@@ -1,21 +1,19 @@
-// Notification queue handlers (Wave A §10). The queue message is
-// `{ type: "notification", outboxId }`: the consumer claims the outbox row and
-// resolves recipients and message text at send time, so no contact or body
-// ever travels through the queue. `order.notification` is the pre-Wave-A
-// shape, still accepted for messages in flight at deploy.
+// Notification delivery (Wave A §10): claims one `notification_outbox` row
+// and resolves recipients and message text at send time, so no contact or
+// body is ever stored with the row. A committed row is sent right after the
+// write that recorded it (`notificationSender`); the scheduled drain sends
+// every row still due (failed rows back off in `next_attempt_at`; after 8
+// attempts a row is `dead_lettered`, which the order page shows).
 
 import type { getDb } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import {
   claimNotificationOutboxForProcessing,
-  claimOrderNotificationOutboxForProcessing,
+  listDueNotificationOutbox,
   markNotificationOutboxDeadLettered,
   markNotificationOutboxProcessingFailed,
   markNotificationOutboxSent,
-  markOrderNotificationOutboxDeadLettered,
-  markOrderNotificationOutboxProcessingFailed,
-  markOrderNotificationOutboxSent,
   recordNothingToSend,
   sendConversationNotification,
   sendOrderNotification,
@@ -24,8 +22,6 @@ import {
   sendStaffAlertNotification,
   sendStaffOrderEmails,
   type ClaimedNotificationOutbox,
-  type NotificationQueueMessage,
-  type OrderNotificationQueueMessage,
 } from "@scalius/core/modules/notifications";
 import {
   isOrderNotificationType,
@@ -34,13 +30,14 @@ import {
   type ResolvedNotificationType,
 } from "@scalius/core/modules/notifications/browser";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
-import { resolveDigitalDeliveryContent } from "./notification-content/digital";
-import { resolveGiftCardIssuedContent, resolveGiftCardSentContent } from "./notification-content/gift-card";
-import { resolveReviewRequestContent } from "./notification-content/review-request";
-import { getCredentialEncryptionKey } from "./utils/encryption-key";
-import { detachedAppProviders } from "./plugins/providers/app-providers";
+import { planLimits } from "@scalius/shared/plan-limits";
+import { resolveDigitalDeliveryContent } from "../notification-content/digital";
+import { resolveGiftCardIssuedContent, resolveGiftCardSentContent } from "../notification-content/gift-card";
+import { resolveReviewRequestContent } from "../notification-content/review-request";
+import { getCredentialEncryptionKey } from "../utils/encryption-key";
+import { detachedAppProviders } from "../plugins/providers/app-providers";
 import { sendMarketingOptInEmail } from "@scalius/core/modules/customer-marketing";
-import { logOpsEvent } from "./utils/ops-log";
+import { logOpsEvent } from "../utils/ops-log";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -49,7 +46,7 @@ type DispatchOutcome = { channel: string; provider: string; error?: string; prov
 /**
  * What a notification send needs besides its content: the env, the
  * credential key, and the app providers a saved SMS or email choice may name
- * (on a detached context: queue work has no request). Nothing is read until
+ * (on a detached context: background work has no request). Nothing is read until
  * a send needs it.
  */
 function messagingRuntime(db: Db, env: Env) {
@@ -97,11 +94,11 @@ async function dispatchOrderNotification(
 
     if (enabledAdminChannels.includes("push")) {
       // Push payloads deep-link into the dashboard through the public
-      // API origin. Queue invocations have no request URL, so the origin
+      // API origin. Background work has no request URL, so the origin
       // must come from Platform settings; never invent a domain.
       const requestUrl = env.PUBLIC_API_BASE_URL;
       if (!requestUrl) {
-        logOpsEvent("warn", "queue.order_notification.admin_push_skipped", {
+        logOpsEvent("warn", "notification.order.admin_push_skipped", {
           orderId: input.orderId,
           notificationType: input.notificationType,
           outboxId: input.outboxId,
@@ -121,7 +118,7 @@ async function dispatchOrderNotification(
       }
     }
   } catch (fcmError) {
-    console.error(`[Queue] Admin notification check/send failed for ${input.orderId}:`, fcmError);
+    console.error(`[notifications] Admin notification check/send failed for ${input.orderId}:`, fcmError);
     retryableFailures.push(`admin push: ${fcmError instanceof Error ? fcmError.message : String(fcmError)}`);
   }
 
@@ -141,77 +138,25 @@ async function dispatchOrderNotification(
       retryableFailures.push(`staff email: ${summarizeNotificationFailures(staffEmailResult.outcomes)}`);
     }
   } catch (staffEmailError) {
-    console.error(`[Queue] Staff order email failed for ${input.orderId}:`, staffEmailError instanceof Error ? staffEmailError.message : "unknown error");
+    console.error(`[notifications] Staff order email failed for ${input.orderId}:`, staffEmailError instanceof Error ? staffEmailError.message : "unknown error");
     retryableFailures.push("staff email: settings or order read failed");
   }
 
   return retryableFailures;
 }
 
-/** Pre-Wave-A `order.notification` messages (in flight at deploy). */
-export async function processLegacyOrderNotificationMessage(
-  payload: OrderNotificationQueueMessage,
-  db: Db,
-  env: Env,
-): Promise<void> {
-  const outboxClaim = payload.outboxId
-    ? await claimOrderNotificationOutboxForProcessing(db, payload.outboxId)
-    : undefined;
-
-  if (outboxClaim && !outboxClaim.claimed) {
-    console.log(`[Queue] Skipped order notification outbox ${payload.outboxId}: ${outboxClaim.reason}`);
-    return;
-  }
-
-  try {
-    const retryableFailures = await dispatchOrderNotification(db, env, {
-      outboxId: payload.outboxId,
-      orderId: payload.orderId,
-      customerEmail: payload.customerEmail,
-      customerName: payload.customerName,
-      notificationType: payload.notificationType,
-      data: payload.data,
-    });
-    if (retryableFailures.length > 0) {
-      throw new Error(`Order notification delivery failed for ${payload.orderId}: ${retryableFailures.join("; ")}`);
-    }
-    if (outboxClaim?.claimed) {
-      await markOrderNotificationOutboxSent(db, outboxClaim.outboxId, outboxClaim.claimId);
-    }
-  } catch (error) {
-    if (outboxClaim?.claimed) {
-      await markOrderNotificationOutboxProcessingFailed(
-        db,
-        outboxClaim.outboxId,
-        outboxClaim.claimId,
-        outboxClaim.attempts,
-        error,
-      ).catch((markError: unknown) => {
-        console.error("[Queue] Failed to mark order notification outbox failure:", markError);
-      });
-      return;
-    }
-    throw error;
-  }
-}
-
 /**
- * `{ type: "notification", outboxId }`. A delivery failure marks the row
- * failed with backoff and acks the message: the scheduled outbox flush is the
- * durable retry authority.
+ * Sends one outbox row. A delivery failure marks the row failed with backoff:
+ * the row is the retry authority, and the scheduled drain sends it again.
  */
-export async function processNotificationMessage(
-  payload: NotificationQueueMessage,
+export async function deliverNotification(
+  outboxId: string,
   db: Db,
   env: Env,
 ): Promise<void> {
-  if (typeof payload.outboxId !== "string" || !payload.outboxId) {
-    console.warn("[Queue] Ignoring notification message without an outbox id");
-    return;
-  }
-  const claim = await claimNotificationOutboxForProcessing(db, payload.outboxId);
+  const claim = await claimNotificationOutboxForProcessing(db, outboxId);
   if (!claim.claimed) {
-    console.log(`[Queue] Skipped notification outbox ${payload.outboxId}: ${claim.reason}`);
+    console.log(`[notifications] Skipped outbox ${outboxId}: ${claim.reason}`);
     return;
   }
 
@@ -228,7 +173,7 @@ export async function processNotificationMessage(
   } catch (error) {
     await markNotificationOutboxProcessingFailed(db, claim.outboxId, claim.claimId, claim.attempts, error)
       .catch((markError: unknown) => {
-        console.error(`[Queue] Failed to mark notification outbox ${claim.outboxId} failure:`, markError instanceof Error ? markError.message : "unknown error");
+        console.error(`[notifications] Failed to mark notification outbox ${claim.outboxId} failure:`, markError instanceof Error ? markError.message : "unknown error");
       });
   }
 }
@@ -261,7 +206,7 @@ async function nothingToSend(
     subjectId: claim.subjectId,
     orderId,
   });
-  console.log(`[Queue] Notification ${claim.outboxId} (${claim.notificationType}) had nothing to send`);
+  console.log(`[notifications] Notification ${claim.outboxId} (${claim.notificationType}) had nothing to send`);
   return { kind: "done" };
 }
 
@@ -400,7 +345,7 @@ async function dispatchClaimedNotification(
     }, messagingRuntime(db, env));
     if (outcome.kind === "nothing_to_send") {
       // Ids only: the line's text never reaches a log.
-      console.log(`[Queue] Conversation notification ${claim.outboxId} had nothing to send: ${outcome.reason}`);
+      console.log(`[notifications] Conversation notification ${claim.outboxId} had nothing to send: ${outcome.reason}`);
       return { kind: "done" };
     }
     return outcome.result.hasRetryableFailure
@@ -411,30 +356,18 @@ async function dispatchClaimedNotification(
   return { kind: "unsupported", reason: `unsupported_notification_subject: ${claim.subjectType}` };
 }
 
-/** `jobs-dlq`: an exhausted notification message dead-letters its outbox row, never resends. */
-export async function archiveNotificationDlqMessage(
-  msg: Message<NotificationQueueMessage | OrderNotificationQueueMessage>,
-  db: Db,
-): Promise<{ status: "outbox_failed" | "outbox_missing" | "legacy_ignored"; outboxId?: string }> {
-  const payload = msg.body;
-  if (!payload.outboxId) {
-    console.warn(`[Queue] Ignoring legacy notification DLQ message ${msg.id}; no durable outbox id was present.`);
-    return { status: "legacy_ignored" };
-  }
+/** Sends rows one at a time, at most this plan's `notificationsPerDrain`; the rest stay due. */
+export async function sendNotifications(db: Db, env: Env, outboxIds: readonly string[]): Promise<number> {
+  const ids = [...new Set(outboxIds)].slice(0, planLimits().background.notificationsPerDrain);
+  for (const outboxId of ids) await deliverNotification(outboxId, db, env);
+  return ids.length;
+}
 
-  const mark = payload.type === "notification" ? markNotificationOutboxDeadLettered : markOrderNotificationOutboxDeadLettered;
-  const result = await mark({
-    db,
-    outboxId: payload.outboxId,
-    error: `${payload.type === "notification" ? "notification" : "order_notification"}_dlq_terminal: Cloudflare queue message ${msg.id} exhausted after ${msg.attempts} attempts`,
-  });
-
-  if (!result.marked) {
-    console.warn(`[Queue] Notification DLQ message ${msg.id} referenced missing outbox ${payload.outboxId}`);
-    return { status: "outbox_missing", outboxId: payload.outboxId };
-  }
-
-  return { status: "outbox_failed", outboxId: payload.outboxId };
+/** The scheduled drain: every due row, within this plan's limit. */
+export async function drainNotificationOutbox(db: Db, env: Env): Promise<{ scanned: number }> {
+  const due = await listDueNotificationOutbox(db, planLimits().background.notificationsPerDrain);
+  await sendNotifications(db, env, due);
+  return { scanned: due.length };
 }
 
 export function summarizeNotificationFailures(outcomes: DispatchOutcome[]): string {

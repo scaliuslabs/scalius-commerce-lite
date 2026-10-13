@@ -9,8 +9,9 @@ import { enforceBuyerWriteLimits } from "../../utils/conversation-http";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { created } from "../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
-import { enqueueOrderSupportRequestNotificationForOrder } from "../../utils/order-notification-queue";
+import { sendOrderSupportRequestNotification } from "../../utils/order-notifications";
 import { receiptSupportRequestSchema, receiptSupportRequestActionSchema } from "./shared";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -77,9 +78,9 @@ app.openapi(createReceiptSupportRequestRoute, async (c) => {
     reason: body.reason,
     message: body.message,
   });
-  await enqueueOrderSupportRequestNotificationForOrder({
+  await sendOrderSupportRequestNotification({
     db,
-    queue: c.env.JOBS_QUEUE,
+    send: notificationSender(c),
     orderId: id,
     requestId: result.request.id,
     notificationType: "support_request_submitted",

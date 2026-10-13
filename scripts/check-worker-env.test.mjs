@@ -153,31 +153,31 @@ describe("worker env check: Worker version in public cache keys", () => {
 });
 
 describe("worker env check: per-store resource shape", () => {
-  it("keeps every committed config to no KV, one bucket, one jobs queue, and two limiters", () => {
+  it("keeps every committed config to no KV, no queue, one bucket, and two limiters", () => {
     for (const app of apps) {
       for (const configPath of app.configs) {
-        expect(collectResourceBindingViolations(configPath, readRepoJsonc(configPath)), configPath).toEqual([]);
+        const config = readRepoJsonc(configPath);
+        expect(collectResourceBindingViolations(configPath, config), configPath).toEqual([]);
+        expect(config.kv_namespaces, configPath).toBeUndefined();
+        expect(config.queues, configPath).toBeUndefined();
       }
     }
-    const api = readRepoJsonc("apps/api/wrangler.jsonc");
-    expect(api.queues.consumers.map((consumer) => consumer.queue)).toEqual(["jobs", "jobs-dlq"]);
-    expect(api.queues.consumers[0].max_batch_timeout).toBeLessThanOrEqual(2);
-    for (const app of apps) {
-      for (const configPath of app.configs) expect(readRepoJsonc(configPath).kv_namespaces, configPath).toBeUndefined();
-    }
+    // Background work drains durable rows on an every-minute tick instead.
+    expect(readRepoJsonc("apps/api/wrangler.jsonc").triggers.crons).toEqual(["* * * * *"]);
   });
 
-  it("fails on any KV namespace, or a second bucket, queue, or limiter", () => {
+  it("fails on any KV namespace or queue, or a second bucket or limiter", () => {
     expect(collectResourceBindingViolations("apps/api/wrangler.jsonc", {
       kv_namespaces: [{ binding: "OAUTH_KV" }],
       r2_buckets: [{ binding: "BUCKET" }, { binding: "AGENT_ARTIFACTS" }],
       ratelimits: [{ name: "RL_STANDARD" }, { name: "SEARCH_RATE_LIMITER" }],
-      queues: { producers: [{ binding: "JOBS_QUEUE" }, { binding: "AUTH_OTP_QUEUE" }] },
+      queues: { producers: [{ binding: "JOBS_QUEUE" }], consumers: [{ queue: "jobs" }, { queue: "jobs-dlq" }] },
     })).toEqual([
       expect.stringContaining("kv_namespaces OAUTH_KV"),
       expect.stringContaining("r2_buckets AGENT_ARTIFACTS"),
       expect.stringContaining("ratelimits SEARCH_RATE_LIMITER"),
-      expect.stringContaining("queue_producers AUTH_OTP_QUEUE"),
+      expect.stringContaining("queue_producers JOBS_QUEUE"),
+      expect.stringContaining("queue_consumers jobs, jobs-dlq"),
     ]);
   });
 

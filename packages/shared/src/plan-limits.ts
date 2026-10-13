@@ -11,8 +11,8 @@
  *
  * Rules the values keep:
  * - Free values fit Workers Free (10 ms CPU, 50 D1 queries and 50 external
- *   subrequests per invocation, 10,000 Queues operations a day;
- *   docs/FREE-PLAN.md). They are lighter, never different in kind.
+ *   subrequests per invocation; docs/FREE-PLAN.md). They are lighter, never
+ *   different in kind.
  * - Paid values are what the code did before the plan existed, or stronger.
  *   `scripts/plan.test.mjs` pins them: a Paid value that gets weaker fails.
  * - Code reads values; it never branches on the plan's name.
@@ -31,39 +31,50 @@ export interface PlanLimits {
   readonly cpuMs: number | null;
   /** What a new password hash costs: it must fit the plan's CPU limit with the rest of a sign-in. */
   readonly password: PasswordHashSpec;
-  readonly queue: {
-    /**
-     * `max_batch_size` of the `jobs` consumer (generated config): one invocation handles at most this
-     * many messages. Bounded by the D1 queries an invocation may make (Free 50, Paid 1,000) over the
-     * most a single message uses (a 20-product recommendation refresh: ~50 measured): Paid 15 keeps
-     * the worst batch under 800, Free handles one message per invocation.
-     */
-    readonly consumerBatchSize: number;
-    /** `max_batch_size` of the dead-letter consumer. */
-    readonly dlqBatchSize: number;
-    /** Bulk producers (rendition and catalogue fan-out) enqueue nothing while the queue's backlog is at or above this. */
-    readonly bulkBacklogLimit: number;
-    /** Most bulk messages one producer call enqueues; the rest waits for the next tick or continuation. */
-    readonly bulkPageSize: number;
-    /** Recommendation lists the nightly pass refreshes. */
-    readonly nightlyRecommendationRefreshLimit: number;
-    /** Products one `catalog.recommendations.refresh` message recomputes (one ranking statement each). */
-    readonly recommendationProductsPerMessage: number;
-    /** Products one `catalog.projections.rebuild` message recomputes before it queues the next chunk. */
+  /**
+   * Background work drains durable rows (outboxes, deliveries, claimed
+   * payment events, cursors) in the invocation that wrote them (`waitUntil`)
+   * and on every scheduled tick. It shares that invocation's D1 queries (Free
+   * 50, Paid 1,000), so each drain takes at most this many items and leaves
+   * the rest due for the next tick.
+   */
+  readonly background: {
+    /** Due events one drain dispatches to their webhook and app subscribers. */
+    readonly eventsPerDrain: number;
+    /** Webhook and app deliveries one drain sends (an outbound request and a few D1 queries each). */
+    readonly deliveriesPerDrain: number;
+    /** Notification outbox rows one drain sends (about 30 D1 queries each: settings, templates, receipts). */
+    readonly notificationsPerDrain: number;
+    /** Claimed payment events one tick retries from their `webhook_events` rows. */
+    readonly paymentEventsPerDrain: number;
+    /** Settled orders one sweep hands to automatic fulfilment. */
+    readonly autoFulfilPerRun: number;
+    /** Apps whose due schedule slot one tick runs. */
+    readonly pluginCronPerRun: number;
+    /** Products whose recommendations a catalogue write recomputes right after it; the rotation heals the rest. */
+    readonly recommendationProductsAfterWrite: number;
+    /** Public products one recommendation rotation run visits, in id order. */
+    readonly recommendationRotationPerRun: number;
+    /** Products sold in the last day whose recommendations the nightly tick recomputes. */
+    readonly nightlySoldRecommendationLimit: number;
+    /** Products one buyer-state/facet projection rebuild chunk recomputes. */
     readonly catalogRebuildChunk: number;
+    /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
+    readonly catalogRebuildChunksPerDrain: number;
     /**
-     * A public read that shows an image still without renditions queues its
-     * rendering at once (and marks it in the Cache API so the next read does
-     * not queue it again). Off, only the scheduled backfill renders: no queue
-     * message on the buyer's path.
+     * Images a public read that still shows an original renders right after
+     * the response (marked in the Cache API so the next read does not render
+     * it again). 0: only the scheduled backfill renders.
      */
-    readonly renditionsFromPublicReads: boolean;
+    readonly renditionsPerPublicRead: number;
   };
   readonly maintenance: {
-    /** The cron rotates through this many groups of sweeps, one group a run (1: every sweep every run). */
-    readonly slices: number;
-    /** Run row-by-row maintenance through separate existing jobs invocations. */
-    readonly queueSweeps: boolean;
+    /** A sweep tick comes every this many minutes (the cron fires every minute; apps/api/src/scheduled/slices.ts). */
+    readonly sweepEveryMinutes: number;
+    /** Jobs of the sweep rotation one sweep tick runs (at least the rotation's length: every job on every sweep tick). */
+    readonly sweepsPerTick: number;
+    /** Expired reservations one run releases (each is a guarded stock write). */
+    readonly inventoryExpiryPerRun: number;
     /** Order cleanup includes inventory/gift-card repair; reserve one invocation per bounded page. */
     readonly staleOrdersPerRun: number;
     /** Each stale/replaced upload requires its own guarded write. */
@@ -72,7 +83,7 @@ export interface PlanLimits {
     readonly orphanAttachmentsPerRun: number;
     /** Each sweep's row limit is this fraction of its full limit (1: the full limit). */
     readonly limitScale: number;
-    /** Images the cron renders itself, without the queue, when the queue cannot take them. */
+    /** Images one sweep tick renders (a CPU guard). */
     readonly inlineRenditionsPerRun: number;
   };
   readonly lists: {
@@ -113,17 +124,30 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     plan: "free",
     cpuMs: null,
     password: Object.freeze({ algorithm: "pbkdf2-sha256", iterations: 30_000 }),
-    queue: Object.freeze({
-      consumerBatchSize: 1,
-      dlqBatchSize: 1,
-      bulkBacklogLimit: 20,
-      bulkPageSize: 10,
-      nightlyRecommendationRefreshLimit: 150,
-      recommendationProductsPerMessage: 5,
+    background: Object.freeze({
+      eventsPerDrain: 2,
+      deliveriesPerDrain: 2,
+      notificationsPerDrain: 1,
+      paymentEventsPerDrain: 1,
+      autoFulfilPerRun: 1,
+      pluginCronPerRun: 1,
+      recommendationProductsAfterWrite: 5,
+      recommendationRotationPerRun: 4,
+      nightlySoldRecommendationLimit: 5,
       catalogRebuildChunk: 90,
-      renditionsFromPublicReads: false,
+      catalogRebuildChunksPerDrain: 1,
+      renditionsPerPublicRead: 0,
     }),
-    maintenance: Object.freeze({ slices: 4, queueSweeps: true, staleOrdersPerRun: 1, digitalUploadsPerState: 10, orphanAttachmentsPerRun: 10, limitScale: 0.2, inlineRenditionsPerRun: 1 }),
+    maintenance: Object.freeze({
+      sweepEveryMinutes: 1,
+      sweepsPerTick: 1,
+      inventoryExpiryPerRun: 4,
+      staleOrdersPerRun: 2,
+      digitalUploadsPerState: 6,
+      orphanAttachmentsPerRun: 10,
+      limitScale: 0.2,
+      inlineRenditionsPerRun: 1,
+    }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8 }),
     plugins: Object.freeze({
       cpuMs: 50,
@@ -138,17 +162,30 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     plan: "paid",
     cpuMs: 30_000,
     password: Object.freeze({ algorithm: "scrypt", N: 16_384, r: 16, p: 1 }),
-    queue: Object.freeze({
-      consumerBatchSize: 15,
-      dlqBatchSize: 10,
-      bulkBacklogLimit: 1_000,
-      bulkPageSize: 1_000,
-      nightlyRecommendationRefreshLimit: 3_000,
-      recommendationProductsPerMessage: 20,
+    background: Object.freeze({
+      eventsPerDrain: 50,
+      deliveriesPerDrain: 25,
+      notificationsPerDrain: 20,
+      paymentEventsPerDrain: 10,
+      autoFulfilPerRun: 50,
+      pluginCronPerRun: 25,
+      recommendationProductsAfterWrite: 40,
+      recommendationRotationPerRun: 32,
+      nightlySoldRecommendationLimit: 200,
       catalogRebuildChunk: 900,
-      renditionsFromPublicReads: true,
+      catalogRebuildChunksPerDrain: 10,
+      renditionsPerPublicRead: 4,
     }),
-    maintenance: Object.freeze({ slices: 1, queueSweeps: false, staleOrdersPerRun: 25, digitalUploadsPerState: 25, orphanAttachmentsPerRun: 50, limitScale: 1, inlineRenditionsPerRun: 240 }),
+    maintenance: Object.freeze({
+      sweepEveryMinutes: 15,
+      sweepsPerTick: 64,
+      inventoryExpiryPerRun: 50,
+      staleOrdersPerRun: 25,
+      digitalUploadsPerState: 25,
+      orphanAttachmentsPerRun: 50,
+      limitScale: 1,
+      inlineRenditionsPerRun: 240,
+    }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90 }),
     plugins: Object.freeze({
       cpuMs: 200,

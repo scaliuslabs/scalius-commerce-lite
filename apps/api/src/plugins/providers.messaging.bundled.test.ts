@@ -2,7 +2,7 @@
 // Free path), as core calls them: the port's outcomes on every failure the
 // app can raise, selection from the merchant's saved settings, failing closed
 // when the app cannot be used, and a customer sign-in code sent from the
-// queue consumer's path through an app SMS provider.
+// OTP sender's path through an app SMS provider.
 import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
@@ -60,7 +60,7 @@ vi.mock("./providers/runtime", async (importOriginal) => {
 
 import { createAppProviders, detachedAppProviders } from "./providers/app-providers";
 import { createAppProviderRuntime } from "./providers/runtime";
-import { deliverAuthOtpDirect } from "../queue-consumer";
+import { deliverAuthOtp } from "../background/otp";
 
 // A real AES key: fraud rows and pinned OTP contacts are encrypted with it, app settings sealed under it.
 const KEY = Buffer.alloc(32, 7).toString("base64");
@@ -193,7 +193,7 @@ describe("app messaging and fraud providers through the bundled loader", () => {
     });
   });
 
-  it("sends a customer sign-in code through an app SMS provider from the queue consumer's path", async () => {
+  it("sends a customer sign-in code through an app SMS provider from the OTP sender's path", async () => {
     await customerAuthDocument.write(db, { email: "optional", whatsapp: "off", channels: ["sms"] });
     await saveSmsSettings(db, { activeProvider: TEXTS }, KEY);
 
@@ -205,16 +205,16 @@ describe("app messaging and fraud providers through the bundled loader", () => {
       credentialEncryptionKey: KEY,
       appProviders: detachedAppProviders(env, db, KEY),
     });
-    // The queue message carries opaque references only.
-    expect(JSON.stringify(requested.queuePayload)).not.toContain("1712345678");
+    // The delivery reference carries opaque references only.
+    expect(JSON.stringify(requested.otpDelivery)).not.toContain("1712345678");
 
-    await deliverAuthOtpDirect(requested.queuePayload, db, env);
+    await deliverAuthOtp(requested.otpDelivery, db, env);
 
     expect(sentRecords()).toBe(1);
-    expect(sqlite.prepare("SELECT status, provider, provider_message_id AS ref FROM auth_otp_delivery_receipts WHERE delivery_key = ?").get(requested.deliveryKey))
+    expect(sqlite.prepare("SELECT status, provider, provider_message_id AS ref FROM auth_otp_delivery_receipts WHERE delivery_key = ?").get(requested.otpDelivery.deliveryKey))
       .toEqual({ status: "accepted", provider: TEXTS, ref: expect.stringMatching(/^T-/) });
-    // A redelivery of the same message never sends the code again.
-    await deliverAuthOtpDirect(requested.queuePayload, db, env);
+    // Delivering the same reference again never sends the code again.
+    await deliverAuthOtp(requested.otpDelivery, db, env);
     expect(sentRecords()).toBe(1);
   });
 });

@@ -626,7 +626,7 @@ export async function uninstallPlugin(
   pluginId: string,
   options: { keepData: boolean; expectedRevision: number },
 ): Promise<void> {
-  const waiting = ["pending", "enqueueing", "queued", "processing", "failed"] as const;
+  const waiting = ["pending", "processing", "failed"] as const;
   const installed = await getPluginInstallation(db, pluginId);
   const hadChannels = (installed?.manifest.salesChannels.length ?? 0) > 0;
   try {

@@ -1,54 +1,45 @@
-// Nightly catalogue maintenance, run from the 15-minute cron once a day
-// (the first tick at or after 02:00 store time: 20:00 UTC for Dhaka):
+// Nightly catalogue maintenance, run from the cron once a day (the 02:00
+// store-time minute: 20:00 UTC for Dhaka):
 //
 // 1. `product_sales_stats` from the last 30 days of real order lines (the
 //    home page's "popular" list and the recommendation ranking's signal);
-// 2. the buyer-state/facet projection rebuild, queued in keyset chunks, which
-//    heals any drift (for example a changed store low-stock level) and bumps
-//    the cache generation once when it ends;
-// 3. recommendation refreshes for products sold in the last day and the
-//    longest-unrefreshed public products, 20 per queue message.
-import { getDb, type Database } from "@scalius/database/client";
-import { claimSystemKv, deleteSystemKv } from "@scalius/core/utils/system-kv";
+// 2. a buyer-state/facet projection rebuild request (background/catalog.ts),
+//    which heals any drift (for example a changed store low-stock level);
+// 3. recommendation refreshes for products sold in the last day. Every other
+//    public product is visited by the recommendation rotation.
+import type { Database } from "@scalius/database/client";
+import { getDb } from "@scalius/database/client";
+import { claimSystemKv } from "@scalius/core/utils/system-kv";
 import {
-  nightlyRecommendationRefreshCandidates,
+  recentlySoldPublicProducts,
+  refreshProductRecommendations,
   refreshProductSalesStats,
 } from "@scalius/core/modules/catalog";
-import { enqueueCatalogProjectionRebuild, enqueueRecommendationRefresh } from "../utils/catalog-jobs";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { commerceCalendarDateKey, commerceWallTimeToEpoch } from "@scalius/shared/commerce-time";
+import { requestCatalogProjectionRebuild } from "../background/catalog";
 
-/** The store-time hour whose first cron tick runs the nightly pass. */
+/** The store-time hour whose first minute runs the nightly pass. */
 export const NIGHTLY_CATALOG_STORE_HOUR = 2;
-/** The cron fires every 15 minutes: exactly one tick falls in this window. */
-const NIGHTLY_WINDOW_MINUTES = 15;
-/**
- * Recommendation lists refreshed per night, never-computed and oldest first:
- * about 0.1 s of D1 time each at 30k products (about 5 minutes a night),
- * so a whole 30k catalogue rolls over in ten nights.
- */
-export const NIGHTLY_RECOMMENDATION_REFRESH_LIMIT = 3_000;
+/** The cron fires every minute: exactly one tick falls in this window. */
+const NIGHTLY_WINDOW_MINUTES = 1;
 
-/** `system_kv` row: the Worker version whose post-deploy projection rebuild was queued. */
+/** `system_kv` row: the Worker version whose post-deploy projection rebuild was requested. */
 export const PROJECTIONS_REBUILT_FOR_VERSION_KEY = "catalog:projections:rebuilt-for-version";
 
 /**
- * The first cron tick of a new API version queues one full projection
+ * The first rotation run of a new API version requests one full projection
  * rebuild. Migrations apply before the new Worker goes live, so a write the
  * previous version committed in between (it does not know the projections)
- * is healed within one tick instead of at night. The version is claimed in
- * the database first (compare-and-set), so overlapping ticks queue it once.
+ * is healed within minutes instead of at night. The version is claimed in the
+ * database first (compare-and-set), so overlapping ticks request it once.
  */
-export async function queuePostDeployProjectionRebuild(env: Env): Promise<boolean> {
+export async function requestPostDeployProjectionRebuild(env: Env): Promise<boolean> {
   const version = env.CF_VERSION_METADATA?.id;
-  if (!version || !env.JOBS_QUEUE) return false;
+  if (!version) return false;
   const db = getDb(env);
   if (!(await claimSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version))) return false;
-  const queued = await enqueueCatalogProjectionRebuild(env.JOBS_QUEUE, null).catch(() => false);
-  if (!queued) {
-    // Not queued: release the claim so the next tick tries again.
-    await deleteSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY);
-    return false;
-  }
+  await requestCatalogProjectionRebuild(db);
   return true;
 }
 
@@ -64,15 +55,14 @@ export function isNightlyCatalogTick(scheduledTime: number | undefined, timeZone
 
 export async function runNightlyCatalogMaintenance(
   db: Database,
-  env: Env,
   scheduledTime: number,
-): Promise<{ salesStatsProducts: number; recommendationMessages: number; rebuildQueued: boolean }> {
+): Promise<{ salesStatsProducts: number; soldRecommendations: number }> {
   const salesStats = await refreshProductSalesStats(db);
-  const rebuildQueued = await enqueueCatalogProjectionRebuild(env.JOBS_QUEUE, null);
-  const candidates = await nightlyRecommendationRefreshCandidates(db, {
+  await requestCatalogProjectionRebuild(db);
+  const sold = await recentlySoldPublicProducts(db, {
     soldSince: Math.floor(scheduledTime / 1000) - 86_400,
-    limit: NIGHTLY_RECOMMENDATION_REFRESH_LIMIT,
+    limit: planLimits().background.nightlySoldRecommendationLimit,
   });
-  const recommendationMessages = await enqueueRecommendationRefresh(env.JOBS_QUEUE, candidates);
-  return { salesStatsProducts: salesStats.products, recommendationMessages, rebuildQueued };
+  await refreshProductRecommendations(db, sold);
+  return { salesStatsProducts: salesStats.products, soldRecommendations: sold.length };
 }

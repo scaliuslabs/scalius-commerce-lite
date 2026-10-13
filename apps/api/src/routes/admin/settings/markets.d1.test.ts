@@ -1,10 +1,10 @@
 // Settings → Markets routes on the migrated schema: the list and detail the
 // dashboard draws, create and edit under the revision, one market per
 // country (409), the backup market's rules, delete, the catalogue rebuild a
-// price increment change queues, and the RBAC map of every route.
+// price increment change requests, and the RBAC map of every route.
 import type { DatabaseSync } from "node:sqlite";
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
@@ -13,13 +13,15 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { errorResponseFromError } from "../../../utils/api-response";
 import { marketsSettingsRoutes } from "./markets";
 
+const rebuild = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock("../../../background/catalog", () => ({ rebuildCatalogProjectionsAfterWrite: rebuild }));
+
 let sqlite: DatabaseSync;
 let db: Database;
-let sent: unknown[];
 
 beforeEach(() => {
   ({ sqlite, db } = createSqliteD1Database());
-  sent = [];
+  rebuild.mockClear();
 });
 afterEach(() => sqlite.close());
 
@@ -38,7 +40,7 @@ function app() {
 }
 
 async function call(method: string, path: string, body?: unknown) {
-  const env = { JOBS_QUEUE: { send: async (message: unknown) => void sent.push(message) } } as unknown as Env;
+  const env = {} as unknown as Env;
   const response = await app().request(`/api/v1/admin/settings/markets${path}`, {
     method,
     ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
@@ -81,16 +83,17 @@ describe("Settings → Markets routes", () => {
     expect((await call("DELETE", `/${id}?expectedRevision=2`)).status).toBe(200);
     expect((await call("GET", `/${id}`)).status).toBe(404);
     expect((await call("DELETE", "/mkt_backup?expectedRevision=1")).status).toBe(400);
-    expect(sent).toEqual([]);
+    expect(rebuild).not.toHaveBeenCalled();
   });
 
-  it("queues a catalogue rebuild when the backup market's price increment changes", async () => {
+  it("requests a catalogue rebuild when the backup market's price increment changes", async () => {
     const paisa = await call("PATCH", "/mkt_backup", { expectedRevision: 1, priceIncrementMinor: 1 });
     expect(paisa.status).toBe(200);
     expect(paisa.body.data.market.priceIncrementMinor).toBe(1);
-    expect(sent).toEqual([{ type: "catalog.projections.rebuild", afterProductId: null }]);
+    expect(rebuild).toHaveBeenCalledTimes(1);
+    expect(rebuild).toHaveBeenCalledWith(expect.anything(), db, "markets");
     await call("PATCH", "/mkt_backup", { expectedRevision: 2, name: "Bangladesh store" });
-    expect(sent).toHaveLength(1);
+    expect(rebuild).toHaveBeenCalledTimes(1);
   });
 
   it("guards reads with settings view and writes with settings edit", () => {

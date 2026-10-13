@@ -98,6 +98,7 @@ import {
     bulkRequestKeySchema,
     adminOrderResourceMutationErrorResponses,
 } from "./shared";
+import { notificationSender } from "../../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -232,8 +233,6 @@ const paymentWebhookIssueSchema = z.object({
     reason: z.enum(PAYMENT_WEBHOOK_ISSUE_REASONS),
     message: z.string(),
     error: z.string().nullable(),
-    queueType: z.string().nullable(),
-    queueMessageId: z.string().nullable(),
     processedAt: timestampSchema,
 });
 
@@ -844,7 +843,6 @@ const orderNotificationOutboxSchema = z.object({
     attempts: z.number(),
     nextAttemptAt: timestampSchema,
     lastError: z.string().nullable(),
-    queuedAt: timestampSchema.nullable(),
     sentAt: timestampSchema.nullable(),
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
@@ -915,7 +913,7 @@ app.openapi(retryNotificationRoute, (async (c: AdminRouteContext<typeof retryNot
     const db = c.get("db");
     const result = await retryFailedOrderNotificationOutboxById({
         db,
-        queue: c.env.JOBS_QUEUE,
+        send: notificationSender(c),
         orderId,
         outboxId,
     });
@@ -974,7 +972,7 @@ app.openapi(resendNotificationRoute, (async (c: AdminRouteContext<typeof resendN
     const db = c.get("db");
     const result = await resendTerminalOrderNotificationOutboxById({
         db,
-        queue: c.env.JOBS_QUEUE,
+        send: notificationSender(c),
         orderId,
         outboxId,
         resendRequestId,

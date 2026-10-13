@@ -231,8 +231,7 @@ export async function sendOrderNotification(
     db: Database,
     order: OrderNotificationData,
     env: Env,
-    // Retained for the queue-consumer call site; the push link is resolved
-    // from the composed dashboard origin, not from the request.
+    // Unused: the push link is resolved from the composed dashboard origin.
     _requestUrl: string,
     options: AdminPushOptions = {},
 ): Promise<OrderNotificationDispatchResult> {

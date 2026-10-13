@@ -5,8 +5,10 @@ import { ValidationError } from "@scalius/core/errors";
 const mocks = vi.hoisted(() => ({
   sendOrderPaymentRecoveryOtp: vi.fn(),
   verifyOrderPaymentRecoveryOtp: vi.fn(),
-  deleteOrderPaymentRecoveryChallenge: vi.fn(),
+  sendAuthOtp: vi.fn(),
 }));
+
+vi.mock("../background/otp-sender", () => ({ sendAuthOtp: mocks.sendAuthOtp }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@scalius/core/modules/orders")>();
@@ -14,7 +16,6 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
     ...actual,
     sendOrderPaymentRecoveryOtp: mocks.sendOrderPaymentRecoveryOtp,
     verifyOrderPaymentRecoveryOtp: mocks.verifyOrderPaymentRecoveryOtp,
-    deleteOrderPaymentRecoveryChallenge: mocks.deleteOrderPaymentRecoveryChallenge,
   };
 });
 
@@ -36,11 +37,7 @@ import { orderRoutes } from "./storefront-orders";
 const db = { id: "db" };
 
 function createTestApp() {
-  const queue = {
-    send: vi.fn(async (_payload: unknown) => undefined),
-  };
   const env = {
-    JOBS_QUEUE: queue,
     CREDENTIAL_ENCRYPTION_KEY: "test-credential-key",
     JWT_SECRET: "test-jwt-secret",
     PUBLIC_API_BASE_URL: "http://localhost:8787",
@@ -58,7 +55,7 @@ function createTestApp() {
   });
   app.route("/orders", orderRoutes);
 
-  return { app, env, queue };
+  return { app, env };
 }
 
 describe("order payment recovery routes", () => {
@@ -74,13 +71,10 @@ describe("order payment recovery routes", () => {
       resendAfterSeconds: 60,
       challengeKey: "order_payrec:challenge",
       deliveryKey: "otp_delivery",
-      queuePayload: {
-        type: "auth.send_otp",
+      otpDelivery: {
         challengeKey: "order_payrec:challenge",
         deliveryKey: "otp_delivery",
         purpose: "order_payment_recovery",
-        method: "phone",
-        allowedMethod: "sms_otp",
         channel: "sms",
       },
     });
@@ -98,11 +92,10 @@ describe("order payment recovery routes", () => {
         depositAmount: 60,
       },
     });
-    mocks.deleteOrderPaymentRecoveryChallenge.mockResolvedValue(undefined);
   });
 
   it("says where the code went without exposing proof or the full contact", async () => {
-    const { app, env, queue } = createTestApp();
+    const { app, env } = createTestApp();
 
     const response = await app.request(
       "/api/v1/orders/payment-recovery/send-otp",
@@ -119,7 +112,8 @@ describe("order payment recovery routes", () => {
     const body = await response.json() as Record<string, unknown>;
 
     expect(response.status).toBe(200);
-    expect(queue.send).toHaveBeenCalledWith(expect.objectContaining({
+    // The code goes out after the response, from references only.
+    expect(mocks.sendAuthOtp).toHaveBeenCalledWith(expect.anything(), db, expect.objectContaining({
       purpose: "order_payment_recovery",
       deliveryKey: "otp_delivery",
     }));
@@ -132,13 +126,13 @@ describe("order payment recovery routes", () => {
     expect(JSON.stringify(body)).not.toContain("chk_");
     expect(JSON.stringify(body)).not.toContain("+8801775528888");
     expect(JSON.stringify(body)).not.toContain("775528888");
-    expect(JSON.stringify(queue.send.mock.calls)).not.toContain("123456");
-    expect(JSON.stringify(queue.send.mock.calls)).not.toContain("+8801775528888");
-    expect(JSON.stringify(queue.send.mock.calls)).not.toContain("Buyer");
-    const queuedPayload = queue.send.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
-    expect(queuedPayload).not.toHaveProperty("code");
-    expect(queuedPayload).not.toHaveProperty("identifier");
-    expect(queuedPayload).not.toHaveProperty("name");
+    const delivery = mocks.sendAuthOtp.mock.calls[0]?.[2] as Record<string, unknown> | undefined;
+    expect(JSON.stringify(delivery)).not.toContain("123456");
+    expect(JSON.stringify(delivery)).not.toContain("+8801775528888");
+    expect(JSON.stringify(delivery)).not.toContain("Buyer");
+    expect(delivery).not.toHaveProperty("code");
+    expect(delivery).not.toHaveProperty("identifier");
+    expect(delivery).not.toHaveProperty("name");
     expect(body).toMatchObject({
       success: true,
       data: {
@@ -151,7 +145,7 @@ describe("order payment recovery routes", () => {
   });
 
   it("keeps validation failures enumeration-safe", async () => {
-    const { app, env, queue } = createTestApp();
+    const { app, env } = createTestApp();
     mocks.sendOrderPaymentRecoveryOtp.mockRejectedValueOnce(
       new ValidationError("That verification channel is not available for this order."),
     );
@@ -168,29 +162,8 @@ describe("order payment recovery routes", () => {
     const body = await response.json() as Record<string, unknown>;
 
     expect(response.status).toBe(200);
-    expect(queue.send).not.toHaveBeenCalled();
+    expect(mocks.sendAuthOtp).not.toHaveBeenCalled();
     expect(JSON.stringify(body)).not.toContain("not available");
-  });
-
-  it("deletes the pending challenge when queue handoff fails", async () => {
-    const { app, env, queue } = createTestApp();
-    queue.send.mockRejectedValueOnce(new Error("queue unavailable"));
-
-    const response = await app.request(
-      "/api/v1/orders/payment-recovery/send-otp",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", channel: "sms" }),
-      },
-      env,
-    );
-
-    expect(response.status).toBe(503);
-    expect(mocks.deleteOrderPaymentRecoveryChallenge).toHaveBeenCalledWith(db, {
-      challengeKey: "order_payrec:challenge",
-      deliveryKey: "otp_delivery",
-    });
   });
 
   it("requires service auth before issuing a receipt token", async () => {

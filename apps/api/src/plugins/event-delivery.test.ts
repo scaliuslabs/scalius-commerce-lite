@@ -65,7 +65,7 @@ describe("plugin event delivery", { timeout: 30_000 }, () => {
       ? { orderId: "ord_hello1", previousPaymentStatus: "unpaid", paymentStatus: "paid" }
       : { orderId: "ord_hello1", status: "pending", paymentStatus: "unpaid", channel: "online_store" };
     sqlite.prepare(`INSERT INTO event_outbox (id, topic, resource_type, resource_id, data, status)
-      VALUES (?, ?, 'order', 'ord_hello1', ?, 'queued')`).run(id, topic, JSON.stringify(facts));
+      VALUES (?, ?, 'order', 'ord_hello1', ?, 'pending')`).run(id, topic, JSON.stringify(facts));
     return toOutboxEvent((await db.select().from(eventOutbox).where(eq(eventOutbox.id, id)).get())!)!;
   }
 
@@ -97,13 +97,13 @@ describe("plugin event delivery", { timeout: 30_000 }, () => {
 
   it("dispatches an event to every subscribed plugin and delivers it once", async () => {
     const event = await outboxEvent("order.paid");
-    const outcome = await processEventDispatch({ db, eventId: event.id, targets: API_EVENT_FAN_OUT_TARGETS, queue: env.JOBS_QUEUE as never });
-    expect(outcome).toMatchObject({ status: "dispatched", messages: [{ type: "plugins.deliver" }] });
-    const [message] = (outcome as { messages: Array<{ deliveryId: string }> }).messages;
+    const outcome = await processEventDispatch({ db, eventId: event.id, targets: API_EVENT_FAN_OUT_TARGETS });
+    expect(outcome).toMatchObject({ status: "dispatched", deliveries: [{ type: "plugins.deliver" }] });
+    const [message] = (outcome as { deliveries: Array<{ deliveryId: string }> }).deliveries;
     expect(await deliver(message!.deliveryId)).toEqual({ status: "succeeded", deliveryId: message!.deliveryId, retryInSeconds: null });
     expect(row(message!.deliveryId)).toEqual({ status: "succeeded", attempts: 1, last_error: null });
     expect(await getPluginKv(db, "acme.hello", "paid_count")).toBe(1);
-    // The same message again (at-least-once queue) does nothing.
+    // The same delivery again (at-least-once drains) does nothing.
     expect(await deliver(message!.deliveryId)).toEqual({ status: "skipped", deliveryId: message!.deliveryId, reason: "not_due" });
     expect(await getPluginKv(db, "acme.hello", "paid_count")).toBe(1);
   });
@@ -113,7 +113,7 @@ describe("plugin event delivery", { timeout: 30_000 }, () => {
     const first = await deliver(id!);
     expect(first).toEqual({ status: "failed", deliveryId: id, retryInSeconds: 60 });
     expect(row(id!)).toEqual({ status: "failed", attempts: 1, last_error: "Error: Upstream for [email] is down" });
-    expect(env.JOBS_QUEUE!.send).toHaveBeenCalledWith({ type: "plugins.deliver", deliveryId: id }, { delaySeconds: 60 });
+    expect(sqlite.prepare("SELECT next_attempt_at - unixepoch() AS wait FROM plugin_event_deliveries WHERE id = ?").get(id!)).toEqual({ wait: 60 });
 
     sqlite.prepare("UPDATE plugin_event_deliveries SET attempts = 7, next_attempt_at = unixepoch() - 1 WHERE id = ?").run(id!);
     expect(await deliver(id!)).toEqual({ status: "exhausted", deliveryId: id, retryInSeconds: null });
@@ -133,11 +133,9 @@ describe("plugin event delivery", { timeout: 30_000 }, () => {
       sqlite.prepare(`INSERT INTO plugin_event_deliveries (id, plugin_id, topic, resource_type, resource_id, status, claim_id, claim_expires_at)
         VALUES (?, 'acme.hello', 'order.created', 'order', 'x', 'processing', 'held', unixepoch() + 60)`).run(`pld_000000000000${index}busybusybusy`);
     }
-    const send = env.JOBS_QUEUE!.send as ReturnType<typeof vi.fn>;
-    send.mockClear();
-    expect(await deliver(ids[1]!)).toEqual({ status: "busy", deliveryId: ids[1], retryInSeconds: 15 });
+    // At the cap the row stays due, untouched: the next drain sends it.
+    expect(await deliver(ids[1]!)).toEqual({ status: "busy", deliveryId: ids[1], retryInSeconds: null });
     expect(row(ids[1]!)).toMatchObject({ status: "pending", attempts: 0 });
-    expect(send).toHaveBeenCalledWith({ type: "plugins.deliver", deliveryId: ids[1] }, { delaySeconds: 15 });
   });
 
   it("updates an installation behind the deployed build in place without using the delivery's attempt", async () => {

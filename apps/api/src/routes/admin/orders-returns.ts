@@ -24,8 +24,9 @@ import {
     successEnvelope,
 } from "../../schemas/responses";
 
-import { enqueueOrderNotificationsForStatus } from "../../utils/order-notification-queue";
+import { sendOrderNotificationsForStatus } from "../../utils/order-notifications";
 import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
@@ -217,9 +218,9 @@ async function postReceiptSideEffects(
 ) {
 
     if (result.wholeOrderReturned) {
-        await enqueueOrderNotificationsForStatus({
+        await sendOrderNotificationsForStatus({
             db: c.get("db"),
-            queue: c.env.JOBS_QUEUE,
+            send: notificationSender(c),
             orderIds: [result.orderId],
             newStatus: "returned",
             dedupeKeyByOrderId: { [result.orderId]: `return:${result.returnId}:fully-received` },

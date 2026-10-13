@@ -9,7 +9,6 @@ import { RateLimitError, ServiceUnavailableError } from "@scalius/core/errors";
 import {
   buildCustomerAuthOtpStorageKey,
   cleanupExpiredCustomerAuthOtpChallenges,
-  deleteCustomerAuthOtpChallenge,
   persistCustomerAuthOtpChallenge,
   type PersistCustomerAuthOtpChallengeInput,
 } from "./customer-auth-otp-challenges";
@@ -62,14 +61,8 @@ describe("customer auth OTP challenges", () => {
       .rejects.toBeInstanceOf(RateLimitError);
   });
 
-  it("deletes a pending challenge after a failed queue handoff and cleans expired ones", async () => {
+  it("cleans expired challenges", async () => {
     const input = await challenge();
-    await persistCustomerAuthOtpChallenge(db, input);
-    await deleteCustomerAuthOtpChallenge(db, { otpKey: input.otpKey, deliveryKey: "other" });
-    expect(sqlite.prepare("SELECT COUNT(*) AS n FROM customer_auth_otp_challenges").get()?.n).toBe(1);
-    await deleteCustomerAuthOtpChallenge(db, { otpKey: input.otpKey, deliveryKey: input.deliveryKey });
-    expect(sqlite.prepare("SELECT COUNT(*) AS n FROM customer_auth_otp_challenges").get()?.n).toBe(0);
-
     await persistCustomerAuthOtpChallenge(db, input);
     const cleaned = await cleanupExpiredCustomerAuthOtpChallenges(db, Math.floor(Date.now() / 1000) + 301);
     expect(cleaned).toMatchObject({ deleted: 1, hasMore: false });

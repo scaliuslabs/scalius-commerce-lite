@@ -53,6 +53,7 @@ import {
   readAttachmentForm,
   serveConversationAttachment,
 } from "../../utils/conversation-http";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -147,7 +148,7 @@ app.openapi(createRoute({
     clientKey: body.clientKey,
     attachmentIds: body.attachmentIds,
     quantity: body.quantity,
-  }, { queue: c.env.JOBS_QUEUE });
+  }, { send: notificationSender(c) });
   return created(c, opened);
 });
 
@@ -200,7 +201,7 @@ app.openapi(createRoute({
     body: body.body,
     clientMessageKey: body.clientMessageKey,
     attachmentIds: body.attachmentIds,
-  }, { queue: c.env.JOBS_QUEUE });
+  }, { send: notificationSender(c) });
   const fresh = await readBuyerClaimThread(db, actor, claimId);
   return created(c, { claim: presentClaim(fresh.claim), conversation: await getBuyerConversationView(db, fresh.thread) });
 });

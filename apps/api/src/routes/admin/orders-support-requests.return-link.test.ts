@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
     listOrderReturns: vi.fn(),
     createOrderReturn: vi.fn(),
     updateAdminOrderSupportRequestStatus: vi.fn(),
-    enqueueOrderSupportRequestNotificationForOrder: vi.fn(),
+    sendOrderSupportRequestNotification: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/conversations", async (importOriginal) => ({
@@ -19,14 +19,14 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
     listOrderReturns: mocks.listOrderReturns,
     createOrderReturn: mocks.createOrderReturn,
 }));
-vi.mock("../../utils/order-notification-queue", () => ({
-    enqueueOrderSupportRequestNotificationForOrder: mocks.enqueueOrderSupportRequestNotificationForOrder,
+vi.mock("../../utils/order-notifications", () => ({
+    sendOrderSupportRequestNotification: mocks.sendOrderSupportRequestNotification,
 }));
 
 import { adminOrdersSupportRequestRoutes } from "./orders-support-requests";
 
 const db = { name: "db" };
-const env = { JOBS_QUEUE: { send: vi.fn() } } as unknown as Env;
+const env = {} as unknown as Env;
 
 function app() {
     const instance = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");

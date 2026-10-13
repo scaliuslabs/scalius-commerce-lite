@@ -91,7 +91,7 @@ afterEach(() => sqlite.close());
 
 const emailEnv = { EMAIL: { send: vi.fn(async () => ({ messageId: "m" })) } };
 
-/** Sends a real code and returns it the way the queue consumer derives it. */
+/** Sends a real code and returns it the way the OTP sender derives it. */
 async function sendEmailCode(email: string, ip = `203.0.113.${++ipCounter}`): Promise<string> {
   const sent = await sendOtp(db, {
     method: "email",
@@ -101,8 +101,8 @@ async function sendEmailCode(email: string, ip = `203.0.113.${++ipCounter}`): Pr
     encryptionKey: KEY,
     credentialEncryptionKey: KEY,
   });
-  expect(sent.queuePayload).not.toHaveProperty("code");
-  return deriveCustomerAuthOtpDeliveryCode({ otpKey: sent.otpStorageKey, deliveryKey: sent.deliveryKey, encryptionKey: KEY });
+  expect(sent.otpDelivery).not.toHaveProperty("code");
+  return deriveCustomerAuthOtpDeliveryCode({ otpKey: sent.otpDelivery.challengeKey, deliveryKey: sent.otpDelivery.deliveryKey, encryptionKey: KEY });
 }
 
 /** An SMS code as the phone channel would deliver it (no SMS provider in tests). */
@@ -378,7 +378,7 @@ describe("a shared phone never exposes or files one person's orders under anothe
     const sent = await sendAccountPhoneCode(db, {
       accountId, ip: `203.0.113.${++ipCounter}`, encryptionKey: KEY, credentialEncryptionKey: KEY,
     });
-    return { sent, code: await deriveCustomerAuthOtpDeliveryCode({ otpKey: sent.otpStorageKey, deliveryKey: sent.deliveryKey, encryptionKey: KEY }) };
+    return { sent, code: await deriveCustomerAuthOtpDeliveryCode({ otpKey: sent.otpDelivery.challengeKey, deliveryKey: sent.otpDelivery.deliveryKey, encryptionKey: KEY }) };
   };
 
   it("tells a buyer nothing about a stranger's order on the phone they share (R3-SB-01)", async () => {

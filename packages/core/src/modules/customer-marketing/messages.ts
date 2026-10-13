@@ -1,5 +1,5 @@
 // Messages of Customers & marketing: the double opt-in confirmation e-mail
-// (an outbox row, subject `customer`, sent by the API queue consumer), and
+// (an outbox row, subject `customer`, sent by the API notification sender), and
 // what any marketing message to a customer must carry: consent for that
 // channel now, an unsubscribe link, and RFC 2369/8058 list headers.
 

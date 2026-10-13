@@ -3,13 +3,12 @@
 // `plugin_event_deliveries` row per (plugin, event) is the delivery's durable
 // state, mirroring webhook deliveries:
 //
-//   fan-out ──▶ pending ──flush──▶ queued ──consumer──▶ processing ──▶ succeeded
-//                  ▲                                        │
-//                  └────────── failed (backoff) ◀───────────┤──▶ exhausted (8 attempts)
-//                                                           └──▶ cancelled (plugin inactive, event pruned)
+//   fan-out ──▶ pending ──drain──▶ processing ──▶ succeeded
+//                  ▲                  │
+//                  └─ failed (backoff) ◀┤──▶ exhausted (8 attempts)
+//                                     └──▶ cancelled (plugin inactive, event pruned)
 //
-// Delivery is at least once: a lost message, a dead Worker or an expired
-// lease redelivers, so the same event can reach a plugin more than once. The
+// Delivery is at least once: a dead Worker or an expired lease redelivers, so the same event can reach a plugin more than once. The
 // event id (`event.id`) is the plugin's idempotency key, stable across every
 // attempt and redelivery. Plugins also receive events caused by their own
 // writes (as Shopify apps do); handlers must be idempotent and convergent
@@ -31,7 +30,7 @@ import {
 } from "@scalius/database/schema";
 import { topicMatchesAnyFilter } from "@scalius/shared/events";
 import { and, asc, desc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
-import type { EventFanOutTarget, EventsQueue, EventsQueueMessage } from "../events";
+import type { EventDelivery, EventFanOutTarget } from "../events";
 import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
 import { hasActiveEventPlugins, listActiveEventPlugins, getActivePluginInstallation } from "./registry";
@@ -41,18 +40,12 @@ export const PLUGIN_DELIVERY_MAX_ATTEMPTS = 8;
 export const PLUGIN_DELIVERY_RETRY_DELAYS_SECONDS = [60, 300, 1_800, 3_600, 10_800, 21_600, 43_200] as const;
 /** A claim outlives the longest invocation (30 s wall time) with room for the bridge. */
 export const PLUGIN_DELIVERY_LEASE_SECONDS = 120;
-/** Deliveries of one plugin in flight at once; the rest wait and are sent again shortly. */
+/** Deliveries of one plugin in flight at once; the rest stay due for the next drain. */
 export const PLUGIN_DELIVERY_MAX_IN_FLIGHT = 4;
-export const PLUGIN_DELIVERY_BUSY_DELAY_SECONDS = 15;
-export const PLUGIN_DELIVERY_FLUSH_BATCH_SIZE = 50;
 export const MAX_PLUGIN_DELIVERY_FLUSH_LIMIT = 200;
 export const PLUGIN_DELIVERY_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 export const PLUGIN_DELIVERY_LIST_MAX_LIMIT = 100;
-const ENQUEUE_LEASE_SECONDS = 5 * 60;
-const STALE_QUEUED_SECONDS = 30 * 60;
 const MAX_ERROR_LENGTH = 500;
-/** Queues delays a message by at most 12 hours. */
-const MAX_QUEUE_DELAY_SECONDS = 43_200;
 const NEVER = 253_402_300_799;
 const PRUNE_BATCH_SIZE = 500;
 /** Bound values per delivery insert row (id, plugin, event, topic, resource type and id). */
@@ -105,7 +98,7 @@ export const pluginEventFanOutTarget: EventFanOutTarget = {
       .from(pluginEventDeliveries)
       .where(and(eq(pluginEventDeliveries.eventId, event.id), eq(pluginEventDeliveries.status, "pending")))
       .all();
-    return pending.map((row): EventsQueueMessage => ({ type: "plugins.deliver", deliveryId: row.id }));
+    return pending.map((row): EventDelivery => ({ type: "plugins.deliver", deliveryId: row.id }));
   },
 };
 
@@ -113,9 +106,8 @@ export const pluginEventFanOutTarget: EventFanOutTarget = {
 
 function claimableCondition() {
   return or(
-    eq(pluginEventDeliveries.status, "queued"),
     and(inArray(pluginEventDeliveries.status, ["pending", "failed"]), lte(pluginEventDeliveries.nextAttemptAt, sql`unixepoch()`)),
-    and(inArray(pluginEventDeliveries.status, ["enqueueing", "processing"]), lte(pluginEventDeliveries.claimExpiresAt, sql`unixepoch()`)),
+    and(eq(pluginEventDeliveries.status, "processing"), lte(pluginEventDeliveries.claimExpiresAt, sql`unixepoch()`)),
   );
 }
 
@@ -194,7 +186,7 @@ export async function completePluginEventDelivery(
 /**
  * Records a failed attempt: retried with backoff until the attempt limit,
  * then exhausted (the dead-letter state the dashboard lists and can retry).
- * The queue message for the retry is the caller's (it knows the queue).
+ * The next drain that finds the row due sends it again.
  */
 export async function failPluginEventDelivery(
   db: Database,
@@ -256,85 +248,18 @@ export async function releasePluginEventDelivery(
   }).where(claimed(delivery, claimId));
 }
 
-/** `jobs-dlq`: an exhausted `plugins.deliver` message leaves the row to the flush, which owns retries. */
-export async function releasePluginDeliveryFromQueue(db: Database, deliveryId: string, reason: string): Promise<boolean> {
-  const rows = await db.update(pluginEventDeliveries).set({
-    status: "failed",
-    claimId: null,
-    claimExpiresAt: null,
-    lastError: normalizeError(reason),
-    nextAttemptAt: sql`unixepoch() + 300`,
-    updatedAt: sql`unixepoch()`,
-  }).where(and(
-    eq(pluginEventDeliveries.id, deliveryId),
-    inArray(pluginEventDeliveries.status, ["pending", "enqueueing", "queued", "processing"]),
-  )).returning({ id: pluginEventDeliveries.id });
-  return rows.length > 0;
-}
+// ── Scheduled drain and retention ─────────────────────────────────────────
 
-export function pluginDeliveryQueueDelay(seconds: number): number {
-  return Math.min(Math.max(0, Math.round(seconds)), MAX_QUEUE_DELAY_SECONDS);
-}
-
-// ── Scheduled flush and retention ─────────────────────────────────────────
-
-function flushableCondition() {
-  return or(
-    and(inArray(pluginEventDeliveries.status, ["pending", "failed"]), lte(pluginEventDeliveries.nextAttemptAt, sql`unixepoch()`)),
-    and(inArray(pluginEventDeliveries.status, ["enqueueing", "processing"]), lte(pluginEventDeliveries.claimExpiresAt, sql`unixepoch()`)),
-    and(eq(pluginEventDeliveries.status, "queued"), lte(pluginEventDeliveries.queuedAt, sql`unixepoch() - ${STALE_QUEUED_SECONDS}`)),
-  );
-}
-
-/** Re-enqueues due retries, expired leases and lost messages (`plugins.deliver`, id only). */
-export async function flushDuePluginEventDeliveries(options: {
-  db: Database;
-  queue: EventsQueue | undefined;
-  limit?: number;
-}): Promise<{ scanned: number; enqueued: number; failed: number; skipped: number }> {
-  const result = { scanned: 0, enqueued: 0, failed: 0, skipped: 0 };
-  if (!options.queue) return result;
-  const { db, queue } = options;
-  const limit = Math.max(1, Math.min(options.limit ?? PLUGIN_DELIVERY_FLUSH_BATCH_SIZE, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT));
+/** Due retries and expired leases, oldest first: the ids a drain sends next. */
+export async function listDuePluginEventDeliveries(db: Database, limit = MAX_PLUGIN_DELIVERY_FLUSH_LIMIT): Promise<string[]> {
   const due = await db
     .select({ id: pluginEventDeliveries.id })
     .from(pluginEventDeliveries)
-    .where(flushableCondition())
+    .where(claimableCondition())
     .orderBy(asc(pluginEventDeliveries.nextAttemptAt), asc(pluginEventDeliveries.id))
-    .limit(limit)
+    .limit(Math.max(1, Math.min(limit, MAX_PLUGIN_DELIVERY_FLUSH_LIMIT)))
     .all();
-  result.scanned = due.length;
-  for (let start = 0; start < due.length; start += PLUGIN_DELIVERY_FLUSH_BATCH_SIZE) {
-    const ids = due.slice(start, start + PLUGIN_DELIVERY_FLUSH_BATCH_SIZE).map((row) => row.id);
-    const claimId = `pdc_${crypto.randomUUID().replace(/-/g, "")}`;
-    const claimedRows = await db
-      .update(pluginEventDeliveries)
-      .set({ status: "enqueueing", claimId, claimExpiresAt: sql`unixepoch() + ${ENQUEUE_LEASE_SECONDS}`, updatedAt: sql`unixepoch()` })
-      .where(and(inArray(pluginEventDeliveries.id, ids), flushableCondition()))
-      .returning({ id: pluginEventDeliveries.id });
-    result.skipped += ids.length - claimedRows.length;
-    if (claimedRows.length === 0) continue;
-    const claimedIds = claimedRows.map((row) => row.id);
-    try {
-      await queue.sendBatch(claimedIds.map((deliveryId) => ({ body: { type: "plugins.deliver" as const, deliveryId } })));
-    } catch (error) {
-      result.failed += claimedIds.length;
-      await db
-        .update(pluginEventDeliveries)
-        .set({ status: "failed", claimId: null, claimExpiresAt: null, nextAttemptAt: sql`unixepoch() + 60`, updatedAt: sql`unixepoch()` })
-        .where(and(inArray(pluginEventDeliveries.id, claimedIds), eq(pluginEventDeliveries.claimId, claimId)))
-        .catch(() => undefined);
-      console.warn("[plugins] Delivery flush send failed:", error instanceof Error ? error.name : "error");
-      continue;
-    }
-    result.enqueued += claimedIds.length;
-    await db
-      .update(pluginEventDeliveries)
-      .set({ status: "queued", claimId: null, claimExpiresAt: null, queuedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
-      .where(and(inArray(pluginEventDeliveries.id, claimedIds), eq(pluginEventDeliveries.claimId, claimId)))
-      .catch(() => undefined);
-  }
-  return result;
+  return due.map((row) => row.id);
 }
 
 /** Bounded delete (500 rows per run) of terminal deliveries older than 30 days. */
@@ -376,7 +301,7 @@ export interface PluginEventDeliveryView {
 }
 
 export function toPluginEventDeliveryView(row: PluginEventDeliveryRow): PluginEventDeliveryView {
-  const waiting = row.status === "pending" || row.status === "failed" || row.status === "queued" || row.status === "enqueueing";
+  const waiting = row.status === "pending" || row.status === "failed";
   return {
     id: row.id,
     pluginId: row.pluginId,
@@ -421,12 +346,11 @@ export async function listPluginEventDeliveries(db: Database, pluginId: string, 
   };
 }
 
-/** Staff "Retry": a failed, exhausted or cancelled delivery of an active plugin starts a fresh retry cycle now. */
+/** Staff "Retry": a failed, exhausted or cancelled delivery of an active plugin starts a fresh retry cycle now (the caller sends it). */
 export async function retryPluginEventDelivery(
   db: Database,
   pluginId: string,
   deliveryId: string,
-  queue: EventsQueue | undefined,
 ): Promise<PluginEventDeliveryView> {
   if (!(await getActivePluginInstallation(db, pluginId))) {
     throw new PluginError("installation.inactive", "Activate the app before retrying its deliveries.");
@@ -456,6 +380,5 @@ export async function retryPluginEventDelivery(
       ? "Its event was pruned; it cannot be delivered again."
       : "Only failed, exhausted or cancelled deliveries can be retried.");
   }
-  await queue?.send({ type: "plugins.deliver", deliveryId }).catch(() => undefined);
   return toPluginEventDeliveryView(rows[0]);
 }

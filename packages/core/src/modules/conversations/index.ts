@@ -7,7 +7,7 @@ export {
   createStoreThread,
   decodeConversationCursor,
   encodeConversationCursor,
-  enqueueConversationNotifications,
+  sendConversationNotifications,
   getBuyerThread,
   getOrCreateOrderThread,
   getStaffInboxSummary,

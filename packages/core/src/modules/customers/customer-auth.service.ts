@@ -20,12 +20,11 @@ import {
     ServiceUnavailableError,
     UnauthorizedError,
 } from "@scalius/core/errors";
-import { buildOtpQueuePayload, type OtpQueuePayload } from "./otp-transport";
+import { buildOtpDelivery, type OtpDelivery } from "./otp-transport";
 import { createAuthOtpDeliveryKey } from "./otp-delivery-receipts";
 import {
     claimCustomerAuthOtpChallenge,
     persistCustomerAuthOtpChallenge,
-    deleteCustomerAuthOtpChallenge,
     cleanupExpiredCustomerAuthOtpChallenges,
     buildCustomerAuthOtpStorageKey,
     extendPendingCustomerAuthOtpChallenge,
@@ -69,7 +68,6 @@ export const OTP_TTL_SECONDS = 60 * 5; // 5 minutes
 const OTP_MAX_ATTEMPTS = 5;
 
 export {
-    deleteCustomerAuthOtpChallenge,
     cleanupExpiredCustomerAuthOtpChallenges,
     cleanupExpiredCustomerAuthOtpRateLimits,
 };
@@ -107,12 +105,8 @@ export interface SendOtpResult {
     message: string;
     /** Seconds until another code can be requested for this contact. */
     resendAfterSeconds: number;
-    /** Queue payload for async OTP delivery. */
-    queuePayload: OtpQueuePayload;
-    /** Exact D1 challenge key, so a failed queue handoff can clear it. */
-    otpStorageKey: string;
-    /** Per-attempt delivery key used for provider idempotency and receipt fencing. */
-    deliveryKey: string;
+    /** Opaque references the API sends the code from, after the response. */
+    otpDelivery: OtpDelivery;
 }
 
 /** Name and contact a buyer adds when the proven email/phone has no account yet. */
@@ -511,15 +505,12 @@ export async function sendOtp(
     return {
         message: "We sent you a code.",
         resendAfterSeconds: Math.max(0, challenge.resendAvailableAt - Math.floor(Date.now() / 1000)),
-        queuePayload: buildOtpQueuePayload({
+        otpDelivery: buildOtpDelivery({
             channel,
             purpose: "customer_login",
             challengeKey: otpKey,
             deliveryKey,
-            otpExpiresAt: challenge.expiresAt,
         }),
-        otpStorageKey: otpKey,
-        deliveryKey,
     };
 }
 

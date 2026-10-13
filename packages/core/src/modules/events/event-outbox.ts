@@ -1,18 +1,16 @@
 // Event outbox dispatch (COMMERCE-HOOKS H3). Rows are written only by SQL
-// triggers in the domain write's transaction; this module moves them to the
-// fan-out targets with the notification outbox's state machine:
+// triggers in the domain write's transaction; the API drains them right after
+// that write (`waitUntil`) and on every scheduled tick:
 //
-//   pending ──claim──▶ enqueueing ──sent──▶ queued ──consumer──▶ processing
-//      ▲                    │                                       │
-//      └──── failed ◀───────┴──────── (backoff) ◀───────────────────┤
-//                                                                   ▼
-//                              dead_lettered (8 attempts)       dispatched
+//   pending ──claim──▶ processing ──targets recorded──▶ dispatched
+//      ▲                    │
+//      └── failed ◀─────────┤ (backoff in next_attempt_at)
+//                           └──▶ dead_lettered (8 attempts)
 //
-// Queue messages carry only the event id. Delivery is at least once: a lost
-// message or an expired lease is re-enqueued by the scheduled flush, and every
-// target is idempotent by event id. With no subscriber at all, due rows are
-// marked dispatched in place and nothing is queued, so an unused store pays one
-// indexed read per flush.
+// Delivery is at least once: a drain that dies leaves an expired lease the
+// next drain reclaims, and every target is idempotent by event id. With no
+// subscriber at all, due rows are marked dispatched in place, so an unused
+// store pays one indexed read per drain.
 
 import type { Database } from "@scalius/database/client";
 import { eventOutbox, type EventOutboxRow } from "@scalius/database/schema";
@@ -27,29 +25,13 @@ import {
 } from "@scalius/shared/events";
 import { and, asc, desc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
 
-export interface EventsDispatchQueueMessage {
-  type: "events.dispatch";
-  eventId: string;
-}
-
-export interface WebhookDeliverQueueMessage {
-  type: "webhooks.deliver";
-  deliveryId: string;
-}
-
-/** One plugin event delivery (`plugin_event_deliveries`), processed by the API's plugin host. */
-export interface PluginDeliverQueueMessage {
-  type: "plugins.deliver";
-  deliveryId: string;
-}
-
-export type EventsQueueMessage = EventsDispatchQueueMessage | WebhookDeliverQueueMessage | PluginDeliverQueueMessage;
-
-/** The subset of Cloudflare `Queue` the events pipeline uses. */
-export interface EventsQueue {
-  send(message: EventsQueueMessage, options?: { delaySeconds?: number }): Promise<unknown>;
-  sendBatch(messages: Array<{ body: EventsQueueMessage; delaySeconds?: number }>): Promise<unknown>;
-}
+/**
+ * Work a fan-out target recorded for an event: one durable delivery row the
+ * API sends next (its own retries live in that row).
+ */
+export type EventDelivery =
+  | { type: "webhooks.deliver"; deliveryId: string }
+  | { type: "plugins.deliver"; deliveryId: string };
 
 /** One event as targets see it: the stored facts parsed against the catalog. */
 export interface OutboxEvent<T extends EventTopic = EventTopic> {
@@ -63,26 +45,22 @@ export interface OutboxEvent<T extends EventTopic = EventTopic> {
 }
 
 /**
- * A fan-out target: webhooks now, plugin subscribers later. `fanOut` records
- * the target's own durable work for the event (idempotent by event id, so a
- * redelivered event adds nothing) and returns the follow-up queue messages to
- * send once the event is marked dispatched.
+ * A fan-out target: webhooks and app subscribers. `fanOut` records the
+ * target's own durable work for the event (idempotent by event id, so a
+ * redelivered event adds nothing) and returns the deliveries still waiting.
  */
 export interface EventFanOutTarget {
   readonly name: string;
-  /** Cheap check used to skip queueing entirely when nobody listens. */
+  /** Cheap check used to settle events in place when nobody listens. */
   hasSubscribers(db: Database): Promise<boolean>;
-  fanOut(db: Database, event: OutboxEvent): Promise<EventsQueueMessage[]>;
+  fanOut(db: Database, event: OutboxEvent): Promise<EventDelivery[]>;
 }
 
-const ENQUEUE_LEASE_SECONDS = 5 * 60;
 const PROCESSING_LEASE_SECONDS = 5 * 60;
-/** A `queued` row whose message never arrived is replayed after this long. */
-export const EVENT_STALE_QUEUED_SECONDS = 30 * 60;
 export const MAX_EVENT_DISPATCH_ATTEMPTS = 8;
-/** Due rows one flush handles (the scheduled sweep uses the maximum). */
+/** Due rows one drain may take (the scheduled sweep's ceiling). */
 export const MAX_EVENT_FLUSH_LIMIT = 200;
-/** Ids per claim/`sendBatch`: within the Queues limit (100) and D1's 100 bound parameters. */
+/** Ids per settle statement: within D1's 100 bound parameters. */
 export const EVENT_FLUSH_BATCH_SIZE = 50;
 const MAX_ERROR_LENGTH = 500;
 const DEAD_LETTER_NEXT_ATTEMPT_AT = 253_402_300_799;
@@ -97,11 +75,7 @@ function normalizeError(error: unknown): string {
   return message.length > MAX_ERROR_LENGTH ? `${message.slice(0, MAX_ERROR_LENGTH - 3)}...` : message;
 }
 
-function randomId(prefix: string): string {
-  return `${prefix}${crypto.randomUUID().replace(/-/g, "")}`;
-}
-
-/** Due pending/failed rows, expired leases and queued rows whose message was lost. */
+/** Due pending/failed rows and expired leases. */
 function claimableCondition() {
   return or(
     and(
@@ -109,12 +83,8 @@ function claimableCondition() {
       lte(eventOutbox.nextAttemptAt, sql`unixepoch()`),
     ),
     and(
-      inArray(eventOutbox.status, ["enqueueing", "processing"]),
+      eq(eventOutbox.status, "processing"),
       lte(eventOutbox.claimExpiresAt, sql`unixepoch()`),
-    ),
-    and(
-      eq(eventOutbox.status, "queued"),
-      lte(eventOutbox.queuedAt, sql`unixepoch() - ${EVENT_STALE_QUEUED_SECONDS}`),
     ),
   );
 }
@@ -131,39 +101,32 @@ export async function anyEventSubscribers(
 
 export interface EventFlushResult {
   scanned: number;
-  enqueued: number;
+  dispatched: number;
   /** Marked dispatched in place because no target had a subscriber. */
   settledWithoutSubscribers: number;
   failed: number;
   skipped: number;
+  /** The deliveries the dispatched events recorded, for the caller to send. */
+  deliveries: EventDelivery[];
 }
 
 /**
- * Hands due outbox rows to the queue (`events.dispatch`, id only): up to
- * `limit` rows, claimed and sent in chunks of 50. Used after a request that
- * wrote an evented table, after queue batches, and by the scheduled sweep.
+ * Dispatches up to `limit` due outbox rows, oldest first: each is claimed,
+ * fanned out to the targets and marked dispatched (or failed with backoff).
+ * Runs after a request that wrote an evented table and on every tick.
  */
-export async function flushPendingEventOutbox(options: {
+export async function dispatchPendingEvents(options: {
   db: Database;
-  queue: EventsQueue | undefined;
   targets: readonly EventFanOutTarget[];
   limit?: number;
   /**
-   * The events this flush moved on (settled or handed to the queue), parsed
-   * from the rows the claim already returns: no extra read. The API fans them
-   * out to the realtime hub. Called once, after the flush; never throws into it.
+   * The events this drain moved on (settled or dispatched). The API fans them
+   * out to the realtime hub. Called once, after the drain; never throws into it.
    */
   onFlushed?: (events: OutboxEvent[]) => void | Promise<void>;
 }): Promise<EventFlushResult> {
-  const result: EventFlushResult = { scanned: 0, enqueued: 0, settledWithoutSubscribers: 0, failed: 0, skipped: 0 };
+  const result: EventFlushResult = { scanned: 0, dispatched: 0, settledWithoutSubscribers: 0, failed: 0, skipped: 0, deliveries: [] };
   const flushed: OutboxEvent[] = [];
-  const noteFlushed = (rows: ReadonlyArray<Pick<EventOutboxRow, "id" | "topic" | "resourceType" | "resourceId" | "data" | "occurredAt">>) => {
-    if (!options.onFlushed) return;
-    for (const row of rows) {
-      const event = toOutboxEvent(row);
-      if (event) flushed.push(event);
-    }
-  };
   const report = async () => {
     if (!options.onFlushed || flushed.length === 0) return;
     try {
@@ -186,8 +149,8 @@ export async function flushPendingEventOutbox(options: {
   if (dueRows.length === 0) return result;
 
   if (!(await anyEventSubscribers(db, options.targets))) {
-    // Nobody listens: settle the rows without a queue round trip. A target
-    // added later receives only events that occur after it exists.
+    // Nobody listens: settle the rows in place. A target added later
+    // receives only events that occur after it exists.
     for (let start = 0; start < dueRows.length; start += EVENT_FLUSH_BATCH_SIZE) {
       const ids = dueRows.slice(start, start + EVENT_FLUSH_BATCH_SIZE).map((row) => row.id);
       const settled = await db
@@ -202,7 +165,10 @@ export async function flushPendingEventOutbox(options: {
         })
         .where(and(inArray(eventOutbox.id, ids), claimableCondition()))
         .returning(flushedColumns());
-      noteFlushed(settled);
+      for (const row of settled) {
+        const event = toOutboxEvent(row);
+        if (event) flushed.push(event);
+      }
       result.settledWithoutSubscribers += settled.length;
       result.skipped += ids.length - settled.length;
     }
@@ -210,69 +176,24 @@ export async function flushPendingEventOutbox(options: {
     return result;
   }
 
-  if (!options.queue) return result;
-  const queue = options.queue;
-
-  for (let start = 0; start < dueRows.length; start += EVENT_FLUSH_BATCH_SIZE) {
-    const ids = dueRows.slice(start, start + EVENT_FLUSH_BATCH_SIZE).map((row) => row.id);
-    const claimId = randomId("evc_");
-    const claimed = await db
-      .update(eventOutbox)
-      .set({
-        status: "enqueueing",
-        claimId,
-        claimExpiresAt: sql`unixepoch() + ${ENQUEUE_LEASE_SECONDS}`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(and(inArray(eventOutbox.id, ids), claimableCondition()))
-      .returning({ ...flushedColumns(), attempts: eventOutbox.attempts });
-    result.skipped += ids.length - claimed.length;
-    if (claimed.length === 0) continue;
-
-    try {
-      await queue.sendBatch(claimed.map((row) => ({ body: { type: "events.dispatch" as const, eventId: row.id } })));
-    } catch (error) {
-      result.failed += claimed.length;
-      await db
-        .update(eventOutbox)
-        .set({
-          status: "failed",
-          claimId: null,
-          claimExpiresAt: null,
-          lastError: `queue_send_failed: ${normalizeError(error)}`,
-          nextAttemptAt: sql`unixepoch() + 60`,
-          updatedAt: sql`unixepoch()`,
-        })
-        .where(and(inArray(eventOutbox.id, claimed.map((row) => row.id)), eq(eventOutbox.claimId, claimId)))
-        .catch((markError: unknown) => {
-          console.error("[events] Failed to mark queue send failure:", normalizeError(markError));
-        });
-      continue;
+  for (const { id } of dueRows) {
+    const outcome = await processEventDispatch({ db, eventId: id, targets: options.targets });
+    if (outcome.status === "dispatched") {
+      result.dispatched += 1;
+      result.deliveries.push(...outcome.deliveries);
+      flushed.push(outcome.event);
+    } else if (outcome.status === "skipped") {
+      result.skipped += 1;
+    } else {
+      result.failed += 1;
+      console.warn(`[events] Dispatch of ${outcome.eventId} ${outcome.status}: ${outcome.reason}`);
     }
-
-    result.enqueued += claimed.length;
-    noteFlushed(claimed);
-    await db
-      .update(eventOutbox)
-      .set({
-        status: "queued",
-        claimId: null,
-        claimExpiresAt: null,
-        queuedAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(and(inArray(eventOutbox.id, claimed.map((row) => row.id)), eq(eventOutbox.claimId, claimId)))
-      .catch((error: unknown) => {
-        // The messages are in the queue; the consumer claims by id and an
-        // expired lease is re-enqueued by a later flush.
-        console.error("[events] Failed to mark events queued:", normalizeError(error));
-      });
   }
   await report();
   return result;
 }
 
-/** What a flush returns per row: enough to parse the event, so observers need no read. */
+/** What a settle returns per row: enough to parse the event, so observers need no read. */
 function flushedColumns() {
   return {
     id: eventOutbox.id,
@@ -300,25 +221,23 @@ export function toOutboxEvent(row: Pick<EventOutboxRow, "id" | "topic" | "resour
 }
 
 export type EventDispatchOutcome =
-  | { status: "dispatched"; eventId: string; messages: EventsQueueMessage[] }
+  | { status: "dispatched"; eventId: string; event: OutboxEvent; deliveries: EventDelivery[] }
   | { status: "skipped"; eventId: string; reason: "missing" | "already_dispatched" | "busy" }
   | { status: "dead_lettered"; eventId: string; reason: string }
   | { status: "failed"; eventId: string; reason: string };
 
 /**
- * The `events.dispatch` consumer: claims the row, lets every target record
- * its work, marks the row dispatched and sends the targets' follow-up
- * messages. A target failure retries the whole event with backoff; targets
+ * Claims one row, lets every target record its work and marks the row
+ * dispatched. A target failure retries the whole event with backoff; targets
  * are idempotent, so the retry only adds what is missing.
  */
 export async function processEventDispatch(options: {
   db: Database;
   eventId: string;
   targets: readonly EventFanOutTarget[];
-  queue: EventsQueue | undefined;
 }): Promise<EventDispatchOutcome> {
   const { db, eventId } = options;
-  const claimId = randomId("evc_");
+  const claimId = `evc_${crypto.randomUUID().replace(/-/g, "")}`;
   const rows = await db
     .update(eventOutbox)
     .set({
@@ -328,14 +247,7 @@ export async function processEventDispatch(options: {
       attempts: sql`${eventOutbox.attempts} + 1`,
       updatedAt: sql`unixepoch()`,
     })
-    .where(and(
-      eq(eventOutbox.id, eventId),
-      or(
-        eq(eventOutbox.status, "queued"),
-        and(inArray(eventOutbox.status, ["pending", "failed"]), lte(eventOutbox.nextAttemptAt, sql`unixepoch()`)),
-        and(inArray(eventOutbox.status, ["enqueueing", "processing"]), lte(eventOutbox.claimExpiresAt, sql`unixepoch()`)),
-      ),
-    ))
+    .where(and(eq(eventOutbox.id, eventId), claimableCondition()))
     .returning();
   const row = rows[0];
   if (!row) {
@@ -350,10 +262,10 @@ export async function processEventDispatch(options: {
     return { status: "dead_lettered", eventId, reason: "unreadable_event" };
   }
 
-  const messages: EventsQueueMessage[] = [];
+  const deliveries: EventDelivery[] = [];
   try {
     for (const target of options.targets) {
-      messages.push(...await target.fanOut(db, event));
+      deliveries.push(...await target.fanOut(db, event));
     }
   } catch (error) {
     const reason = normalizeError(error);
@@ -386,22 +298,10 @@ export async function processEventDispatch(options: {
       updatedAt: sql`unixepoch()`,
     })
     .where(and(eq(eventOutbox.id, eventId), eq(eventOutbox.claimId, claimId)));
-
-  if (messages.length > 0 && options.queue) {
-    // Follow-up work is durable in the targets' own tables; a failed send is
-    // picked up by their scheduled flush.
-    for (let start = 0; start < messages.length; start += 100) {
-      await options.queue
-        .sendBatch(messages.slice(start, start + 100).map((body) => ({ body })))
-        .catch((error: unknown) => {
-          console.warn(`[events] Follow-up send for ${eventId} failed; the scheduled flush retries:`, normalizeError(error));
-        });
-    }
-  }
-  return { status: "dispatched", eventId, messages };
+  return { status: "dispatched", eventId, event, deliveries };
 }
 
-async function markEventDeadLettered(db: Database, eventId: string, claimId: string | null, reason: string): Promise<void> {
+async function markEventDeadLettered(db: Database, eventId: string, claimId: string, reason: string): Promise<void> {
   await db
     .update(eventOutbox)
     .set({
@@ -412,24 +312,7 @@ async function markEventDeadLettered(db: Database, eventId: string, claimId: str
       nextAttemptAt: DEAD_LETTER_NEXT_ATTEMPT_AT,
       updatedAt: sql`unixepoch()`,
     })
-    .where(claimId ? and(eq(eventOutbox.id, eventId), eq(eventOutbox.claimId, claimId)) : eq(eventOutbox.id, eventId));
-}
-
-/** `jobs-dlq`: an exhausted `events.dispatch` message dead-letters its row. */
-export async function deadLetterEventFromQueue(db: Database, eventId: string, reason: string): Promise<boolean> {
-  const rows = await db
-    .update(eventOutbox)
-    .set({
-      status: "dead_lettered",
-      claimId: null,
-      claimExpiresAt: null,
-      lastError: normalizeError(reason),
-      nextAttemptAt: DEAD_LETTER_NEXT_ATTEMPT_AT,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(and(eq(eventOutbox.id, eventId), sql`${eventOutbox.status} <> 'dispatched'`))
-    .returning({ id: eventOutbox.id });
-  return rows.length > 0;
+    .where(and(eq(eventOutbox.id, eventId), eq(eventOutbox.claimId, claimId)));
 }
 
 // ── Admin reads ───────────────────────────────────────────────────────────

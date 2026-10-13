@@ -10,21 +10,21 @@ import {
     voidOrderFulfilment,
 } from "@scalius/core/modules/fulfilment";
 import { recordOrderEvent } from "@scalius/core/modules/orders";
-import { enqueueOrderNotificationOutboxById } from "@scalius/core/modules/notifications";
 import { ok, created } from "../../../utils/api-response";
 
-import { enqueueOrderAutoFulfil } from "../../../utils/auto-fulfil-queue";
+import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
 import {
-    enqueueOrderNotificationMessage,
-    enqueueOrderNotificationsForStatus,
-    enqueueOrderStatusChangeNotification,
-} from "../../../utils/order-notification-queue";
+    sendOrderNotification,
+    sendOrderNotificationsForStatus,
+    sendOrderStatusChangeNotification,
+} from "../../../utils/order-notifications";
 import { successEnvelope, serviceUnavailableResponse } from "../../../schemas/responses";
 import {
     fulfillmentTypeSchema,
     orderFulfilmentLineSchema,
 } from "../../../schemas/order-lines";
 import { adminOrderResourceMutationErrorResponses } from "./shared";
+import { notificationSender } from "../../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -116,7 +116,7 @@ app.openapi(createFulfilmentRoute, async (c) => {
     }, { type: "admin", id: actorId });
 
     // Cash taken at the counter settled the order in the same batch.
-    if (body.cashReceived !== undefined) await enqueueOrderAutoFulfil(c.env.JOBS_QUEUE, orderId, "orders-fulfilment-cash");
+    if (body.cashReceived !== undefined) await autoFulfilAfterResponse(c, c.get("db"), orderId, "orders-fulfilment-cash");
     if (!result.replayed) {
         const quantity = result.lines.reduce((sum, line) => sum + line.quantity, 0);
         await recordOrderEvent(db, {
@@ -136,9 +136,9 @@ app.openapi(createFulfilmentRoute, async (c) => {
         });
         const trackingId = body.tracking?.trackingId ?? null;
         if (result.statusChange) {
-            await enqueueOrderStatusChangeNotification({
+            await sendOrderStatusChangeNotification({
                 db,
-                queue: c.env.JOBS_QUEUE,
+                send: notificationSender(c),
                 statusChange: result.statusChange,
                 trackingId,
                 source: "orders-fulfilment",
@@ -146,9 +146,9 @@ app.openapi(createFulfilmentRoute, async (c) => {
         } else if (result.kind === "ship" && result.shipmentId) {
             // An earlier parcel of a split shipment: the buyer hears about
             // each parcel as it leaves, not only the last one (R2-ORD-06).
-            await enqueueOrderNotificationsForStatus({
+            await sendOrderNotificationsForStatus({
                 db,
-                queue: c.env.JOBS_QUEUE,
+                send: notificationSender(c),
                 orderIds: [orderId],
                 newStatus: "shipped",
                 trackingByOrderId: { [orderId]: trackingId },
@@ -158,16 +158,11 @@ app.openapi(createFulfilmentRoute, async (c) => {
         }
         const delivered = result.delivered?.notification;
         if (delivered) {
-            await enqueueOrderNotificationMessage({
+            await sendOrderNotification({
                 db,
-                queue: c.env.JOBS_QUEUE,
-                message: {
-                    type: "order.notification",
-                    orderId: delivered.orderId,
-                    customerEmail: delivered.customerEmail,
-                    customerName: delivered.customerName,
-                    notificationType: delivered.notificationType,
-                },
+                send: notificationSender(c),
+                orderId: delivered.orderId,
+                notificationType: delivered.notificationType,
                 dedupeKey: delivered.dedupeKey ?? `order_status:${orderId}:${delivered.notificationType}`,
                 source: "orders-fulfilment-delivered",
             });
@@ -279,17 +274,8 @@ app.openapi(pickupReadyRoute, async (c) => {
             data: { pickupReady: true },
         });
     }
-    if (result.notificationOutboxId && c.env.JOBS_QUEUE) {
-        // The row committed with the mark; a failed send is retried by the
-        // outbox sweep.
-        await enqueueOrderNotificationOutboxById({
-            db,
-            queue: c.env.JOBS_QUEUE,
-            outboxId: result.notificationOutboxId,
-        }).catch((error: unknown) => {
-            console.error("[orders] pickup-ready notification enqueue failed:", error instanceof Error ? error.message : "unknown");
-        });
-    }
+    // The row committed with the mark; the scheduled drain sends it if this send fails.
+    if (result.notificationOutboxId) await notificationSender(c)([result.notificationOutboxId]);
     return ok(c, {
         orderId: result.orderId,
         pickupReadyAt: result.pickupReadyAt,

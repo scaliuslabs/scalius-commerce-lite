@@ -1,64 +1,32 @@
-// Order notifications on the generic outbox. The order helpers keep their
-// signatures and write `notification_outbox` rows with `subject_type='order'`;
-// the queue carries `{ type: "notification", outboxId }` and the consumer reads
-// the order's contact at send time (§10). The legacy `order.notification`
-// message shape is still accepted by the consumer for messages in flight.
+// Order notifications on the generic outbox: `notification_outbox` rows with
+// `subject_type='order'`. The sender reads the order's contact at send time
+// (§10), so a row carries only ids and safe facts.
 
 import type { Database } from "@scalius/database/client";
 import { notificationDeliveryReceipts, notificationOutbox } from "@scalius/database/schema";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { OrderNotificationType } from "./notification-types";
 import {
-    STALE_QUEUED_REPLAY_SECONDS,
-    claimNotificationOutboxForProcessing,
     createNotificationOutboxInsertValues,
-    enqueueNotificationOutboxById,
-    markNotificationOutboxDeadLettered,
-    markNotificationOutboxProcessingFailed,
-    markNotificationOutboxSent,
     parseNotificationPayload,
-    recordAndEnqueueNotification,
+    recordAndSendNotification,
     selectNotificationOutboxById,
     type NotificationInput,
     type NotificationOutboxInsert,
     type NotificationOutboxStatus,
-    type NotificationQueue,
-    type RecordAndEnqueueNotificationResult,
+    type NotificationSender,
+    type RecordNotificationResult,
 } from "./notification-outbox";
 
-export { STALE_QUEUED_REPLAY_SECONDS };
-
 export type OrderNotificationOutboxStatus = NotificationOutboxStatus;
-
-/**
- * The pre-Wave-A queue shape. New code never sends it; the consumer still
- * accepts it so messages in flight at deploy keep working.
- */
-export interface OrderNotificationQueueMessage {
-    type: "order.notification";
-    outboxId?: string;
-    orderId: string;
-    customerEmail?: string;
-    customerName: string;
-    notificationType: OrderNotificationType;
-    data?: Record<string, unknown>;
-}
-
-export type OrderNotificationQueue = NotificationQueue;
 
 export interface OrderNotificationInput {
     dedupeKey: string;
     orderId: string;
-    /** Accepted for call-site compatibility; the consumer reads the order's contact at send time. */
-    customerEmail?: string | null;
-    /** Accepted for call-site compatibility; the consumer reads the order's name at send time. */
-    customerName?: string;
     notificationType: OrderNotificationType;
     data?: Record<string, unknown>;
     source: string;
 }
-
-export type RecordAndEnqueueOrderNotificationResult = RecordAndEnqueueNotificationResult;
 
 export interface OrderNotificationDeliveryReceiptView {
     id: string;
@@ -91,7 +59,6 @@ export interface OrderNotificationOutboxView {
     attempts: number;
     nextAttemptAt: number;
     lastError: string | null;
-    queuedAt: number | null;
     sentAt: number | null;
     createdAt: number;
     updatedAt: number;
@@ -163,24 +130,16 @@ export function createOrderNotificationOutboxInsertValues(input: OrderNotificati
     return createNotificationOutboxInsertValues(orderNotificationInput(input));
 }
 
-export async function recordAndEnqueueOrderNotification(options: {
+export async function recordAndSendOrderNotification(options: {
     db: Database;
-    queue: OrderNotificationQueue | undefined;
+    send: NotificationSender | undefined;
     notification: OrderNotificationInput;
-}): Promise<RecordAndEnqueueOrderNotificationResult> {
-    return await recordAndEnqueueNotification({
+}): Promise<RecordNotificationResult> {
+    return await recordAndSendNotification({
         db: options.db,
-        queue: options.queue,
+        send: options.send,
         notification: orderNotificationInput(options.notification),
     });
-}
-
-export async function enqueueOrderNotificationOutboxById(options: {
-    db: Database;
-    queue: OrderNotificationQueue;
-    outboxId: string;
-}): Promise<Omit<RecordAndEnqueueOrderNotificationResult, "dedupeKey" | "created">> {
-    return await enqueueNotificationOutboxById(options);
 }
 
 export async function listOrderNotificationOutboxForOrder(
@@ -200,7 +159,6 @@ export async function listOrderNotificationOutboxForOrder(
             attempts: notificationOutbox.attempts,
             nextAttemptAt: notificationOutbox.nextAttemptAt,
             lastError: notificationOutbox.lastError,
-            queuedAt: notificationOutbox.queuedAt,
             sentAt: notificationOutbox.sentAt,
             createdAt: notificationOutbox.createdAt,
             updatedAt: notificationOutbox.updatedAt,
@@ -259,10 +217,10 @@ export async function listOrderNotificationOutboxForOrder(
 
 export async function retryFailedOrderNotificationOutboxById(options: {
     db: Database;
-    queue: OrderNotificationQueue | undefined;
+    send: NotificationSender | undefined;
     orderId: string;
     outboxId: string;
-}): Promise<RecordAndEnqueueOrderNotificationResult> {
+}): Promise<RecordNotificationResult> {
     const existing = await selectNotificationOutboxById(options.db, options.outboxId);
     if (!existing || existing.subjectType !== "order" || existing.orderId !== options.orderId) {
         return {
@@ -299,7 +257,8 @@ export async function retryFailedOrderNotificationOutboxById(options: {
             status: "pending",
             nextAttemptAt: sql`unixepoch()`,
             lastError: null,
-            ...(options.queue ? { claimId: null, claimExpiresAt: null } : {}),
+            claimId: null,
+            claimExpiresAt: null,
             updatedAt: sql`unixepoch()`,
         })
         .where(and(
@@ -308,36 +267,19 @@ export async function retryFailedOrderNotificationOutboxById(options: {
             inArray(notificationOutbox.status, ["pending", "failed", "dead_lettered"]),
         ));
 
-    if (!options.queue) {
-        return {
-            outboxId: existing.id,
-            dedupeKey: existing.dedupeKey,
-            created: false,
-            enqueued: false,
-            skippedReason: "no_queue",
-        };
-    }
-
-    const result = await enqueueNotificationOutboxById({
-        db: options.db,
-        queue: options.queue,
-        outboxId: existing.id,
-    });
-
-    return {
-        ...result,
-        dedupeKey: existing.dedupeKey,
-        created: false,
-    };
+    const base = { outboxId: existing.id, dedupeKey: existing.dedupeKey, created: false };
+    if (!options.send) return { ...base, enqueued: false, skippedReason: "no_sender" };
+    await options.send([existing.id]);
+    return { ...base, enqueued: true };
 }
 
 export async function resendTerminalOrderNotificationOutboxById(options: {
     db: Database;
-    queue: OrderNotificationQueue | undefined;
+    send: NotificationSender | undefined;
     orderId: string;
     outboxId: string;
     resendRequestId: string;
-}): Promise<RecordAndEnqueueOrderNotificationResult> {
+}): Promise<RecordNotificationResult> {
     const existing = await selectNotificationOutboxById(options.db, options.outboxId);
     if (!existing || existing.subjectType !== "order" || existing.orderId !== options.orderId) {
         return {
@@ -360,9 +302,9 @@ export async function resendTerminalOrderNotificationOutboxById(options: {
     }
 
     const payload = parseNotificationPayload(existing.payload, existing.notificationType);
-    return await recordAndEnqueueOrderNotification({
+    return await recordAndSendOrderNotification({
         db: options.db,
-        queue: options.queue,
+        send: options.send,
         notification: {
             dedupeKey: buildManualOrderNotificationResendDedupeKey({
                 outboxId: existing.id,
@@ -374,44 +316,6 @@ export async function resendTerminalOrderNotificationOutboxById(options: {
             source: "manual_resend",
         },
     });
-}
-
-export async function markOrderNotificationOutboxDeadLettered(options: {
-    db: Database;
-    outboxId: string;
-    error: unknown;
-}): Promise<{ marked: boolean }> {
-    return await markNotificationOutboxDeadLettered(options);
-}
-
-export async function claimOrderNotificationOutboxForProcessing(
-    db: Database,
-    outboxId: string,
-): Promise<
-    | { claimed: true; outboxId: string; claimId: string; attempts: number }
-    | { claimed: false; reason: "already_sent" | "busy" | "missing" }
-> {
-    const claim = await claimNotificationOutboxForProcessing(db, outboxId);
-    if (!claim.claimed) return claim;
-    return { claimed: true, outboxId: claim.outboxId, claimId: claim.claimId, attempts: claim.attempts };
-}
-
-export async function markOrderNotificationOutboxSent(
-    db: Database,
-    outboxId: string,
-    claimId: string,
-): Promise<void> {
-    await markNotificationOutboxSent(db, outboxId, claimId);
-}
-
-export async function markOrderNotificationOutboxProcessingFailed(
-    db: Database,
-    outboxId: string,
-    claimId: string,
-    attempts: number,
-    error: unknown,
-): Promise<void> {
-    await markNotificationOutboxProcessingFailed(db, outboxId, claimId, attempts, error);
 }
 
 async function resetRetryableNotificationDeliveryReceipts(

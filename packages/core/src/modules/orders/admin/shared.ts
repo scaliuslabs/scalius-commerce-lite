@@ -188,7 +188,7 @@ export function paymentRecoveryLifecycleCondition() {
             WHERE ${webhookEvents.orderId} = ${orderIdSql}
               AND ${onlinePaymentMethodCondition(webhookEvents.provider)}
               AND ${webhookEvents.eventType} NOT LIKE 'courier.%'
-              AND ${webhookEvents.status} IN ('processing', 'queued', 'failed', 'manual_reconciliation')
+              AND ${webhookEvents.status} IN ('processing', 'retrying', 'failed', 'manual_reconciliation')
         ) THEN 1
         ELSE 0
     END`;

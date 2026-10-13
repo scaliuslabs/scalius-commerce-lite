@@ -32,14 +32,15 @@ import { successEnvelope, messageResponse, errorResponses, conflictResponse, ser
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 
-import { enqueueOrderAutoFulfil } from "../../utils/auto-fulfil-queue";
+import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 import {
-    enqueueOrderNotificationMessage,
-    enqueueOrderNotificationsForStatus,
-} from "../../utils/order-notification-queue";
+    sendOrderNotification,
+    sendOrderNotificationsForStatus,
+} from "../../utils/order-notifications";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 import { requestCourierProviders } from "../../plugins/providers/courier";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -196,19 +197,14 @@ app.openapi(updateStatusRoute, async (c) => {
     }
 
     if (result.notification) {
-        await enqueueOrderNotificationMessage({
+        await sendOrderNotification({
             db,
-            queue: c.env.JOBS_QUEUE,
-            message: {
-                type: "order.notification",
-                orderId: result.notification.orderId,
-                customerEmail: result.notification.customerEmail,
-                customerName: result.notification.customerName,
-                notificationType: result.notification.notificationType,
-                data: result.notification.newStatus === "shipped" && result.notification.trackingId
-                    ? { trackingId: result.notification.trackingId }
-                    : undefined,
-            },
+            send: notificationSender(c),
+            orderId: result.notification.orderId,
+            notificationType: result.notification.notificationType,
+            data: result.notification.newStatus === "shipped" && result.notification.trackingId
+                ? { trackingId: result.notification.trackingId }
+                : undefined,
             dedupeKey: result.notification.dedupeKey ?? `order_status:${orderId}:${result.notification.notificationType}`,
             source: "orders-status-update",
         });
@@ -248,16 +244,11 @@ app.openapi(markDeliveredRoute, async (c) => {
             requestKey: `mark-delivered:${result.notification.version}`,
             data: { from: result.notification.previousStatus, to: "delivered" },
         });
-        await enqueueOrderNotificationMessage({
+        await sendOrderNotification({
             db,
-            queue: c.env.JOBS_QUEUE,
-            message: {
-                type: "order.notification",
-                orderId: result.notification.orderId,
-                customerEmail: result.notification.customerEmail,
-                customerName: result.notification.customerName,
-                notificationType: result.notification.notificationType,
-            },
+            send: notificationSender(c),
+            orderId: result.notification.orderId,
+            notificationType: result.notification.notificationType,
             dedupeKey: result.notification.dedupeKey ?? `order_status:${orderId}:${result.notification.notificationType}`,
             source: "orders-mark-delivered",
         });
@@ -350,7 +341,7 @@ app.openapi(postCodRoute, async (c) => {
     const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
 
     // Collected cash settles the order: hand over its automatic lines.
-    if (data.action === "collected") await enqueueOrderAutoFulfil(c.env.JOBS_QUEUE, orderId, "orders-cod-action");
+    if (data.action === "collected") await autoFulfilAfterResponse(c, db, orderId, "orders-cod-action");
     await recordOrderEvent(db, data.action === "collected"
         ? {
             orderId,
@@ -377,16 +368,11 @@ app.openapi(postCodRoute, async (c) => {
         }).from(orders).where(eq(orders.id, orderId)).get();
 
         if (order) {
-            await enqueueOrderNotificationMessage({
+            await sendOrderNotification({
                 db,
-                queue: c.env.JOBS_QUEUE,
-                message: {
-                    type: "order.notification",
-                    orderId,
-                    customerEmail: order.customerEmail ?? undefined,
-                    customerName: order.customerName,
-                    notificationType: notifType,
-                },
+                send: notificationSender(c),
+                orderId,
+                notificationType: notifType,
                 dedupeKey: `cod:${orderId}:${data.action}:v${order.version}:${order.status}`,
                 source: "orders-cod-action",
             });
@@ -496,9 +482,9 @@ app.openapi(createShipmentRoute, async (c) => {
     });
 
     if (shipmentResult.shipment) {
-        await enqueueOrderNotificationsForStatus({
+        await sendOrderNotificationsForStatus({
             db,
-            queue: c.env.JOBS_QUEUE,
+            send: notificationSender(c),
             orderIds: [orderId],
             newStatus: "shipped",
         trackingByOrderId: createdShipmentRecord.trackingId
@@ -691,9 +677,9 @@ app.openapi(reconcileShipmentRoute, async (c) => {
     const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
 
     if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
-        await enqueueOrderNotificationsForStatus({
+        await sendOrderNotificationsForStatus({
             db,
-            queue: c.env.JOBS_QUEUE,
+            send: notificationSender(c),
             orderIds: [orderId],
             newStatus: result.orderStatus,
             trackingByOrderId: result.orderStatus === "shipped" && result.trackingId
@@ -751,9 +737,9 @@ app.openapi(unknownShipmentLookupRoute, async (c) => {
     const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
 
     if (result.status === "repaired" && RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
-        await enqueueOrderNotificationsForStatus({
+        await sendOrderNotificationsForStatus({
             db,
-            queue: c.env.JOBS_QUEUE,
+            send: notificationSender(c),
             orderIds: [orderId],
             newStatus: result.orderStatus,
             trackingByOrderId: result.orderStatus === "shipped" && result.trackingId
@@ -803,9 +789,9 @@ app.openapi(resolveUnknownShipmentRoute, async (c) => {
     const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
 
     if (RECONCILE_NOTIFICATION_STATUSES.has(result.orderStatus)) {
-        await enqueueOrderNotificationsForStatus({
+        await sendOrderNotificationsForStatus({
             db,
-            queue: c.env.JOBS_QUEUE,
+            send: notificationSender(c),
             orderIds: [orderId],
             newStatus: result.orderStatus,
             trackingByOrderId: result.orderStatus === "shipped" && result.trackingId

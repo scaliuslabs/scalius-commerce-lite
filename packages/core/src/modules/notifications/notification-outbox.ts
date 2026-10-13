@@ -1,8 +1,14 @@
 // Generic notification outbox (Wave A §10). One row per notification, keyed by
 // subject (an order, a conversation) and audience, written in the same batch
-// as the fact it announces or right after it. The queue message carries only
-// the outbox id; recipients and message text are resolved at send time, so no
-// contact, message body or code ever sits in a queue payload or an outbox row.
+// as the fact it announces or right after it. The API sends a committed row
+// right after the write (`NotificationSender`, by id) and its scheduled drain
+// sends every due row; recipients and message text are resolved at send time,
+// so no contact, message body or code ever sits in an outbox row.
+//
+//   pending ──claim──▶ processing ──▶ sent
+//      ▲                    │
+//      └── failed ◀─────────┤ (backoff in next_attempt_at)
+//                           └──▶ dead_lettered (8 attempts, or nothing it can send)
 
 import type { Database } from "@scalius/database/client";
 import { notificationOutbox } from "@scalius/database/schema";
@@ -15,27 +21,17 @@ import type {
 
 export type NotificationOutboxStatus =
     | "pending"
-    | "enqueueing"
-    | "queued"
     | "processing"
     | "sent"
     | "failed"
     | "dead_lettered";
 
-/** The only queue message a notification sends: the outbox id. */
-export interface NotificationQueueMessage {
-    type: "notification";
-    outboxId: string;
-}
-
-export interface NotificationQueue {
-    send(message: NotificationQueueMessage): Promise<unknown>;
-}
-
-/** The scheduled flush sends in batches (Cloudflare `Queue.sendBatch`). */
-export interface NotificationBatchQueue extends NotificationQueue {
-    sendBatch(messages: Array<{ body: NotificationQueueMessage }>): Promise<unknown>;
-}
+/**
+ * Sends committed outbox rows by id, off the response path (the API's
+ * background drain). It never throws into the caller: a row it could not send
+ * stays due for the scheduled drain.
+ */
+export type NotificationSender = (outboxIds: readonly string[]) => Promise<void>;
 
 /** Small, id-shaped facts a sender needs; never contacts, bodies, codes or tokens. */
 export type NotificationData = Record<string, string | number | boolean | null>;
@@ -50,8 +46,8 @@ export interface NotificationInput {
     data?: Record<string, unknown>;
     /**
      * Epoch seconds before which the row is not sent (a review request days
-     * after delivery). It becomes the row's `next_attempt_at`, so neither the
-     * enqueue nor the scheduled flush picks the row before it is due.
+     * after delivery). It becomes the row's `next_attempt_at`, so no drain
+     * picks the row before it is due.
      */
     notBefore?: number;
 }
@@ -62,23 +58,22 @@ export interface NotificationPayload {
     data?: NotificationData;
 }
 
-export type NotificationEnqueueSkipReason =
-    | "no_queue"
-    | "already_queued"
+export type NotificationSendSkipReason =
+    | "no_sender"
     | "already_sent"
     | "already_retryable"
     | "not_sent"
     | "busy"
-    | "missing"
-    | "queue_failed";
+    | "missing";
 
-export interface RecordAndEnqueueNotificationResult {
+export interface RecordNotificationResult {
     outboxId: string;
     dedupeKey: string;
     created: boolean;
+    /** Handed to the sender now; otherwise the scheduled drain sends it when due. */
     enqueued: boolean;
-    skippedReason?: NotificationEnqueueSkipReason;
-    /** Not enqueued yet: the row is due at this epoch second and the scheduled flush sends it. */
+    skippedReason?: NotificationSendSkipReason;
+    /** Not sent yet: the row is due at this epoch second and the scheduled drain sends it. */
     scheduledFor?: number;
 }
 
@@ -98,17 +93,10 @@ export interface ClaimedNotificationOutbox {
 export type NotificationOutboxRow = typeof notificationOutbox.$inferSelect;
 export type NotificationOutboxInsert = typeof notificationOutbox.$inferInsert;
 
-const ENQUEUE_LEASE_SECONDS = 5 * 60;
 const PROCESSING_LEASE_SECONDS = 15 * 60;
-export const STALE_QUEUED_REPLAY_SECONDS = 60 * 60;
 const MAX_NOTIFICATION_OUTBOX_ATTEMPTS = 8;
-/** Due rows one scheduled flush hands to the queue. */
+/** Due rows one drain may list. */
 export const MAX_FLUSH_LIMIT = 200;
-/**
- * Rows claimed and sent per `sendBatch` call: within the Queues limit of 100
- * messages per batch and D1's 100 bound parameters for the claim.
- */
-export const FLUSH_BATCH_SIZE = 50;
 const MAX_ERROR_LENGTH = 500;
 const DEAD_LETTER_NEXT_ATTEMPT_AT = 253_402_300_799;
 
@@ -209,200 +197,38 @@ export function buildNotificationOutboxInsert(db: Database, input: NotificationI
     };
 }
 
-/** Records the row (idempotent by dedupe key), then hands it to the queue. */
-export async function recordAndEnqueueNotification(options: {
+/** Records the row (idempotent by dedupe key), then hands it to the sender when it is due now. */
+export async function recordAndSendNotification(options: {
     db: Database;
-    queue: NotificationQueue | undefined;
+    send: NotificationSender | undefined;
     notification: NotificationInput;
-}): Promise<RecordAndEnqueueNotificationResult> {
+}): Promise<RecordNotificationResult> {
     const recorded = await recordNotificationOutbox(options.db, options.notification);
+    const base = { outboxId: recorded.row.id, dedupeKey: recorded.row.dedupeKey, created: recorded.created };
 
-    // A scheduled row waits for the flush that finds it due.
+    // A scheduled row waits for the drain that finds it due.
     const scheduledFor = scheduledLaterAt(options.notification);
-    if (scheduledFor !== null) {
-        return {
-            outboxId: recorded.row.id,
-            dedupeKey: recorded.row.dedupeKey,
-            created: recorded.created,
-            enqueued: false,
-            scheduledFor,
-        };
-    }
-
-    if (!options.queue) {
-        return {
-            outboxId: recorded.row.id,
-            dedupeKey: recorded.row.dedupeKey,
-            created: recorded.created,
-            enqueued: false,
-            skippedReason: "no_queue",
-        };
-    }
-
-    const enqueueResult = await enqueueNotificationOutboxById({
-        db: options.db,
-        queue: options.queue,
-        outboxId: recorded.row.id,
-    });
-
-    return {
-        ...enqueueResult,
-        dedupeKey: recorded.row.dedupeKey,
-        created: recorded.created,
-    };
+    if (scheduledFor !== null) return { ...base, enqueued: false, scheduledFor };
+    if (recorded.row.status === "sent") return { ...base, enqueued: false, skippedReason: "already_sent" };
+    if (recorded.row.status !== "pending" && recorded.row.status !== "failed") return { ...base, enqueued: false, skippedReason: "busy" };
+    if (!options.send) return { ...base, enqueued: false, skippedReason: "no_sender" };
+    await options.send([recorded.row.id]);
+    return { ...base, enqueued: true };
 }
 
-export async function enqueueNotificationOutboxById(options: {
-    db: Database;
-    queue: NotificationQueue;
-    outboxId: string;
-}): Promise<Omit<RecordAndEnqueueNotificationResult, "dedupeKey" | "created">> {
-    const claim = await claimNotificationOutboxForEnqueue(options.db, options.outboxId);
-    if (!claim.claimed) {
-        return {
-            outboxId: options.outboxId,
-            enqueued: false,
-            skippedReason: claim.reason,
-        };
-    }
-
-    const message: NotificationQueueMessage = { type: "notification", outboxId: claim.row.id };
-
-    try {
-        await options.queue.send(message);
-    } catch (error) {
-        await markNotificationOutboxFailed(
-            options.db,
-            claim.row.id,
-            claim.row.claimId,
-            error,
-            getRetryDelaySeconds(claim.row.attempts),
-            claim.row.attempts,
-        ).catch((markError: unknown) => {
-            console.error("[notifications-outbox] Failed to mark queue send failure:", normalizeError(markError));
-        });
-
-        return {
-            outboxId: claim.row.id,
-            enqueued: false,
-            skippedReason: "queue_failed",
-        };
-    }
-
-    await markNotificationOutboxQueued(options.db, claim.row.id, claim.row.claimId)
-        .catch((error: unknown) => {
-            // The message is already in Cloudflare Queues. Leave the row claimed;
-            // the consumer can still process it by outboxId, and the scheduled
-            // sweeper reclaims it if delivery never happens.
-            console.error("[notifications-outbox] Failed to mark notification queued:", normalizeError(error));
-        });
-
-    return {
-        outboxId: claim.row.id,
-        enqueued: true,
-    };
-}
-
-/**
- * Scheduled durable retry: due pending/failed rows (scheduled rows once their
- * time comes), expired leases and stale queued rows. Up to 200 per run, in
- * chunks of 50: each chunk is claimed in one statement (the same guard as a
- * single enqueue, so a row another worker holds is skipped), handed to the
- * queue in one `sendBatch` of `{ type: "notification", outboxId }` messages,
- * then marked queued. A failed batch marks its rows failed with backoff.
- */
-export async function flushPendingNotificationOutbox(options: {
-    db: Database;
-    queue: NotificationBatchQueue | undefined;
-    limit?: number;
-}): Promise<{ scanned: number; enqueued: number; failed: number; skipped: number; staleQueued: number }> {
-    const limit = Math.max(1, Math.min(options.limit ?? 10, MAX_FLUSH_LIMIT));
-    if (!options.queue) {
-        return { scanned: 0, enqueued: 0, failed: 0, skipped: 0, staleQueued: 0 };
-    }
-
-    const dueRows = await options.db
-        .select({
-            id: notificationOutbox.id,
-            status: notificationOutbox.status,
-        })
+/** Due rows (pending/failed past their time, expired leases), oldest first: the ids a drain sends next. */
+export async function listDueNotificationOutbox(db: Database, limit: number): Promise<string[]> {
+    const rows = await db
+        .select({ id: notificationOutbox.id })
         .from(notificationOutbox)
-        .where(enqueueClaimableCondition())
+        .where(claimableCondition())
         .orderBy(asc(notificationOutbox.nextAttemptAt), asc(notificationOutbox.createdAt))
-        .limit(limit)
+        .limit(Math.max(1, Math.min(limit, MAX_FLUSH_LIMIT)))
         .all();
-
-    let enqueued = 0;
-    let failed = 0;
-    let skipped = 0;
-    const staleQueued = dueRows.filter((row) => row.status === "queued").length;
-
-    for (let start = 0; start < dueRows.length; start += FLUSH_BATCH_SIZE) {
-        const ids = dueRows.slice(start, start + FLUSH_BATCH_SIZE).map((row) => row.id);
-        const claimId = createNotificationOutboxClaimId();
-        const claimed = await options.db
-            .update(notificationOutbox)
-            .set({
-                status: "enqueueing",
-                claimId,
-                claimExpiresAt: sql`unixepoch() + ${ENQUEUE_LEASE_SECONDS}`,
-                attempts: sql`${notificationOutbox.attempts} + 1`,
-                updatedAt: sql`unixepoch()`,
-            })
-            .where(and(inArray(notificationOutbox.id, ids), enqueueClaimableCondition()))
-            .returning({ id: notificationOutbox.id, attempts: notificationOutbox.attempts });
-        skipped += ids.length - claimed.length;
-        if (claimed.length === 0) continue;
-
-        try {
-            await options.queue.sendBatch(claimed.map((row) => ({
-                body: { type: "notification" as const, outboxId: row.id },
-            })));
-        } catch (error) {
-            failed += claimed.length;
-            for (const row of claimed) {
-                await markNotificationOutboxFailed(
-                    options.db,
-                    row.id,
-                    claimId,
-                    error,
-                    getRetryDelaySeconds(row.attempts),
-                    row.attempts,
-                ).catch((markError: unknown) => {
-                    console.error("[notifications-outbox] Failed to mark queue send failure:", normalizeError(markError));
-                });
-            }
-            continue;
-        }
-
-        enqueued += claimed.length;
-        try {
-            await options.db
-                .update(notificationOutbox)
-                .set({
-                    status: "queued",
-                    claimId: null,
-                    claimExpiresAt: null,
-                    lastError: null,
-                    queuedAt: sql`unixepoch()`,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(and(
-                    inArray(notificationOutbox.id, claimed.map((row) => row.id)),
-                    eq(notificationOutbox.claimId, claimId),
-                ));
-        } catch (error) {
-            // The messages are already in Cloudflare Queues: leave the rows
-            // claimed; the consumer processes them by id, and a later flush
-            // reclaims an expired lease if delivery never happens.
-            console.error("[notifications-outbox] Failed to mark notifications queued:", normalizeError(error));
-        }
-    }
-
-    return { scanned: dueRows.length, enqueued, failed, skipped, staleQueued };
+    return rows.map((row) => row.id);
 }
 
-/** The consumer's lease on one row; returns what the sender needs to resolve recipients. */
+/** A drain's lease on one row; returns what the sender needs to resolve recipients. */
 export async function claimNotificationOutboxForProcessing(
     db: Database,
     outboxId: string,
@@ -418,22 +244,7 @@ export async function claimNotificationOutboxForProcessing(
             lastError: null,
             updatedAt: sql`unixepoch()`,
         })
-        .where(
-            and(
-                eq(notificationOutbox.id, outboxId),
-                or(
-                    and(
-                        inArray(notificationOutbox.status, ["pending", "failed"]),
-                        lte(notificationOutbox.nextAttemptAt, sql`unixepoch()`),
-                    ),
-                    eq(notificationOutbox.status, "queued"),
-                    and(
-                        inArray(notificationOutbox.status, ["enqueueing", "processing"]),
-                        lte(notificationOutbox.claimExpiresAt, sql`unixepoch()`),
-                    ),
-                ),
-            ),
-        )
+        .where(and(eq(notificationOutbox.id, outboxId), claimableCondition()))
         .returning({
             id: notificationOutbox.id,
             attempts: notificationOutbox.attempts,
@@ -584,83 +395,18 @@ export async function recordNotificationOutbox(
     }
 }
 
-/**
- * A row the enqueue may claim: due pending/failed, an expired lease, or a
- * queued row whose message never arrived. One guard for the single enqueue
- * and the batched flush.
- */
-function enqueueClaimableCondition() {
+/** A row a drain may claim: due pending/failed, or an expired lease. */
+function claimableCondition() {
     return or(
         and(
             inArray(notificationOutbox.status, ["pending", "failed"]),
             lte(notificationOutbox.nextAttemptAt, sql`unixepoch()`),
         ),
         and(
-            inArray(notificationOutbox.status, ["enqueueing", "processing"]),
+            eq(notificationOutbox.status, "processing"),
             lte(notificationOutbox.claimExpiresAt, sql`unixepoch()`),
         ),
-        and(
-            eq(notificationOutbox.status, "queued"),
-            lte(notificationOutbox.queuedAt, sql`unixepoch() - ${STALE_QUEUED_REPLAY_SECONDS}`),
-        ),
     );
-}
-
-async function claimNotificationOutboxForEnqueue(
-    db: Database,
-    outboxId: string,
-): Promise<
-    | { claimed: true; row: { id: string; claimId: string; attempts: number } }
-    | { claimed: false; reason: "already_queued" | "already_sent" | "busy" | "missing" }
-> {
-    const claimId = createNotificationOutboxClaimId();
-    const rows = await db
-        .update(notificationOutbox)
-        .set({
-            status: "enqueueing",
-            claimId,
-            claimExpiresAt: sql`unixepoch() + ${ENQUEUE_LEASE_SECONDS}`,
-            attempts: sql`${notificationOutbox.attempts} + 1`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(eq(notificationOutbox.id, outboxId), enqueueClaimableCondition()))
-        .returning({
-            id: notificationOutbox.id,
-            claimId: notificationOutbox.claimId,
-            attempts: notificationOutbox.attempts,
-        });
-
-    const row = rows[0];
-    if (row?.claimId) {
-        return { claimed: true, row: { id: row.id, claimId: row.claimId, attempts: row.attempts } };
-    }
-
-    const existing = await selectNotificationOutboxById(db, outboxId);
-    if (!existing) return { claimed: false, reason: "missing" };
-    if (existing.status === "sent") return { claimed: false, reason: "already_sent" };
-    if (existing.status === "queued") return { claimed: false, reason: "already_queued" };
-    return { claimed: false, reason: "busy" };
-}
-
-async function markNotificationOutboxQueued(
-    db: Database,
-    outboxId: string,
-    claimId: string,
-): Promise<void> {
-    await db
-        .update(notificationOutbox)
-        .set({
-            status: "queued",
-            claimId: null,
-            claimExpiresAt: null,
-            lastError: null,
-            queuedAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(notificationOutbox.id, outboxId),
-            eq(notificationOutbox.claimId, claimId),
-        ));
 }
 
 export async function markNotificationOutboxFailed(

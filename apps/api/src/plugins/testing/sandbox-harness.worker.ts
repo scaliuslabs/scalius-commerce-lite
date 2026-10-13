@@ -53,7 +53,6 @@ function harnessEnv(bindings: HarnessBindings): Env {
     ...(bindings as unknown as Env),
     DB: remoteD1(bindings.DB_PROXY),
     RL_STANDARD: { limit: async () => ({ success: true }) },
-    JOBS_QUEUE: { send: async () => undefined, sendBatch: async () => undefined },
     PUBLIC_API_BASE_URL: "https://api.shop.test",
     STOREFRONT_URL: "https://shop.test",
     BETTER_AUTH_URL: "https://admin.shop.test",

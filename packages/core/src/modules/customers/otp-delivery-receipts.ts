@@ -232,37 +232,6 @@ export async function markAuthOtpDeliveryReceiptSkipped(
         ));
 }
 
-export async function markAuthOtpDeliveryReceiptSkippedByDeliveryKey(
-    db: Database,
-    target: AuthOtpDeliveryTarget,
-    reason: string,
-    result: AuthOtpDeliveryReceiptResult = {},
-): Promise<"skipped" | "already_terminal"> {
-    await ensureAuthOtpDeliveryReceipt(db, target);
-
-    const rows = await db
-        .update(authOtpDeliveryReceipts)
-        .set({
-            status: "skipped",
-            provider: result.provider ?? target.provider,
-            providerMessageId: result.providerMessageId ?? null,
-            providerStatus: normalizeRawResponse(result.providerStatus ?? reason),
-            rawResponse: normalizeRawResponse(result.rawResponse),
-            claimId: null,
-            claimExpiresAt: null,
-            lastError: normalizeError(reason),
-            skippedAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(authOtpDeliveryReceipts.deliveryKey, target.deliveryKey),
-            inArray(authOtpDeliveryReceipts.status, ["pending", "processing", "failed"]),
-        ))
-        .returning({ id: authOtpDeliveryReceipts.id });
-
-    return rows[0]?.id ? "skipped" : "already_terminal";
-}
-
 async function ensureAuthOtpDeliveryReceipt(
     db: Database,
     target: AuthOtpDeliveryTarget,
@@ -356,9 +325,14 @@ function normalizeRawResponse(value: string | null | undefined): string | null {
     return String(value).slice(0, MAX_RAW_RESPONSE_LENGTH);
 }
 
+/**
+ * Backoff after a failed attempt: 2 s, 6 s, 18 s, then a minute. A code lives
+ * five minutes and the request that issued it retries inline, so only the
+ * first waits matter; a buyer who still has no code asks for a new one.
+ */
 export function getAuthOtpDeliveryRetryDelaySeconds(attempts: number): number {
     const normalizedAttempts = Math.max(1, Math.min(attempts, 8));
-    return Math.min(60 * 60, 30 * 2 ** (normalizedAttempts - 1));
+    return Math.min(60, 2 * 3 ** (normalizedAttempts - 1));
 }
 
 function getBusyRetryAfterSeconds(

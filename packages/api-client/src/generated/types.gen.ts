@@ -2656,7 +2656,7 @@ export type WebhookDelivery = {
     topic: string;
     resourceType: string | null;
     resourceId: string | null;
-    status: 'pending' | 'enqueueing' | 'queued' | 'processing' | 'succeeded' | 'failed' | 'exhausted' | 'cancelled';
+    status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'exhausted' | 'cancelled';
     attempts: number;
     maxAttempts: number;
     responseStatus: number | null;
@@ -3222,7 +3222,7 @@ export type AppEventDelivery = {
     topic: string;
     resourceType: string;
     resourceId: string;
-    status: 'pending' | 'enqueueing' | 'queued' | 'processing' | 'succeeded' | 'failed' | 'exhausted' | 'cancelled';
+    status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'exhausted' | 'cancelled';
     attempts: number;
     maxAttempts: number;
     durationMs: number | null;
@@ -48469,11 +48469,9 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 provider: string;
                 eventType: string;
                 status: 'failed' | 'manual_reconciliation';
-                reason: 'manual_reconciliation' | 'stale' | 'dead_letter' | 'failed';
+                reason: 'manual_reconciliation' | 'dead_letter' | 'failed';
                 message: string;
                 error: string | null;
-                queueType: string | null;
-                queueMessageId: string | null;
                 processedAt: string | number;
             }>;
             paymentSessionAttempts: Array<{
@@ -48526,7 +48524,6 @@ export type GetApiV1AdminOrdersByIdNotificationsResponses = {
                 attempts: number;
                 nextAttemptAt: string | number;
                 lastError: string | null;
-                queuedAt: string | number | unknown;
                 sentAt: string | number | unknown;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -59288,7 +59285,7 @@ export type GetApiV1AdminWebhooksByIdDeliveriesData = {
         id: string;
     };
     query?: {
-        status?: 'pending' | 'enqueueing' | 'queued' | 'processing' | 'succeeded' | 'failed' | 'exhausted' | 'cancelled';
+        status?: 'pending' | 'processing' | 'succeeded' | 'failed' | 'exhausted' | 'cancelled';
         /**
          * `nextCursor` of the previous page.
          */
@@ -60365,7 +60362,7 @@ export type GetApiV1AdminAppsByIdDeliveriesData = {
         id: string;
     };
     query?: {
-        status?: 'pending' | 'enqueueing' | 'queued' | 'processing' | 'succeeded' | 'failed' | 'exhausted' | 'cancelled';
+        status?: 'pending' | 'processing' | 'succeeded' | 'failed' | 'exhausted' | 'cancelled';
         /**
          * `nextCursor` of the previous page.
          */

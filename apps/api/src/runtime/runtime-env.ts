@@ -26,7 +26,7 @@ import {
 } from "@scalius/shared/platform-config";
 
 export interface ComposeRuntimeEnvOptions {
-  /** Incoming request URL; absent for queue and cron invocations. */
+  /** Incoming request URL; absent for cron invocations. */
   requestUrl?: string;
 }
 

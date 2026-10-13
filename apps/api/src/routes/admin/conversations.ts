@@ -52,6 +52,7 @@ import { validateConversationProductRefs, projectConversationProductCards } from
 import { fromMinor } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, UnauthorizedError, ValidationError } from "../../utils/api-error";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -259,7 +260,7 @@ app.openapi(createRoute({
     visibility: body.visibility,
     clientMessageKey: body.requestKey,
     attachmentIds: body.attachmentIds,
-  }, { queue: c.env.JOBS_QUEUE });
+  }, { send: notificationSender(c) });
   return created(c, { conversation: await presentStaffConversation(db, actor.userId, await getStaffThread(db, posted.conversationId)) });
 });
 
@@ -339,7 +340,7 @@ app.openapi(createRoute({
     visibility: body.visibility,
     clientMessageKey: body.requestKey,
     attachmentIds: body.attachmentIds,
-  }, { queue: c.env.JOBS_QUEUE });
+  }, { send: notificationSender(c) });
   return created(c, { conversation: await presentStaffConversation(db, actor.userId, await getStaffThread(db, thread.id)) });
 });
 

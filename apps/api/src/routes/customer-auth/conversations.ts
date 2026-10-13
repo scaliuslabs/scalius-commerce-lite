@@ -52,6 +52,7 @@ import {
 import { NotFoundError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 import { requireCustomerSession, setPrivateNoStoreHeaders } from "./shared";
 import { prepareConversationCartLines, projectConversationCartShare } from "../../utils/conversation-cart-share";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -143,7 +144,7 @@ app.openapi(createRoute({
   const db = c.get("db");
   const body = c.req.valid("json");
   await enforceBuyerWriteLimits(c, "store-thread", { customerId });
-  const posted = await createStoreThread(db, customerId, body, { queue: c.env.JOBS_QUEUE });
+  const posted = await createStoreThread(db, customerId, body, { send: notificationSender(c) });
   const thread = await resolveBuyerThread(db, actor, posted.conversationId);
   return created(c, { conversation: await getBuyerConversationView(db, thread) });
 });
@@ -188,7 +189,7 @@ app.openapi(createRoute({
     body: body.body,
     clientMessageKey: body.clientMessageKey,
     attachmentIds: body.attachmentIds,
-  }, { queue: c.env.JOBS_QUEUE });
+  }, { send: notificationSender(c) });
   const fresh = await resolveBuyerThread(db, actor, thread.id);
   return created(c, { conversation: await getBuyerConversationView(db, fresh) });
 });
@@ -278,7 +279,7 @@ app.openapi(createRoute({
     body: body.body,
     clientMessageKey: body.clientMessageKey,
     attachmentIds: body.attachmentIds,
-  }, { queue: c.env.JOBS_QUEUE });
+  }, { send: notificationSender(c) });
   const thread = await resolveBuyerThread(db, actor, posted.conversationId);
   return created(c, { conversation: await getBuyerConversationView(db, thread) });
 });

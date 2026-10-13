@@ -20,7 +20,6 @@ describe("admin webhook routes", () => {
   let app: OpenAPIHono<{ Bindings: Env }>;
   const env = {
     CREDENTIAL_ENCRYPTION_KEY: ENCRYPTION_KEY,
-    JOBS_QUEUE: { send: vi.fn(async () => undefined), sendBatch: vi.fn(async () => undefined) },
   } as unknown as Env;
 
   beforeAll(() => {

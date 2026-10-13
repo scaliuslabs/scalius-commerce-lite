@@ -76,13 +76,6 @@ function createBucket(options: { delayMs?: number } = {}) {
   } as unknown as R2Bucket;
 }
 
-function createQueue() {
-  return {
-    send: vi.fn(async () => undefined),
-    sendBatch: vi.fn(async () => undefined),
-  } as unknown as Queue;
-}
-
 function createRateLimiter() {
   return {
     limit: vi.fn(async () => ({ success: true })),
@@ -100,7 +93,6 @@ function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     DB: createDb(),
     BUCKET: createBucket(),
-    JOBS_QUEUE: createQueue(),
     RL_STRICT: createRateLimiter(),
     RL_STANDARD: createRateLimiter(),
     // Installed secrets: the master secret plus the credential key.
@@ -150,7 +142,6 @@ describe("API readiness route", () => {
     expect(json.checks).toMatchObject({
       d1: { status: "ok" },
       r2: { status: "ok" },
-      jobs_queue: { status: "ok" },
       rl_strict: { status: "ok" },
       rl_standard: { status: "ok" },
       runtime_config: { status: "ok", detail: "required secrets installed" },
@@ -273,7 +264,6 @@ describe("API readiness route", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const env = createEnv({
       DB: createDb({ fail: true }),
-      JOBS_QUEUE: undefined as unknown as Queue,
       RL_STRICT: undefined as unknown as RateLimit,
       SCALIUS_SECRET: "",
       CREDENTIAL_ENCRYPTION_KEY: "",
@@ -318,10 +308,8 @@ describe("API readiness route", () => {
       status: "error",
       detail: "D1 unavailable",
     });
-    expect(json.checks?.jobs_queue).toMatchObject({
-      status: "missing",
-      detail: "queue binding is not configured",
-    });
+    // A store has no queue: readiness never asks for one.
+    expect(json.checks).not.toHaveProperty("jobs_queue");
     expect(json.checks?.rl_strict).toMatchObject({
       status: "missing",
       detail: "rate limit binding is not configured",
@@ -347,7 +335,6 @@ describe("API readiness route", () => {
       cfRay: "readyz123-DAC",
       degradedChecks: [
         "d1:error",
-        "jobs_queue:missing",
         "rl_strict:missing",
         "runtime_config:missing",
         "platform_config:missing",

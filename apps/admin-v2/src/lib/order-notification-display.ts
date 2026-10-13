@@ -74,7 +74,7 @@ export function summarizeNotificationDelivery(
   if (all((status) => status === "skipped")) return "skipped";
   if (all((status) => status === "failed")) return "failed";
   if (some("accepted", "delivered") && some("failed", "skipped")) return "partial";
-  if (some("pending", "queued", "enqueueing", "processing")) return "pending";
+  if (some("pending", "processing")) return "pending";
   if (some("failed")) return "failed";
   if (some("skipped")) return "skipped";
   return outbox.status;

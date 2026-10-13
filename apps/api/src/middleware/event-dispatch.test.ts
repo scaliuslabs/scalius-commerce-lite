@@ -1,6 +1,6 @@
-// The post-write flush (COMMERCE-HOOKS H3): a mutating request that wrote an
-// evented table hands its events to the queue after the response; reads and
-// writes of other tables cost nothing.
+// The post-write drain (COMMERCE-HOOKS H3): a mutating request that wrote an
+// evented table dispatches its events after the response and sends the
+// deliveries they recorded; reads and writes of other tables cost nothing.
 import { Hono } from "hono";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,16 +14,13 @@ describe("eventDispatchMiddleware", () => {
   let sqlite: DatabaseSync;
   let db: Database;
   let app: Hono<{ Bindings: Env }>;
-  const sendBatch = vi.fn(async () => undefined);
   const publish = vi.fn(async () => ({ sockets: 0 }));
   const env = {
-    JOBS_QUEUE: { send: vi.fn(), sendBatch },
     REALTIME_HUB: { idFromName: () => ({}), get: () => ({ publish }) },
   } as unknown as Env;
 
   beforeEach(() => {
     ({ sqlite, db } = createSqliteD1Database());
-    sendBatch.mockClear();
     publish.mockClear();
     sqlite.exec(`INSERT INTO webhook_subscriptions (id, url, topics, api_version, secret_ciphertext, secret_hint)
       VALUES ('whs_1', 'https://hooks.example.com/x', '["*"]', '2026-10', 'enc:x:y', 'abcd')`);
@@ -74,10 +71,11 @@ describe("eventDispatchMiddleware", () => {
     return { status: response.status, waited: pending.length };
   }
 
-  it("flushes after a request that wrote an evented table, and tells the hub in one RPC", async () => {
+  it("drains after a request that wrote an evented table, and tells the hub in one RPC", async () => {
     expect(await request("POST", "/orders")).toEqual({ status: 200, waited: 1 });
-    expect(sendBatch).toHaveBeenCalledWith([{ body: { type: "events.dispatch", eventId: expect.stringMatching(/^evt_/) } }]);
-    expect(sqlite.prepare("SELECT status FROM event_outbox").get()).toEqual({ status: "queued" });
+    expect(sqlite.prepare("SELECT status FROM event_outbox").get()).toEqual({ status: "dispatched" });
+    // The subscription's delivery was recorded and attempted (its test secret cannot sign: retried later).
+    expect(sqlite.prepare("SELECT status, attempts FROM webhook_event_deliveries").get()).toEqual({ status: "failed", attempts: 1 });
     expect(publish).toHaveBeenCalledTimes(1);
     expect(publish).toHaveBeenCalledWith([{ topic: "orders", kind: "order.created", id: "ord_mw", status: expect.any(String) }]);
   });
@@ -85,13 +83,13 @@ describe("eventDispatchMiddleware", () => {
   it("sends a table-level notice for a realtime table without events, with no read", async () => {
     expect(await request("POST", "/inbox")).toEqual({ status: 200, waited: 1 });
     expect(publish).toHaveBeenCalledWith([{ topic: "inbox", kind: "changed" }]);
-    expect(sendBatch).not.toHaveBeenCalled();
+    expect(sqlite.prepare("SELECT count(*) AS n FROM event_outbox").get()).toEqual({ n: 0 });
   });
 
   it("refreshes staff context after cart changes without creating messages or customer notifications", async () => {
     expect(await request("PUT", "/cart-share")).toEqual({ status: 200, waited: 1 });
     expect(publish).toHaveBeenCalledExactlyOnceWith([{ topic: "inbox", kind: "changed" }]);
-    expect(sendBatch).not.toHaveBeenCalled();
+    expect(sqlite.prepare("SELECT count(*) AS n FROM event_outbox").get()).toEqual({ n: 0 });
     expect(sqlite.prepare("SELECT count(*) AS n FROM conversation_messages").get()).toEqual({ n: 0 });
   });
 
@@ -99,7 +97,7 @@ describe("eventDispatchMiddleware", () => {
     expect(await request("POST", "/settings")).toEqual({ status: 200, waited: 0 });
     expect(await request("POST", "/read")).toEqual({ status: 200, waited: 0 });
     expect(await request("GET", "/orders")).toEqual({ status: 200, waited: 0 });
-    expect(sendBatch).not.toHaveBeenCalled();
+    expect(sqlite.prepare("SELECT count(*) AS n FROM event_outbox").get()).toEqual({ n: 0 });
     expect(publish).not.toHaveBeenCalled();
   });
 });

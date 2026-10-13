@@ -35,7 +35,7 @@ import {
     acceptedPaymentSessionProcessing,
     paymentSessionProcessingResponse,
 } from "../payment/payment-session-response";
-import { enqueueOrderSupportRequestNotificationForOrder } from "../../utils/order-notification-queue";
+import { sendOrderSupportRequestNotification } from "../../utils/order-notifications";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { setPrivateNoStoreHeaders, requireCustomerSession } from "./shared";
 import {
@@ -45,6 +45,7 @@ import {
   presentOrderGiftCardTenders,
   withOrderLineExtras,
 } from "../shared/order-line-extras";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -422,9 +423,9 @@ app.openapi(createCustomerOrderSupportRequestRoute, async (c) => {
   const body = c.req.valid("json");
   await enforceBuyerWriteLimits(c, "support-request", { customerId: session.customerId });
   const result = await createCustomerOrderSupportRequest(db, session.customerId, orderId, body);
-  await enqueueOrderSupportRequestNotificationForOrder({
+  await sendOrderSupportRequestNotification({
     db,
-    queue: c.env.JOBS_QUEUE,
+    send: notificationSender(c),
     orderId,
     requestId: result.request.id,
     notificationType: "support_request_submitted",

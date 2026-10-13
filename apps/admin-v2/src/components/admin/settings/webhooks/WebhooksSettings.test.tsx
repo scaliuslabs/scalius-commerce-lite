@@ -425,7 +425,7 @@ describe("Settings › Webhooks", () => {
           }),
     );
     sdk.postApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetry.mockImplementation(() =>
-      ok({ delivery: delivery({ id: "whd_2", status: "queued" }) }));
+      ok({ delivery: delivery({ id: "whd_2", status: "pending" }) }));
     await render(MANAGER, true);
     await vi.waitFor(() => expect(text()).toContain("https://hooks.example.com/scalius"));
 

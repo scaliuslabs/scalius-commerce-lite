@@ -55,8 +55,8 @@ vi.mock("@scalius/core/modules/plugins", async (importOriginal) => ({
   listActiveCheckoutRegistrations: async () => [],
 }));
 
-vi.mock("../utils/order-notification-queue", () => ({
-  enqueueOrderSupportRequestNotificationForOrder: mocks.enqueueSupport,
+vi.mock("../utils/order-notifications", () => ({
+  sendOrderSupportRequestNotification: mocks.enqueueSupport,
 }));
 
 import { storefrontAgentContextRoutes } from "./storefront-agent-contexts";
@@ -118,7 +118,6 @@ async function rawRequest(path: string, init?: RequestInit): Promise<Response> {
   return app().request(`https://api.example.test${path}`, init, {
     PUBLIC_API_BASE_URL: "https://api.example.test",
     STOREFRONT_URL: "https://shop.example.test",
-    JOBS_QUEUE: { send: vi.fn() },
   } as unknown as Env);
 }
 

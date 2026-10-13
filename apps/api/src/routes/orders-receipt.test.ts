@@ -11,7 +11,7 @@ const orderSupportMocks = vi.hoisted(() => ({
 }));
 
 const notificationMocks = vi.hoisted(() => ({
-  enqueueOrderSupportRequestNotificationForOrder: vi.fn(),
+  sendOrderSupportRequestNotification: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
@@ -34,7 +34,7 @@ vi.mock("@scalius/core/modules/conversations", async (importOriginal) => ({
 
 const allowLimiter = { limit: vi.fn(async () => ({ success: true })) };
 
-vi.mock("../utils/order-notification-queue", () => notificationMocks);
+vi.mock("../utils/order-notifications", () => notificationMocks);
 
 // Review extras are covered on the real schema by the reviews domain tests.
 vi.mock("@scalius/core/modules/reviews", async (importOriginal) => ({
@@ -259,7 +259,7 @@ describe("order receipt route", () => {
       supportRequestActions,
       supportRequestIntro: "Send a request and the store will review it.",
     });
-    notificationMocks.enqueueOrderSupportRequestNotificationForOrder.mockResolvedValue(undefined);
+    notificationMocks.sendOrderSupportRequestNotification.mockResolvedValue(undefined);
     vi.clearAllMocks();
   });
 
@@ -511,7 +511,7 @@ describe("order receipt route", () => {
           reason: "Please cancel before shipment",
         }),
       },
-      { CACHE: kv, JOBS_QUEUE: { send: vi.fn() }, RL_STRICT: allowLimiter, RL_STANDARD: allowLimiter } as never,
+      { CACHE: kv, RL_STRICT: allowLimiter, RL_STANDARD: allowLimiter } as never,
     );
 
     expect(response.status).toBe(404);
@@ -519,12 +519,11 @@ describe("order receipt route", () => {
     expect(kv.get).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
     expect(orderSupportMocks.createReceiptOrderSupportRequest).not.toHaveBeenCalled();
-    expect(notificationMocks.enqueueOrderSupportRequestNotificationForOrder).not.toHaveBeenCalled();
+    expect(notificationMocks.sendOrderSupportRequestNotification).not.toHaveBeenCalled();
   });
 
   it("creates receipt support requests with safe notification metadata", async () => {
     const { app, db, kv } = createTestApp({ tokenOrderId: "order_1" });
-    const queue = { send: vi.fn() };
 
     const response = await app.request(
       "/api/v1/orders/receipt/order_1/support-requests",
@@ -538,7 +537,7 @@ describe("order receipt route", () => {
           message: "Ordered by mistake.",
         }),
       },
-      { CACHE: kv, JOBS_QUEUE: queue, RL_STRICT: allowLimiter, RL_STANDARD: allowLimiter } as never,
+      { CACHE: kv, RL_STRICT: allowLimiter, RL_STANDARD: allowLimiter } as never,
     );
     const body = await response.json() as {
       data?: {
@@ -564,10 +563,10 @@ describe("order receipt route", () => {
         message: "Ordered by mistake.",
       },
     );
-    expect(notificationMocks.enqueueOrderSupportRequestNotificationForOrder).toHaveBeenCalledWith(
+    expect(notificationMocks.sendOrderSupportRequestNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         db,
-        queue,
+        send: expect.any(Function),
         orderId: "order_1",
         requestId: "osr_1",
         notificationType: "support_request_submitted",
@@ -581,7 +580,7 @@ describe("order receipt route", () => {
         },
       }),
     );
-    const notificationPayload = notificationMocks.enqueueOrderSupportRequestNotificationForOrder.mock.calls[0]?.[0]?.data;
+    const notificationPayload = notificationMocks.sendOrderSupportRequestNotification.mock.calls[0]?.[0]?.data;
     expect(notificationPayload).not.toHaveProperty("reason");
     expect(notificationPayload).not.toHaveProperty("message");
     expect(notificationPayload).not.toHaveProperty("token");

@@ -4,7 +4,7 @@
 // Double opt-in: the consent row keeps only SHA-256 of the confirmation token
 // and the outbox row only a random nonce; the token is
 // HMAC(opt-in key, customerId:nonce), so it exists only in the e-mail the
-// queue consumer builds. A newer request replaces the row's hash, which voids
+// notification sender builds. A newer request replaces the row's hash, which voids
 // older links; confirming clears it (single use); it expires after 7 days.
 //
 // Unsubscribe: `u1.<customer id, base64url>.<channel>.<HMAC>`, stateless and

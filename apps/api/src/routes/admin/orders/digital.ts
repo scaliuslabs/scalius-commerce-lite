@@ -4,10 +4,11 @@
 // packages/core/src/auth/rbac/route-permissions/digital.ts.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { countOrderDigitalEntitlements } from "@scalius/core/modules/digital";
-import { recordAndEnqueueNotification } from "@scalius/core/modules/notifications";
+import { recordAndSendNotification } from "@scalius/core/modules/notifications";
 import { AppError } from "@scalius/core/errors";
 import { ok } from "../../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
+import { notificationSender } from "../../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -40,9 +41,9 @@ app.openapi(createRoute({
     if (await countOrderDigitalEntitlements(db, orderId) === 0) {
         throw new AppError(409, "NOTHING_TO_RESEND", "This order has no downloads or keys to send.");
     }
-    const result = await recordAndEnqueueNotification({
+    const result = await recordAndSendNotification({
         db,
-        queue: c.env.JOBS_QUEUE,
+        send: notificationSender(c),
         notification: {
             subjectType: "order",
             subjectId: orderId,

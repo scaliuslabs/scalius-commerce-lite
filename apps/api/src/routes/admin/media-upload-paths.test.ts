@@ -8,9 +8,9 @@ import { describe, expect, it } from "vitest";
  * content blocks, homepage banners, category and collection images) is a
  * `media` row, and a media row is committed only by an upload completion.
  * Those forms pick or upload through the shared dashboard media manager
- * (`mediaClient.ts`), which goes through the two routes below. So the delayed
- * `media.render_variants` job covers every upload path exactly when each
- * route that commits an upload also enqueues it.
+ * (`mediaClient.ts`), which goes through the two routes below. The browser
+ * pipeline uploads renditions with the original, and the scheduled backfill
+ * renders any committed row that still lacks them.
  */
 const repoRoot = fileURLToPath(new URL("../../../../../", import.meta.url));
 
@@ -44,25 +44,13 @@ describe("media upload paths", () => {
     ]);
   });
 
-  it("enqueues the delayed render job on every route that completes an upload", () => {
+  it("completes uploads only on these routes; the scheduled backfill renders what lacks renditions", () => {
     expect(callers(serverFiles, /\b(?:completeMediaUpload|importMediaFromUrl)\(/)).toEqual([
       "apps/api/src/routes/admin/media-url-import.ts",
       "apps/api/src/routes/admin/media.ts",
       "apps/api/src/routes/admin/store-transfer.ts",
       "packages/core/src/modules/media/media.service.ts",
     ]);
-    // Store import downloads product images through the same import and queues their renditions.
-    const importRoute = readFileSync(join(repoRoot, "apps/api/src/routes/admin/store-transfer.ts"), "utf8");
-    const importAt = importRoute.indexOf("await importMediaFromUrl(");
-    expect(importAt).toBeGreaterThan(-1);
-    expect(importRoute.slice(importAt, importRoute.indexOf("\n});", importAt))).toContain("await enqueueMediaVariantsJob(");
-    const routes = readFileSync(join(repoRoot, "apps/api/src/routes/admin/media.ts"), "utf8");
-    for (const commit of ["await importMediaFromUrl(", "await completeMediaUpload("]) {
-      const at = routes.indexOf(commit);
-      expect(at).toBeGreaterThan(-1);
-      const handlerEnd = routes.indexOf("\n});", at);
-      expect(routes.slice(at, handlerEnd)).toContain("await enqueueMediaVariantsJob(");
-    }
   });
 
   it("uploads dashboard images only through the media manager client", () => {

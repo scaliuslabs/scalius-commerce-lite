@@ -43,7 +43,7 @@ import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { commitTaxDocument } from "@scalius/core/modules/tax";
 import { runOrderRiskChecks } from "../../plugins/order-risk";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
-import { enqueueOrderAutoFulfil } from "../../utils/auto-fulfil-queue";
+import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 import { AppError, ValidationError, RateLimitError } from "../../utils/api-error";
 import {
   CUSTOMER_SESSION_ENDED_HEADER,
@@ -62,6 +62,7 @@ import {
     lazySessionCustomerId,
     persistedStorefrontVariantIdSchema,
 } from "./shared";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -716,12 +717,12 @@ app.openapi(createOrderRoute, async (c) => {
     diagnostics?.mark("commit");
 
     const postCommit = Promise.all([
-      runStorefrontOrderPostCommitSideEffects(db, c.env, result.commitPayload),
+      runStorefrontOrderPostCommitSideEffects(db, { ...c.env, sendNotifications: notificationSender(c) }, result.commitPayload),
       // An app tax provider's calculation becomes its committed document.
       committed.alreadyCommitted ? null : commitTaxDocument(result.taxQuote, result.orderId, requestAppProviders(c)),
       // An order fully paid at commit (e.g. covered by gift cards) is settled now.
       result.commitPayload.orderData.paymentStatus === PaymentStatus.PAID
-        ? enqueueOrderAutoFulfil(c.env.JOBS_QUEUE, result.orderId, "checkout-commit")
+        ? autoFulfilAfterResponse(c, db, result.orderId, "checkout-commit")
         : null,
       // Apps' advisory risk checks: after the commit, never on the buyer's path.
       !apps.points.has("order.risk") || committed.alreadyCommitted
@@ -747,7 +748,7 @@ app.openapi(createOrderRoute, async (c) => {
           },
           language: data.marketingConsent.language,
           channels: data.marketingConsent.channels,
-        }, { env: c.env as never, queue: c.env.JOBS_QUEUE })
+        }, { env: c.env as never, send: notificationSender(c) })
         : null,
     ]);
     if (executionCtx && typeof executionCtx.waitUntil === "function") {

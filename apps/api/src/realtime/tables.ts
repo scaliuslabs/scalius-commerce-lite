@@ -2,9 +2,10 @@ import type { RealtimeTopic } from "@scalius/shared/realtime";
 
 /**
  * Tables whose writes the dashboard hears as a table-level `changed` (no
- * ids): the write observers (middleware/event-dispatch.ts, the queue
- * consumer) report them. Tables without events (the inbox, reviews, courier
- * shipments, payment attempts) depend on this; evented tables also get
+ * ids): the write observers (middleware/event-dispatch.ts, and
+ * background/payment-events.ts for payments applied after the response)
+ * report them. Tables without events (the inbox, reviews, courier shipments,
+ * payment attempts) depend on this; evented tables also get
  * outbox notices with ids (realtime/publish.ts). Kept free of imports beyond
  * a type: the middleware runs in every route family.
  */

@@ -4,11 +4,10 @@
 // `--plugin-sandbox` and a lockfile with the sandbox on imply it, because the
 // Worker Loader is Workers Paid). Nothing selects Paid by itself, and the
 // default is Free: the committed Wrangler configs are Free-ready (no `limits`,
-// no `define`, Free queue batch sizes; `pnpm check:env` enforces it) and a
-// Paid deploy generates a config beside them that adds exactly what the plan's
-// profile (packages/shared/src/plan-limits.ts) says: `limits.cpu_ms`, the
-// consumer batch sizes and the build constant `__SCALIUS_PLAN__` the Worker
-// reads through `planLimits()`. No environment variable or secret is involved.
+// no `define`; `pnpm check:env` enforces it) and a Paid deploy generates a
+// config beside them that adds exactly what the plan's profile
+// (packages/shared/src/plan-limits.ts) says: `limits.cpu_ms` and the build
+// constant `__SCALIUS_PLAN__` the Worker reads through `planLimits()`. No environment variable or secret is involved.
 import { PLAN_LIMITS } from "../packages/shared/src/plan-limits.ts";
 
 export const PLANS = Object.freeze(["free", "paid"]);
@@ -51,8 +50,8 @@ export function resolvePlan({ args = [], env = process.env, sandbox = false } = 
 
 /**
  * `config` with the plan's profile applied. Free returns it unchanged (the
- * committed config is the Free config); Paid adds the build constant, the CPU
- * limit and the consumer batch sizes.
+ * committed config is the Free config); Paid adds the build constant and the
+ * CPU limit.
  */
 export function withPlanProfile(config, plan) {
   if (plan === "free") return config;
@@ -62,16 +61,6 @@ export function withPlanProfile(config, plan) {
     define: { ...config.define, __SCALIUS_PLAN__: JSON.stringify(plan) },
   };
   if (limits.cpuMs !== null) next.limits = { ...config.limits, cpu_ms: limits.cpuMs };
-  if (config.queues?.consumers) {
-    next.queues = {
-      ...config.queues,
-      consumers: config.queues.consumers.map((consumer) => {
-        if (consumer.queue === "jobs") return { ...consumer, max_batch_size: limits.queue.consumerBatchSize };
-        if (consumer.queue === "jobs-dlq") return { ...consumer, max_batch_size: limits.queue.dlqBatchSize };
-        return consumer;
-      }),
-    };
-  }
   return next;
 }
 
@@ -93,17 +82,6 @@ export function collectCommittedPlanViolations(configPath, config) {
   }
   if (config?.define?.__SCALIUS_PLAN__ !== undefined) {
     problems.push(`${configPath} defines __SCALIUS_PLAN__. The plan is decided at deploy time (--plan), never committed.`);
-  }
-  for (const consumer of config?.queues?.consumers ?? []) {
-    const expected = consumer.queue === "jobs"
-      ? PLAN_LIMITS.free.queue.consumerBatchSize
-      : consumer.queue === "jobs-dlq" ? PLAN_LIMITS.free.queue.dlqBatchSize : null;
-    if (expected !== null && consumer.max_batch_size !== expected) {
-      problems.push(
-        `${configPath} sets max_batch_size ${consumer.max_batch_size} for ${consumer.queue}; the Free profile says ${expected} `
-        + "(packages/shared/src/plan-limits.ts). A Paid deploy raises it from the profile.",
-      );
-    }
   }
   return problems;
 }

@@ -15,7 +15,7 @@ import {
   updateSalesChannel,
 } from "@scalius/core/modules/sales-channels";
 import { ok } from "../../../utils/api-response";
-import { enqueueCatalogProjectionRebuild } from "../../../utils/catalog-jobs";
+import { rebuildCatalogProjectionsAfterWrite } from "../../../background/catalog";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 import { presentSalesChannel, salesChannelRecordSchema, updateSalesChannelSchema } from "../../../schemas/sales-channels";
 
@@ -82,9 +82,7 @@ app.openapi(createRoute({
   const { channel, locationsChanged } = await updateSalesChannel(c.get("db"), c.req.valid("param").id, c.req.valid("json"));
   if (locationsChanged) {
     // The online store's stored availability bands read the channel's locations.
-    await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch((error: unknown) => {
-      console.warn("[sales-channels] projection rebuild enqueue failed", error instanceof Error ? error.name : "unknown");
-    });
+    await rebuildCatalogProjectionsAfterWrite(c, c.get("db"), "sales-channels");
   }
   return ok(c, { channel: presentSalesChannel(channel) });
 });

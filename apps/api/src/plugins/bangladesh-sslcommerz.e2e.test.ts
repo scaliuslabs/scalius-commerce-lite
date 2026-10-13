@@ -28,13 +28,11 @@ import { checkoutDocument, currencyDocument, paymentMethodsDocument, sslcommerzD
 import { errorResponseFromError } from "../utils/api-response";
 import { paymentRoutes } from "../routes/payment/payment-routes";
 import { paymentWebhookRoutes } from "../routes/webhooks/payments";
-import type { PaymentEventQueueMessage } from "../routes/payment/payment-events";
-import { handleQueueBatch } from "../queue-consumer";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { activatePluginWithHooks } from "./lifecycle";
 import { handOffRetiredProviders } from "./provider-handoff";
 import { appPaymentProvidersLoader } from "./providers/payment";
-import { pluginTestCtx } from "./testing/fixtures";
+import { pluginTestCtx, settleBackground } from "./testing/fixtures";
 import { manifest as packManifest } from "../../../../plugins/bangladesh/src/index";
 
 const PACK = "scalius.bangladesh";
@@ -67,18 +65,15 @@ describe("the Bangladesh pack takes over a store's SSLCommerz", () => {
   let sqlite: DatabaseSync;
   let db: Database;
   let env: Env;
-  let sent: PaymentEventQueueMessage[];
   let gateway: ReturnType<typeof fakeSslcommerz>;
 
   beforeEach(async () => {
     let binding: D1Database;
     ({ sqlite, binding } = createSqliteD1Database());
-    sent = [];
     env = {
       DB: binding,
       RL_STANDARD: LIMITER,
       RL_STRICT: LIMITER,
-      JOBS_QUEUE: { send: vi.fn(async (message: PaymentEventQueueMessage) => { sent.push(message); }), sendBatch: async () => undefined },
       JWT_SECRET: "sslcommerz-e2e-secret-0123456789abcdef",
       SCALIUS_SECRET: "sslcommerz-e2e-master-secret-0123456789abcdefghijk",
       CREDENTIAL_ENCRYPTION_KEY: KEY,
@@ -148,11 +143,6 @@ describe("the Bangladesh pack takes over a store's SSLCommerz", () => {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(body).toString(),
   }, env, pluginTestCtx());
-  async function deliver() {
-    const messages = sent.splice(0).map((body, index) => ({ id: `m${index}`, timestamp: new Date(), attempts: 1, body, ack: vi.fn(), retry: vi.fn() }));
-    await handleQueueBatch({ queue: "jobs", messages, ackAll: vi.fn(), retryAll: vi.fn() } as never, env);
-    return messages;
-  }
   const row = (sql: string, ...params: string[]) => sqlite.prepare(sql).get(...params) as Record<string, unknown>;
   const validated = (orderId: string, valId: string, amount = "160.00") => gateway.validations.set(valId, {
     status: "VALID", tran_id: `${orderId}_full_ABC12345`, val_id: valId, amount, currency_type: "BDT",
@@ -196,17 +186,19 @@ describe("the Bangladesh pack takes over a store's SSLCommerz", () => {
     expect(gateway.calls.at(-1)?.pathname).toBe("/validator/api/validationserverAPI.php");
     const repeat = await form("/webhooks/sslcommerz", { val_id: "val_fly" });
     expect(await repeat.json()).toMatchObject({ duplicate: true });
-    const delivered = await deliver();
-    expect(delivered.every((message) => message.retry.mock.calls.length === 0)).toBe(true);
+    // Applied after the IPN's response, once.
+    await settleBackground();
+    expect(row("SELECT count(*) AS n, min(status) AS status FROM webhook_events WHERE order_id = 'ORDFLY'")).toEqual({ n: 1, status: "processed" });
     expect(row("SELECT payment_status, paid_amount_minor FROM orders WHERE id = 'ORDFLY'")).toEqual({ payment_status: "paid", paid_amount_minor: 16_000 });
     expect(row("SELECT count(*) AS n FROM order_payments WHERE order_id = 'ORDFLY' AND status = 'succeeded'")).toEqual({ n: 1 });
 
     // A tampered IPN (the validation answers for another payment) changes nothing.
-    sent.length = 0;
+    const eventsBefore = row("SELECT count(*) AS n FROM webhook_events");
     gateway.validations.set("val_fake", { ...gateway.validations.get("val_fly")!, val_id: "val_other" });
     const tampered = await form("/webhooks/sslcommerz", { val_id: "val_fake" });
     expect(tampered.status).toBe(200);
-    expect(sent).toEqual([]);
+    await settleBackground();
+    expect(row("SELECT count(*) AS n FROM webhook_events")).toEqual(eventsBefore);
 
     // The cancel URL sent with the old session releases its attempt.
     const cancelled = await form("/payment/sslcommerz/cancel", { tran_id: "ORDQUIT_full_ABC12345", status: "CANCELLED" });

@@ -78,7 +78,7 @@ import {
 import { STORE_NAME_MAX_LENGTH, applyStoreSetup } from "@scalius/core/modules/onboarding";
 import { TIME_ZONE_MAX_LENGTH, isValidTimeZone } from "@scalius/shared/commerce-time";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "@scalius/shared/store-defaults";
-import { enqueueCatalogProjectionRebuild } from "../../utils/catalog-jobs";
+import { rebuildCatalogProjectionsAfterWrite } from "../../background/catalog";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const ADMIN_USER_ENRICHMENT_CHUNK_SIZE = 90;
 const ADMIN_USER_PAGE_LIMIT = 2;
@@ -2284,7 +2284,7 @@ async function applySetupStore(
     try {
         const result = await applyStoreSetup(c.get("db"), store, settingsMirror(c.env));
         if (result.priceIncrementChanged) {
-            await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch(() => undefined);
+            await rebuildCatalogProjectionsAfterWrite(c, c.get("db"), "setup");
         }
         return "applied";
     } catch (error: unknown) {

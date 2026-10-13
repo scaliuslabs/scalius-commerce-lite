@@ -16,8 +16,6 @@ import { orderRoutes } from "../routes/storefront-orders";
 import { checkoutRoutes } from "../routes/checkout";
 import { paymentRoutes } from "../routes/payment/payment-routes";
 import { paymentWebhookRoutes } from "../routes/webhooks/payments";
-import type { PaymentEventQueueMessage } from "../routes/payment/payment-events";
-import { handleQueueBatch } from "../queue-consumer";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { PLUGIN_TEST_CREDENTIAL_KEY } from "./testing/fixtures";
 import { manifest as bkashManifest } from "../../../../plugins/bkash/src/index";
@@ -75,17 +73,14 @@ describe("bKash app through checkout, session, return and the queue", () => {
   let binding: D1Database;
   let db: Database;
   let env: Env;
-  let sent: PaymentEventQueueMessage[];
   let bank: ReturnType<typeof fakeBkash>;
 
   beforeEach(async () => {
     ({ sqlite, binding } = createSqliteD1Database());
-    sent = [];
     env = {
       DB: binding,
       RL_STANDARD: LIMITER,
       RL_STRICT: LIMITER,
-      JOBS_QUEUE: { send: vi.fn(async (message: PaymentEventQueueMessage) => { sent.push(message); }), sendBatch: async () => undefined },
       JWT_SECRET: "bkash-e2e-secret-0123456789abcdef",
       SCALIUS_SECRET: "bkash-e2e-master-secret-0123456789abcdefghijklmnop",
       CREDENTIAL_ENCRYPTION_KEY: PLUGIN_TEST_CREDENTIAL_KEY,
@@ -157,12 +152,6 @@ describe("bKash app through checkout, session, return and the queue", () => {
     return response;
   }
 
-  async function deliver() {
-    const messages = sent.splice(0).map((body, index) => ({ id: `m${index}`, timestamp: new Date(), attempts: 1, body, ack: vi.fn(), retry: vi.fn() }));
-    await handleQueueBatch({ queue: "jobs", messages, ackAll: vi.fn(), retryAll: vi.fn() } as never, env);
-    return messages;
-  }
-
   it("offers the app's method, takes the order, pays on bKash and credits the order once", async () => {
     const config = await (await request("GET", "/checkout/config")).json() as { data: { gateways: Array<Record<string, unknown>> } };
     expect(config.data.gateways).toEqual(expect.arrayContaining([expect.objectContaining({ id: METHOD, name: "bKash", flow: "hosted" })]));
@@ -205,8 +194,8 @@ describe("bKash app through checkout, session, return and the queue", () => {
     // A repeated return (the buyer reloads) applies nothing new.
     await request("GET", `${back.pathname.replace("/api/v1", "")}${back.search}`);
 
-    const delivered = await deliver();
-    expect(delivered.every((message) => message.retry.mock.calls.length === 0)).toBe(true);
+    // Applied after the return's response, once: one processed payment event.
+    expect(sqlite.prepare("SELECT status FROM webhook_events WHERE order_id = ?").all(orderId)).toEqual([{ status: "processed" }]);
     expect(sqlite.prepare("SELECT payment_status, paid_amount_minor FROM orders WHERE id = ?").get(orderId))
       .toEqual({ payment_status: PaymentStatus.PAID, paid_amount_minor: 106_000 });
     expect(sqlite.prepare("SELECT count(*) AS n FROM order_payments WHERE order_id = ? AND status = 'succeeded'").get(orderId)).toEqual({ n: 1 });

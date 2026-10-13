@@ -1,5 +1,5 @@
 // Notification vocabulary (Wave A §10). Pure: the settings document, the
-// dashboard channel matrix, the outbox and the queue consumer share it.
+// dashboard channel matrix, the outbox and the notification sender share it.
 //
 // Order types are about one order and render through the order templates.
 // Conversation types are about one thread: `conversation_reply` tells the

@@ -7,7 +7,7 @@
  *   node scripts/deploy.mjs --only api       # typecheck + build dashboard SPA and API, migrate D1, deploy API
  *   node scripts/deploy.mjs --only storefront # typecheck + build/deploy storefront
  *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
- *   node scripts/deploy.mjs --plan paid          # Workers Paid: the plan profile's CPU limit, queue batch sizes
+ *   node scripts/deploy.mjs --plan paid          # Workers Paid: the plan profile's CPU limit
  *     and limits (packages/shared/src/plan-limits.ts); also SCALIUS_PLAN=paid. The default is
  *     Free: the committed Wrangler configs deploy on Workers Free unchanged.
  *   node scripts/deploy.mjs --only api --plugin-sandbox # also bind the Worker Loader
@@ -1205,7 +1205,7 @@ export async function main() {
     process.exit(1);
   }
   if (plan !== "free" && customWranglerConfigPath) {
-    console.error("✗ --plan paid applies to the committed API config; set limits.cpu_ms and the queue batch sizes in the custom --wrangler-config instead.");
+    console.error("✗ --plan paid applies to the committed API config; set limits.cpu_ms in the custom --wrangler-config instead.");
     process.exit(1);
   }
   const apiDeployConfigPath = customWranglerConfigPath

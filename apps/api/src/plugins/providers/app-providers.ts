@@ -4,7 +4,7 @@
 // (`AppProviders`, @scalius/core/integrations/provider-port). Core asks only
 // when the merchant's saved choice is an app id (`<plugin id>:<provider id>`),
 // so a store on built-in providers reads no plugin table. One answer per id
-// per request (or queue message): readiness and the send that follows share
+// per request (or background run): readiness and the send that follows share
 // one installation read.
 //
 // An app answers only when it is installed, declares that provider, is
@@ -140,7 +140,7 @@ export function requestAppProviders(c: RequestLike): AppProviders {
 }
 
 /**
- * For work outside a request (queue consumers, scheduled jobs): app
+ * For work outside a request (background work, scheduled jobs): app
  * providers on a detached execution context, created without any read.
  * `encryptionKey` is the CREDENTIAL_ENCRYPTION_KEY the caller already read.
  */

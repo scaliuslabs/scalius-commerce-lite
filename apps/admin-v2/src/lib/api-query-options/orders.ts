@@ -36,7 +36,7 @@ export type OrderNotificationReceiptDto = WithTimestamps<
 >;
 export type OrderNotificationOutboxDto = WithTimestamps<
   Omit<ApiNotification, "receipts">,
-  "queuedAt" | "sentAt"
+  "sentAt"
 > & { receipts: OrderNotificationReceiptDto[] };
 
 export const getOrderItems = (orderId: string) =>

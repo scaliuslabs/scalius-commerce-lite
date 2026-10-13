@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
     listOrderReturns: vi.fn(),
     getOrderReturn: vi.fn(),
 
-    enqueueOrderNotificationsForStatus: vi.fn(),
+    sendOrderNotificationsForStatus: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
@@ -25,14 +25,14 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
     getOrderReturn: mocks.getOrderReturn,
 }));
 
-vi.mock("../../utils/order-notification-queue", () => ({
-    enqueueOrderNotificationsForStatus: mocks.enqueueOrderNotificationsForStatus,
+vi.mock("../../utils/order-notifications", () => ({
+    sendOrderNotificationsForStatus: mocks.sendOrderNotificationsForStatus,
 }));
 
 import { adminOrdersReturnRoutes } from "./orders-returns";
 
 const db = { name: "db" };
-const env = { JOBS_QUEUE: { send: vi.fn() } } as unknown as Env;
+const env = {} as unknown as Env;
 const baseResult = {
     orderId: "order_1",
     returnId: "ret_1",
@@ -123,7 +123,7 @@ describe("admin item return routes", () => {
         expect(await response.json()).not.toHaveProperty(
             "data.availabilityTransitionVariantIds",
         );
-        expect(mocks.enqueueOrderNotificationsForStatus).not.toHaveBeenCalled();
+        expect(mocks.sendOrderNotificationsForStatus).not.toHaveBeenCalled();
     });
 
     it("emits returned status only when receipt completion derives a fully returned order", async () => {
@@ -145,7 +145,7 @@ describe("admin item return routes", () => {
         }, env);
 
         expect(response.status).toBe(200);
-        expect(mocks.enqueueOrderNotificationsForStatus).toHaveBeenCalledWith(expect.objectContaining({
+        expect(mocks.sendOrderNotificationsForStatus).toHaveBeenCalledWith(expect.objectContaining({
             orderIds: ["order_1"],
             newStatus: "returned",
         }));

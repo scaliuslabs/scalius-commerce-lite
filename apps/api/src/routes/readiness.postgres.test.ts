@@ -32,7 +32,6 @@ function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     POSTGRES_DATABASE_URL: "postgresql://hyperdrive.internal/scalius",
     BUCKET: { list: vi.fn(async () => ({ objects: [], truncated: false, delimitedPrefixes: [] })) },
-    JOBS_QUEUE: { send: vi.fn(), sendBatch: vi.fn() },
     RL_STRICT: { limit: vi.fn() },
     RL_STANDARD: { limit: vi.fn() },
     SCALIUS_SECRET: "test-master-secret-with-at-least-thirty-two-characters",

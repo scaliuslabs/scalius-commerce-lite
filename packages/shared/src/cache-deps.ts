@@ -1166,6 +1166,8 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   admin_setup_rate_limits: PRIVATE,
   admin_invitations: PRIVATE,
   scanner_token_claims: PRIVATE,
+  // Markers and cursors (OAuth state, background-work cursors).
+  system_kv: PRIVATE,
   admin_identity_handoff_events: PRIVATE,
   permissions: PRIVATE,
   roles: PRIVATE,

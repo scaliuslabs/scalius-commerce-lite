@@ -131,10 +131,6 @@ function bindingMethodsCheck(
   };
 }
 
-function queueBindingCheck(name: string, queue: unknown): CheckResult {
-  return bindingMethodsCheck(name, queue, ["send"], "queue");
-}
-
 async function databaseCheck(env: Env): Promise<CheckResult> {
   let config: ReturnType<typeof resolveDatabaseConfiguration>;
   try {
@@ -284,7 +280,6 @@ app.get("/readyz", async (c) => {
 
   const checks = [
     ...asyncChecks,
-    queueBindingCheck("jobs_queue", env.JOBS_QUEUE),
     bindingMethodsCheck("rl_strict", env.RL_STRICT, ["limit"], "rate limit"),
     bindingMethodsCheck("rl_standard", env.RL_STANDARD, ["limit"], "rate limit"),
     configCheck(env),

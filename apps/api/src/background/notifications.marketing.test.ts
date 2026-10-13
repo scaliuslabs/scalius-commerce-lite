@@ -1,6 +1,6 @@
 // E-mail double opt-in end to end: a newsletter signup writes the pending
-// consent and its outbox row, the queue message (outbox id only) is
-// processed by the real consumer, the confirmation is captured as Mailpit
+// consent and its outbox row, the row (by id) is sent by the real
+// sender, the confirmation is captured as Mailpit
 // would receive it, the outbox row is marked sent with a scrubbed receipt,
 // and the link in the mail confirms the subscription exactly once.
 import type { DatabaseSync } from "node:sqlite";
@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { confirmMarketingOptIn, subscribeToNewsletter } from "@scalius/core/modules/customer-marketing";
-import { processNotificationMessage } from "./queue-notifications";
+import { deliverNotification } from "./notifications";
 
 const env = {
     SCALIUS_SECRET: "test-master-secret-that-is-long-enough-123456",
@@ -36,18 +36,18 @@ describe("marketing double opt-in through the notification outbox", () => {
         vi.unstubAllGlobals();
     });
 
-    it("queues, sends once and confirms through the link", async () => {
-        const queued: Array<{ type: string; outboxId: string }> = [];
+    it("records, sends once and confirms through the link", async () => {
+        const sent: string[] = [];
         const result = await subscribeToNewsletter(db, { phone: "01755555555", email: "Mina@Example.com", channels: ["email", "sms"], language: "bn" }, {
             env: env as never,
-            queue: { send: async (message) => { queued.push(message); } },
+            send: async (outboxIds) => { sent.push(...outboxIds); },
             ip: "203.0.113.5",
         });
         expect(result).toEqual({ result: "pending" });
-        expect(queued).toHaveLength(1);
-        expect(Object.keys(queued[0]!)).toEqual(["type", "outboxId"]);
+        expect(sent).toHaveLength(1);
+        expect(sent[0]).toMatch(/^ono_/);
 
-        await processNotificationMessage(queued[0]! as never, db as never, env);
+        await deliverNotification(sent[0]!, db as never, env);
         expect(sqlite.prepare("SELECT status FROM notification_outbox").get()).toEqual({ status: "sent" });
         expect(mail).toHaveLength(1);
         expect(mail[0]!.To).toEqual([{ Email: "mina@example.com" }]);
@@ -59,8 +59,8 @@ describe("marketing double opt-in through the notification outbox", () => {
         expect(receipts).not.toContain(link![1]);
         expect(receipts).toContain('"subject_type":"customer"');
 
-        // A replayed queue message sends nothing more.
-        await processNotificationMessage(queued[0]! as never, db as never, env);
+        // Sending the same row again sends nothing more.
+        await deliverNotification(sent[0]!, db as never, env);
         expect(mail).toHaveLength(1);
 
         expect(await confirmMarketingOptIn(db, link![1]!)).toEqual({ status: "confirmed", channel: "email" });
@@ -72,13 +72,13 @@ describe("marketing double opt-in through the notification outbox", () => {
     });
 
     it("sends nothing without a store URL and never dead-letters the row", async () => {
-        const queued: Array<{ type: string; outboxId: string }> = [];
+        const sent: string[] = [];
         await subscribeToNewsletter(db, { phone: "01755555555", email: "mina@example.com", channels: ["email"] }, {
             env: env as never,
-            queue: { send: async (message) => { queued.push(message); } },
+            send: async (outboxIds) => { sent.push(...outboxIds); },
             ip: "203.0.113.5",
         });
-        await processNotificationMessage(queued[0]! as never, db as never, { ...env, STOREFRONT_URL: "" } as Env);
+        await deliverNotification(sent[0]!, db as never, { ...env, STOREFRONT_URL: "" } as Env);
         expect(mail).toHaveLength(0);
         expect(sqlite.prepare("SELECT status FROM notification_outbox").get()).toEqual({ status: "sent" });
         expect(sqlite.prepare("SELECT status, last_error FROM notification_delivery_receipts").get())

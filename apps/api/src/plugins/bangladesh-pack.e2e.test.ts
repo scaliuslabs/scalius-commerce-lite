@@ -4,7 +4,7 @@
 // old choices fail closed and say why; activation loads the 11,550 places
 // through the place import, moves the saved keys into the pack's sealed
 // settings and repoints the choices, so a sign-in code goes out through the
-// pack from the queue consumer's path with the same request as before.
+// pack from the OTP sender's path with the same request as before.
 // Activating again moves nothing, and removing the pack keeps every place.
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,7 +21,7 @@ import { activatePluginWithHooks, deactivatePluginWithHooks, uninstallPluginWith
 import { createAppProviders, detachedAppProviders } from "./providers/app-providers";
 import { createAppProviderRuntime } from "./providers/runtime";
 import { pluginTestCtx, pluginTestEnv } from "./testing/fixtures";
-import { deliverAuthOtpDirect } from "../queue-consumer";
+import { deliverAuthOtp } from "../background/otp";
 import { manifest as packManifest } from "../../../../plugins/bangladesh/src/index";
 import placesDataset from "../../../../plugins/bangladesh/places/manifest.json";
 
@@ -119,22 +119,22 @@ describe("the Bangladesh pack takes over a store's Bangladesh providers", () => 
     expect(smsDocument()).toEqual({ activeProvider: `${PACK}:bdbulksms` });
     await expect(getFraudProviders(db, KEY)).resolves.toEqual([{ id: "row_fraudbd", name: "FraudBD", isActive: true, providerType: `${PACK}:fraudbd`, retired: false }]);
 
-    // A sign-in code from the queue consumer's path: the same BDBulkSMS request as the built-in sent.
+    // A sign-in code from the delivery path: the same BDBulkSMS request as the built-in sent.
     await customerAuthDocument.write(db, { email: "optional", whatsapp: "off", channels: ["sms"] });
     const requested = await sendOtp(db, {
       method: "phone", identifier: "01712345678", ip: "203.0.113.9", encryptionKey: KEY, credentialEncryptionKey: KEY,
       appProviders: detachedAppProviders(env, db, KEY),
     });
-    // The queue message carries opaque references only: no phone, no code.
-    expect(JSON.stringify(requested.queuePayload)).not.toContain("1712345678");
-    await deliverAuthOtpDirect(requested.queuePayload, db, env);
+    // The delivery reference carries opaque references only: no phone, no code.
+    expect(JSON.stringify(requested.otpDelivery)).not.toContain("1712345678");
+    await deliverAuthOtp(requested.otpDelivery, db, env);
     const sms = requests.filter((request) => request.url.startsWith("https://api.bdbulksms.net/"));
     expect(sms).toHaveLength(1);
     expect(sms[0]!.url).toBe("https://api.bdbulksms.net/api.php?json");
     const body = JSON.parse(String(sms[0]!.init.body)) as { token: string; smsdata: Array<{ to: string; message: string }> };
     expect(body.token).toBe(TOKEN);
     expect(body.smsdata[0]!.to).toBe("+8801712345678");
-    expect(sqlite.prepare("SELECT status, provider FROM auth_otp_delivery_receipts WHERE delivery_key = ?").get(requested.deliveryKey))
+    expect(sqlite.prepare("SELECT status, provider FROM auth_otp_delivery_receipts WHERE delivery_key = ?").get(requested.otpDelivery.deliveryKey))
       .toEqual({ status: "accepted", provider: `${PACK}:bdbulksms` });
     // Nothing the pack logged holds the code, the phone or a key.
     const logs = JSON.stringify(sqlite.prepare("SELECT message, fields_json FROM plugin_log_entries WHERE plugin_id = ?").all(PACK));

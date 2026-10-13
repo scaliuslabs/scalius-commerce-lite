@@ -4,7 +4,7 @@
 //   1. Event outbox rows, as the flush claims or settles them (the rows it
 //      already returns): ids, states and revisions from the catalog facts.
 //   2. Tables without events (the inbox and reviews): the write observer of the
-//      request or queue message saw the write, so a table-level `changed`.
+//      request or background run saw the write, so a table-level `changed`.
 //
 // One RPC to the hub per flush or write, never per row. Failures are dropped:
 // the dashboard refetches on reconnect and on focus, and the database stays

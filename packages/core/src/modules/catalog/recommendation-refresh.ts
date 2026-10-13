@@ -3,16 +3,17 @@
 //
 // - `refreshProductRecommendations` runs the live ranking statement
 //   (recommendations.ts) once per product and stores its top 24 in
-//   `product_recommendations`. The queue message
-//   `catalog.recommendations.refresh` carries at most
-//   RECOMMENDATION_REFRESH_PRODUCTS_PER_MESSAGE products. Only changed slots
-//   are written (D1 bills rows written): an unchanged list writes nothing.
+//   `product_recommendations`; callers bound the list by the plan profile.
+//   Only changed slots are written (D1 bills rows written): an unchanged list
+//   writes nothing.
 // - `recommendationRefreshTargets` is who to refresh after a catalogue
 //   write: the products, the products currently recommending them, and a
 //   bounded set of newest public peers in their categories.
-// - `nightlyRecommendationRefreshCandidates`: products sold in the last day
-//   (new co-purchases) and the longest-unrefreshed public products, so
-//   popularity and the "new arrivals" tail roll over within days.
+// - `recommendationRotationBatch`: the next public products after a
+//   persisted cursor, wrapping at the end, so every public product is visited
+//   in turn (an unchanged list leaves `computed_at` alone, so a staleness
+//   order would pick the same products every time).
+// - `recentlySoldPublicProducts`: products with new co-purchases.
 // - `refreshProductSalesStats`: units sold in the last 30 days from real
 //   order lines, reconciled in one batch without churning unchanged rows.
 import {
@@ -25,14 +26,13 @@ import {
     recommendationOrderProducts,
 } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, sql } from "drizzle-orm";
 import {
     rankRecommendationRows,
     recommendationRowReason,
     STORED_RECOMMENDATION_LIMIT,
 } from "./recommendations";
 
-export const RECOMMENDATION_REFRESH_PRODUCTS_PER_MESSAGE = 20;
 /** Newest public category peers refreshed after a product write. */
 const RECOMMENDATION_CATEGORY_PEERS = 11;
 /** Products currently recommending a written product, refreshed with it. */
@@ -49,15 +49,15 @@ function idSet(ids: readonly string[]) {
 }
 
 /**
- * Recomputes and stores the recommendations of up to 20 products, one
- * ranking statement and one two-statement batch each. Products that are not
+ * Recomputes and stores the recommendations of these products, one ranking
+ * statement and one two-statement batch each (the caller bounds the list). Products that are not
  * public lose their stored rows (their page is not shown).
  */
 export async function refreshProductRecommendations(
     db: Database,
     productIds: readonly string[],
 ): Promise<{ refreshed: number; cleared: number }> {
-    const ids = uniqueIds(productIds).slice(0, RECOMMENDATION_REFRESH_PRODUCTS_PER_MESSAGE);
+    const ids = uniqueIds(productIds);
     if (ids.length === 0) return { refreshed: 0, cleared: 0 };
     const publicRows = await db
         .select({ id: productBuyerState.productId })
@@ -149,7 +149,8 @@ export async function recommendationRefreshTargets(
  * co-purchases changed), then the public products whose stored lists are
  * oldest or missing, up to `limit` in all.
  */
-export async function nightlyRecommendationRefreshCandidates(
+/** Public products with a real order line since `soldSince` (new co-purchases), at most `limit`. */
+export async function recentlySoldPublicProducts(
     db: Database,
     input: { soldSince: number; limit: number },
 ): Promise<string[]> {
@@ -166,22 +167,38 @@ export async function nightlyRecommendationRefreshCandidates(
         ))
         .limit(limit)
         .all();
-    const soldIds = uniqueIds(sold.map((row) => row.id ?? ""));
-    const remaining = limit - soldIds.length;
-    if (remaining <= 0) return soldIds;
-    const lastComputed = sql<number>`COALESCE((
-        SELECT MIN(${productRecommendations.computedAt}) FROM ${productRecommendations}
-        WHERE ${productRecommendations.productId} = ${productBuyerState.productId}
-    ), 0)`;
-    const stale = await db
+    return uniqueIds(sold.map((row) => row.id ?? ""));
+}
+
+/**
+ * The next `limit` public products after `after` in id order, wrapping to the
+ * start, and the cursor to save: every public product is visited once per
+ * lap whatever its lists' age. Two indexed reads at most.
+ */
+export async function recommendationRotationBatch(
+    db: Database,
+    input: { after: string | null; limit: number },
+): Promise<{ ids: string[]; next: string | null }> {
+    const limit = Math.max(0, Math.trunc(input.limit));
+    if (limit === 0) return { ids: [], next: input.after };
+    const page = (after: string | null, size: number) => db
         .select({ id: productBuyerState.productId })
         .from(productBuyerState)
-        .where(sql`${productBuyerState.isPublic} = 1`)
-        .orderBy(asc(lastComputed), asc(productBuyerState.productId))
-        .limit(remaining + soldIds.length)
+        .where(and(
+            sql`${productBuyerState.isPublic} = 1`,
+            after === null ? undefined : gt(productBuyerState.productId, after),
+        ))
+        .orderBy(asc(productBuyerState.productId))
+        .limit(size)
         .all();
-    const staleIds = stale.map((row) => row.id).filter((id) => !soldIds.includes(id));
-    return uniqueIds([...soldIds, ...staleIds]).slice(0, limit);
+    const head = (await page(input.after, limit)).map((row) => row.id);
+    let ids = head;
+    if (head.length < limit && input.after !== null) {
+        // The lap ended: continue from the start, up to where this batch began.
+        const wrapped = (await page(null, limit - head.length)).map((row) => row.id).filter((id) => id <= input.after!);
+        ids = uniqueIds([...head, ...wrapped]);
+    }
+    return { ids, next: ids.at(-1) ?? null };
 }
 
 /**

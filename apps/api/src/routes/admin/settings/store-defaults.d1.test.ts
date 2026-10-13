@@ -6,11 +6,13 @@ import { errorResponseFromError } from "../../../utils/api-response";
 import { TEST_WORKER_VERSION, stubSettingsMirror } from "../../../testing/settings-mirror";
 import { storeDefaultsSettingsRoutes } from "./store-defaults";
 
+const rebuild = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock("../../../background/catalog", () => ({ rebuildCatalogProjectionsAfterWrite: rebuild }));
+
 describe("store defaults and store setup routes", () => {
   let sqlite: DatabaseSync;
   let app: OpenAPIHono<{ Bindings: Env }>;
   let env: Env;
-  const send = vi.fn(async () => undefined);
   let mirror: ReturnType<typeof stubSettingsMirror>;
 
   beforeEach(() => {
@@ -19,7 +21,6 @@ describe("store defaults and store setup routes", () => {
     mirror = stubSettingsMirror();
     env = {
       CF_VERSION_METADATA: { id: TEST_WORKER_VERSION },
-      JOBS_QUEUE: { send },
     } as unknown as Env;
     app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
     app.onError((error, c) => {
@@ -37,7 +38,7 @@ describe("store defaults and store setup routes", () => {
   afterEach(() => {
     sqlite.close();
     vi.restoreAllMocks();
-    send.mockClear();
+    rebuild.mockClear();
     vi.unstubAllGlobals();
   });
 
@@ -71,7 +72,7 @@ describe("store defaults and store setup routes", () => {
       status: 200,
       body: { data: { countryCode: "FR", currencyCode: "EUR", unitSystem: "metric", weightUnit: "kg", timeZone: "Europe/Paris" } },
     });
-    expect(send).toHaveBeenCalledTimes(1);
+    expect(rebuild).toHaveBeenCalledTimes(1);
 
     const again = await call("POST", "/store-setup", { storeName: "Maison", countryCode: "FR", timeZone: "Europe/Paris" });
     expect(again).toMatchObject({ status: 409, body: { error: { code: "STORE_SETUP_DONE" } } });

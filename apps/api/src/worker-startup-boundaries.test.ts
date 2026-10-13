@@ -4,7 +4,6 @@ type TestApiWorker = {
   env: Env;
   ctx: ExecutionContext;
   fetch(request: Request): Promise<Response>;
-  queue(batch: MessageBatch<Record<string, unknown>>): Promise<void>;
   scheduled(controller: ScheduledController): Promise<void>;
 };
 
@@ -87,7 +86,6 @@ describe("API Worker startup boundaries", () => {
     vi.doUnmock("./runtime/admin-app");
     vi.doUnmock("./runtime/system-app");
     vi.doUnmock("./runtime/docs-app");
-    vi.doUnmock("./queue-consumer");
     vi.doUnmock("./scheduled-maintenance");
     vi.doUnmock("./agent-access/oauth");
     vi.doUnmock("./agent-access/artifact-delivery");
@@ -96,24 +94,17 @@ describe("API Worker startup boundaries", () => {
     vi.resetModules();
   });
 
-  it("does not load HTTP route families, queue, or scheduled graphs when the entrypoint module is imported", async () => {
+  it("does not load HTTP route families or the scheduled graph when the entrypoint module is imported", async () => {
     const loaded = {
       probe: false,
       public: false,
       admin: false,
       system: false,
       docs: false,
-      queue: false,
       scheduled: false,
     };
 
     mockRuntimeApps(loaded);
-    vi.doMock("./queue-consumer", () => {
-      loaded.queue = true;
-      return {
-        handleQueueBatch: vi.fn(),
-      };
-    });
     vi.doMock("./scheduled-maintenance", () => {
       loaded.scheduled = true;
       return {
@@ -128,7 +119,6 @@ describe("API Worker startup boundaries", () => {
       admin: false,
       system: false,
       docs: false,
-      queue: false,
       scheduled: false,
     });
   });
@@ -344,7 +334,6 @@ describe("API Worker startup boundaries", () => {
   it("serves only health probes while the database migration freeze is active", async () => {
     const fetch = vi.fn(() => new Response("healthy"));
     vi.doMock("./runtime/probe-app", () => ({ default: { fetch } }));
-    vi.doMock("./queue-consumer", () => ({ handleQueueBatch: vi.fn() }));
     vi.doMock("./scheduled-maintenance", () => ({ runScheduledMaintenance: vi.fn() }));
 
     const { default: ApiWorker } = await import("./worker");
@@ -370,76 +359,21 @@ describe("API Worker startup boundaries", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("loads only the queue graph for queue invocations", async () => {
-    const loaded = {
-      app: false,
-      queue: false,
-      scheduled: false,
-    };
-    const handleQueueBatch = vi.fn();
-
-    vi.doMock("./app", () => {
-      loaded.app = true;
-      return { default: { fetch: vi.fn() } };
-    });
-    vi.doMock("./queue-consumer", () => {
-      loaded.queue = true;
-      return { handleQueueBatch };
-    });
-    vi.doMock("./scheduled-maintenance", () => {
-      loaded.scheduled = true;
-      return { runScheduledMaintenance: vi.fn() };
-    });
-
-    const { default: ApiWorker } = await import("./worker");
-    const worker = new ApiWorker(
-      undefined as never,
-      runtimeEnv(),
-    ) as unknown as TestApiWorker;
-    const batch = { messages: [] } as unknown as MessageBatch<
-      Record<string, unknown>
-    >;
-
-    await worker.queue(batch);
-
-    expect(handleQueueBatch).toHaveBeenCalledWith(
-      batch,
-      composedEnv,
-      worker.ctx,
-    );
-    expect(loaded).toEqual({
-      app: false,
-      queue: true,
-      scheduled: false,
-    });
-  });
-
   it("loads only the scheduled graph for cron invocations", async () => {
-    // One slice (Paid): the agent-access housekeeping rides every tick.
-    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
     const loaded = {
       app: false,
-      queue: false,
       scheduled: false,
     };
     const runScheduledMaintenance = vi.fn();
-    const purgeExpiredOAuthData = vi.fn();
-    const purgeExpiredAgentArtifacts = vi.fn();
 
     vi.doMock("./app", () => {
       loaded.app = true;
       return { default: { fetch: vi.fn() } };
-    });
-    vi.doMock("./queue-consumer", () => {
-      loaded.queue = true;
-      return { handleQueueBatch: vi.fn() };
     });
     vi.doMock("./scheduled-maintenance", () => {
       loaded.scheduled = true;
       return { runScheduledMaintenance };
     });
-    vi.doMock("./agent-access/oauth", () => ({ purgeExpiredOAuthData }));
-    vi.doMock("./agent-access/artifact-delivery", () => ({ purgeExpiredAgentArtifacts }));
 
     const { default: ApiWorker } = await import("./worker");
     const worker = new ApiWorker(
@@ -447,7 +381,7 @@ describe("API Worker startup boundaries", () => {
       runtimeEnv(),
     ) as unknown as TestApiWorker;
     const controller = {
-      cron: "*/15 * * * *",
+      cron: "* * * * *",
       scheduledTime: 1783166400000,
       noRetry: vi.fn(),
     } as unknown as ScheduledController;
@@ -458,49 +392,19 @@ describe("API Worker startup boundaries", () => {
       composedEnv,
       worker.ctx,
       {
-        cron: "*/15 * * * *",
+        cron: "* * * * *",
         scheduledTime: 1783166400000,
       },
     );
-    expect(purgeExpiredOAuthData).toHaveBeenCalledWith(composedEnv);
-    expect(purgeExpiredAgentArtifacts).toHaveBeenCalledWith(composedEnv);
     expect(loaded).toEqual({
       app: false,
-      queue: false,
       scheduled: true,
     });
   });
 
-  it("runs the agent-access housekeeping once an hour on the Free rotation, in the last slice", async () => {
-    const runScheduledMaintenance = vi.fn();
-    const purgeExpiredOAuthData = vi.fn();
-    const purgeExpiredAgentArtifacts = vi.fn();
-    vi.doMock("./scheduled-maintenance", () => ({ runScheduledMaintenance }));
-    vi.doMock("./agent-access/oauth", () => ({ purgeExpiredOAuthData }));
-    vi.doMock("./agent-access/artifact-delivery", () => ({ purgeExpiredAgentArtifacts }));
-    const { default: ApiWorker } = await import("./worker");
-    const worker = new ApiWorker(undefined as never, runtimeEnv()) as unknown as TestApiWorker;
-    const tickMs = 15 * 60 * 1_000;
-    const ranFor = async (tick: number) => {
-      purgeExpiredOAuthData.mockClear();
-      await worker.scheduled({ cron: "*/15 * * * *", scheduledTime: tick * tickMs } as unknown as ScheduledController);
-      return purgeExpiredOAuthData.mock.calls.length;
-    };
-
-    // Free: every fourth tick. The maintenance itself runs on every tick (it picks its own slice).
-    expect([await ranFor(8_000), await ranFor(8_001), await ranFor(8_002), await ranFor(8_003)]).toEqual([0, 0, 0, 1]);
-    expect(runScheduledMaintenance).toHaveBeenCalledTimes(4);
-
-    // Paid: every tick.
-    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
-    expect([await ranFor(8_000), await ranFor(8_001)]).toEqual([1, 1]);
-  });
-
-  it("retries queues and skips cron work while the database migration freeze is active", async () => {
-    const handleQueueBatch = vi.fn();
+  it("skips cron work while the database migration freeze is active", async () => {
     const runScheduledMaintenance = vi.fn();
     vi.doMock("./app", () => ({ default: { fetch: vi.fn() } }));
-    vi.doMock("./queue-consumer", () => ({ handleQueueBatch }));
     vi.doMock("./scheduled-maintenance", () => ({ runScheduledMaintenance }));
     vi.doMock("./agent-access/oauth", () => ({ purgeExpiredOAuthData: vi.fn() }));
     vi.doMock("./agent-access/artifact-delivery", () => ({
@@ -512,21 +416,13 @@ describe("API Worker startup boundaries", () => {
       undefined as never,
       { DATABASE_MIGRATION_FREEZE: "true" } as Env,
     ) as unknown as TestApiWorker;
-    const retryAll = vi.fn();
-    const batch = {
-      messages: [],
-      retryAll,
-    } as unknown as MessageBatch<Record<string, unknown>>;
     const controller = {
-      cron: "*/15 * * * *",
+      cron: "* * * * *",
       scheduledTime: 1783166400000,
     } as unknown as ScheduledController;
 
-    await worker.queue(batch);
     await worker.scheduled(controller);
 
-    expect(retryAll).toHaveBeenCalledWith({ delaySeconds: 60 });
-    expect(handleQueueBatch).not.toHaveBeenCalled();
     expect(runScheduledMaintenance).not.toHaveBeenCalled();
   });
 
@@ -641,10 +537,8 @@ describe("API Worker startup boundaries", () => {
       expect(probeEnv.API_TOKEN).toBeUndefined();
     });
 
-    it("retries queue batches and skips cron work instead of running without derived secrets", async () => {
-      const handleQueueBatch = vi.fn();
+    it("skips cron work instead of running without derived secrets", async () => {
       const runScheduledMaintenance = vi.fn();
-      vi.doMock("./queue-consumer", () => ({ handleQueueBatch }));
       vi.doMock("./scheduled-maintenance", () => ({ runScheduledMaintenance }));
       vi.doMock("./agent-access/oauth", () => ({ purgeExpiredOAuthData: vi.fn() }));
       vi.doMock("./agent-access/artifact-delivery", () => ({
@@ -653,17 +547,11 @@ describe("API Worker startup boundaries", () => {
 
       const { default: ApiWorker } = await import("./worker");
       const worker = new ApiWorker(undefined as never, {} as Env) as unknown as TestApiWorker;
-      const retryAll = vi.fn();
-      const batch = { messages: [], retryAll } as unknown as MessageBatch<Record<string, unknown>>;
-
-      await worker.queue(batch);
       await worker.scheduled({
-        cron: "*/15 * * * *",
+        cron: "* * * * *",
         scheduledTime: 1783166400000,
       } as unknown as ScheduledController);
 
-      expect(retryAll).toHaveBeenCalledWith({ delaySeconds: 60 });
-      expect(handleQueueBatch).not.toHaveBeenCalled();
       expect(runScheduledMaintenance).not.toHaveBeenCalled();
     });
   });

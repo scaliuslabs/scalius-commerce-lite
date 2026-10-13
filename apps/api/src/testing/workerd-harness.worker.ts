@@ -73,7 +73,7 @@ function remoteD1(proxy: HarnessBindings["DB_PROXY"], clock: WaitClock, calls: {
 }
 
 interface Timing {
-  kind: "fetch" | "queue" | "scheduled";
+  kind: "fetch" | "scheduled";
   cpuMs: number;
   wallMs: number;
   waitMs: number;
@@ -192,10 +192,6 @@ export default class HarnessWorker extends ApiWorker {
       // A streamed body is part of the invocation: read it here.
       return new Response(await response.arrayBuffer(), response);
     });
-  }
-
-  override async queue(batch: MessageBatch<Record<string, unknown>>): Promise<void> {
-    await this.timed("queue", () => super.queue(batch));
   }
 
   override async scheduled(controller: ScheduledController): Promise<void> {

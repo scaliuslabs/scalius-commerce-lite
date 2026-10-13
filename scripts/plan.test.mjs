@@ -48,28 +48,20 @@ describe("which plan a deploy targets", () => {
 describe("the committed configs are the Free config", () => {
   const configs = ["apps/api/wrangler.jsonc", "apps/api/wrangler.local.jsonc", "apps/storefront/wrangler.jsonc"];
 
-  it.each(configs)("%s has no limits, no plan constant, and Free queue batch sizes", (path) => {
+  it.each(configs)("%s has no limits and no plan constant", (path) => {
     expect(collectCommittedPlanViolations(path, committed(path))).toEqual([]);
     expect(committed(path).limits).toBeUndefined();
     expect(committed(path).define).toBeUndefined();
   });
 
-  it("the API queue consumers match the Free profile", () => {
-    const [jobs, dlq] = committed("apps/api/wrangler.jsonc").queues.consumers;
-    expect(jobs.max_batch_size).toBe(PLAN_LIMITS.free.queue.consumerBatchSize);
-    expect(dlq.max_batch_size).toBe(PLAN_LIMITS.free.queue.dlqBatchSize);
-  });
-
-  it("flags a committed limits block, plan constant or drifted batch size", () => {
+  it("flags a committed limits block or plan constant", () => {
     const problems = collectCommittedPlanViolations("w.jsonc", {
       limits: { cpu_ms: 30000 },
       define: { __SCALIUS_PLAN__: "\"paid\"" },
-      queues: { consumers: [{ queue: "jobs", max_batch_size: 10 }, { queue: "jobs-dlq", max_batch_size: 1 }] },
     });
-    expect(problems).toHaveLength(3);
+    expect(problems).toHaveLength(2);
     expect(problems.join("\n")).toMatch(/limits/);
     expect(problems.join("\n")).toMatch(/__SCALIUS_PLAN__/);
-    expect(problems.join("\n")).toMatch(/max_batch_size 10 for jobs/);
   });
 });
 
@@ -81,27 +73,20 @@ describe("a Paid deploy's generated config", () => {
     expect(withStorefrontPlanProfile(committed("apps/storefront/wrangler.jsonc"), "free")).toEqual(committed("apps/storefront/wrangler.jsonc"));
   });
 
-  it("adds exactly the profile: 30 s CPU, the plan constant, the larger consumer batches", () => {
+  it("adds exactly the profile: 30 s CPU and the plan constant", () => {
     const paid = withPlanProfile(base, "paid");
     expect(paid.limits).toEqual({ cpu_ms: 30_000 });
     expect(paid.define).toEqual({ __SCALIUS_PLAN__: "\"paid\"" });
-    const [jobs, dlq] = paid.queues.consumers;
-    expect(jobs).toMatchObject({ queue: "jobs", max_batch_size: PLAN_LIMITS.paid.queue.consumerBatchSize, max_retries: 5, dead_letter_queue: "jobs-dlq" });
-    expect(dlq).toMatchObject({ queue: "jobs-dlq", max_batch_size: PLAN_LIMITS.paid.queue.dlqBatchSize });
     // Nothing else moved: bindings, routes, assets, crons.
     const withoutProfile = (config) => Object.fromEntries(
-      Object.entries(config).filter(([key]) => !["limits", "define", "queues"].includes(key)),
+      Object.entries(config).filter(([key]) => !["limits", "define"].includes(key)),
     );
     expect(withoutProfile(paid)).toEqual(withoutProfile(base));
-    expect(paid.queues.producers).toEqual(base.queues.producers);
   });
 
   it("never weakens what the config said before the profile existed", () => {
-    // Before the profile: limits.cpu_ms 30000 and consumer batches of 10.
-    const paid = withPlanProfile(base, "paid");
-    expect(paid.limits.cpu_ms).toBeGreaterThanOrEqual(30_000);
-    expect(paid.queues.consumers[0].max_batch_size).toBeGreaterThanOrEqual(10);
-    expect(paid.queues.consumers[1].max_batch_size).toBeGreaterThanOrEqual(10);
+    // Before the profile: limits.cpu_ms 30000.
+    expect(withPlanProfile(base, "paid").limits.cpu_ms).toBeGreaterThanOrEqual(30_000);
   });
 
   it("gives the Storefront build's generated config the same CPU limit", () => {
@@ -135,7 +120,7 @@ describe("the API config a deploy uses", () => {
     expect(config.define).toEqual({ __SCALIUS_PLAN__: "\"paid\"" });
     expect(config.worker_loaders).toBeUndefined();
     expect(config.d1_databases).toEqual(committed("apps/api/wrangler.jsonc").d1_databases);
-    expect(config.queues.consumers[0].max_batch_size).toBe(PLAN_LIMITS.paid.queue.consumerBatchSize);
+    expect(config.queues).toBeUndefined();
 
     const sandboxed = JSON.parse(readFileSync(apiWranglerConfig({ plan: "paid", sandbox: true }), "utf8"));
     expect(sandboxed.worker_loaders).toEqual([{ binding: "LOADER" }]);

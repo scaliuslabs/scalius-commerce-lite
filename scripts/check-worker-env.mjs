@@ -14,11 +14,12 @@ export const ALLOWED_WRANGLER_VARS = Object.freeze({
   "apps/api/wrangler.local.jsonc": Object.freeze(["LOCAL_MAILPIT_URL"]),
 });
 
-// The per-store resource shape: one R2 bucket, one jobs queue (plus its DLQ),
-// two rate limiters, and no KV namespace (an account allows 1,000; the
-// relational provider and the Cache API hold what KV once did). Other users
-// share these by key prefix; a new binding of these kinds needs an explicit
-// architecture decision.
+// The per-store resource shape: one R2 bucket, two rate limiters, no KV
+// namespace (an account allows 1,000; the relational provider and the Cache
+// API hold what KV once did) and no queue (an account allows 10,000; durable
+// rows drained after each write and by the every-minute cron replace them).
+// Other users share these by key prefix; a new binding of these kinds needs
+// an explicit architecture decision.
 // Durable Objects: only the realtime hub (WebSockets on Workers need one;
 // docs/ARCHITECTURE.md, "Realtime hub"). It must be SQLite-backed, which is
 // what Workers Free allows.
@@ -26,7 +27,8 @@ export const ALLOWED_RESOURCE_BINDINGS = Object.freeze({
   kv_namespaces: Object.freeze([]),
   r2_buckets: Object.freeze(["BUCKET"]),
   ratelimits: Object.freeze(["RL_STRICT", "RL_STANDARD"]),
-  queue_producers: Object.freeze(["JOBS_QUEUE"]),
+  queue_producers: Object.freeze([]),
+  queue_consumers: Object.freeze([]),
   durable_objects: Object.freeze(["REALTIME_HUB"]),
 });
 
@@ -65,13 +67,16 @@ export function collectResourceBindingViolations(configPath, config) {
     r2_buckets: (config?.r2_buckets ?? []).map((entry) => entry.binding),
     ratelimits: (config?.ratelimits ?? []).map((entry) => entry.name),
     queue_producers: (config?.queues?.producers ?? []).map((entry) => entry.binding),
+    queue_consumers: (config?.queues?.consumers ?? []).map((entry) => entry.queue),
     durable_objects: (config?.durable_objects?.bindings ?? []).map((entry) => entry.name),
   };
   return Object.entries(declared).flatMap(([kind, names]) => {
     const extra = sorted(names.filter((name) => !ALLOWED_RESOURCE_BINDINGS[kind].includes(name)));
     return extra.length === 0 ? [] : [
       `${configPath} declares ${kind} ${extra.join(", ")}. `
-      + `Only ${ALLOWED_RESOURCE_BINDINGS[kind].join(", ")} may exist; share them by key prefix instead.`,
+      + (ALLOWED_RESOURCE_BINDINGS[kind].length === 0
+        ? `A store has none of these; keep the work in durable rows instead.`
+        : `Only ${ALLOWED_RESOURCE_BINDINGS[kind].join(", ")} may exist; share them by key prefix instead.`),
     ];
   });
 }

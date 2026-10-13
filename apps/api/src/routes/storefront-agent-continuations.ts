@@ -1,4 +1,3 @@
-import { enqueueAuthOtp } from "../utils/otp-queue";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   assertHostedContinuationOrderAccess,
@@ -13,7 +12,6 @@ import {
 } from "@scalius/core/modules/agent-storefront";
 import {
   buildSetCookieHeader,
-  deleteCustomerAuthOtpChallenge,
   deleteCustomerSession,
   getCookieConfig,
   hashCustomerSessionToken,
@@ -22,7 +20,6 @@ import {
   verifyOtp,
 } from "@scalius/core/modules/customers";
 import {
-  deleteOrderPaymentRecoveryChallenge,
   sendOrderPaymentRecoveryOtp,
   verifyOrderPaymentRecoveryOtp,
 } from "@scalius/core/modules/orders";
@@ -31,7 +28,6 @@ import { exchangeThemePreviewContinuation } from "@scalius/core/modules/settings
 import { authMiddleware } from "../middleware/auth";
 import {
   ForbiddenError,
-  ServiceUnavailableError,
   ValidationError,
 } from "../utils/api-error";
 import { ok } from "../utils/api-response";
@@ -54,6 +50,7 @@ import {
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment/payment-session-response";
 import { reconcileOrderPayment } from "./payment/payment-events";
 import { requestPaymentProviders } from "../plugins/providers/payment";
+import { sendAuthOtp } from "../background/otp-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -252,16 +249,7 @@ app.openapi(sendCustomerOtpRoute, async (c) => {
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     appProviders: requestAppProviders(c),
   });
-  try {
-    await enqueueAuthOtp(c, result.queuePayload);
-  } catch (error) {
-    await deleteCustomerAuthOtpChallenge(c.get("db"), {
-      otpKey: result.otpStorageKey,
-      deliveryKey: result.deliveryKey,
-    }).catch(() => undefined);
-    console.error("[AgentContinuation] Customer OTP queue handoff failed:", error instanceof Error ? error.message : "unknown");
-    throw new ServiceUnavailableError("Could not queue verification code delivery. Please try again.");
-  }
+  await sendAuthOtp(c, c.get("db"), result.otpDelivery);
   return ok(c, { message: result.message || "Verification code sent." });
 });
 
@@ -390,6 +378,7 @@ app.openapi(reconcilePaymentRoute, async (c) => {
     env: c.env,
     orderId: access.orderId,
     providers: () => requestPaymentProviders(c),
+    caller: c,
   });
   return accepted
     ? c.json({ success: true as const, data: {
@@ -430,19 +419,8 @@ app.openapi(sendRecoveryOtpRoute, async (c) => {
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     appProviders: requestAppProviders(c),
   });
-  if (result.queuePayload) {
-    try {
-      await enqueueAuthOtp(c, result.queuePayload);
-    } catch (error) {
-      if (result.challengeKey && result.deliveryKey) {
-        await deleteOrderPaymentRecoveryChallenge(c.get("db"), {
-          challengeKey: result.challengeKey,
-          deliveryKey: result.deliveryKey,
-        }).catch(() => undefined);
-      }
-      console.error("[AgentContinuation] Recovery OTP queue handoff failed:", error instanceof Error ? error.message : "unknown");
-      throw new ServiceUnavailableError("Could not queue verification code delivery. Please try again.");
-    }
+  if (result.otpDelivery) {
+    await sendAuthOtp(c, c.get("db"), result.otpDelivery);
   }
   return ok(c, { message: result.queued ? result.message : GENERIC_RECOVERY_MESSAGE, channel: result.channel });
 });

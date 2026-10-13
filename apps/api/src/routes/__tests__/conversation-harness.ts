@@ -96,7 +96,6 @@ export async function createConversationHarness(): Promise<Harness> {
     CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
     BUCKET: bucket,
     IMAGES: images,
-    JOBS_QUEUE: { send: vi.fn(async () => undefined) },
   } as Record<string, unknown>, {
     get(target, key: string) {
       if (key === "RL_STRICT" || key === "RL_STANDARD") return limiter.missing ? undefined : rateLimiter;

@@ -47,8 +47,9 @@ import {
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { billingAddressBodyShape } from "../schemas/billing-address";
 import { getOptionalExecutionContext } from "../utils/execution-context";
-import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
+import { sendOrderSupportRequestNotification } from "../utils/order-notifications";
 import { BUILT_IN_PAYMENT_PROVIDERS, isPaymentMethodId, type PaymentProviders } from "@scalius/core/modules/payments";
+import { notificationSender } from "../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -776,7 +777,7 @@ app.openapi(submitCheckoutRoute, async (c) => {
   if (submitted.postCommitPayload || risk) {
     const postCommit = Promise.all([
       submitted.postCommitPayload
-        ? runStorefrontOrderPostCommitSideEffects(c.get("db"), c.env, submitted.postCommitPayload)
+        ? runStorefrontOrderPostCommitSideEffects(c.get("db"), { ...c.env, sendNotifications: notificationSender(c) }, submitted.postCommitPayload)
         : null,
       // Apps' advisory risk checks: after this submit's commit, never on a replay.
       risk && apps.points.has("order.risk")
@@ -1037,9 +1038,9 @@ app.openapi(createSupportRequestRoute, async (c) => {
   const result = await createAgentStorefrontOrderSupportRequest(
     c.get("db"), principal.grantId, params.contextId, params.orderId, c.req.valid("json"),
   );
-  await enqueueOrderSupportRequestNotificationForOrder({
+  await sendOrderSupportRequestNotification({
     db: c.get("db"),
-    queue: c.env.JOBS_QUEUE,
+    send: notificationSender(c),
     orderId: params.orderId,
     requestId: result.request.id,
     notificationType: "support_request_submitted",

@@ -20,8 +20,7 @@ import {
 } from "@scalius/core/modules/gift-cards";
 import {
   buildNotificationOutboxInsert,
-  enqueueNotificationOutboxById,
-  recordAndEnqueueNotification,
+  recordAndSendNotification,
 } from "@scalius/core/modules/notifications";
 import { priceIncrementForCurrency, readGiftCardSettings } from "@scalius/core/modules/settings";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
@@ -37,6 +36,7 @@ import { ok, created } from "../../utils/api-response";
 import { ServiceUnavailableError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -353,11 +353,7 @@ app.openapi(createRoute({
     outboxId = insert.outboxId;
     return [insert.statement as unknown as BatchItem<"sqlite">];
   });
-  if (result.created && outboxId && c.env.JOBS_QUEUE) {
-    await enqueueNotificationOutboxById({ db, queue: c.env.JOBS_QUEUE, outboxId }).catch((error: unknown) => {
-      console.warn(`[gift-cards] issue notification for ${result.giftCardId} not enqueued:`, error instanceof Error ? error.message : "unknown error");
-    });
-  }
+  if (result.created && outboxId) await notificationSender(c)([outboxId]);
   const summary = await getStaffGiftCardSummary(db, result.giftCardId);
   return created(c, { giftCard: presentSummary(summary), code: formatGiftCardCode(result.code) });
 });
@@ -477,9 +473,9 @@ app.openapi(createRoute({
   const { giftCardId } = c.req.valid("param");
   const card = await getStaffGiftCardSummary(db, giftCardId);
   if (card.status !== "active") throw new ValidationError("Enable the gift card before sending it again.");
-  const result = await recordAndEnqueueNotification({
+  const result = await recordAndSendNotification({
     db,
-    queue: c.env.JOBS_QUEUE,
+    send: notificationSender(c),
     notification: giftCardIssuedNotification(giftCardId, "admin-gift-card-resend", `:resend:${crypto.randomUUID()}`),
   });
   return ok(c, { queued: result.enqueued });

@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => {
     cleanupStaleAbandonedCheckouts: vi.fn(),
     cleanupExpiredOrderPaymentRecoveryChallenges: vi.fn(),
     archiveStaleIncompleteOrders: vi.fn(),
-    flushPendingNotificationOutbox: vi.fn(),
+    drainNotificationOutbox: vi.fn(),
+    drainPaymentEvents: vi.fn(),
+    drainCatalogProjectionRebuild: vi.fn(),
+    rotateRecommendations: vi.fn(),
+    cursorSave: vi.fn(async () => true),
     flushPendingMetaPurchaseOutbox: vi.fn(),
     cleanupExpiredCustomerAuthOtpChallenges: vi.fn(),
     cleanupExpiredCustomerAuthOtpRateLimits: vi.fn(),
@@ -21,14 +25,16 @@ const mocks = vi.hoisted(() => {
     pruneExpiredIdentityHandoffEvents: vi.fn(),
     reconcileDueRefundAttempts: vi.fn(),
     reconcileExternalRefundWebhooks: vi.fn(),
-
-    enqueueOrderRefundNotificationForOrder: vi.fn(),
-    failStaleQueuedPaymentWebhookEvents: vi.fn(),
+    sendOrderRefundNotification: vi.fn(),
     backfillMissingMediaVariants: vi.fn(),
-    enqueueMediaVariantsBacklog: vi.fn(),
     runScheduledEventMaintenance: vi.fn(),
     runScheduledEventRetention: vi.fn(async () => ({ events: 0, deliveries: 0, pluginDeliveries: 0 })),
     runScheduledPluginMaintenance: vi.fn(),
+    measurePluginStorage: vi.fn(async () => 0),
+    runNightlyCatalogMaintenance: vi.fn(async () => ({ salesStatsProducts: 0, soldRecommendations: 0 })),
+    purgeExpiredOAuthData: vi.fn(),
+    purgeExpiredAgentArtifacts: vi.fn(),
+    expireAgentBrowserHandoffs: vi.fn(),
   };
 });
 
@@ -54,16 +60,25 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
 
 vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/notifications")>()),
-  flushPendingNotificationOutbox: mocks.flushPendingNotificationOutbox,
   pruneStaffAlerts: vi.fn(async () => ({ inbox: 0, alerts: 0 })),
 }));
+vi.mock("./background/notifications", () => ({ drainNotificationOutbox: mocks.drainNotificationOutbox }));
+vi.mock("./background/payment-events", () => ({ drainPaymentEvents: mocks.drainPaymentEvents }));
+vi.mock("./background/catalog", () => ({
+  drainCatalogProjectionRebuild: mocks.drainCatalogProjectionRebuild,
+  rotateRecommendations: mocks.rotateRecommendations,
+}));
+// Scan positions are their own D1 tests (scheduled/cursor.ts); here every scan starts fresh.
+vi.mock("./scheduled/cursor", () => ({ readMaintenanceCursor: vi.fn(async () => ({ value: {}, save: mocks.cursorSave })) }));
 
 // The projection sweeps have their own D1 tests (derived-projections.test.ts).
 vi.mock("@scalius/core/modules/analytics", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/analytics")>()),
   sealAnalyticsDays: vi.fn(async () => 0),
 }));
-vi.mock("./scheduled/derived-projections", () => ({ maintainDerivedProjections: vi.fn(async () => null) }));
+vi.mock("./scheduled/derived-projections", () => ({
+  maintainDerivedProjections: vi.fn(async () => ({ analytics: { drift: 0 }, recommendations: { drift: 0 }, inbox: { drift: 0 } })),
+}));
 
 
 vi.mock("@scalius/core/modules/reviews", async (importOriginal) => ({
@@ -112,11 +127,10 @@ vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
 vi.mock("@scalius/core/modules/media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/media")>()),
   backfillMissingMediaVariants: mocks.backfillMissingMediaVariants,
-  enqueueMediaVariantsBacklog: mocks.enqueueMediaVariantsBacklog,
 }));
 
-vi.mock("./utils/order-notification-queue", () => ({
-  enqueueOrderRefundNotificationForOrder: mocks.enqueueOrderRefundNotificationForOrder,
+vi.mock("./utils/order-notifications", () => ({
+  sendOrderRefundNotification: mocks.sendOrderRefundNotification,
 }));
 
 vi.mock("./events/dispatch", () => ({
@@ -126,51 +140,51 @@ vi.mock("./events/dispatch", () => ({
 
 vi.mock("./plugins/scheduled", () => ({
   runScheduledPluginMaintenance: mocks.runScheduledPluginMaintenance,
+  measurePluginStorage: mocks.measurePluginStorage,
 }));
 
-vi.mock("./utils/webhook-idempotency", () => ({
-  failStaleQueuedPaymentWebhookEvents: mocks.failStaleQueuedPaymentWebhookEvents,
+vi.mock("./scheduled/catalog-projections", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./scheduled/catalog-projections")>()),
+  runNightlyCatalogMaintenance: mocks.runNightlyCatalogMaintenance,
 }));
+
+vi.mock("./agent-access/oauth", () => ({ purgeExpiredOAuthData: mocks.purgeExpiredOAuthData }));
+vi.mock("./agent-access/artifact-delivery", () => ({ purgeExpiredAgentArtifacts: mocks.purgeExpiredAgentArtifacts }));
+vi.mock("./agent-access/browser-handoffs", () => ({ expireAgentBrowserHandoffs: mocks.expireAgentBrowserHandoffs }));
 
 import {
   ABANDONED_CHECKOUT_RETENTION_DAYS,
   ABANDONED_CHECKOUT_SWEEP_LIMIT,
   EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
-  INVENTORY_EXPIRY_SWEEP_LIMIT,
   MEDIA_RENDITION_BACKFILL_CONCURRENCY,
   MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
   MAINTENANCE_SWEEPS,
-  MAINTENANCE_TICK_MS,
-  maintenanceSliceDue,
+  DRAIN_TICK_MS,
+  dueSweepIndexes,
+  firstSweepRunOfHour,
+  sweepPeriodMinutes,
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
   CUSTOMER_SESSION_SWEEP_LIMIT,
   META_PURCHASE_OUTBOX_SWEEP_LIMIT,
-  ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
   ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT,
   REVIEW_REQUEST_SWEEP_LIMIT,
   REFUND_ATTEMPT_RECONCILIATION_LIMIT,
   SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
   EXTERNAL_REFUND_RECONCILIATION_LIMIT,
-  STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES,
-  STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT,
   STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES,
   STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
   runScheduledMaintenance,
-  runQueuedMaintenance,
 } from "./scheduled-maintenance";
 import { PLAN_LIMITS } from "@scalius/shared/plan-limits";
 
 /** What the Paid profile runs per tick: every sweep at its full limit (the behaviour before the profile). */
 const MEDIA_RENDITION_BACKFILL_MAX_PER_RUN = PLAN_LIMITS.paid.maintenance.inlineRenditionsPerRun;
-const MEDIA_RENDITION_FANOUT_MAX_PER_RUN = PLAN_LIMITS.paid.queue.bulkPageSize;
+const INVENTORY_EXPIRY_SWEEP_LIMIT = PLAN_LIMITS.paid.maintenance.inventoryExpiryPerRun;
 
 function createEnv() {
   return {
     BUCKET: { id: "generated-media-bucket" },
-    JOBS_QUEUE: {
-      send: vi.fn(),
-    },
   } as unknown as Env;
 }
 
@@ -215,18 +229,14 @@ describe("runScheduledMaintenance", () => {
       limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
       hasMore: false,
     });
-    mocks.flushPendingNotificationOutbox.mockResolvedValue({
-      scanned: 0,
-      enqueued: 0,
-      failed: 0,
-      skipped: 0,
-      staleQueued: 0,
-    });
+    mocks.drainNotificationOutbox.mockResolvedValue({ scanned: 0 });
+    mocks.drainPaymentEvents.mockResolvedValue({ scanned: 0, processed: 0 });
+    mocks.drainCatalogProjectionRebuild.mockResolvedValue(0);
+    mocks.rotateRecommendations.mockResolvedValue(0);
     mocks.runScheduledEventMaintenance.mockResolvedValue({
-      events: { scanned: 0, enqueued: 0, settledWithoutSubscribers: 0, failed: 0, skipped: 0 },
-      deliveries: { scanned: 0, enqueued: 0, failed: 0, skipped: 0 },
-      pluginDeliveries: { scanned: 0, enqueued: 0, failed: 0, skipped: 0 },
-      pruned: { events: 0, deliveries: 0, pluginDeliveries: 0 },
+      events: { scanned: 0, dispatched: 0, settledWithoutSubscribers: 0, failed: 0, skipped: 0, deliveries: [] },
+      deliveries: 0,
+      pluginDeliveries: 0,
     });
     mocks.runScheduledPluginMaintenance.mockResolvedValue({
       bundled: { installed: [], updated: [], removed: [], failed: [], fxApps: false },
@@ -296,22 +306,16 @@ describe("runScheduledMaintenance", () => {
       limit: EXTERNAL_REFUND_RECONCILIATION_LIMIT,
       hasMore: false,
     });
-    mocks.enqueueOrderRefundNotificationForOrder.mockResolvedValue({
+    mocks.sendOrderRefundNotification.mockResolvedValue({
       orderId: "order_refunded",
       outboxId: "outbox_refund_1",
-      enqueued: true,
-    });
-    mocks.failStaleQueuedPaymentWebhookEvents.mockResolvedValue({
-      scanned: 0,
-      failed: 0,
-      limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT,
-      hasMore: false,
+      enqueued: false,
+      skippedReason: "no_sender",
     });
     mocks.backfillMissingMediaVariants.mockResolvedValue({ scanned: 0, generated: 0, failed: 0, hasMore: false });
-    mocks.enqueueMediaVariantsBacklog.mockResolvedValue({ queued: 0, hasMore: false });
     mocks.sweepReviewRequests.mockResolvedValue({ queued: 0, skipped: 0 });
     mocks.sweepDigitalUploads.mockResolvedValue({ aborted: 0 });
-    mocks.sweepAutoFulfilment.mockResolvedValue({ scanned: 0, fulfilled: 0, failed: 0 });
+    mocks.sweepAutoFulfilment.mockResolvedValue({ scanned: 0, fulfilled: 0, failed: 0, lastOrderId: null });
   });
 
   afterEach(() => {
@@ -320,7 +324,7 @@ describe("runScheduledMaintenance", () => {
     vi.restoreAllMocks();
   });
 
-  it("runs inventory expiry and bounded outbox recovery", async () => {
+  it("runs the drains, inventory expiry and the sweeps of a sweep tick", async () => {
     const now = new Date("2026-06-20T12:00:00.000Z");
     vi.setSystemTime(now);
     const env = createEnv();
@@ -351,13 +355,6 @@ describe("runScheduledMaintenance", () => {
       deletedEmpty: 2,
       limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
       hasMore: false,
-    });
-    mocks.flushPendingNotificationOutbox.mockResolvedValue({
-      scanned: 1,
-      enqueued: 1,
-      failed: 0,
-      skipped: 0,
-      staleQueued: 1,
     });
     mocks.flushPendingMetaPurchaseOutbox.mockResolvedValue({
       scanned: 2,
@@ -396,12 +393,6 @@ describe("runScheduledMaintenance", () => {
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
       hasMore: false,
     });
-    mocks.failStaleQueuedPaymentWebhookEvents.mockResolvedValue({
-      scanned: 2,
-      failed: 2,
-      limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT,
-      hasMore: false,
-    });
     mocks.cleanupExpiredCustomerAuthOtpChallenges.mockResolvedValue({
       scanned: 2,
       deleted: 2,
@@ -435,11 +426,12 @@ describe("runScheduledMaintenance", () => {
     });
 
     await runScheduledMaintenance(env, executionCtx, {
-      cron: "*/15 * * * *",
+      cron: "* * * * *",
       scheduledTime: now.getTime(),
     });
 
     expect(mocks.getDb).toHaveBeenCalledWith(env);
+    expect(mocks.drainNotificationOutbox).toHaveBeenCalledWith(mocks.db, env);
 
     expect(mocks.releaseExpiredReservations).toHaveBeenCalledWith(mocks.db, 30, {
       limit: INVENTORY_EXPIRY_SWEEP_LIMIT,
@@ -447,7 +439,7 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.archiveStaleIncompleteOrders).toHaveBeenCalledWith(
       mocks.db,
       Math.floor(now.getTime() / 1000) - STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES * 60,
-      { limit: STALE_INCOMPLETE_ORDER_SWEEP_LIMIT },
+      { limit: STALE_INCOMPLETE_ORDER_SWEEP_LIMIT, afterOrderId: undefined, afterGiftCardOrderId: undefined },
     );
     expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalledWith(
       mocks.db,
@@ -459,11 +451,6 @@ describe("runScheduledMaintenance", () => {
       },
     );
 
-    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalledWith({
-      db: mocks.db,
-      queue: env.JOBS_QUEUE,
-      limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
-    });
     expect(mocks.flushPendingMetaPurchaseOutbox).toHaveBeenCalledWith({
       db: mocks.db,
       storefrontUrl: undefined,
@@ -471,11 +458,10 @@ describe("runScheduledMaintenance", () => {
       limit: META_PURCHASE_OUTBOX_SWEEP_LIMIT,
     });
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("event=scheduled_run_started"));
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("cron=*/15 * * * *"));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("cron=* * * * *"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("scheduledTime=2026-06-20T12:00:00.000Z"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("operation=inventory_expiry_sweep"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("event=scheduled_run_completed"));
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("staleQueued=1"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Meta Purchase outbox flush"));
     // App gateways load only when a due row names one.
     expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalledWith(mocks.db, {
@@ -488,9 +474,9 @@ describe("runScheduledMaintenance", () => {
       limit: EXTERNAL_REFUND_RECONCILIATION_LIMIT,
       providers: expect.any(Function),
     });
-    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
+    expect(mocks.sendOrderRefundNotification).toHaveBeenNthCalledWith(1, {
       db: mocks.db,
-      queue: env.JOBS_QUEUE,
+      send: undefined,
       orderId: "order_refunded",
       notificationType: "order_refunded",
       dedupeKey: "refund-reconcile:order_refunded:rfa_1:full",
@@ -500,9 +486,9 @@ describe("runScheduledMaintenance", () => {
         refundId: "re_1",
       },
     });
-    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(2, {
+    expect(mocks.sendOrderRefundNotification).toHaveBeenNthCalledWith(2, {
       db: mocks.db,
-      queue: env.JOBS_QUEUE,
+      send: undefined,
       orderId: "order_processing",
       notificationType: "refund_processing",
       dedupeKey: "refund:order_processing:refund_order_processing_2:processing",
@@ -512,9 +498,9 @@ describe("runScheduledMaintenance", () => {
         refundId: "re_pending",
       },
     });
-    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(3, {
+    expect(mocks.sendOrderRefundNotification).toHaveBeenNthCalledWith(3, {
       db: mocks.db,
-      queue: env.JOBS_QUEUE,
+      send: undefined,
       orderId: "order_failed",
       notificationType: "refund_failed",
       dedupeKey: "refund:order_failed:refund_order_failed_2:failed",
@@ -524,11 +510,6 @@ describe("runScheduledMaintenance", () => {
         refundId: "re_failed",
       },
     });
-    expect(mocks.failStaleQueuedPaymentWebhookEvents).toHaveBeenCalledWith(
-      mocks.db,
-      Math.floor(now.getTime() / 1000) - STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES * 60,
-      { limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT },
-    );
     expect(mocks.cleanupExpiredCustomerAuthOtpChallenges).toHaveBeenCalledWith(
       mocks.db,
       Math.floor(now.getTime() / 1000),
@@ -559,7 +540,7 @@ describe("runScheduledMaintenance", () => {
     );
   });
 
-  it("invalidates and enqueues notifications after Stripe external refunds are locally reconciled", async () => {
+  it("records notifications for the drain after Stripe external refunds are locally reconciled", async () => {
     const env = createEnv();
     const executionCtx = createExecutionContext();
     mocks.reconcileExternalRefundWebhooks.mockResolvedValue({
@@ -583,9 +564,9 @@ describe("runScheduledMaintenance", () => {
 
     await runScheduledMaintenance(env, executionCtx);
 
-    expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
+    expect(mocks.sendOrderRefundNotification).toHaveBeenCalledWith({
       db: mocks.db,
-      queue: env.JOBS_QUEUE,
+      send: undefined,
       orderId: "order_stripe_refunded",
       notificationType: "order_partially_refunded",
       dedupeKey: "refund-reconcile:order_stripe_refunded:rfa_stripe_external_re_1:partial",
@@ -603,24 +584,20 @@ describe("runScheduledMaintenance", () => {
     await runScheduledMaintenance(createEnv(), createExecutionContext());
 
     expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalled();
-    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalled();
+    expect(mocks.drainNotificationOutbox).toHaveBeenCalled();
     expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalled();
-    expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
-    expect(mocks.failStaleQueuedPaymentWebhookEvents).toHaveBeenCalled();
+    expect(mocks.sendOrderRefundNotification).not.toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerAuthOtpChallenges).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerAuthOtpRateLimits).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();
     expect(mocks.cleanupExpiredScannerTokenClaims).toHaveBeenCalled();
   });
 
-  it("queues due review requests before the outbox flush sends up to 200 rows", async () => {
+  it("turns due review requests into outbox rows the notification drain sends", async () => {
     const env = createEnv();
     await runScheduledMaintenance(env, createExecutionContext());
 
     expect(mocks.sweepReviewRequests).toHaveBeenCalledWith(mocks.db, { limit: REVIEW_REQUEST_SWEEP_LIMIT });
-    expect(mocks.sweepReviewRequests.mock.invocationCallOrder[0])
-      .toBeLessThan(mocks.flushPendingNotificationOutbox.mock.invocationCallOrder[0]!);
-    expect(ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT).toBe(200);
     expect(mocks.sweepDigitalUploads).toHaveBeenCalledWith(mocks.db, env.BUCKET, {
       limit: 25,
       afterUploadingId: undefined,
@@ -639,7 +616,7 @@ describe("runScheduledMaintenance", () => {
     mocks.sweepDigitalUploads.mockRejectedValueOnce(new Error("R2 down"));
 
     await expect(runScheduledMaintenance(createEnv(), createExecutionContext())).rejects.toBe(first);
-    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalled();
+    expect(mocks.drainNotificationOutbox).toHaveBeenCalled();
     expect(mocks.flushPendingMetaPurchaseOutbox).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();
 
@@ -667,57 +644,92 @@ describe("runScheduledMaintenance", () => {
       },
     );
 
-    // The backlog goes to the jobs queue first; nothing queued, the run renders inline.
-    expect(mocks.enqueueMediaVariantsBacklog).toHaveBeenCalledWith(mocks.db, env.JOBS_QUEUE, {
-      skip: 0,
-      limit: MEDIA_RENDITION_FANOUT_MAX_PER_RUN,
-    });
-
     const executionCtx = createExecutionContext();
     mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 158, generated: 157, failed: 1, hasMore: false });
     await runScheduledMaintenance(env, executionCtx);
 
   });
 
-  it("fans a rendition backlog out to the jobs queue instead of rendering it inline", async () => {
-    const env = { ...createEnv(), IMAGES: { info: vi.fn() } } as unknown as Env;
-    mocks.enqueueMediaVariantsBacklog.mockResolvedValueOnce({ queued: 1_000, hasMore: true });
-    await runScheduledMaintenance(env, createExecutionContext());
-    expect(mocks.backfillMissingMediaVariants).not.toHaveBeenCalled();
-
-    // A queue that refuses the batch leaves the inline backfill to render.
-    mocks.enqueueMediaVariantsBacklog.mockRejectedValueOnce(new Error("queue down"));
-    await runScheduledMaintenance(env, createExecutionContext());
-    expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledTimes(1);
-  });
-
-  it("runs the event outbox backstop (due events, webhook retries, retention) after the refund sweeps", async () => {
+  it("runs the background drains on every tick and the sweeps only on the 15-minute tick", async () => {
     const env = createEnv();
-    await runScheduledMaintenance(env, createExecutionContext());
-    expect(mocks.runScheduledEventMaintenance).toHaveBeenCalledWith(mocks.db, env);
-    // Refund reconciliation writes refunds whose events this run should hand over.
-    expect(mocks.reconcileExternalRefundWebhooks.mock.invocationCallOrder[0])
-      .toBeLessThan(mocks.runScheduledEventMaintenance.mock.invocationCallOrder[0]!);
+    const ctx = createExecutionContext();
+    const sweepTick = Date.parse("2026-10-02T10:15:00.000Z");
+    await runScheduledMaintenance(env, ctx, { cron: "* * * * *", scheduledTime: sweepTick });
+    expect(mocks.drainNotificationOutbox).toHaveBeenCalledWith(mocks.db, env);
+    expect(mocks.runScheduledEventMaintenance).toHaveBeenCalledWith(mocks.db, env, ctx);
+    expect(mocks.drainPaymentEvents).toHaveBeenCalledWith(mocks.db, env, ctx);
+    expect(mocks.drainCatalogProjectionRebuild).toHaveBeenCalledWith(mocks.db);
+    // The drains go first: a sweep that keeps failing never delays them.
+    expect(mocks.drainCatalogProjectionRebuild.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.releaseExpiredReservations.mock.invocationCallOrder[0]!);
+    expect(mocks.rotateRecommendations).toHaveBeenCalledWith(mocks.db);
+
+    vi.clearAllMocks();
+    for (const minute of [1, 7, 14]) {
+      await runScheduledMaintenance(env, ctx, { cron: "* * * * *", scheduledTime: sweepTick + minute * 60_000 });
+    }
+    expect(mocks.drainNotificationOutbox).toHaveBeenCalledTimes(3);
+    expect(mocks.runScheduledEventMaintenance).toHaveBeenCalledTimes(3);
+    expect(mocks.releaseExpiredReservations).not.toHaveBeenCalled();
+    expect(mocks.runScheduledPluginMaintenance).not.toHaveBeenCalled();
+    expect(mocks.rotateRecommendations).not.toHaveBeenCalled();
   });
 
-  it("prunes settled events after dispatching the due ones, in the last slice of the rotation", async () => {
+  it("keeps draining when one drain fails, then fails the run", async () => {
+    const broken = new Error("event drain broken");
+    mocks.runScheduledEventMaintenance.mockRejectedValueOnce(broken);
+    await expect(runScheduledMaintenance(createEnv(), createExecutionContext())).rejects.toBe(broken);
+    expect(mocks.drainPaymentEvents).toHaveBeenCalled();
+    expect(mocks.drainCatalogProjectionRebuild).toHaveBeenCalled();
+    expect(mocks.releaseExpiredReservations).toHaveBeenCalled();
+  });
+
+  it("prunes settled events after dispatching the due ones", async () => {
     await runScheduledMaintenance(createEnv(), createExecutionContext());
     expect(mocks.runScheduledEventRetention).toHaveBeenCalledWith(mocks.db);
     expect(mocks.runScheduledEventMaintenance.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.runScheduledEventRetention.mock.invocationCallOrder[0]!);
-    expect(MAINTENANCE_SWEEPS.find((sweep) => sweep.name === "event_outbox_retention")?.slice).toBe(3);
+  });
+
+  it("runs the agent-access housekeeping as a rotation job, each part isolated", async () => {
+    const env = createEnv();
+    mocks.purgeExpiredOAuthData.mockRejectedValueOnce(new Error("oauth storage down"));
+    await runScheduledMaintenance(env, createExecutionContext());
+    expect(mocks.purgeExpiredOAuthData).toHaveBeenCalledWith(env);
+    expect(mocks.purgeExpiredAgentArtifacts).toHaveBeenCalledWith(env);
+    expect(mocks.expireAgentBrowserHandoffs).toHaveBeenCalledWith(mocks.db);
+  });
+
+  it("gives the 02:00 store-time minute to the nightly pass alone", async () => {
+    const env = createEnv();
+    const ctx = createExecutionContext();
+    // 20:00 UTC is 02:00 in Dhaka (the store zone without a platform document).
+    const nightly = Date.parse("2026-10-02T20:00:00.000Z");
+    await runScheduledMaintenance(env, ctx, { cron: "* * * * *", scheduledTime: nightly });
+    expect(mocks.runNightlyCatalogMaintenance).toHaveBeenCalledWith(mocks.db, nightly);
+    expect(mocks.measurePluginStorage).toHaveBeenCalledWith(mocks.db);
+    expect(mocks.drainNotificationOutbox).not.toHaveBeenCalled();
+    expect(mocks.releaseExpiredReservations).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    await runScheduledMaintenance(env, ctx, { cron: "* * * * *", scheduledTime: nightly + DRAIN_TICK_MS });
+    expect(mocks.runNightlyCatalogMaintenance).not.toHaveBeenCalled();
+    expect(mocks.drainNotificationOutbox).toHaveBeenCalledTimes(1);
   });
 
   it("runs the plugin tick (bundled sync, due cron slots) at the scheduled time, after the event sweep", async () => {
     const env = createEnv();
     const ctx = createExecutionContext();
-    await runScheduledMaintenance(env, ctx, { cron: "*/15 * * * *", scheduledTime: Date.parse("2026-10-02T10:15:00.000Z") });
-    expect(mocks.runScheduledPluginMaintenance).toHaveBeenCalledWith(mocks.db, env, ctx, Date.parse("2026-10-02T10:15:00.000Z"), { nightly: false });
+    await runScheduledMaintenance(env, ctx, { cron: "* * * * *", scheduledTime: Date.parse("2026-10-02T10:15:00.000Z") });
+    // Paid runs it every 15 minutes: the exchange rates refresh on the :00 run only.
+    expect(mocks.runScheduledPluginMaintenance).toHaveBeenCalledWith(mocks.db, env, ctx, Date.parse("2026-10-02T10:15:00.000Z"), { fxDue: false });
+    await runScheduledMaintenance(env, ctx, { cron: "* * * * *", scheduledTime: Date.parse("2026-10-02T11:00:00.000Z") });
+    expect(mocks.runScheduledPluginMaintenance).toHaveBeenLastCalledWith(mocks.db, env, ctx, Date.parse("2026-10-02T11:00:00.000Z"), { fxDue: true });
     expect(mocks.runScheduledEventMaintenance.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.runScheduledPluginMaintenance.mock.invocationCallOrder[0]!);
   });
 
-  it("runs the time-budgeted rendition backfill last, after every commerce sweep", async () => {
+  it("runs the time-budgeted rendition backfill after the commerce sweeps", async () => {
     const env = { ...createEnv(), IMAGES: { info: vi.fn() } } as unknown as Env;
 
     await runScheduledMaintenance(env, createExecutionContext());
@@ -725,7 +737,7 @@ describe("runScheduledMaintenance", () => {
     const backfillOrder = mocks.backfillMissingMediaVariants.mock.invocationCallOrder[0]!;
     for (const sweep of [
       mocks.releaseExpiredReservations,
-      mocks.flushPendingNotificationOutbox,
+      mocks.drainNotificationOutbox,
       mocks.reconcileDueRefundAttempts,
       mocks.cleanupExpiredCustomerSessions,
       mocks.pruneExpiredIdentityHandoffEvents,
@@ -747,7 +759,7 @@ describe("runScheduledMaintenance", () => {
 
     await expect(runScheduledMaintenance(env, createExecutionContext())).rejects.toBe(first);
 
-    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalled();
+    expect(mocks.drainNotificationOutbox).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();
     expect(mocks.pruneExpiredIdentityHandoffEvents).toHaveBeenCalled();
     expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledTimes(1);
@@ -791,121 +803,94 @@ describe("the sweep rotation", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  const tickAt = (tick: number) => tick * MAINTENANCE_TICK_MS;
+  const count = MAINTENANCE_SWEEPS.length;
+  const minuteAt = (minute: number) => minute * DRAIN_TICK_MS;
+  const indexOf = (name: string) => MAINTENANCE_SWEEPS.findIndex((sweep) => sweep.name === name);
 
-  it("names every sweep once, in a slice of the rotation or on every tick", () => {
+  it("names every job once, and Paid runs them all on one sweep tick", () => {
     const names = MAINTENANCE_SWEEPS.map((sweep) => sweep.name);
-    expect(new Set(names).size).toBe(names.length);
-    for (const sweep of MAINTENANCE_SWEEPS) expect([0, 1, 2, 3, "every"]).toContain(sweep.slice);
-    // Time-sensitive work is never thinned out: buyers' notifications, webhooks, the merchant's plugin schedules.
-    for (const name of ["notification_outbox_flush", "event_outbox_maintenance", "plugin_maintenance"]) {
-      expect(MAINTENANCE_SWEEPS.find((sweep) => sweep.name === name)?.slice).toBe("every");
-    }
+    expect(new Set(names).size).toBe(count);
+    expect(PLAN_LIMITS.paid.maintenance.sweepsPerTick).toBeGreaterThanOrEqual(count);
+    // docs/FREE-PLAN.md, the plugin SDK and the domain READMEs say a Free job runs every 24 minutes.
+    expect(sweepPeriodMinutes(count, PLAN_LIMITS.free.maintenance)).toBe(24);
   });
 
-  it("on one slice (Paid) every sweep is due on every tick, and on an unknown time (a manual run)", () => {
-    for (const sweep of MAINTENANCE_SWEEPS) {
-      for (let tick = 0; tick < 8; tick += 1) expect(maintenanceSliceDue(tickAt(tick), sweep.slice, 1)).toBe(true);
-      expect(maintenanceSliceDue(undefined, sweep.slice, 4)).toBe(true);
-    }
+  it("on Paid runs every job on every fifteenth minute and none between; a manual run runs every job", () => {
+    const paid = PLAN_LIMITS.paid.maintenance;
+    const all = Array.from({ length: count }, (_, index) => index);
+    expect(dueSweepIndexes(minuteAt(1_500), count, paid)).toEqual(all);
+    for (const offset of [1, 7, 14]) expect(dueSweepIndexes(minuteAt(1_500 + offset), count, paid)).toEqual([]);
+    expect(dueSweepIndexes(undefined, count, PLAN_LIMITS.free.maintenance)).toEqual(all);
+    expect(sweepPeriodMinutes(count, paid)).toBe(15);
   });
 
-  it("on four slices (Free) each sweep runs once an hour, and the four ticks of an hour together run every sweep", () => {
-    const perSweep = new Map<string, number>();
-    for (let tick = 100; tick < 104; tick += 1) {
-      for (const sweep of MAINTENANCE_SWEEPS) {
-        if (maintenanceSliceDue(tickAt(tick), sweep.slice, 4)) perSweep.set(sweep.name, (perSweep.get(sweep.name) ?? 0) + 1);
+  it("on Free runs one job a minute, every job once per rotation, each at least hourly", () => {
+    const free = PLAN_LIMITS.free.maintenance;
+    const seen = new Map<number, number>();
+    for (let minute = 7_000; minute < 7_000 + count; minute += 1) {
+      const due = dueSweepIndexes(minuteAt(minute), count, free);
+      expect(due).toHaveLength(1);
+      seen.set(due[0]!, (seen.get(due[0]!) ?? 0) + 1);
+    }
+    expect([...seen.keys()].sort((a, b) => a - b)).toEqual(Array.from({ length: count }, (_, index) => index));
+    expect(sweepPeriodMinutes(count, free)).toBe(count);
+    expect(sweepPeriodMinutes(count, free)).toBeLessThanOrEqual(60);
+  });
+
+  it("marks exactly one run of each job an hour as the hour's first, on both plans", () => {
+    for (const limits of [PLAN_LIMITS.free.maintenance, PLAN_LIMITS.paid.maintenance]) {
+      for (const job of [0, count - 1]) {
+        let first = 0;
+        for (let minute = 60 * 500; minute < 60 * 503; minute += 1) {
+          if (dueSweepIndexes(minuteAt(minute), count, limits).includes(job) && firstSweepRunOfHour(minuteAt(minute), count, limits)) first += 1;
+        }
+        expect(first, `job ${job}`).toBe(3);
       }
     }
-    for (const sweep of MAINTENANCE_SWEEPS) expect(perSweep.get(sweep.name), sweep.name).toBe(sweep.slice === "every" ? 4 : 1);
   });
 
-  it("keeps a Free tick light: no tick runs more than a third of the sweeps that rotate", () => {
-    const rotating = MAINTENANCE_SWEEPS.filter((sweep) => sweep.slice !== "every");
-    for (let tick = 0; tick < 4; tick += 1) {
-      const due = rotating.filter((sweep) => maintenanceSliceDue(tickAt(tick), sweep.slice, 4));
-      expect(due.length, `tick ${tick}`).toBeLessThanOrEqual(Math.ceil(rotating.length / 3));
-    }
-  });
-
-  it("runs only the due slice on Free, at a fraction of each sweep's limit, and still the every-tick sweeps", async () => {
-    const env = { BUCKET: {}, JOBS_QUEUE: { send: vi.fn(), sendBatch: vi.fn() } } as unknown as Env;
+  it("runs the drains and one job per Free minute, at the Free limits", async () => {
+    vi.stubGlobal("__SCALIUS_PLAN__", "free");
+    const env = { BUCKET: {} } as unknown as Env;
     const ctx = { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
-    mocks.releaseExpiredReservations.mockResolvedValue({ found: 0, released: 0, limit: 10, hasMore: false, releasedVariantIds: [], availabilityTransitionVariantIds: [], errors: [] });
-    mocks.flushPendingNotificationOutbox.mockResolvedValue({ scanned: 0, enqueued: 0, failed: 0, skipped: 0, staleQueued: 0 });
-    mocks.reconcileDueRefundAttempts.mockResolvedValue({ refundNotifications: [], scanned: 0, claimed: 0, finalized: 0, failed: 0, deferred: 0, errors: [], limit: 1, hasMore: false });
-    mocks.reconcileExternalRefundWebhooks.mockResolvedValue({ refundNotifications: [], scanned: 0, imported: 0, finalized: 0, skipped: 0, deferred: 0, errors: [], limit: 1, hasMore: false });
-    mocks.failStaleQueuedPaymentWebhookEvents.mockResolvedValue({ scanned: 0, failed: 0, limit: 5, hasMore: false });
-    mocks.runScheduledEventMaintenance.mockResolvedValue({ events: { scanned: 0, enqueued: 0, settledWithoutSubscribers: 0, failed: 0 }, deliveries: { scanned: 0, enqueued: 0 }, pluginDeliveries: { scanned: 0, enqueued: 0 }, pruned: { events: 0, deliveries: 0, pluginDeliveries: 0 } });
-    mocks.runScheduledPluginMaintenance.mockResolvedValue({ bundled: { installed: [], updated: [], removed: [], failed: [], fxApps: false }, cron: { due: 0, ran: 0, failed: 0, skipped: 0, deferred: 0, expired: 0 }, prunedCronRuns: 0 });
+    mocks.releaseExpiredReservations.mockResolvedValue({ found: 0, released: 0, limit: 5, hasMore: false, releasedVariantIds: [], availabilityTransitionVariantIds: [], errors: [] });
+    mocks.archiveStaleIncompleteOrders.mockResolvedValue({ found: 0, limit: 2, hasMore: false, archived: 0, failed: 0, archivedOrderIds: [], errors: [] });
+    mocks.drainNotificationOutbox.mockResolvedValue({ scanned: 0 });
+    mocks.drainPaymentEvents.mockResolvedValue({ scanned: 0, processed: 0 });
+    mocks.drainCatalogProjectionRebuild.mockResolvedValue(0);
+    mocks.runScheduledEventMaintenance.mockResolvedValue({ events: { scanned: 0, dispatched: 0, settledWithoutSubscribers: 0, failed: 0, skipped: 0, deliveries: [] }, deliveries: 0, pluginDeliveries: 0 });
 
-    // Slice 0 (inventory, refunds, stale webhooks) on tick 0; nothing of slices 1-3.
-    await runScheduledMaintenance(env, ctx, { cron: "*/15 * * * *", scheduledTime: tickAt(4_000) });
-    expect(mocks.releaseExpiredReservations).not.toHaveBeenCalled();
-    expect(mocks.reconcileDueRefundAttempts).not.toHaveBeenCalled();
-    expect(env.JOBS_QUEUE!.sendBatch).toHaveBeenCalledWith([
-      ...["inventory_expiry_sweep", "refund_attempt_reconciliation", "external_refund_reconciliation", "plugin_maintenance"].map((name) => ({ body: { type: "maintenance.sweep", name, scheduledAt: tickAt(4_000) } })),
-    ]);
-    await runQueuedMaintenance(env, ctx, { type: "maintenance.sweep", name: "inventory_expiry_sweep", scheduledAt: tickAt(4_000) });
-    expect(mocks.releaseExpiredReservations).toHaveBeenCalledWith(mocks.db, 30, {
-      limit: Math.floor(INVENTORY_EXPIRY_SWEEP_LIMIT * PLAN_LIMITS.free.maintenance.limitScale),
-    });
+    // The minute whose rotation position is the inventory expiry job.
+    const inventoryMinute = count * 1_000 + indexOf("inventory_expiry_sweep");
+    await runScheduledMaintenance(env, ctx, { cron: "* * * * *", scheduledTime: minuteAt(inventoryMinute) });
+    expect(mocks.releaseExpiredReservations).toHaveBeenCalledWith(mocks.db, 30, { limit: PLAN_LIMITS.free.maintenance.inventoryExpiryPerRun });
+    expect(mocks.archiveStaleIncompleteOrders).not.toHaveBeenCalled();
     expect(mocks.cleanupStaleAbandonedCheckouts).not.toHaveBeenCalled();
-    expect(mocks.cleanupExpiredCustomerSessions).not.toHaveBeenCalled();
-    expect(mocks.flushPendingMetaPurchaseOutbox).not.toHaveBeenCalled();
-    // Every tick: the notification flush (at a fraction of its limit), the event outbox, the plugin tick.
-    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalledWith({
-      db: mocks.db,
-      queue: env.JOBS_QUEUE,
-      limit: Math.floor(ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT * PLAN_LIMITS.free.maintenance.limitScale),
-    });
+    expect(mocks.drainNotificationOutbox).toHaveBeenCalledTimes(1);
     expect(mocks.runScheduledEventMaintenance).toHaveBeenCalledTimes(1);
-    expect(mocks.runScheduledPluginMaintenance).not.toHaveBeenCalled();
 
-    // The next tick runs the next slice.
+    // The next minute runs the next job.
     vi.clearAllMocks();
-    await runScheduledMaintenance(env, ctx, { cron: "*/15 * * * *", scheduledTime: tickAt(4_001) });
+    await runScheduledMaintenance(env, ctx, { cron: "* * * * *", scheduledTime: minuteAt(inventoryMinute + 1) });
     expect(mocks.releaseExpiredReservations).not.toHaveBeenCalled();
-    expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalledTimes(1);
-    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalledTimes(1);
+    const next = MAINTENANCE_SWEEPS[(indexOf("inventory_expiry_sweep") + 1) % count]!.name;
+    expect(next).toBe("stale_incomplete_order_cleanup");
+    expect(mocks.archiveStaleIncompleteOrders).toHaveBeenCalledWith(mocks.db, expect.any(Number), expect.objectContaining({ limit: PLAN_LIMITS.free.maintenance.staleOrdersPerRun }));
+    expect(mocks.drainNotificationOutbox).toHaveBeenCalledTimes(1);
   });
 
-  it("leaves a queue that is full of bulk work alone, and renders inline only without a queue or when the queue refuses", async () => {
+  it("renders the rendition backlog in its turn, at the Free per-run limit", async () => {
+    vi.stubGlobal("__SCALIUS_PLAN__", "free");
     const images = { info: vi.fn() };
-    const send = vi.fn();
-    const full = { send, sendBatch: vi.fn(), metrics: vi.fn(async () => ({ backlogCount: PLAN_LIMITS.free.queue.bulkBacklogLimit })) };
     const ctx = { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
-    // Slice 3 of the rotation: the rendition backlog.
-    const sliceThree = tickAt(4_003);
-    await runScheduledMaintenance({ BUCKET: {}, IMAGES: images, JOBS_QUEUE: full } as unknown as Env, ctx, { scheduledTime: sliceThree });
-    expect(mocks.enqueueMediaVariantsBacklog).not.toHaveBeenCalled();
-    expect(mocks.backfillMissingMediaVariants).not.toHaveBeenCalled();
-
-    // Room for 4 more: one small page, behind the jobs already queued.
-    const roomy = { send, sendBatch: vi.fn(), metrics: vi.fn(async () => ({ backlogCount: PLAN_LIMITS.free.queue.bulkBacklogLimit - 4 })) };
-    mocks.enqueueMediaVariantsBacklog.mockResolvedValueOnce({ queued: 4, hasMore: true });
-    await runScheduledMaintenance({ BUCKET: {}, IMAGES: images, JOBS_QUEUE: roomy } as unknown as Env, ctx, { scheduledTime: sliceThree });
-    expect(mocks.enqueueMediaVariantsBacklog).toHaveBeenCalledWith(mocks.db, roomy, {
-      skip: PLAN_LIMITS.free.queue.bulkBacklogLimit - 4,
-      limit: 4,
-    });
-    expect(mocks.backfillMissingMediaVariants).not.toHaveBeenCalled();
-
-    // A queue that refuses falls back to the inline backfill, at the Free inline limit (one image).
-    mocks.enqueueMediaVariantsBacklog.mockRejectedValueOnce(new Error("queue down"));
     mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 1, generated: 1, failed: 0, hasMore: true });
-    await runScheduledMaintenance({ BUCKET: {}, IMAGES: images, JOBS_QUEUE: roomy } as unknown as Env, ctx, { scheduledTime: sliceThree });
+    const minute = count * 1_000 + indexOf("media_rendition_backfill");
+    await runScheduledMaintenance({ BUCKET: {}, IMAGES: images } as unknown as Env, ctx, { scheduledTime: minuteAt(minute) });
     expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledWith(
       mocks.db,
       expect.anything(),
       images,
       expect.objectContaining({ maxImages: PLAN_LIMITS.free.maintenance.inlineRenditionsPerRun }),
     );
-
-    // No queue binding at all: inline too.
-    mocks.backfillMissingMediaVariants.mockClear();
-    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 0, generated: 0, failed: 0, hasMore: false });
-    await expect(runScheduledMaintenance({ BUCKET: {}, IMAGES: images } as unknown as Env, ctx, { scheduledTime: sliceThree })).rejects.toThrow("requires the jobs queue");
-    expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledTimes(1);
   });
 });

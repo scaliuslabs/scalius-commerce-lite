@@ -1,47 +1,30 @@
 // src/modules/customers/otp-transport.ts
-// The OTP queue message. The queue consumer in apps/api/src/queue-consumer.ts
-// dispatches on `method` + `channel`. Payloads carry opaque challenge/delivery
-// references only: provider secrets, raw codes, recipients and names are
-// resolved at send time and must never be serialized into queues.
-import {
-  channelRequestMethod,
-  channelToAllowedMethod,
-  type CustomerAuthOtpChannel,
-} from "@scalius/shared/customer-auth-policy";
+// The OTP delivery reference the API sends after the response
+// (apps/api/src/background/otp.ts). It carries opaque challenge/delivery
+// references only: the recipient, the name, the method and the expiry are
+// read from the challenge row and the code is derived at send time, so none
+// of them is ever handed around in memory or logged.
+import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
 
-export interface OtpQueuePayload {
-  type: "auth.send_otp";
+export interface OtpDelivery {
+  purpose: string;
   challengeKey: string;
   deliveryKey: string;
-  purpose?: string;
-  otpExpiresAt?: number;
-  method: "email" | "phone";
-  allowedMethod: string;
-  channel?: CustomerAuthOtpChannel;
-  /** Legacy pre-reference payloads only. New OTP queue payloads must omit this. */
-  identifier?: string;
-  /** Legacy pre-reference payloads only. New OTP queue payloads must omit this. */
-  code?: string;
-  /** Legacy pre-reference payloads only. New OTP queue payloads must omit this. */
-  name?: string;
+  /** Only for the receipt of a challenge that cannot be read any more. */
+  channel: CustomerAuthOtpChannel;
 }
 
-/** One reference-only OTP message for a challenge on one channel. */
-export function buildOtpQueuePayload(input: {
+/** One reference-only OTP delivery for a challenge on one channel. */
+export function buildOtpDelivery(input: {
   channel: CustomerAuthOtpChannel;
   purpose: string;
   challengeKey: string;
   deliveryKey: string;
-  otpExpiresAt: number;
-}): OtpQueuePayload {
+}): OtpDelivery {
   return {
-    type: "auth.send_otp",
+    purpose: input.purpose,
     challengeKey: input.challengeKey,
     deliveryKey: input.deliveryKey,
-    purpose: input.purpose,
-    otpExpiresAt: input.otpExpiresAt,
-    method: channelRequestMethod(input.channel),
-    allowedMethod: channelToAllowedMethod(input.channel),
     channel: input.channel,
   };
 }

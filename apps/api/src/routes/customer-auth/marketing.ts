@@ -9,6 +9,7 @@ import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { ok } from "../../utils/api-response";
 import { UnauthorizedError } from "../../utils/api-error";
 import { requireCustomerSession } from "./shared";
+import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -80,7 +81,7 @@ app.openapi(updateRoute, async (c) => {
     const customerId = await accountId(c);
     const result = await updateAccountMarketingPreferences(c.get("db"), customerId, c.req.valid("json"), {
         env: c.env as never,
-        queue: c.env.JOBS_QUEUE,
+        send: notificationSender(c),
     });
     return ok(c, result);
 });

@@ -1,19 +1,18 @@
 // Buyer-verified hosted payment recovery: send and verify the recovery OTP.
-import { enqueueAuthOtp } from "../../utils/otp-queue";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
-  deleteOrderPaymentRecoveryChallenge,
   sendOrderPaymentRecoveryOtp,
   verifyOrderPaymentRecoveryOtp,
 } from "@scalius/core/modules/orders";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
-import { NotFoundError, ValidationError, ServiceUnavailableError } from "../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { authMiddleware } from "../../middleware/auth";
 import { getTrustedClientIp } from "../../utils/client-ip";
+import { sendAuthOtp } from "../../background/otp-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -85,21 +84,8 @@ app.openapi(sendOrderPaymentRecoveryOtpRoute, async (c) => {
     throw error;
   }
 
-  if (result.queuePayload) {
-    try {
-      await enqueueAuthOtp(c, result.queuePayload);
-    } catch (error) {
-      if (result.challengeKey && result.deliveryKey) {
-        await deleteOrderPaymentRecoveryChallenge(db, {
-          challengeKey: result.challengeKey,
-          deliveryKey: result.deliveryKey,
-        }).catch((deleteError: unknown) => {
-          console.error("[Orders] Failed to clear payment recovery challenge after queue handoff failure:", deleteError);
-        });
-      }
-      console.error("[Orders] Failed to enqueue payment recovery OTP:", error);
-      throw new ServiceUnavailableError("Could not queue verification code delivery. Please try again.");
-    }
+  if (result.otpDelivery) {
+    await sendAuthOtp(c, c.get("db"), result.otpDelivery);
   }
 
   return result.queued
