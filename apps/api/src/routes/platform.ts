@@ -41,7 +41,7 @@ const getPlatformRoute = createRoute({
 });
 
 app.openapi(getPlatformRoute, async (c) => {
-  // Worker-entry KV is an eventually consistent hint. Origin changes must be
+  // The Worker-entry mirror is a per-colo hint (up to 60 s old). Origin changes must be
   // visible on this configuration read immediately after a successful save.
   const platform = await getPlatformSettings(c.get("db"));
   c.header("Cache-Control", "no-store");

@@ -22,10 +22,6 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
-interface KVNamespace {
-  get(key: string, options?: { cacheTtl?: number }): Promise<string | null>;
-}
-
 // The Workers Cache API's per-data-center default cache.
 interface CacheStorage {
   readonly default: Cache;

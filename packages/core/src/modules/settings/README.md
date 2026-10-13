@@ -155,7 +155,7 @@ WhatsApp saves require a ready provider that is not paused by
 - `notification-channels.ts`, `notification-templates.ts` -- customer and admin order channels, message templates.
 - `system.ts` -- customer auth + WhatsApp (policy saves fail closed unless every selected OTP channel is deliverable; WhatsApp token saves require `CREDENTIAL_ENCRYPTION_KEY`, reject placeholders, skip masked values, and clear WhatsApp provider pauses in the same batch), checkout flow (`expectedRevision` CAS, revision `0` before the first save), checkout readiness, security (CSP only; never widens API CORS), email, Firebase.
 - `payments.ts` -- payment methods and Stripe (SSLCommerz is the Bangladesh pack's; its keys are the pack's settings). Secret saves require `CREDENTIAL_ENCRYPTION_KEY`; enabled saves require non-placeholder credentials.
-- `meta-conversions-admin.ts` -- Meta CAPI settings; a save clears the `meta-capi:browser-events:circuit` KV marker.
+- `meta-conversions-admin.ts` -- Meta CAPI settings; a save clears the `meta-capi:browser-events:circuit` `system_kv` row.
 - `business.ts`, `sms.ts`, `platform.ts`.
 
 ## Checkout configuration

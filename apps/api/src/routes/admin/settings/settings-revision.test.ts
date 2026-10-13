@@ -21,7 +21,7 @@ function createApp() {
     await next();
   });
   app.route("/admin/settings", adminSettingsRoutes);
-  const env = { CREDENTIAL_ENCRYPTION_KEY, CACHE: { delete: vi.fn(), put: vi.fn(), get: vi.fn(async () => null) } } as unknown as Env;
+  const env = { CREDENTIAL_ENCRYPTION_KEY } as unknown as Env;
   const request = async (method: "GET" | "POST" | "PUT", path: string, body?: unknown) => {
     const response = await app.request(`/api/v1/admin/settings${path}`, {
       method,

@@ -25,7 +25,6 @@ function createTestApp(options: {
   batchError?: Error;
 } = {}) {
   const env = {
-    CACHE: { id: "api-cache-kv" },
   } as unknown as Env;
   const selectedRows = [...(options.selectedRows ?? [])];
   const insertReturning = vi.fn().mockResolvedValue([languageRecord]);
@@ -87,7 +86,7 @@ function createStoreApp(seed = "") {
   const { sqlite, db } = createSqliteD1Database();
   // No checkout copy yet: each test saves the ones it needs.
   sqlite.exec(`DELETE FROM checkout_languages; ${seed}`);
-  const env = { CACHE: { id: "api-cache-kv" } } as unknown as Env;
+  const env = {} as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => c.json({ message: error.message }, (error as { status?: number }).status === 409 ? 409 : 500));
   app.use("*", async (c, next) => {

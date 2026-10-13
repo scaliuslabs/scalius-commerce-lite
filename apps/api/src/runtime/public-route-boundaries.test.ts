@@ -11,7 +11,6 @@ function request(app: typeof publicBuyerApp, path: string, init: RequestInit = {
   return app.request(`https://api.example.test/api/v1${path}`, init, {
     DB: binding,
     JWT_SECRET,
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
   } as unknown as Env);
 }
 

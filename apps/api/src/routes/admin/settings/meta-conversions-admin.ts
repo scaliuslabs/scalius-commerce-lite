@@ -21,7 +21,7 @@ import {
 } from "../../../schemas/responses";
 
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
-import { META_CAPI_BROWSER_CIRCUIT_KEY } from "../../meta-conversions";
+import { clearMetaCapiBrowserCircuit } from "../../../utils/meta-capi-circuit";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
 const PLACEHOLDER_CREDENTIALS = new Set([
@@ -171,16 +171,6 @@ const saveSettingsRoute = createRoute({
     }
 });
 
-async function clearMetaCapiBrowserCircuit(env: Env): Promise<void> {
-    try {
-        await env.CACHE?.delete(META_CAPI_BROWSER_CIRCUIT_KEY);
-    } catch (error) {
-        console.warn("Meta CAPI browser-event circuit could not be cleared", {
-            error: error instanceof Error ? error.message : String(error),
-        });
-    }
-}
-
 app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRoute>) => {
     const db = c.get("db");
     const validation = c.req.valid("json");
@@ -239,7 +229,7 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
             : getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     }, { expectedRevision: validation.expectedRevision });
 
-    await clearMetaCapiBrowserCircuit(c.env);
+    await clearMetaCapiBrowserCircuit(db, c.env);
 
     const maskedResult = {
         ...maskedSettings(

@@ -324,7 +324,6 @@ export const policies = [
       "packages/core/src/integrations/storage.ts",
       "packages/core/src/integrations/email/provider.ts",
       "packages/core/src/modules/payments/gateways/stripe.ts",
-      "apps/api/src/utils/kv-cache.ts",
     ],
     // `let` caches are caught by the mutable-module-variable check below.
     forbid: [/\bcachedEnvSignature\b|const permissionCache = new Map|\binitPublicMediaUrl\b|new InMemoryCache|const memCache/],

@@ -66,7 +66,7 @@ function noStore(c: Context) {
 async function assertMay(c: Context<{ Bindings: Env }>, type: (typeof TRANSLATION_EDITOR_TYPES)[number], action: "view" | "edit"): Promise<void> {
   const user = c.get("user") as { id?: string } | undefined;
   const permission = TRANSLATION_PERMISSIONS[type][action];
-  if (!user?.id || !await hasPermission(c.get("db"), user.id, permission, c.env.CACHE)) {
+  if (!user?.id || !await hasPermission(c.get("db"), user.id, permission)) {
     throw new ForbiddenError(action === "view" ? "You don't have permission to see this kind of resource." : "You don't have permission to edit this kind of resource.");
   }
 }

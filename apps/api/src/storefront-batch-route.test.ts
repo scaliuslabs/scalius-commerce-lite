@@ -64,7 +64,6 @@ function setup(version = "version-a") {
     CF_VERSION_METADATA: { id: version, tag: "", timestamp: "" },
     DB: binding,
     SCALIUS_SECRET: "storefront-batch-route-master-secret-0123456789",
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
   } as unknown as Env;
   const waits: Promise<unknown>[] = [];
   const publicApi = vi.fn<(request: Request) => Promise<Response>>();

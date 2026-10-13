@@ -35,7 +35,6 @@ function createTestApp(db: Record<string, unknown> = {
   })),
 }) {
   const env = {
-    CACHE: { id: "api-cache-kv" },
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 

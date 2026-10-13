@@ -83,7 +83,6 @@ describe("bKash app through checkout, session, return and the queue", () => {
     sent = [];
     env = {
       DB: binding,
-      CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
       RL_STANDARD: LIMITER,
       RL_STRICT: LIMITER,
       JOBS_QUEUE: { send: vi.fn(async (message: PaymentEventQueueMessage) => { sent.push(message); }), sendBatch: async () => undefined },

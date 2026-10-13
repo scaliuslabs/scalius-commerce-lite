@@ -1,15 +1,6 @@
-import { sha256Hex } from "./hash";
 export const SCANNER_COOKIE_NAME = "scanner_sid";
 export const SCANNER_TOKEN_TTL_SECONDS = 15 * 60;
 export const SCANNER_SESSION_TTL_SECONDS = 6 * 60 * 60;
-
-export interface ScannerSessionPayload {
-  adminId: string;
-  adminName: string;
-  createdAt: number;
-  lastSeenAt?: number;
-  claimTokenHash?: string;
-}
 
 const SCANNER_API_ALLOWLIST = new Set([
   "GET /api/v1/admin/inventory/scanner/lookup",
@@ -32,10 +23,6 @@ const SCANNER_API_PATTERNS: ReadonlyArray<readonly [method: string, path: RegExp
   ["GET", new RegExp(`^/api/v1/admin/inventory/transfers/${DOCUMENT_ID}$`)],
   ["POST", new RegExp(`^/api/v1/admin/inventory/transfers/${DOCUMENT_ID}/receive$`)],
 ];
-
-export async function getScannerSessionKey(sessionId: string): Promise<string> {
-  return `scanner:session:${await sha256Hex(sessionId)}`;
-}
 
 export function parseCookie(cookieHeader: string | null | undefined, name: string): string | undefined {
   if (!cookieHeader) return undefined;

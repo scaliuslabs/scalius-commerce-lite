@@ -60,7 +60,6 @@ function createTestApp(
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   const db = { id: "db" };
   const env = {
-    CACHE: { id: "api-cache-kv" },
     ...(dashboardUrl ? { PLATFORM_CONFIG: { dashboardUrl } } : {}),
   } as unknown as Env;
 

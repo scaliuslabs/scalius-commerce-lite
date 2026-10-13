@@ -115,7 +115,6 @@ async function seededCatalogue() {
   await refreshProductRecommendations(db, ["p_linen", "p_cotton"]);
   const env = {
     DB: binding,
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
     JWT_SECRET: "cache-deps-catalogue-secret-0123456789abcdef",
     CREDENTIAL_ENCRYPTION_KEY: "cache-deps-catalogue-credential-key-0123456789",
     STOREFRONT_URL: "https://shop.test",

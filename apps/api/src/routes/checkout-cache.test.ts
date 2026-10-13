@@ -19,26 +19,6 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
 
 import { checkoutRoutes } from "./checkout";
 
-function createKvStore(): KVNamespace {
-  const store = new Map<string, string>();
-  return {
-    get: vi.fn(async (key: string) => store.get(key) ?? null),
-    put: vi.fn(async (key: string, value: string) => {
-      store.set(key, value);
-    }),
-    list: vi.fn(async ({ prefix }: { prefix?: string } = {}) => ({
-      keys: [...store.keys()]
-        .filter((name) => !prefix || name.startsWith(prefix))
-        .map((name) => ({ name })),
-      list_complete: true,
-      cacheStatus: null,
-    })),
-    delete: vi.fn(async (key: string) => {
-      store.delete(key);
-    }),
-  } as unknown as KVNamespace;
-}
-
 function createTestApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => {
@@ -61,7 +41,6 @@ describe("checkout config API caching", () => {
   it("does not cache degraded checkout config failures as healthy responses", async () => {
     const app = createTestApp();
     const env = {
-      CACHE: createKvStore(),
       JWT_SECRET: "test-jwt-secret",
     } as unknown as Env;
     mocks.getCheckoutConfig.mockRejectedValue(new Error("D1 unavailable"));

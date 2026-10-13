@@ -351,7 +351,7 @@ function isCustomerSessionEndpoint(path: string): boolean {
 function securityForOperation(path: string, method: string): OpenApiSecurityRequirement[] | null {
   if (isScannerEndpoint(path, method)) return SCANNER_SECURITY;
   if (path === "/auth/token") return API_TOKEN_SECURITY;
-  if (path === "/auth/me" || path === "/auth/revoke" || path === "/auth/token-stats") {
+  if (path === "/auth/me" || path === "/auth/token-stats") {
     return BEARER_SECURITY;
   }
   if (isCustomerSessionEndpoint(path)) return CUSTOMER_SECURITY;

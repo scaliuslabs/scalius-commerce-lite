@@ -170,7 +170,7 @@ export async function readDashboardSessionState(
     (!twoFactorEnabled || twoFactorVerified);
   const permissions = passedGates
     // Native pushes recheck this answer before display; a cached grant must never outlive revocation.
-    ? [...await retryTransientD1(() => getUserPermissions(db, user.id, undefined, isSuperAdmin))]
+    ? [...await retryTransientD1(() => getUserPermissions(db, user.id, isSuperAdmin))]
     : null;
 
   return {

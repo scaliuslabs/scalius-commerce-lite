@@ -52,7 +52,6 @@ function harnessEnv(bindings: HarnessBindings): Env {
   return {
     ...(bindings as unknown as Env),
     DB: remoteD1(bindings.DB_PROXY),
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined, list: async () => ({ keys: [], list_complete: true }) },
     RL_STANDARD: { limit: async () => ({ success: true }) },
     JOBS_QUEUE: { send: async () => undefined, sendBatch: async () => undefined },
     PUBLIC_API_BASE_URL: "https://api.shop.test",

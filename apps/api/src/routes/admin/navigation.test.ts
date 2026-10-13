@@ -61,7 +61,6 @@ import { adminNavigationRoutes } from "./navigation";
 function createTestApp() {
     const db = { id: "db" };
     const env = {
-        CACHE: { id: "api-cache-kv" },
     } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 

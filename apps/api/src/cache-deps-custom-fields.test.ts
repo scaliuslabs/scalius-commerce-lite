@@ -66,7 +66,6 @@ async function seeded() {
   await set("customer", "cus_a", [[fields.vip, true]]);
   const env = {
     DB: binding,
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
     JWT_SECRET: "cache-deps-custom-fields-secret-0123456789abcdef",
     CREDENTIAL_ENCRYPTION_KEY: "cache-deps-custom-fields-credential-key-0123456789",
     STOREFRONT_URL: "https://shop.test",

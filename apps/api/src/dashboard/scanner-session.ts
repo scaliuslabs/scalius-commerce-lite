@@ -1,20 +1,19 @@
 /**
  * `<dashboard>/api/scanner-token`: turns a one-time scanner pairing token
  * (minted by `POST /api/v1/admin/auth/scanner-link`) into a scanner cookie on
- * the dashboard origin, or refreshes an existing scanner session.
+ * the dashboard origin, or refreshes an existing scanner session. The session
+ * is the consumed claim row in the relational database (`session_expires_at`).
  *
  * The token travels only in a same-origin POST body, never in a URL.
  */
-import { consumeScannerTokenClaim } from "@scalius/core/auth/scanner-token-claims";
+import { consumeScannerTokenClaim, readScannerSession } from "@scalius/core/auth/scanner-token-claims";
 import { UnauthorizedError } from "@scalius/core/errors";
-import { getDb } from "@scalius/database/client";
+import { getDb, type Database } from "@scalius/database/client";
 import {
   SCANNER_COOKIE_NAME,
   SCANNER_SESSION_TTL_SECONDS,
   buildScannerSessionCookie,
-  getScannerSessionKey,
   parseCookie,
-  type ScannerSessionPayload,
 } from "@scalius/shared/scanner-auth";
 import { isForeignDashboardRequest } from "../middleware/cookie-origin-guard";
 
@@ -34,48 +33,24 @@ async function readToken(request: Request): Promise<unknown> {
   }
 }
 
-async function readScannerSession(
-  request: Request,
-  kv: KVNamespace,
-): Promise<{ sessionId: string; session: ScannerSessionPayload } | null> {
-  const sessionId = parseCookie(request.headers.get("Cookie"), SCANNER_COOKIE_NAME);
-  if (!sessionId) return null;
-  const raw = await kv.get(await getScannerSessionKey(sessionId));
-  if (!raw) return null;
-  try {
-    return { sessionId, session: JSON.parse(raw) as ScannerSessionPayload };
-  } catch {
-    return null;
-  }
-}
-
-async function startScannerSession(
-  request: Request,
-  kv: KVNamespace,
-  sessionId: string,
-  session: ScannerSessionPayload,
-): Promise<Response> {
-  await kv.put(await getScannerSessionKey(sessionId), JSON.stringify(session), {
-    expirationTtl: SCANNER_SESSION_TTL_SECONDS,
-  });
+function sessionResponse(request: Request, sessionId: string, adminName: string): Response {
   const cookie = buildScannerSessionCookie(sessionId, SCANNER_SESSION_TTL_SECONDS, {
     secure: new URL(request.url).protocol === "https:",
   });
-  return json({ success: true, valid: true, adminName: session.adminName }, 200, cookie);
+  return json({ success: true, valid: true, adminName }, 200, cookie);
 }
 
+/** Slides the cookie's live session (a database row) another full lifetime. */
 async function refreshExistingSession(
   request: Request,
-  kv: KVNamespace,
+  db: Database,
   nowMs: number,
   missing: Response,
 ): Promise<Response> {
-  const existing = await readScannerSession(request, kv);
-  if (!existing) return missing;
-  return startScannerSession(request, kv, existing.sessionId, {
-    ...existing.session,
-    lastSeenAt: nowMs,
-  });
+  const sessionId = parseCookie(request.headers.get("Cookie"), SCANNER_COOKIE_NAME);
+  if (!sessionId) return missing;
+  const session = await readScannerSession(db, sessionId, { nowMs, refresh: true });
+  return session ? sessionResponse(request, sessionId, session.adminName) : missing;
 }
 
 export async function handleScannerSessionRequest(
@@ -102,11 +77,11 @@ export async function handleScannerSessionRequest(
     return json({ success: false, error: "Scanner token is invalid" }, 400);
   }
 
-  const kv = env.CACHE;
+  const db = getDb(env);
   if (typeof token !== "string") {
     return refreshExistingSession(
       request,
-      kv,
+      db,
       nowMs,
       json({ success: false, error: "Scanner session required" }, 401),
     );
@@ -114,20 +89,14 @@ export async function handleScannerSessionRequest(
 
   const sessionId = crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", "");
   try {
-    const claim = await consumeScannerTokenClaim(getDb(env), { token, sessionId, nowMs });
-    return startScannerSession(request, kv, sessionId, {
-      adminId: claim.adminId,
-      adminName: claim.adminName,
-      createdAt: nowMs,
-      lastSeenAt: nowMs,
-      claimTokenHash: claim.tokenHash,
-    });
+    const claim = await consumeScannerTokenClaim(db, { token, sessionId, nowMs });
+    return sessionResponse(request, sessionId, claim.adminName);
   } catch (error) {
     if (!(error instanceof UnauthorizedError)) throw error;
     // A reloaded scanner page re-posts its spent token; keep its session.
     return refreshExistingSession(
       request,
-      kv,
+      db,
       nowMs,
       json({ success: false, error: "Token invalid or expired" }, 401),
     );

@@ -62,7 +62,7 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
     c.set("db", db);
     // A public render inside a dependency scope reads the platform origins
     // (media URL, store URL, CORS) from the tracked settings row, never the
-    // KV hint composed at Worker entry. Outside a scope nothing changes.
+    // per-colo mirror composed at Worker entry. Outside a scope nothing changes.
     c.env = await withTrackedPlatformEnv(c.env as Env, db, c.req.url);
     // The store's time zone (Platform settings) for deep merchant-calendar
     // reads such as a segment's date filter inside checkout pricing.

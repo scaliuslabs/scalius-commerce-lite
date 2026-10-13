@@ -82,7 +82,7 @@ The public and private path lists and the browser `Cache-Control` values are in 
 - The path and query are canonical: sorted query, empty values removed, no tracking parameters or `_sv`, `q` and `search` whitespace collapsed, and default `page=1` and `sortBy=newest` removed on category, collection, blog and search paths. The gateway renders this URL without cookies, so every anonymous visitor gets the same bytes.
 - Tracking parameters (`utm_*`, `fbclid`, `gclid`, `ref` and the other click and campaign keys in `isStorefrontTrackingQueryParam`, `packages/shared/src/storefront-cache-path.ts`) do not count toward the query bounds. The browser URL keeps them for client analytics. An unknown parameter stays, because it may change the page.
 - `BUILD_ID` comes from `apps/storefront/scripts/generate-build-id.js`. The page reports it in `X-Storefront-Build`, and deploy verification compares it.
-- The Worker version is `CF_VERSION_METADATA.id`, read through `readWorkerVersion` (`packages/shared/src/cache-generation.ts`) at no KV or D1 cost. Without the binding it returns null and nothing is cached. `pnpm check:env` fails when a Wrangler config lacks `"version_metadata": { "binding": "CF_VERSION_METADATA" }`.
+- The Worker version is `CF_VERSION_METADATA.id`, read through `readWorkerVersion` (`packages/shared/src/cache-generation.ts`) at no D1 cost. Without the binding it returns null and nothing is cached. `pnpm check:env` fails when a Wrangler config lacks `"version_metadata": { "binding": "CF_VERSION_METADATA" }`.
 - Every deploy of a Worker starts its public cache cold: the first page per data center is a miss. Nothing purges old entries, and Cloudflare evicts them. `pnpm run deploy` deploys the API before the storefront, so old storefront HTML stays consistent with the API that rendered it.
 
 ### Validity
@@ -121,7 +121,7 @@ The `GET /cart` HTML does not depend on the buyer, so the gateway caches it like
 | Dependency cache correctness | `cache-dvc.property.test.ts`, `cache-dvc.race.test.ts` | zero findings |
 | TTFB, LCP and CLS in a real browser | `pnpm perf:storefront` | [thresholds](#pnpm-perfstorefront) |
 | Template fidelity, listing density, navigation at scale, page weights | `pnpm fidelity:check` | [tolerances](#pnpm-fidelitycheck) |
-| Free plan D1, KV, queue and CPU cost per operation | `pnpm free-plan:budget` | [FREE-PLAN.md](./FREE-PLAN.md) |
+| Free plan D1, queue and CPU cost per operation | `pnpm free-plan:budget` | [FREE-PLAN.md](./FREE-PLAN.md) |
 
 D1 budgets of a cold render, per page (seeded store; the home page uses every section type; a batch counts as one round trip):
 
@@ -198,7 +198,7 @@ pnpm fidelity:check --only department-mall --report-only
 pnpm fidelity:check --only listing,marketplace --state-cache /tmp/fidelity-cache
 ```
 
-One run builds the storefront (`--skip-build` reuses `dist/`) and seeds a temporary D1, KV and R2 state that it owns (`seed-large.mjs`: the catalogue-scale store ([below](#load-data)) plus a four-level category tree, generated photos, video products and five navigation menus of 12 to 1,150 links). `--state-cache <dir>` keeps a copy keyed by a fingerprint of the seed code and the migrations. It starts the API and the built storefront under `wrangler dev` on that state and measures them with one headless Chrome over CDP (`scripts/storefront-fidelity/*.mjs`). Then it compares the numbers (`lib/compare.mjs` in that folder), writes the report, stops every process tree it started and deletes the state.
+One run builds the storefront (`--skip-build` reuses `dist/`) and seeds a temporary D1 and R2 state that it owns (`seed-large.mjs`: the catalogue-scale store ([below](#load-data)) plus a four-level category tree, generated photos, video products and five navigation menus of 12 to 1,150 links). `--state-cache <dir>` keeps a copy keyed by a fingerprint of the seed code and the migrations. It starts the API and the built storefront under `wrangler dev` on that state and measures them with one headless Chrome over CDP (`scripts/storefront-fidelity/*.mjs`). Then it compares the numbers (`lib/compare.mjs` in that folder), writes the report, stops every process tree it started and deletes the state.
 
 - Default ports: API 9001, storefront 4601, admin 4602, media 4603, Chrome 9601 (`--api-port`, `--storefront-port`, `--admin-port`, `--media-port`, `--chrome-port`).
 - The API runs as `scalius-api-local-<api port>` on a private dev registry. The run stops unless the storefront home page carries this stack's origins.
@@ -268,7 +268,7 @@ Opt-in harnesses use it and skip unless their variable is set (see each header):
 
 Listings, counts, the product sitemap and recommendations read stored projections (`product_buyer_state`, `product_facet_values`, `product_recommendations`, `product_sales_stats`), not per-request eligibility and ranking over every SKU. Every product, SKU, option-matrix, stock and checkout write appends the refresh statements to its own D1 batch, so the projection commits with the write. Projections are not authority: cart validation and checkout stay authoritative. Columns, refresh, rebuild and recommendation rules are in the [products](../packages/core/src/modules/products/README.md#catalogue-projections) and [catalog](../packages/core/src/modules/catalog/README.md) READMEs.
 
-Migration `0091_catalogue_projection_fill` fills both projections. It was generated from `catalogProjectionFillStatements` (`packages/core/scripts/catalog-projection-fill.ts`) and is immutable: a test keeps the D1/Turso file and its PostgreSQL sidecar at their recorded ledger digest, and proves the current builders still fill a seeded store the same way. Changing the price increment (Settings → Markets, on the backup market) queues a full rebuild, because card prices round to it. A rebuild that finds no drift advances no dependency, and the first cron tick of every new API version queues one full rebuild (KV hint `catalog:projections:rebuilt-for-version`).
+Migration `0091_catalogue_projection_fill` fills both projections. It was generated from `catalogProjectionFillStatements` (`packages/core/scripts/catalog-projection-fill.ts`) and is immutable: a test keeps the D1/Turso file and its PostgreSQL sidecar at their recorded ledger digest, and proves the current builders still fill a seeded store the same way. Changing the price increment (Settings → Markets, on the backup market) queues a full rebuild, because card prices round to it. A rebuild that finds no drift advances no dependency, and the first cron tick of every new API version queues one full rebuild (the `system_kv` claim `catalog:projections:rebuilt-for-version`).
 
 ### Listing reads
 

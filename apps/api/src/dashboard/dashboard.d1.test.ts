@@ -37,16 +37,6 @@ function totp(base32: string, nowMs = Date.now()): string {
   return value.toString().padStart(6, "0");
 }
 
-function memoryKv(): KVNamespace {
-  const store = new Map<string, string>();
-  return {
-    get: async (key: string) => store.get(key) ?? null,
-    put: async (key: string, value: string) => void store.set(key, value),
-    delete: async (key: string) => void store.delete(key),
-    list: async () => ({ keys: [], list_complete: true, cacheStatus: null }),
-  } as unknown as KVNamespace;
-}
-
 const SHELL = `<!doctype html><html><head><meta name="scalius-dashboard-base-path" content=""><link rel="icon" href="/favicon.png" /><script type="module" crossorigin src="/assets/immutable/index-abc.js"></script></head><body><div id="root"></div></body></html>`;
 
 function fakeAssets(): NonNullable<Env["ASSETS"]> {
@@ -72,7 +62,6 @@ function makeEnv(platform: Partial<PlatformConfig> = {}): Env {
   };
   return {
     DB: database.binding,
-    CACHE: memoryKv(),
     ASSETS: fakeAssets(),
     BETTER_AUTH_SECRET: "dashboard-test-secret-0123456789abcdef",
     PLATFORM_CONFIG: config,
@@ -363,7 +352,7 @@ describe("scanner cookie exchange", () => {
 
 
 describe("native push first-party session read", () => {
-  it("reads revoked permissions from the database even when a paid-profile KV snapshot still grants them", async () => {
+  it("reads granted and revoked permissions from the database on each read", async () => {
     const env = makeEnv();
     const userId = await createSuperAdmin(env);
     const cookie = sessionCookie(await signIn(env));
@@ -373,23 +362,14 @@ describe("native push first-party session read", () => {
     await database.db.update(userTable).set({ isSuperAdmin: false }).where(eq(userTable.id, userId));
     database.sqlite.exec("INSERT OR IGNORE INTO permissions (id,name,display_name,resource,action,category) VALUES ('push-orders-view','orders.view','Orders','orders','view','Orders')");
     database.sqlite.prepare("INSERT INTO user_permissions (id,user_id,permission_id,granted) SELECT 'push-grant', ?, id, 1 FROM permissions WHERE name='orders.view'").run(userId);
-    const originalGet = env.CACHE.get;
-    const cached = vi.spyOn(env.CACHE, "get").mockImplementation(((key: string, ...args: unknown[]) =>
-      key.startsWith("rbac:perms:") ? Promise.resolve(["orders.view"]) : Reflect.apply(originalGet, env.CACHE, [key, ...args])) as typeof env.CACHE.get);
     vi.stubGlobal("__SCALIUS_PLAN__", "paid");
     try {
-      expect(planLimits().kv.permissionCache).toBe(true);
       const demoted = (await (await readState(env, cookie)).json() as SessionState).session;
       expect(demoted.user.isSuperAdmin).toBe(false);
       expect(demoted.permissions).toContain("orders.view");
       database.sqlite.prepare("DELETE FROM user_permissions WHERE user_id = ?").run(userId);
       expect((await (await readState(env, cookie)).json() as SessionState).session.permissions).not.toContain("orders.view");
-      // KV.get has a bulk overload; this spy records both the scalar and bulk key shapes.
-      expect(cached.mock.calls.some((call) => {
-        const key: unknown = call[0];
-        return typeof key === "string" && key.startsWith("rbac:perms:");
-      })).toBe(false);
-    } finally { vi.unstubAllGlobals(); cached.mockRestore(); }
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it.each(["", "/dashboard"])("serves JSON at the %s base with SW-style same-origin credentials", async (base) => {

@@ -73,16 +73,7 @@ export async function fetchRuntimeApiApp(
 ): Promise<Response> {
   const pathname = new URL(request.url).pathname;
   if (pathname === "/api/v1/health" || pathname === "/api/v1/health/") {
-    return Response.json({
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      cache: {
-        type: "kv",
-        size: -1,
-        memory: "N/A (Cloudflare KV managed)",
-        uptime: "N/A (Cloudflare KV managed)",
-      },
-    });
+    return Response.json({ status: "ok", timestamp: new Date().toISOString() });
   }
 
   const family = classifyRuntimeApiPath(pathname);

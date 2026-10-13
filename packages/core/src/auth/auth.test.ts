@@ -438,13 +438,4 @@ describe("createAuth", () => {
       "https://shop.example.com",
     ]);
   });
-
-  it("hands identity handoff the CACHE namespace that admin-auth reads permissions from", () => {
-    const cache = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
-    createAuth({ BETTER_AUTH_SECRET: "test-secret", CACHE: cache } as never);
-
-    expect(mocks.identityHandoff).toHaveBeenCalledWith(
-      expect.objectContaining({ permissionCache: cache }),
-    );
-  });
 });

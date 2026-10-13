@@ -345,7 +345,6 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
         config: handoffConfig,
         hmacSecret: readString(env, "IDENTITY_HANDOFF_SECRET"),
         dashboardUrl,
-        permissionCache: env.CACHE,
       }),
     ],
     trustedOrigins: [baseURL, storefrontURL].filter(Boolean) as string[],

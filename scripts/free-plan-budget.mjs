@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// The Workers plan budget harness: what each operation costs in D1 queries, KV
-// operations, queue messages and CPU, under the Free and the Paid profile, and
+// The Workers plan budget harness: what each operation costs in D1 queries,
+// queue messages and CPU, under the Free and the Paid profile, and
 // what a day of orders consumes of Workers Free's quotas.
 //
 //   pnpm free-plan:budget                 run the Node tier (both profiles), print the tables
@@ -27,9 +27,6 @@ const root = resolve(import.meta.dirname, "..");
 
 /** Workers Free daily quotas (developers.cloudflare.com, checked 2026-10-03). */
 export const FREE_DAILY_QUOTAS = Object.freeze({
-  kvWrites: 1_000,
-  kvDeletes: 1_000,
-  kvReads: 100_000,
   queueOperations: 10_000,
   d1RowsWritten: 100_000,
   d1RowsRead: 5_000_000,
@@ -113,9 +110,6 @@ export function dailyQuota(rows, options = {}) {
   const daily = sum(scale(perOrder, model.orders), cron);
   const queueOperations = (daily.queueMessages ?? 0) * 3;
   const resources = {
-    kvWrites: { used: daily.kvWrites ?? 0, perOrder: perOrder.kvWrites ?? 0, limit: FREE_DAILY_QUOTAS.kvWrites },
-    kvDeletes: { used: daily.kvDeletes ?? 0, perOrder: perOrder.kvDeletes ?? 0, limit: FREE_DAILY_QUOTAS.kvDeletes },
-    kvReads: { used: daily.kvReads ?? 0, perOrder: perOrder.kvReads ?? 0, limit: FREE_DAILY_QUOTAS.kvReads },
     queueOperations: { used: queueOperations, perOrder: (perOrder.queueMessages ?? 0) * 3, limit: FREE_DAILY_QUOTAS.queueOperations },
     d1RowsWritten: {
       used: (daily.d1RowsChanged ?? 0) * model.indexWriteFactor,
@@ -138,12 +132,12 @@ const number = (value, digits = 0) => (Number.isFinite(value) ? value.toFixed(di
 export function renderCounterTable(plan, rows) {
   const lines = [
     `Plan profile: ${plan}`,
-    `${"operation".padEnd(34)} ${pad("cpu cold", 8)} ${pad("cpu warm", 8)} ${pad("D1 calls", 8)} ${pad("D1 stmts", 8)} ${pad("rows chg", 8)} ${pad("KV r/w/d", 9)} ${pad("queue msgs", 10)} ${pad("fetch", 5)}`,
+    `${"operation".padEnd(34)} ${pad("cpu cold", 8)} ${pad("cpu warm", 8)} ${pad("D1 calls", 8)} ${pad("D1 stmts", 8)} ${pad("rows chg", 8)} ${pad("queue msgs", 10)} ${pad("fetch", 5)}`,
   ];
   for (const row of rows) {
     const c = row.counters;
     lines.push(
-      `${row.id.padEnd(34)} ${pad(number(row.cold.cpuMs, 1), 8)} ${pad(number(row.warmCpuMs, 1), 8)} ${pad(c.d1Calls, 8)} ${pad(c.d1Statements, 8)} ${pad(c.d1RowsChanged, 8)} ${pad(`${c.kvReads}/${c.kvWrites}/${c.kvDeletes}`, 9)} ${pad(c.queueMessages, 10)} ${pad(c.externalFetches, 5)}`,
+      `${row.id.padEnd(34)} ${pad(number(row.cold.cpuMs, 1), 8)} ${pad(number(row.warmCpuMs, 1), 8)} ${pad(c.d1Calls, 8)} ${pad(c.d1Statements, 8)} ${pad(c.d1RowsChanged, 8)} ${pad(c.queueMessages, 10)} ${pad(c.externalFetches, 5)}`,
     );
   }
   return lines.join("\n");
@@ -152,9 +146,6 @@ export function renderCounterTable(plan, rows) {
 export function renderQuotaTable(plan, quota) {
   const { model, resources } = quota;
   const labels = {
-    kvWrites: "KV writes",
-    kvDeletes: "KV deletes",
-    kvReads: "KV reads",
     queueOperations: "Queue operations",
     d1RowsWritten: "D1 rows written (est.)",
   };
@@ -175,7 +166,7 @@ export function renderQuotaTable(plan, quota) {
 
 /** Source of apps/api/src/testing/free-plan-budgets.ts from a report: each operation's measured counters. */
 export function budgetsSource(report) {
-  const keys = ["d1Calls", "d1Statements", "kvReads", "kvWrites", "kvDeletes", "queueMessages", "externalFetches"];
+  const keys = ["d1Calls", "d1Statements", "queueMessages", "externalFetches"];
   const block = (rows) => rows
     .map((row) => `    ${JSON.stringify(row.id)}: { ${keys.map((key) => `${key}: ${row.counters[key]}`).join(", ")} },`)
     .join("\n");

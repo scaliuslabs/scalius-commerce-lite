@@ -152,7 +152,6 @@ describe("API Worker startup boundaries", () => {
     vi.stubGlobal("caches", { default: { match, put } });
     const waits: Promise<unknown>[] = [];
     const cachedFetch = vi.fn(async (_request: Request) => new Response("cached"));
-    const kvGet = vi.fn(async () => "a1b2c3d4e5f60718");
     const { default: ApiWorker } = await import("./worker");
     const worker = new ApiWorker(
       {
@@ -160,7 +159,6 @@ describe("API Worker startup boundaries", () => {
         exports: { PublicApi: { fetch: cachedFetch } },
       } as unknown as ExecutionContext,
       runtimeEnv({
-        CACHE: { get: kvGet } as unknown as KVNamespace,
         CF_VERSION_METADATA: { id: "version-a", tag: "", timestamp: "" },
       }),
     ) as unknown as TestApiWorker;
@@ -172,7 +170,6 @@ describe("API Worker startup boundaries", () => {
     }));
 
     await Promise.all(waits);
-    expect(kvGet).not.toHaveBeenCalled();
     expect(cachedFetch).not.toHaveBeenCalled();
     expect(match.mock.calls.map(([key]) => key)).toEqual([
       "https://api.example.test/api/v1/products?limit=10&page=2&__cv=version-a",
@@ -557,7 +554,7 @@ describe("API Worker startup boundaries", () => {
       const { default: ApiWorker } = await import("./worker");
       const worker = new ApiWorker(
         undefined as never,
-        { CACHE: { get: vi.fn() } } as unknown as Env,
+        {} as unknown as Env,
       ) as unknown as TestApiWorker;
       const response = await worker.fetch(new Request(`https://api.example.test${path}`));
 

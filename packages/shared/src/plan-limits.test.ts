@@ -89,8 +89,7 @@ describe("plan profile", () => {
       expect(paid.queue.catalogRebuildChunk).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.catalogRebuildChunk);
     });
 
-    it("every KV hint and on-demand rendition stays on", () => {
-      expect(Object.values(paid.kv)).toEqual(Object.values(paid.kv).map(() => true));
+    it("on-demand renditions stay on", () => {
       expect(paid.queue.renditionsFromPublicReads).toBe(true);
     });
 

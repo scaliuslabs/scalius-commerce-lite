@@ -1,11 +1,9 @@
 // src/server/routes/meta-conversions.ts
 
-import { putKvHint } from "@scalius/shared/kv-hints";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
 import {
   sendCapiEvent,
-  type SendCapiEventResult,
 } from "@scalius/core/integrations/meta/conversions-api";
 import { getClientIp } from "@scalius/shared/rate-limit";
 
@@ -15,10 +13,8 @@ import { RateLimitError, ValidationError } from "../utils/api-error";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { getOptionalExecutionContext } from "../utils/execution-context";
 import { isWithinRateLimit } from "../utils/rate-limit";
+import { isMetaCapiBrowserCircuitOpen, openMetaCapiBrowserCircuit } from "../utils/meta-capi-circuit";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-export const META_CAPI_BROWSER_CIRCUIT_KEY =
-  "meta-capi:browser-events:circuit";
-const META_CAPI_BROWSER_CIRCUIT_TTL_SECONDS = 15 * 60;
 
 const eventPayloadSchema = z.object({
   eventId: z.string().min(8).max(128).optional(),
@@ -102,46 +98,6 @@ function isTrustedEventSource(eventSourceUrl: string, storefrontUrl?: string): b
   }
 }
 
-async function readMetaCapiBrowserCircuit(kv: KVNamespace | undefined) {
-  if (!kv) return null;
-  try {
-    // Read on every browser event; the edge-cached read keeps the circuit
-    // check off the KV origin for a minute at a time.
-    const raw = await kv.get(META_CAPI_BROWSER_CIRCUIT_KEY, { cacheTtl: 60 });
-    if (!raw) return null;
-    return JSON.parse(raw) as {
-      reason?: string;
-      eventName?: string;
-      openedAt?: number;
-    };
-  } catch (error) {
-    console.warn("[Meta CAPI] Failed to read browser event circuit", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-}
-
-async function openMetaCapiBrowserCircuit(
-  kv: KVNamespace | undefined,
-  result: SendCapiEventResult,
-  eventName: string,
-) {
-  if (!kv || result.success || result.retryable !== false) return;
-
-  const opened = await putKvHint(
-    kv,
-    META_CAPI_BROWSER_CIRCUIT_KEY,
-    JSON.stringify({
-      reason: result.error || "non-retryable Meta CAPI failure",
-      eventName,
-      openedAt: Date.now(),
-    }),
-    { expirationTtl: META_CAPI_BROWSER_CIRCUIT_TTL_SECONDS },
-  );
-  if (!opened) console.warn("[Meta CAPI] Browser event circuit not opened");
-}
-
 // ─── POST /events ────────────────────────────────────────────────────────────
 
 const postEventRoute = createRoute({
@@ -178,24 +134,20 @@ app.openapi(postEventRoute, async (c) => {
     throw new ValidationError("Event source URL is not trusted for this storefront.");
   }
 
-  const kv = c.env.CACHE as KVNamespace | undefined;
-  if (kv) {
-    const circuit = await readMetaCapiBrowserCircuit(kv);
-    if (circuit) {
-      return ok(c, {
-        message:
-          "Event skipped because Meta CAPI recently failed. Save valid Meta settings to retry sooner.",
-        eventId,
-      });
-    }
+  const db = c.get("db");
+  if (await isMetaCapiBrowserCircuitOpen(db, c.env)) {
+    return ok(c, {
+      message:
+        "Event skipped because Meta CAPI recently failed. Save valid Meta settings to retry sooner.",
+      eventId,
+    });
   }
 
-  // Browser tracking fires on every page view; the native limiter costs no KV.
+  // Browser tracking fires on every page view; the native limiter costs no database work.
   if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "meta-events", getClientIp(c.req.raw)))) {
     throw new RateLimitError("Too many tracking events. Please try again later.");
   }
 
-  const db = c.get("db");
   const clientIp = getClientIp(c.req.raw);
   const clientIpForMeta =
     clientIp === "unknown" ? c.req.header("x-real-ip") : clientIp;
@@ -218,7 +170,9 @@ app.openapi(postEventRoute, async (c) => {
   }, {
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   }).then(async (result) => {
-    await openMetaCapiBrowserCircuit(kv, result, body.eventName);
+    if (!result.success && result.retryable === false) {
+      await openMetaCapiBrowserCircuit(db, c.env, result.error || "non-retryable Meta CAPI failure", body.eventName);
+    }
     return result;
   });
 

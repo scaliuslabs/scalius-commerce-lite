@@ -96,7 +96,6 @@ describe.runIf(databasePath)("cache dependency noise-column audit", () => {
     const { binding } = createSqliteD1Database({ sqlite });
     const env = {
       DB: binding,
-      CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
       JWT_SECRET: "cache-deps-noise-secret-0123456789abcdef",
       CREDENTIAL_ENCRYPTION_KEY: "cache-deps-noise-credential-key-0123456789",
       STOREFRONT_URL: "https://shop.test",

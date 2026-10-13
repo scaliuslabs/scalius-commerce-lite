@@ -1,13 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { getAllPermissionNames, PERMISSIONS } from "./permissions";
 import {
-  clearPermissionCache,
   getAllRolesWithPermissions,
-  getFreshUserPermissionsFromD1,
   getUserPermissions,
+  removeRoleFromUser,
+  setUserPermissionOverride,
 } from "./helpers";
-import { getRbacSeedCacheKey } from "./auto-seed";
-import { resetKvHintBreaker } from "@scalius/shared/kv-hints";
 
 function createSelectChain() {
   const chain = {
@@ -19,11 +18,7 @@ function createSelectChain() {
   return chain;
 }
 
-// The KV snapshot is the Paid profile's accelerator (kv.permissionCache); the
-// Free profile resolves from D1 and is covered by the describe at the end.
-describe("RBAC permission cache", () => {
-  beforeEach(() => { vi.stubGlobal("__SCALIUS_PLAN__", "paid"); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+describe("RBAC permission resolution", () => {
 
   it("loads a bounded role page and only its permissions", async () => {
     const rolesResult = [
@@ -100,74 +95,14 @@ describe("RBAC permission cache", () => {
     expect(db.batch).not.toHaveBeenCalled();
   });
 
-  it("does not retain stale local memory after a KV permission cache miss", async () => {
-    const selectChain = createSelectChain();
-    const db = {
-      select: vi.fn(() => selectChain),
-      batch: vi.fn().mockResolvedValue([
-        [{ id: "user_1", isSuperAdmin: false }],
-        [{ permissionName: PERMISSIONS.ORDERS_VIEW }],
-        [],
-      ]),
-    };
-    const kv = {
-      get: vi
-        .fn()
-        .mockResolvedValueOnce([PERMISSIONS.PRODUCTS_VIEW])
-        .mockResolvedValueOnce(null),
-      put: vi.fn().mockResolvedValue(undefined),
-      delete: vi.fn().mockResolvedValue(undefined),
-    };
-
-    const cached = await getUserPermissions(db as never, "user_1", kv as never);
-    expect(cached).toEqual(new Set([PERMISSIONS.PRODUCTS_VIEW]));
-    expect(kv.get).toHaveBeenNthCalledWith(
-      1,
-      `rbac:perms:user_1:${getRbacSeedCacheKey()}`,
-      "json",
-    );
-    expect(db.batch).not.toHaveBeenCalled();
-
-    const refreshed = await getUserPermissions(db as never, "user_1", kv as never);
-    expect(refreshed).toEqual(new Set([PERMISSIONS.ORDERS_VIEW]));
-    expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(kv.put).toHaveBeenCalledWith(
-      `rbac:perms:user_1:${getRbacSeedCacheKey()}`,
-      JSON.stringify([PERMISSIONS.ORDERS_VIEW]),
-      { expirationTtl: 3600 },
-    );
-  });
-
-  it("clears the current catalog-versioned permission entry", async () => {
-    const kv = {
-      delete: vi.fn().mockResolvedValue(undefined),
-    };
-
-    await clearPermissionCache("user_1", kv as never);
-
-    expect(kv.delete).toHaveBeenCalledWith(
-      `rbac:perms:user_1:${getRbacSeedCacheKey()}`,
-    );
-  });
-
-  it("derives known super-admin authority from the code registry before stale caches", async () => {
+  it("derives known super-admin authority from the code registry", async () => {
     const db = { batch: vi.fn(), select: vi.fn() };
-    const kv = {
-      get: vi.fn().mockResolvedValue([PERMISSIONS.PRODUCTS_VIEW]),
-      put: vi.fn(),
-    };
 
-    const resolved = await getUserPermissions(
-      db as never,
-      "super_1",
-      kv as never,
-      true,
-    );
+    const resolved = await getUserPermissions(db as never, "super_1", true);
 
     expect(resolved).toEqual(new Set(getAllPermissionNames()));
     expect(resolved).toContain(PERMISSIONS.TAXES_VIEW);
     expect(resolved).toContain(PERMISSIONS.TAXES_MANAGE);
-    expect(kv.get).not.toHaveBeenCalled();
     expect(db.batch).not.toHaveBeenCalled();
   });
 
@@ -191,115 +126,25 @@ describe("RBAC permission cache", () => {
     expect(db.select).toHaveBeenCalledTimes(3);
   });
 
-  it("bypasses stale KV and local role grants after D1 revokes the role permission", async () => {
-    const selectChain = createSelectChain();
-    const db = {
-      select: vi.fn(() => selectChain),
-      batch: vi.fn().mockResolvedValue([
-        [{ id: "user_1", isSuperAdmin: false }],
-        [],
-        [],
-      ]),
-    };
-    const kv = {
-      get: vi.fn().mockResolvedValue([PERMISSIONS.PRODUCTS_VIEW]),
-      put: vi.fn().mockResolvedValue(undefined),
-    };
+  it("revokes on the very next check after a role removal or an explicit denial", async () => {
+    const { sqlite, db } = createSqliteD1Database();
+    sqlite.exec(`
+      INSERT INTO user (id, name, email, email_verified, role) VALUES ('staff', 'Staff', 'staff@shop.test', 1, 'admin');
+      INSERT INTO permissions (id, name, display_name, resource, action, category) VALUES
+        ('perm_view', '${PERMISSIONS.ORDERS_VIEW}', 'View orders', 'orders', 'view', 'orders'),
+        ('perm_products', '${PERMISSIONS.PRODUCTS_VIEW}', 'View products', 'products', 'view', 'products');
+      INSERT INTO roles (id, name, display_name) VALUES ('role_ops', 'ops', 'Ops'), ('role_catalog', 'catalog', 'Catalog');
+      INSERT INTO role_permissions (id, role_id, permission_id) VALUES ('rp1', 'role_ops', 'perm_view'), ('rp2', 'role_catalog', 'perm_products');
+      INSERT INTO user_roles (id, user_id, role_id) VALUES ('ur1', 'staff', 'role_ops'), ('ur2', 'staff', 'role_catalog');
+    `);
 
-    const stale = await getUserPermissions(db as never, "user_1", kv as never);
-    const fresh = await getFreshUserPermissionsFromD1(db as never, "user_1");
+    expect(await getUserPermissions(db, "staff")).toEqual(new Set([PERMISSIONS.ORDERS_VIEW, PERMISSIONS.PRODUCTS_VIEW]));
 
-    expect(stale).toEqual(new Set([PERMISSIONS.PRODUCTS_VIEW]));
-    expect(fresh).toEqual(new Set());
-    expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(kv.get).toHaveBeenCalledTimes(1);
-    expect(kv.put).not.toHaveBeenCalled();
-  });
+    await removeRoleFromUser(db, "staff", "role_ops");
+    expect(await getUserPermissions(db, "staff")).toEqual(new Set([PERMISSIONS.PRODUCTS_VIEW]));
 
-  it("honors a fresh D1 explicit denial even when KV still contains the role grant", async () => {
-    const selectChain = createSelectChain();
-    const db = {
-      select: vi.fn(() => selectChain),
-      batch: vi.fn().mockResolvedValue([
-        [{ id: "user_1", isSuperAdmin: false }],
-        [{ permissionName: PERMISSIONS.PRODUCTS_VIEW }],
-        [{ permissionName: PERMISSIONS.PRODUCTS_VIEW, granted: false }],
-      ]),
-    };
-    const kv = {
-      get: vi.fn().mockResolvedValue([PERMISSIONS.PRODUCTS_VIEW]),
-      put: vi.fn().mockResolvedValue(undefined),
-    };
-
-    const stale = await getUserPermissions(db as never, "user_1", kv as never);
-    const fresh = await getFreshUserPermissionsFromD1(db as never, "user_1");
-
-    expect(stale).toEqual(new Set([PERMISSIONS.PRODUCTS_VIEW]));
-    expect(fresh).toEqual(new Set());
-    expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(kv.get).toHaveBeenCalledTimes(1);
-    expect(kv.put).not.toHaveBeenCalled();
-  });
-
-  it("uses current D1 super-admin truth instead of a stale limited cache", async () => {
-    const selectChain = createSelectChain();
-    const db = {
-      select: vi.fn(() => selectChain),
-      batch: vi.fn().mockResolvedValue([
-        [{ id: "super_3", isSuperAdmin: true }],
-        [],
-        [],
-      ]),
-    };
-    const kv = {
-      get: vi.fn().mockResolvedValue([PERMISSIONS.PRODUCTS_VIEW]),
-      put: vi.fn().mockResolvedValue(undefined),
-    };
-
-    const stale = await getUserPermissions(db as never, "super_3", kv as never);
-    const fresh = await getFreshUserPermissionsFromD1(db as never, "super_3");
-
-    expect(stale).toEqual(new Set([PERMISSIONS.PRODUCTS_VIEW]));
-    expect(fresh).toEqual(new Set(getAllPermissionNames()));
-    expect(fresh).toContain(PERMISSIONS.TAXES_VIEW);
-    expect(fresh).toContain(PERMISSIONS.TAXES_MANAGE);
-    expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(kv.get).toHaveBeenCalledTimes(1);
-    expect(kv.put).not.toHaveBeenCalled();
-  });
-});
-
-describe("RBAC permissions on the Free profile", () => {
-  afterEach(() => resetKvHintBreaker());
-
-  const resolvedBatch = () => vi.fn().mockResolvedValue([
-    [{ id: "user_1", isSuperAdmin: false }],
-    [{ permissionName: PERMISSIONS.ORDERS_VIEW }],
-    [],
-  ]);
-
-  it("resolves every check from D1 and neither reads nor writes the KV snapshot", async () => {
-    const db = { batch: resolvedBatch(), select: vi.fn(() => createSelectChain()) };
-    const kv = {
-      get: vi.fn().mockResolvedValue([PERMISSIONS.PRODUCTS_VIEW]),
-      put: vi.fn().mockResolvedValue(undefined),
-      delete: vi.fn().mockResolvedValue(undefined),
-    };
-
-    // A snapshot that says otherwise is never consulted.
-    expect(await getUserPermissions(db as never, "user_1", kv as never)).toEqual(new Set([PERMISSIONS.ORDERS_VIEW]));
-    expect(await getUserPermissions(db as never, "user_1", kv as never)).toEqual(new Set([PERMISSIONS.ORDERS_VIEW]));
-    expect(db.batch).toHaveBeenCalledTimes(2);
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
-  });
-
-  it("still sweeps a leftover snapshot on a role change, and never fails the change over KV", async () => {
-    const kv = { delete: vi.fn().mockResolvedValue(undefined) };
-    await clearPermissionCache("user_1", kv as never);
-    expect(kv.delete).toHaveBeenCalledWith(`rbac:perms:user_1:${getRbacSeedCacheKey()}`);
-
-    const refusing = { delete: vi.fn().mockRejectedValue(new Error("KV DELETE failed: 429 Too Many Requests")) };
-    await expect(clearPermissionCache("user_1", refusing as never)).resolves.toBeUndefined();
+    await setUserPermissionOverride(db, "staff", PERMISSIONS.PRODUCTS_VIEW, false);
+    expect(await getUserPermissions(db, "staff")).toEqual(new Set());
+    expect(await getUserPermissions(db, "missing")).toEqual(new Set());
   });
 });

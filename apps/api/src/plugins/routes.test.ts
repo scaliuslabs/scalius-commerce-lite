@@ -122,21 +122,11 @@ describe("plugin routes", { timeout: 30_000 }, () => {
   }
 
   beforeEach(async () => {
-    // The staff below are the KV permission snapshot (kv.permissionCache), the Paid profile's resolver.
     vi.stubGlobal("__SCALIUS_PLAN__", "paid");
     let binding: D1Database;
     ({ sqlite, db, binding } = createSqliteD1Database());
     limited = false;
     env = pluginTestEnv(binding, {
-      CACHE: {
-        get: async (key: string) => {
-          const userId = /^rbac:perms:([^:]+):/.exec(key)?.[1];
-          return userId && STAFF[userId] ? STAFF[userId] : null;
-        },
-        put: async () => undefined,
-        delete: async () => undefined,
-        list: async () => ({ keys: [], list_complete: true }),
-      },
       RL_STANDARD: { limit: vi.fn(async () => ({ success: !limited })) },
     });
     await installHello(db, sqlite);
@@ -145,6 +135,14 @@ describe("plugin routes", { timeout: 30_000 }, () => {
         sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES (?, ?, ?, 1, 'staff', 0)").run(id, id, `${id}@shop.test`);
       }
       expect(permissions === null || Array.isArray(permissions)).toBe(true);
+      // Each staff member's grants, as the database resolves them.
+      for (const name of permissions ?? []) {
+        const [resource, action] = name.split(".");
+        sqlite.prepare("INSERT OR IGNORE INTO permissions (id, name, display_name, resource, action, category) VALUES (?, ?, ?, ?, ?, ?)")
+          .run(`perm_${name}`, name, name, resource!, action!, resource!);
+        sqlite.prepare("INSERT INTO user_permissions (id, user_id, permission_id, granted) SELECT ?, ?, id, 1 FROM permissions WHERE name = ?")
+          .run(`up_${id}_${name}`, id, name);
+      }
       sqlite.prepare("INSERT INTO session (id, user_id, token, expires_at, two_factor_verified) VALUES (?, ?, ?, unixepoch() + 3600, 1)").run(`ses_${id}`, id, `tok_${id}`);
     }
     await installPlugin(db, { manifest: echoManifest, source: "bundled", bundleSha256: ECHO_SHA });

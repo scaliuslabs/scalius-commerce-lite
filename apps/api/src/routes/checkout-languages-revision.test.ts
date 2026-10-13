@@ -19,7 +19,7 @@ function createApp() {
     await next();
   });
   app.route("/admin/settings/checkout-languages", checkoutLanguageRoutes);
-  const env = { CACHE: { id: "kv" } } as unknown as Env;
+  const env = {} as unknown as Env;
   return async (method: string, path: string, body?: unknown) => {
     const response = await app.request(`/api/v1/admin/settings/checkout-languages${path}`, {
       method,

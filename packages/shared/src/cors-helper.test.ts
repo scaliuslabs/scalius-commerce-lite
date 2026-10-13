@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { getCorsOriginContext } from "./cors-helper";
 
@@ -36,14 +36,8 @@ describe("getCorsOriginContext", () => {
   });
 
   it("does not treat merchant CSP domains as credentialed API origins", async () => {
-    const get = vi.fn(async () => "kv.example.com");
-    const getOrigin = await getCorsOriginContext({
-      env: {
-        CACHE: { get },
-      },
-    });
+    const getOrigin = await getCorsOriginContext({ env: {} });
 
-    expect(get).not.toHaveBeenCalled();
     expect(getOrigin("https://example.com")).toBeNull();
     expect(getOrigin("https://shop.example.com")).toBeNull();
     expect(getOrigin("https://kv.example.com")).toBeNull();

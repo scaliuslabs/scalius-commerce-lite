@@ -25,11 +25,7 @@ function createGuardedApp(envOverrides: Record<string, unknown> = {}) {
 
 describe("cookieOriginGuardMiddleware", () => {
   it("rejects unsafe cookie requests from merchant CSP-only origins", async () => {
-    const { app, env } = createGuardedApp({
-      CACHE: {
-        get: async () => "analytics.vendor.test",
-      } as unknown as KVNamespace,
-    });
+    const { app, env } = createGuardedApp();
 
     const response = await app.request(
       "/guarded",

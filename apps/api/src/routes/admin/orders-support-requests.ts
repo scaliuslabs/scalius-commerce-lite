@@ -180,7 +180,7 @@ async function cancelOrderForRequest(
 ): Promise<void> {
     const db = c.get("db");
     // Accepting cancels the order, so it needs the same right as cancelling.
-    if (!actorId || !await hasPermission(db, actorId, PERMISSIONS.ORDERS_CHANGE_STATUS, c.env.CACHE)) {
+    if (!actorId || !await hasPermission(db, actorId, PERMISSIONS.ORDERS_CHANGE_STATUS)) {
         throw new ForbiddenError("You don't have permission to cancel orders.");
     }
     const before = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();

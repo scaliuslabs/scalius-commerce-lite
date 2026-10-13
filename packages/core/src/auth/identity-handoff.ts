@@ -52,7 +52,6 @@ import {
   type IdentityHandoffConfig,
 } from "@scalius/shared/platform-config";
 
-import { clearPermissionCache } from "./rbac/helpers";
 import { sha256Hex } from "@scalius/shared/hash";
 
 export const IDENTITY_HANDOFF_PLUGIN_ID = "identity-handoff";
@@ -366,8 +365,6 @@ export interface PerformIdentityHandoffInput {
   claims: IdentityHandoffClaims;
   config: IdentityHandoffConfig;
   request: IdentityHandoffRequestContext;
-  /** Shared auth KV holding cached effective permissions. */
-  permissionCache?: KVNamespace;
   now?: () => Date;
 }
 
@@ -446,7 +443,6 @@ export async function performIdentityHandoff(
         );
       }
       await safeBatch(db, statements);
-      await clearPermissionCache(existing.id, input.permissionCache);
       await recordHandoffOutcome(db, eventId, "signed_in", existing.id);
       return { userId: existing.id, created: false, eventId, mapping };
     }
@@ -558,7 +554,6 @@ export async function performIdentityRevocation(
         suspended = true;
       }
     }
-    await clearPermissionCache(target.id, input.permissionCache);
     await recordHandoffOutcome(
       db,
       eventId,
@@ -609,7 +604,6 @@ export interface IdentityHandoffPluginOptions {
   hmacSecret: string | null | undefined;
   /** Full dashboard URL (origin plus optional base path) for the post-handoff redirect. */
   dashboardUrl: string | undefined;
-  permissionCache?: KVNamespace;
 }
 
 /**
@@ -664,7 +658,6 @@ export function identityHandoff(options: IdentityHandoffPluginOptions): BetterAu
               claims,
               config,
               request: requestContext(ctx.request),
-              permissionCache: options.permissionCache,
             });
             const session = await ctx.context.internalAdapter.createSession(
               result.userId,
@@ -709,7 +702,6 @@ export function identityHandoff(options: IdentityHandoffPluginOptions): BetterAu
               claims,
               config,
               request: requestContext(ctx.request),
-              permissionCache: options.permissionCache,
             });
             return ctx.json({
               userId: result.userId,

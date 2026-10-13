@@ -433,7 +433,6 @@ export function getFirebaseAdminMessaging(
   serviceAccountJson?: string,
 ): FCMMessagingService {
   // The service retains its environment and access-token lookup state. Create
-  // it per request; encrypted OAuth tokens are already shared safely through
-  // the request's KV binding.
+  // it per request.
   return new FCMMessagingService(environment, serviceAccountJson);
 }

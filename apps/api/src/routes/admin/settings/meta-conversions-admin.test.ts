@@ -5,11 +5,6 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
-const mocks = vi.hoisted(() => ({
-
-    cacheDelete: vi.fn(async () => undefined),
-}));
-
 import { metaConversionsAdminRoutes } from "./meta-conversions-admin";
 
 const CREDENTIAL_ENCRYPTION_KEY = btoa("k".repeat(32));
@@ -62,6 +57,10 @@ function createDb(options: {
     }
     return {
         db,
+        /** The browser-event circuit row, if any. */
+        circuit: () => sqlite.prepare("SELECT value FROM system_kv WHERE key = 'meta-capi:browser-events:circuit'").get(),
+        openCircuit: () => sqlite.prepare("INSERT INTO system_kv (key, value, expires_at) VALUES ('meta-capi:browser-events:circuit', ?, unixepoch() + 900)")
+            .run(JSON.stringify({ openUntil: Date.now() + 900_000 })),
         /** The stored document (the access token as stored ciphertext). */
         get settings() {
             const row = sqlite.prepare("SELECT value FROM settings WHERE category = 'meta_conversions'").get() as
@@ -75,9 +74,6 @@ function createDb(options: {
 function createTestApp(database: ReturnType<typeof createDb>) {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin/settings");
     const env = {
-        CACHE: {
-            delete: mocks.cacheDelete,
-        },
         CREDENTIAL_ENCRYPTION_KEY,
     } as unknown as Env;
 
@@ -140,7 +136,6 @@ async function saveSettings(
 
 beforeEach(() => {
 
-    mocks.cacheDelete.mockClear();
 });
 
 afterEach(() => {
@@ -217,6 +212,7 @@ describe("Meta Conversions admin settings", () => {
 
     it("trims credentials before storing and masks the saved access token response", async () => {
         const db = createDb({ settings: null });
+        db.openCircuit();
         const { response, body } = await saveSettings(db, {
             pixelId: " 1234567890 ",
             accessToken: " live-access-token ",
@@ -232,7 +228,8 @@ describe("Meta Conversions admin settings", () => {
         expect(db.settings?.accessToken).not.toContain("live-access-token");
         await expect(decryptCredentials(db.settings!.accessToken.replace(/^enc:/, ""), CREDENTIAL_ENCRYPTION_KEY))
             .resolves.toBe("live-access-token");
-        expect(mocks.cacheDelete).toHaveBeenCalledWith("meta-capi:browser-events:circuit");
+        // A successful save closes the browser-event circuit.
+        expect(db.circuit()).toBeUndefined();
 
     });
 

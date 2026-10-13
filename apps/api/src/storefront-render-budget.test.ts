@@ -323,7 +323,6 @@ async function renderPage(
   const meter = meteredBinding(binding);
   const baseEnv = {
     CF_VERSION_METADATA: { id: "render-budget-version", tag: "", timestamp: "" },
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
     JWT_SECRET: "render-budget-secret-0123456789abcdef",
     // Hello's secret settings were sealed with the fixtures' key.
     CREDENTIAL_ENCRYPTION_KEY: options.apps ? PLUGIN_TEST_CREDENTIAL_KEY : "render-budget-credential-key-0123456789abcdef",

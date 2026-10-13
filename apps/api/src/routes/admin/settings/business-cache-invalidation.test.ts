@@ -20,7 +20,6 @@ import { businessSettingsRoutes } from "./business";
 function createTestApp() {
     const db = { id: "db" };
     const env = {
-        CACHE: { id: "api-cache-kv" },
         STOREFRONT_URL: "https://storefront.example.com",
     } as unknown as Env;
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");

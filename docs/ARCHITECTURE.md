@@ -181,7 +181,7 @@ Shared composition files are split so that features in different domains never e
 
 ## Runtime configuration boundary
 
-Wrangler configs declare resource bindings only and carry no `vars`, except `LOCAL_MAILPIT_URL` in `apps/api/wrangler.local.jsonc`. `pnpm check:env` enforces this. It limits bindings to KV `CACHE`, R2 `BUCKET`, rate limiters `RL_STRICT` and `RL_STANDARD`, queue producer `JOBS_QUEUE` and the Durable Object `REALTIME_HUB` (class `RealtimeHub`, SQLite-backed, created by a `new_sqlite_classes` migration). It requires `CF_VERSION_METADATA`, keeps the entrypoints uncached and checks each Worker's `Env` declaration.
+Wrangler configs declare resource bindings only and carry no `vars`, except `LOCAL_MAILPIT_URL` in `apps/api/wrangler.local.jsonc`. `pnpm check:env` enforces this. It allows no KV namespace and limits bindings to R2 `BUCKET`, rate limiters `RL_STRICT` and `RL_STANDARD`, queue producer `JOBS_QUEUE` and the Durable Object `REALTIME_HUB` (class `RealtimeHub`, SQLite-backed, created by a `new_sqlite_classes` migration). It requires `CF_VERSION_METADATA`, keeps the entrypoints uncached and checks each Worker's `Env` declaration.
 
 - Installed secrets: `SCALIUS_SECRET` on both Workers and `CREDENTIAL_ENCRYPTION_KEY` on the API Worker. Every per-purpose secret is HKDF-derived from `SCALIUS_SECRET` at Worker entry (`packages/shared/src/runtime-secrets.ts`).
 - Public origins are the `platform` settings document, not deployment configuration. Merchants edit the origins under Settings > Store details > Web addresses. They edit the customer cookie domain, extra CORS origins and single sign-on under Settings > Advanced > Sign-in and access. `GET /api/v1/platform` serves the four origins and the setup-token and identity-handoff flags with `Cache-Control: no-store`.
@@ -357,7 +357,7 @@ Gateway port rules: [payments README](../packages/core/src/modules/payments/READ
 
 ## Settings documents
 
-A settings document is one `settings` row: `category` is the document key, `key` is `'document'`, `value` is JSON and `revision` is the CAS counter. A domain declares each document with `defineSettingsDocument()` (`packages/core/src/settings-store/index.ts`), the only code that reads or writes document rows. Secret fields hold `enc:` ciphertext under `CREDENTIAL_ENCRYPTION_KEY` and are decrypted strictly. The `platform` and `security` documents also have a KV mirror. "Declared in" paths are under `packages/core/src/modules/`.
+A settings document is one `settings` row: `category` is the document key, `key` is `'document'`, `value` is JSON and `revision` is the CAS counter. A domain declares each document with `defineSettingsDocument()` (`packages/core/src/settings-store/index.ts`), the only code that reads or writes document rows. Secret fields hold `enc:` ciphertext under `CREDENTIAL_ENCRYPTION_KEY` and are decrypted strictly. The `platform` and `security` documents also have a 60-second per-colo Cache API mirror (`settingsMirror(env)`). "Declared in" paths are under `packages/core/src/modules/`.
 
 | Document key | Declared in | Holds | Secret fields |
 |--------------|-------------|-------|---------------|

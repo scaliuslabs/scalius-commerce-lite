@@ -14,7 +14,7 @@ The API Worker serves the dashboard SPA (`apps/admin-v2`) and the API. The dashb
 <dashboard>/api/scanner-token -> apps/api/src/dashboard/scanner-session.ts
 ```
 
-The selected relational provider is the authority for staff sessions, setup, scanner tokens and permissions. KV holds only the permission snapshot (Paid), the RBAC seed marker and the scanner session payload. Tables: `packages/database/src/schema/auth.ts` and `rbac.ts`.
+The selected relational provider is the authority for staff sessions, setup, scanner tokens and permissions. There is no KV: every permission check reads the database (one batch), so a role change holds on the next request; only the RBAC seed marker is a per-colo Cache API hint. Tables: `packages/database/src/schema/auth.ts` and `rbac.ts`.
 
 The admin API accepts four kinds of caller:
 
@@ -144,11 +144,11 @@ For a cookie session, in order:
 
 Every role has `dashboard.view`. Exact grants: `getSystemRoleSeeds()`.
 
-`autoSeedRbacIfNeeded` creates missing permissions and roles and corrects system role grants. A KV marker `rbac:seed-current:v5:<hash>` (6 hours) skips repeat checks. D1 stays the authority.
+`autoSeedRbacIfNeeded` creates missing permissions and roles and corrects system role grants. A per-colo Cache API marker `rbac:seed-current:v5:<hash>` (`rbacSeedMarker(env)`, 6 hours, keyed by the Worker version) skips repeat checks. The database stays the authority.
 
 ### Permission snapshot cache
 
-- `rbac:perms:<userId>:<seed hash>` in KV, TTL 1 hour. Paid only (`planLimits().kv.permissionCache`). On Free every check reads D1.
+- There is no permission cache: `getUserPermissions` resolves from the database every time.
 - Every role or override write deletes the affected entries (`clearPermissionCache`, `clearPermissionCacheForRole`).
 - Role changes do not end sessions. The next request reads the new permissions.
 
@@ -187,17 +187,17 @@ Better Auth e-mail sign-up is not atomic on the one-shot proxy adapters. Create 
 ## First-admin setup (`admin-setup.ts`)
 
 - `GET /api/v1/setup` returns `{ adminExists, setupTokenRequired }`. `POST /api/v1/setup` creates the first super admin and seeds RBAC.
-- D1 decides concurrency: the singleton row `admin_setup_claims` (`first_admin`, 60-second lease) and 5 attempts per hour per IP in `admin_setup_rate_limits`. Do not move this lock to KV.
+- D1 decides concurrency: the singleton row `admin_setup_claims` (`first_admin`, 60-second lease) and 5 attempts per hour per IP in `admin_setup_rate_limits`. Do not move this lock out of the database.
 - When the Platform setting `setupTokenRequired` is on, the request needs the header `X-Scalius-Setup-Token` with the derived `ADMIN_SETUP_TOKEN`. See `docs/AUTOMATED-DEPLOYMENTS.md`.
 
 ## Scanner pairing
 
 1. `POST /api/v1/admin/auth/scanner-link` stores the SHA-256 of a one-time token (`sct_...`) in `scanner_token_claims`. It lives 15 minutes.
 2. The scanner page (`/scanner`) reads the token from the URL fragment and posts it to `<dashboard>/api/scanner-token`. Tokens in URLs are refused.
-3. The exchange consumes the claim atomically, writes the session payload to KV (`scanner:session:<sha256>`, 6 hours) and sets `scanner_sid` (`HttpOnly`, `SameSite=Strict`).
+3. The exchange consumes the claim atomically. The claim row is the session: `consumed_session_hash` (SHA-256 of the cookie value) and `session_expires_at` (6 hours, slid by each refresh of `<dashboard>/api/scanner-token`). It sets `scanner_sid` (`HttpOnly`, `SameSite=Strict`). Deleting the admin deletes the row and the session.
 4. The middleware lets a scanner session call only the allowlist in `packages/shared/src/scanner-auth.ts` (inventory lookup, locations, stock adjust and set, purchase order and transfer reads and receiving). It never inherits the minting admin's permissions.
 
-Scheduled maintenance deletes expired and old consumed claims.
+Scheduled maintenance deletes expired claims and claims whose session has expired.
 
 ## Identity handoff
 

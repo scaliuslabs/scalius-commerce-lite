@@ -1,37 +1,15 @@
-// src/server/utils/jwt.ts
+// The storefront's service JWT: minted by /auth/token for the holder of
+// API_TOKEN (derived from SCALIUS_SECRET) and valid for one hour. There is no
+// revocation list: anyone holding API_TOKEN can mint another token, so
+// rotating SCALIUS_SECRET is the revocation, and it voids every token at once.
 import jwt from "jsonwebtoken";
-import { setCache, getCache } from "./kv-cache";
-import { ServiceUnavailableError } from "./api-error";
 
 // Default JWT expiration time (1 hour)
 const DEFAULT_EXPIRATION = "1h";
 
-// Token blacklist key prefix
-const BLACKLIST_KEY_PREFIX = "jwt:blacklist:";
-
-// KV minimum TTL is 60 seconds. Tokens expiring sooner are still stored for
-// 60 s – an acceptable security trade-off for short-lived tokens.
-const MIN_BLACKLIST_TTL = 60;
-
-/**
- * Produce a SHA-256 hex digest of the token for blacklist keys.
- * Replaces the old truncated base64 approach which had collision risk.
- */
-async function hashToken(token: string): Promise<string> {
-  const data = new TextEncoder().encode(token);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 interface JwtSigningEnv {
   JWT_SECRET?: string;
   [key: string]: unknown;
-}
-
-interface JwtVerificationEnv extends JwtSigningEnv {
-  CACHE: KVNamespace;
 }
 
 /**
@@ -65,17 +43,13 @@ export function generateToken(
 }
 
 /**
- * Verify a JWT token. Checks the blacklist and signature.
+ * Verify a JWT token's signature and expiry.
  */
 export async function verifyToken(
   token: string,
-  env: JwtVerificationEnv,
+  env: JwtSigningEnv,
 ): Promise<jwt.JwtPayload | string> {
   try {
-    if (await isTokenBlacklisted(token, env.CACHE)) {
-      throw new Error("Token has been revoked");
-    }
-
     const secret = getJwtSecret(env);
     return (jwt.verify as (...args: unknown[]) => jwt.JwtPayload | string)(token, secret);
   } catch (error: unknown) {
@@ -120,7 +94,7 @@ export function isTokenExpiringSoon(
  */
 export async function refreshTokenIfNeeded(
   token: string,
-  env: JwtVerificationEnv,
+  env: JwtSigningEnv,
   thresholdMinutes = 5,
 ): Promise<string> {
   try {
@@ -132,65 +106,8 @@ export async function refreshTokenIfNeeded(
     }
     return token;
   } catch (error: unknown) {
-    if (error instanceof ServiceUnavailableError) throw error;
     console.error("Error refreshing token:", error);
     throw new Error("Failed to refresh token");
-  }
-}
-
-/**
- * Revoke a token by storing it in the KV blacklist.
- */
-export async function revokeToken(
-  token: string,
-  kv: KVNamespace,
-): Promise<void> {
-  try {
-    const decoded = jwt.decode(token) as { exp?: number };
-    if (!decoded?.exp) throw new Error("Invalid token format");
-
-    const expiresAt = decoded.exp * 1000;
-    const ttlSeconds = Math.max(
-      MIN_BLACKLIST_TTL,
-      Math.floor((expiresAt - Date.now()) / 1000),
-    );
-
-    const tokenHash = await hashToken(token);
-    await setCache(
-      `${BLACKLIST_KEY_PREFIX}${tokenHash}`,
-      { revoked: true },
-      ttlSeconds,
-      kv,
-    );
-
-    if (typeof process !== "undefined" && process.env.NODE_ENV === "production") {
-      console.log(`Token revoked, expires at ${new Date(expiresAt).toISOString()}`);
-    }
-  } catch (error: unknown) {
-    console.error("Error revoking token:", error);
-    throw new Error("Failed to revoke token");
-  }
-}
-
-/**
- * Check if a token is in the KV blacklist.
- */
-export async function isTokenBlacklisted(
-  token: string,
-  kv: KVNamespace,
-): Promise<boolean> {
-  try {
-    const tokenHash = await hashToken(token);
-    const result = await getCache<{ revoked: boolean }>(
-      `${BLACKLIST_KEY_PREFIX}${tokenHash}`,
-      kv,
-    );
-    return result?.revoked === true;
-  } catch (error: unknown) {
-    console.error("Error checking token blacklist:", error);
-    throw new ServiceUnavailableError(
-      "Authentication revocation state is temporarily unavailable.",
-    );
   }
 }
 
@@ -212,13 +129,11 @@ export function extractTokenFromHeader(
 export function getTokenStats(
   env?: JwtSigningEnv,
 ): {
-  blacklistStorage: string;
   isConfigured: boolean;
   secretLengthSufficient: boolean;
 } {
   const secret = env?.JWT_SECRET ?? "";
   return {
-    blacklistStorage: "cloudflare-kv",
     isConfigured: typeof secret === "string" && secret.length > 0,
     secretLengthSufficient: typeof secret === "string" && secret.length >= 32,
   };

@@ -9,45 +9,6 @@
 // boundary check guarantees no server code reaches browser bundles.
 // Avoids importing @cloudflare/workers-types globally, which can conflict with DOM types.
 
-interface KVNamespaceListKey<Metadata = unknown, Key extends string = string> {
-  name: Key;
-  expiration?: number;
-  metadata?: Metadata;
-}
-
-interface KVNamespaceListResult<
-  Metadata = unknown,
-  Key extends string = string,
-> {
-  keys: KVNamespaceListKey<Metadata, Key>[];
-  list_complete: boolean;
-  cursor?: string;
-  cacheStatus: string | null;
-}
-
-interface KVNamespace<Key extends string = string> {
-  get(key: Key, options?: { cacheTtl?: number }): Promise<string | null>;
-  get(key: Key, type: "text"): Promise<string | null>;
-  get<T = unknown>(key: Key, type: "json"): Promise<T | null>;
-  get(key: Key, type: "arrayBuffer"): Promise<ArrayBuffer | null>;
-  get(key: Key, type: "stream"): Promise<ReadableStream | null>;
-  put(
-    key: Key,
-    value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
-    options?: {
-      expiration?: number;
-      expirationTtl?: number;
-      metadata?: object | null;
-    },
-  ): Promise<void>;
-  delete(key: Key): Promise<void>;
-  list<Metadata = unknown>(options?: {
-    prefix?: Key;
-    limit?: number;
-    cursor?: string;
-  }): Promise<KVNamespaceListResult<Metadata, Key>>;
-}
-
 interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   first<T = Record<string, unknown>>(colName?: string): Promise<T | null>;

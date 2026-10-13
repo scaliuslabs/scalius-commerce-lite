@@ -187,7 +187,6 @@ beforeAll(async () => {
   menuIds = await seedNavigation();
   env = {
     DB: harness.binding,
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
     JWT_SECRET: "cache-deps-content-secret-0123456789abcdef",
     CREDENTIAL_ENCRYPTION_KEY: "cache-deps-content-credential-key-0123456789",
     // Deliberately different from the stored Platform document: a scoped

@@ -28,7 +28,6 @@ const SESSION_KEY = "loyalty-checkout-session-key-0123456789";
 const SESSION = "loyalty-buyer-session";
 const LIMITER = { limit: async () => ({ success: true }) };
 const ENV = {
-  CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
   RL_STANDARD: LIMITER,
   RL_STRICT: LIMITER,
   JOBS_QUEUE: { send: async () => undefined, sendBatch: async () => undefined },

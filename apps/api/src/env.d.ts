@@ -8,38 +8,6 @@
 // with DOM types (e.g. Response.json() overload changes).
 // ---------------------------------------------------------------------------
 
-interface KVNamespaceListKey<Metadata = unknown, Key extends string = string> {
-  name: Key;
-  expiration?: number;
-  metadata?: Metadata;
-}
-
-interface KVNamespaceListResult<Metadata = unknown, Key extends string = string> {
-  keys: KVNamespaceListKey<Metadata, Key>[];
-  list_complete: boolean;
-  cursor?: string;
-  cacheStatus: string | null;
-}
-
-interface KVNamespace<Key extends string = string> {
-  get(key: Key, options?: { cacheTtl?: number }): Promise<string | null>;
-  get(key: Key, type: "text"): Promise<string | null>;
-  get<T = unknown>(key: Key, type: "json"): Promise<T | null>;
-  get(key: Key, type: "arrayBuffer"): Promise<ArrayBuffer | null>;
-  get(key: Key, type: "stream"): Promise<ReadableStream | null>;
-  put(
-    key: Key,
-    value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
-    options?: { expiration?: number; expirationTtl?: number; metadata?: object | null },
-  ): Promise<void>;
-  delete(key: Key): Promise<void>;
-  list<Metadata = unknown>(options?: {
-    prefix?: Key;
-    limit?: number;
-    cursor?: string;
-  }): Promise<KVNamespaceListResult<Metadata, Key>>;
-}
-
 interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   first<T = Record<string, unknown>>(colName?: string): Promise<T | null>;
@@ -224,8 +192,6 @@ interface Response {
 interface Env {
   // Service / resource bindings
   DB?: D1Database;
-  // The only KV namespace. Other users share it by key prefix (OAuth: `oauth:`).
-  CACHE: KVNamespace;
   // Public media plus sealed agent artifacts under `private/agent-artifacts/`.
   BUCKET: R2Bucket;
   // Store-scoped keys (src/utils/rate-limit.ts): strict 5/60s, standard 60/60s.

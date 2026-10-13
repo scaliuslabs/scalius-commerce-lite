@@ -62,20 +62,12 @@ export const SYSTEM_OPERATIONS = {
     reason:
       "Legacy service-JWT claim introspection; agent identity comes from the live agent grant and principal.",
   },
-  "system.auth_revoke.revoke": {
-    exposure: "excluded",
-    principals: ["internal"],
-    risk: "security",
-    idempotency: "supported",
-    reason:
-      "Legacy service-JWT KV blacklist revocation; use agent credential self-revoke or agent-access grant management.",
-  },
   "system.auth_token_stats.get_token_stats": {
     exposure: "excluded",
     principals: ["internal"],
     risk: "security",
     reason:
-      "Legacy JWT secret and blacklist diagnostics; not merchant-visible functionality or agent authentication state.",
+      "Legacy JWT secret diagnostics; not merchant-visible functionality or agent authentication state.",
   },
   "system.auth_token.get_token": {
     exposure: "excluded",

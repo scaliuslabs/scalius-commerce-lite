@@ -37,7 +37,7 @@ import { adminCategoryRoutes } from "./categories";
 
 function createTestApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
-  const env = { CACHE: { id: "api-cache-kv" } } as unknown as Env;
+  const env = {} as unknown as Env;
   mocks.createBrand.mockResolvedValue({ id: "brd_walton01", slug: "walton", revision: 1, status: "draft" });
   mocks.updateBrand.mockResolvedValue({ revision: 2, status: "published" });
   mocks.updateBrandStatus.mockResolvedValue({ revision: 2, status: "published" });

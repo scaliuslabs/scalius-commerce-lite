@@ -67,7 +67,7 @@ describe("SMS settings write behavior", () => {
   });
 
   it("saves an installed app's gateway, refusing a built-in id and a save without its revision", async () => {
-    const env = { CACHE: { id: "api-cache-kv" }, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as unknown as Env;
+    const env = { CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as unknown as Env;
     const db = { id: "db" };
     mocks.saveSmsSettings.mockResolvedValue({ revision: 3 });
     mocks.getSmsSettings.mockResolvedValue({ activeProvider: PACK_SMS, activeProviderConfigured: true, activeProviderError: null, revision: 3 });

@@ -52,7 +52,7 @@ const row = (overrides: Record<string, unknown> = {}) => ({
 });
 
 function createTestApp() {
-  const env = { CACHE: { id: "api-cache-kv" } } as unknown as Env;
+  const env = {} as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   mocks.getCredentialEncryptionKey.mockReturnValue("credential-key");
   mocks.getDeliveryProviders.mockResolvedValue([row()]);

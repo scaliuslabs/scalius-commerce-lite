@@ -70,7 +70,7 @@ export const checkoutAuthority = sqliteTable("checkout_authority", {
 /**
  * The store's public cache generation: one opaque random token included in
  * every public API and storefront cache key. Buyer-visible writes replace it
- * right after they commit; the API mirrors it to the `CACHE` KV namespace.
+ * right after they commit.
  */
 export const cacheGeneration = sqliteTable("cache_generation", {
     id: text("id").primaryKey().default("default"),
@@ -108,6 +108,23 @@ export const cacheDep = sqliteTable("cache_dep", {
     seq: integer("seq").notNull(),
 }, (table) => [
     index("cache_dep_seq_idx").on(table.seq),
+]);
+
+/**
+ * Small store-internal key/value rows that once lived in Workers KV (migration
+ * 0147): the agent-access OAuth provider's grants, tokens and clients
+ * (`oauth:` keys; the library stores only hashed token ids and encrypted
+ * props), the Meta CAPI browser-event circuit and the post-deploy projection
+ * marker. `expires_at` (unix seconds) makes a row read as absent; the
+ * scheduled maintenance deletes expired rows. Never buyer-visible.
+ */
+export const systemKv = sqliteTable("system_kv", {
+    key: text("key").primaryKey(),
+    value: text("value").notNull(),
+    expiresAt: integer("expires_at"),
+}, (table) => [
+    index("system_kv_expires_idx").on(table.expiresAt).where(sql`${table.expiresAt} IS NOT NULL`),
+    check("system_kv_key_length", sql`length(${table.key}) BETWEEN 1 AND 512`),
 ]);
 
 /**
