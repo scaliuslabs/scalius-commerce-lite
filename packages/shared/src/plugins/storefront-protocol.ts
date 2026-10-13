@@ -35,6 +35,9 @@ export const STOREFRONT_COMPONENT_LIMITS = {
   publicFiles: 40,
   /** Markup one render answers. */
   htmlBytes: 256 * 1024,
+  /** Element nesting and element count of one render's markup. */
+  htmlDepth: 48,
+  htmlElements: 6_000,
   /** A batch's wall time before the storefront falls back to its own blocks. */
   renderWallMs: 250,
   /** CPU one batch may use in its isolate. */
@@ -215,8 +218,17 @@ export type StorefrontResolvedValue =
 
 /** The page around a render. */
 export interface StorefrontRenderContext {
-  /** `timeZone`: the store's IANA time zone (Settings -> Store details), for dates a merchant typed. */
-  store: { name: string; currency: string; locale: string; language: "en" | "bn"; timeZone: string };
+  store: {
+    name: string;
+    /** The page market's currency (ISO 4217). */
+    currency: string;
+    /** The page's language and the store's country (BCP 47: `en-US`, `bn-BD`); format with the SDK's `formatNumber`, `plural`, `formatDate`. */
+    locale: string;
+    /** The page's language (BCP 47: `en`, `bn`, `pt-BR`); pick words with the SDK's `t`. */
+    language: string;
+    /** The store's IANA time zone (Settings -> Store details), for dates a merchant typed. */
+    timeZone: string;
+  };
   page: { kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "other"; path: string };
   /** The app's file base URL (`/_x/<plugin id>/<release>/`): its public files are under `public/`. */
   assets: string;
@@ -286,7 +298,8 @@ export interface StorefrontIslandContext {
   pluginId: string;
   /** The app's file base URL (its public files are under `public/`). */
   assets: string;
-  language: "en" | "bn";
+  /** The page's language (BCP 47). */
+  language: string;
   currency: string;
   /** Formats an amount in the page's currency as the store does. */
   formatMoney(amount: number): string;

@@ -12,6 +12,7 @@ import { activatePlugin, installPlugin } from "@scalius/core/modules/plugins";
 import { BUNDLED_PLUGINS } from "./plugins/bundled.gen";
 import { installHello, PLUGIN_TEST_CREDENTIAL_KEY } from "./plugins/testing/fixtures";
 import { manifest as wishlistManifest } from "./plugins/testing/apps/wishlist/src/index";
+import { manifest as noorManifest } from "../../../plugins/noor/src/index";
 import {
   createNavigationMenu,
   createNavigationMenuItem,
@@ -269,12 +270,25 @@ class MemoryCache {
 async function renderPage(
   page: keyof typeof PAGE_PARTS,
   extraSeed = "",
-  options: { paths?: readonly string[]; prepare?: (db: Database) => Promise<void>; apps?: boolean; editTheme?: (theme: StorefrontThemeDocument) => void } = {},
+  options: {
+    paths?: readonly string[];
+    prepare?: (db: Database) => Promise<void>;
+    apps?: boolean;
+    /** App component sections (Noor's) added to the home page. */
+    components?: StorefrontSection[];
+    editTheme?: (theme: StorefrontThemeDocument) => void;
+  } = {},
 ) {
   const { sqlite, binding, db } = createSqliteD1Database();
   sqlite.exec(SEED);
   if (extraSeed) sqlite.exec(extraSeed);
   await options.prepare?.(db);
+  if (options.components?.length) {
+    // Noor ships component sections; activation grants its storefront code.
+    sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('noor-owner', 'Owner', 'noor-owner@shop.test', 1, 'admin', 1)").run();
+    const noor = await installPlugin(db, { manifest: noorManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["scalius.noor"]!.sha256, actorUserId: "noor-owner" });
+    await activatePlugin(db, "scalius.noor", { actorUserId: "noor-owner", expectedRevision: noor.revision });
+  }
   if (options.apps) {
     // Hello draws a homepage section; Wishlist draws a product block (both bundled, active).
     await installHello(db, sqlite);
@@ -285,6 +299,8 @@ async function renderPage(
   const theme = sectionPage ? everySectionTheme() : storefrontTemplateTheme("department-mall");
   if (sectionPage) {
     sqlite.exec(HOME_SEED);
+    // Room for three component sections within the page cap (the same core sections go with or without them).
+    if (options.components) theme.pages.home = [...theme.pages.home.slice(0, -3), ...options.components];
     if (options.apps) theme.pages.home.push({ id: "hello", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: { heading: "Eid Mubarak" } } });
     theme.pages.landing.eid = { title: "ঈদের বাছাই", description: "", sections: structuredClone(theme.pages.home) };
   } else if (page === "collection") {
@@ -620,6 +636,33 @@ describe("storefront page render D1 budget", () => {
     expect({ roundTrips: product.render.roundTrips, waves: product.render.waves })
       .toEqual({ roundTrips: Math.min(product.render.roundTrips, APP_PAGE_D1_BUDGETS.product.roundTrips), waves: Math.min(product.render.waves, APP_PAGE_D1_BUDGETS.product.waves) });
     expect(product.hit).toEqual({ roundTrips: 1, waves: 1, statuses: PAGE_PARTS.product.map(() => "hit"), sameBodies: true });
+  });
+
+  it("gives app component sections their products and images from the homepage's batches", async () => {
+    const section = (id: string, type: string, values: Record<string, unknown>): StorefrontSection =>
+      ({ id, type: "app", version: 1, settings: { app: `scalius.noor/${type}`, values } }) as StorefrontSection;
+    const listed = section("noor-products", "products", { heading: "New", tab1_label: "New", tab1_products: "newest" });
+    const picked = section("noor-order", "landing-order", { product: "p_linen" });
+    const collected = section("noor-collected", "products", { heading: "Best", tab1_label: "Best", tab1_products: "collection:col_grid" });
+    const measure = async (components: StorefrontSection[]) => {
+      const result = await renderPage("home", "", { components });
+      const apps = (result.bodies[1] as { data: { sections: { apps: Array<{ sectionId: string; component?: { lists: Array<{ source: string; products: unknown[] }> } }> } } }).data.sections.apps;
+      expect(result.hit).toEqual({ roundTrips: 1, waves: 1, statuses: PAGE_PARTS.home.map(() => "hit"), sameBodies: true });
+      return { apps, render: { roundTrips: result.render.roundTrips, waves: result.render.waves } };
+    };
+    const plain = await measure([]);
+    const one = await measure([listed, picked]);
+    expect(one.apps.map((app) => [app.sectionId, app.component?.lists.map((list) => [list.source, list.products.length])])).toEqual([
+      ["noor-products", [["newest", 2]]],
+      ["noor-order", [["product:p_linen", 1]]],
+    ]);
+    const two = await measure([listed, picked, collected]);
+    expect(two.apps.find((app) => app.sectionId === "noor-collected")?.component?.lists).toEqual([{ source: "collection:col_grid", products: [expect.anything(), expect.anything()] }]);
+    // The true cost, measured: the apps' read (beside the second batch) names the sections'
+    // schemas, so their images, lists and picked products are one more batch and wave; a
+    // collection source reads the collection's rules first, one more again.
+    expect(one.render).toEqual({ roundTrips: plain.render.roundTrips + 2, waves: plain.render.waves + 1 });
+    expect(two.render).toEqual({ roundTrips: plain.render.roundTrips + 3, waves: plain.render.waves + 2 });
   });
 
   it.each(Object.keys(PAGE_D1_BUDGETS) as Array<keyof typeof PAGE_D1_BUDGETS>)(

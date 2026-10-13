@@ -14,12 +14,12 @@ const root = resolve(import.meta.dirname, "..");
 const ts = createRequire(import.meta.url)("typescript");
 const codeExtensions = new Set([".ts", ".tsx", ".astro", ".mjs", ".js"]);
 
-/** Files under `path` (a file or directory), skipping tests, declarations, generated code. */
+/** Files under `path` (a file or directory), skipping tests, declarations, build output and generated code. */
 export function codeFiles(path, extensions = codeExtensions) {
   const absolute = resolve(root, path);
   if (extensions.has(extname(absolute))) return [absolute];
   return readdirSync(absolute, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.name === "node_modules" || entry.name === "generated" || entry.name === "testing") return [];
+    if (entry.name === "node_modules" || entry.name === "dist" || entry.name === "generated" || entry.name === "testing") return [];
     const child = resolve(absolute, entry.name);
     if (entry.isDirectory()) return codeFiles(child, extensions);
     // `.gen.js` is an app's compiled storefront module (scripts/plugin-build.mjs): the app's code, not the repository's.
@@ -41,7 +41,7 @@ export const policies = [
   {
     rule: "numbers, money, dates, lists and plurals are formatted through @scalius/shared/locale-format",
     why: "one Intl layer, keyed by the reader's language and the store's country (CLDR); a hard-coded locale (en-US, en-IN, en-GB) writes a store abroad in another country's format",
-    paths: [storefront, "apps/admin-v2/src", "apps/api/src", "packages/core/src", "packages/shared/src"],
+    paths: [storefront, "apps/admin-v2/src", "apps/api/src", "packages/core/src", "packages/shared/src", "packages/plugin-sdk/src", "plugins"],
     allow: {
       "packages/shared/src/locale-format.ts": "the layer itself",
       "packages/shared/src/locale-words.ts": "the layer's lists, plurals, relative times and units",

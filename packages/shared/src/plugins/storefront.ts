@@ -17,6 +17,9 @@
 
 import { z } from "zod";
 import type { PluginSettingValue } from "./settings-schema";
+import { serializeSchemaJsonLd } from "./html";
+
+export { serializeJsonLd } from "./html";
 
 /**
  * At most this many app sections render on one page (a page's whole section
@@ -139,16 +142,6 @@ export interface PluginHead {
 
 export const EMPTY_PLUGIN_HEAD: Readonly<PluginHead> = Object.freeze({ meta: [], jsonLd: [] });
 
-/** JSON for a `<script type="application/ld+json">`: nothing in it can close the element or start markup. */
-export function serializeJsonLd(value: unknown): string {
-  return JSON.stringify(value)
-    .replace(/</g, "\\u003c")
-    .replace(/>/g, "\\u003e")
-    .replace(/&/g, "\\u0026")
-    .replace(new RegExp(String.fromCharCode(0x2028), "g"), "\\u2028")
-    .replace(new RegExp(String.fromCharCode(0x2029), "g"), "\\u2029");
-}
-
 function plainContent(value: string): string {
   let text = "";
   for (const character of value) {
@@ -182,16 +175,8 @@ export function sanitizePluginHead(value: unknown): PluginHead {
   }
   const jsonLd: string[] = [];
   for (const entry of parsed.data.jsonLd ?? []) {
-    const context = entry["@context"];
-    if (context !== "https://schema.org" && context !== "http://schema.org" && context !== "https://schema.org/") continue;
-    if (typeof entry["@type"] !== "string" || !/^[A-Za-z]{2,60}$/.test(entry["@type"])) continue;
-    let serialized: string;
-    try {
-      serialized = serializeJsonLd({ ...entry, "@context": "https://schema.org" });
-    } catch {
-      continue;
-    }
-    if (new TextEncoder().encode(serialized).byteLength > PLUGIN_HEAD_LIMITS.jsonLdBytes) continue;
+    const serialized = serializeSchemaJsonLd(entry);
+    if (!serialized || new TextEncoder().encode(serialized).byteLength > PLUGIN_HEAD_LIMITS.jsonLdBytes) continue;
     jsonLd.push(serialized);
   }
   return { meta, jsonLd };

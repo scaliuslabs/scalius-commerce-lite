@@ -1,7 +1,8 @@
 ---
 // The store footer: the app footer the theme names (`apps.footer`, an app's
 // footer slot), else the theme's own footer (CoreFooter.astro). An app
-// footer that is inactive, fails or is late gives way to the core footer.
+// footer that is inactive, draws nothing, fails or is late gives way to the
+// core footer.
 import { storefrontExtensionBase } from "@scalius/shared/plugins/storefront-protocol";
 import AppComponent from "@/components/apps/AppComponent.astro";
 import { appSlot, requestExtensions } from "@/lib/extensions";
@@ -35,6 +36,6 @@ if (app) {
 }
 ---
 
-{html !== null && app
+{html?.trim() && app
   ? <AppComponent html={html} pluginId={app.extension.pluginId} base={storefrontExtensionBase(app.extension.pluginId, app.extension.release)} />
   : <CoreFooter {...props} />}

@@ -9,13 +9,14 @@ import {
   Price,
   editable,
   quickAdd,
+  storeTime,
   t,
   type SectionProps,
   type StorefrontImage,
   type StorefrontProductCard,
 } from "@scalius/plugin-sdk/storefront";
 import { Icon } from "../icons";
-import { Button, Products, Rail, Section, SectionHead, Stars, choice, cx, ratingLabel, text, type Context } from "../ui";
+import { Button, Products, Rail, Section, SectionHead, Stars, choice, cx, percent, ratingLabel, ratingValue, reviewCount, text, type Context } from "../ui";
 
 // ── Products with tabs ───────────────────────────────────────────────────
 
@@ -97,7 +98,7 @@ export function FeaturedProduct({ settings, context }: SectionProps<FeaturedSett
         <a class="noor-split-media noor-feature-media" href={product.url} tabindex="-1" aria-hidden="true">
           {photo ? <Image image={photo} sizes="(min-width: 768px) 50vw, 100vw" alt="" class="noor-cover" /> : null}
           {product.hoverImage && !settings.image ? <Image image={product.hoverImage} sizes="(min-width: 768px) 50vw, 100vw" alt="" class="noor-cover is-alt" /> : null}
-          {product.percentOff ? <span class="noor-badge is-sale">−{product.percentOff}%</span> : null}
+          {product.percentOff ? <span class="noor-badge is-sale">−{percent(context, product.percentOff)}</span> : null}
         </a>
         <div class="noor-split-copy">
           {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
@@ -105,7 +106,7 @@ export function FeaturedProduct({ settings, context }: SectionProps<FeaturedSett
           {product.rating ? (
             <p class="noor-rating-line">
               <Stars value={product.rating.average} label={ratingLabel(context, product.rating.average, product.rating.count)} />
-              <span>{product.rating.average.toFixed(1)} · {t(context, { en: `${product.rating.count} reviews`, bn: `${product.rating.count}টি রিভিউ` })}</span>
+              <span>{ratingValue(context, product.rating.average)} · {reviewCount(context, product.rating.count)}</span>
             </p>
           ) : null}
           <Price price={product.price} compareAt={product.compareAt} from={product.priceVaries} context={context} class="noor-price is-large" />
@@ -261,33 +262,19 @@ export interface CountdownSettings {
   spacing: string;
 }
 
-/** The offset of `timeZone` from UTC at `epoch`, in ms. */
-function zoneOffset(epoch: number, timeZone: string): number {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
-    timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
-  }).formatToParts(new Date(epoch)).map((part) => [part.type, part.value]));
-  return Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second)) - epoch;
-}
-
 /**
  * An end time the merchant typed (`2026-12-31` or `2026-12-31 18:00`) in the
  * store's time zone, as epoch ms; null when it is not one. A date alone ends
  * at the end of that day.
  */
 export function countdownEnd(value: string | null, timeZone: string): number | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?$/.exec(value?.trim() ?? "");
+  const match = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2}))?$/.exec(value?.trim() ?? "");
   if (!match) return null;
-  const [, year, month, day, hour = "23", minute = "59"] = match;
-  const wall = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), hour === "23" && minute === "59" ? 59 : 0);
-  const date = new Date(wall);
-  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() !== Number(month) - 1
-    || date.getUTCDate() !== Number(day) || date.getUTCHours() !== Number(hour)
-    || date.getUTCMinutes() !== Number(minute)) return null;
-  try {
-    return wall - zoneOffset(wall, timeZone);
-  } catch {
-    return wall;
-  }
+  const [, date, hour, minute] = match;
+  const at = (zone: string) => storeTime({ store: { timeZone: zone } }, date!, Number(hour ?? 23), Number(minute ?? 59));
+  // An unknown zone counts in UTC (an impossible date is null in every zone).
+  const end = at(timeZone) ?? at("UTC");
+  return end === null || hour !== undefined ? end : end + 59_000;
 }
 
 export function Countdown({ end, context, size = "m" }: { end: number; context: Context; size?: "s" | "m" }) {

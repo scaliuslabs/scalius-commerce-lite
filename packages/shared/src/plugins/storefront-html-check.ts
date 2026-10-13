@@ -1,7 +1,7 @@
 // Author diagnostics, used only by SDK tests and the packer. These check
 // declared host contracts; layout, CSS and optional capabilities stay the app's.
 import { Parser } from "htmlparser2";
-import { isSafeStorefrontUrl } from "./storefront-html";
+import { sanitizePluginUrl } from "./html";
 import { STOREFRONT_ISLAND_HYDRATION } from "./storefront-protocol";
 
 export interface StorefrontHeaderCheckOptions {
@@ -30,7 +30,7 @@ export function checkStorefrontHeaderHtml(html: string, options: StorefrontHeade
         ids.add(id);
       }
       for (const marker of ["data-search-open", "data-account-link", "data-cart-open"]) {
-        if (marker in attributes && tag === "a" && attributes.href !== undefined && !isSafeStorefrontUrl(attributes.href)) {
+        if (marker in attributes && tag === "a" && attributes.href !== undefined && sanitizePluginUrl(attributes.href, "link") === null) {
           issues.push(`${marker} has an unsafe href; use a safe fallback URL such as the supplied data.routes path.`);
         }
       }

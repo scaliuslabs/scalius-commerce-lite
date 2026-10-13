@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parsePluginManifest } from "@scalius/plugin-sdk/manifest";
 import { checkPluginHandlers, pluginHandlerInventory, resolveStorefrontSettings } from "@scalius/shared/plugins";
-import { sanitizeStorefrontHtml } from "@scalius/shared/plugins/storefront-html";
 import { validatePluginSettingValues, type PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
 import {
   DEFAULT_STOREFRONT_THEME,
@@ -17,6 +16,7 @@ import {
   renderHeader,
   renderProductCard,
   renderSection,
+  storefrontShown,
 } from "@scalius/plugin-sdk/storefront/testing";
 import type { StorefrontImage } from "@scalius/plugin-sdk/storefront";
 import plugin, { manifest } from "./index";
@@ -51,7 +51,7 @@ function slotSettings(id: string, values: Record<string, unknown> = {}) {
 
 /** What the storefront would put on the page: the checked markup. */
 function shown(html: string): string {
-  const result = sanitizeStorefrontHtml(html);
+  const result = storefrontShown(html, "scalius.noor");
   expect(result.dropped).toBe(0);
   return result.html;
 }
@@ -305,6 +305,17 @@ describe("Noor chrome", () => {
     expect(html).toContain('class="noor-card-bar" href="/products/linen-shirt" data-card-quick-add aria-label="Add Linen shirt to cart"');
   });
 
+  it("writes ratings, review counts and discounts in the page's numbers and plural rules", () => {
+    const one = renderProductCard(storefront, "noor-card", slotSettings("noor-card"), { rating: { average: 4.5, count: 1 } });
+    expect(one).toContain('aria-label="Rated 4.5 out of 5 from 1 review"');
+    const bangla = renderProductCard(storefront, "noor-card", slotSettings("noor-card"), { rating: { average: 4.5, count: 12 } }, {
+      context: { store: { name: "দোকান", currency: "BDT", locale: "bn-BD", language: "bn", timeZone: "Asia/Dhaka" } },
+    });
+    expect(bangla).toContain("১২টি রিভিউতে ৫-এর মধ্যে ৪.৫");
+    expect(bangla).toContain("★ ৪.৫");
+    expect(bangla).toContain("−২০%");
+  });
+
   it("offers no add button on a sold-out card, and a round one when asked", () => {
     const soldOut = renderProductCard(storefront, "noor-card", slotSettings("noor-card"), { soldOut: true, quickAdd: false });
     expect(soldOut).toContain("Sold out");
@@ -317,7 +328,7 @@ describe("Noor sections", () => {
   it("draws every section from its defaults (and nothing for one with nothing to show)", () => {
     for (const section of declared.storefront.sections) {
       const html = renderSection(storefront, section.type, settingsFor(section.type));
-      if (html) expect(sanitizeStorefrontHtml(html).dropped).toBe(0);
+      if (html) expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
     }
     expect(renderSection(storefront, "faq", settingsFor("faq"))).toBe("");
     expect(renderSection(storefront, "slideshow", settingsFor("slideshow"))).toBe("");
@@ -420,8 +431,9 @@ describe("Noor landing kit", () => {
 
   it("places the store's order form at its instance anchor, with the phone order bar", () => {
     const html = shown(render("landing-order", { assurances: [{ icon: "truck", text: "2-day delivery" }], max_quantity: 3 }));
-    expect(html).toContain('id="order-app-landing-order"');
-    expect(html).toContain('<scalius-checkout data-product="linen-shirt" data-max-quantity="3"></scalius-checkout>');
+    expect(html).toContain('id="noor-order-app-landing-order"');
+    // The embed names the product by id, never by a URL a canonical path override can change.
+    expect(html).toContain('<scalius-checkout data-product="product:prod_1-1" data-max-quantity="3"></scalius-checkout>');
     expect(html).toContain('data-island="landing-bar"');
     expect(html).toContain("2-day delivery");
     expect(html).not.toContain("Cash on delivery: pay when it arrives");
@@ -450,8 +462,8 @@ describe("Noor landing kit", () => {
     for (const [index, result] of reply.results.entries()) {
       if (!("html" in result)) throw new Error(result.error);
       const id = index === 0 ? "first" : "second";
-      expect(shown(result.html)).toContain(`id="order-${id}"`);
-      expect(result.html).toContain(`href="#order-${id}"`);
+      expect(shown(result.html)).toContain(`id="noor-order-${id}"`);
+      expect(result.html).toContain(`href="#noor-order-${id}"`);
     }
   });
 

@@ -16,6 +16,11 @@ import {
   type StorefrontResolvedSettings,
 } from "@scalius/shared/plugins/storefront-components";
 import { getLayoutData } from "@/lib/api/storefront";
+import { getRuntime } from "@/lib/api/runtime";
+import { appComponentsRenderOn, storefrontAppPage } from "@/lib/app-scripts";
+import { storeRegion, storeTimeZone } from "@/lib/store-time-zone";
+import { dateLocale } from "@scalius/shared/locale-format";
+import { markPageUnproven } from "@/lib/page-dependencies";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { ExtensionHost } from "./host";
 import type { ExtensionRuntime } from "./loaders";
@@ -33,6 +38,20 @@ interface RequestExtensions {
 const previewPages = new WeakMap<object, string>();
 export function setExtensionPreviewPage(locals: object, path: string): void {
   previewPages.set(locals, path);
+}
+
+/** What Layout knows of the page before its body draws (and app components with it). */
+export interface ExtensionPage {
+  /** The page's language (`<html lang>`). */
+  language: string;
+  /** The store's display name. */
+  storeName: string;
+  /** A `noindex` page: app JSON-LD stays out of it. */
+  noIndex: boolean;
+}
+const pages = new WeakMap<object, ExtensionPage>();
+export function setExtensionPage(locals: object, page: ExtensionPage): void {
+  pages.set(locals, page);
 }
 
 const perRequest = new WeakMap<object, Promise<RequestExtensions>>();
@@ -57,21 +76,36 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
   if (!pending) {
     pending = (async () => {
       const [layout, theme] = await Promise.all([getLayoutData(), currentRequestTheme(locals)]);
-      const list = readStorefrontExtensions(layout?.appExtensions);
+      // App components cannot name a page, so none renders on a buyer's page (lib/app-scripts.ts).
+      // The page drawn: the request's, or the one the library previews.
+      const path = previewPages.get(locals) ?? url.pathname;
+      // The store's own values, never a guess: without its currency no component draws.
+      const currency = layout?.currency?.code ?? "";
+      const list = currency && appComponentsRenderOn(storefrontAppPage(path)) ? readStorefrontExtensions(layout?.appExtensions) : [];
+      const page = pages.get(locals);
+      const language = page?.language ?? theme.language;
       const byId = new Map(list.map((extension) => [extension.pluginId, extension]));
       const context: StorefrontRenderContext = {
         store: {
-          name: layout?.business?.companyName?.trim() || "Store",
-          currency: layout?.currency?.code ?? "BDT",
-          locale: theme.language === "bn" ? "bn-BD" : "en-BD",
-          language: theme.language,
-          timeZone: layout?.timeZone?.trim() || "Asia/Dhaka",
+          name: page?.storeName ?? "",
+          currency,
+          locale: dateLocale(language, storeRegion()),
+          language,
+          timeZone: storeTimeZone(),
         },
-        page: { kind: pageKind(previewPages.get(locals) ?? url.pathname), path: previewPages.get(locals) ?? url.pathname },
+        page: { kind: pageKind(path), path },
         assets: "",
         preview: theme.preview !== null,
       };
-      return { list, byId, host: new ExtensionHost({ runtime: { env: runtimeEnv() }, context }) };
+      const dependencies = getRuntime()?.pageDependencies;
+      const host = new ExtensionHost({
+        runtime: { env: runtimeEnv() },
+        context,
+        jsonLd: () => pages.get(locals)?.noIndex !== true,
+        // A page drawn with a fallback is never stored (it would stay until an unrelated write).
+        degraded: () => markPageUnproven(dependencies),
+      });
+      return { list, byId, host };
     })();
     perRequest.set(locals, pending);
   }

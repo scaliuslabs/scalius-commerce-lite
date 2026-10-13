@@ -20,7 +20,7 @@ import {
   type StorefrontProductCard,
 } from "@scalius/plugin-sdk/storefront";
 import { ICON_NAMES, Icon, type IconName } from "../icons";
-import { Section, SectionHead, Stars, choice, cx, ratingLabel, text, type Context } from "../ui";
+import { Section, SectionHead, Stars, choice, cx, percent, ratingLabel, ratingValue, reviewCount, text, type Context } from "../ui";
 import { Countdown, countdownEnd } from "./commerce";
 
 function iconOf(value: unknown): IconName {
@@ -43,7 +43,8 @@ function Empty({ context, words }: { context: Context; words: { en: string; bn: 
 
 function Savings({ product, context }: { product: StorefrontProductCard; context: Context }) {
   if (!product.compareAt || product.compareAt.amount <= product.price.amount) return null;
-  return <span class="noor-save">{t(context, { en: `Save ${product.percentOff ?? 0}%`, bn: `${product.percentOff ?? 0}% ছাড়` })}</span>;
+  const off = percent(context, product.percentOff ?? 0);
+  return <span class="noor-save">{t(context, { en: `Save ${off}`, bn: `${off} ছাড়` })}</span>;
 }
 
 // ── Product hero ─────────────────────────────────────────────────────────
@@ -82,13 +83,13 @@ export function LandingHero({ settings, context, instanceId }: SectionProps<Land
         <Island name="slideshow" hydrate="visible" props={{ autoplay: false }} class="noor-lhero-gallery">
           <ul class="noor-lhero-photos" data-track tabindex="0" aria-label={t(context, { en: "Photos", bn: "ছবি" })}>
             {photos.map((photo, index) => (
-              <li data-slide id={`${instanceId}-photo-${index}`}>
+              <li data-slide id={`noor-${instanceId}-photo-${index}`}>
                 <Image image={photo} sizes="(min-width: 900px) 46vw, 100vw" loading={index === 0 ? "eager" : "lazy"}
                   alt={index === 0 ? product.title : photo.alt} class="noor-cover" />
               </li>
             ))}
           </ul>
-          {product.percentOff ? <span class="noor-badge is-sale is-large">−{product.percentOff}%</span> : null}
+          {product.percentOff ? <span class="noor-badge is-sale is-large">−{percent(context, product.percentOff)}</span> : null}
           {photos.length > 1 ? (
             <ol class="noor-thumbs" data-controls hidden>
               {photos.map((photo, index) => (
@@ -106,7 +107,7 @@ export function LandingHero({ settings, context, instanceId }: SectionProps<Land
           {product.rating ? (
             <p class="noor-rating-line">
               <Stars value={product.rating.average} label={ratingLabel(context, product.rating.average, product.rating.count)} />
-              <span>{product.rating.average.toFixed(1)} · {t(context, { en: `${product.rating.count} reviews`, bn: `${product.rating.count}টি রিভিউ` })}</span>
+              <span>{ratingValue(context, product.rating.average)} · {reviewCount(context, product.rating.count)}</span>
             </p>
           ) : null}
           <div class="noor-lhero-price">
@@ -221,7 +222,7 @@ export function LandingOrder({ settings, context, instanceId }: SectionProps<Lan
   const assurances = settings.assurances.filter((item) => text(item.text));
   const call = phoneHref(text(settings.phone));
   const barLabel = text(settings.bar_label) ?? t(context, { en: "Order now", bn: "অর্ডার করুন" });
-  const orderAnchor = `order-${instanceId}`;
+  const orderAnchor = `noor-order-${instanceId}`;
   return (
     <Section name="order" tone={settings.tone} space="m" id={orderAnchor}>
       <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading) ?? t(context, { en: "Place your order", bn: "অর্ডার করতে নিচের ফর্মটি পূরণ করুন" })}

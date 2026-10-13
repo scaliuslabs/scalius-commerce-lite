@@ -51,8 +51,9 @@ import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
 import { AD_CLICK_ID_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
 import { optimizeAnalyticsScriptDelivery } from "@/lib/analytics-script-delivery";
-import { appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
+import { appComponentsRenderOn, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
+import { setExtensionPage } from "@/lib/extensions";
 import { themeAppStylesheets } from "@/lib/extensions/stylesheets";
 import {
   buildPartytownBootstrap,
@@ -145,7 +146,10 @@ const {
 const chromeCopy = storefrontCopy(themeLanguage).chrome;
 const isThemePreview = themePreview !== null;
 // The stylesheets of the apps the theme names (their slots and sections): immutable, cached files.
-const appStylesheets = themeAppStylesheets(storefrontTheme, readStorefrontExtensions(layoutData?.appExtensions));
+// None on a buyer's page, where app components never render.
+const appStylesheets = appComponentsRenderOn(storefrontAppPage(Astro.url.pathname))
+  ? themeAppStylesheets(storefrontTheme, readStorefrontExtensions(layoutData?.appExtensions))
+  : [];
 // The theme editor's bridge, only under a valid preview: buyers never get it.
 const themeEditorBridge = isThemePreview && !libraryPreview
   ? themePreviewBridgeScript(themeEditorOrigin(getRuntimeDashboardUrl()))
@@ -215,6 +219,8 @@ const presenceEntry = marketPresence ? marketOfPresence(marketMatrix, marketPres
 const pageLanguage = presenceEntry?.presence.locale
   ?? (hasSeveralPresences(marketMatrix) ? defaultLocale(marketMatrix) : null)
   ?? documentLanguage;
+// App components draw after this, in the page's language; no app JSON-LD on a noindex page.
+setExtensionPage(Astro.locals, { language: pageLanguage, storeName: storeDisplayName ?? "", noIndex: noindex === true });
 // The page's country: the store's (the backup market's). Numbers and dates are
 // written as there; Open Graph names the presence's country, else the store's.
 const pageRegion = storeRegion();

@@ -2,8 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { parsePluginManifest } from "@scalius/plugin-sdk/manifest";
 import { resolveStorefrontSettings } from "@scalius/shared/plugins/storefront-components";
-import { sanitizeStorefrontHtml } from "@scalius/shared/plugins/storefront-html";
-import { fixtureContext, renderHeader } from "@scalius/plugin-sdk/storefront/testing";
+import { fixtureContext, renderHeader, storefrontShown } from "@scalius/plugin-sdk/storefront/testing";
 import type { StorefrontMenuItem } from "@scalius/plugin-sdk/storefront";
 import { manifest } from "../index";
 import storefront from "../storefront";
@@ -21,7 +20,7 @@ function render(items: StorefrontMenuItem[], layout: "center" | "start", languag
   const settings = resolveStorefrontSettings(schema, { layout, menu_style: style }, { image: () => null, products: () => [] });
   const context = fixtureContext();
   context.store.language = language;
-  const html = sanitizeStorefrontHtml(renderHeader(storefront, "noor-header", settings, { menu: items }, { context }));
+  const html = storefrontShown(renderHeader(storefront, "noor-header", settings, { menu: items }, { context }), "scalius.noor");
   expect(html.dropped).toBe(0);
   const template = document.createElement("template");
   template.innerHTML = html.html;

@@ -338,11 +338,11 @@ function placesPage(request: PluginRouteRequest, state: PlacesState | null, refr
     ui.card(t.title, [
       status,
       ui.keyValue([
-        { label: t.places, value: PLACES_TOTAL.toLocaleString("en-US") },
-        { label: t.sent, value: (state && state.version === PLACES_VERSION ? state.next : 0).toLocaleString("en-US") },
-        { label: t.created, value: String(state?.created ?? 0) },
-        { label: t.updated, value: String(state?.updated ?? 0) },
-        { label: t.conflicts, value: String(state?.conflicts ?? 0) },
+        { label: t.places, value: PLACES_TOTAL },
+        { label: t.sent, value: state && state.version === PLACES_VERSION ? state.next : 0 },
+        { label: t.created, value: state?.created ?? 0 },
+        { label: t.updated, value: state?.updated ?? 0 },
+        { label: t.conflicts, value: state?.conflicts ?? 0 },
         { label: t.version, value: PLACES_VERSION.slice(0, 12) },
       ]),
       ui.text(t.keep, { tone: "neutral", size: "sm" }),

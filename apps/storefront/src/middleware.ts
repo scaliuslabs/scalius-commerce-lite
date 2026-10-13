@@ -24,7 +24,7 @@ import {
   requestHasPrivateSession,
 } from "@/lib/cache-policy";
 import { setPageCspHeader } from "@/lib/middleware-helper/csp-handler";
-import { appScriptOrigins, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
+import { appComponentsRenderOn, appScriptOrigins, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
 import {
   applyBrowserCachePolicyForPublicResponse,
   isSuccessfulPublicDiscoveryResponse,
@@ -160,10 +160,11 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 
   // A theme preview may be framed by the dashboard's editor; a buyer's page never.
   const frameAncestors = await themePreviewFrameAncestors({ request, locals }, response);
-  // The theme the page drew (the draft in a preview) names the apps whose hosts may be reached.
+  // The theme the page drew (the draft in a preview) names the apps whose hosts may be reached;
+  // none on a buyer's page, where app components never render.
   const themeConnectHosts = themeAppConnectHosts(
     (await currentRequestTheme(locals)).theme,
-    readStorefrontExtensions(layout?.appExtensions),
+    appComponentsRenderOn(storefrontAppPage(url.pathname)) ? readStorefrontExtensions(layout?.appExtensions) : [],
   );
   // A purchased file streams as a sandboxed attachment: it keeps its own policy.
   return withPageCsp(url.pathname, response, {

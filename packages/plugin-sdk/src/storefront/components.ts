@@ -11,6 +11,7 @@ import type {
   StorefrontRenderContext,
 } from "@scalius/shared/plugins/storefront-protocol";
 import { EMPTY_HTML, escapeHtml, raw, renderChild, type Html, type Renderable } from "./html";
+import { t } from "./locale";
 
 type Attributes = Record<string, string | number | boolean | null | undefined>;
 
@@ -27,13 +28,6 @@ function children(content: unknown): string {
   const out: string[] = [];
   renderChild(content, out);
   return out.join("");
-}
-
-// ── Words ─────────────────────────────────────────────────────────────────
-
-/** Picks the page language's words: `t(context, { en: "Shop now", bn: "এখনই কিনুন" })`. */
-export function t(context: Pick<StorefrontRenderContext, "store">, words: { en: string; bn?: string }): string {
-  return context.store.language === "bn" && words.bn ? words.bn : words.en;
 }
 
 // ── Images ────────────────────────────────────────────────────────────────
@@ -182,7 +176,7 @@ export function editable(context: Pick<StorefrontRenderContext, "preview">, sett
 
 export interface CheckoutProps {
   /** The product to order: a card from a `product` or `products` setting. Nothing renders without one. */
-  product: Pick<StorefrontProductCard, "url"> | null | undefined;
+  product: Pick<StorefrontProductCard, "id"> | null | undefined;
   /** The most the quantity picker offers (1 hides it; at most 10). */
   maxQuantity?: number;
   /** The submit button's words (the store's checkout language otherwise). */
@@ -199,11 +193,10 @@ export interface CheckoutProps {
  *   <section id="order"><Checkout product={settings.product} maxQuantity={5} /></section>
  */
 export function Checkout(props: CheckoutProps): Html {
-  const url = props.product?.url ?? "";
-  const slug = decodeURIComponent(url.split(/[?#]/, 1)[0]!.split("/").filter(Boolean).pop() ?? "");
-  if (!slug) return EMPTY_HTML;
+  const id = props.product?.id ?? "";
+  if (!id) return EMPTY_HTML;
   return raw(`<scalius-checkout${attributes({
-    "data-product": slug,
+    "data-product": id,
     "data-max-quantity": props.maxQuantity,
     "data-submit-label": props.submitLabel,
   })}></scalius-checkout>`);

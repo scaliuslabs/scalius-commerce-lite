@@ -49,7 +49,8 @@ beforeAll(async () => {
 afterAll(async () => { await server?.close(); });
 
 it("gives repeated same-product embeds distinct titles and location labels across placements", async () => {
-  const props = { pluginId: "scalius.noor", base: "/_x/noor/release/", html: '<scalius-checkout data-product="shirt"></scalius-checkout>'.repeat(2) };
+  const props = { pluginId: "scalius.noor", base: "/_x/noor/release/", products: new Map([["prod_shirt", "shirt"]]),
+    html: '<scalius-checkout data-product="prod_shirt"></scalius-checkout>'.repeat(2) };
   const html = (await container.renderToString(AppComponent, { props: { ...props, instanceId: "first" } }))
     + (await container.renderToString(AppComponent, { props: { ...props, instanceId: "second" } }));
   const document = new Window().document;
@@ -66,4 +67,13 @@ it("gives repeated same-product embeds distinct titles and location labels acros
       expect(control && form.contains(control)).toBe(true);
     }
   }
+});
+
+it("orders only a product the component was given: an embed naming any other renders nothing", async () => {
+  const html = await container.renderToString(AppComponent, { props: {
+    pluginId: "scalius.noor", base: "/_x/noor/release/", products: new Map([["prod_shirt", "shirt"]]),
+    html: '<p>a</p><scalius-checkout data-product="prod_other"></scalius-checkout>',
+  } });
+  expect(html).toContain("<p>a</p>");
+  expect(html).not.toContain("data-order-form");
 });

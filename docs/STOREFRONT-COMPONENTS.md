@@ -9,7 +9,7 @@ Source of truth:
 | Part | Where |
 | --- | --- |
 | Contract (manifest, data shapes, render protocol, limits) | `packages/shared/src/plugins/storefront-components.ts`, `storefront-protocol.ts` (zod-free) |
-| Output check | `packages/shared/src/plugins/storefront-html.ts` (`sanitizeStorefrontHtml`) |
+| Output check | `packages/shared/src/plugins/html.ts` (`sanitizePluginHtml`, `component` profile) |
 | SDK | `@scalius/plugin-sdk/storefront`, `/storefront/testing`, `/island` (`packages/plugin-sdk/src/storefront/`) |
 | Packer | `scripts/plugin-build.mjs` (`packStorefront`, `writeStorefrontGenerated`) |
 | Host (storefront) | `apps/storefront/src/lib/extensions/` and `components/apps/AppComponent.astro` |
@@ -68,7 +68,7 @@ Component sections and slots use the app settings types (`text`, `textarea`, `nu
 
 The editor shows a media picker, a product source or product picker, a link field and a repeatable item list. Values are resolved against the schema as it is now (`resolveStorefrontSettings`): a removed setting drops, a new one takes its default, a deleted image or product resolves to `null`. Slot settings cannot use `image`, `products` or `product`: the chrome renders on every page and must not add reads.
 
-The page reads every image and product list its component sections name in one batch beside the page's own second batch (`readAppComponentData`), with the homepage limits (40 images, 8 product lists). A page with component sections adds no round trip to its critical path.
+The page reads every image, product list and picked product its component sections name in one batch (`readAppComponentData`), with the homepage limits (40 images, 8 product lists). That batch follows the apps' read, which names the settings schemas, so component sections add one wave to the page, and a `collection:` source one more (its rules are read first). `apps/api/src/storefront-render-budget.test.ts` measures both.
 
 ## A storefront module
 
@@ -107,7 +107,8 @@ The SDK's primitives:
 - `stickyHeader()`: declare the actual sticky header box so core navigation and anchors reserve its space.
 - `editable(context, key)`: marks the element that shows a text setting, so the editor edits it in place (preview only; the published page has no marks).
 - `asset(context, "public/font.woff2")`: a public file's URL.
-- `t(context, { en, bn })`: the store's language.
+- `t(context, { en, bn, … })`: words in the page's language (exact BCP 47 tag, then its language, then English).
+- `formatNumber`, `plural(context, count, { en: { one: "# review", other: "# reviews" } })`, `formatMoney`, `formatDate`, `storeTime`: numbers, plurals, money and dates as the store writes them (`@scalius/shared/locale-format`); `context.store` carries the page's `language`, `locale` (language and the store's country), `currency` and `timeZone`, never a default.
 - `Checkout`: the core order form (below).
 
 JSX escapes every string. `raw(...)` passes HTML through; the output check still runs. Event handler attributes and functions as attributes are refused at render time.
@@ -184,7 +185,7 @@ on removal or mount failure; your other resources still need that cleanup.
 
 `<Checkout product={settings.product} maxQuantity={5} />` places the store's own order form in the app's markup: option picker, quantity, name, phone, address. It is the Bangladesh-style landing page: the buyer orders without leaving the page.
 
-- The storefront replaces the marker with `OrderForm.astro` (at most 2 per page).
+- The marker names the product by id (`data-product`), and only a product the section's settings gave it orders: the storefront replaces the marker with `OrderForm.astro` (at most 2 per page).
   The server render input contains no buyer form data. The resulting form belongs
   to core; trusted browser islands share its page and can access its DOM.
 - The form posts to `/checkout/quick`, the same cash-on-delivery pipeline as the product page's quick buy: stock, prices, the delivery quote, checkout functions and the order commit are the core's. The buyer confirms the total once and the order is placed.
@@ -266,8 +267,10 @@ The merchant owns their apps (private or uploaded). The platform makes what an a
   Activation approval, CSP and server authorization are boundaries; HTML
   sanitization does not sandbox an approved island. HttpOnly cookies prevent
   reading cookie values, not making otherwise-authorized same-origin requests.
-- Output passes `sanitizeStorefrontHtml`. Any element, class, inline style, `<style>`, SVG and form stays. Dropped: `<script>` (islands are the only code), `<object>`, `<embed>`, `<base>`, `<meta>`, `<link>`, event handler attributes, `srcdoc`, and any URL that is not relative, `http(s)`, `mailto`, `tel` or `sms` (an `<img>` may use a base64 raster `data:` URL). An `<iframe>` needs an `https://` source and loads lazily.
+- Output passes `sanitizePluginHtml` (`component` profile), an allowlist. It keeps content, list, table and form elements, `h1`, `video`, an SVG drawing subset, islands and core embeds; classes; `id`s that start with the app name (`noor-…` for `scalius.noor`); inline style without loading functions (`url()`, `image-set()`, …), escapes or comments; forms that post to a store path; and schema.org JSON-LD (dropped on `noindex` pages). It drops everything else: `<script>`, `<style>` (CSS belongs in the stylesheet), `<iframe>`, `<noscript>`, `<template>`, `<math>`, SVG animation and `foreignObject`, event handlers, `data-sx-*` (host attributes), and every URL that is not a store path, `http(s)` (the store's media origin is http on a local stack), `mailto`, `tel` or a fragment. Test with `storefrontShown(html, pluginId)` (`/storefront/testing`): `dropped` counts what it left out.
+- App components, their islands, stylesheets and connect hosts never reach a buyer's page (checkout, the receipt, account, payment recovery, order tracking; `appComponentsRenderOn` in `apps/storefront/src/lib/app-scripts.ts`): the core chrome renders there.
 - Island code is served from the store's origin under its release; CSP `script-src` gains nothing. Connect hosts join `connect-src` and `img-src` only, on pages whose theme uses the app.
+- A page drawn with a fallback (a component late, failed, refused, or a release the isolate cannot load) is never stored in the page cache.
 - SVG files are served with a sandboxing CSP and `nosniff`.
 
 ## Versioning

@@ -17,8 +17,19 @@ import {
   type StorefrontResolvedSettings,
 } from "@scalius/shared/plugins/storefront-protocol";
 import { checkStorefrontHeaderHtml, type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
+import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 
 export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-html-check";
+
+/**
+ * What the storefront shows of a component's markup (the host's sanitizer),
+ * and how many elements and attributes it left out: assert `dropped` is 0.
+ */
+export function storefrontShown(html: string, pluginId: string): { html: string; dropped: number } {
+  const result = sanitizePluginHtml(html, { pluginId, profile: "component" });
+  if (!result.ok) throw new Error(`The storefront would show nothing: ${result.reason}.`);
+  return { html: result.html, dropped: result.dropped };
+}
 
 /** Assert declared header capabilities without requiring search, nav or account. */
 export function assertHeaderContract(html: string, options: StorefrontHeaderCheckOptions = {}): void {
