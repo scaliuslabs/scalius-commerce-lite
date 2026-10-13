@@ -204,6 +204,53 @@ describe("transactional analytics overview projections", () => {
     process.stdout.write(`${JSON.stringify({ analyticsRollup300Lines: { elapsedMs } })}\n`);
   });
 
+  it("equals a rebuild after a random sequence of order writes, with days sealed in between", async () => {
+    let state = 20_260_815;
+    const random = (n: number) => { state = (state * 1_103_515_245 + 12_345) % 2_147_483_648; return state % n; };
+    f.customer("merge_into", "Kept", "+8801712000001");
+    f.customer("merge_from", "Merged", "+8801712000002");
+    const ids: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const id = `rnd_${i}`;
+      ids.push(id);
+      order(id, {
+        createdAt: `2026-08-${String(10 + (i % 9)).padStart(2, "0")}T0${i % 10}:00:00Z`,
+        customerId: i % 4 === 0 ? "merge_from" : i % 4 === 1 ? "merge_into" : undefined,
+        customerPhone: i % 4 === 2 ? NO_PHONE : undefined,
+        currencyCode: i % 5 === 0 ? "USD" : "BDT", status: i % 3 === 0 ? "delivered" : "pending",
+        paymentMethod: i % 2 ? "cod" : "stripe", shippingMinor: 60, pricesIncludeTax: i % 2 === 0,
+        lines: [
+          { id: `${id}_a`, productId: "p_rnd", quantity: 1 + (i % 3), unitMinor: 97 + i, discountMinor: i % 4, taxMinor: i % 5, fulfillmentType: "digital" },
+          { id: `${id}_b`, productId: "p_rnd_b", quantity: 2, unitMinor: 51, taxMinor: 3, fulfillmentType: i % 6 === 0 ? "gift_card" : "digital" },
+        ],
+      });
+      if (i % 5 === 0) f.sqlite.prepare("UPDATE orders SET shop_currency = 'BDT', fx_rate = '1.37' WHERE id = ?").run(id);
+    }
+    const pick = () => ids[random(ids.length)]!;
+    const writes: Array<() => void> = [
+      () => f.payment({ id: `pay_${random(1e9)}`, orderId: pick(), amountMinor: 1 + random(40), type: "refund", status: random(2) ? "refunded" : "pending" }),
+      () => f.sqlite.exec(`UPDATE order_payments SET status = 'refunded' WHERE id = (SELECT id FROM order_payments ORDER BY id LIMIT 1)`),
+      () => { const id = pick(); f.returnCase({ id: `ret_${random(1e9)}`, orderId: id, status: random(2) ? "approved" : "completed", lines: [{ itemId: `${id}_a`, approved: 1 }] }); },
+      () => f.sqlite.exec(`UPDATE orders SET status = '${["cancelled", "pending", "delivered", "returned", "refunded", "incomplete"][random(6)]}' WHERE id = '${pick()}'`),
+      () => f.sqlite.exec(`UPDATE order_items SET line_subtotal_minor = line_subtotal_minor + ${random(30)}, quantity = quantity + ${random(2)} WHERE id = '${pick()}_a'`),
+      () => f.sqlite.exec(`UPDATE orders SET fx_rate = '${(0.5 + random(100) / 37).toFixed(4)}' WHERE id = '${pick()}' AND currency_code <> shop_currency`),
+      () => f.sqlite.exec(`UPDATE orders SET deleted_at = ${random(2) ? 123 : "NULL"} WHERE id = '${pick()}'`),
+      () => f.sqlite.exec("UPDATE orders SET customer_id = 'merge_into' WHERE customer_id = 'merge_from'"),
+      () => f.sqlite.exec(`UPDATE orders SET created_at = created_at + ${(random(5) - 2) * 86_400} WHERE id = '${pick()}'`),
+      () => f.cod({ orderId: pick(), status: random(2) ? "collected" : "pending" }),
+      () => f.sqlite.exec(`DELETE FROM order_items WHERE id = '${pick()}_b'`),
+      () => f.sqlite.exec(`UPDATE orders SET prices_include_tax = 1 - prices_include_tax, tax_amount_minor = tax_amount_minor + 1 WHERE id = '${pick()}'`),
+    ];
+    let applied = 0;
+    for (let step = 0; step < 60; step++) {
+      try { writes[random(writes.length)]!(); applied++; } catch { /* a write the schema refuses changes nothing */ }
+      await assertRollupProjection(f.db);
+      if (step % 7 === 0) await sealEveryFactDay(f.db);
+    }
+    expect(applied).toBeGreaterThan(40);
+    await parity(AUGUST, "Asia/Dhaka", "BDT", "previous_period");
+  });
+
   it("changes only the order's fact for COD collection or a refund, and unseals a finished day", async () => {
     order("payment_only");
     f.cod({ orderId: "payment_only", status: "pending" });

@@ -17,9 +17,10 @@ function recommendationPairs(orderIds: string): string {
     WHERE o.id IN (${orderIds}) AND ${recommendationRealOrderSql("o")}`;
 }
 
-const symmetricDifference = (expected: string, stored: string) => `SELECT count(*) AS drift FROM (
-    SELECT * FROM (${expected}) AS e1 EXCEPT SELECT * FROM (${stored}) AS s1
-    UNION ALL SELECT * FROM (${stored}) AS s2 EXCEPT SELECT * FROM (${expected}) AS e2) AS diff`;
+/** Rows in either result but not the other (compound operators bind left to right: each EXCEPT is its own query). */
+export const symmetricDifference = (expected: string, stored: string) => `SELECT count(*) AS drift FROM (
+    SELECT * FROM (SELECT * FROM (${expected}) AS e1 EXCEPT SELECT * FROM (${stored}) AS s1) AS missing
+    UNION ALL SELECT * FROM (SELECT * FROM (${stored}) AS s2 EXCEPT SELECT * FROM (${expected}) AS e2) AS extra) AS diff`;
 
 /** Stored pairs of the orders `orderIds` selects that differ from their sources. */
 export function recommendationPairsDriftSql(orderIds: string): string {

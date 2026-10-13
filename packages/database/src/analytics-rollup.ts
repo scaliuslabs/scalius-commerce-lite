@@ -18,6 +18,7 @@ import { currencyExponent, EXCLUDED_CURRENCY_CODES, SUPPORTED_CURRENCY_CODES } f
 import {
   COUNTED_RETURN_STATUSES, NON_SALES_STATUSES, REVERSED_STATUSES, lineKeptTaxSql, lineReturnsSql,
 } from "./analytics-sales-sql";
+import { symmetricDifference } from "./derived-projections";
 
 export const ANALYTICS_MEASURES = ["order_count", "placed", "cancelled", "gross", "disc", "returns", "shipping", "taxes", "net_units", "cod", "rts", "cod_delivered", "refunded"] as const;
 export const ANALYTICS_BUCKET_KEYS = ["grain_seconds", "dimension_kind", "bucket_start", "shop_currency", "key1", "key2"] as const;
@@ -257,8 +258,7 @@ export function analyticsBucketDriftSql(from: number, through: number): string {
   const expected = `select * from (${bucketRows(dayFacts(from, through))}) as e where ${sealedDay("e.bucket_start")}`;
   const stored = `select ${columns} from analytics_sales_buckets b
     where b.bucket_start >= ${from} and b.bucket_start < ${through} and ${sealedDay("b.bucket_start")}`;
-  return `select count(*) as drift from (select * from (${expected}) as e1 except select * from (${stored}) as s1
-    union all select * from (${stored}) as s2 except select * from (${expected}) as e2) as diff`;
+  return symmetricDifference(expected, stored);
 }
 
 /**
@@ -298,8 +298,7 @@ export function analyticsFactsDriftSql(orderScope: string): string {
   const columns = ANALYTICS_FACT_COLUMNS.join(", ");
   const expected = `select ${columns} from (${analyticsFactsSelect(orderScope)}) as e`;
   const stored = `select ${columns} from analytics_order_facts where order_id in (select o.id from orders o where ${orderScope})`;
-  return `select count(*) as drift from (select * from (${expected}) as e1 except select * from (${stored}) as s1
-    union all select * from (${stored}) as s2 except select * from (${expected}) as e2) as diff`;
+  return symmetricDifference(expected, stored);
 }
 
 export interface AnalyticsRollupTrigger { name: string; table: string; sqlite: string }

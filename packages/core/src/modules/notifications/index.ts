@@ -127,5 +127,5 @@ export type {
 export * from "./staff-alerts.contract";
 export {
   recordStaffAlert, readStaffAlerts, readStaffAlertSummary, markStaffAlertRead,
-  markAllStaffAlertsRead, clearStaffAlerts, undoStaffAlertsClear,
+  markAllStaffAlertsRead, clearStaffAlerts, undoStaffAlertsClear, pruneStaffAlerts,
 } from "./staff-alerts";

@@ -7,7 +7,8 @@ import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
   archiveStaleIncompleteOrders,
 } from "@scalius/core/modules/orders";
-import { flushPendingNotificationOutbox } from "@scalius/core/modules/notifications";
+import { flushPendingNotificationOutbox, pruneStaffAlerts } from "@scalius/core/modules/notifications";
+import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
 import { sweepAutoFulfilment, listOrdersAwaitingAutoFulfil } from "@scalius/core/modules/fulfilment";
 import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
@@ -35,6 +36,7 @@ import {
   runNightlyCatalogMaintenance,
 } from "./scheduled/catalog-projections";
 import { readMaintenanceCursor } from "./scheduled/cursor";
+import { maintainDerivedProjections } from "./scheduled/derived-projections";
 import { storeTimeZoneOf } from "./utils/store-time-zone";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
@@ -635,6 +637,26 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
+    // Finished UTC days become analytics buckets; until then reports read their facts.
+    name: "analytics_seal",
+    slice: 2,
+    async run({ db, timed }) {
+      const sealed = await timed("analytics_seal", () => sealAnalyticsDays(db));
+      if (sealed > 0) console.log(`[scheduled] Analytics seal: days=${sealed}`);
+    },
+  },
+  {
+    // Bell history no reader or Undo can reach, and alerts no inbox row shows.
+    name: "staff_alert_retention",
+    slice: 3,
+    async run({ db, timed }) {
+      const pruned = await timed("staff_alert_retention", () => pruneStaffAlerts(db, Math.floor(Date.now() / 1000)));
+      if (pruned.inbox > 0 || pruned.alerts > 0) {
+        console.log(`[scheduled] Staff alert retention: inbox=${pruned.inbox}, alerts=${pruned.alerts}`);
+      }
+    },
+  },
+  {
     // Identity handoff audit rows double as the single-use token ledger; they
     // are retained for 90 days after the token expired, then pruned by index.
     name: "identity_handoff_audit_prune",
@@ -794,6 +816,14 @@ async function runScheduledMaintenanceInner(
       console.log(
         `[scheduled] Nightly catalogue: salesStatsProducts=${nightly.salesStatsProducts}, ` +
           `recommendationMessages=${nightly.recommendationMessages}, rebuildQueued=${nightly.rebuildQueued}`,
+      );
+    }
+    // A sampled drift check of the derived projections, repaired in place.
+    const projections = await timed("derived_projection_check", () => maintainDerivedProjections(db)).catch(() => null);
+    if (projections && (projections.analytics.drift || projections.recommendations.drift || projections.inbox.drift)) {
+      console.log(
+        `[scheduled] Derived projections repaired: analytics=${projections.analytics.drift}, ` +
+          `recommendations=${projections.recommendations.drift}, inbox=${projections.inbox.drift}`,
       );
     }
   }

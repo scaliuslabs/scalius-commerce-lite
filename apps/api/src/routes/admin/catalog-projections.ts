@@ -10,6 +10,7 @@ import {
     rebuildCatalogProjections,
 } from "@scalius/core/modules/products";
 
+import { maintainDerivedProjections } from "../../scheduled/derived-projections";
 import { ok } from "../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 
@@ -66,6 +67,53 @@ app.openapi(rebuildRoute, async (c) => {
     // Rebuilt rows are buyer-visible (listings, counts, sitemaps).
 
     return ok(c, result);
+});
+
+const checked = z.object({ drift: z.number().int().nonnegative(), repaired: z.boolean() });
+const derivedRoute = createRoute({
+    method: "post",
+    path: "/projections/derived",
+    operationId: "dashboard.derived_projections.maintain",
+    tags: ["Admin - Catalog"],
+    summary: "Check, repair or rebuild the derived order projections",
+    description:
+        "Seals finished analytics days, then compares the analytics facts and sealed days, recommendation order "
+        + "pairs and inbox counters with their sources and rewrites what differs. `rebuild` recomputes the next 500 "
+        + "orders after `afterOrderId` instead of a sample: call again with the returned cursor until `done`.",
+    request: {
+        body: {
+            required: true,
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        rebuild: z.boolean().optional(),
+                        afterOrderId: z.string().trim().min(1).max(180).nullable().optional(),
+                    }).strict(),
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Projections checked",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        sealedDays: z.number().int().nonnegative(),
+                        analytics: checked, recommendations: checked, inbox: checked,
+                        nextAfterOrderId: z.string().nullable().optional(),
+                        done: z.boolean().optional(),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(derivedRoute, async (c) => {
+    const body = c.req.valid("json");
+    return ok(c, await maintainDerivedProjections(c.get("db"), { rebuild: body.rebuild, afterOrderId: body.afterOrderId ?? null }));
 });
 
 export { app as adminCatalogProjectionRoutes };

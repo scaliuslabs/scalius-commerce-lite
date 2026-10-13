@@ -6,4 +6,7 @@ export const CATALOG_PROJECTION_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/catalog/projections/rebuild": {
     POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
+  "/api/v1/admin/catalog/projections/derived": {
+    POST: { permission: PERMISSIONS.ANALYTICS_EDIT },
+  },
 };

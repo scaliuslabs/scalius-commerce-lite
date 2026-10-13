@@ -42,7 +42,10 @@ export interface ProjectionCheck {
 export async function checkAnalyticsRollup(db: Database, options: { repair?: boolean; now?: Date } = {}): Promise<ProjectionCheck> {
   const scope = `1 = 1 order by o.created_at desc, o.id desc limit ${ANALYTICS_REPAIR_ORDERS}`;
   const through = Math.floor((options.now ?? new Date()).getTime() / 1000 / DAY) * DAY;
-  const from = through - 7 * DAY;
+  // The sealed days of the sampled orders, and at least the last week.
+  const [oldest] = await db.all<{ at: number | null }>(sql.raw(`select min(created_at) as at from (
+    select created_at from orders order by created_at desc, id desc limit ${ANALYTICS_REPAIR_ORDERS}) as sample`));
+  const from = Math.min(through - 7 * DAY, Math.floor(Number(oldest?.at ?? through) / DAY) * DAY);
   const facts = await count(db, analyticsFactsDriftSql(scope));
   const buckets = await count(db, analyticsBucketDriftSql(from, through));
   if (options.repair && facts > 0) await statement(db, analyticsFactsRepairStatement(scope));

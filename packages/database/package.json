@@ -6,6 +6,7 @@
   "exports": {
     "./analytics-sales-sql": "./src/analytics-sales-sql.ts",
     "./analytics-rollup": "./src/analytics-rollup.ts",
+    "./derived-projections": "./src/derived-projections.ts",
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
     "./postgres-adapter": "./src/postgres-adapter.ts",
