@@ -1,18 +1,19 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getDb } from "@scalius/database/client";
 import { securityDocument } from "@scalius/core/modules/settings";
+import { settingsMirror } from "@scalius/core/settings-store";
 import { errorResponses } from "../schemas/responses";
 
 const ALLOWED_PROXY_PROTOCOLS = new Set(["https:"]);
 
 /**
  * The merchant CSP allow-list is dashboard-managed (Settings -> Security).
- * KV first, then the settings row once on a miss (mirrored back to KV).
+ * Per-colo mirror first, then the settings row once on a miss.
  * Failing to read anything yields the empty default, which blocks every
  * proxy target.
  */
 async function readMerchantCspAllowedDomains(env: Env): Promise<string> {
-  const ctx = { kv: env.CACHE };
+  const ctx = { kv: settingsMirror(env) };
   const cached = await securityDocument.readCached(ctx);
   if (cached) return cached.cspAllowedDomains;
 

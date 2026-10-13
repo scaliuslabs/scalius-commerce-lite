@@ -140,8 +140,8 @@ The `auth.send_otp` queue message is handled in `apps/api/src/queue-consumer.ts`
 
 - Email, SMS and WhatsApp OTP use the same pause markers. A paused provider gives a terminal skipped receipt.
 - WhatsApp OTP uses the `whatsapp` document's `authTemplateName` (default `auth_otp`), language `en_US`, and the code as the one body value.
-- `jobs-dlq` never calls a provider. It marks the receipt `skipped` (`auth_otp_dlq_terminal`), or `accepted` when a recovery hint exists.
-- If a provider accepts a code and D1 cannot record it, the consumer writes the KV hint `auth_otp:accepted:<deliveryKey>` (24 hours). It holds only the delivery key, channel and acceptance metadata. A retry repairs the receipt before any provider call.
+- `jobs-dlq` never calls a provider. It marks the receipt `skipped` (`auth_otp_dlq_terminal`).
+- If a provider accepts a code and D1 cannot record it after brief retries, the message retries and may send one duplicate code. The receipt is the only authority; there is no KV hint.
 
 ## Dispatch kit
 

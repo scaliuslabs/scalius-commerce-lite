@@ -70,7 +70,7 @@ function noStore(c: Context) {
 
 /** Validates the receipt proof for this order and returns the guest actor. */
 async function receiptActor(c: Context<{ Bindings: Env }>, order: string): Promise<ConversationActor & { kind: "guest_receipt" }> {
-  await validateReceiptToken(c.env.CACHE, order, c.req.header(RECEIPT_TOKEN_HEADER)?.trim() || undefined, c.get("db"));
+  await validateReceiptToken(c.get("db"), order, c.req.header(RECEIPT_TOKEN_HEADER)?.trim() || undefined);
   return { kind: "guest_receipt", orderId: order };
 }
 

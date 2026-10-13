@@ -3,11 +3,9 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { orders, checkoutAttempts } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import { getCheckoutAttemptRequestKeyFromStatusToken, isEndedCheckoutOrder } from "@scalius/core/modules/checkout";
-import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
-import { scheduleCheckoutSuccessRecoveryHints, scheduleCheckoutFailureStatusHint } from "./shared";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -59,12 +57,11 @@ app.openapi(getOrderStatusRoute, async (c) => {
     throw new ValidationError("Invalid checkout status token");
   }
 
-  // Hints can outlive an order's cancellation; read both durable facts atomically.
+  // Read both durable facts atomically.
   const attempt = await c.get("db")
     .select({
       status: checkoutAttempts.status,
       orderId: checkoutAttempts.orderId,
-      checkoutToken: checkoutAttempts.checkoutToken,
       persistedOrderId: orders.id,
       orderStatus: sql<string | null>`${orders.status}`.as("order_status"),
       deletedAt: orders.deletedAt,
@@ -92,24 +89,10 @@ app.openapi(getOrderStatusRoute, async (c) => {
     }
 
     if (attempt.deletedAt === null) {
-      scheduleCheckoutSuccessRecoveryHints(
-        c.env,
-        statusToken,
-        attempt.checkoutToken,
-        attempt.orderId,
-        getOptionalExecutionContext(c),
-      );
       return ok(c, { status: "completed", orderId: attempt.orderId });
     }
   } else if (attempt?.status === "failed") {
     const error = "Order creation failed. Please review your checkout and try again.";
-    scheduleCheckoutFailureStatusHint(
-      c.env,
-      statusToken,
-      attempt.orderId,
-      error,
-      getOptionalExecutionContext(c),
-    );
     return ok(c, { status: "failed", orderId: attempt.orderId, error });
   }
 

@@ -3,12 +3,6 @@
 // Replaces firebase-admin SDK with direct HTTP calls
 
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
-import {
-  decryptCredentials,
-  decryptCredentialsGraceful,
-  encryptCredentials,
-} from "../../utils/credential-encryption";
-import { sha256Hex } from "@scalius/shared/hash";
 
 export interface ServiceAccount {
   client_email: string;
@@ -19,69 +13,8 @@ export interface ServiceAccount {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /** Parallel FCM sends per multicast. Fixed; not merchant- or env-tunable. */
 export const FCM_SEND_CONCURRENCY = 8;
-const FCM_ACCESS_TOKEN_CACHE_TTL_SECONDS = 3300;
-const ENCRYPTED_VALUE_PREFIX = "enc:";
-/** One deployment per KV namespace, so the cache prefix is fixed. */
-const FCM_TOKEN_CACHE_PREFIX = "scalius";
-
-function getCredentialEncryptionKey(
-  env: Record<string, unknown>,
-): string | undefined {
-  return env.CREDENTIAL_ENCRYPTION_KEY as string | undefined;
-}
-
-async function serviceAccountCacheFingerprint(
-  serviceAccount: ServiceAccount,
-): Promise<string> {
-  const material = JSON.stringify([
-    serviceAccount.project_id,
-    serviceAccount.client_email,
-    serviceAccount.private_key,
-  ]);
-  return (await sha256Hex(material)).slice(0, 24);
-}
-
-export async function getFirebaseAccessTokenCacheKey(
-  serviceAccount: ServiceAccount,
-): Promise<string> {
-  const fingerprint = await serviceAccountCacheFingerprint(serviceAccount);
-  return `${FCM_TOKEN_CACHE_PREFIX}:fcm_access_token:${serviceAccount.project_id}:${fingerprint}`;
-}
-
-async function readCachedAccessToken(
-  storedValue: string,
-  encryptionKey: string,
-): Promise<string | undefined> {
-  const trimmed = storedValue.trim();
-  if (!trimmed) return undefined;
-
-  if (trimmed.startsWith(ENCRYPTED_VALUE_PREFIX)) {
-    try {
-      return await decryptCredentials(
-        trimmed.slice(ENCRYPTED_VALUE_PREFIX.length),
-        encryptionKey,
-      );
-    } catch (error: unknown) {
-      console.warn(
-        "[Firebase] Failed to decrypt cached FCM access token:",
-        error instanceof Error ? error.message : error,
-      );
-      return undefined;
-    }
-  }
-
-  return decryptCredentialsGraceful(trimmed, encryptionKey);
-}
-
-async function encodeCachedAccessToken(
-  accessToken: string,
-  encryptionKey: string,
-): Promise<string> {
-  return `${ENCRYPTED_VALUE_PREFIX}${await encryptCredentials(
-    accessToken,
-    encryptionKey,
-  )}`;
-}
+/** Per-instance reuse of the OAuth access token (Google issues it for an hour). */
+const FCM_ACCESS_TOKEN_REUSE_SECONDS = 3300;
 
 function base64UrlEncode(str: string): string {
   const encoded = new TextEncoder().encode(str);
@@ -385,14 +318,12 @@ function initializeFCMService(serviceAccountJson?: string) {
 export class FCMMessagingService {
   private serviceAccount: ServiceAccount;
   private projectId: string;
-  private env: Record<string, unknown>;
   private accessTokenCache: { token: string; expiresAt: number } | null = null;
 
-  constructor(environment: Record<string, unknown>, serviceAccountJson?: string) {
+  constructor(_environment: Record<string, unknown>, serviceAccountJson?: string) {
     const { serviceAccount, projectId } = initializeFCMService(serviceAccountJson);
     this.serviceAccount = serviceAccount;
     this.projectId = projectId;
-    this.env = environment;
   }
 
   private async ensureValidAccessToken(): Promise<string> {
@@ -401,54 +332,15 @@ export class FCMMessagingService {
       return this.accessTokenCache.token;
     }
 
-    // Scope the reusable OAuth token to the exact service-account credential.
-    // Project-only keys can reuse an old token after private-key rotation in a
-    // warm Worker/colo for the full token TTL.
-    const cacheKey = await getFirebaseAccessTokenCacheKey(this.serviceAccount);
-    const cache = this.env.CACHE as KVNamespace | undefined;
-    const encryptionKey = getCredentialEncryptionKey(this.env);
-
-    if (cache && encryptionKey) {
-      try {
-        const cachedToken = await cache.get(cacheKey);
-        if (cachedToken) {
-          const accessToken = await readCachedAccessToken(cachedToken, encryptionKey);
-          if (accessToken) {
-            this.rememberAccessToken(accessToken);
-            return accessToken;
-          }
-        }
-      } catch (error: unknown) {
-        console.warn(
-          "[Firebase] Failed to read cached FCM access token:",
-          error instanceof Error ? error.message : error,
-        );
-      }
-    }
-
     const newAccessToken = await getAccessToken(this.serviceAccount);
     this.rememberAccessToken(newAccessToken);
-
-    if (cache && encryptionKey) {
-      try {
-        await cache.put(cacheKey, await encodeCachedAccessToken(newAccessToken, encryptionKey), {
-          expirationTtl: FCM_ACCESS_TOKEN_CACHE_TTL_SECONDS,
-        });
-      } catch (error: unknown) {
-        console.warn(
-          "[Firebase] Failed to write encrypted FCM access token cache:",
-          error instanceof Error ? error.message : error,
-        );
-      }
-    }
-
     return newAccessToken;
   }
 
   private rememberAccessToken(accessToken: string): void {
     this.accessTokenCache = {
       token: accessToken,
-      expiresAt: Date.now() + FCM_ACCESS_TOKEN_CACHE_TTL_SECONDS * 1000,
+      expiresAt: Date.now() + FCM_ACCESS_TOKEN_REUSE_SECONDS * 1000,
     };
   }
 

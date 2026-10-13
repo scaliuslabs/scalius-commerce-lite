@@ -12,9 +12,6 @@ export const ROOT = resolve(HARNESS_DIR, "..", "..");
 export const API_DIR = join(ROOT, "apps", "api");
 export const STOREFRONT_DIR = join(ROOT, "apps", "storefront");
 
-/** The cache KV namespace both local Workers bind (wrangler.local.jsonc). */
-export const CACHE_KV_NAMESPACE = "d6e2d77d898e4b3f9c186802ce63f9b8";
-
 /** The five presets of the one design system (`STOREFRONT_TEMPLATE_IDS`). */
 export const TEMPLATES = Object.freeze(["boutique", "marketplace", "department-mall", "daily-essentials", "showcase-landing"]);
 
@@ -106,11 +103,6 @@ export async function loadSharp() {
 export function wranglerBin() {
   const pkg = apiRequire.resolve("wrangler/package.json");
   return join(dirname(pkg), "bin", "wrangler.js");
-}
-
-/** Local explorer endpoint of the API's wrangler dev (KV writes during a run). */
-export function kvValueUrl(ports, key) {
-  return `http://localhost:${ports.api}/cdn-cgi/local/explorer/api/storage/kv/namespaces/${CACHE_KV_NAMESPACE}/values/${encodeURIComponent(key)}`;
 }
 
 /** Platform origins of the stack; media comes from the harness media server (lib/media-server.mjs). */

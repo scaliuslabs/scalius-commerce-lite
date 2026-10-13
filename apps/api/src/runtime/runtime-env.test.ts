@@ -3,6 +3,8 @@ import {
   RUNTIME_SECRET_PURPOSES,
   deriveRuntimeSecret,
 } from "@scalius/shared/runtime-secrets";
+import { TEST_WORKER_VERSION, stubSettingsMirror } from "../testing/settings-mirror";
+
 const PLATFORM_CONFIG_CACHE_KEY = "settings:platform";
 
 const mocks = vi.hoisted(() => ({
@@ -60,19 +62,16 @@ function createDb(options: {
   };
 }
 
-function createKv(stored: string | null = null) {
-  return {
-    get: vi.fn(async () => stored),
-    put: vi.fn(async () => undefined),
-    delete: vi.fn(async () => undefined),
-  };
-}
+let mirror: ReturnType<typeof stubSettingsMirror>;
 
-function createEnv(overrides: Record<string, unknown> = {}): Env {
+/** An env whose per-colo settings mirror holds `stored` (the platform document text) or is empty. */
+function createEnv(overrides: Record<string, unknown> = {}, stored: string | null = null): Env {
+  mirror = stubSettingsMirror(stored ? { [PLATFORM_CONFIG_CACHE_KEY]: stored } : {});
   return {
     SCALIUS_SECRET: MASTER_SECRET,
     CREDENTIAL_ENCRYPTION_KEY: "credential-key",
-    CACHE: createKv(),
+    CACHE: { id: "kv" },
+    CF_VERSION_METADATA: { id: TEST_WORKER_VERSION },
     DB: { id: "d1" },
     ...overrides,
   } as unknown as Env;
@@ -85,13 +84,13 @@ describe("composeApiRuntimeEnv", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
     mocks.getDb.mockReset();
   });
 
   it("derives every runtime secret from SCALIUS_SECRET and passes bindings through by reference", async () => {
-    const cache = createKv(JSON.stringify(PRODUCTION_CONFIG));
-    const env = createEnv({ CACHE: cache });
+    const env = createEnv({}, JSON.stringify(PRODUCTION_CONFIG));
 
     const composed = await composeApiRuntimeEnv(env, {
       requestUrl: "https://api.example.com/api/v1/products",
@@ -104,7 +103,7 @@ describe("composeApiRuntimeEnv", () => {
     expect(composed.API_TOKEN).not.toBe(composed.JWT_SECRET);
     expect(composed.CREDENTIAL_ENCRYPTION_KEY).toBe("credential-key");
     expect(composed.SCALIUS_SECRET).toBe(MASTER_SECRET);
-    expect(composed.CACHE).toBe(cache);
+    expect(composed.CACHE).toBe(env.CACHE);
     expect(composed.DB).toBe(env.DB);
     // The input env is never mutated.
     expect(env.JWT_SECRET).toBeUndefined();
@@ -112,10 +111,7 @@ describe("composeApiRuntimeEnv", () => {
   });
 
   it("does not synthesize secrets when the master secret is missing", async () => {
-    const env = createEnv({
-      SCALIUS_SECRET: "too-short",
-      CACHE: createKv(JSON.stringify(PRODUCTION_CONFIG)),
-    });
+    const env = createEnv({ SCALIUS_SECRET: "too-short" }, JSON.stringify(PRODUCTION_CONFIG));
 
     expect(hasMasterSecret(env)).toBe(false);
     const composed = await composeApiRuntimeEnv(env);
@@ -126,13 +122,12 @@ describe("composeApiRuntimeEnv", () => {
     expect(composed.PLATFORM_CONFIG).toEqual(PRODUCTION_CONFIG);
   });
 
-  it("reads the platform configuration from KV without opening the database", async () => {
-    const cache = createKv(JSON.stringify(PRODUCTION_CONFIG));
-    const composed = await composeApiRuntimeEnv(createEnv({ CACHE: cache }));
+  it("reads the platform configuration from the per-colo mirror without opening the database", async () => {
+    const composed = await composeApiRuntimeEnv(createEnv({}, JSON.stringify(PRODUCTION_CONFIG)));
 
-    expect(cache.get).toHaveBeenCalledWith(PLATFORM_CONFIG_CACHE_KEY, { cacheTtl: 60 });
+    expect(mirror.cache.match).toHaveBeenCalledTimes(1);
     expect(mocks.getDb).not.toHaveBeenCalled();
-    expect(cache.put).not.toHaveBeenCalled();
+    expect(mirror.cache.put).not.toHaveBeenCalled();
     expect(composed.PLATFORM_CONFIG).toEqual(PRODUCTION_CONFIG);
     expect(composed).toMatchObject({
       STOREFRONT_URL: "https://shop.example.com",
@@ -145,20 +140,16 @@ describe("composeApiRuntimeEnv", () => {
     });
   });
 
-  it("reads the database on a KV miss and caches the resolved configuration", async () => {
-    const cache = createKv(null);
+  it("reads the database on a mirror miss and caches the resolved configuration", async () => {
     const { db, where } = createDb({ document: PRODUCTION_CONFIG });
     mocks.getDb.mockReturnValue(db);
-    const env = createEnv({ CACHE: cache });
+    const env = createEnv();
 
     const composed = await composeApiRuntimeEnv(env);
 
     expect(mocks.getDb).toHaveBeenCalledWith(env);
     expect(where).toHaveBeenCalledTimes(1);
-    expect(cache.put).toHaveBeenCalledWith(
-      PLATFORM_CONFIG_CACHE_KEY,
-      JSON.stringify(PRODUCTION_CONFIG),
-    );
+    expect(mirror.read(PLATFORM_CONFIG_CACHE_KEY)).toBe(JSON.stringify(PRODUCTION_CONFIG));
     expect(composed.PLATFORM_CONFIG).toEqual(PRODUCTION_CONFIG);
     expect(composed.STOREFRONT_URL).toBe("https://shop.example.com");
   });
@@ -166,7 +157,7 @@ describe("composeApiRuntimeEnv", () => {
   it("fills unset origins with the fixed local development ports when the request arrives on loopback", async () => {
     mocks.getDb.mockReturnValue(createDb({ document: { storefrontUrl: "/" } }).db);
 
-    const composed = await composeApiRuntimeEnv(createEnv({ CACHE: createKv(null) }), {
+    const composed = await composeApiRuntimeEnv(createEnv(), {
       requestUrl: "http://localhost:8787/api/v1/products",
     });
 
@@ -188,7 +179,7 @@ describe("composeApiRuntimeEnv", () => {
   it("never guesses production origins from a non-loopback request", async () => {
     mocks.getDb.mockReturnValue(createDb().db);
 
-    const composed = await composeApiRuntimeEnv(createEnv({ CACHE: createKv(null) }), {
+    const composed = await composeApiRuntimeEnv(createEnv(), {
       requestUrl: "https://api.example.com/api/v1/products",
     });
 
@@ -205,7 +196,7 @@ describe("composeApiRuntimeEnv", () => {
 
     it("uses the public request origin when no API URL is stored", async () => {
       const composed = await composeApiRuntimeEnv(
-        createEnv({ CACHE: createKv(JSON.stringify(stored)) }),
+        createEnv({}, JSON.stringify(stored)),
         { requestUrl: "https://api.example.com/api/v1/platform?x=1" },
       );
 
@@ -215,7 +206,7 @@ describe("composeApiRuntimeEnv", () => {
 
     it("ignores the service-binding origin https://api.internal", async () => {
       const composed = await composeApiRuntimeEnv(
-        createEnv({ CACHE: createKv(JSON.stringify(stored)) }),
+        createEnv({}, JSON.stringify(stored)),
         { requestUrl: "https://api.internal/api/v1/platform" },
       );
 
@@ -225,7 +216,7 @@ describe("composeApiRuntimeEnv", () => {
 
     it("leaves the API URL unset for queue and cron invocations without a request", async () => {
       const composed = await composeApiRuntimeEnv(
-        createEnv({ CACHE: createKv(JSON.stringify(stored)) }),
+        createEnv({}, JSON.stringify(stored)),
       );
 
       expect(composed.PUBLIC_API_BASE_URL).toBeUndefined();
@@ -233,7 +224,7 @@ describe("composeApiRuntimeEnv", () => {
 
     it("prefers the stored API URL over the request origin", async () => {
       const composed = await composeApiRuntimeEnv(
-        createEnv({ CACHE: createKv(JSON.stringify(PRODUCTION_CONFIG)) }),
+        createEnv({}, JSON.stringify(PRODUCTION_CONFIG)),
         { requestUrl: "https://edge-alias.example.net/api/v1/products" },
       );
 
@@ -243,17 +234,15 @@ describe("composeApiRuntimeEnv", () => {
 
   it("joins the extra CORS origins into a comma list and drops invalid entries", async () => {
     const composed = await composeApiRuntimeEnv(
-      createEnv({
-        CACHE: createKv(JSON.stringify({
-          ...PRODUCTION_CONFIG,
-          corsAllowedOrigins: [
-            "https://mobile.example.com",
-            "http://insecure.example.com",
-            "https://kiosk.example.com/path",
-            "https://kiosk.example.com",
-          ],
-        })),
-      }),
+      createEnv({}, JSON.stringify({
+        ...PRODUCTION_CONFIG,
+        corsAllowedOrigins: [
+          "https://mobile.example.com",
+          "http://insecure.example.com",
+          "https://kiosk.example.com/path",
+          "https://kiosk.example.com",
+        ],
+      })),
     );
 
     expect(composed.CORS_ALLOWED_ORIGINS).toBe("https://mobile.example.com,https://kiosk.example.com");
@@ -263,16 +252,15 @@ describe("composeApiRuntimeEnv", () => {
     ]);
 
     const none = await composeApiRuntimeEnv(
-      createEnv({ CACHE: createKv(JSON.stringify({ ...PRODUCTION_CONFIG, corsAllowedOrigins: [] })) }),
+      createEnv({}, JSON.stringify({ ...PRODUCTION_CONFIG, corsAllowedOrigins: [] })),
     );
     expect(none.CORS_ALLOWED_ORIGINS).toBeUndefined();
   });
 
   it("fails closed to an empty platform configuration when the database read fails", async () => {
     mocks.getDb.mockReturnValue(createDb({ fail: true }).db);
-    const cache = createKv(null);
 
-    const composed = await composeApiRuntimeEnv(createEnv({ CACHE: cache }), {
+    const composed = await composeApiRuntimeEnv(createEnv(), {
       requestUrl: "https://api.example.com/api/v1/products",
     });
 
@@ -284,6 +272,6 @@ describe("composeApiRuntimeEnv", () => {
       corsAllowedOrigins: [],
     });
     expect(composed.STOREFRONT_URL).toBeUndefined();
-    expect(cache.put).not.toHaveBeenCalled();
+    expect(mirror.cache.put).not.toHaveBeenCalled();
   });
 });

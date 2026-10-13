@@ -33,7 +33,7 @@ function noStore(c: Context) {
 /** Validates the receipt proof for this order and returns the guest buyer. */
 async function receiptBuyer(c: Context<{ Bindings: Env }>, orderId: string): Promise<ReviewBuyer> {
   const token = c.req.header(RECEIPT_TOKEN_HEADER)?.trim() || undefined;
-  await validateReceiptToken(c.env.CACHE, orderId, token, c.get("db"));
+  await validateReceiptToken(c.get("db"), orderId, token);
   return { kind: "guest_receipt", orderId };
 }
 

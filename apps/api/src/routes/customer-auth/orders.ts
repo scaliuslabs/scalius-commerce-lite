@@ -105,7 +105,7 @@ app.openapi(claimCustomerOrderReceiptRoute, async (c) => {
   const orderId = c.req.valid("param").id;
   const receiptToken = c.req.valid("header")["x-receipt-token"];
   const db = c.get("db");
-  await validateReceiptToken(c.env.CACHE, orderId, receiptToken, db);
+  await validateReceiptToken(db, orderId, receiptToken);
   const result = await claimGuestOrderToAccount(db, {
     orderId,
     customerId: session.customerId,

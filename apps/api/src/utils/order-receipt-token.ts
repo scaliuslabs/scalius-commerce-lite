@@ -1,81 +1,21 @@
 import { NotFoundError } from "./api-error";
 import type { Database } from "@scalius/database/client";
-import { putKvHint } from "@scalius/shared/kv-hints";
-import { planLimits } from "@scalius/shared/plan-limits";
 import {
-  ORDER_RECEIPT_TOKEN_PREFIX,
-  ORDER_RECEIPT_TOKEN_TTL_SECONDS,
-  hashOrderReceiptToken,
   isOrderReceiptToken,
   validateOrderReceiptProof,
 } from "@scalius/core/modules/orders";
 
-export const RECEIPT_TOKEN_PREFIX = ORDER_RECEIPT_TOKEN_PREFIX;
-export const RECEIPT_TOKEN_TTL_SECONDS = ORDER_RECEIPT_TOKEN_TTL_SECONDS;
-
-export function getReceiptTokenKvKeyFromHash(tokenHash: string): string {
-  return `${RECEIPT_TOKEN_PREFIX}${tokenHash}`;
-}
-
-export async function getReceiptTokenKvKey(token: string): Promise<string> {
-  return getReceiptTokenKvKeyFromHash(await hashOrderReceiptToken(token));
-}
-
-export async function getCheckoutStatusKvKey(token: string): Promise<string> {
-  return `checkout_status:${await hashOrderReceiptToken(token)}`;
-}
-
+/** Receipt proof is authorised by the relational database alone. */
 export async function validateReceiptToken(
-  kv: KVNamespace | undefined,
+  db: Database,
   orderId: string,
   token: string | undefined,
-  db?: Database,
 ): Promise<void> {
   if (!isOrderReceiptToken(token)) {
     throw new NotFoundError("Order receipt not found");
   }
-
-  if (db) {
-    const result = await validateOrderReceiptProof(db, { orderId, token });
-    if (!result) {
-      throw new NotFoundError("Order receipt not found");
-    }
-
-    if (result.shouldRepairKv) {
-      await repairReceiptKv(kv, orderId, result.tokenHash);
-    }
-    return;
-  }
-
-  const raw = kv ? await kv.get(await getReceiptTokenKvKey(token)) : null;
-  if (!raw) {
+  const result = await validateOrderReceiptProof(db, { orderId, token });
+  if (!result) {
     throw new NotFoundError("Order receipt not found");
   }
-
-  try {
-    const data = JSON.parse(raw) as { orderId?: unknown };
-    if (data.orderId !== orderId) {
-      throw new NotFoundError("Order receipt not found");
-    }
-  } catch (error) {
-    if (error instanceof NotFoundError) throw error;
-    throw new NotFoundError("Order receipt not found");
-  }
-}
-
-async function repairReceiptKv(
-  kv: KVNamespace | undefined,
-  orderId: string,
-  tokenHash: string,
-): Promise<void> {
-  // A read must not become a KV write where the plan profile turns the
-  // checkout recovery hints off (D1 answered it; nothing reads the hint).
-  if (!kv || !planLimits().kv.checkoutRecoveryHints) return;
-
-  await putKvHint(
-    kv,
-    getReceiptTokenKvKeyFromHash(tokenHash),
-    JSON.stringify({ orderId }),
-    { expirationTtl: RECEIPT_TOKEN_TTL_SECONDS },
-  );
 }

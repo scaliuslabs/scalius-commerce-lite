@@ -11,7 +11,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { devApiWorkerName, localStorefrontWorkerConfig, verifyStorefrontBinding } from "../../dev-ports.mjs";
-import { API_DIR, STOREFRONT_DIR, assertLocalDatabase, assertOwnedState, childEnv, kvValueUrl, origins, wranglerBin } from "./context.mjs";
+import { API_DIR, STOREFRONT_DIR, assertLocalDatabase, assertOwnedState, childEnv, origins, wranglerBin } from "./context.mjs";
 import { killTree, startGroup, waitForUrl } from "./proc.mjs";
 
 export const STOREFRONT_CONFIG = join(STOREFRONT_DIR, "dist", "server", "wrangler.fidelity.json");
@@ -116,8 +116,6 @@ export class Stack {
       "--inspector-port", String(this.ports.storefrontInspector), "--env-file", this.secrets, "--show-interactive-dev-session=false",
     ], { cwd: STOREFRONT_DIR, env: this.env(), logFile: join(this.runDir, "storefront.log") });
     await waitForUrl(`http://localhost:${this.ports.storefront}/favicon.svg`, { timeoutMs: 180000, child: this.storefront });
-    // The Platform KV mirror is a hint the API rebuilds from D1 (dev-ports.mjs).
-    await fetch(kvValueUrl(this.ports, "settings:platform"), { method: "DELETE" }).catch(() => {});
     // Fail fast when the storefront's BACKEND_API reached another stack's API.
     const o = origins(this.ports);
     await verifyStorefrontBinding({ storefrontUrl: o.storefrontUrl, mediaUrl: o.mediaUrl });

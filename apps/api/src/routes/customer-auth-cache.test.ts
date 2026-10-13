@@ -934,7 +934,6 @@ describe("customer auth private cache policy", () => {
       expect.anything(),
       "order_1",
       "chk_private_receipt",
-      expect.anything(),
     );
     expect(mocks.claimGuestOrderToAccount).toHaveBeenCalledWith(expect.anything(), {
       orderId: "order_1",

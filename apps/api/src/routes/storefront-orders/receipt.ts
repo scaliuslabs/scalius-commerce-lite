@@ -470,7 +470,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   c.header("Pragma", "no-cache");
   c.header("Expires", "0");
 
-  await validateReceiptToken(c.env.CACHE, id, token, db);
+  await validateReceiptToken(db, id, token);
 
   const order = await db
     .select({

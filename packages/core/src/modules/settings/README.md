@@ -8,9 +8,9 @@ wrappers over the documents.
 ## Files
 
 - `@scalius/core/settings-store` (`packages/core/src/settings-store/`, infrastructure, not a domain) -- `defineSettingsDocument()` and `selectSettingsDocuments()`: the only code that reads or writes document rows. It imports no domain, so any domain can own a document without depending on `settings`
-- `documents.ts` -- the shared document definitions (key, zod schema, defaults, secret fields, optional KV mirror); a domain that owns a document declares it itself (`platform/document.ts`, `notifications/documents.ts`, `delivery/zones.ts`, `products/low-stock-policy.ts`)
+- `documents.ts` -- the shared document definitions (key, zod schema, defaults, secret fields, optional per-colo mirror); a domain that owns a document declares it itself (`platform/document.ts`, `notifications/documents.ts`, `delivery/zones.ts`, `products/low-stock-policy.ts`)
 - `staff-shortcuts.ts` -- one per-staff-member document (`staff-shortcuts:<userId>`, no KV, no secrets) for dashboard keyboard shortcuts; saves replace the whole map; the row is deleted with staff removal and invitation revocation
-- `../platform/` (the platform domain owns the `platform` document and its service) -- deployment public origins (storefront/API/dashboard/media URLs, customer cookie domain, extra CORS origins) and their KV-first Worker-entry resolution
+- `../platform/` (the platform domain owns the `platform` document and its service) -- deployment public origins (storefront/API/dashboard/media URLs, customer cookie domain, extra CORS origins) and their mirror-first Worker-entry resolution
 - `site-settings.service.ts` -- currency (code, symbol), the theme (live, draft, versions, preview sessions), media delivery, SEO, allowed countries
 - `settings.service.ts` -- `getCurrencyConfig()`
 - `store-money.ts` -- code-only money helpers: `StoreCurrency`, `toStoreMinor()`, `orderPricePolicy()`, `priceIncrementForCurrency()` and the SQL currency code. The store pricing currency (`readStoreCurrency()`) and the SQL twin of its price increment (`storePriceIncrementSql()`) are in the `markets` domain, because the backup market holds the increment
@@ -25,7 +25,7 @@ A document is `settings(category = <document key>, key = 'document', type = 'jso
 - **Secrets** (`secretFields`): stored as `enc:` ciphertext encrypted with `CREDENTIAL_ENCRYPTION_KEY`. Reads decrypt strictly with that key; unreadable ciphertext or an obvious placeholder (`isPlaceholderSecret`) reads as the default (not configured) and is reported in `secretErrors` / `secretsConfigured`. A write that leaves a secret field untouched carries its ciphertext verbatim, so non-secret edits never need the key. Secrets are never logged or returned; routes mask them.
 - **Write**: validates the patched (or `replace`d) document, compare-and-swaps on the revision it read, and advances the revision by one. Every merchant editor sends the revision it loaded (`expectedRevision`); a stale one throws `SettingsRevisionConflictError` (409 `SETTINGS_REVISION_CONFLICT`, details `{ document, expectedRevision, currentRevision }`). Internal plain patches retry a lost race. `writeSettingsDocuments()` commits several documents all-or-nothing; a revision guard leads the batch, so a stale write also rolls back `before`/`after` statements (media guards, provider-health clears).
 - **Admin contract**: every settings GET returns `revision` in `data` (0 = never saved; `/auth` returns one per document it edits), every save requires `expectedRevision` and answers with the new `revision`.
-- **KV mirror** (`cacheKey`, non-secret documents only): `readCached` is KV-first; `writeCached`/`write(..., { kv })` writes through. Used by `platform` (`settings:platform`) and `security` (`settings:security`).
+- **Per-colo mirror** (`cacheKey`, non-secret documents only): a Cache API entry (60 s, keyed by the Worker version) from `settingsMirror(env)`, never authority. `readCached` is mirror-first; `writeCached`/`write(..., { kv })` writes through in the writer's colo; other colos converge within 60 s. Used by `platform` (`settings:platform`) and `security` (`settings:security`).
 - **Checkout authority**: the existing `settings_checkout_authority_*` triggers advance `checkout_authority.revision` on every document insert, change, or delete, so in-flight checkouts are fenced against any settings change.
 
 | Document | Contents | Secrets |
@@ -106,11 +106,11 @@ discard and publish. Every command answers revisions only.
 ## Platform origins
 
 `env.STOREFRONT_URL` and the other public origins are resolved at Worker entry
-by `resolvePlatformConfig()` (KV mirror first, then the `platform` document; a
+by `resolvePlatformConfig()` (mirror first, then the `platform` document; a
 DB failure resolves the empty configuration so callers fail closed).
 `savePlatformSettings(db, patch, kv?, { expectedRevision }?)` validates every field before writing
 (`storefrontUrl` is required and normalized to one HTTPS origin, HTTP loopback
-only for local development) and writes the KV mirror through.
+only for local development) and writes the mirror through.
 
 Admin API: `GET`/`PUT /api/v1/admin/settings/platform` (adds `readiness` and
 `effective`). Public API: `GET /api/v1/platform` returns only the four origins

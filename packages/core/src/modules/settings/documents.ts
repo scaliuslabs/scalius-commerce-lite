@@ -52,7 +52,7 @@ const jsonRecord = z.record(z.string(), z.unknown());
 
 // ─────────────────────────────────────────
 // Storefront security policy (merchant CSP sources, comma-separated). The API
-// Partytown proxy reads the KV mirror.
+// Partytown proxy reads the mirror.
 // ─────────────────────────────────────────
 
 export interface SecuritySettings {

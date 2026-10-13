@@ -15,7 +15,6 @@ export interface DevOrigins {
 
 export declare const DEFAULT_DEV_PORTS: Readonly<DevPorts>;
 export declare const DEV_PORT_ENV: Readonly<Record<keyof DevPorts, string>>;
-export declare const PLATFORM_KV_KEY: string;
 export declare function readDevPorts(env?: Record<string, string | undefined>): DevPorts;
 export declare function devOrigins(ports?: DevPorts): DevOrigins;
 export declare function previewProxyOrigin(

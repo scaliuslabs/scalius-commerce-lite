@@ -29,7 +29,7 @@ interface Env {
   };
 
   // The only KV namespace (auth/rbac permission cache, identity handoff,
-  // firebase/admin.ts FCM token cache, middleware-helper/csp-handler).
+  // middleware-helper/csp-handler).
   CACHE: KVNamespace;
 
   // Order notification fan-out (modules/checkout/post-commit.ts).

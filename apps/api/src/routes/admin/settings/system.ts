@@ -46,6 +46,7 @@ import {
     selectSettingsDocuments,
     writeSettingsDocuments,
     type SettingsDocumentWriteRequest,
+    settingsMirror,
 } from "@scalius/core/settings-store";
 import { getCheckoutFlowSettingsDocument, saveCheckoutFlowSettingsDocument } from "@scalius/core/modules/checkout";
 
@@ -700,13 +701,13 @@ app.openapi(saveSecurityRoute, async (c) => {
 
         if (typeof cspAllowedDomains === "string") {
             assertMerchantCspSourcesValid(cspAllowedDomains);
-            // Writing through refreshes the KV mirror the Partytown proxy reads.
+            // Writing through refreshes the mirror the Partytown proxy reads.
             ({ revision } = await securityDocument.write(db, {
                 cspAllowedDomains: normalizeStoredMerchantCspSources(
                     cspAllowedDomains,
                     c.env as Record<string, unknown>,
                 ),
-            }, { kv: c.env.CACHE }, { expectedRevision }));
+            }, { kv: settingsMirror(c.env) }, { expectedRevision }));
 
         }
 

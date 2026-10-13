@@ -53,7 +53,7 @@ Product photos are `product_media` rows that point at `media` with `restrict`. O
   - The dashboard browser encodes the ladder and sends it to `POST /{id}/variants` (`components/admin/media-manager/utils/media-variants.ts`).
   - Upload completion enqueues the `media.render_variants` job on `JOBS_QUEUE` with a 120 second delay. The consumer `renderMissingMediaVariants` renders only if `variant_width` is still NULL. It needs the `IMAGES` binding.
   - The cron (`*/15 * * * *`) fans the backlog out to the queue (`enqueueMediaVariantsBacklog`). Without a queue it renders inline (`backfillMissingMediaVariants`, limited by the plan profile). It skips files touched in the last 10 minutes.
-  - On the Paid plan profile, a public read that renders a still original queues the job at once (`apps/api/src/utils/media-rendition-hints.ts`, KV marker `media:rendition-hint:<id>`, at most 24 ids per read).
+  - On the Paid plan profile, a public read that renders a still original queues the job at once (`apps/api/src/utils/media-rendition-hints.ts`, per-colo Cache API marker keyed by the Worker version, at most 24 ids per read).
 - Plan limits: [`docs/FREE-PLAN.md`](../../../../../docs/FREE-PLAN.md).
 
 ## Usage index

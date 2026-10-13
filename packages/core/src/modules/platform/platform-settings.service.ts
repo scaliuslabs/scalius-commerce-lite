@@ -1,6 +1,6 @@
 // src/modules/platform/platform-settings.service.ts
 // Validation and resolution for the deployment's public origins. Storage is
-// the `platform` settings document; Workers read it through its KV mirror.
+// the `platform` settings document; Workers read it through its Cache API mirror.
 
 import type { Database } from "@scalius/database/client";
 import {
@@ -257,7 +257,7 @@ export interface ResolvePlatformConfigOptions {
 }
 
 /**
- * KV-first resolution used at Worker entry. A database failure returns the
+ * Mirror-first resolution used at Worker entry. A database failure returns the
  * empty configuration so callers fail closed on missing origins instead of
  * crashing every request.
  */

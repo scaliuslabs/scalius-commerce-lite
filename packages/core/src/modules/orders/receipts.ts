@@ -4,14 +4,12 @@ import { and, eq, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { sha256Hex } from "@scalius/shared/hash";
 
-export const ORDER_RECEIPT_TOKEN_PREFIX = "order_receipt:";
 export const ORDER_RECEIPT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 export type OrderReceiptValidationResult = {
   source: "order_receipts" | "checkout_attempts";
   orderId: string;
   tokenHash: string;
-  shouldRepairKv: boolean;
 };
 
 export function isOrderReceiptToken(value: string | undefined): value is string {
@@ -102,7 +100,6 @@ export async function validateOrderReceiptProof(
       source: "order_receipts",
       orderId: receipt.orderId,
       tokenHash,
-      shouldRepairKv: true,
     };
   }
 
@@ -145,6 +142,5 @@ export async function validateOrderReceiptProof(
     source: "checkout_attempts",
     orderId: attempt.orderId,
     tokenHash,
-    shouldRepairKv: attempt.status === "committed",
   };
 }

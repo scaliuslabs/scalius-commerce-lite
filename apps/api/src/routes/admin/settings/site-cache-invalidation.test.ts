@@ -752,15 +752,15 @@ describe("site settings write behavior", () => {
   ])(
     "commits $path saves",
     async ({ path, method, body }) => {
-      const { app, env, kv } = createTestApp();
+      const { app, env } = createTestApp();
 
       const response = await requestJson(app, env, method, path, body);
 
       expect(response.status).toBe(200);
 
       if (path === "/storefront-url") {
-        // The storefront origin lives in the platform document; its KV mirror is written through.
-        expect(mocks.saveStorefrontUrl).toHaveBeenCalledWith(expect.anything(), expect.any(String), kv, { expectedRevision: 1 });
+        // The storefront origin lives in the platform document; its mirror is written through.
+        expect(mocks.saveStorefrontUrl).toHaveBeenCalledWith(expect.anything(), expect.any(String), null, { expectedRevision: 1 });
       }
     },
   );

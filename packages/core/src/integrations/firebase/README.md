@@ -30,7 +30,7 @@ The `firebase` settings document (`firebaseDocument` in `packages/core/src/modul
 
 - `getFirebaseAdminMessaging(env, serviceAccountJson)` builds a new `FCMMessagingService` per call. It throws `ServiceUnavailableError` when the JSON is empty.
 - Auth: an RS256 JWT with scope `https://www.googleapis.com/auth/firebase.messaging`, exchanged at `https://oauth2.googleapis.com/token`.
-- Token cache: memory per instance, and KV `CACHE` only when `CREDENTIAL_ENCRYPTION_KEY` is present. The KV value is an `enc:` AES-GCM string with a 3300 s TTL. The key is `scalius:fcm_access_token:<project_id>:<24-hex fingerprint of the service account>`. A rotated private key changes the fingerprint.
+- Token cache: memory per instance (3300 s). Nothing is persisted; a cold instance exchanges the JWT again.
 - Send: `sendEachForMulticast()` makes one request per token to `https://fcm.googleapis.com/v1/projects/<project_id>/messages:send`. `FCM_SEND_CONCURRENCY` is a fixed 8.
 - Retry: up to 3 attempts for HTTP 429 and 5xx. Backoff is `2^attempt` seconds plus up to 1 s of jitter. `Retry-After` overrides it.
 - `admin.ts` maps the FCM status to a `messaging/*` error code (for example `UNREGISTERED` -> `messaging/registration-token-not-registered`). Anything unknown becomes `messaging/unknown-error`.
