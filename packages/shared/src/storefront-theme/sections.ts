@@ -122,8 +122,6 @@ export const STOREFRONT_SECTION_REGISTRY = {
     settings: z.object({
       // Full-bleed 2.6:1; contained (+ 2 side banners); split halves; a
       // full-screen phone frame; wide editorial (copy beside the image).
-      // Retired: app-panel reads as contained-banners and story-cards as
-      // full-bleed (upgrade.ts withTightenedBounds).
       layout: z.enum(["full-bleed", "contained-banners", "split", "full-screen", "wide-editorial"]),
       /** The slides, in order. A hero without one renders nothing. */
       slides: z.array(storefrontHeroSlideSchema).max(STOREFRONT_HERO_SLIDE_LIMIT),

@@ -87,8 +87,9 @@ places: the live row (`theme_settings`), one shared draft
   the history list reads only `meta` (`json_extract`) and the publisher's
   name (joined from `user`), ten versions a page. Rows from before history
   metadata hold the bare document and list with no changes.
-- Reads upgrade older documents in memory (`upgradeThemeDocument`); writes
-  store only the current version, at most 512 KiB.
+- Reads and writes accept only the current version, at most 512 KiB; an
+  older document reads as unreadable (a shape change resets the rows in a
+  migration).
 
 Previews: a draft preview follows saved edits; a version preview shows that
 version. The 52-character bearer is `tpc_`/`tpv_` plus `D` and 47 random

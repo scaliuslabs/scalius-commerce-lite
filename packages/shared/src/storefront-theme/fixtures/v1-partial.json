@@ -1,8 +1,0 @@
-{
-  "colors": { "primary": "#123456", "primary-foreground": "#ffffff", "border": "var(--primary)" },
-  "typography": { "heading": "editorial", "scale": "generous" },
-  "cornerStyle": "rounded",
-  "density": "airy",
-  "components": { "cards": "flat" },
-  "layout": { "footer": "contact", "homepage": ["delivery", "hero", "categories", "collections"] }
-}

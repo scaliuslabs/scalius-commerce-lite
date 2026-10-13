@@ -1,5 +1,4 @@
 import {
-  STOREFRONT_RETIRED_TEMPLATE_IDS,
   STOREFRONT_TEMPLATE_IDS,
   resolveStorefrontTheme,
   storefrontTemplateTheme,
@@ -22,7 +21,7 @@ export function resolveProductPageTheme(
   shape: StoreShape,
 ) {
   const named = product.pageTemplate ?? null;
-  const id = named === "classic" ? "department-mall" : named ? (STOREFRONT_RETIRED_TEMPLATE_IDS[named] ?? named) : null;
+  const id = named === "classic" ? "department-mall" : named;
   const template = STOREFRONT_TEMPLATE_IDS.find((candidate) => candidate === id);
   if (!template) return requestTheme.resolved;
   return resolveStorefrontTheme({

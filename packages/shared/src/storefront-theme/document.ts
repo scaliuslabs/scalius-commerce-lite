@@ -27,7 +27,6 @@ import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBrandSchema } from "./brand";
 import { storefrontSectionListSchema } from "./sections";
 import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefrontPageTemplateSchemaOf, storefrontPageTemplatesSchemaOf } from "./pages";
-import { upgradeThemeDocumentSteps } from "./upgrade";
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
 
 export const STOREFRONT_THEME_DOCUMENT_VERSION = 9 as const;
@@ -173,15 +172,10 @@ export function storefrontThemeDocumentJsonSchema(): Record<string, unknown> {
   return z.toJSONSchema(storefrontThemeDocumentSchema, { unrepresentable: "any" }) as Record<string, unknown>;
 }
 
-/** Pure, step-wise read upgrade. Writes continue to require the current strict schema. */
-export function upgradeThemeDocument(document: unknown): StorefrontThemeDocument {
-  return storefrontThemeDocumentSchema.parse(upgradeThemeDocumentSteps(document, STOREFRONT_THEME_DOCUMENT_VERSION));
-}
-
 /**
- * Upgrades a stored document in memory, then parses it strictly. Returns null
- * for invalid or unsupported documents; callers decide what that means (the
- * dashboard fails closed, the storefront renders the default theme).
+ * Parses a stored document strictly. Returns null for invalid documents (any
+ * other version included); callers decide what that means (the dashboard
+ * fails closed, the storefront renders the default theme).
  */
 export function parseStoredStorefrontThemeDocument(value: string | null | undefined): StorefrontThemeDocument | null {
   if (!value) return null;
@@ -192,7 +186,7 @@ export function parseStoredStorefrontThemeDocument(value: string | null | undefi
     return null;
   }
   try {
-    return upgradeThemeDocument(parsed);
+    return storefrontThemeDocumentSchema.parse(parsed);
   } catch {
     return null;
   }
