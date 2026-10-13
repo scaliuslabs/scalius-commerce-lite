@@ -1,14 +1,13 @@
 /**
  * Test-only meter for the Workers Free plan budget (scripts/free-plan-budget.mjs).
  *
- * It wraps the bindings a Worker invocation touches (D1, KV, R2, the jobs
+ * It wraps the bindings a Worker invocation touches (D1, R2, the jobs
  * queue, `fetch`) in counters and records the CPU the invocation spent. The
  * Free plan limits it measures against:
  *
  * - 10 ms CPU per invocation (HTTP, queue consumer, cron);
  * - 50 external subrequests and 1,000 Cloudflare-service subrequests;
  * - 50 D1 queries (one `batch()` is one query);
- * - 1,000 KV writes (and 1,000 deletes) per day, 100,000 KV reads per day;
  * - 10,000 Queues operations per day (a message is a write, a read and a delete).
  *
  * CPU is `process.cpuUsage()` around the operation minus the CPU the embedded
@@ -31,10 +30,6 @@ export interface FreePlanCounters {
   d1Statements: number;
   /** Rows changed by writes (a lower bound of D1 "rows written": index writes are not counted). */
   d1RowsChanged: number;
-  kvReads: number;
-  kvWrites: number;
-  kvDeletes: number;
-  kvLists: number;
   r2Ops: number;
   /** Cache API `match`/`put`/`delete` calls (each is a subrequest). */
   cacheOps: number;
@@ -53,15 +48,14 @@ export interface FreePlanCounters {
 export function emptyCounters(): FreePlanCounters {
   return {
     cpuMs: 0, wallMs: 0, d1Calls: 0, d1Statements: 0, d1RowsChanged: 0,
-    kvReads: 0, kvWrites: 0, kvDeletes: 0, kvLists: 0, r2Ops: 0, cacheOps: 0, serviceCalls: 0,
+    r2Ops: 0, cacheOps: 0, serviceCalls: 0,
     queueCalls: 0, queueMessages: 0, queueTypes: {}, externalFetches: 0, waitUntilTasks: 0,
   };
 }
 
-/** Subrequests to Cloudflare services (Free: 1,000): D1, KV, R2 and Queues calls. */
+/** Subrequests to Cloudflare services (Free: 1,000): D1, R2, Cache API and Queues calls. */
 export function internalSubrequests(counters: FreePlanCounters): number {
-  return counters.d1Calls + counters.kvReads + counters.kvWrites + counters.kvDeletes
-    + counters.kvLists + counters.r2Ops + counters.cacheOps + counters.serviceCalls + counters.queueCalls;
+  return counters.d1Calls + counters.r2Ops + counters.cacheOps + counters.serviceCalls + counters.queueCalls;
 }
 
 /** Queues operations (Free: 10,000 per day): write, read and delete of every message. */
@@ -149,67 +143,6 @@ export function meterD1(
       return typeof value === "function" ? (value as AnyFn).bind(target) : value;
     },
   });
-}
-
-// ── KV ──────────────────────────────────────────────────────────────────────
-
-export interface MeteredKvOptions {
-  /** After this many writes (put/delete) every write throws the daily-quota error. */
-  writeQuota?: number;
-}
-
-export class DailyQuotaError extends Error {
-  constructor(operation: string) {
-    super(`KV ${operation}() limit exceeded for the day.`);
-    this.name = "Error";
-  }
-}
-
-export interface MeteredKv extends KVNamespace {
-  /** Entries currently stored (for assertions). */
-  readonly entries: Map<string, string>;
-  /** Total writes attempted, including refused ones. */
-  attemptedWrites(): number;
-}
-
-export function meterKv(counters: () => FreePlanCounters, options: MeteredKvOptions = {}): MeteredKv {
-  const entries = new Map<string, string>();
-  let attempted = 0;
-  const refuse = (operation: string): void => {
-    attempted += 1;
-    if (options.writeQuota !== undefined && attempted > options.writeQuota) throw new DailyQuotaError(operation);
-  };
-  const read = async (key: string, type?: unknown): Promise<unknown> => {
-    counters().kvReads += 1;
-    const raw = entries.get(key);
-    if (raw === undefined) return null;
-    const kind = typeof type === "string" ? type : (type as { type?: string } | undefined)?.type;
-    return kind === "json" ? JSON.parse(raw) : raw;
-  };
-  const kv = {
-    entries,
-    attemptedWrites: () => attempted,
-    get: read,
-    getWithMetadata: async (key: string, type?: unknown) => ({ value: await read(key, type), metadata: null, cacheStatus: null }),
-    put: async (key: string, value: string) => {
-      refuse("put");
-      counters().kvWrites += 1;
-      entries.set(key, typeof value === "string" ? value : String(value));
-    },
-    delete: async (key: string) => {
-      refuse("delete");
-      counters().kvDeletes += 1;
-      entries.delete(key);
-    },
-    list: async (listOptions?: { prefix?: string }) => {
-      counters().kvLists += 1;
-      const keys = [...entries.keys()]
-        .filter((name) => !listOptions?.prefix || name.startsWith(listOptions.prefix))
-        .map((name) => ({ name }));
-      return { keys, list_complete: true, cacheStatus: null };
-    },
-  };
-  return kv as unknown as MeteredKv;
 }
 
 // ── R2 ──────────────────────────────────────────────────────────────────────
@@ -315,12 +248,17 @@ export function meterService<T extends object>(binding: T, counters: () => FreeP
 // ── The meter ───────────────────────────────────────────────────────────────
 
 export interface FreePlanMeter {
-  /** Spread into an `Env`: DB, CACHE, BUCKET, JOBS_QUEUE and the two rate limiters. */
-  readonly bindings: Pick<Env, "DB" | "CACHE" | "BUCKET" | "JOBS_QUEUE" | "RL_STRICT" | "RL_STANDARD">;
-  readonly kv: MeteredKv;
+  /** Spread into an `Env`: DB, BUCKET, JOBS_QUEUE and the two rate limiters. */
+  readonly bindings: Pick<Env, "DB" | "BUCKET" | "JOBS_QUEUE" | "RL_STRICT" | "RL_STANDARD">;
   readonly queue: MeteredQueue;
   /** `caches.default` for the duration of every measurement. */
   readonly cache: MeteredCache;
+  /**
+   * The metered Cache API (`caches.default` and named `caches.open()` caches,
+   * such as the settings mirror), installed as `caches` during every
+   * measurement. Install it around setup that should warm the same caches.
+   */
+  readonly caches: { default: MeteredCache; open(name: string): Promise<MeteredCache> };
   /** Wrap a service binding (EMAIL, IMAGES) so each call counts as a subrequest. */
   service<T extends object>(binding: T): T;
   /** An `ExecutionContext` whose `waitUntil` tasks the measurement awaits. */
@@ -337,7 +275,6 @@ export interface CreateFreePlanMeterOptions {
   d1: D1Database;
   /** The database behind `d1`, to count rows changed (`total_changes()`). */
   sqlite?: DatabaseSync;
-  kv?: MeteredKvOptions;
   /** Answers `fetch()` calls to external origins; defaults to an empty 200 JSON response. */
   fetchImpl?: (input: Request) => Promise<Response> | Response;
 }
@@ -348,16 +285,23 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
   const clock: EngineClock = { engineMicros: 0 };
   const pending: Promise<unknown>[] = [];
   const limiter = { limit: async () => ({ success: true }) };
-  const kv = meterKv(counters, options.kv);
   const queue = meterQueue(counters);
   const cache = meterCache(counters);
+  const named = new Map<string, MeteredCache>();
+  const caches = {
+    default: cache,
+    async open(name: string) {
+      let opened = named.get(name);
+      if (!opened) named.set(name, opened = meterCache(counters));
+      return opened;
+    },
+  };
   const totalChanges = (): number => {
     if (!options.sqlite) return 0;
     return Number((options.sqlite.prepare("SELECT total_changes() AS n").get() as { n: number | bigint }).n);
   };
   const bindings = {
     DB: meterD1(options.d1, counters, clock),
-    CACHE: kv,
     BUCKET: meterR2(counters),
     JOBS_QUEUE: queue,
     RL_STRICT: limiter,
@@ -373,9 +317,9 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
 
   return {
     bindings,
-    kv,
     queue,
     cache,
+    caches,
     service: (binding) => meterService(binding, counters),
     ctx,
     async measure<T>(operation: () => Promise<T>) {
@@ -384,7 +328,7 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
       pending.length = 0;
       const originalFetch = globalThis.fetch;
       const originalCaches = (globalThis as { caches?: unknown }).caches;
-      (globalThis as { caches?: unknown }).caches = { default: cache };
+      (globalThis as { caches?: unknown }).caches = caches;
       const answer = options.fetchImpl ?? (() => Response.json({}));
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         current.externalFetches += 1;

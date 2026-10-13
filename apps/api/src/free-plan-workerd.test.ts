@@ -115,7 +115,6 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
       modulesRoot: join(workdir, "dist"),
       compatibilityDate: COMPATIBILITY_DATE,
       compatibilityFlags: COMPATIBILITY_FLAGS,
-      kvNamespaces: ["CACHE"],
       r2Buckets: ["BUCKET"],
       queueProducers: { JOBS_QUEUE: { queueName: "jobs" } },
       bindings: { SCALIUS_SECRET: STORE.masterSecret, CREDENTIAL_ENCRYPTION_KEY: CREDENTIAL_KEY },
@@ -136,12 +135,11 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
       },
     }) as never);
 
-    // The store: Platform settings (D1 and the KV hint the Worker reads), the owner.
-    const kv = await mf.getKVNamespace("CACHE");
+    // The store: Platform settings, the owner.
     const db = getDb({ DB: created.binding } as unknown as Env);
-    await savePlatformSettings(db, { storefrontUrl: STORE.storefront, apiUrl: STORE.api, dashboardUrl: STORE.dashboard }, kv as never);
+    await savePlatformSettings(db, { storefrontUrl: STORE.storefront, apiUrl: STORE.api, dashboardUrl: STORE.dashboard }, null);
     const composed = await composeApiRuntimeEnv({
-      DB: created.binding, CACHE: kv, SCALIUS_SECRET: STORE.masterSecret, CREDENTIAL_ENCRYPTION_KEY: CREDENTIAL_KEY,
+      DB: created.binding, SCALIUS_SECRET: STORE.masterSecret, CREDENTIAL_ENCRYPTION_KEY: CREDENTIAL_KEY,
     } as unknown as Env);
     // The owner's hash is the one this plan's sign-in verifies (no upgrade write inside a measurement).
     vi.stubGlobal("__SCALIUS_PLAN__", PLAN);

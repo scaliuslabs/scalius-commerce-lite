@@ -272,7 +272,6 @@ export class DvcHarness {
     const db = config.provider === "turso" && config.providerDatabase ? config.providerDatabase(sqlite) : seedDb;
     const env = {
       DB: binding,
-      CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined, getWithMetadata: async () => ({ value: null, metadata: null }) },
       JWT_SECRET: "dvc-harness-secret-0123456789abcdef0123",
       CREDENTIAL_ENCRYPTION_KEY: "dvc-harness-credential-key-0123456789abcdef",
       ...(config.provider === "turso" ? { __DVC_DB: db } : {}),

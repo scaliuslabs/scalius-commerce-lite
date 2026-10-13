@@ -141,9 +141,6 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     const actual: Budget = {
       d1Calls: counters.d1Calls,
       d1Statements: counters.d1Statements,
-      kvReads: counters.kvReads,
-      kvWrites: counters.kvWrites,
-      kvDeletes: counters.kvDeletes,
       queueMessages: counters.queueMessages,
       externalFetches: counters.externalFetches,
     };

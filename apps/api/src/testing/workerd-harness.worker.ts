@@ -99,7 +99,6 @@ async function authConstructCost(bindings: Record<string, unknown>): Promise<Res
   const env = await composeApiRuntimeEnv({
     ...bindings,
     DB: stub,
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
   } as never);
   const samples: number[] = [];
   const first = performance.now();

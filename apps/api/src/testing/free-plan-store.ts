@@ -10,9 +10,10 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { user as userTable } from "@scalius/database/schema";
 import { createAuth } from "@scalius/core/auth";
 import { savePlatformSettings } from "@scalius/core/modules/platform";
+import { settingsMirror } from "@scalius/core/settings-store";
 import { composeApiRuntimeEnv } from "../runtime/runtime-env";
 
-import { createFreePlanMeter, type CreateFreePlanMeterOptions, type FreePlanMeter } from "./free-plan-meter";
+import { createFreePlanMeter, type FreePlanMeter } from "./free-plan-meter";
 
 export const STORE = {
   dashboard: "https://admin.shop.test",
@@ -49,7 +50,6 @@ export interface FreePlanStore {
 }
 
 export interface CreateFreePlanStoreOptions {
-  kv?: CreateFreePlanMeterOptions["kv"];
   /** Extra bindings merged over the defaults (EMAIL, IMAGES, ...). */
   bindings?: Record<string, unknown>;
 }
@@ -62,7 +62,7 @@ export function emailBinding(sent: Array<unknown> = []) {
 export async function createFreePlanStore(options: CreateFreePlanStoreOptions = {}): Promise<FreePlanStore> {
   const { sqlite, binding, db: shimDb } = createSqliteD1Database({ foreignKeys: true });
   void shimDb;
-  const meter = createFreePlanMeter({ d1: binding, sqlite, kv: options.kv });
+  const meter = createFreePlanMeter({ d1: binding, sqlite });
   const emails: unknown[] = [];
   const env = {
     ...meter.bindings,
@@ -73,11 +73,18 @@ export async function createFreePlanStore(options: CreateFreePlanStoreOptions = 
     ...options.bindings,
   } as unknown as Env;
   const db = getDb({ DB: binding } as unknown as Env);
-  await savePlatformSettings(
-    db,
-    { storefrontUrl: STORE.storefront, apiUrl: STORE.api, dashboardUrl: STORE.dashboard },
-    meter.kv as never,
-  );
+  // Saved through the metered Cache API, so Worker entry finds its mirror warm.
+  const originalCaches = (globalThis as { caches?: unknown }).caches;
+  (globalThis as { caches?: unknown }).caches = meter.caches;
+  try {
+    await savePlatformSettings(
+      db,
+      { storefrontUrl: STORE.storefront, apiUrl: STORE.api, dashboardUrl: STORE.dashboard },
+      settingsMirror(env),
+    );
+  } finally {
+    (globalThis as { caches?: unknown }).caches = originalCaches;
+  }
 
   const { default: ApiWorker } = await import("../worker");
   const worker = new (ApiWorker as unknown as new () => TestWorker)();
