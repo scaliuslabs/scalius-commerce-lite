@@ -871,19 +871,6 @@ export function readCanonicalPostgresTableNames(preDataSql: string): readonly st
   return tables;
 }
 
-export function buildCanonicalTruncateSql(tableNames: readonly string[]): string {
-  const unique = [...new Set(tableNames)];
-  if (unique.length === 0 || unique.length !== tableNames.length) {
-    throw new Error("PostgreSQL canonical truncate requires a non-empty unique table set.");
-  }
-  return [
-    "BEGIN;",
-    `TRUNCATE TABLE ${[...unique].sort().map(quoteIdentifier).join(", ")};`,
-    "COMMIT;",
-    "",
-  ].join("\n");
-}
-
 function unwrapCanonicalTransaction(sql: string, label: string): string {
   const trimmed = sql.trim();
   if (!trimmed.startsWith("BEGIN;") || !trimmed.endsWith("COMMIT;")) {

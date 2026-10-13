@@ -153,16 +153,6 @@ export function isValidImageUrl(url: string | null | undefined): boolean {
 }
 
 /**
- * Get fallback image if invalid
- */
-export function getFallbackImage(
-  url: string | null | undefined,
-  fallback: string = "/placeholder-product.svg",
-): string {
-  return isValidImageUrl(url) ? url! : fallback;
-}
-
-/**
  * Validate all inputs before adding to cart
  */
 export interface AddToCartValidation {

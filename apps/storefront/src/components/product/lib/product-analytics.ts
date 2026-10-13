@@ -115,17 +115,3 @@ export function convertVariantToAnalyticsData(
     price: variant.discountedPrice ?? variant.price,
   };
 }
-
-/**
- * Check if Facebook Pixel is loaded
- */
-export function isFacebookPixelLoaded(): boolean {
-  return typeof window !== "undefined" && typeof window.fbq === "function";
-}
-
-/**
- * Check if Google Analytics is loaded
- */
-export function isGoogleAnalyticsLoaded(): boolean {
-  return typeof window !== "undefined" && Array.isArray(window.dataLayer);
-}
