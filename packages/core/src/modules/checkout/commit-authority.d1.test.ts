@@ -181,7 +181,6 @@ describe("storefront checkout authority at the atomic commit", () => {
       checkoutRequestId: "authority-test",
       requestKey: `checkout_submit:v1:${identity.repeat(64)}`,
       requestHash: "b".repeat(64),
-      legacyRequestHash: "b".repeat(64),
       customerWhatsapp: null,
       statusToken: `cst_${identity.repeat(64)}`,
     });
