@@ -51,7 +51,7 @@ describe("abandoned checkout cleanup", () => {
 
     it("detects empty abandoned checkout payloads without deleting rows that still identify a customer", () => {
         expect(isAbandonedCheckoutEmpty({
-            checkoutData: JSON.stringify({ items: [], customerInfo: {} }),
+            checkoutData: JSON.stringify({ cart: { items: [] }, customerInfo: {} }),
             customerPhone: null,
         })).toBe(true);
         expect(isAbandonedCheckoutEmpty({
@@ -59,7 +59,7 @@ describe("abandoned checkout cleanup", () => {
             customerPhone: null,
         })).toBe(true);
         expect(isAbandonedCheckoutEmpty({
-            checkoutData: JSON.stringify({ items: [{ id: "variant_1" }], customerInfo: {} }),
+            checkoutData: JSON.stringify({ cart: { items: [{ id: "variant_1" }] }, customerInfo: {} }),
             customerPhone: null,
         })).toBe(false);
         expect(isAbandonedCheckoutEmpty({
@@ -96,8 +96,8 @@ describe("abandoned checkout cleanup", () => {
     it("deletes expired checkouts and only empty old checkouts within the same bounded sweep", async () => {
         const expiredRows = [{ id: "expired_1" }, { id: "expired_2" }];
         const oldRows: CheckoutRow[] = [
-            { id: "old_empty", checkoutData: JSON.stringify({ items: [], customerInfo: {} }), customerPhone: null },
-            { id: "old_cart", checkoutData: JSON.stringify({ items: [{ id: "variant_1" }], customerInfo: {} }), customerPhone: null },
+            { id: "old_empty", checkoutData: JSON.stringify({ cart: { items: [] }, customerInfo: {} }), customerPhone: null },
+            { id: "old_cart", checkoutData: JSON.stringify({ cart: { items: [{ id: "variant_1" }] }, customerInfo: {} }), customerPhone: null },
             { id: "old_phone", checkoutData: "not json", customerPhone: "+8801712345678" },
         ];
         const { db, rawDb, operations } = createDbMock([expiredRows, oldRows]);
