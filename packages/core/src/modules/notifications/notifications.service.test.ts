@@ -69,6 +69,9 @@ vi.mock("./order-notification-delivery-receipts", () => ({
     createProviderClientReference: mocks.createProviderClientReference,
 }));
 
+// The staff inbox write has its own tests (staff-alerts.d1.test.ts); these cover the provider fan-out.
+vi.mock("./staff-alerts", () => ({ recordStaffAlert: vi.fn(async () => undefined) }));
+
 vi.mock("./notification-provider-health", () => ({
     getNotificationProviderBlock: mocks.getNotificationProviderBlock,
     markNotificationProviderBlocked: mocks.markNotificationProviderBlocked,
