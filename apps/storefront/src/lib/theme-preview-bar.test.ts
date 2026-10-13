@@ -1,3 +1,5 @@
+// @vitest-environment node
+// Workers Request/Response semantics: happy-dom hides Cookie, Sec-* request headers and Set-Cookie.
 import { describe, expect, it } from "vitest";
 import { showsThemePreviewBar, themePreviewBarCopy } from "./theme-preview-bar";
 
