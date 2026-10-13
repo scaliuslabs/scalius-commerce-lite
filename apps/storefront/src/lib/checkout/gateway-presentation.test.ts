@@ -11,6 +11,10 @@ import {
 
 const BKASH = "scalius.bkash:bkash";
 
+// A computed path: Vite rewrites a template-literal `new URL(..., import.meta.url)`
+// into a dev-server `/@fs/` URL, which `readFileSync` cannot open.
+const fromHere = (relative: string) => new URL(relative, import.meta.url);
+
 describe("gateway presentation", () => {
   it("keeps the built-in gateways exactly as they were", () => {
     expect(getGatewayPresentation("stripe", "Card")).toEqual({
@@ -68,10 +72,10 @@ describe("gateway presentation", () => {
     expect(Object.keys(APP_PROVIDER_MARKS).sort()).toEqual(Object.keys(declared).sort());
     for (const [id, src] of Object.entries(APP_PROVIDER_MARKS)) {
       const { plugin, icon } = declared[id]!;
-      const manifest = readFileSync(new URL(`../../../../../plugins/${plugin}/src/index.ts`, import.meta.url), "utf8");
+      const manifest = readFileSync(fromHere(`../../../../../plugins/${plugin}/src/index.ts`), "utf8");
       expect(manifest, id).toContain(`icon: "${icon}"`);
-      const served = readFileSync(new URL(`../../../public${src}`, import.meta.url));
-      const mark = readFileSync(new URL(`../../../../../plugins/${plugin}/${icon}`, import.meta.url));
+      const served = readFileSync(fromHere(`../../../public${src}`));
+      const mark = readFileSync(fromHere(`../../../../../plugins/${plugin}/${icon}`));
       expect(served.equals(mark), id).toBe(true);
     }
   });
