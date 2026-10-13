@@ -28,6 +28,7 @@ import {
   compiledMigrationSql,
   createMigratedSqlite,
   createSqliteD1Database,
+  execOnTursoEngine,
 } from "../src/testing/sqlite-d1";
 
 const BREAKPOINT = "--> statement-breakpoint";
@@ -448,7 +449,7 @@ describe(`${MIGRATION} on the Turso engine`, () => {
     for (const statement of compiledMigrationSql("turso").split(BREAKPOINT)) {
       if (!statement.trim()) continue;
       try {
-        await database.exec(statement);
+        await execOnTursoEngine(database, statement);
       } catch (error) {
         // Two pre-0100 backfills use SQL the local engine does not parse yet.
         if (own.has(statement.trim())) throw error;

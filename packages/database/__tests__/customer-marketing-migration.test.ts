@@ -24,7 +24,7 @@ import {
   MARKETING_CONSENT_SOURCE_VALUES,
   MARKETING_CONSENT_STATE_VALUES,
 } from "../src/schema/customer-marketing";
-import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
+import { compiledMigrationSql, createMigratedSqlite, execOnTursoEngine } from "../src/testing/sqlite-d1";
 
 const NAME = "0108_customer_marketing";
 const BREAKPOINT = "--> statement-breakpoint";
@@ -268,7 +268,7 @@ describe(`${NAME} on the Turso engine`, () => {
     for (const statement of compiledMigrationSql("turso").split(BREAKPOINT)) {
       if (!statement.trim()) continue;
       try {
-        await database.exec(statement);
+        await execOnTursoEngine(database, statement);
       } catch (error) {
         // Two pre-0100 backfills use SQL the local engine does not parse yet.
         if (own.has(statement.trim())) throw error;

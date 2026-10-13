@@ -372,3 +372,26 @@ export function createSqliteD1Database(
   // Observed like the production D1 request client, so read capture works in tests.
   return { sqlite, binding, db: drizzle(observeD1Prepare(binding), { schema }) as unknown as Database };
 }
+
+/**
+ * Applies one migration statement on the local Turso engine (0.7). That
+ * engine re-parses every trigger body when a table is renamed and cannot
+ * resolve the `with ao as materialized (...)` CTEs inside the analytics
+ * triggers of 0131, so each table rebuild between 0131 and 0146 fails. 0146
+ * drops those triggers by name and writes new ones, so the harness drops them
+ * and retries the statement once; hosted Turso applies the chain unchanged.
+ * Applied migrations stay as they are.
+ */
+export async function execOnTursoEngine(
+  database: { exec(sql: string): Promise<unknown>; prepare(sql: string): { all(): Promise<unknown[]> } },
+  statement: string,
+): Promise<void> {
+  try {
+    await database.exec(statement);
+  } catch (error) {
+    if (!/error in trigger analytics_\w+: no such table: ao\b/.test((error as Error).message)) throw error;
+    const triggers = await database.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'analytics%'").all() as Array<{ name: string }>;
+    for (const { name } of triggers) await database.exec(`DROP TRIGGER IF EXISTS ${name}`);
+    await database.exec(statement);
+  }
+}

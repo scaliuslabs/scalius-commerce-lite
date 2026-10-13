@@ -11,7 +11,7 @@ import { connect } from "@tursodatabase/database";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { parseEventFacts, type EventTopic } from "../../shared/src/events";
-import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
+import { compiledMigrationSql, createMigratedSqlite, execOnTursoEngine } from "../src/testing/sqlite-d1";
 
 const NAME = "0109_inventory_purchasing";
 const BREAKPOINT = "--> statement-breakpoint";
@@ -232,7 +232,7 @@ describe(`${NAME} on the Turso engine`, () => {
     for (const statement of compiledMigrationSql("turso").split(BREAKPOINT)) {
       if (!statement.trim()) continue;
       try {
-        await database.exec(statement);
+        await execOnTursoEngine(database, statement);
       } catch (error) {
         // A few pre-0100 backfills use SQL the local engine does not parse yet.
         if (own.has(statement.trim())) throw error;

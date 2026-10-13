@@ -32,7 +32,7 @@ import {
   renderCacheDepProjectionMigration,
   CACHE_DEP_PROJECTION_MIGRATION_PATHS,
 } from "../scripts/cache-dep-triggers";
-import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
+import { compiledMigrationSql, createMigratedSqlite, execOnTursoEngine } from "../src/testing/sqlite-d1";
 import { bumped, runCacheDepScenario, type CacheDepDriver } from "./cache-dep-scenario";
 
 const BREAKPOINT = "--> statement-breakpoint";
@@ -241,7 +241,7 @@ describe("0100_cache_dependencies", () => {
     const failures: string[] = [];
     for (const statement of migrations) {
       try {
-        await database.exec(statement);
+        await execOnTursoEngine(database, statement);
       } catch (error) {
         // Two pre-0100 backfills use SQL the local engine does not parse yet;
         // hosted Turso applies them. Every 0100 statement must apply.
