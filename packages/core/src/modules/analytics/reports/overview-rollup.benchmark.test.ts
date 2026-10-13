@@ -12,7 +12,7 @@ import { createAnalyticsContext } from "./context";
 import { getAnalyticsOverviewForRequest } from "./service";
 import { seedScaleStore } from "./reports.scale-store";
 import { createAnalyticsFixture } from "./reports.fixture";
-import { sourceOverviewPeriod } from "./overview.source-oracle";
+import { sourceOverviewPeriod } from "../../../testing/analytics-oracle/source-oracle";
 
 const OUT = process.env.ANALYTICS_SCALE_OUT;
 const ORDERS = Number(process.env.ANALYTICS_SCALE_ORDERS ?? 1_000_000);

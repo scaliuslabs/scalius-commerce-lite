@@ -8,7 +8,7 @@ import { pruneStaffAlerts } from "@scalius/core/modules/notifications";
 import { maintainDerivedProjections } from "./scheduled/derived-projections";
 import { createAnalyticsFixture, type AnalyticsFixture } from "../../../packages/core/src/modules/analytics/reports/reports.fixture";
 import { AUGUST } from "../../../packages/core/src/modules/analytics/reports/metrics.fixture-store";
-import { sourceOverviewPeriod } from "../../../packages/core/src/modules/analytics/reports/overview.source-oracle";
+import { sourceOverviewPeriod } from "../../../packages/core/src/testing/analytics-oracle/source-oracle";
 import { assertRollupProjection, sealEveryFactDay } from "../../../packages/core/src/modules/analytics/reports/overview-rollup.assertions";
 
 afterAll(closeNativePostgres);

@@ -5,7 +5,7 @@ import type { CapturedQuery } from "../../../testing/list-plans";
 import { createAnalyticsFixture, type AnalyticsFixture } from "./reports.fixture";
 import { createAnalyticsContext } from "./context";
 import { getAnalyticsOverview } from "./overview";
-import { sourceOverviewPeriod } from "./overview.source-oracle";
+import { sourceOverviewPeriod } from "../../../testing/analytics-oracle/source-oracle";
 import { sealEveryFactDay } from "./overview-rollup.assertions";
 
 let f: AnalyticsFixture;
