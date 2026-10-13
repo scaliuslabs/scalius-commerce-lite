@@ -1585,80 +1585,20 @@ export function getCheckoutLanguagePreset(code: unknown): CheckoutLanguageData {
   return { ...(preset ?? ENGLISH_CHECKOUT_LANGUAGE_DATA) };
 }
 
-function comparableDefaultText(value: string): string {
-  return value
-    .trim()
-    .toLocaleLowerCase("en")
-    .replaceAll("…", "...")
-    .replace(/[.!]+$/u, "")
-    .replace(/\s+/g, " ");
-}
-
 /**
- * Earlier built-in wording. A saved language still holding one of these was
- * never edited by the merchant, so it follows the current default instead.
- */
-const RETIRED_DEFAULT_TEXT: Partial<Record<CheckoutLanguageKey, readonly string[]>> = {
-  deliveryOptionReplacedText: ["{old} is no longer available for this address, so {new} is selected. Check your total, then place your order.", "{old} এই ঠিকানায় আর পাওয়া যাচ্ছে না, তাই {new} বেছে নেওয়া হয়েছে। মোট টাকা দেখে অর্ডার করুন।"],
-  discountMinimumQuantityText: ["Add {count} more to use {code}."],
-  addToCartText: ["Add to Cart"],
-  buyNowText: ["Buy Now"],
-  chooseAddressForDeliveryText: ["Choose your city and zone to see delivery options.", "ডেলিভারি অপশন দেখতে শহর ও জোন বেছে নিন।"],
-  cityZoneRequiredText: ["Choose a city and zone to continue.", "এগিয়ে যেতে শহর ও এলাকা বেছে নিন।"],
-  customerPhoneHelp: ["Enter your phone number with country code", "কান্ট্রি কোডসহ আপনার ফোন নম্বর লিখুন"],
-  customerPhonePlaceholder: ["Phone number", "ফোন নম্বর"],
-  discountAppliedText: ["Discount applied successfully!", "ডিসকাউন্ট সফলভাবে প্রয়োগ হয়েছে!"],
-  enterDiscountCodeText: ["Enter a discount code", "একটি ডিসকাউন্ট কোড লিখুন"],
-  invalidDiscountCodeText: ["Invalid discount code", "ডিসকাউন্ট কোডটি সঠিক নয়"],
-  noPaymentMethodsText: ["No available payment method can accept this order total. Return to your cart or contact the store.", "এই অর্ডারের মোট টাকার জন্য কোনো পেমেন্ট পদ্ধতি পাওয়া যাচ্ছে না। কার্টে ফিরুন অথবা দোকানের সঙ্গে যোগাযোগ করুন।"],
-  orderReceiptExpiredMessageText: ["This private receipt is no longer available in this browser. Sign in to check account orders, or contact the store if you still need help.", "এই ব্রাউজারে ব্যক্তিগত রসিদটি আর পাওয়া যাচ্ছে না। অ্যাকাউন্টের অর্ডার দেখতে সাইন ইন করুন অথবা সাহায্যের জন্য দোকানের সঙ্গে যোগাযোগ করুন।"],
-  orderReceiptPaymentIssueMessageText: ["Order #{orderId} is saved. Retry payment below instead of placing another order.", "অর্ডার #{orderId} সংরক্ষিত আছে। নতুন অর্ডার না করে নিচে থেকে আবার পেমেন্ট করুন।"],
-  orderReceiptPaymentPendingMessageText: ["Order #{orderId} is saved. Do not place it again while we check the payment.", "অর্ডার #{orderId} সংরক্ষিত আছে। পেমেন্ট যাচাই করার সময় অর্ডারটি আবার দেবেন না।"],
-  orderReceiptPaymentPendingTitleText: ["Confirming payment", "পেমেন্ট নিশ্চিত করা হচ্ছে"],
-  orderReceiptRequestRejectedText: ["The store could not accept this request. Contact the store if you still need help.", "দোকান অনুরোধটি গ্রহণ করতে পারেনি। আরও সাহায্য লাগলে দোকানের সঙ্গে যোগাযোগ করুন।"],
-  orderReceiptRequestSettledText: ["This request is settled. Contact the store if you still need help.", "অনুরোধটি নিষ্পত্তি হয়েছে। আরও সাহায্য লাগলে দোকানের সঙ্গে যোগাযোগ করুন।"],
-  paymentRecoveryCodesUnavailableText: ["We can't send codes right now. Contact the store to finish paying.", "এই মুহূর্তে কোড পাঠানো যাচ্ছে না। পেমেন্ট সম্পন্ন করতে দোকানের সাথে যোগাযোগ করুন।"],
-  paymentRecoveryUnavailableText: ["Payment recovery is not available right now. Sign in to check account orders or contact the store.", "এই মুহূর্তে পেমেন্ট পুনরুদ্ধার করা যাচ্ছে না। অ্যাকাউন্টের অর্ডার দেখতে সাইন ইন করুন অথবা দোকানের সঙ্গে যোগাযোগ করুন।"],
-  phoneInvalidText: ["Enter a valid phone number.", "সঠিক ফোন নম্বর লিখুন।", "Enter an 11-digit mobile number starting with 01.", "০১ দিয়ে শুরু ১১ সংখ্যার মোবাইল নম্বর লিখুন।"],
-  selectZonePlaceholder: ["Select a zone", "এলাকা বেছে নিন"],
-  taxVerificationFailedText: ["We could not verify tax. Change the destination or try again.", "কর যাচাই করা যায়নি। গন্তব্য পরিবর্তন করুন অথবা আবার চেষ্টা করুন।"],
-  termsText: ["By placing this order, you agree to our Terms of Service and Privacy Policy.", "অর্ডারটি নিশ্চিত করলে আপনি আমাদের পরিষেবার শর্তাবলি ও গোপনীয়তা নীতিতে সম্মত হচ্ছেন।"],
-  trackOrderUnavailableText: ["Order tracking isn't available right now. Contact the store.", "এই মুহূর্তে অর্ডার ট্র্যাক করা যাচ্ছে না। দোকানের সাথে যোগাযোগ করুন।"],
-  unavailableText: ["Unavailable", "পাওয়া যাচ্ছে না"],
-  zoneLabel: ["Zone", "এলাকা"],
-  zoneRequiredText: ["Choose a zone to continue.", "এগিয়ে যেতে একটি এলাকা বেছে নিন।"],
-  zonesLoadFailedText: ["Could not load zones. Try again", "এলাকাগুলো লোড করা যায়নি। আবার চেষ্টা করুন"],
-};
-
-/**
- * Stored values are merchant overrides. Older records persisted the English
- * defaults even for non-English locale codes, so an unchanged English value
- * must not shadow a built-in locale preset. Genuine custom values are kept.
+ * Stored values are merchant overrides on the locale's preset: a blank value
+ * keeps the preset's wording, any other value replaces it.
  */
 export function resolveCheckoutLanguageData(
   code: unknown,
   storedValue: unknown,
 ): CheckoutLanguageData {
-  const baseCode = checkoutLanguageBaseCode(code);
-  const resolved = getCheckoutLanguagePreset(baseCode);
+  const resolved = getCheckoutLanguagePreset(checkoutLanguageBaseCode(code));
   const stored = parseStoredLanguageData(storedValue);
 
   for (const key of CHECKOUT_LANGUAGE_KEYS) {
     const value = stored[key];
-    if (typeof value !== "string" || value.trim() === "") continue;
-    if (RETIRED_DEFAULT_TEXT[key]?.some((retired) => comparableDefaultText(retired) === comparableDefaultText(value))) {
-      continue;
-    }
-    // "Phone Number" saved from an older default is the default in sentence case.
-    if (comparableDefaultText(value) === comparableDefaultText(resolved[key])) continue;
-    if (
-      baseCode !== "en" &&
-      comparableDefaultText(value) ===
-        comparableDefaultText(ENGLISH_CHECKOUT_LANGUAGE_DATA[key])
-    ) {
-      continue;
-    }
-    resolved[key] = value;
+    if (typeof value === "string" && value.trim() !== "") resolved[key] = value;
   }
 
   return resolved;

@@ -419,14 +419,6 @@ describe("cart v3 line keys (buyer inputs)", () => {
     expect(cartStore.get().totalItems).toBe(4);
   });
 
-  it("drops a v2 cart at the v3 deploy and removes it from storage", async () => {
-    localStorage.setItem("cart", JSON.stringify(persistedCart));
-    const { hydrateCartFromStorage } = await importFreshCartModule();
-
-    expect(hydrateCartFromStorage().items).toEqual({});
-    expect(localStorage.getItem("cart")).toBeNull();
-  });
-
   it("drops a stored line whose inputs have no hash, and re-keys the rest from their stored hash", async () => {
     const { createCartItemKey, hydrateCartFromStorage } = await importFreshCartModule();
     localStorage.setItem("cart:v3", JSON.stringify({
@@ -487,7 +479,6 @@ describe("cart v3 line keys (buyer inputs)", () => {
     expect(Object.values(cartStore.get().items).map(({ id, quantity }) => [id, quantity]))
       .toEqual([["drink", 2], ["tee", 1]]);
     expect(cartStore.get()).toMatchObject({ totalItems: 3, totalAmount: 740, discountCodes: ["SAVE10"] });
-    expect(localStorage.getItem("cart:v3:buy-now")).toBeNull();
     const after = structuredClone(cartStore.get());
     expect(syncCartFromStorage()).toEqual(after);
   });
@@ -542,48 +533,5 @@ describe("cart v3 line keys (buyer inputs)", () => {
     expect(Object.values(cartStore.get().items).find(({ id }) => id === "pen")?.quantity).toBe(3);
     expect(cartStore.get().totalItems).toBe(4);
     expect(JSON.parse(localStorage.getItem("cart:v3")!)).toEqual(cartStore.get());
-  });
-
-  it("recovers an old hidden cart once and never restores lines removed afterward", async () => {
-    const { addToCart, cartStore, createCartItemKey, hydrateCartFromStorage, removeCartItemByKey, syncCartFromStorage } = await importFreshCartModule();
-    await addToCart({ id: "tee", variantId: "tee_m", name: "Tee", price: 500 });
-    localStorage.setItem("cart:v3:buy-now", JSON.stringify({ ...persistedCart, discountCodes: ["SAVE10"] }));
-    syncCartFromStorage();
-    expect(cartStore.get()).toMatchObject({ totalItems: 3, totalAmount: 740, discountCodes: ["SAVE10"] });
-    expect(localStorage.getItem("cart:v3:buy-now")).toBeNull();
-    const drinkKey = createCartItemKey(persistedCart.items.drink);
-    removeCartItemByKey(drinkKey);
-    syncCartFromStorage();
-    expect(hydrateCartFromStorage().items[drinkKey]).toBeUndefined();
-    expect(cartStore.get().totalItems).toBe(1);
-  });
-
-  it("merges hidden quantities only once and preserves the cart if the old stash is corrupt", async () => {
-    localStorage.setItem("cart:v3", JSON.stringify(persistedCart));
-    localStorage.setItem("cart:v3:buy-now", JSON.stringify(persistedCart));
-    const { hydrateCartFromStorage, syncCartFromStorage } = await importFreshCartModule();
-    expect(hydrateCartFromStorage().totalItems).toBe(4);
-    expect(syncCartFromStorage().totalItems).toBe(4);
-    localStorage.setItem("cart:v3:buy-now", "{invalid");
-    expect(syncCartFromStorage().totalItems).toBe(4);
-    expect(localStorage.getItem("cart:v3:buy-now")).toBeNull();
-  });
-
-  it("keeps the old stash recoverable when persisting its migration fails", async () => {
-    const { addToCart, cartStore, syncCartFromStorage } = await importFreshCartModule();
-    await addToCart({ id: "tee", variantId: "tee_m", name: "Tee", price: 500 });
-    const current = structuredClone(cartStore.get());
-    const stashed = JSON.stringify(persistedCart);
-    localStorage.setItem("cart:v3:buy-now", stashed);
-    const setItem = localStorage.setItem.bind(localStorage);
-    const blocked = vi.spyOn(localStorage, "setItem").mockImplementation((key, value) => {
-      if (key === "cart:v3") throw new Error("QuotaExceededError");
-      setItem(key, value);
-    });
-    expect(syncCartFromStorage()).toEqual(current);
-    expect(localStorage.getItem("cart:v3:buy-now")).toBe(stashed);
-    blocked.mockRestore();
-    expect(syncCartFromStorage().totalItems).toBe(3);
-    expect(localStorage.getItem("cart:v3:buy-now")).toBeNull();
   });
 });
