@@ -308,28 +308,8 @@ export const orders = sqliteTable("orders", {
     ),
     // Home and activity sum a period from the index alone (migration 0128).
     index("orders_sales_rollup_idx").on(table.deletedAt, table.createdAt, table.status, table.totalShopMinor, table.shopCurrency),
-    // Recommendation buyer matching reads eligible orders without fetching order rows (0132).
-    index("orders_recommendation_buyers_idx").on(table.deletedAt, table.createdAt, table.status, table.id, table.customerPhone, table.customerEmail),
-    // The bounded source-order sample seeks IDs without fetching wide order rows (0137).
-    index("orders_recommendation_id_buyers_idx").on(table.id, table.deletedAt, table.status, table.createdAt, table.customerPhone, table.customerEmail),
-    // Overview totals read only these fields, in currency/date order (0129).
-    index("orders_overview_idx").on(
-      table.deletedAt, table.shopCurrency, table.createdAt, table.id, table.status,
-      table.paymentMethod, table.channel, table.channelSource, table.cityName,
-      table.fulfillmentLocationId, table.shippingMethodId, table.shippingMethodKind,
-      table.requiresShipping, table.customerId, table.customerPhone, table.pricesIncludeTax,
-      table.shippingAmountMinor, table.discountAmountMinor, table.taxAmountMinor,
-      table.currencyCode, table.currencyDecimalPlaces, table.fxRate,
-    ),
-    index("orders_customer_sales_idx")
-      .on(table.customerId, table.deletedAt, table.createdAt, table.status)
-      .where(sql`${table.customerId} IS NOT NULL`),
     // Proven-contact sign-in must seek the latest live order without planner statistics.
     index("orders_customer_phone_lookup_idx").on(table.customerPhone, table.deletedAt, table.createdAt, table.id),
-    // Guest repeat-purchase checks must seek by phone before walking history (0129).
-    index("orders_guest_sales_idx")
-      .on(table.customerPhone, table.deletedAt, table.createdAt, table.status)
-      .where(sql`${table.customerId} IS NULL`),
     index("orders_customer_email_lookup_idx").on(sql`lower(trim(${table.customerEmail}))`, table.deletedAt, table.createdAt, table.id),
     index("orders_shipment_claim_idx")
         .on(table.shipmentClaimId, table.shipmentClaimExpiresAt)
@@ -532,8 +512,9 @@ export const orderItems = sqliteTable("order_items", {
         sql`${table.properties} IS NULL OR (json_valid(${table.properties}) AND length(${table.properties}) <= 65536)`,
     ),
     check("order_items_properties_price_nonnegative", sql`${table.propertiesPriceMinor} >= 0`),
-    index("order_items_order_id_idx").on(table.orderId),
+    // Live recommendations read a co-buy order's products from this covering index.
     index("order_items_order_product_idx").on(table.orderId, table.productId),
+    // Also the order's lines lookup (order_id leads).
     index("order_items_sales_idx").on(table.orderId, table.id, table.quantity,
       table.lineSubtotalMinor, table.discountAmountMinor, table.taxAmountMinor, table.fulfillmentType),
     // A product's lines, newest first: "also bought" reads only the latest (0128).
@@ -647,7 +628,6 @@ export const orderReturns = sqliteTable("order_returns", {
 }, (table) => [
     index("order_returns_order_created_idx").on(table.orderId, table.createdAt),
     index("order_returns_order_status_idx").on(table.orderId, table.status),
-    index("order_returns_sales_idx").on(table.id, table.status),
     uniqueIndex("order_returns_source_reference_unique").on(table.source, table.sourceReferenceId),
     uniqueIndex("order_returns_active_order_key_unique").on(table.activeOrderKey),
     check("order_returns_version_positive", sql`${table.version} >= 1`),

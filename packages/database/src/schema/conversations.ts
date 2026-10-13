@@ -30,8 +30,6 @@ export const conversations = sqliteTable("conversations", {
     assigneeUserId: text("assignee_user_id")
         .references(() => user.id, { onDelete: "set null" }),
     lastSeq: integer("last_seq").notNull().default(0),
-    /** Private historical-search cursor. Updated without editor revision or activity changes. */
-    searchIndexedSeq: integer("search_indexed_seq"),
     customerReadSeq: integer("customer_read_seq").notNull().default(0),
     staffReadSeq: integer("staff_read_seq").notNull().default(0),
     lastMessageAt: integer("last_message_at"),
@@ -215,10 +213,3 @@ export const conversationSearchTerms = sqliteTable("conversation_search_terms", 
     index("conversation_search_terms_message_idx").on(table.conversationId, table.seq, table.term),
     check("conversation_search_terms_length", sql`length(${table.term}) BETWEEN 2 AND 32`),
 ]);
-
-/** Bounded automatic backfill cursor; absence means historical coverage is incomplete. */
-export const conversationSearchState = sqliteTable("conversation_search_state", {
-    id: text("id").primaryKey(),
-    lastMessageId: text("last_message_id"),
-    complete: integer("complete", { mode: "boolean" }).notNull().default(false),
-}, (table) => [check("conversation_search_state_id", sql`${table.id} = 'v1'`)]);

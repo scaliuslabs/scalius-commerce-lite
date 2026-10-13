@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => {
   return {
     db,
     sweepReviewRequests: vi.fn(),
-    backfillConversationSearch: vi.fn(),
     sweepDigitalUploads: vi.fn(),
     sweepAutoFulfilment: vi.fn(),
     getDb: vi.fn(() => db),
@@ -77,7 +76,6 @@ vi.mock("@scalius/core/modules/fulfilment", async (importOriginal) => ({
 
 vi.mock("@scalius/core/modules/conversations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/conversations")>()),
-  backfillConversationSearch: mocks.backfillConversationSearch,
   sweepOrphanConversationAttachments: vi.fn(async () => ({ scanned: 0, deleted: 0 })),
 }));
 

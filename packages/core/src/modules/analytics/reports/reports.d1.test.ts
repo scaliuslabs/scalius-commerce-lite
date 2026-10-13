@@ -155,7 +155,8 @@ describe("customer reports", () => {
       id: "c:c1",
       values: { customer: "Buyer", phone: "+8801711000001", orders: 2, total_sales: 195_200, first_order: "2026-08-05", last_order: "2026-08-10" },
     });
-    expect(byId(page.rows)["p:+8801799999999"]?.values).toMatchObject({ orders: 1, first_order: "2026-07-31" });
+    // Guest P1's checkout record (keyed by phone) holds both of their orders.
+    expect(byId(page.rows)["c:guest_8801799999999"]?.values).toMatchObject({ orders: 1, first_order: "2026-07-31" });
   });
 
   it("refuses to name customers without the View customers permission", async () => {

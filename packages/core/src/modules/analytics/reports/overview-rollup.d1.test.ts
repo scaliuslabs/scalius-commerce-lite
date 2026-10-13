@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 import { analyticsInstantRange, type AnalyticsRange } from "@scalius/shared/analytics-period";
 import { createAnalyticsFixture, type AnalyticsFixture, type FixtureOrder } from "./reports.fixture";
 import { AUGUST, seedKnownAnswerStore } from "./metrics.fixture-store";
 import { createAnalyticsContext } from "./context";
 import { getAnalyticsOverview, rollUpDays } from "./overview";
 import { sourceOverviewPeriod } from "./overview.source-oracle";
-import { assertRollupProjection } from "./overview-rollup.assertions";
+import { assertRollupProjection, sealEveryFactDay } from "./overview-rollup.assertions";
 
 let f: AnalyticsFixture;
 beforeEach(() => {
@@ -16,37 +17,42 @@ beforeEach(() => {
 afterEach(() => { f.close(); vi.restoreAllMocks(); });
 
 function order(id: string, overrides: Partial<FixtureOrder> = {}) {
-  f.order({ id, createdAt: "2026-08-15T12:00:00Z", customerPhone: "NO_PHONE", requiresShipping: false,
+  f.order({ id, createdAt: "2026-08-15T12:00:00Z", requiresShipping: false,
     lines: [{ id: `${id}_line`, productId: "p_rollup", quantity: 3, unitMinor: 101, taxMinor: 31, discountMinor: 11, fulfillmentType: "digital" }], ...overrides });
-}
-
-function checkProjection() {
-  assertRollupProjection(
-    f.sqlite.prepare("SELECT * FROM analytics_order_facts").all(),
-    f.sqlite.prepare("SELECT * FROM analytics_sales_buckets").all(),
-    f.sqlite.prepare("SELECT * FROM analytics_customer_first_sale").all(),
-  );
 }
 
 function trackProjectionWrites() {
   f.sqlite.exec("CREATE TEMP TABLE projection_writes (name TEXT)");
-  for (const table of ["analytics_order_facts", "analytics_sales_buckets", "analytics_customer_first_sale", "analytics_customer_currency_summary"]) {
+  for (const table of ["analytics_order_facts", "analytics_sales_buckets", "analytics_sealed_days"]) {
     for (const action of ["INSERT", "UPDATE", "DELETE"]) {
       f.sqlite.exec(`CREATE TEMP TRIGGER count_${table}_${action} AFTER ${action} ON ${table} BEGIN INSERT INTO projection_writes VALUES ('${table}'); END`);
     }
   }
 }
+const projectionWrites = () => f.sqlite.prepare("SELECT name, count(*) AS n FROM projection_writes GROUP BY name ORDER BY name").all();
 
-async function parity(range: AnalyticsRange = AUGUST, timeZone = "Asia/Dhaka", currency = "BDT", comparison: "none" | "previous_period" | "previous_year" = "none") {
+/**
+ * The overview equals the independent source query with the days as they are
+ * (unsealed after a write), and again once every day is sealed into buckets.
+ */
+async function parity(range: AnalyticsRange = AUGUST, timeZone = "Asia/Dhaka", currency = "BDT", comparison: "none" | "previous_period" | "previous_year" = "none", seal = true) {
   const ctx = await createAnalyticsContext(f.db, timeZone);
   ctx.currency = { ...ctx.currency, code: currency, decimalPlaces: getDecimalPlaces(currency) };
-  const result = await getAnalyticsOverview(ctx, { range, comparison, granularity: "day" });
-  const source = await sourceOverviewPeriod(ctx, range);
-  expect(result.current).toEqual(source);
-  if (result.previous) expect(result.previous).toEqual(await sourceOverviewPeriod(ctx, result.previous.range));
-  expect(result.series.map((row) => row.current)).toEqual(rollUpDays(range, source.days, "day", ctx.weekStart).map((row) => row.measures));
-  checkProjection();
-  return result.current;
+  const check = async () => {
+    const result = await getAnalyticsOverview(ctx, { range, comparison, granularity: "day" });
+    const source = await sourceOverviewPeriod(ctx, range);
+    expect(result.current).toEqual(source);
+    if (result.previous) expect(result.previous).toEqual(await sourceOverviewPeriod(ctx, result.previous.range));
+    expect(result.series.map((row) => row.current)).toEqual(rollUpDays(range, source.days, "day", ctx.weekStart).map((row) => row.measures));
+    return result.current;
+  };
+  await assertRollupProjection(f.db);
+  const asWritten = await check();
+  if (!seal) return asWritten;
+  await sealEveryFactDay(f.db);
+  await assertRollupProjection(f.db);
+  expect(await check()).toEqual(asWritten);
+  return asWritten;
 }
 
 describe("transactional analytics overview projections", () => {
@@ -68,17 +74,19 @@ describe("transactional analytics overview projections", () => {
     }
   });
 
-  it("maintains exact cross-currency first sales and shared NO_PHONE identities after identity and date moves", async () => {
-    order("prior", { createdAt: "2026-07-01T00:00:00Z", currencyCode: "USD" });
-    order("a");
-    order("b", { createdAt: "2026-08-16T00:00:00Z" });
-    expect((await parity()).customers).toEqual({ customers: 1, newCustomers: 0, returningCustomers: 1, repeatPurchaseRate: 100 });
+  it("keys customers by record: phoneless orders without one never merge, merges and date moves stay exact", async () => {
+    // Production stores a missing phone as NO_PHONE (''); without a customer record each order is its own customer.
+    order("prior", { createdAt: "2026-07-01T00:00:00Z", currencyCode: "USD", customerPhone: NO_PHONE });
+    order("a", { customerPhone: NO_PHONE });
+    order("b", { createdAt: "2026-08-16T00:00:00Z", customerPhone: NO_PHONE });
+    expect((await parity()).customers).toEqual({ customers: 2, newCustomers: 2, returningCustomers: 0, repeatPurchaseRate: 0 });
+    expect(f.sqlite.prepare("SELECT count(*) AS n FROM analytics_order_facts WHERE identity LIKE 'p:%' OR identity LIKE '%+880%'").get()!.n).toBe(0);
     f.customer("registered", "Registered", "+8801712345678");
     for (const statement of [
-      "UPDATE orders SET customer_id = 'registered' WHERE id = 'b'",
-      "UPDATE orders SET customer_phone = '+8801799999988' WHERE id = 'a'",
+      "UPDATE orders SET customer_id = 'registered' WHERE id IN ('prior', 'b')",
+      "UPDATE orders SET customer_id = 'registered' WHERE id = 'a'",
       "UPDATE orders SET created_at = created_at + 86400 * 62 WHERE id = 'prior'",
-      "UPDATE orders SET customer_id = NULL, customer_phone = 'NO_PHONE' WHERE id = 'b'",
+      "UPDATE orders SET customer_id = NULL WHERE id = 'b'",
       "UPDATE orders SET status = 'cancelled' WHERE id = 'a'",
       "UPDATE orders SET deleted_at = 123 WHERE id = 'b'",
       "UPDATE orders SET deleted_at = NULL WHERE id = 'b'",
@@ -134,7 +142,7 @@ describe("transactional analytics overview projections", () => {
     const before = await parity();
     f.sqlite.exec("BEGIN");
     f.sqlite.exec("UPDATE orders SET shop_currency = 'USD', created_at = created_at - 86400 * 60 WHERE id = 'b'");
-    await parity();
+    await parity(AUGUST, "Asia/Dhaka", "BDT", "none", false);
     f.sqlite.exec("ROLLBACK");
     expect(await parity()).toEqual(before);
   });
@@ -174,41 +182,44 @@ describe("transactional analytics overview projections", () => {
     await parity(range, timeZone);
     await parity(range, "UTC");
     await parity(range, "Asia/Dhaka");
+    // A day unsealed by a late write is read from facts beside its sealed neighbours.
+    f.sqlite.exec("UPDATE orders SET status = 'cancelled' WHERE id = 'time_3'");
+    expect(f.sqlite.prepare("SELECT count(*) AS n FROM analytics_sealed_days").get()!.n).toBeGreaterThan(0);
+    await parity(range, timeZone);
   });
 
-  it("bounds projection writes for the supported 99-line order and ignores unrelated or unchanged updates", async () => {
+  it("writes one fact row per order and per line, never a shared row, and nothing for unrelated or unchanged updates", async () => {
     trackProjectionWrites();
     const started = performance.now();
-    order("large", { lines: Array.from({ length: 99 }, (_, i) => ({ id: `large_${i}`, productId: "p_large", quantity: 1, unitMinor: 101, fulfillmentType: "digital" })) });
+    order("large", { lines: Array.from({ length: 300 }, (_, i) => ({ id: `large_${i}`, productId: "p_large", quantity: 1, unitMinor: 101, fulfillmentType: "digital" })) });
     const elapsedMs = performance.now() - started;
-    const writes = Number(f.sqlite.prepare("SELECT count(*) AS n FROM projection_writes").get()!.n);
-    // One fact + at most seven bucket writes per refresh, and two customer-summary inserts.
-    expect(writes).toBeLessThanOrEqual(8 * 100 + 2);
-    expect((await parity()).totals).toMatchObject({ orders: 1, grossSales: 9_999, netItemsSold: 99 });
+    // One fact insert, then one update per line: linear, and no bucket or day row.
+    expect(projectionWrites()).toEqual([{ name: "analytics_order_facts", n: 301 }]);
+    expect((await parity()).totals).toMatchObject({ orders: 1, grossSales: 30_300, netItemsSold: 300 });
     f.sqlite.exec("DELETE FROM projection_writes");
     f.sqlite.exec("UPDATE orders SET customer_name = 'Changed label', updated_at = updated_at + 1 WHERE id = 'large'");
     f.sqlite.exec("UPDATE order_items SET line_subtotal_minor = line_subtotal_minor WHERE order_id = 'large'");
-    expect(f.sqlite.prepare("SELECT count(*) AS n FROM projection_writes").get()!.n).toBe(0);
+    expect(projectionWrites()).toEqual([]);
     // Evidence, not a machine-dependent unit-test latency threshold.
-    process.stdout.write(`${JSON.stringify({ analyticsRollup99Lines: { elapsedMs, projectionWrites: writes } })}\n`);
+    process.stdout.write(`${JSON.stringify({ analyticsRollup300Lines: { elapsedMs } })}\n`);
   });
 
-  it("changes only the fact and two total buckets for COD collection or a refund", async () => {
+  it("changes only the order's fact for COD collection or a refund, and unseals a finished day", async () => {
     order("payment_only");
     f.cod({ orderId: "payment_only", status: "pending" });
     f.payment({ id: "payment_only_refund", orderId: "payment_only", amountMinor: 17, type: "refund", status: "pending" });
+    await sealEveryFactDay(f.db);
     trackProjectionWrites();
-    for (const statement of [
-      "UPDATE cod_tracking SET cod_status = 'collected' WHERE order_id = 'payment_only'",
-      "UPDATE order_payments SET status = 'refunded' WHERE id = 'payment_only_refund'",
-    ]) {
+    for (const [statement, expected] of [
+      ["UPDATE cod_tracking SET cod_status = 'collected' WHERE order_id = 'payment_only'",
+        [{ name: "analytics_order_facts", n: 1 }, { name: "analytics_sealed_days", n: 1 }]],
+      ["UPDATE order_payments SET status = 'refunded' WHERE id = 'payment_only_refund'", [{ name: "analytics_order_facts", n: 1 }]],
+    ] as const) {
       f.sqlite.exec("DELETE FROM projection_writes");
       f.sqlite.exec(statement);
-      expect(f.sqlite.prepare("SELECT name, count(*) AS n FROM projection_writes GROUP BY name ORDER BY name").all()).toEqual([
-        { name: "analytics_order_facts", n: 1 },
-        { name: "analytics_sales_buckets", n: 2 },
-      ]);
-      await parity();
+      expect(projectionWrites()).toEqual(expected);
+      await assertRollupProjection(f.db);
     }
+    await parity();
   });
 });

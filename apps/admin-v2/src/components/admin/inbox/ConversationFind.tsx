@@ -69,6 +69,5 @@ export function ConversationFind({ conversationId, onSelect, onClose }: { conver
       <Button variant="ghost" size="icon" aria-label={t("newerMatch")} disabled={waiting || index <= 0} aria-disabled={results.isFetchingNextPage || undefined} onClick={newer}><ChevronDown aria-hidden /></Button>
       <Button variant="ghost" size="icon" aria-label={t("closeFind")} onClick={onClose}><X aria-hidden /></Button>
     </div>
-    {last?.bodyCoverage === "since_index" ? <p className="mt-1 text-body text-muted-foreground">{t("searchCoverage")}</p> : null}
   </section>;
 }

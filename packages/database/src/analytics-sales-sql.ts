@@ -76,18 +76,22 @@ export function salesLinesCtesText(options: SalesLineOptions = {}): string {
   ),
   lv as (
     select sv.*,
-      case
-        when sv.returned_qty = 0 then 0
-        when sv.returned_qty = sv.quantity then sv.gross - sv.disc
-        else ((sv.gross - sv.disc) * sv.returned_qty) / sv.quantity
-      end as returns,
-      case
-        when sv.returned_qty = 0 then sv.tax
-        when sv.returned_qty = sv.quantity then 0
-        else sv.tax - (sv.tax * sv.returned_qty) / sv.quantity
-      end as kept_tax
+      ${lineReturnsSql("sv.gross", "sv.disc", "sv.quantity", "sv.returned_qty")} as returns,
+      ${lineKeptTaxSql("sv.tax", "sv.quantity", "sv.returned_qty")} as kept_tax
     from sv
   )`;
+}
+
+/** The returned share of a line's (gross − discount) for `returned` of `quantity` units, floored. */
+export function lineReturnsSql(gross: string, disc: string, quantity: string, returned: string): string {
+  return `(case when ${returned} = 0 then 0 when ${returned} = ${quantity} then ${gross} - ${disc}
+    else ((${gross} - ${disc}) * ${returned}) / ${quantity} end)`;
+}
+
+/** A line's tax less its returned share. */
+export function lineKeptTaxSql(tax: string, quantity: string, returned: string): string {
+  return `(case when ${returned} = 0 then ${tax} when ${returned} = ${quantity} then 0
+    else ${tax} - (${tax} * ${returned}) / ${quantity} end)`;
 }
 
 /**

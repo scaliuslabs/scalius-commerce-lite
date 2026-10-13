@@ -9,7 +9,7 @@ vi.mock("@scalius/api-client/sdk", () => ({ postApiV1AdminConversationsByIdSearc
 import { ConversationFind } from "./ConversationFind";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const en = inboxMessages.en;
-const page = (seqs: number[], nextCursor: number | null = null) => ({ data: { success: true, data: { items: seqs.map((seq) => ({ seq })), nextCursor, scanExhausted: nextCursor === null, scanned: 50, bodyCoverage: "complete" } }, response: new Response() });
+const page = (seqs: number[], nextCursor: number | null = null) => ({ data: { success: true, data: { items: seqs.map((seq) => ({ seq })), nextCursor, scanExhausted: nextCursor === null, scanned: 50 } }, response: new Response() });
 let host: HTMLDivElement, root: Root, client: QueryClient;
 const select = vi.fn(), close = vi.fn();
 const input = () => host.querySelector("input")!;

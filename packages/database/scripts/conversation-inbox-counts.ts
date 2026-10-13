@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { conversationInboxCountsBackfill, conversationInboxCountsRebuild } from "../src/derived-projections";
 import { compileSqliteDdlForPostgres, compileSqliteTriggerForPostgres } from "./postgres-schema";
 
 export const CONVERSATION_INBOX_COUNTS_MIGRATION = "0141_conversation_inbox_counts";
@@ -10,21 +11,7 @@ const open = (ref: string) => `(${ref}.status = 'open' AND ${ref}.last_message_a
 const openCount = (ref: string) => `(CASE WHEN ${open(ref)} THEN 1 ELSE 0 END)`;
 const unassignedCount = (ref: string) => `(CASE WHEN ${open(ref)} AND ${ref}.assignee_user_id IS NULL THEN 1 ELSE 0 END)`;
 
-// External upgrades require the verified write freeze in upgrade-provider-schema.ts; this backfill is not an online migration.
-export const conversationInboxCountsBackfill = [
-  `INSERT INTO conversation_inbox_counts (scope, unread, open, unassigned_open)
-SELECT '*',
-  (SELECT count(*) FROM conversation_messages m JOIN conversations c ON c.id = m.conversation_id
-    WHERE c.last_message_at IS NOT NULL AND m.seq > c.staff_read_seq AND ${incoming("m")}),
-  coalesce(sum(${openCount("c")}), 0), coalesce(sum(${unassignedCount("c")}), 0)
-FROM conversations c;`,
-  `INSERT INTO conversation_inbox_counts (scope, open)
-SELECT 'u:' || assignee_user_id, count(*) FROM conversations c
-WHERE ${open("c")} AND assignee_user_id IS NOT NULL GROUP BY assignee_user_id;`,
-];
-
-/** Run as one transaction with source authority stable; normal writes use only trigger deltas. */
-export const conversationInboxCountsRebuild = ["DELETE FROM conversation_inbox_counts;", ...conversationInboxCountsBackfill];
+export { conversationInboxCountsBackfill, conversationInboxCountsRebuild };
 
 export function generateConversationInboxCountsTriggers(): Array<{ name: string; sqlite: string }> {
   const triggers: Array<{ name: string; sqlite: string }> = [];

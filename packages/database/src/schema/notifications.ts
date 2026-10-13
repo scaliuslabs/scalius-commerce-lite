@@ -129,7 +129,11 @@ export const staffAlerts = sqliteTable("staff_alerts", {
     orderNumber: text("order_number"),
     // The first recording transaction fixes recipients, including an empty set.
     fanoutComplete: integer("fanout_complete", { mode: "boolean" }).notNull().default(false),
-}, (t) => [check("staff_alert_scope", sql`${t.scope} IN ('orders', 'conversations')`)]);
+}, (t) => [
+    check("staff_alert_scope", sql`${t.scope} IN ('orders', 'conversations')`),
+    // Retention removes old alerts no inbox row still shows.
+    index("staff_alerts_recorded_idx").on(t.recordedAt),
+]);
 
 export const staffAlertInbox = sqliteTable("staff_alert_inbox", {
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),

@@ -106,10 +106,10 @@ export function bucketStartSql(dayExpression: SQL, granularity: AnalyticsGranula
   return sql.join(parts, sql.raw(""));
 }
 
-/** Customer identity: the customer record, else the phone the order was placed with. */
+/** Customer identity: the customer record, else the order itself (never a phone number). */
 export function orderIdentitySql(alias = "so"): SQL {
   return sql.raw(
-    `(case when ${alias}.customer_id is not null then 'c:' || ${alias}.customer_id else 'p:' || ${alias}.customer_phone end)`,
+    `(case when ${alias}.customer_id is not null then 'c:' || ${alias}.customer_id else 'o:' || ${alias}.id end)`,
   );
 }
 
@@ -183,41 +183,26 @@ export function lineMeasuresSql(alias = "lv"): SQL {
 }
 
 /**
- * Whether a customer identity ordered before the scope started (any sales
- * order). Index-backed: `orders_customer_activity_idx` for customer records,
- * `orders_customer_phone_idx` for phone identities.
+ * Whether a customer ordered before the scope started (any sales order),
+ * through `orders_customer_activity_idx`. An order without a customer record
+ * is its own customer: nothing precedes it.
  */
 export function hasPriorSalesOrderSql(scopeStart: number, alias = "so"): SQL {
   const order = sql.raw(alias);
-  return sql`(case
-    when ${order}.customer_id is not null and exists (
+  return sql`(case when ${order}.customer_id is not null and exists (
       select 1 from orders p
       where p.customer_id = ${order}.customer_id and p.deleted_at is null
         and p.created_at < ${scopeStart} and p.status not in (${NON_SALES})
-    ) then 1
-    when ${order}.customer_id is null and exists (
-      select 1 from orders p
-      where p.customer_phone = ${order}.customer_phone and p.customer_id is null and p.deleted_at is null
-        and p.created_at < ${scopeStart} and p.status not in (${NON_SALES})
-    ) then 1
-    else 0 end)`;
+    ) then 1 else 0 end)`;
 }
 
-/** Whether an order is its customer identity's first sales order ever (ties broken by id). */
+/** Whether an order is its customer's first sales order ever (ties broken by id). */
 export function isFirstSalesOrderSql(alias = "so"): SQL {
   const order = sql.raw(alias);
-  return sql`(case
-    when ${order}.customer_id is not null and exists (
+  return sql`(case when ${order}.customer_id is not null and exists (
       select 1 from orders p
       where p.customer_id = ${order}.customer_id and p.deleted_at is null
         and p.status not in (${NON_SALES})
         and (p.created_at < ${order}.created_at or (p.created_at = ${order}.created_at and p.id < ${order}.id))
-    ) then 0
-    when ${order}.customer_id is null and exists (
-      select 1 from orders p
-      where p.customer_phone = ${order}.customer_phone and p.customer_id is null and p.deleted_at is null
-        and p.status not in (${NON_SALES})
-        and (p.created_at < ${order}.created_at or (p.created_at = ${order}.created_at and p.id < ${order}.id))
-    ) then 0
-    else 1 end)`;
+    ) then 0 else 1 end)`;
 }

@@ -604,7 +604,7 @@ export async function getInventoryOverview(db: Database, params: {
             operationalSkuRowPredicate(),
         ];
         if (aStatus === "active" || aStatus === "acknowledged") {
-            // Seek the restock index before resolving each candidate's exact inherited threshold.
+            // A cheap bound on the row before resolving each candidate's exact inherited threshold.
             const storeThreshold = storeDefaultLowStockThresholdSql();
             alertConditions.push(sql`(${productVariants.stock} - ${productVariants.reservedStock} - CASE WHEN ${productVariants.lowStockThreshold} IS NULL THEN 0 ELSE ${productVariants.lowStockThreshold} END)
                 <= CASE WHEN ${storeThreshold} > 0 THEN ${storeThreshold} ELSE 0 END`);

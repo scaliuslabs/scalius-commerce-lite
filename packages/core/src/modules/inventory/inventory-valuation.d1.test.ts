@@ -79,10 +79,9 @@ describe("inventory valuation", () => {
       .map((row) => String(row.detail)).join("\n");
     expect(plan).toContain("SEARCH inventory_levels USING COVERING INDEX inventory_levels_location_idx (location_id=? AND on_hand>?)");
     expect(plan).not.toMatch(/USE TEMP B-TREE FOR GROUP BY/);
-    expect(plan).toContain("MATERIALIZE valuation_costs");
-    expect(plan).toContain("SCAN product_variants USING COVERING INDEX product_variants_valuation_cost_idx");
-    expect(plan).not.toMatch(/SEARCH product_variants\b/);
-    expect(plan).toMatch(/SEARCH valuation_costs\b[^\n]*USING AUTOMATIC (?:PARTIAL )?COVERING INDEX[^\n]*\(id=\?\)/);
+    // A primary-key probe per held level; never a pass over every SKU.
+    expect(plan).toMatch(/SEARCH product_variants USING INDEX sqlite_autoindex_product_variants_1 \(id=\?\) LEFT-JOIN/);
+    expect(plan).not.toMatch(/SCAN product_variants|MATERIALIZE valuation_costs/);
     const missingRead = queries.find(({ query }) => query.includes("EXISTS") && query.includes('"cost_minor" IS NULL'))!;
     const missingPlan = sqlite.prepare(`EXPLAIN QUERY PLAN ${missingRead.query}`).all(...missingRead.params)
       .map((row) => String(row.detail)).join("\n");

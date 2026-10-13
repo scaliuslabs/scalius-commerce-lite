@@ -100,10 +100,10 @@ export function merchantDaySql(column: string, offsets: ZoneOffsetSchedule): SQL
   return sql.raw(`cast((${column} + ${offset}) / 86400 as integer)`);
 }
 
-/** Customer identity: the customer record, else the phone the order was placed with. */
+/** Customer identity: the customer record, else the order itself. */
 export function orderIdentitySql(alias = "so"): SQL {
   return sql.raw(
-    `(case when ${alias}.customer_id is not null then 'c:' || ${alias}.customer_id else 'p:' || ${alias}.customer_phone end)`,
+    `(case when ${alias}.customer_id is not null then 'c:' || ${alias}.customer_id else 'o:' || ${alias}.id end)`,
   );
 }
 
@@ -266,23 +266,12 @@ export function orderMeasuresSql(alias = "om", grouped = false): SQL {
       coalesce(sum(${alias}.net_units), 0) as net_items_sold`);
 }
 
-/**
- * Whether a customer identity ordered before the scope started (any sales
- * order). Index-backed: `orders_customer_activity_idx` for customer records,
- * `orders_customer_phone_idx` for phone identities.
- */
+/** Whether a customer record ordered before the scope started (any sales order). */
 export function hasPriorSalesOrderSql(scopeStart: number, alias = "so"): SQL {
   const order = sql.raw(alias);
-  return sql`(case
-    when ${order}.customer_id is not null and exists (
+  return sql`(case when ${order}.customer_id is not null and exists (
       select 1 from orders p
       where p.customer_id = ${order}.customer_id and p.deleted_at is null
         and p.created_at < ${scopeStart} and p.status not in (${NON_SALES})
-    ) then 1
-    when ${order}.customer_id is null and exists (
-      select 1 from orders p
-      where p.customer_phone = ${order}.customer_phone and p.customer_id is null and p.deleted_at is null
-        and p.created_at < ${scopeStart} and p.status not in (${NON_SALES})
-    ) then 1
-    else 0 end)`;
+    ) then 1 else 0 end)`;
 }

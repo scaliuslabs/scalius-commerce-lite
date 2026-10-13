@@ -187,7 +187,7 @@ const salesOverTime: ReportImplementation = {
   async rows(ctx, params) {
     const range = requireRange(params);
     const granularity = requireGranularity(params);
-    const rows = await selectRows(ctx, salesOverTimeSql(ctx, range, granularity), ["bucket", ...ORDER_MEASURE_FIELDS]);
+    const rows = await selectRows(ctx, await salesOverTimeSql(ctx, range, granularity), ["bucket", ...ORDER_MEASURE_FIELDS]);
     const found = new Map(rows.map((row) => {
       const values: Record<string, ReportCell> = Object.fromEntries(ORDER_MEASURE_FIELDS.map((key) => [key, num(row[key])]));
       finishOrderRow(values);
@@ -380,23 +380,18 @@ const customersTop: SqlReport = {
             min(ci.created_at) as first_in_range, max(ci.created_at) as last_in_range
           from ci group by ci.identity
         )`,
-      // First order ever: an index probe per customer (orders_customer_activity_idx / orders_customer_phone_idx).
+      // First order ever: an index probe per customer (orders_customer_activity_idx); an order
+      // without a customer record is its own customer.
       select: sql`select cg.identity as id,
           coalesce(cust.name, cg.order_name, '') as customer,
           coalesce(cust.phone, cg.order_phone, '') as phone,
           cg.orders as orders, cg.total_sales as total_sales, cg.net_sales as net_sales,
           case when cg.orders > 0 then (cg.gross_sales - cg.discounts) * 1.0 / cg.orders end as average_order_value,
           cg.gross_sales as gross_sales, cg.discounts as discounts,
-          coalesce(case
-            when cg.customer_id is not null then (
-              select min(p.created_at) from orders p
-              where p.customer_id = cg.customer_id and p.deleted_at is null
-                and p.status not in ('incomplete', 'cancelled'))
-            else (
-              select min(p.created_at) from orders p
-              where p.customer_phone = cg.order_phone and p.customer_id is null and p.deleted_at is null
-                and p.status not in ('incomplete', 'cancelled'))
-          end, cg.first_in_range) as first_order,
+          coalesce((
+            select min(p.created_at) from orders p
+            where p.customer_id = cg.customer_id and p.deleted_at is null
+              and p.status not in ('incomplete', 'cancelled')), cg.first_in_range) as first_order,
           cg.last_in_range as last_order
         from cg left join customers cust on cust.id = cg.customer_id`,
     };

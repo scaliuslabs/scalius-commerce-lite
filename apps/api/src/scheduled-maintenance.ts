@@ -9,7 +9,7 @@ import {
 } from "@scalius/core/modules/orders";
 import { flushPendingNotificationOutbox } from "@scalius/core/modules/notifications";
 import { sweepAutoFulfilment, listOrdersAwaitingAutoFulfil } from "@scalius/core/modules/fulfilment";
-import { backfillConversationSearch, sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
+import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
@@ -357,13 +357,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
             `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
         );
       }
-    },
-  },
-  {
-    name: "conversation_search_backfill",
-    slice: "every",
-    async run({ db, timed }) {
-      await timed("conversation_search_backfill", () => backfillConversationSearch(db, { limit: 100 }));
     },
   },
   {

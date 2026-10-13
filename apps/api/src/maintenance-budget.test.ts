@@ -37,25 +37,6 @@ function seedBusyWork() {
   // More pending notifications than the per-tick flush bound.
   for (let index = 0; index < 100; index += 1)
     seedNotification(`pending_${prefix}_${index}`);
-  store.sqlite.exec(
-    "DELETE FROM conversation_search_terms; UPDATE conversation_search_state SET complete=0,last_message_id=NULL",
-  );
-  const conversation = `cnv_${prefix}_search`;
-  store.sqlite
-    .prepare(
-      "INSERT INTO conversations(id,subject_type,order_id) VALUES (?,'order',?)",
-    )
-    .run(conversation, `ord_seed_${serial}`);
-  for (let seq = 1; seq <= 110; seq += 1) {
-    store.sqlite
-      .prepare("UPDATE conversations SET last_seq=? WHERE id=?")
-      .run(seq, conversation);
-    store.sqlite
-      .prepare(
-        "INSERT INTO conversation_messages(id,conversation_id,seq,kind,visibility,author_type,body) VALUES (?, ?, ?, 'message','public','system','Old searchable message')",
-      )
-      .run(`msg_${prefix}_${String(seq).padStart(12, "0")}`, conversation, seq);
-  }
 }
 
 async function measureQueuedMaintenance(from: number) {
@@ -190,22 +171,11 @@ describe("Free maintenance integration budget", () => {
         cron(hour + slice * 900_000),
       );
       const jobs = await measureQueuedMaintenance(queueStart);
-      const indexed = Number(
-        (
-          store.sqlite
-            .prepare(
-              "SELECT count(distinct message_id) AS n FROM conversation_search_terms",
-            )
-            .get() as { n: number }
-        ).n,
-      );
-      expect(indexed).toBe(100);
       expect(result.counters.queueTypes.notification).toBeGreaterThanOrEqual(
         40,
       );
       slices.push({
         slice,
-        indexedMessages: indexed,
         jobs,
         ...result.counters,
       });

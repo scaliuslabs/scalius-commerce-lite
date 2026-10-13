@@ -14,6 +14,7 @@ import { createReportCsvBuilder } from "./csv";
 import { getAnalyticsReportPage, exportAnalyticsReportCsv } from "./service";
 import { bucketStartSql } from "./sales-sql";
 import { merchantDaySql, orderMeasuresSql, orderMetricsCtes, salesLinesCtes, salesOrdersCte, scopeOffsets } from "./overview.source-sales";
+import { sealEveryFactDay } from "./overview-rollup.assertions";
 
 const ACCESS = { customers: true, costs: true };
 const FIELDS = ["orders", "gross_sales", "discounts", "returns", "net_sales", "shipping", "taxes", "total_sales", "net_items_sold"] as const;
@@ -56,15 +57,23 @@ const sourceReport: RowsReport = {
 };
 
 async function parity(ctx: AnalyticsContext, range: AnalyticsRange, granularity: AnalyticsGranularity, sort = "period", direction: "asc" | "desc" = "asc", page = 1, pageSize = 100) {
-  queries.length = 0;
-  const actual = await getAnalyticsReportPage(ctx, "sales_over_time", { ...range, granularity, sort, direction, page, pageSize }, ACCESS);
-  expect(queries).toHaveLength(1);
-  const query = queries[0]!;
-  expect(query.query).toContain("analytics_sales_buckets");
-  expect(query.query).not.toMatch(/\b(?:from|join)\s+(?:orders|order_items|order_returns|order_return_lines|order_payments)\b/i);
+  const read = async () => {
+    queries.length = 0;
+    const actual = await getAnalyticsReportPage(ctx, "sales_over_time", { ...range, granularity, sort, direction, page, pageSize }, ACCESS);
+    // The sealed days of the range, then one bucket/fact statement.
+    expect(queries).toHaveLength(2);
+    expect(queries[0]!.query).toContain("analytics_sealed_days");
+    const query = queries[1]!;
+    expect(query.query).toContain("analytics_sales_buckets");
+    expect(query.query).not.toMatch(/\b(?:from|join)\s+(?:orders|order_items|order_returns|order_return_lines|order_payments)\b/i);
+    return { actual, query };
+  };
   const expected = await runReportPage(ctx, "sales_over_time", sourceReport, { range, granularity, sort: { key: sort, direction }, page, pageSize });
-  expect(actual).toEqual(expected);
-  return { actual, query };
+  expect((await read()).actual).toEqual(expected);
+  await sealEveryFactDay(f.db);
+  const sealed = await read();
+  expect(sealed.actual).toEqual(expected);
+  return sealed;
 }
 
 it("preserves returns, gift cards, FX rounding, totals, sorting, paging and CSV bytes", async () => {
@@ -100,7 +109,7 @@ it("preserves returns, gift cards, FX rounding, totals, sorting, paging and CSV 
   csv.appendTotals(source.totals);
   queries.length = 0;
   const exported = await exportAnalyticsReportCsv(ctx, "sales_over_time", { ...AUGUST, granularity: "day", sort: "total_sales", direction: "desc" }, ACCESS);
-  expect(queries).toHaveLength(1);
+  expect(queries).toHaveLength(2);
   expect(exported.artifact).toEqual(csv.finish());
   expect(exported).toMatchObject({ totalRows: 31, truncatedBy: "none", filename: "sales-over-time-2026-08-01_2026-08-31.csv" });
 });

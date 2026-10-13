@@ -6,6 +6,7 @@ import { createAnalyticsFixture, type AnalyticsFixture } from "./reports.fixture
 import { createAnalyticsContext } from "./context";
 import { getAnalyticsOverview } from "./overview";
 import { sourceOverviewPeriod } from "./overview.source-oracle";
+import { sealEveryFactDay } from "./overview-rollup.assertions";
 
 let f: AnalyticsFixture;
 let queries: CapturedQuery[];
@@ -16,6 +17,7 @@ beforeEach(() => {
 });
 afterEach(() => f.close());
 
+/** `identity` is the guest's phone: checkout keys their customer record by it. */
 function order(id: string, identity: string, createdAt: number, currencyCode = "BDT") {
   f.order({ id, createdAt, currencyCode, customerPhone: identity, requiresShipping: false,
     lines: [{ id: `${id}_line`, productId: "customer_summary", quantity: 1, unitMinor: 100, fulfillmentType: "digital" }] });
@@ -24,7 +26,6 @@ function order(id: string, identity: string, createdAt: number, currencyCode = "
 function seedBoundaries(range: AnalyticsRange, zone: string) {
   const { start, endExclusive: end } = analyticsInstantRange(range, zone);
   const middle = start + 36 * 3600;
-  // These complete-day sales select the broad path without changing distinct counts.
   for (let i = 0; i < 12; i++) order(`steady_${i}`, "steady", middle);
   order("at_start", "at_start", start);
   order("at_end", "at_end", end);
@@ -54,45 +55,33 @@ function seedBoundaries(range: AnalyticsRange, zone: string) {
   return { start, middle, end };
 }
 
+/** Exact against the source query, as written and with every finished day sealed. */
 async function parity(range: AnalyticsRange, zone: string, comparison: "none" | "previous_period" = "none") {
   const ctx = await createAnalyticsContext(f.db, zone);
-  queries.length = 0;
-  const result = await getAnalyticsOverview(ctx, { range, comparison, granularity: "day" });
-  expect(queries).toHaveLength(2);
-  const query = queries[1]!;
-  for (const statement of queries) expect(statement.values.length).toBeLessThanOrEqual(100);
-  expect(query.query).toContain("analytics_customer_currency_summary");
-  expect(query.query).not.toContain("analytics_customer_first_sale");
-  if (comparison !== "none") expect(query.query).toContain("select 0 as period, q.*");
-  expect(result.current).toEqual(await sourceOverviewPeriod(ctx, range));
-  if (result.previous) expect(result.previous).toEqual(await sourceOverviewPeriod(ctx, result.previous.range));
-  return { period: result.current, query, result };
+  const read = async () => {
+    queries.length = 0;
+    const result = await getAnalyticsOverview(ctx, { range, comparison, granularity: "day" });
+    // Sealed days of both periods, then one statement per period.
+    expect(queries).toHaveLength(comparison === "none" ? 2 : 3);
+    for (const statement of queries) expect(statement.values.length).toBeLessThanOrEqual(100);
+    expect(result.current).toEqual(await sourceOverviewPeriod(ctx, range));
+    if (result.previous) expect(result.previous).toEqual(await sourceOverviewPeriod(ctx, result.previous.range));
+    return result;
+  };
+  const asWritten = await read();
+  await sealEveryFactDay(f.db);
+  const result = await read();
+  expect(result).toEqual(asWritten);
+  return { period: result.current, query: queries[1]!, result };
 }
 
-function expectBoundaryProbes(query: CapturedQuery, expected = [
-  "p:a_deep_late:0", "p:deep_gap:0", "p:deep_span:0", "p:z_deep_early:0",
-]) {
-  // The membership CASE runs once per identity/period, not once per output counter.
-  const probed: string[] = [];
-  const shared = query.query.includes("customer_counts as materialized");
-  f.sqlite.function("customer_boundary_probe", (identity, period) => { probed.push(`${String(identity)}:${Number(period)}`); return 1; });
-  const instrumented = query.query.replace("then case when exists (",
-    `then customer_boundary_probe(cs.identity, ${shared ? "p.period" : "0"}) * case when exists (`);
-  expect(instrumented).not.toBe(query.query);
-  expect(f.sqlite.prepare(instrumented).all(...query.values as never[])).toEqual(f.sqlite.prepare(query.query).all(...query.values as never[]));
-  expect(probed.sort()).toEqual(expected);
+function expectCustomerPlan(query: CapturedQuery) {
   const plan = f.sqlite.prepare(`EXPLAIN QUERY PLAN ${query.query}`).all(...query.values as never[]).map((row) => String(row.detail));
-  if (shared) {
-    // Decode the two period rows once, before the covering customer loop.
-    const periodBuild = plan.indexOf("MATERIALIZE customer_periods");
-    expect(periodBuild).toBeGreaterThanOrEqual(0);
-    expect(periodBuild).toBeLessThan(plan.findIndex((line) => /SEARCH cs USING COVERING INDEX/.test(line)));
-    expect(plan.filter((line) => line === "MATERIALIZE customer_counts")).toHaveLength(1);
-  }
-  expect(plan).not.toContain("MATERIALIZE customer_states");
-  expect(plan).not.toContain("MATERIALIZE unresolved");
-  expect(plan.filter((line) => /SEARCH cs USING COVERING INDEX analytics_customer_currency_range_idx/.test(line))).toHaveLength(1);
-  expect(plan.filter((line) => /SEARCH f (?:EXISTS )?USING COVERING INDEX analytics_facts_customer_identity_idx.*identity=\? AND created_at>\? AND created_at<\?/.test(line))).toHaveLength(1);
+  // Customers in range from the covering date index; each one's earlier sale is one probe.
+  expect(plan.some((line) => /SEARCH f USING COVERING INDEX analytics_facts_customer_range_idx \(shop_currency=\? AND created_at>\? AND created_at<\?\)/.test(line))).toBe(true);
+  expect(plan.some((line) => /SEARCH p USING COVERING INDEX analytics_facts_identity_idx \(identity=\? AND created_at<\?\)/.test(line))).toBe(true);
+  expect(plan).toContain("MATERIALIZE cp");
+  expect(plan.filter((line) => /^SCAN (f|p|analytics_order_facts)( |$)/.test(line))).toEqual([]);
 }
 
 it.each([
@@ -105,60 +94,22 @@ it.each([
   seedBoundaries(range, zone);
   const { period, query } = await parity(range, zone, "previous_period");
   expect(period.customers).toEqual({ customers: 8, newCustomers: 4, returningCustomers: 4, repeatPurchaseRate: 6 / 8 * 100 });
-  // Eight sales split four/four still need the gap check; a ninth middle sale is present.
-  expectBoundaryProbes(query);
+  expectCustomerPlan(query);
 });
 
-it("proves membership at each added endpoint, including start and fractional end boundaries", async () => {
-  const range = { from: "2026-08-01", to: "2026-08-03" };
-  const { start, middle, end } = seedBoundaries(range, "UTC");
-  for (let i = 0; i < 64; i++) order(`endpoint_steady_${i}`, "steady", middle);
-  for (const [name, before, after] of [
-    ["third", 2, 5], ["fourth", 3, 4], ["penultimate", 6, 1],
-    ["third_last", 6, 2], ["fourth_last", 6, 3],
-  ] as const) {
-    for (const [boundary, instant] of [["start", start], ["middle", middle], ["end", end - 0.25]] as const) {
-      const identity = `${name}_${boundary}`;
-      for (let i = 0; i < before; i++) order(`${identity}_before_${i}`, identity, start - 0.25);
-      order(`${identity}_inside`, identity, instant);
-      for (let i = 0; i < after; i++) order(`${identity}_after_${i}`, identity, end);
-    }
-  }
-  const { period, query } = await parity(range, "UTC", "previous_period");
-  expect(period.customers).toMatchObject({ customers: 23, newCustomers: 4, returningCustomers: 19 });
-  // Each added history has exactly one stored endpoint inside; none needs a fact probe.
-  expectBoundaryProbes(query);
-});
-
-it("shares one summary scan and aggregates both broad periods without temporary customer rows", async () => {
+it("reads the same counts through Turso", async () => {
   const range = { from: "2026-08-04", to: "2026-08-06" };
-  const { start, middle, end } = seedBoundaries(range, "UTC");
-  const previousStart = start - 3 * 86400;
-  for (let i = 0; i < 120; i++) {
-    order(`shared_current_${i}`, "steady", middle);
-    order(`shared_previous_${i}`, "previous_steady", previousStart + 36 * 3600);
-  }
-  for (const identity of ["both_gap", "both_span"]) {
-    for (let i = 0; i < 4; i++) {
-      order(`${identity}_before_${i}`, identity, previousStart - 0.25);
-      order(`${identity}_after_${i}`, identity, end);
-    }
-  }
-  order("both_span_previous", "both_span", previousStart + 36 * 3600);
-  order("both_span_current", "both_span", middle);
-  const { query, result } = await parity(range, "UTC", "previous_period");
-  expectBoundaryProbes(query, [
-    "p:a_deep_late:0", "p:both_gap:0", "p:both_gap:1", "p:both_span:0", "p:both_span:1",
-    "p:deep_gap:0", "p:deep_span:0", "p:z_deep_early:0",
-  ]);
+  seedBoundaries(range, "UTC");
+  const { result } = await parity(range, "UTC", "previous_period");
   const turso = await createAnalyticsContext(createSqliteTursoDatabase(f.sqlite), "UTC");
   expect(await getAnalyticsOverview(turso, { range, comparison: "previous_period", granularity: "day" })).toEqual(result);
 });
 
-it("refreshes all sale endpoints through status, currency, identity, date and deletion changes", async () => {
+it("stays exact through status, currency, identity, date and deletion changes", async () => {
   const range = { from: "2026-08-01", to: "2026-08-03" };
   const { start, middle, end } = seedBoundaries(range, "UTC");
   await parity(range, "UTC", "previous_period");
+  const customerOf = (phone: string) => String(f.sqlite.prepare("SELECT id FROM customers WHERE phone = ?").get(phone)!.id);
   for (const statement of [
     "UPDATE orders SET status = 'cancelled' WHERE id = 'tie_b'",
     "UPDATE orders SET status = 'pending' WHERE id = 'tie_b'",
@@ -168,8 +119,9 @@ it("refreshes all sale endpoints through status, currency, identity, date and de
     `UPDATE orders SET created_at = ${start - 0.25} WHERE id = 'cross_prior'`,
     "UPDATE orders SET shop_currency = 'USD' WHERE id = 'cross_current'",
     "UPDATE orders SET shop_currency = 'BDT' WHERE id = 'cross_current'",
-    "UPDATE orders SET customer_phone = 'ties' WHERE id = 'cross_current'",
-    "UPDATE orders SET customer_phone = 'cross' WHERE id = 'cross_current'",
+    `UPDATE orders SET customer_id = '${customerOf("ties")}' WHERE id = 'cross_current'`,
+    `UPDATE orders SET customer_id = '${customerOf("cross")}' WHERE id = 'cross_current'`,
+    "UPDATE orders SET customer_id = NULL WHERE id = 'span_inside'",
     "UPDATE orders SET deleted_at = 123 WHERE id = 'span_inside'",
     "UPDATE orders SET deleted_at = NULL WHERE id = 'span_inside'",
     "UPDATE orders SET status = 'cancelled' WHERE id = 'deep_span_first'",
@@ -184,11 +136,9 @@ it("refreshes all sale endpoints through status, currency, identity, date and de
     await parity(range, "UTC", "previous_period");
   }
   order("tie_restored", "ties", middle);
-  await parity(range, "UTC", "previous_period");
   const before = await parity(range, "UTC", "previous_period");
   f.sqlite.exec("BEGIN");
   f.sqlite.exec("UPDATE orders SET status = 'cancelled' WHERE id = 'cross_prior'");
-  await parity(range, "UTC", "previous_period");
   f.sqlite.exec("ROLLBACK");
   expect((await parity(range, "UTC", "previous_period")).period).toEqual(before.period);
 });

@@ -120,7 +120,7 @@ app.openapi(createRoute({
   request: { body: { required: true, content: { "application/json": { schema: inboxQuerySchema } } } },
   responses: { 200: { description: "Search window", content: { "application/json": { schema: successEnvelope(z.object({
     items: z.array(staffConversationSummarySchema), nextCursor: z.string().nullable(), scanExhausted: z.boolean(),
-    scanned: z.number().int(), bodyCoverage: z.enum(["complete", "since_index"]),
+    scanned: z.number().int(),
   })) } } }, ...errorResponses },
 }), async (c) => { noStore(c); return ok(c, await queryStaffInbox(c.get("db"), staffActor(c).userId, c.req.valid("json"))); });
 
@@ -138,7 +138,7 @@ app.openapi(createRoute({
   request: { params: conversationParam, body: { required: true, content: { "application/json": { schema: z.object({ q: z.string().min(1).max(100), cursor: z.number().int().positive().optional() }).strict() } } } },
   responses: { 200: { description: "Message positions", content: { "application/json": { schema: successEnvelope(z.object({
     items: z.array(z.object({ seq: z.number().int() })), nextCursor: z.number().int().nullable(),
-    scanned: z.number().int(), scanExhausted: z.boolean(), bodyCoverage: z.enum(["complete", "since_index"]),
+    scanned: z.number().int(), scanExhausted: z.boolean(),
   })) } } }, ...errorResponses },
 }), async (c) => { noStore(c); staffActor(c); return ok(c, await findConversationMessages(c.get("db"), c.req.valid("param").id, c.req.valid("json"))); });
 

@@ -17,13 +17,13 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(202);
+      expect(d1Tables).toHaveLength(206);
       expect(d1Tables).toContain("conversation_inbox_counts");
-      expect(d1Tables).toContain("product_buyer_public_counts");
+      // 0146: the analytics projection keeps facts, sealed day buckets and their seals.
+      for (const table of ["product_buyer_public_counts", "conversation_search_state", "analytics_customer_first_sale", "analytics_customer_currency_summary"]) expect(d1Tables).not.toContain(table);
       expect(d1Tables).toContain("recommendation_order_products");
       expect(d1Tables).toContain("product_facet_public_counts");
-      // 0131: private sales and customer projections maintained with their source writes.
-      for (const table of ["analytics_order_facts", "analytics_sales_buckets", "analytics_customer_first_sale", "analytics_customer_currency_summary"]) expect(d1Tables).toContain(table);
+      for (const table of ["analytics_order_facts", "analytics_sales_buckets", "analytics_sealed_days"]) expect(d1Tables).toContain(table);
       // 0126: metaobjects, Web Push subscriptions and buyer identities.
       for (const table of ["metaobject_definitions", "metaobject_entries", "push_subscriptions", "customer_identities"]) expect(d1Tables).toContain(table);
       // 0125: the data updates each app ran.

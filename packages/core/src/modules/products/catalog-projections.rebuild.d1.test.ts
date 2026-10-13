@@ -32,20 +32,11 @@ describe("full catalog rebuild repairs public catalog counters", () => {
         JOIN product_buyer_state b ON b.product_id = f.product_id WHERE b.is_public = 1
         GROUP BY f.facet_kind, f.facet_key, f.value_key ORDER BY f.facet_kind, f.facet_key, f.value_key`).all();
     const sequence = () => Number(harness.sqlite.prepare("SELECT seq FROM cache_clock WHERE id = 1").get()!.seq);
-    const buyerCounts = () => harness.sqlite.prepare(`SELECT * FROM product_buyer_public_counts
-        WHERE product_count > 0 ORDER BY dimension, value_id`).all();
-    const expectedBuyerCounts = () => harness.sqlite.prepare(`
-        SELECT 'brand' AS dimension, brand_id AS value_id, COUNT(*) AS product_count
-        FROM product_buyer_state WHERE is_public=1 AND brand_id IS NOT NULL GROUP BY brand_id
-        UNION ALL SELECT 'category', category_id, COUNT(*) FROM product_buyer_state
-        WHERE is_public=1 AND category_id IS NOT NULL GROUP BY category_id ORDER BY 1,2`).all();
 
     it("repairs undercounts before deletes, clears stale groups, and resyncs only the initial page", async () => {
         harness.sqlite.exec(`
             UPDATE product_facet_public_counts SET product_count = 0 WHERE value_key = 'cotton';
             INSERT INTO product_facet_public_counts VALUES ('attribute', 'attr_stale', 'stale', 8);
-            UPDATE product_buyer_public_counts SET product_count = 0;
-            INSERT INTO product_buyer_public_counts VALUES ('brand', 'stale', 8);
             UPDATE product_attribute_values SET value = 'Linen' WHERE id = 'pav_a';
         `);
         const before = sequence();
@@ -53,29 +44,12 @@ describe("full catalog rebuild repairs public catalog counters", () => {
         for (;;) {
             const page = await rebuildCatalogProjections(harness.db, { afterProductId, limit: 1 });
             expect(counts()).toEqual(expectedCounts());
-            expect(buyerCounts()).toEqual(expectedBuyerCounts());
             if (page.done) break;
             afterProductId = page.nextAfterProductId;
         }
         expect(counts().map(row => [row.value_key, row.product_count])).toEqual([["cotton", 1], ["linen", 1], ["wool", 1]]);
         expect(statements.filter(query => query.includes('delete from "product_facet_public_counts"'))).toHaveLength(1);
-        expect(statements.filter(query => query.includes('delete from "product_buyer_public_counts"'))).toHaveLength(1);
         expect(harness.sqlite.prepare("SELECT seq FROM cache_dep WHERE dep = 'store'").get()!.seq).toBeGreaterThan(before);
-    });
-
-    it("repairs dimension-only drift with one coherent store clock advance", async () => {
-        const before = sequence();
-        const facets = counts();
-        harness.sqlite.exec(`UPDATE product_buyer_public_counts SET product_count = 0;
-            INSERT INTO product_buyer_public_counts VALUES ('category', 'stale', 8)`);
-        expect(sequence()).toBe(before);
-        await rebuildCatalogProjections(harness.db);
-        expect(buyerCounts()).toEqual(expectedBuyerCounts());
-        expect(counts()).toEqual(facets);
-        expect(sequence()).toBe(before + 1);
-        expect(harness.sqlite.prepare("SELECT seq FROM cache_dep WHERE dep='store'").get()!.seq).toBe(before + 1);
-        await rebuildCatalogProjections(harness.db);
-        expect(sequence()).toBe(before + 1);
     });
 
     it("invalidates repaired counter-only drift but leaves a correct rebuild's dependencies unchanged", async () => {
@@ -90,12 +64,10 @@ describe("full catalog rebuild repairs public catalog counters", () => {
 
     it("clears stale counters for an empty catalog and invalidates the corrected result", async () => {
         harness.sqlite.exec(`DELETE FROM products; INSERT INTO product_facet_public_counts
-            VALUES ('attribute', 'attr_stale', 'stale', 8);
-            INSERT INTO product_buyer_public_counts VALUES ('category', 'stale', 8)`);
+            VALUES ('attribute', 'attr_stale', 'stale', 8)`);
         const before = sequence();
         expect(await rebuildCatalogProjections(harness.db)).toEqual({ processed: 0, nextAfterProductId: null, done: true });
         expect(harness.sqlite.prepare("SELECT * FROM product_facet_public_counts").all()).toEqual([]);
-        expect(harness.sqlite.prepare("SELECT * FROM product_buyer_public_counts").all()).toEqual([]);
         expect(sequence()).toBe(before + 1);
     });
 });

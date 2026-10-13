@@ -1,21 +1,19 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { recommendationBuyerSql, recommendationOrderProductsBackfill, recommendationRealOrderSql } from "../src/derived-projections";
 import { cacheDepTriggersForMigration } from "./cache-dep-triggers";
 import { compileSqliteDdlForPostgres, compileSqliteTriggerForPostgres } from "./postgres-schema";
 
 export const RECOMMENDATION_ORDER_PRODUCTS_MIGRATION = "0139_recommendation_order_products";
 const BREAKPOINT = "--> statement-breakpoint";
-const REAL_STATUSES = "('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'completed')";
-const realOrder = (alias: string) => `${alias}.status IN ${REAL_STATUSES} AND ${alias}.deleted_at IS NULL`;
-const buyer = (alias: string) => `coalesce(nullif(${alias}.customer_phone, ''), lower(trim(${alias}.customer_email)))`;
+const realOrder = recommendationRealOrderSql;
+const buyer = recommendationBuyerSql;
 const UPSERT = `ON CONFLICT (order_id, product_id) DO UPDATE SET created_at = excluded.created_at, buyer = excluded.buyer
   WHERE recommendation_order_products.created_at IS NOT excluded.created_at
      OR recommendation_order_products.buyer IS NOT excluded.buyer`;
 
-export const recommendationOrderProductsBackfill = `INSERT INTO recommendation_order_products (order_id, product_id, created_at, buyer)
-SELECT DISTINCT o.id, item.product_id, o.created_at, ${buyer("o")}
-FROM orders o JOIN order_items item ON item.order_id = o.id WHERE ${realOrder("o")};`;
+export { recommendationOrderProductsBackfill };
 
 export function generateRecommendationOrderProductsTriggers(): Array<{ name: string; sqlite: string }> {
   const trigger = (name: string, event: string, table: string, body: string, guard?: string) => ({

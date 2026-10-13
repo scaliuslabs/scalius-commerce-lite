@@ -188,7 +188,6 @@ export function InboxList({
             ))}
           </ul>
         )}
-        {lastPage?.bodyCoverage === "since_index" && debouncedQuery ? <p className="px-3 py-2 text-body text-muted-foreground">{t("searchCoverage")}</p> : null}
         {list.hasNextPage ? (
           <div className="flex justify-center p-3">
             <Button type="button" size="sm" variant="ghost" loading={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>

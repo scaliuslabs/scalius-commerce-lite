@@ -4,3 +4,4 @@ export * from "./analytics.service";
 export * from "./meta-pixel-parity";
 export * from "./provider-health";
 export * from "./reports";
+export * from "./rollup";

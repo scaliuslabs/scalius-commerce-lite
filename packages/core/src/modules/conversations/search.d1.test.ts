@@ -4,10 +4,8 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import { conversations } from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
-  backfillConversationSearch,
   conversationBodySearchCondition,
   findConversationMessages,
-  getConversationSearchCoverage,
   planConversationSearchIndex,
   tokenizeConversationSearch,
   type ConversationSearchMessage,
@@ -97,53 +95,12 @@ describe("conversation search index", () => {
       for (const term of tokenizeConversationSearch(message.body!)) insert.run(conversationId, message.id, message.seq, term);
     }
     const first = await findConversationMessages(db, conversationId, { q: "common needle" });
-    expect(first).toMatchObject({ items: [], scanned: 2000, scanExhausted: false, nextCursor: 2, bodyCoverage: "since_index" });
+    expect(first).toMatchObject({ items: [], scanned: 2000, scanExhausted: false, nextCursor: 2 });
     expect(await findConversationMessages(db, conversationId, { q: "common needle", cursor: first.nextCursor! }))
       .toMatchObject({ items: [{ seq: 1 }], scanned: 1, scanExhausted: true, nextCursor: null });
     const page = await findConversationMessages(db, conversationId, { q: "common" });
     expect(page.items).toHaveLength(50);
     expect(page).toMatchObject({ scanned: 50, scanExhausted: false, nextCursor: 1952 });
-  });
-
-  it("backfills bounded pages before claiming complete coverage and indexes new IDs behind the cursor", async () => {
-    append("first historical line");
-    append("second historical line");
-    append("third historical line");
-    expect(await getConversationSearchCoverage(db)).toBe("since_index");
-    expect(await backfillConversationSearch(db, { limit: 2 }))
-      .toEqual({ indexed: 2, lastMessageId: "msg_000000000002", complete: false });
-    await index(append("fresh arrival", { id: "msg_000000000000" }));
-    expect(await backfillConversationSearch(db, { limit: 2 }))
-      .toEqual({ indexed: 1, lastMessageId: "msg_000000000003", complete: true });
-    expect(await getConversationSearchCoverage(db)).toBe("complete");
-    expect((await findConversationMessages(db, conversationId, { q: "arrival" })).items).toEqual([{ seq: 4 }]);
-    expect(await backfillConversationSearch(db)).toMatchObject({ indexed: 0, complete: true });
-  });
-
-  it("rolls back the cursor when term insertion fails", async () => {
-    append("historical failure");
-    sqlite.exec(`CREATE TRIGGER search_test_failure BEFORE INSERT ON conversation_search_terms
-      WHEN NEW.term = 'failure' BEGIN SELECT RAISE(ABORT, 'test index failure'); END`);
-    await expect(backfillConversationSearch(db)).rejects.toThrow("test index failure");
-    expect(sqlite.prepare("SELECT last_message_id, complete FROM conversation_search_state").get())
-      .toEqual({ last_message_id: null, complete: 0 });
-    expect(sqlite.prepare("SELECT count(*) AS n FROM conversation_search_terms").get()).toEqual({ n: 0 });
-  });
-
-  it("does not move a competing backfill cursor backwards", async () => {
-    append("first historical line");
-    append("second historical line");
-    append("third historical line");
-    let compete = true;
-    const racingDb = createSqliteD1Database({ sqlite, beforeBatch: async (_sqlite, statements) => {
-      if (!compete || !statements.some((statement) => /update "conversation_search_state"/i.test(statement.query))) return;
-      compete = false;
-      await backfillConversationSearch(db, { limit: 2 });
-    } }).db;
-    expect(await backfillConversationSearch(racingDb, { limit: 1 }))
-      .toEqual({ indexed: 0, lastMessageId: "msg_000000000002", complete: false });
-    expect(await backfillConversationSearch(db))
-      .toEqual({ indexed: 1, lastMessageId: "msg_000000000003", complete: true });
   });
 
   it("fails closed for missing threads and rejects invalid cursors", async () => {

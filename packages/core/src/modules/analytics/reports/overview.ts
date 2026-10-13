@@ -2,9 +2,9 @@
 // COD and cancellation rates, and breakdowns by channel, payment method,
 // city, delivery zone and location, for a range and its comparison period.
 //
-// A small bucket read chooses each customer path. Two broad periods share one
-// customer scan; other periods use separate statements, at most two of D1's six
-// connections. Labels and merchant days follow the store's current settings.
+// One read finds the sealed days of both periods; each period is then one
+// statement (at most two of D1's six connections). Labels and merchant days
+// follow the store's current settings.
 import { sql, type SQL } from "drizzle-orm";
 import {
   analyticsBuckets,
@@ -17,8 +17,9 @@ import {
   type AnalyticsRange,
 } from "@scalius/shared/analytics-period";
 import type { WeekDay } from "@scalius/shared/week-start";
+import { analyticsFactMeasures } from "@scalius/database/analytics-rollup";
 import { merchantDaySql, scopeOffsets, orderMeasuresSql } from "./sales-sql";
-import { overviewReadRanges } from "./overview-buckets";
+import { overviewReadRanges, readSealedIntervals, type SealedIntervals } from "./overview-buckets";
 import { num, runAnalyticsQuery, text, type AnalyticsContext } from "./context";
 
 /** Sales measures in integer minor units of the report currency. */
@@ -195,6 +196,7 @@ const ROLLUP_MEASURES = [
 const DIMENSIONS = sql.raw(`'["total","channel","payment","city","delivery","location"]'`);
 const columns = (alias: string) => sql.raw(ROLLUP_MEASURES.map((name) => `${alias}.${name}`).join(", "));
 const sums = (alias: string) => sql.raw(ROLLUP_MEASURES.map((name) => `sum(${alias}.${name}) as ${name}`).join(", "));
+const factMeasures = (alias: string) => sql.raw(analyticsFactMeasures(alias));
 
 function intervalCte(name: string, intervals: readonly (readonly [number, number])[]): SQL {
   return sql`${sql.raw(name)} as (
@@ -204,73 +206,11 @@ function intervalCte(name: string, intervals: readonly (readonly [number, number
   )`;
 }
 
-/** One covering scan aggregates both periods without storing customer rows. */
-function summarizedCustomerCtes(currency: string, periods: readonly { start: number; end: number }[]): SQL {
-  const counters = [0, 1].map((period) => sql.raw(`
-    coalesce(sum(case when p.period = ${period} then 1 else 0 end), 0) as customers_${period},
-    coalesce(sum(case when p.period = ${period} and cs.first_sale_any_currency_at < p.lo
-      then 1 else 0 end), 0) as returning_${period},
-    coalesce(sum(case when p.period = ${period} and (cs.first_sale_any_currency_at < p.lo
-      or (cs.first_sale_at >= p.lo and cs.second_sale_at < p.hi)) then 1 else 0 end), 0) as repeat_${period}`));
-  return sql`customer_periods as materialized (
-      select cast(json_extract(value, '$.period') as integer) as period,
-        cast(json_extract(value, '$.start') as bigint) as lo,
-        cast(json_extract(value, '$.end') as bigint) as hi
-      from json_each(${JSON.stringify(periods.map((bounds, period) => ({ period, ...bounds })))})
-    ),
-    customer_counts as materialized (
-      select ${sql.join(counters, sql.raw(","))}
-      from analytics_customer_currency_summary cs cross join customer_periods p
-      where cs.shop_currency = ${currency} and cs.first_sale_at is not null
-        and cs.first_sale_at < ${Math.max(...periods.map((p) => p.end))}
-        and cs.last_sale_at >= ${Math.min(...periods.map((p) => p.start))}
-        and cs.first_sale_at < p.hi and cs.last_sale_at >= p.lo
-        and case when (
-          cs.first_sale_at >= p.lo or cs.last_sale_at < p.hi
-          or (cs.second_sale_at >= p.lo and cs.second_sale_at < p.hi)
-          or (cs.third_sale_at >= p.lo and cs.third_sale_at < p.hi)
-          or (cs.fourth_sale_at >= p.lo and cs.fourth_sale_at < p.hi)
-          or (cs.penultimate_sale_at >= p.lo and cs.penultimate_sale_at < p.hi)
-          or (cs.third_last_sale_at >= p.lo and cs.third_last_sale_at < p.hi)
-          or (cs.fourth_last_sale_at >= p.lo and cs.fourth_last_sale_at < p.hi)
-        ) then 1
-        when cs.fourth_sale_at < p.lo and cs.fourth_last_sale_at >= p.hi
-          then case when exists (
-            select 1 from analytics_order_facts f
-            where f.shop_currency = cs.shop_currency and f.identity = cs.identity and f.order_count = 1
-              and f.created_at >= p.lo and f.created_at < p.hi
-          ) then 1 else 0 end
-        else 0 end = 1
-    )`;
-}
-
-function customerCtes(currency: string, start: number, end: number, summarized: boolean): SQL {
-  if (summarized) {
-    // Stored endpoints prove membership before the unresolved gap touches facts.
-    return sql`cp as (
-      select case when cs.first_sale_at >= ${start} and cs.second_sale_at < ${end} then 2 else 1 end as n,
-        case when cs.first_sale_any_currency_at < ${start} then 1 else 0 end as prior
-      from analytics_customer_currency_summary cs
-      where cs.shop_currency = ${currency} and cs.first_sale_at is not null
-        and cs.first_sale_at < ${end} and cs.last_sale_at >= ${start}
-        and case when (
-          cs.first_sale_at >= ${start} or cs.last_sale_at < ${end}
-          or (cs.second_sale_at >= ${start} and cs.second_sale_at < ${end})
-          or (cs.third_sale_at >= ${start} and cs.third_sale_at < ${end})
-          or (cs.fourth_sale_at >= ${start} and cs.fourth_sale_at < ${end})
-          or (cs.penultimate_sale_at >= ${start} and cs.penultimate_sale_at < ${end})
-          or (cs.third_last_sale_at >= ${start} and cs.third_last_sale_at < ${end})
-          or (cs.fourth_last_sale_at >= ${start} and cs.fourth_last_sale_at < ${end})
-        ) then 1
-        when cs.fourth_sale_at < ${start} and cs.fourth_last_sale_at >= ${end}
-          then case when exists (
-            select 1 from analytics_order_facts f
-            where f.shop_currency = cs.shop_currency and f.identity = cs.identity and f.order_count = 1
-              and f.created_at >= ${start} and f.created_at < ${end}
-          ) then 1 else 0 end
-        else 0 end = 1
-    )`;
-  }
+/**
+ * Distinct customers with a sales order in the range, from the covering date
+ * index; each one's earlier sales order (any currency) is one index probe.
+ */
+function customerCtes(currency: string, start: number, end: number): SQL {
   return sql`cu as (
       select f.identity, count(*) as n
       from analytics_order_facts f
@@ -278,27 +218,24 @@ function customerCtes(currency: string, start: number, end: number, summarized: 
         and f.created_at >= ${start} and f.created_at < ${end}
       group by f.identity
     ),
-    cp as (
-      select cu.n, case when fs.first_sale_at < ${start} then 1 else 0 end as prior
-      from cu left join analytics_customer_first_sale fs on fs.identity = cu.identity
+    cp as materialized (
+      select cu.n, case when exists (
+        select 1 from analytics_order_facts p
+        where p.identity = cu.identity and p.order_count = 1 and p.created_at < ${start}
+      ) then 1 else 0 end as prior
+      from cu
     )`;
 }
 
-/** UTC totals use daily buckets; only merchant-day boundaries need finer reads. */
-function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summarizedCustomers: boolean, sharedPeriod?: 0 | 1): SQL {
+/** Sealed UTC days use their buckets; every other instant is read from facts. */
+function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, sealed: SealedIntervals): SQL {
   const instants = analyticsInstantRange(range, ctx.timeZone);
   const offsets = scopeOffsets(ctx.timeZone, instants);
-  const ranges = overviewReadRanges(instants, offsets);
+  const ranges = overviewReadRanges(instants, offsets, sealed);
   const currency = ctx.currency.code;
   const measures = orderMeasuresSql("x", true);
-  const customers = sharedPeriod === undefined
-    ? sql.raw(`count(*), 0, 0, 0, 0, 0, 0, 0, 0,
-        coalesce(sum(case when cp.prior = 0 then 1 else 0 end), 0),
-        coalesce(sum(cp.prior), 0),
-        coalesce(sum(case when cp.prior = 1 or cp.n >= 2 then 1 else 0 end), 0), 0`)
-    : sql.raw(`cp.customers_${sharedPeriod}, 0, 0, 0, 0, 0, 0, 0, 0,
-        cp.customers_${sharedPeriod} - cp.returning_${sharedPeriod}, cp.returning_${sharedPeriod}, cp.repeat_${sharedPeriod}, 0`);
   return sql`with
+    ${intervalCte("full_days", ranges.fullDays)},
     ${intervalCte("period_edges", ranges.periodEdges)},
     ${intervalCte("quarter_hours", ranges.quarterHours)},
     ${intervalCte("day_edges", ranges.dayEdges)},
@@ -309,10 +246,10 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summari
     ),
     period_rows as (
       select b.dimension_kind, b.shop_currency, b.key1, b.key2, ${columns("b")}
-      from json_each(${DIMENSIONS}) d
+      from full_days fd cross join json_each(${DIMENSIONS}) d
       cross join analytics_sales_buckets b
       where b.grain_seconds = 86400 and b.dimension_kind = d.value
-        and b.bucket_start >= ${ranges.fullDays[0]} and b.bucket_start < ${ranges.fullDays[1]}
+        and b.bucket_start >= fd.lo and b.bucket_start < fd.hi
         and (b.shop_currency = ${currency} or b.dimension_kind = 'total')
       union all
       select cast(d.value as text), edge.shop_currency,
@@ -332,9 +269,10 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summari
           when 'delivery' then coalesce(edge.shipping_method_id, '')
           when 'location' then coalesce(edge.fulfillment_location_id, '')
           else '' end,
-        ${columns("edge")}
+        ${factMeasures("edge")}
       from edge_facts edge cross join json_each(${DIMENSIONS}) d
-      where edge.shop_currency = ${currency} or d.value = 'total'
+      where (edge.shop_currency = ${currency} or d.value = 'total')
+        and (edge.order_count <> 0 or (d.value = 'total' and edge.placed <> 0))
     ),
     px as materialized (
       select dimension_kind, shop_currency, key1, key2, ${sums("r")}
@@ -349,7 +287,7 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summari
       where b.grain_seconds = 900 and b.dimension_kind = 'total'
         and b.bucket_start >= q.lo and b.bucket_start < q.hi and b.shop_currency = ${currency}
       union all
-      select ${merchantDaySql("f.created_at", offsets)} as day, ${columns("f")}
+      select ${merchantDaySql("f.created_at", offsets)} as day, ${factMeasures("f")}
       from day_edges e cross join analytics_order_facts f
       where f.created_at >= e.lo and f.created_at < e.hi and f.shop_currency = ${currency}
         and f.order_count = 1
@@ -372,9 +310,7 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summari
       ), '') else s.key2 end as location_key
       from sales s where s.dimension_kind = 'location'
     ),
-    ${sharedPeriod === undefined
-      ? customerCtes(currency, instants.start, instants.endExclusive, summarizedCustomers)
-      : sql`cp as (select * from customer_counts)`}
+    ${customerCtes(currency, instants.start, instants.endExclusive)}
     -- Keep each compound SELECT within D1's five-term limit.
     select * from (
       select 'total' as kind, '' as k1, '' as k2, ${measures},
@@ -403,7 +339,10 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange, summari
       from locations x left join inventory_locations il on il.id = x.location_key
       group by x.location_key, coalesce(il.name, '')
       union all
-      select 'customers', '', '', ${customers}
+      select 'customers', '', '', count(*), 0, 0, 0, 0, 0, 0, 0, 0,
+        coalesce(sum(case when cp.prior = 0 then 1 else 0 end), 0),
+        coalesce(sum(cp.prior), 0),
+        coalesce(sum(case when cp.prior = 1 or cp.n >= 2 then 1 else 0 end), 0), 0
       from cp
       union all
       select 'placed', '', '',
@@ -421,49 +360,8 @@ function overviewFields() {
   ) as Record<(typeof OVERVIEW_FIELDS)[number], SQL<unknown>>;
 }
 
-function overviewQuery(ctx: AnalyticsContext, range: AnalyticsRange, summarizedCustomers: boolean) {
-  return ctx.db.select(overviewFields()).from(sql`(${overviewStatement(ctx, range, summarizedCustomers)}) as q`);
-}
-
-function overviewComparisonQuery(ctx: AnalyticsContext, current: AnalyticsRange, previous: AnalyticsRange) {
-  const periods = [current, previous].map((range) => {
-    const { start, endExclusive: end } = analyticsInstantRange(range, ctx.timeZone);
-    return { start, end };
-  });
-  const statement = sql`with ${summarizedCustomerCtes(ctx.currency.code, periods)}
-    select 0 as period, q.* from (${overviewStatement(ctx, current, true, 0)}) as q
-    union all
-    select 1 as period, q.* from (${overviewStatement(ctx, previous, true, 1)}) as q`;
-  return ctx.db.select({ period: sql`q.period`, ...overviewFields() }).from(sql`(${statement}) as q`);
-}
-
-/** Summaries bound broad reads and historical prefixes; narrow interior ranges use dated facts. */
-async function overviewCustomerStrategies(ctx: AnalyticsContext, current: AnalyticsRange, previous: AnalyticsRange | null): Promise<[boolean, boolean]> {
-  const completeDaySales = (range: AnalyticsRange | null): SQL => {
-    if (!range) return sql.raw("0");
-    const { start, endExclusive } = analyticsInstantRange(range, ctx.timeZone);
-    return sql`coalesce(sum(case when b.bucket_start >= ${Math.ceil(start / 86400) * 86400}
-      and b.bucket_start < ${Math.floor(endExclusive / 86400) * 86400} then b.order_count else 0 end), 0)`;
-  };
-  // Complete days are a lower bound, so partial-day facts need no extra read.
-  const [row] = await ctx.db.select({
-    total: sql`coalesce(sum(b.order_count), 0)`,
-    firstSaleDay: sql`min(case when b.order_count > 0 then b.bucket_start end)`,
-    current: completeDaySales(current),
-    previous: completeDaySales(previous),
-  }).from(sql`analytics_sales_buckets b`).where(sql`b.grain_seconds = 86400
-    and b.dimension_kind = 'total' and b.shop_currency = ${ctx.currency.code}`);
-  const total = num(row?.total);
-  const summarize = (range: AnalyticsRange | null, orders: unknown) => {
-    if (!range || total === 0) return false;
-    // Before the first sales day, every summary reached by first_sale_at < end belongs to the range.
-    const prefix = row?.firstSaleDay != null
-      && analyticsInstantRange(range, ctx.timeZone).start <= num(row.firstSaleDay);
-    // Above a quarter of the store's sales, grouping facts and joining each
-    // customer costs more than scanning the covering customer summaries.
-    return prefix || num(orders) * 4 >= total;
-  };
-  return [summarize(current, row?.current), summarize(previous, row?.previous)];
+function overviewQuery(ctx: AnalyticsContext, range: AnalyticsRange, sealed: SealedIntervals) {
+  return ctx.db.select(overviewFields()).from(sql`(${overviewStatement(ctx, range, sealed)}) as q`);
 }
 
 function emptyPeriod(range: AnalyticsRange): OverviewPeriod {
@@ -582,14 +480,11 @@ export function rollUpDays(
 export async function getAnalyticsOverview(ctx: AnalyticsContext, input: OverviewInput): Promise<AnalyticsOverview> {
   const previousRange = analyticsComparisonRange(input.range, input.comparison);
   const [currentRows, previousRows] = await runAnalyticsQuery("overview", async () => {
-    const [currentStrategy, previousStrategy] = await overviewCustomerStrategies(ctx, input.range, previousRange);
-    if (previousRange && currentStrategy && previousStrategy) {
-      const rows = await overviewComparisonQuery(ctx, input.range, previousRange);
-      return [rows.filter((row) => num(row.period) === 0), rows.filter((row) => num(row.period) === 1)] as const;
-    }
+    const instants = [input.range, previousRange].flatMap((range) => range ? [analyticsInstantRange(range, ctx.timeZone)] : []);
+    const sealed = await readSealedIntervals(ctx.db, Math.min(...instants.map((i) => i.start)), Math.max(...instants.map((i) => i.endExclusive)));
     return Promise.all([
-      overviewQuery(ctx, input.range, currentStrategy),
-      previousRange ? overviewQuery(ctx, previousRange, previousStrategy) : Promise.resolve(null),
+      overviewQuery(ctx, input.range, sealed),
+      previousRange ? overviewQuery(ctx, previousRange, sealed) : Promise.resolve(null),
     ]);
   });
   const current = mapOverviewPeriod(input.range, currentRows);

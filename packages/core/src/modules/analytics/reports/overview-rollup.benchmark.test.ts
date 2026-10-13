@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { afterEach, expect, it, vi } from "vitest";
-import { analyticsRollupBackfillStatements } from "@scalius/database/analytics-rollup";
+import { analyticsFactsBackfillStatement } from "@scalius/database/analytics-rollup";
 import { applyD1Limits, createMigratedSqlite, createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 import { createAnalyticsContext } from "./context";
 import { getAnalyticsOverviewForRequest } from "./service";
 import { seedScaleStore } from "./reports.scale-store";
@@ -25,7 +26,7 @@ const PERIODS = [
   { name: "one-day", from: "2026-08-15", to: "2026-08-15" },
   { name: "empty", from: "2020-01-01", to: "2020-01-01" },
 ];
-const projectionTables = ["analytics_sales_buckets", "analytics_customer_first_sale", "analytics_customer_currency_summary", "analytics_order_facts"];
+const projectionTables = ["analytics_sales_buckets", "analytics_sealed_days", "analytics_order_facts"];
 afterEach(() => vi.restoreAllMocks());
 
 function usedBytes(sqlite: DatabaseSync) {
@@ -45,7 +46,7 @@ function writeCost(lines: number) {
     }
     const count = () => Number(sqlite.prepare("SELECT count(*) AS n FROM projection_writes").get()!.n);
     let started = performance.now();
-    fixture.order({ id: "bench", createdAt: NOW.getTime() / 1000, requiresShipping: false, customerPhone: "NO_PHONE",
+    fixture.order({ id: "bench", createdAt: NOW.getTime() / 1000, requiresShipping: false, customerPhone: NO_PHONE,
       lines: Array.from({ length: lines }, (_, i) => ({ id: `bench_${i}`, productId: "p_bench", quantity: 1, unitMinor: 101, fulfillmentType: "digital" })) });
     const createMs = performance.now() - started;
     const createProjectionWrites = count();
@@ -58,8 +59,9 @@ function writeCost(lines: number) {
     const amendProjectionWrites = count();
     expect(sqlite.prepare("SELECT order_count, gross, net_units FROM analytics_order_facts WHERE order_id = 'bench'").get())
       .toEqual({ order_count: 1, gross: lines * 102, net_units: lines });
-    expect(createProjectionWrites).toBeLessThanOrEqual(8 * (lines + 1) + 2);
-    expect(amendProjectionWrites).toBeLessThanOrEqual(8 * lines);
+    // Linear: one fact insert and one fact update per line; no shared row.
+    expect(createProjectionWrites).toBe(lines + 1);
+    expect(amendProjectionWrites).toBe(lines);
     return { lines, supported: lines <= 99, createMs, amendMs, createProjectionWrites, amendProjectionWrites, instrumentation: "temporary triggers count projection writes; source validation/API time excluded" };
   } finally { fixture.close(); }
 }
@@ -81,7 +83,7 @@ it.runIf(Boolean(OUT))("measures one-million-order backfill, fresh-connection re
     applyD1Limits(sqlite);
     process.stdout.write(`analytics benchmark: seeding ${ORDERS} orders\n`);
     // Time the seeder's actual backfill, avoiding a second million-row rebuild.
-    const backfill = analyticsRollupBackfillStatements();
+    const backfill = [analyticsFactsBackfillStatement()];
     const execute = sqlite.exec.bind(sqlite);
     const steps: Array<{ name: string | undefined; ms: number; rows: number }> = [];
     let beforeBytes = 0;
@@ -103,9 +105,7 @@ it.runIf(Boolean(OUT))("measures one-million-order backfill, fresh-connection re
     finally { trace.mockRestore(); }
     report.seedIncludingFirstBackfillMs = performance.now() - started;
     expect(Number(sqlite.prepare("SELECT count(*) AS n FROM orders").get()!.n)).toBe(ORDERS);
-    expect(steps.map(({ name }) => name)).toEqual([
-      "analytics_order_facts", "analytics_sales_buckets", "analytics_customer_first_sale", "analytics_customer_currency_summary",
-    ]);
+    expect(steps.map(({ name }) => name)).toEqual(["analytics_order_facts"]);
     report.backfill = { ms: steps.reduce((sum, step) => sum + step.ms, 0), addedUsedBytes: afterBytes - beforeBytes, beforeUsedBytes: beforeBytes, afterUsedBytes: afterBytes, steps, cache: "source pages may be warm from seed; commit/fsync excluded" };
     // Production D1 has no ANALYZE statistics; do not let the fixture hide a scan.
     for (const table of ["sqlite_stat1", "sqlite_stat4"]) {
@@ -133,18 +133,14 @@ it.runIf(Boolean(OUT))("measures one-million-order backfill, fresh-connection re
         const warm = await getAnalyticsOverviewForRequest(ctx, request);
         const warmMs = performance.now() - started;
         expect(warm).toEqual(first);
-        const sharedCustomers = overviewQueries.some(({ query }) => query.includes("customer_counts as materialized"));
-        expect(overviewQueries).toHaveLength(sharedCustomers ? 2 : 3);
+        // The range's sealed days, then one statement per period.
+        expect(overviewQueries).toHaveLength(3);
         const statements = overviewQueries.map(({ query, values }) => {
           expect(values.length).toBeLessThanOrEqual(100);
           expect(sqlite!.prepare(query).columns().length).toBeLessThanOrEqual(100);
           expect(query).not.toMatch(/\b(?:from|join)\s+(?:orders|order_items|order_payments|cod_tracking|order_returns|order_return_lines)\b/i);
           const plan = sqlite!.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...values).map((row) => String(row.detail));
-          expect(plan.filter((line) => /^SCAN (f|b|fs|cs|analytics_order_facts|analytics_sales_buckets|analytics_customer_first_sale|analytics_customer_currency_summary)( |$)/.test(line))).toEqual([]);
-          if (query.includes("from analytics_customer_currency_summary cs")) {
-            expect(plan.some((line) => /SEARCH cs USING COVERING INDEX analytics_customer_currency_range_idx/.test(line))).toBe(true);
-            expect(plan.some((line) => /SEARCH f USING COVERING INDEX analytics_facts_customer_identity_idx.*identity=.*created_at>.*created_at</.test(line))).toBe(true);
-          }
+          expect(plan.filter((line) => /^SCAN (f|b|p|analytics_order_facts|analytics_sales_buckets)( |$)/.test(line))).toEqual([]);
           const sqlStarted = performance.now();
           sqlite!.prepare(query).all(...values);
           return { binds: values.length, warmSqlMs: performance.now() - sqlStarted, plan };

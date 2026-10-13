@@ -8,7 +8,7 @@ import { getInventoryOverview } from "./inventory.service";
 let sqlite: DatabaseSync | undefined;
 afterEach(() => sqlite?.close());
 
-it("seeks restock candidates and preserves counts as the inherited threshold changes at scale", async () => {
+it("reads restock candidates from tracked live SKUs and preserves counts as the inherited threshold changes at scale", async () => {
     const queries: CapturedQuery[] = [];
     const harness = createSqliteD1Database({ onQuery: (query, values) => queries.push({ query, values }) });
     sqlite = harness.sqlite;
@@ -42,7 +42,8 @@ it("seeks restock candidates and preserves counts as the inherited threshold cha
             expect(values.length).toBeLessThanOrEqual(100);
             expect(sqlite.prepare(query).columns().length).toBeLessThanOrEqual(100);
             const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...values as never[]).map((row) => String(row.detail));
-            expect(plan).toContain("SEARCH product_variants USING COVERING INDEX product_variants_alerts_idx (track_inventory=? AND deleted_at=? AND <expr><?)");
+            // Tracked live SKUs by index; no stock column is indexed, so reservations rewrite no entry.
+            expect(plan).toContain("SEARCH product_variants USING INDEX product_variants_track_inventory_idx (track_inventory=? AND deleted_at=?)");
             expect(plan.some((line) => /^SCAN (product_variants|products)( |$)/.test(line))).toBe(false);
         }
     }

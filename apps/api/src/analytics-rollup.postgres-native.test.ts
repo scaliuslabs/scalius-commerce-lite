@@ -1,11 +1,13 @@
 import { Client } from "pg";
 import { afterAll, describe, expect, it, vi } from "vitest";
+import { analyticsFactMeasureSql } from "@scalius/database/analytics-rollup";
 import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
+import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 import { createAnalyticsContext, getAnalyticsOverviewForRequest } from "@scalius/core/modules/analytics";
 import { createAnalyticsFixture, type AnalyticsFixture } from "../../../packages/core/src/modules/analytics/reports/reports.fixture";
 import { AUGUST } from "../../../packages/core/src/modules/analytics/reports/metrics.fixture-store";
 import { sourceOverviewPeriod } from "../../../packages/core/src/modules/analytics/reports/overview.source-oracle";
-import { assertRollupProjection } from "../../../packages/core/src/modules/analytics/reports/overview-rollup.assertions";
+import { assertRollupProjection, sealEveryFactDay } from "../../../packages/core/src/modules/analytics/reports/overview-rollup.assertions";
 
 afterAll(closeNativePostgres);
 
@@ -29,38 +31,12 @@ async function copyFixture(client: Client, fixture: AnalyticsFixture) {
   }
 }
 
-async function assertCustomerTimelines(client: Client) {
-  const orders = (await client.query(`SELECT shop_currency, created_at,
-    CASE WHEN customer_id IS NOT NULL THEN 'c:' || customer_id ELSE 'p:' || customer_phone END AS identity
-    FROM orders WHERE deleted_at IS NULL AND status NOT IN ('incomplete', 'cancelled')
-    ORDER BY created_at, id`)).rows;
-  const summaries = (await client.query("SELECT * FROM analytics_customer_currency_summary")).rows;
-  for (const order of orders) {
-    expect(summaries.some((row) => row.identity === order.identity && row.shop_currency === order.shop_currency)).toBe(true);
-  }
-  for (const row of summaries) {
-    const history = orders.filter((order) => order.identity === row.identity);
-    const currencyHistory = history.filter((order) => order.shop_currency === row.shop_currency);
-    expect(row).toEqual({
-      identity: row.identity, shop_currency: row.shop_currency,
-      first_sale_at: currencyHistory[0]?.created_at ?? null,
-      second_sale_at: currencyHistory[1]?.created_at ?? null,
-      third_sale_at: currencyHistory[2]?.created_at ?? null,
-      fourth_sale_at: currencyHistory[3]?.created_at ?? null,
-      last_sale_at: currencyHistory.at(-1)?.created_at ?? null,
-      penultimate_sale_at: currencyHistory.at(-2)?.created_at ?? null,
-      third_last_sale_at: currencyHistory.at(-3)?.created_at ?? null,
-      fourth_last_sale_at: currencyHistory.at(-4)?.created_at ?? null,
-      first_sale_any_currency_at: history[0]?.created_at ?? null,
-    });
-  }
-}
-
+/** Two orders of one guest on 15 August; the projection is copied with every day sealed. */
 async function seed(client: Client, extra?: (fixture: AnalyticsFixture) => void, committedMutations: readonly string[] = []) {
   const fixture = createAnalyticsFixture();
   try {
     for (const id of ["race_a", "race_b"]) {
-      fixture.order({ id, createdAt: "2026-08-15T12:00:00Z", status: "delivered", customerPhone: "NO_PHONE",
+      fixture.order({ id, createdAt: "2026-08-15T12:00:00Z", status: "delivered", customerPhone: "+8801799990000",
         lines: [
           { id: `${id}_1`, productId: "p_race", quantity: 5, unitMinor: 101 },
           { id: `${id}_2`, productId: "p_race", quantity: 5, unitMinor: 103 },
@@ -72,11 +48,9 @@ async function seed(client: Client, extra?: (fixture: AnalyticsFixture) => void,
       { itemId: "race_a_2", requested: 3, approved: 1 },
     ] });
     extra?.(fixture);
-    // Like the existing analytics provider-parity suite, copy valid D1 rows;
-    // the contention below exercises the live PostgreSQL maintenance triggers.
+    await sealEveryFactDay(fixture.db);
+    // Copy valid D1 rows; the contention below exercises the live PostgreSQL triggers.
     await copyFixture(client, fixture);
-    // Expected final state uses SQLite's independent pre-rollup SQL. Running
-    // that legacy SQL on PG would retain its former numeric-division bug.
     for (const statement of committedMutations) fixture.sqlite.exec(statement);
     return await sourceOverviewPeriod(await createAnalyticsContext(fixture.db, "Asia/Dhaka"), AUGUST);
   } finally {
@@ -93,8 +67,20 @@ async function outcome(operation: Promise<unknown>): Promise<Outcome> {
 async function begin(client: Client) {
   await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
   await client.query("SET LOCAL lock_timeout = '10s'");
-  // Both transactions observe the old order, before either changes a child.
+  // Both transactions observe the old orders, before either changes a child.
   await client.query("SELECT id FROM orders WHERE id IN ('race_a', 'race_b')");
+}
+
+/** The overview equals the source query, and the projection a rebuild, before and after sealing. */
+async function expectExact(pg: Awaited<ReturnType<typeof createNativePostgres>>, expected: unknown) {
+  const ctx = await createAnalyticsContext(pg.db, "Asia/Dhaka");
+  const read = async () => (await getAnalyticsOverviewForRequest(ctx, { ...AUGUST, comparison: "none" })).current;
+  expect(await read()).toEqual(expected);
+  await assertRollupProjection(pg.db);
+  await sealEveryFactDay(pg.db);
+  await assertRollupProjection(pg.db);
+  expect(await read()).toEqual(expected);
+  return read();
 }
 
 const races = [
@@ -103,12 +89,12 @@ const races = [
   { name: "first writer rolls back", rollback: true, left: "UPDATE order_items SET line_subtotal_minor = line_subtotal_minor + 11 WHERE id = 'race_a_1'", right: "UPDATE order_items SET line_subtotal_minor = line_subtotal_minor + 7 WHERE id = 'race_a_2'" },
   { name: "different refunds", left: "UPDATE order_payments SET amount_minor = amount_minor + 11 WHERE id = 'race_a_refund_1'", right: "UPDATE order_payments SET amount_minor = amount_minor + 7 WHERE id = 'race_a_refund_2'" },
   { name: "different return lines", left: "UPDATE order_return_lines SET approved_quantity = 2 WHERE id = 'race_return_l0'", right: "UPDATE order_return_lines SET approved_quantity = 2 WHERE id = 'race_return_l1'" },
-  { name: "different orders sharing buckets", left: "UPDATE order_items SET line_subtotal_minor = line_subtotal_minor + 11 WHERE id = 'race_a_1'", right: "UPDATE order_items SET line_subtotal_minor = line_subtotal_minor + 7 WHERE id = 'race_b_1'" },
-  { name: "same-identity customer timelines", left: "UPDATE orders SET created_at = created_at - 86400 WHERE id = 'race_a'", right: "UPDATE orders SET created_at = created_at + 86400 WHERE id = 'race_b'" },
+  { name: "different orders unsealing one day", left: "UPDATE order_items SET line_subtotal_minor = line_subtotal_minor + 11 WHERE id = 'race_a_1'", right: "UPDATE order_items SET line_subtotal_minor = line_subtotal_minor + 7 WHERE id = 'race_b_1'" },
+  { name: "date moves out of one sealed day", left: "UPDATE orders SET created_at = created_at - 86400 WHERE id = 'race_a'", right: "UPDATE orders SET created_at = created_at + 86400 WHERE id = 'race_b'" },
 ];
 
 describe.runIf(nativePostgresUrl())("analytics rollup SERIALIZABLE concurrency", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
-  it.each(races)("keeps exact facts and buckets when $name contend", async (race) => {
+  it.each(races)("keeps exact facts and sealed days when $name contend", async (race) => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const pg = await createNativePostgres({ label: "analytics_rollup" });
     const left = new Client({ connectionString: pg.url });
@@ -144,14 +130,7 @@ describe.runIf(nativePostgresUrl())("analytics rollup SERIALIZABLE concurrency",
         await right.query(race.right);
         await right.query("COMMIT");
       }
-      const ctx = await createAnalyticsContext(pg.db, "Asia/Dhaka");
-      const current = (await getAnalyticsOverviewForRequest(ctx, { ...AUGUST, comparison: "none" })).current;
-      expect(current).toEqual(expected);
-      const facts = (await pg.client.query("SELECT * FROM analytics_order_facts")).rows;
-      assertRollupProjection(facts,
-        (await pg.client.query("SELECT * FROM analytics_sales_buckets")).rows,
-        (await pg.client.query("SELECT * FROM analytics_customer_first_sale")).rows);
-      await assertCustomerTimelines(pg.client);
+      const current = await expectExact(pg, expected);
       expect(current.totals.orders).toBe(2);
       expect(current.customers).toEqual({ customers: 1, newCustomers: 1, returningCustomers: 0, repeatPurchaseRate: 100 });
       if (race.rollback) {
@@ -167,36 +146,70 @@ describe.runIf(nativePostgresUrl())("analytics rollup SERIALIZABLE concurrency",
     }
   });
 
-  it("refreshes customer timelines after eligibility, date, identity and currency changes", async () => {
+  it("lets concurrent checkouts on an unsealed day commit without a shared projection row", async () => {
+    const pg = await createNativePostgres({ label: "analytics_checkouts" });
+    await pg.client.query("INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('p_checkout', 'Checkout', 'checkout', 100, 1)");
+    // Isolate the projection: the cache dependency clock is a separate, known hot row.
+    for (const { tgname, tbl } of (await pg.client.query(`SELECT tgname, tgrelid::regclass::text AS tbl FROM pg_trigger
+      WHERE NOT tgisinternal AND tgrelid::regclass::text IN ('orders', 'order_items') AND tgname LIKE 'cdep_%'`)).rows) {
+      await pg.client.query(`DROP TRIGGER "${tgname}" ON ${tbl}`);
+    }
+    const clients = await Promise.all(["one", "two"].map(async (name) => {
+      const client = new Client({ connectionString: pg.url });
+      await client.connect();
+      await client.query(`INSERT INTO customers (id, name, phone) VALUES ('cus_${name}', 'Buyer', '+880170000${name === "one" ? 1 : 2}000')`);
+      return { client, name };
+    }));
+    const now = Math.floor(Date.now() / 1000);
+    try {
+      for (const { client } of clients) await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+      for (const { client, name } of clients) {
+        await client.query(`INSERT INTO orders (id, customer_name, customer_phone, customer_id, shipping_address, city, zone, city_name,
+          currency_code, subtotal_amount_minor, shipping_amount_minor, discount_amount_minor, tax_amount_minor, total_amount_minor,
+          shop_currency, subtotal_shop_minor, shipping_shop_minor, discount_shop_minor, tax_shop_minor, total_shop_minor,
+          status, payment_method, payment_status, paid_amount_minor, balance_due_minor, fulfillment_status, channel, created_at, updated_at)
+          VALUES ('ord_${name}', 'Buyer', '+8801700000000', 'cus_${name}', 'Road 1', 'city', 'zone', 'Dhaka', 'BDT', 200, 0, 0, 0, 200,
+          'BDT', 200, 0, 0, 0, 200, 'pending', 'cod', 'unpaid', 0, 200, 'pending', 'online_store', ${now}, ${now})`);
+        for (const line of [1, 2]) {
+          await client.query(`INSERT INTO order_items (id, order_id, product_id, quantity, product_name, unit_price_minor, line_subtotal_minor, fulfillment_type, created_at)
+            VALUES ('ord_${name}_${line}', 'ord_${name}', 'p_checkout', 1, 'Checkout', 100, 100, 'ship', ${now})`);
+        }
+      }
+      for (const { client } of clients) expect(await outcome(client.query("COMMIT"))).toEqual({ ok: true });
+      await assertRollupProjection(pg.db);
+      expect((await pg.client.query("SELECT count(*) AS n FROM analytics_sales_buckets")).rows[0].n).toBe(0);
+    } finally {
+      for (const { client } of clients) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        await client.end();
+      }
+    }
+  });
+
+  it("keeps facts exact through eligibility, date, identity and currency changes", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const fixture = createAnalyticsFixture();
     try {
       const pg = await createNativePostgres({ label: "analytics_customers" });
       fixture.customer("timeline_registered", "Registered", "+8801799999900");
       for (const [id, createdAt, currencyCode, customerPhone, status] of [
-        ["history_usd", "2026-07-01T12:00:00Z", "USD", "NO_PHONE", "cancelled"],
-        ["history_a", "2026-08-10T12:00:00Z", "BDT", "NO_PHONE", "cancelled"],
-        ["history_b", "2026-08-10T12:00:00Z", "BDT", "NO_PHONE", "cancelled"],
-        ["history_c", "2026-08-11T12:00:00Z", "BDT", "NO_PHONE", "cancelled"],
-        ["history_d", "2026-08-12T12:00:00Z", "BDT", "NO_PHONE", "cancelled"],
-        ["history_e", "2026-08-15T12:00:00Z", "BDT", "NO_PHONE", "cancelled"],
-        ["history_f", "2026-08-18T12:00:00Z", "BDT", "NO_PHONE", "cancelled"],
-        ["history_g", "2026-08-20T12:00:00Z", "BDT", "NO_PHONE", "cancelled"],
-        ["history_last", "2026-08-20T12:00:00Z", "BDT", "NO_PHONE", "cancelled"],
+        ["history_usd", "2026-07-01T12:00:00Z", "USD", NO_PHONE, "cancelled"],
+        ["history_a", "2026-08-10T12:00:00Z", "BDT", NO_PHONE, "cancelled"],
+        ["history_b", "2026-08-10T12:00:00Z", "BDT", NO_PHONE, "cancelled"],
+        ["history_c", "2026-08-11T12:00:00Z", "BDT", NO_PHONE, "cancelled"],
         ["gap_before", "2026-07-01T12:00:00Z", "BDT", "+8801799999901", "delivered"],
         ["gap_after", "2026-09-01T12:00:00Z", "BDT", "+8801799999901", "delivered"],
         ["gap_middle", "2026-08-15T12:00:00Z", "BDT", "+8801799999901", "cancelled"],
-        // Keep the summary reader selected even while the NO_PHONE history is dormant.
         ["filler_a", "2026-08-12T12:00:00Z", "BDT", "+8801799999902", "delivered"],
         ["filler_b", "2026-08-13T12:00:00Z", "BDT", "+8801799999902", "delivered"],
-        ["filler_c", "2026-08-14T12:00:00Z", "BDT", "+8801799999902", "delivered"],
       ] as const) fixture.order({ id, createdAt, currencyCode, customerPhone, status, requiresShipping: false,
         lines: [{ id: `${id}_line`, productId: "p_timeline", quantity: 1, unitMinor: 101, fulfillmentType: "digital" }] });
+      await sealEveryFactDay(fixture.db);
       await copyFixture(pg.client, fixture);
       const ctx = await createAnalyticsContext(pg.db, "Asia/Dhaka");
       const sourceCtx = await createAnalyticsContext(fixture.db, "Asia/Dhaka");
       const parity = async () => {
-        await assertCustomerTimelines(pg.client);
+        await assertRollupProjection(pg.db);
         for (const code of ["BDT", "USD"]) {
           const expected = await sourceOverviewPeriod({ ...sourceCtx, currency: { ...sourceCtx.currency, code } }, AUGUST);
           const actual = (await getAnalyticsOverviewForRequest({ ...ctx, currency: { ...ctx.currency, code } }, { ...AUGUST, comparison: "none" })).current;
@@ -205,17 +218,14 @@ describe.runIf(nativePostgresUrl())("analytics rollup SERIALIZABLE concurrency",
       };
       await parity();
       for (const statement of [
-        "UPDATE orders SET status = 'delivered' WHERE customer_phone = 'NO_PHONE'",
+        `UPDATE orders SET status = 'delivered' WHERE customer_phone = '${NO_PHONE}'`,
         `UPDATE orders SET created_at = ${fixture.epoch("2026-09-05T12:00:00Z")} WHERE id = 'history_usd'`,
         `UPDATE orders SET created_at = ${fixture.epoch("2026-07-01T12:00:00Z")} WHERE id = 'history_usd'`,
         "UPDATE orders SET deleted_at = 123 WHERE id = 'history_usd'",
         "UPDATE orders SET deleted_at = NULL WHERE id = 'history_usd'",
         "UPDATE orders SET shop_currency = 'USD', currency_code = 'USD' WHERE id = 'history_a'",
-        "UPDATE orders SET customer_id = 'timeline_registered' WHERE id = 'history_b'",
+        "UPDATE orders SET customer_id = 'timeline_registered' WHERE id IN ('history_b', 'history_c')",
         "UPDATE orders SET customer_id = NULL WHERE id = 'history_b'",
-        "UPDATE orders SET status = 'cancelled' WHERE customer_phone = 'NO_PHONE'",
-        "UPDATE orders SET status = 'delivered' WHERE id = 'history_b'",
-        "UPDATE orders SET status = 'delivered' WHERE id = 'history_usd'",
         "UPDATE orders SET status = 'delivered' WHERE id = 'gap_middle'",
         "DELETE FROM orders WHERE id = 'gap_middle'",
       ]) {
@@ -228,6 +238,8 @@ describe.runIf(nativePostgresUrl())("analytics rollup SERIALIZABLE concurrency",
           throw error;
         }
         fixture.sqlite.exec(statement);
+        await parity();
+        await sealEveryFactDay(pg.db);
         await parity();
       }
     } finally {
@@ -255,12 +267,12 @@ describe.runIf(nativePostgresUrl())("analytics rollup SERIALIZABLE concurrency",
       // Recompute on PostgreSQL; a copied D1 projection alone would hide the bug.
       await pg.client.query("UPDATE order_items SET line_subtotal_minor = line_subtotal_minor + 2 WHERE order_id IN ('fx_positive', 'fx_negative')");
       await pg.client.query("UPDATE order_items SET line_subtotal_minor = line_subtotal_minor - 2 WHERE order_id IN ('fx_positive', 'fx_negative')");
-      const ctx = await createAnalyticsContext(pg.db, "Asia/Dhaka");
-      const actual = (await getAnalyticsOverviewForRequest(ctx, { ...AUGUST, comparison: "none" })).current;
-      expect(actual).toEqual(expected);
+      await pg.client.query("UPDATE orders SET fx_rate = '0.25' WHERE id IN ('fx_positive', 'fx_negative')");
+      await pg.client.query("UPDATE orders SET fx_rate = '0.5' WHERE id IN ('fx_positive', 'fx_negative')");
+      const actual = await expectExact(pg, expected);
       expect(actual.breakdowns.city.find((row) => row.key === "fx_positive")?.grossSales).toBe(6);
       expect(actual.breakdowns.city.find((row) => row.key === "fx_negative")?.grossSales).toBe(-6);
-      expect((await pg.client.query("SELECT refunded FROM analytics_order_facts WHERE order_id = 'fx_positive'")).rows[0].refunded).toBe(1);
+      expect((await pg.client.query(`SELECT ${analyticsFactMeasureSql("f").refunded} AS refunded FROM analytics_order_facts f WHERE order_id = 'fx_positive'`)).rows[0].refunded).toBe(1);
     } finally {
       log.mockRestore();
     }
@@ -270,16 +282,18 @@ describe.runIf(nativePostgresUrl())("analytics rollup SERIALIZABLE concurrency",
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     try {
       const pg = await createNativePostgres({ label: "analytics_partial_return" });
+      // The case is approved on PostgreSQL: its status trigger moves the line's accepted units.
+      const approve = ["UPDATE order_return_lines SET approved_quantity = 2 WHERE id = 'partial_return_l0'",
+        "UPDATE order_returns SET status = 'approved' WHERE id = 'partial_return'"];
       const expected = await seed(pg.client, (fixture) => {
         fixture.order({ id: "partial", createdAt: "2026-08-20T12:00:00Z", status: "delivered", cityName: "partial",
           lines: [{ id: "partial_line", productId: "p_partial", quantity: 3, unitMinor: 101, discountMinor: 11, taxMinor: 31 }] });
-        fixture.returnCase({ id: "partial_return", orderId: "partial", status: "approved", lines: [{ itemId: "partial_line", requested: 3, approved: 2 }] });
-      });
+        fixture.returnCase({ id: "partial_return", orderId: "partial", status: "requested", lines: [{ itemId: "partial_line", requested: 3, approved: 0 }] });
+      }, approve);
+      for (const statement of approve) await pg.client.query(statement);
       await pg.client.query("UPDATE order_items SET line_subtotal_minor = line_subtotal_minor + 3 WHERE id = 'partial_line'");
       await pg.client.query("UPDATE order_items SET line_subtotal_minor = line_subtotal_minor - 3 WHERE id = 'partial_line'");
-      const ctx = await createAnalyticsContext(pg.db, "Asia/Dhaka");
-      const actual = (await getAnalyticsOverviewForRequest(ctx, { ...AUGUST, comparison: "none" })).current;
-      expect(actual).toEqual(expected);
+      const actual = await expectExact(pg, expected);
       expect(actual.breakdowns.city.find((row) => row.key === "partial")).toMatchObject({ returns: 194, taxes: 11, totalSales: 109 });
     } finally {
       log.mockRestore();

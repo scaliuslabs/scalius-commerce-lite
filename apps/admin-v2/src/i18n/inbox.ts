@@ -32,7 +32,6 @@ export const inboxMessages = defineMessages({
     findLoadFailed: "Couldn't load that message. Please try again.",
 
     searchContinueHelp: "No matches in this window. There is more history to search.",
-    searchCoverage: "Older message text is still being indexed. Search results may not include it yet.",
 
     mine: "Mine",
     all: "All",
@@ -211,7 +210,6 @@ export const inboxMessages = defineMessages({
     findLoadFailed: "মেসেজটি লোড করা যায়নি। আবার চেষ্টা করুন।",
 
     searchContinueHelp: "এই অংশে মিল নেই। আরও ইতিহাসে খোঁজা যাবে।",
-    searchCoverage: "পুরোনো মেসেজের লেখা এখনও সূচিতে যোগ হচ্ছে। সেগুলো এখনই ফলে নাও আসতে পারে।",
 
     mine: "আমার",
     all: "সব",

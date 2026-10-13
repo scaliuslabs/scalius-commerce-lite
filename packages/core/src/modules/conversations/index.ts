@@ -50,5 +50,5 @@ export {
 
 export * from "./saved-replies";
 export * from "./cart-share";
-export { findConversationMessages, backfillConversationSearch } from "./search";
+export { findConversationMessages } from "./search";
 export { getConversationContext } from "./context";

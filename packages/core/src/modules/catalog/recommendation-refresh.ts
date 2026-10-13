@@ -21,9 +21,10 @@ import {
     productRecommendations,
     productSalesStats,
     products,
+    recommendationOrderProducts,
 } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import {
     rankRecommendationRows,
     recommendationRowReason,
@@ -153,15 +154,13 @@ export async function nightlyRecommendationRefreshCandidates(
 ): Promise<string[]> {
     const limit = Math.max(0, Math.trunc(input.limit));
     if (limit === 0) return [];
+    // The order/product projection holds exactly the live, real orders' pairs.
     const sold = await db
-        .selectDistinct({ id: orderItems.productId })
-        .from(orders)
-        .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
-        .innerJoin(productBuyerState, eq(productBuyerState.productId, orderItems.productId))
+        .selectDistinct({ id: recommendationOrderProducts.productId })
+        .from(recommendationOrderProducts)
+        .innerJoin(productBuyerState, eq(productBuyerState.productId, recommendationOrderProducts.productId))
         .where(and(
-            inArray(orders.status, REAL_ORDER_STATUSES),
-            isNull(orders.deletedAt),
-            gte(orders.createdAt, sql`${input.soldSince}`),
+            gte(recommendationOrderProducts.createdAt, sql`${input.soldSince}`),
             sql`${productBuyerState.isPublic} = 1`,
         ))
         .limit(limit)

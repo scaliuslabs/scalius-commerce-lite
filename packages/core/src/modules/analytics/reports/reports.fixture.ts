@@ -4,6 +4,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 
 export interface FixtureLine {
   id: string;
@@ -117,6 +118,16 @@ export function createAnalyticsFixture(): AnalyticsFixture {
       if (order.customerId && !customers.has(order.customerId)) {
         fixture.customer(order.customerId, order.customerName ?? "Buyer", order.customerPhone ?? "+8801711000000");
       }
+      // Checkout attaches every order to a customer, a guest record keyed by
+      // phone (NO_PHONE: none here). `customerId: null` models a customer
+      // hard-deleted since (FK SET NULL): the order is its own customer.
+      const phone = order.customerPhone ?? "+8801711000000";
+      let customerId = order.customerId;
+      if (customerId === undefined && phone !== NO_PHONE) {
+        customerId = (sqlite.prepare("SELECT id FROM customers WHERE phone = ? AND deleted_at IS NULL ORDER BY id LIMIT 1").get(phone)?.id as string | undefined)
+          ?? `guest_${phone.replace(/\W/g, "")}`;
+        if (!customers.has(customerId)) fixture.customer(customerId, order.customerName ?? "Buyer", phone);
+      }
       const subtotal = order.lines.reduce((sum, line) => sum + line.unitMinor * line.quantity, 0);
       const lineDiscount = order.lines.reduce((sum, line) => sum + (line.discountMinor ?? 0), 0);
       const lineTax = order.lines.reduce((sum, line) => sum + (line.taxMinor ?? 0), 0);
@@ -137,8 +148,8 @@ export function createAnalyticsFixture(): AnalyticsFixture {
       `).run(
         order.id,
         order.customerName ?? "Buyer",
-        order.customerPhone ?? "+8801711000000",
-        order.customerId ?? null,
+        phone,
+        customerId ?? null,
         requiresShipping ? "Road 1" : null,
         requiresShipping ? "city_dhaka" : null,
         requiresShipping ? "zone_1" : null,

@@ -34,7 +34,7 @@ import { formatOrderNumber, parseOrderNumberSearch } from "@scalius/shared/order
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { staffPermissionSql } from "../../auth/rbac/helpers";
-import { planConversationSearchIndex, conversationBodySearchCondition, getConversationSearchCoverage } from "./search";
+import { planConversationSearchIndex, conversationBodySearchCondition } from "./search";
 import { containsText } from "../../utils/text-match";
 import { staffUnreadMessageCondition } from "../../utils/conversation-unread";
 import { nanoid } from "nanoid";
@@ -1105,7 +1105,6 @@ export async function queryStaffInbox(db: Database, userId: string, filters: Sta
     nextCursor: hasContinuation && last?.lastMessageAt ? encodeConversationCursor({ lastMessageAt: last.lastMessageAt, id: last.id }) : null,
     scanExhausted: !hasContinuation,
     scanned,
-    bodyCoverage: await getConversationSearchCoverage(db),
   };
 }
 

@@ -725,6 +725,30 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 7,
         postgresStatements: 7,
       },
+      {
+        version: 143,
+        name: "0143_remaining_polish",
+        sqliteStatements: 55,
+        postgresStatements: 26,
+      },
+      {
+        version: 144,
+        name: "0144_customer_contact_lookup",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
+      {
+        version: 145,
+        name: "0145_conversation_search_cursor",
+        sqliteStatements: 2,
+        postgresStatements: 2,
+      },
+      {
+        version: 146,
+        name: "0146_order_write_path",
+        sqliteStatements: 75,
+        postgresStatements: 75,
+      },
     ]);
   });
 
@@ -916,6 +940,10 @@ describe("provider-neutral schema upgrades", () => {
           { version: 140, name: "0140_buyer_public_counts" },
           { version: 141, name: "0141_conversation_inbox_counts" },
           { version: 142, name: "0142_staff_alerts" },
+          { version: 143, name: "0143_remaining_polish" },
+          { version: 144, name: "0144_customer_contact_lookup" },
+          { version: 145, name: "0145_conversation_search_cursor" },
+          { version: 146, name: "0146_order_write_path" },
         ],
       });
     } finally {

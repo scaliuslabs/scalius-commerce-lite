@@ -1,7 +1,7 @@
 // Test-only generator for the scale run: a store with a year of orders
 // (lines, COD tracking, parcels, returns, payments and refunds) bulk-loaded
 // into a migrated node:sqlite database with its triggers dropped.
-import { analyticsRollupBackfillStatements } from "@scalius/database/analytics-rollup";
+import { analyticsFactsBackfillStatement, analyticsSealStatements } from "@scalius/database/analytics-rollup";
 import type { SqliteTestDatabase } from "@scalius/database/testing/sqlite-d1";
 
 const DAY = 86_400;
@@ -127,7 +127,11 @@ export function seedScaleStore(db: SqliteTestDatabase, orderCount: number, now: 
       returnLine.run(`retl_${id}`, `ret_${id}`, id, lineIds[0]!.id, lineIds[0]!.variant);
     }
   }
-  for (const statement of analyticsRollupBackfillStatements()) sqlite.exec(statement);
+  sqlite.exec(analyticsFactsBackfillStatement());
+  // Every finished day sealed, as maintenance leaves a store.
+  const firstDay = Math.floor(start / DAY) * DAY;
+  const today = Math.floor(now.getTime() / 1000 / DAY) * DAY;
+  for (const statement of analyticsSealStatements(Array.from({ length: (today - firstDay) / DAY }, (_, i) => firstDay + i * DAY))) sqlite.exec(statement);
   sqlite.exec("COMMIT");
   sqlite.exec("ANALYZE");
 }
