@@ -196,6 +196,8 @@ export const scannerTokenClaims = sqliteTable("scanner_token_claims", {
     adminName: text("admin_name").notNull(),
     consumedAt: integer("consumed_at"),
     consumedSessionHash: text("consumed_session_hash"),
+    /** The scanner session made from this claim lives until this time (unix seconds); each use slides it. */
+    sessionExpiresAt: integer("session_expires_at"),
     expiresAt: integer("expires_at").notNull(),
     createdAt: integer("created_at").notNull().default(UNIX_NOW),
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
