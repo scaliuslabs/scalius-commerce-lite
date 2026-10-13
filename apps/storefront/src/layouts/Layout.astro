@@ -51,8 +51,9 @@ import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
 import { AD_CLICK_ID_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
 import { optimizeAnalyticsScriptDelivery } from "@/lib/analytics-script-delivery";
-import { appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
+import { appComponentsRenderOn, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
+import { setExtensionPageNoIndex } from "@/lib/extensions";
 import { themeAppStylesheets } from "@/lib/extensions/stylesheets";
 import {
   buildPartytownBootstrap,
@@ -145,7 +146,12 @@ const {
 const chromeCopy = storefrontCopy(themeLanguage).chrome;
 const isThemePreview = themePreview !== null;
 // The stylesheets of the apps the theme names (their slots and sections): immutable, cached files.
-const appStylesheets = themeAppStylesheets(storefrontTheme, readStorefrontExtensions(layoutData?.appExtensions));
+// None on a buyer's page, where app components never render.
+const appStylesheets = appComponentsRenderOn(storefrontAppPage(Astro.url.pathname))
+  ? themeAppStylesheets(storefrontTheme, readStorefrontExtensions(layoutData?.appExtensions))
+  : [];
+// App JSON-LD stays out of a noindex page (its components draw after this).
+if (noindex) setExtensionPageNoIndex(Astro.locals);
 // The theme editor's bridge, only under a valid preview: buyers never get it.
 const themeEditorBridge = isThemePreview && !libraryPreview
   ? themePreviewBridgeScript(themeEditorOrigin(getRuntimeDashboardUrl()))

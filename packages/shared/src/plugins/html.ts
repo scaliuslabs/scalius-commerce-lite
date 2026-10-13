@@ -203,8 +203,12 @@ export function hasControlCharacter(value: string): boolean {
   return false;
 }
 
-/** A same-store path (`/x`, never `//x` or `/\x`), a fragment, or one of the schemes allowed for this attribute. */
-export function sanitizePluginUrl(value: string, kind: "link" | "image"): string | null {
+/**
+ * A same-store path (`/x`, never `//x` or `/\x`), a fragment, or one of the
+ * schemes allowed for this attribute. `http` also allows http URLs: component
+ * media comes from the store's own media origin, which is http on a local stack.
+ */
+export function sanitizePluginUrl(value: string, kind: "link" | "image", http = false): string | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > MAX_ATTRIBUTE_VALUE) return null;
   if (trimmed.includes("\\") || hasControlCharacter(trimmed)) return null;
@@ -216,15 +220,15 @@ export function sanitizePluginUrl(value: string, kind: "link" | "image"): string
   } catch {
     return null;
   }
-  if (url.protocol === "https:") return url.username || url.password ? null : url.href;
+  if (url.protocol === "https:" || (http && url.protocol === "http:")) return url.username || url.password ? null : url.href;
   if (kind === "link" && (url.protocol === "mailto:" || url.protocol === "tel:")) return trimmed;
   return null;
 }
 
-function sanitizeSrcset(value: string): string | null {
+function sanitizeSrcset(value: string, http: boolean): string | null {
   const candidates = value.split(",").map((candidate) => {
     const [url = "", ...descriptors] = candidate.trim().split(/\s+/);
-    const safe = sanitizePluginUrl(url, "image");
+    const safe = sanitizePluginUrl(url, "image", http);
     if (!safe || !descriptors.every((descriptor) => /^\d+(?:\.\d+)?[wx]$/.test(descriptor))) return null;
     return [safe, ...descriptors].join(" ");
   });
@@ -319,16 +323,16 @@ function attribute(name: string, value: string, tag: string, svg: boolean, scope
       return style ? [name, style] : null;
     }
     case "href": {
-      const href = sanitizePluginUrl(value, "link");
+      const href = sanitizePluginUrl(value, "link", scope.component);
       return href ? [name, href] : null;
     }
     case "src":
     case "poster": {
-      const src = sanitizePluginUrl(value, "image");
+      const src = sanitizePluginUrl(value, "image", scope.component);
       return src ? [name, src] : null;
     }
     case "srcset": {
-      const srcset = sanitizeSrcset(value);
+      const srcset = sanitizeSrcset(value, scope.component);
       return srcset ? [name, srcset] : null;
     }
     case "rel":

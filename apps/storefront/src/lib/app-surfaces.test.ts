@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { serializeJsonLd, type PluginHead } from "@scalius/shared/plugins/storefront";
 import { layoutHasAppBlocks, mergeAppHeads, readAppBlocks, readAppHead, readHomepageAppSurfaces, readProductAppBlocks } from "./app-surfaces";
-import { appScriptOrigins, appScriptsForPage, readAppScripts, storefrontAppPage } from "./app-scripts";
+import { appComponentsRenderOn, appScriptOrigins, appScriptsForPage, readAppScripts, storefrontAppPage } from "./app-scripts";
 import { setPageCspHeader } from "./middleware-helper/csp-handler";
 
 const head = (meta: Array<["name" | "property", string, string]> = [], jsonLd: unknown[] = []): PluginHead => ({
@@ -109,7 +109,9 @@ describe("app scripts", () => {
     expect(storefrontAppPage("/checkout")).toBe("checkout");
     expect(storefrontAppPage("/checkout/quick")).toBe("checkout");
     expect(storefrontAppPage("/order-success")).toBe("order-success");
-    for (const path of ["/account", "/account/profile", "/account/orders/ord_1"]) expect(storefrontAppPage(path), path).toBe("account");
+    for (const path of ["/account", "/account/profile", "/account/orders/ord_1", "/payment-recovery", "/track-order", "/newsletter/confirm"]) {
+      expect(storefrontAppPage(path), path).toBe("private");
+    }
     for (const path of ["/about-us", "/apps/acme.wishlist/wishlist", "/blog", "/accounts"]) expect(storefrontAppPage(path), path).toBeNull();
   });
 
@@ -128,8 +130,15 @@ describe("app scripts", () => {
     ];
     expect(appScriptsForPage(buyer, "checkout").map((script) => script.pluginId)).toEqual(["acme.pay"]);
     expect(appScriptsForPage(buyer, "order-success").map((script) => script.pluginId)).toEqual(["acme.pay"]);
-    expect(appScriptsForPage(buyer, "account")).toEqual([]);
+    expect(appScriptsForPage(buyer, "private")).toEqual([]);
     expect(appScriptsForPage(buyer, "cart").map((script) => script.pluginId)).toEqual(["acme.chat"]);
+  });
+
+  it("renders app components only off the buyer's pages", () => {
+    for (const path of ["/", "/products/x", "/cart", "/about-us"]) expect(appComponentsRenderOn(storefrontAppPage(path)), path).toBe(true);
+    for (const path of ["/checkout", "/order-success", "/account/orders/ord_1", "/payment-recovery", "/track-order"]) {
+      expect(appComponentsRenderOn(storefrontAppPage(path)), path).toBe(false);
+    }
   });
 
   it("adds a script's host to the page CSP only when the layout lists it for that page", () => {

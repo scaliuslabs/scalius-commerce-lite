@@ -3,8 +3,8 @@
 // theme names (`apps.productCard`, an app's product-card slot), else the
 // theme's own card (CoreProductCard.astro). The app card gets the same
 // card model (prices in the page's market, photo renditions, the quick-add
-// rules); one that fails or is late gives way to the core card. A grid of
-// app cards is one call to the app (lib/extensions/host.ts).
+// rules); one that draws nothing, fails or is late gives way to the core
+// card. A grid of app cards is one call to the app (lib/extensions/host.ts).
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { storefrontExtensionBase } from "@scalius/shared/plugins/storefront-protocol";
 import AppComponent from "@/components/apps/AppComponent.astro";
@@ -44,6 +44,6 @@ if (app) {
 }
 ---
 
-{html !== null && app
+{html?.trim() && app
   ? <AppComponent html={html} pluginId={app.extension.pluginId} base={storefrontExtensionBase(app.extension.pluginId, app.extension.release)} />
   : <CoreProductCard {...props} />}

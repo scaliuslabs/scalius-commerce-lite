@@ -13,6 +13,8 @@
 // - comes within `renderWallMs`, or the page draws without it: a section
 //   draws nothing, a slot draws the theme's own block. This timeout cannot
 //   preempt synchronous bundled code or detect incorrect layout/interaction.
+//   A page drawn without an answer (late, failed, refused, or a release the
+//   isolate cannot load) calls `degraded`, so the page cache never keeps it.
 
 import {
   STOREFRONT_COMPONENT_ABI,
@@ -31,6 +33,7 @@ export type ExtensionJob = StorefrontRenderJob extends infer Job ? Job extends u
 interface Pending {
   job: StorefrontRenderJob;
   key: string;
+  jsonLd: boolean;
   resolve: (html: string | null) => void;
 }
 
@@ -87,6 +90,10 @@ export interface ExtensionHostOptions {
   run?: typeof runStorefrontModule;
   /** Test seam: the wall time of one batch. */
   wallMs?: number;
+  /** Whether component JSON-LD may stay (not on a `noindex` page); asked at each render. */
+  jsonLd?: () => boolean;
+  /** Called when a component the page asked for draws its fallback instead (the page must not be stored). */
+  degraded?: () => void;
 }
 
 export class ExtensionHost {
@@ -94,8 +101,6 @@ export class ExtensionHost {
   readonly #queues = new Map<string, { extension: StorefrontExtension; pending: Pending[] }>();
   #scheduled = false;
   #next = 0;
-  /** Batches run (tests and the perf budget read it). */
-  batches = 0;
 
   constructor(options: ExtensionHostOptions) {
     this.#options = options;
@@ -113,13 +118,14 @@ export class ExtensionHost {
   /** The component's checked markup, or null when it draws nothing, fails or is late. */
   render(extension: StorefrontExtension, ask: ExtensionJob): Promise<string | null> {
     const context = this.#options.context;
-    const key = `${extension.pluginId}\u0000${extension.release}\u0000${JSON.stringify(context)}\u0000${JSON.stringify(ask)}`;
+    const jsonLd = this.#options.jsonLd?.() ?? true;
+    const key = `${extension.pluginId}\u0000${extension.release}\u0000${jsonLd}\u0000${JSON.stringify(context)}\u0000${JSON.stringify(ask)}`;
     const known = recall(key);
     if (known !== undefined) return Promise.resolve(known);
     const job = { ...ask, id: `j${this.#next++}` } as StorefrontRenderJob;
     return new Promise((resolve) => {
       const queue = this.#queues.get(extension.pluginId) ?? { extension, pending: [] };
-      queue.pending.push({ job, key, resolve });
+      queue.pending.push({ job, key, jsonLd, resolve });
       this.#queues.set(extension.pluginId, queue);
       if (!this.#scheduled) {
         this.#scheduled = true;
@@ -141,9 +147,13 @@ export class ExtensionHost {
   }
 
   async #runBatch(extension: StorefrontExtension, pending: Pending[]): Promise<void> {
-    this.batches += 1;
     const run = this.#options.run ?? runStorefrontModule;
     const wallMs = this.#options.wallMs ?? STOREFRONT_COMPONENT_LIMITS.renderWallMs;
+    const fallBack = (entry: Pending, key: string, message: string) => {
+      warnOnce(key, message);
+      this.#options.degraded?.();
+      entry.resolve(null);
+    };
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const reply = await Promise.race([
@@ -156,22 +166,20 @@ export class ExtensionHost {
       for (const entry of pending) {
         const result = results.get(entry.job.id);
         if (!result || "error" in result) {
-          warnOnce(`${extension.pluginId}:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)}: ${result && "error" in result ? result.error : "no result"}`);
-          entry.resolve(null);
+          fallBack(entry, `${extension.pluginId}:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)}: ${result && "error" in result ? result.error : "no result"}`);
           continue;
         }
-        const checked = sanitizePluginHtml(result.html, { pluginId: extension.pluginId, profile: "component" });
+        const checked = sanitizePluginHtml(result.html, { pluginId: extension.pluginId, profile: "component", jsonLd: entry.jsonLd });
         if (!checked.ok) {
-          warnOnce(`${extension.pluginId}:size:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)} drew markup over its bounds (${checked.reason}).`);
-          entry.resolve(null);
+          fallBack(entry, `${extension.pluginId}:size:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)} drew markup over its bounds (${checked.reason}).`);
           continue;
         }
         remember(entry.key, checked.html);
         entry.resolve(checked.html);
       }
     } catch (error) {
-      warnOnce(`${extension.pluginId}:batch`, `${extension.pluginId}: ${error instanceof Error ? error.message : String(error)}; the page draws without it.`);
-      for (const entry of pending) entry.resolve(null);
+      const message = `${extension.pluginId}: ${error instanceof Error ? error.message : String(error)}; the page draws without it.`;
+      for (const entry of pending) fallBack(entry, `${extension.pluginId}:batch`, message);
     } finally {
       if (timer !== undefined) clearTimeout(timer);
     }

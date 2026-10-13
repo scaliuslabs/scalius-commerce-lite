@@ -16,6 +16,9 @@ import {
   type StorefrontResolvedSettings,
 } from "@scalius/shared/plugins/storefront-components";
 import { getLayoutData } from "@/lib/api/storefront";
+import { getRuntime } from "@/lib/api/runtime";
+import { appComponentsRenderOn, storefrontAppPage } from "@/lib/app-scripts";
+import { markPageUnproven } from "@/lib/page-dependencies";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { ExtensionHost } from "./host";
 import type { ExtensionRuntime } from "./loaders";
@@ -33,6 +36,12 @@ interface RequestExtensions {
 const previewPages = new WeakMap<object, string>();
 export function setExtensionPreviewPage(locals: object, path: string): void {
   previewPages.set(locals, path);
+}
+
+// Layout marks a `noindex` page before its body draws: app JSON-LD stays out of it.
+const noIndexPages = new WeakSet<object>();
+export function setExtensionPageNoIndex(locals: object): void {
+  noIndexPages.add(locals);
 }
 
 const perRequest = new WeakMap<object, Promise<RequestExtensions>>();
@@ -57,7 +66,10 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
   if (!pending) {
     pending = (async () => {
       const [layout, theme] = await Promise.all([getLayoutData(), currentRequestTheme(locals)]);
-      const list = readStorefrontExtensions(layout?.appExtensions);
+      // App components cannot name a page, so none renders on a buyer's page (lib/app-scripts.ts).
+      // The page drawn: the request's, or the one the library previews.
+      const path = previewPages.get(locals) ?? url.pathname;
+      const list = appComponentsRenderOn(storefrontAppPage(path)) ? readStorefrontExtensions(layout?.appExtensions) : [];
       const byId = new Map(list.map((extension) => [extension.pluginId, extension]));
       const context: StorefrontRenderContext = {
         store: {
@@ -67,11 +79,19 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
           language: theme.language,
           timeZone: layout?.timeZone?.trim() || "Asia/Dhaka",
         },
-        page: { kind: pageKind(previewPages.get(locals) ?? url.pathname), path: previewPages.get(locals) ?? url.pathname },
+        page: { kind: pageKind(path), path },
         assets: "",
         preview: theme.preview !== null,
       };
-      return { list, byId, host: new ExtensionHost({ runtime: { env: runtimeEnv() }, context }) };
+      const dependencies = getRuntime()?.pageDependencies;
+      const host = new ExtensionHost({
+        runtime: { env: runtimeEnv() },
+        context,
+        jsonLd: () => !noIndexPages.has(locals),
+        // A page drawn with a fallback is never stored (it would stay until an unrelated write).
+        degraded: () => markPageUnproven(dependencies),
+      });
+      return { list, byId, host };
     })();
     perRequest.set(locals, pending);
   }

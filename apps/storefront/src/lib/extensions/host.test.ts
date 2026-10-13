@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StorefrontExtension, StorefrontRenderBatch, StorefrontRenderReply } from "@scalius/shared/plugins/storefront-components";
-import { ExtensionHost, clearExtensionMemo } from "./host";
+import { ExtensionHost, clearExtensionMemo, type ExtensionHostOptions } from "./host";
 import { splitCoreEmbeds } from "./embeds";
 import type { StorefrontHeaderData } from "@scalius/shared/plugins/storefront-protocol";
 
@@ -9,7 +9,7 @@ const extension: StorefrontExtension = {
   sections: ["hero"], sectionSettings: {}, slots: [], islands: [], stylesheet: false, connect: [],
 };
 
-function host(run: (batch: StorefrontRenderBatch) => Promise<StorefrontRenderReply> | StorefrontRenderReply, wallMs?: number) {
+function host(run: (batch: StorefrontRenderBatch) => Promise<StorefrontRenderReply> | StorefrontRenderReply, wallMs?: number, extra: Partial<ExtensionHostOptions> = {}) {
   const calls: StorefrontRenderBatch[] = [];
   const instance = new ExtensionHost({
     runtime: { env: {} },
@@ -24,6 +24,7 @@ function host(run: (batch: StorefrontRenderBatch) => Promise<StorefrontRenderRep
       return run(batch);
     },
     ...(wallMs ? { wallMs } : {}),
+    ...extra,
   });
   return { instance, calls };
 }
@@ -112,6 +113,34 @@ describe("ExtensionHost", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const { instance } = host((batch) => ({ abi: 1, results: batch.jobs.map((job) => ({ id: job.id, html: "x".repeat(300 * 1024) })) }));
     expect(await instance.render(extension, section("a"))).toBeNull();
+  });
+
+  it("keeps every page drawn with a fallback out of the page cache, and only those", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const cases: Array<[string, Parameters<typeof host>[0], number | undefined]> = [
+      ["late", () => new Promise(() => {}), 20],
+      ["thrown (a release the isolate cannot load)", () => { throw new Error("ExtensionUnavailableError"); }, undefined],
+      ["failed job", (batch) => ({ abi: 1, results: batch.jobs.map((job) => ({ id: job.id, error: "Error: boom" })) }), undefined],
+      ["no result", () => ({ abi: 1, results: [] }), undefined],
+      ["over its bounds", (batch) => ({ abi: 1, results: batch.jobs.map((job) => ({ id: job.id, html: "x".repeat(300 * 1024) })) }), undefined],
+    ];
+    for (const [name, run, wallMs] of cases) {
+      const degraded = vi.fn();
+      const { instance } = host(run, wallMs, { degraded });
+      expect(await instance.render(extension, section(name)), name).toBeNull();
+      expect(degraded, name).toHaveBeenCalled();
+    }
+    const degraded = vi.fn();
+    const drawn = host(echo, undefined, { degraded });
+    expect(await drawn.instance.render(extension, section("ok"))).toBe('<p data-n="ok">ok</p>');
+    expect(degraded).not.toHaveBeenCalled();
+  });
+
+  it("leaves component JSON-LD out of a noindex page, without sharing the memo with an indexed one", async () => {
+    const jsonLd = '<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage"}</script>';
+    const run = (batch: StorefrontRenderBatch): StorefrontRenderReply => ({ abi: 1, results: batch.jobs.map((job) => ({ id: job.id, html: `<p>q</p>${jsonLd}` })) });
+    expect(await host(run, undefined, { jsonLd: () => true }).instance.render(extension, section("faq"))).toBe(`<p>q</p>${jsonLd}`);
+    expect(await host(run, undefined, { jsonLd: () => false }).instance.render(extension, section("faq"))).toBe("<p>q</p>");
   });
 });
 
