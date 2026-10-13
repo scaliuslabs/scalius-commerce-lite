@@ -31825,85 +31825,6 @@ export type PostApiV1AdminInventoryLocationsByLocationIdDefaultResponses = {
 
 export type PostApiV1AdminInventoryLocationsByLocationIdDefaultResponse = PostApiV1AdminInventoryLocationsByLocationIdDefaultResponses[keyof PostApiV1AdminInventoryLocationsByLocationIdDefaultResponses];
 
-export type GetApiV1AdminNavigationItemsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/navigation/items';
-};
-
-export type GetApiV1AdminNavigationItemsErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type GetApiV1AdminNavigationItemsError = GetApiV1AdminNavigationItemsErrors[keyof GetApiV1AdminNavigationItemsErrors];
-
-export type GetApiV1AdminNavigationItemsResponses = {
-    /**
-     * Navigation items list
-     */
-    200: {
-        success: true;
-        data: {
-            items: {
-                categories: Array<{
-                    id: string;
-                    name: string;
-                    slug: string;
-                    type: string;
-                    url: string;
-                }>;
-                pages: Array<{
-                    id: string;
-                    name: string;
-                    slug: string;
-                    type: string;
-                    url: string;
-                }>;
-                products: Array<{
-                    id: string;
-                    name: string;
-                    slug: string;
-                    type: string;
-                    url: string;
-                }>;
-                collections: Array<{
-                    id: string;
-                    name: string;
-                    slug: string;
-                    type: string;
-                    url: string;
-                }>;
-            };
-        };
-    };
-};
-
-export type GetApiV1AdminNavigationItemsResponse = GetApiV1AdminNavigationItemsResponses[keyof GetApiV1AdminNavigationItemsResponses];
-
 export type GetApiV1AdminNavigationResourcesData = {
     body?: never;
     path?: never;
@@ -65231,24 +65152,6 @@ export type GetApiV1AdminAbandonedCheckoutsSummariesResponses = {
 };
 
 export type GetApiV1AdminAbandonedCheckoutsSummariesResponse = GetApiV1AdminAbandonedCheckoutsSummariesResponses[keyof GetApiV1AdminAbandonedCheckoutsSummariesResponses];
-
-export type PostApiV1AdminAbandonedCheckoutsBulkDeleteData = {
-    body?: {
-        ids: Array<string>;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/abandoned-checkouts/bulk-delete';
-};
-
-export type PostApiV1AdminAbandonedCheckoutsBulkDeleteResponses = {
-    /**
-     * No content
-     */
-    204: void;
-};
-
-export type PostApiV1AdminAbandonedCheckoutsBulkDeleteResponse = PostApiV1AdminAbandonedCheckoutsBulkDeleteResponses[keyof PostApiV1AdminAbandonedCheckoutsBulkDeleteResponses];
 
 export type PostApiV1AdminFcmTokenData = {
     body: {

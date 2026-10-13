@@ -85,13 +85,6 @@ export interface HostedPaymentRecoverySession {
 export const CHECKOUT_TRANSFER_UNAVAILABLE_MESSAGE =
   "We could not open payment because this browser blocked checkout storage. Please allow site storage for this store, then try again.";
 
-const LEGACY_ANALYTICS_PII_KEYS = [
-  "scalius_user_phone",
-  "scalius_user_email",
-  "scalius_user_name",
-  "scalius_user_city",
-] as const;
-
 function removeSessionKeys(keys: readonly string[]): void {
   for (const key of keys) {
     sessionStorage.removeItem(key);
@@ -127,7 +120,6 @@ export function readReviewedCheckoutQuote(expectedFingerprint: unknown): Checkou
 export function clearCheckoutTransferSession(): void {
   try {
     removeSessionKeys(CHECKOUT_TRANSFER_KEYS);
-    removeSessionKeys(LEGACY_ANALYTICS_PII_KEYS);
   } catch {
     // ignore storage access errors
   }
@@ -207,7 +199,7 @@ export function discardCheckoutFormDraftOfOtherOwner(owner: string): boolean {
   if (!stored || (stored.owner ?? "guest") === owner) return false;
   // Keep an existing account's identity when an expired session clears its draft.
   try {
-    if (!sessionStorage.getItem(CHECKOUT_OWNER_KEY) && stored.owner && stored.owner !== "guest" && stored.owner !== "customer" && !stored.owner.includes("@")) {
+    if (!sessionStorage.getItem(CHECKOUT_OWNER_KEY) && stored.owner && stored.owner !== "guest" && stored.owner !== "customer") {
       sessionStorage.setItem(CHECKOUT_OWNER_KEY, stored.owner);
     }
   } catch {
@@ -218,7 +210,7 @@ export function discardCheckoutFormDraftOfOtherOwner(owner: string): boolean {
 }
 
 /** A proven account switch ends private checkout state, while the product cart stays. */
-export function reconcileCheckoutAfterSignIn(customerId: string, email?: string): boolean {
+export function reconcileCheckoutAfterSignIn(customerId: string): boolean {
   let previousOwner: string | undefined | null;
   try {
     previousOwner = sessionStorage.getItem(CHECKOUT_OWNER_KEY) ?? readStoredDraft()?.owner;
@@ -226,7 +218,7 @@ export function reconcileCheckoutAfterSignIn(customerId: string, email?: string)
     return false;
   }
   const changedAccount = Boolean(previousOwner && previousOwner !== "guest" && previousOwner !== "customer"
-    && previousOwner !== customerId && previousOwner !== email);
+    && previousOwner !== customerId);
   if (changedAccount) {
     clearCheckoutAttemptSession();
     clearHostedPaymentRecoverySession();

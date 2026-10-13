@@ -183,39 +183,12 @@ app.openapi(listAbandonedCheckoutSummariesRoute, async (c) => {
     });
 });
 
-// ── Bulk Delete Abandoned Checkouts (POST) ──
+// ── Delete Abandoned Checkouts ──
 
 const bulkDeleteSchema = z.object({
     ids: z.array(z.string()).min(1, "No IDs provided")
 });
 
-const bulkDeleteCheckoutsRoute = createRoute({
-    operationId: "dashboard.abandoned_checkouts.bulk_delete_legacy",
-    method: "post",
-    path: "/abandoned-checkouts/bulk-delete",
-    tags: ["Admin - System Utils"],
-    summary: "Bulk delete abandoned checkouts",
-    request: {
-        body: { content: { "application/json": { schema: bulkDeleteSchema } } }
-    },
-    responses: {
-        204: noContentResponse,
-    }
-});
-
-app.openapi(bulkDeleteCheckoutsRoute, async (c) => {
-    const db = c.get("db");
-    try {
-        const { ids } = c.req.valid("json");
-        await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, ids));
-        return noContent(c);
-    } catch (error: unknown) {
-        console.error("Error bulk deleting checkouts:", error);
-        throw error;
-    }
-});
-
-// ── Bulk Delete Abandoned Checkouts (DELETE) ──
 
 const deleteCheckoutsRoute = createRoute({
     operationId: "dashboard.abandoned_checkouts.delete",

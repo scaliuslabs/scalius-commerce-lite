@@ -2,11 +2,6 @@
 import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_ORDER_OPERATIONS = {
-  "dashboard.abandoned_checkouts.bulk_delete_legacy": {
-    exposure: "excluded",
-    risk: "destructive",
-    reason: "Legacy duplicate; use DELETE /admin/abandoned-checkouts.",
-  },
   "dashboard.abandoned_checkouts.delete": {
     risk: "destructive",
     batch: "forbidden",
