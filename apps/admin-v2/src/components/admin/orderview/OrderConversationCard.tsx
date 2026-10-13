@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
-import { inboxMessages } from "~/i18n/inbox";
+import { orderConversationMessages } from "~/i18n/order-conversation";
 import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
 import { orderMessages } from "~/i18n/orders";
 import { formatOrderTimestamp } from "./formatters";
@@ -42,7 +42,7 @@ const ConversationComposer = lazy(() =>
 
 export function OrderConversationCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
   const t = useMessages(orderDetailMessages);
-  const tr = useMessages(inboxMessages);
+  const tr = useMessages(orderConversationMessages);
   const o = useMessages(orderMessages);
   const actions = useOrderActionPermissions();
   const canResolve = actions.canResolveOrderSupportRequests;

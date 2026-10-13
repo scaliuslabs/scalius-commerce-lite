@@ -97,6 +97,40 @@ describe("useMediaUpload", () => {
     vi.useRealTimers();
   });
 
+  it("cancels active sessions on close and never starts queued work afterward", async () => {
+    const part = deferred<void>();
+    api.initiateUpload.mockImplementation(async ({ filename }: { filename: string }) => session(filename));
+    api.uploadPart.mockReturnValue(part.promise);
+    await act(async () => { await latest.uploadFiles(["one.png", "two.png", "three.png"].map((name) => fileOf(PNG, name, "image/png"))); });
+    await flush();
+    expect(api.initiateUpload).toHaveBeenCalledTimes(2);
+    const signals = api.uploadPart.mock.calls.map((call) => call[3] as AbortSignal);
+    act(() => root.render(null));
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    expect(api.abortUpload).toHaveBeenCalledWith("one.png");
+    expect(api.abortUpload).toHaveBeenCalledWith("two.png");
+    part.resolve();
+    await flush();
+    expect(api.initiateUpload).toHaveBeenCalledTimes(2);
+    expect(api.completeUpload).not.toHaveBeenCalled();
+  });
+
+  it("does not abort a completion that already crossed the commit boundary", async () => {
+    const completion = deferred<ReturnType<typeof uploaded>>();
+    api.initiateUpload.mockResolvedValue(session("finishing"));
+    api.uploadPart.mockResolvedValue(undefined);
+    api.completeUpload.mockReturnValue(completion.promise);
+    await act(async () => { await latest.uploadFiles([fileOf(PNG, "one.png", "image/png")]); });
+    await flush();
+    expect(latest.pendingCount).toBe(1);
+    expect(latest.queue[0]?.status).toBe("processing");
+    act(() => root.render(null));
+    expect(api.abortUpload).not.toHaveBeenCalled();
+    completion.resolve(uploaded("media_finishing"));
+    await flush();
+    expect(onUploadComplete).not.toHaveBeenCalled();
+  });
+
   it("moves a row through the real lifecycle under StrictMode, then removes it", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const part = deferred<void>();

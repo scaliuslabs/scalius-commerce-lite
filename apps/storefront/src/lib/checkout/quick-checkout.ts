@@ -1,3 +1,4 @@
+import { marketingConsentFormValues } from "./marketing-consent";
 /**
  * Checkout without JavaScript (`/checkout/quick`): the quick-buy line from
  * `/buy/<slug>` is carried in the form body, every step is a plain POST, and
@@ -61,7 +62,7 @@ export interface QuickCheckoutForm {
   discountCode: string;
   expectedQuoteFingerprint: string;
   /** The marketing consent box's value when ticked (the label's language), else "". */
-  marketingConsent: string;
+  marketingConsent: Record<string, string>;
   intent: "review" | "place";
 }
 
@@ -120,7 +121,7 @@ export function readQuickCheckoutForm(form: FormData): QuickCheckoutForm {
     notes: text(form, "notes", 500),
     discountCode: text(form, "discountCode", 50).toUpperCase(),
     expectedQuoteFingerprint: FINGERPRINT_PATTERN.test(fingerprint) ? fingerprint : "",
-    marketingConsent: text(form, "marketingConsent", 16),
+    marketingConsent: marketingConsentFormValues(form),
     intent: form.get("intent") === "place" ? "place" : "review",
   };
 }
@@ -345,7 +346,7 @@ export function quickCheckoutOrderForm(
     customerEmail: form.customerEmail,
     customerWhatsapp: form.customerWhatsapp,
     notes: form.notes,
-    ...(form.marketingConsent ? { marketingConsent: form.marketingConsent } : {}),
+    ...form.marketingConsent,
     discountCodes: codes.length > 0 ? JSON.stringify(codes) : "",
     deliveryMode: mode === "pickup" ? "pickup" : "delivery",
     ...(mode === "none" ? {} : { shippingLocation: rateId }),

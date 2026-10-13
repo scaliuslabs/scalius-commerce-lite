@@ -17,6 +17,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ReadOnlyValue } from "~/components/ui/field";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   DropdownMenu,
@@ -88,7 +89,8 @@ export default function ContentBlocksCard({ productId, readOnly, onTabsMoved }: 
   const { draft, setDraft, saved, dirty, markSaved, prepareRebase } = useSectionDraft(loaded);
   // The blocks the last Save sent: saved once that write succeeds.
   const sent = useRef<BlockDraft[] | null>(null);
-  const blocks = useMemo(() => draft?.blocks ?? [], [draft]);
+  const shown = readOnly ? loaded : draft;
+  const blocks = useMemo(() => shown?.blocks ?? [], [shown]);
   const [open, setOpen] = useState<string | null>(null);
   const [chosenMedia, setChosenMedia] = useState<BlockMediaPreview[]>([]);
   const media = useMemo(() => new Map<string, BlockMediaPreview>(
@@ -112,12 +114,14 @@ export default function ContentBlocksCard({ productId, readOnly, onTabsMoved }: 
   useProductSection({
     label: t("content"),
     dirty: !readOnly && dirty,
-    problems,
+    navigationDirty: dirty,
+    problems: readOnly ? null : problems,
     prepareRebase: async () => {
       const latest = await queryClient.fetchQuery(productContentBlocksQueryOptions(productId));
       return () => prepareRebase({ blocks: latest.items.map(fromItem) });
     },
     changes: () => {
+      if (readOnly) return {};
       sent.current = blocks;
       const before = new Map((saved?.blocks ?? []).map((block) => [block.key, block]));
       // The old tabs become blocks in this write, which also removes the originals.
@@ -200,13 +204,13 @@ export default function ContentBlocksCard({ productId, readOnly, onTabsMoved }: 
       title={t("content")}
       description={t("contentHelp")}
       defaultOpen={readOnly}
-      summary={draft === undefined ? <Skeleton className="h-5 w-40" /> : (
+      summary={shown === undefined ? <Skeleton className="h-5 w-40" /> : (
         <p className="text-body text-muted-foreground">
           {blocks.length > 0 ? t("blockCount", { count: blocks.length }) : t("noBlocks")}
         </p>
       )}
     >
-      {draft === undefined ? <Skeleton className="h-24 w-full" /> : (
+      {shown === undefined ? <Skeleton className="h-24 w-full" /> : (
         <div className="space-y-4">
           {groups.length === 0 ? <p className="text-body text-muted-foreground">{t("noBlocks")}</p> : null}
           {groups.map((group) => (
@@ -225,7 +229,8 @@ export default function ContentBlocksCard({ productId, readOnly, onTabsMoved }: 
                           variant="ghost"
                           size="icon"
                           aria-expanded={expanded}
-                          aria-label={t("editBlock", { name: title || typeLabel(block.type) })}
+                          aria-label={t(readOnly ? "viewBlock" : "editBlock", { name: title || typeLabel(block.type) })}
+                          disabled={!known}
                           onClick={() => setOpen(expanded ? null : block.key)}
                         >
                           <ChevronDown className={cn("h-4 w-4", !expanded && "-rotate-90")} />
@@ -256,17 +261,16 @@ export default function ContentBlocksCard({ productId, readOnly, onTabsMoved }: 
                       </div>
                       {expanded && known ? (
                         <div className="space-y-3 border-t pt-3">
-                          <div className="space-y-1">
+                          {readOnly ? <ReadOnlyValue label={t("placement")} value={t(`placement_${block.placement}`)} /> : <div className="space-y-1">
                             <label htmlFor={`placement-${block.key}`} className="text-body font-medium">{t("placement")}</label>
                             <SearchableSelect
                               id={`placement-${block.key}`}
                               value={block.placement}
-                              disabled={readOnly}
                               onValueChange={(value) => changePlacement(block.key, value as ProductContentBlockPlacement)}
                               triggerClassName="w-full"
                               options={PRODUCT_CONTENT_BLOCK_PLACEMENTS.filter((placement) => isProductContentBlockPlacementAllowed(block.type as BlockType, placement)).map((placement) => ({ value: placement, label: t(`placement_${placement}`) }))}
                             />
-                          </div>
+                          </div>}
                           <BlockSettingsEditor
                             type={block.type as BlockType}
                             settings={block.settings}

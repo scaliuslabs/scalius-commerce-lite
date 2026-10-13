@@ -6,19 +6,17 @@
  * CMS pages preview one of the store's own; the tree says which ("Previewing
  * …"), with a way to change it.
  */
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useRef, useState, type ComponentProps } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Check, ChevronDown, Plus } from "lucide-react";
 import {
-  STOREFRONT_LANDING_TITLE_MAX,
   STOREFRONT_MAX_LANDING_PAGES,
-  storefrontLandingSlugSchema,
 } from "@scalius/shared/storefront-theme";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "~/components/ui/command";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
@@ -26,15 +24,35 @@ import { navigationResourcesQueryOptions, type NavigationResourceOption } from "
 import { NavigationResourcePicker } from "../NavigationResourcePicker";
 import type { Theme } from "../theme-fields";
 import { STORE_PAGE_KINDS, samePage, type EditorPage, type ResourcePageKind } from "./editor-pages";
-import { Field } from "~/components/ui/field";
-import { Badge } from "~/components/ui/badge";
-import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import type { LandingPreset } from "./landing-presets";
 
-const ProductSelect = lazy(() => import("../schema-form/resource-fields").then((module) => ({ default: module.ProductSelect })));
+const loadCreateLandingDialog = () => import("./CreateLandingDialog");
+const CreateLandingDialogContent = lazy(() => loadCreateLandingDialog().then((module) => ({ default: module.CreateLandingDialogContent })));
 
-/** The "blank page" choice (preset keys always hold a slash). */
-const BLANK = "blank";
+/** Keep the dialog/focus scope and close animation while the form downloads only on first use. */
+export function CreateLandingDialog(props: ComponentProps<typeof CreateLandingDialogContent> & { onOpenChange: (open: boolean) => void }) {
+  const t = useMessages(themeEditorMessages);
+  const opened = useOpenedOnce(props.open);
+  const open = useRef(props.open);
+  open.current = props.open;
+  const restorePickerFocus = (event: Event) => {
+    // The menu item that opens this dialog unmounts with its popover.
+    // Keep focus inside during the lazy handoff; return to the live picker on close.
+    event.preventDefault();
+    if (!open.current) document.querySelector<HTMLButtonElement>("[data-page-picker]")?.focus();
+  };
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      {opened ? <Suspense fallback={
+        <DialogContent aria-busy="true" onCloseAutoFocus={restorePickerFocus}>
+          <DialogHeader>
+            <DialogTitle>{t("newLanding")}</DialogTitle>
+            <DialogDescription>{t("newLandingHelp")}</DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      }><CreateLandingDialogContent {...props} onCloseAutoFocus={restorePickerFocus} /></Suspense> : null}
+    </Dialog>
+  );
+}
 
 export function usePageName() {
   const t = useMessages(themeEditorMessages);
@@ -68,7 +86,7 @@ export function PagePicker({ theme, page, onPage, onCreate, className }: {
     </CommandItem>
   );
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => { setOpen(next); if (next && onCreate) void loadCreateLandingDialog().catch(() => undefined); }}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -108,109 +126,6 @@ export function PagePicker({ theme, page, onPage, onCreate, className }: {
         <p className="border-t border-border px-3 py-2 text-body text-muted-foreground">{t("otherPagesNote")}</p>
       </PopoverContent>
     </Popover>
-  );
-}
-
-/** A URL handle from a title: lowercase Latin letters and digits joined by hyphens. */
-function landingHandle(title: string): string {
-  return title.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 100);
-}
-
-/** Naming a new landing page: its title and the handle in its address. */
-export function CreateLandingDialog({ open, onOpenChange, theme, presets = [], onCreate }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  theme: Theme;
-  /** Ready-made pages installed apps offer; the page may start from one. */
-  presets?: readonly LandingPreset[];
-  onCreate: (slug: string, title: string, start: { preset: LandingPreset; productId: string | null } | null) => void;
-}) {
-  const t = useMessages(themeEditorMessages);
-  const [title, setTitle] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugEdited, setSlugEdited] = useState(false);
-  const [presetKey, setPresetKey] = useState(BLANK);
-  const [productId, setProductId] = useState("");
-  useEffect(() => {
-    if (!open) { setTitle(""); setSlug(""); setSlugEdited(false); setPresetKey(BLANK); setProductId(""); }
-  }, [open]);
-  const handle = slugEdited ? slug : landingHandle(title);
-  const taken = Boolean(theme.pages.landing[handle]);
-  const handleValid = storefrontLandingSlugSchema.safeParse(handle).success && !taken;
-  const preset = presets.find((each) => each.key === presetKey) ?? null;
-  const valid = handleValid && title.trim().length > 0 && (!preset?.needsProduct || productId !== "");
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("newLanding")}</DialogTitle>
-          <DialogDescription>{t("newLandingHelp")}</DialogDescription>
-        </DialogHeader>
-        <form
-          id="new-landing-form"
-          method="post"
-          className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (valid) onCreate(handle, title.trim(), preset ? { preset, productId: productId || null } : null);
-          }}
-        >
-          <Field id="new-landing-title" label={t("landingTitle")}>
-            <Input id="new-landing-title" value={title} maxLength={STOREFRONT_LANDING_TITLE_MAX} onChange={(event) => setTitle(event.target.value)} autoFocus />
-          </Field>
-          <Field id="new-landing-slug" label={t("landingSlug")}>
-            <Input
-              id="new-landing-slug"
-              value={handle}
-              maxLength={100}
-              aria-invalid={handle !== "" && !handleValid}
-              aria-describedby="landing-slug-help"
-              onChange={(event) => { setSlugEdited(true); setSlug(event.target.value); }}
-            />
-            <p id="landing-slug-help" className={handle !== "" && !handleValid ? "text-body text-destructive" : "text-body text-muted-foreground"}>
-              {handle !== "" && !handleValid ? t(taken ? "landingSlugTaken" : "landingSlugInvalid") : t("landingSlugHelp", { path: `/pages/${handle || "…"}` })}
-            </p>
-          </Field>
-          {presets.length > 0 ? (
-            <fieldset className="space-y-2">
-              <legend className="text-body font-medium">{t("landingStart")}</legend>
-              <RadioGroup value={presetKey} onValueChange={setPresetKey}>
-                {[
-                  { value: BLANK, label: t("landingBlank"), help: t("landingBlankHelp"), app: null },
-                  ...presets.map((each) => ({ value: each.key, label: each.name, help: each.description, app: each.appName })),
-                ].map((option) => (
-                  <label key={option.value} className="flex min-h-11 items-start gap-3 rounded-md px-2 py-1.5 text-body hover:bg-muted">
-                    <span className="flex h-lh items-center"><RadioGroupItem value={option.value} /></span>
-                    <span className="min-w-0">
-                      <span className="flex flex-wrap items-center gap-2 font-medium">
-                        {option.label}
-                        {option.app ? <Badge variant="secondary">{t("appBadge")}</Badge> : null}
-                      </span>
-                      {option.help || option.app ? (
-                        <span className="block text-muted-foreground">
-                          {[option.help, option.app ? t("appFrom", { app: option.app }) : null].filter(Boolean).join(" ")}
-                        </span>
-                      ) : null}
-                    </span>
-                  </label>
-                ))}
-              </RadioGroup>
-            </fieldset>
-          ) : null}
-          {preset?.needsProduct ? (
-            <Field id="new-landing-product" label={t("landingProduct")}>
-              <Suspense fallback={<Input id="new-landing-product" disabled aria-busy="true" />}>
-                <ProductSelect id="new-landing-product" value={productId} onChange={setProductId} />
-              </Suspense>
-              <p className="text-body text-muted-foreground">{t("landingProductHelp")}</p>
-            </Field>
-          ) : null}
-        </form>
-        <DialogFooter>
-          <Button type="submit" form="new-landing-form" disabled={!valid}>{t("addLanding")}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 

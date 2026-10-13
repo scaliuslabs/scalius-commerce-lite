@@ -169,7 +169,8 @@ export async function readDashboardSessionState(
     !(user.mustEnrollTwoFactor === true && !twoFactorEnabled) &&
     (!twoFactorEnabled || twoFactorVerified);
   const permissions = passedGates
-    ? [...await retryTransientD1(() => getUserPermissions(db, user.id, env.CACHE, isSuperAdmin))]
+    // Native pushes recheck this answer before display; a cached grant must never outlive revocation.
+    ? [...await retryTransientD1(() => getUserPermissions(db, user.id, undefined, isSuperAdmin))]
     : null;
 
   return {

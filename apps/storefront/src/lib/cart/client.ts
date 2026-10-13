@@ -13,6 +13,7 @@ import {
   restoreCart,
   updateCartItemByKey,
   getEffectiveCartShippingFee,
+  cartItemsSubtotal,
   cartLinePropertyInputs,
   type CartItem,
   type VariantCartItem,
@@ -30,7 +31,8 @@ import {
   previewCartDiscounts,
   saveAbandonedCheckoutFromBrowser as saveAbandonedCheckout,
 } from "./browser-api";
-import { formatMoney } from "@scalius/shared/currency";
+import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
@@ -318,19 +320,6 @@ function setCheckoutIdInputValue(checkoutId: string): void {
 
 function syncCheckoutIdInput(): void {
   setCheckoutIdInputValue(getCheckoutId());
-}
-
-function rotateCheckoutId(): string {
-  const checkoutId = `chk_session_${nanoid()}`;
-  sessionStorage.setItem("checkoutId", checkoutId);
-  setCheckoutIdInputValue(checkoutId);
-  return checkoutId;
-}
-
-function rotateCheckoutIdIfCartBlocked(): void {
-  if (hasBlockingCartIssues()) {
-    rotateCheckoutId();
-  }
 }
 
 interface CheckoutFormData {
@@ -679,6 +668,7 @@ type TotalsElements = {
 function renderShippingLine(
   element: HTMLElement,
   shipping: { baseFee: number; charged: number; discounts: CheckoutDiscountFacts["discounts"] } | null,
+  decimalPlaces = getDecimalPlaces(getCurrencyCode()),
 ): void {
   const copy = activeCheckoutCopy();
   if (!shipping) {
@@ -686,8 +676,8 @@ function renderShippingLine(
     return;
   }
   const delivery = shipping.discounts.filter(({ shippingAmount }) => shippingAmount > 0);
-  const discount = delivery.reduce((total, { shippingAmount }) => total + shippingAmount, 0);
-  const net = Math.max(0, Math.round((shipping.charged - discount) * 100) / 100);
+  const discountMinor = delivery.reduce((total, { shippingAmount }) => total + toMinor(shippingAmount, decimalPlaces), 0);
+  const net = fromMinor(Math.max(0, toMinor(shipping.charged, decimalPlaces) - discountMinor), decimalPlaces);
   const parts: Array<Node | string> = [];
   if (net < shipping.baseFee) {
     const struck = document.createElement("s");
@@ -706,13 +696,16 @@ function renderShippingLine(
 }
 
 /** "Add ৳500 more for free delivery." while the chosen rate's threshold is not reached. */
-function renderFreeDeliveryProgress(chargedFee: number): void {
+function renderFreeDeliveryProgress(
+  chargedFee: number,
+  subtotal = cartItemsSubtotal(cartStore.get().items),
+  decimalPlaces = getDecimalPlaces(getCurrencyCode()),
+): void {
   const progress = document.getElementById("shippingProgress");
   if (!progress) return;
   const method = window.lastShippingEventDetail;
-  const { totalAmount } = cartStore.get();
   const shortfall = method && method.freeOver !== null && chargedFee > 0
-    ? Math.round((method.freeOver - totalAmount) * 100) / 100
+    ? fromMinor(toMinor(method.freeOver, decimalPlaces) - toMinor(subtotal, decimalPlaces), decimalPlaces)
     : 0;
   progress.textContent = shortfall > 0
     ? formatCheckoutLanguageText(activeCheckoutCopy().freeDeliveryProgressText, { amount: formatMoney(shortfall) })
@@ -747,12 +740,12 @@ function renderAuthoritativeCartQuote(
       baseFee: quotedFee,
       charged: quote.shippingAmount,
       discounts: quote.discounts,
-    });
+    }, quote.decimalPlaces);
   } else {
     // Nothing physical: no delivery line to price (the row is hidden).
     renderShippingLine(elements.shipping, { baseFee: 0, charged: 0, discounts: [] });
   }
-  renderFreeDeliveryProgress(quote.shippingAmount);
+  renderFreeDeliveryProgress(quote.shippingAmount, quote.subtotalAmount, quote.decimalPlaces);
   elements.total.textContent = formatMoney(quote.totalAmount);
   if (elements.totalLabel) {
     elements.totalLabel.textContent =
@@ -968,7 +961,8 @@ function applyPendingCartRepairState(): boolean {
     readAndClearCartRepairState() ?? readAndClearInlineCartRepairState();
   if (!state) return false;
 
-  rotateCheckoutId();
+  // A rejected validation does not prove that an earlier submit failed to
+  // commit. Keep its identity even when its response/recovery pointer was lost.
 
   if (state.issues.length > 0) {
     setCartValidationIssues(state.issues, cartStore.get().items, state.message);
@@ -1615,13 +1609,11 @@ export async function initCartFunctionality() {
     const quantityLimit = cartQuantityLimits[cartKey];
     const nextQuantity =
       typeof quantityLimit === "number" ? Math.min(qty, quantityLimit) : qty;
-    rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
     if (nextQuantity <= 0) removeLineWithUndo(cartKey);
     else updateCartItemByKey(cartKey, { quantity: nextQuantity });
   };
   window.removeFromCart = (cartKey) => {
-    rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
     delete cartQuantityLimits[cartKey];
     removeLineWithUndo(cartKey);
@@ -1641,14 +1633,12 @@ export async function initCartFunctionality() {
     return true;
   };
   window.removeCartIssueItem = (cartKey) => {
-    rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
     delete cartValidationIssues[cartKey];
     delete cartQuantityLimits[cartKey];
     removeCartItemByKey(cartKey);
   };
   window.reduceCartIssueItem = (cartKey) => {
-    rotateCheckoutIdIfCartBlocked();
     const issue = (cartValidationIssues[cartKey] ?? []).find(
       (item) => item.action === "reduce_quantity",
     );
@@ -1665,7 +1655,6 @@ export async function initCartFunctionality() {
     updateCartItemByKey(cartKey, { quantity: issue.availableQuantity });
   };
   window.refreshCartIssueItem = (cartKey) => {
-    rotateCheckoutIdIfCartBlocked();
     const issue = (cartValidationIssues[cartKey] ?? []).find(
       (item) => item.action === "refresh_item",
     );

@@ -289,22 +289,22 @@ describe("the cart shell render", () => {
       "/api/v1/checkout-languages/active": { status: 200, body: envelope({ language: { ...LANGUAGE, code } }) },
     });
     const { html } = await renderCart(new Request("https://shop.test/cart"), consent(true));
-    const box = html.match(/<input[^>]*name="marketingConsent"[^>]*>/)?.[0] ?? "";
+    const box = html.match(/<input[^>]*name="marketingConsent_sms"[^>]*>/)?.[0] ?? "";
     expect(box).toMatch(/type="checkbox"/);
     expect(box).toMatch(/value="en"/);
     expect(box).not.toMatch(/\schecked/);
     expect(box).not.toMatch(/\srequired/);
     expect(html).toContain("Send me news and offers");
     // Inside the checkout form, so a ticked box travels with the order.
-    expect(html.indexOf('name="marketingConsent"')).toBeGreaterThan(html.indexOf('id="checkoutForm"'));
-    expect(html.indexOf('name="marketingConsent"')).toBeLessThan(html.indexOf('id="submitButton"'));
+    expect(html.indexOf('name="marketingConsent_sms"')).toBeGreaterThan(html.indexOf('id="checkoutForm"'));
+    expect(html.indexOf('name="marketingConsent_sms"')).toBeLessThan(html.indexOf('id="submitButton"'));
 
     const bangla = await renderCart(new Request("https://shop.test/cart"), consent(true, "bn"));
     expect(bangla.html).toContain("আমাকে খবর ও অফার পাঠান");
-    expect(bangla.html.match(/<input[^>]*name="marketingConsent"[^>]*>/)?.[0]).toMatch(/value="bn"/);
+    expect(bangla.html.match(/<input[^>]*name="marketingConsent_sms"[^>]*>/)?.[0]).toMatch(/value="bn"/);
 
     const off = await renderCart(new Request("https://shop.test/cart"), consent(false));
-    expect(off.html).not.toContain('name="marketingConsent"');
+    expect(off.html).not.toContain('name="marketingConsent_sms"');
     // Still one batch: the box comes from the checkout settings the page already reads.
     expect(off.calls.filter((call) => !call.startsWith("/api/v1/storefront/batch"))).toEqual([]);
   });

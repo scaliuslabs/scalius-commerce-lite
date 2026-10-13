@@ -308,7 +308,7 @@ const createOrderSchema = z.object({
    * shown in this storefront language. Absent or null: no consent recorded.
    * Never required; recorded after the order commits.
    */
-  marketingConsent: z.object({ language: z.string().trim().max(16).nullable() }).strict().nullable().optional(),
+  marketingConsent: z.object({ language: z.string().trim().max(16).nullable(), channels: z.array(z.enum(["email", "sms", "whatsapp"])).min(1).max(3) }).strict().nullable().optional(),
   expectedAmountDueMinor: z.number().int().nonnegative().optional().openapi({
     description: "The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.",
   }),
@@ -772,6 +772,7 @@ app.openapi(createOrderRoute, async (c) => {
             whatsapp: result.commitPayload.orderData.customerWhatsapp ?? null,
           },
           language: data.marketingConsent.language,
+          channels: data.marketingConsent.channels,
         }, { env: c.env as never, queue: c.env.JOBS_QUEUE })
         : null,
     ]);

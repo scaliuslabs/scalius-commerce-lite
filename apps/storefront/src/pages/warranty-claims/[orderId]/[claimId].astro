@@ -2,7 +2,7 @@
 // A guest's warranty claim: its thread (the store's replies, status lines and
 // photos) and a reply form, reached with the order's receipt proof (its
 // httpOnly cookie; the URL carries ids only). Signed-in owners have the same
-// thread in their Inbox. Server-rendered, marked read when shown, and works
+// thread in their Inbox. Server-rendered and works
 // without JavaScript; private and never cached.
 import Layout from "@/layouts/Layout.astro";
 import ConversationReplyForm from "@/components/conversation/ConversationReplyForm.astro";
@@ -13,11 +13,11 @@ import {
   conversationStatusLabel,
   isOrderId,
   readConversationStatusFlag,
+  readBeforeSeq,
   renderConversationMessages,
 } from "@/lib/account-inbox";
 import {
   attachmentUrlFor,
-  markConversationRead,
   readConversation,
   type ConversationTarget,
 } from "@/lib/account-inbox-server";
@@ -31,17 +31,17 @@ const { orderId, claimId } = Astro.params;
 const target: ConversationTarget | null = isOrderId(orderId) && isWarrantyClaimId(claimId)
   ? { kind: "claim", orderId, claimId }
   : null;
+const beforeSeq = readBeforeSeq(Astro.url.searchParams.get("conversationBefore"));
 const [layoutData, language, read] = await Promise.all([
   getLayoutData(),
   getActiveCheckoutLanguage().catch(() => null),
-  target ? readConversation(Astro.request, target) : Promise.resolve(null),
+  target ? readConversation(Astro.request, target, beforeSeq) : Promise.resolve(null),
 ]);
 Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
 const copy = pickWarrantyCopy(language?.languageData, getCheckoutLanguagePreset(language?.code));
 const thread = read?.ok ? read.data : null;
 const failure = thread ? null : read && !read.ok && read.reason === "unavailable" ? "unavailable" : "no_access";
 Astro.response.status = failure === "unavailable" ? 503 : failure === "no_access" ? 404 : 200;
-if (target && thread) await markConversationRead(Astro.request, target, thread);
 
 const pageHref = target ? `/warranty-claims/${encodeURIComponent(target.orderId)}/${encodeURIComponent(target.claimId)}` : "/track-order";
 const receiptHref = target ? `/order-success?${new URLSearchParams({ orderId: target.orderId })}` : "/track-order";
@@ -49,6 +49,8 @@ const messagesHtml = target && thread
   ? renderConversationMessages(thread.messages, { attachmentUrl: attachmentUrlFor(target, thread), readSeq: thread.readSeq })
   : "";
 const title = thread?.subject?.trim() || copy.warrantyLabelText;
+const earliestSeq = Math.min(...(thread?.messages ?? []).map((message) => message.seq));
+const earlierHref = thread?.hasMore ? `${pageHref}?conversationBefore=${earliestSeq}#conversation` : null;
 ---
 
 <Layout title={title} layoutData={layoutData} documentLanguage={checkoutLanguageBaseCode(language?.code)}>
@@ -73,20 +75,25 @@ const title = thread?.subject?.trim() || copy.warrantyLabelText;
     )}
 
     {thread && target && (
-      <div id="conversation" class="mt-2">
-        <p class="text-sm text-muted-foreground">{conversationStatusLabel(thread.status)}</p>
+      <div id="conversation" data-conversation-panel style="overflow-anchor:none" class="mt-2">
+        <p class="text-sm text-muted-foreground"><span data-conversation-thread-status>{conversationStatusLabel(thread.status)}</span></p>
         <div class={`${ui.card} ${ui.cardBody} mt-6`}>
-          <ol id="claimMessages" class="space-y-4" aria-label="Messages" hidden={thread.messages.length === 0} set:html={messagesHtml} />
-          <ConversationReplyForm
+          {earlierHref && <a href={earlierHref} data-conversation-earlier data-before={earliestSeq} data-before-param="conversationBefore" data-astro-prefetch="false" class="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{CONVERSATION_COPY.earlierMessages}</a>}
+          <ol id="claimMessages" class="mx-auto max-w-3xl [overflow-anchor:none]" aria-label="Messages" hidden={thread.messages.length === 0} set:html={messagesHtml} />
+          {beforeSeq ? <a href={`${pageHref}#conversation`} data-astro-prefetch="false" class="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{CONVERSATION_COPY.latestMessages}</a> : <ConversationReplyForm
             action={`/api/warranties/orders/${encodeURIComponent(target.orderId)}/claims/${encodeURIComponent(target.claimId)}/messages`}
+            readAction={`/api/warranties/orders/${encodeURIComponent(target.orderId)}/claims/${encodeURIComponent(target.claimId)}/read`}
             returnTo={pageHref}
             messagesTargetId="claimMessages"
+            conversationId={thread.id}
+            readSeq={thread.readSeq}
+              lastShownSeq={Math.max(0, ...thread.messages.map((message) => message.seq))}
             idPrefix="claimReply"
             status={readConversationStatusFlag(Astro.url)}
             label="Reply"
             placeholder="Write a reply"
             note={thread.status === "closed" ? CONVERSATION_COPY.closedNote : null}
-          />
+          />}
         </div>
       </div>
     )}

@@ -6,6 +6,7 @@ import {
 } from "@/lib/template-options";
 import { useMessages } from "~/i18n";
 import { catalogTemplateMessages } from "~/i18n/catalog-templates";
+import { ReadOnlyValue } from "~/components/ui/field";
 
 type Known = readonly string[];
 
@@ -19,18 +20,22 @@ export function TemplateSelect({
   value,
   onChange,
   disabled,
+  readOnly = false,
 }: {
   id?: string;
   kind: "product" | "listing";
   value: string | null;
   onChange: (value: string | null) => void;
   disabled?: boolean;
+  /** A saved label rather than a disabled picker; closes an existing picker on revocation. */
+  readOnly?: boolean;
 }) {
   const t = useMessages(catalogTemplateMessages);
   const known: Known = kind === "product"
     ? PRODUCT_PAGE_TEMPLATE_IDS
     : [...LISTING_LAYOUT_TEMPLATE_IDS, ...LISTING_FILTER_TEMPLATE_IDS];
   const label = (template: string) => t(`${kind === "product" ? "page" : "listing"}_${template}` as never);
+  if (readOnly) return <ReadOnlyValue label={t("template")} value={!value ? t("themeDefault") : known.includes(value) ? label(value) : t("unknownTemplate", { id: value })} />;
   return (
     <SearchableSelect
       id={id}

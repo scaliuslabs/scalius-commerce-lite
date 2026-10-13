@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { REALTIME_TOPICS, type RealtimeServerMessage } from "@scalius/shared/realtime";
+import { PRESENCE_PREFIXES, REALTIME_TOPICS, type RealtimeServerMessage } from "@scalius/shared/realtime";
 import { MAX_SOCKETS_PER_USER } from "./hub";
 
 const apiDir = resolve(import.meta.dirname, "../..");
@@ -54,7 +54,7 @@ describe("RealtimeHub in workerd", () => {
   });
 
   async function connect(userId: string, name: string, topics: string[]): Promise<Client> {
-    const identity = encodeURIComponent(JSON.stringify({ userId, name, topics }));
+    const identity = encodeURIComponent(JSON.stringify({ userId, name, topics, edit: (1 << PRESENCE_PREFIXES.length) - 1 }));
     const response = await mf.dispatchFetch(`http://hub/connect?identity=${identity}`, { headers: { Upgrade: "websocket" } });
     expect(response.status).toBe(101);
     const socket = response.webSocket as unknown as Client["socket"];

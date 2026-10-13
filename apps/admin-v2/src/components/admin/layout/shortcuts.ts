@@ -14,7 +14,7 @@ export interface KeyCombo {
 interface Shortcut {
   label: ShortcutsKey;
   /** Where it works: anywhere in the dashboard, or while editing. */
-  group: "general" | "editing";
+  group: "general" | "editing" | "inbox";
   combos: readonly KeyCombo[];
 }
 
@@ -33,6 +33,11 @@ export const SHORTCUTS = {
   // Polaris pagination's keys: the order and product pages step through the list they came from.
   previousItem: { label: "previousItem", group: "general", combos: [{ key: "j" }] },
   nextItem: { label: "nextItem", group: "general", combos: [{ key: "k" }] },
+  inboxCompose: { label: "inboxCompose", group: "inbox", combos: [{ key: "enter" }] },
+  inboxReply: { label: "inboxReply", group: "inbox", combos: [{ key: "r" }] },
+  inboxNote: { label: "inboxNote", group: "inbox", combos: [{ key: "n" }] },
+  inboxAssign: { label: "inboxAssign", group: "inbox", combos: [{ key: "a" }] },
+  inboxClose: { label: "inboxClose", group: "inbox", combos: [{ key: "e" }] },
   save: { label: "save", group: "editing", combos: [{ key: "s", mod: true }] },
   submit: { label: "submit", group: "editing", combos: [{ key: "enter", mod: true }] },
   undo: { label: "undo", group: "editing", combos: [{ key: "z", mod: true }] },
@@ -47,6 +52,8 @@ type AnyKeyboardEvent = KeyboardEvent | ReactKeyboardEvent;
 
 /** Whether the event is one of the shortcut's key presses (never with Alt; ⌘/Ctrl only when declared). */
 export function matchesShortcut(id: ShortcutId, event: AnyKeyboardEvent): boolean {
+  const native = "nativeEvent" in event ? event.nativeEvent : event;
+  if (native.isComposing || native.keyCode === 229) return false;
   const mod = event.metaKey || event.ctrlKey;
   if (event.altKey) return false;
   return SHORTCUTS[id].combos.some((combo: KeyCombo) => {
@@ -71,8 +78,7 @@ export function comboCaps(combo: KeyCombo): string[] {
 
 /** Typing in a field (or a dialog) never triggers a page-wide shortcut. */
 export function typingIn(target: EventTarget | null): boolean {
-  const element = target as HTMLElement | null;
-  return Boolean(element?.closest("input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='dialog']"));
+  return target instanceof Element && Boolean(target.closest("input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='dialog']"));
 }
 
 // ── Go-to sequences ─────────────────────────────────────────────────────────

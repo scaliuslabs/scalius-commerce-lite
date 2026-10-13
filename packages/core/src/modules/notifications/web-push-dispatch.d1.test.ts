@@ -68,6 +68,17 @@ function dispatch(audience: "staff" | "customer") {
 }
 
 describe("Web Push dispatch retries", () => {
+  it("keeps customer punctuation as plain text in native order notifications", async () => {
+    await subscribe("staff", "plain-name");
+    sqlite.exec("INSERT INTO admin_fcm_tokens (id, user_id, token, is_active) VALUES ('plain-token', 'staff', 'fcm-test-token', 1)");
+    const payload = vi.spyOn(webPush, "webPushPayload");
+    const customerName = "A&B O'Neil <shop>";
+    await sendOrderNotification(db, { id: "order_push", customerName, notificationType: "order_confirmed" }, ENV, "https://api.example.test");
+    const body = `Order Confirmed from ${customerName}. Click to view.`;
+    expect(payload).toHaveBeenCalledWith(expect.objectContaining({ body }));
+    expect(fcm.sendEachForMulticast).toHaveBeenCalledWith(expect.objectContaining({ notification: expect.objectContaining({ body }) }));
+  });
+
   it.each(["staff", "customer"] as const)("keeps a %s subscription read failure retryable", async (audience) => {
     await subscribe(audience, "reader-failure");
     queryFault = (query) => {
@@ -83,6 +94,7 @@ describe("Web Push dispatch retries", () => {
     await subscribe(audience, "first");
     await subscribe(audience, "second");
     const payload = vi.spyOn(webPush, "webPushPayload");
+    const delivery = vi.spyOn(webPush, "deliverWebPush");
     let claims = 0;
     queryFault = (query) => {
       if (query.startsWith('insert into "notification_delivery_receipts"') && ++claims === 2) throw new Error("temporary receipt failure");
@@ -101,6 +113,7 @@ describe("Web Push dispatch retries", () => {
     expect(sent.filter((endpoint) => endpoint === acceptedEndpoint)).toHaveLength(1);
     expect(sqlite.prepare("SELECT count(*) AS n FROM notification_delivery_receipts WHERE provider = 'webpush' AND status = 'accepted'").get()).toEqual({ n: 2 });
     expect(payload).toHaveBeenCalledWith(expect.objectContaining({ tag: audience === "staff" ? "evt:outbox_push" : "order:order_push" }));
+    if (audience === "staff") expect(delivery).toHaveBeenCalledWith(db, expect.anything(), expect.anything(), expect.any(String), { staffRequirement: "orders.view" });
   });
 
   it("keeps the accepted FCM outcome when the independent Web Push branch fails", async () => {
@@ -153,6 +166,7 @@ describe("staff push resource authorization", () => {
   });
 
   it("does not disclose conversations to order-only staff or buyer-only events to any staff", async () => {
+    const delivery = vi.spyOn(webPush, "deliverWebPush");
     const spec = {
       receipt: { subjectType: "conversation" as const, subjectId: "thread", notificationType: "conversation_message" as const },
       setupRecipient: "test", logLabel: "test", title: "Message", body: "Open inbox", link: null, data: {},
@@ -164,12 +178,14 @@ describe("staff push resource authorization", () => {
     await sendAdminPush(db, ENV, spec);
     expect(sent).toHaveLength(1);
     expect(fcm.sendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(delivery).toHaveBeenCalledWith(db, expect.anything(), expect.anything(), expect.any(String), { staffRequirement: "conversations.view" });
     await sendAdminPush(db, ENV, { ...spec, receipt: { ...spec.receipt, notificationType: "conversation_reply" } });
     expect(sent).toHaveLength(1);
     expect(fcm.sendEachForMulticast).toHaveBeenCalledTimes(1);
   });
 
   it("restricts resource notices and arbitrary app payloads through the same two-transport policy", async () => {
+    const delivery = vi.spyOn(webPush, "sendWebPushNotification");
     const notice = { title: "Notice", body: "Private fact", link: null, data: { notificationType: "webhook_disabled" } };
     await sendAdminPushNotice(db, ENV, notice);
     expect(sent).toEqual([]);
@@ -184,6 +200,7 @@ describe("staff push resource authorization", () => {
     await sendAdminPushNotice(db, ENV, { ...notice, data: { notificationType: "plugin_notice" } });
     expect(sent).toHaveLength(2);
     expect(fcm.sendEachForMulticast).toHaveBeenCalledTimes(2);
+    expect(delivery).toHaveBeenLastCalledWith(db, expect.anything(), { audience: "staff", requiredPermission: "super_admin" }, expect.anything());
     await sendAdminPushNotice(db, ENV, { ...notice, data: { notificationType: "unknown" } });
     expect(sent).toHaveLength(2);
   });

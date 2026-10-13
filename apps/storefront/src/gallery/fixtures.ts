@@ -68,6 +68,7 @@ interface ProductSeed {
   sale?: number;
   soldOut?: boolean;
   noImage?: boolean;
+  images?: 1;
   colors?: Array<[string, string]>;
   sizes?: string[];
   specs?: string[];
@@ -91,7 +92,7 @@ const SEEDS: ProductSeed[] = [
   { name: "Silk Three-Piece (Unstitched)", bangla: "সিল্ক থ্রি-পিস", category: "three-piece", brand: "deshi-dash", price: 6800, sale: 5440, colors: FASHION_COLORS.slice(1, 5), sold: 33 },
   { name: "Smart Watch Fit 4", category: "wearables", brand: "xiaomi", price: 8999, soldOut: true, specs: ["Display: 1.82 in AMOLED", "Battery: 10 days"] },
   { name: "Jute Tote Bag", category: "bags", brand: "fabric-lab", price: 690, noImage: true },
-  { name: "Mi 4K TV Box S (2nd Gen)", category: "smart-home", brand: "xiaomi", price: 6500, specs: ["Resolution: 4K HDR", "OS: Google TV"], rating: [4.3, 31] },
+  { name: "Mi 4K TV Box S (2nd Gen)", images: 1, category: "smart-home", brand: "xiaomi", price: 6500, specs: ["Resolution: 4K HDR", "OS: Google TV"], rating: [4.3, 31] },
   { name: "Kids Frock", bangla: "শিশুদের ফ্রক", category: "kids", brand: "apex", price: 1150, sale: 920, sizes: ["2Y", "4Y", "6Y"], colors: FASHION_COLORS.slice(2, 4) },
   { name: "Power Bank 20000 mAh 22.5 W Fast Charging with USB-C PD", category: "accessories", brand: "anker", price: 3200, specs: ["Capacity: 20000 mAh", "Output: 22.5 W"], sold: 210, rating: [4.6, 402] },
   { name: "Gamcha", bangla: "গামছা", category: "home-decor", brand: "aarong-weave", price: 250, pack: "Pack of 3", sold: 15 },
@@ -135,7 +136,7 @@ export function cardProduct(index: number, options: { bangla?: boolean } = {}) {
   return {
     id: `prod_${index}`,
     name,
-    slug: `${slugify(seed.name).slice(0, 48)}-${index}`,
+    slug: fixtureSlug(index),
     description: null,
     price: seed.price,
     discountType: onSale ? ("flat" as const) : null,
@@ -158,7 +159,7 @@ export function cardProduct(index: number, options: { bangla?: boolean } = {}) {
     imageUrl: seed.noImage ? null : imageUrl(`product-${index % 24}`),
     imageMediaId: seed.noImage ? null : `product-${index % 24}`,
     imageAlt: seed.noImage ? null : name,
-    secondaryImageUrl: seed.noImage ? null : imageUrl(`product-${(index + 7) % 24}`),
+    secondaryImageUrl: seed.noImage || seed.images === 1 ? null : imageUrl(`product-${(index + 7) % 24}`),
     rating: seed.rating ? { average: seed.rating[0], count: seed.rating[1] } : null,
     cardFacts: {
       brand: brand ? { name: brand[1], slug: brand[0] } : null,
@@ -320,7 +321,7 @@ export function fixtureFacets() {
 
 // ─── Product page ─────────────────────────────────────────────────────────
 
-export type ProductScenario = "fashion" | "electronics" | "sold-out" | "no-image" | "bangla" | "simple";
+export type ProductScenario = "fashion" | "electronics" | "sold-out" | "no-image" | "bangla" | "simple" | "one-image";
 
 export const PRODUCT_SCENARIO_SLUGS: Record<ProductScenario, string> = {
   fashion: "jamdani-saree",
@@ -329,11 +330,25 @@ export const PRODUCT_SCENARIO_SLUGS: Record<ProductScenario, string> = {
   "no-image": "kantha-cushion",
   bangla: "bangla-three-piece",
   simple: "power-bank",
+  "one-image": "mi-tv-box",
 };
 
 const SCENARIO_SEED: Record<ProductScenario, number> = {
-  fashion: 0, electronics: 3, "sold-out": 4, "no-image": 6, bangla: 9, simple: 14,
+  fashion: 0, electronics: 3, "sold-out": 4, "no-image": 6, bangla: 9, simple: 14, "one-image": 12,
 };
+
+export function fixtureSlug(index: number): string {
+  const scenario = (Object.keys(SCENARIO_SEED) as ProductScenario[]).find((key) => SCENARIO_SEED[key] === index);
+  return scenario ? PRODUCT_SCENARIO_SLUGS[scenario] : `${slugify(seedFor(index).name).slice(0, 48)}-${index}`;
+}
+
+export function fixtureProductIndexOf(slug: string): number | null {
+  const scenario = productScenarioOf(slug);
+  if (scenario) return SCENARIO_SEED[scenario];
+  const suffix = /-(\d+)$/.exec(slug);
+  const index = suffix ? Number(suffix[1]) : -1;
+  return Number.isSafeInteger(index) && index >= 0 && fixtureSlug(index) === slug ? index : null;
+}
 
 export function productScenarioOf(slug: string): ProductScenario | null {
   return (Object.entries(PRODUCT_SCENARIO_SLUGS).find(([, value]) => value === slug)?.[0] as ProductScenario | undefined) ?? null;
@@ -345,10 +360,10 @@ const REVIEW_BODIES = [
   "Good, but the blouse piece was shorter than I expected.",
 ];
 
-export function productDetail(scenario: ProductScenario) {
-  const index = SCENARIO_SEED[scenario];
+export function productDetail(scenario: ProductScenario | number, flags: { bangla?: boolean } = {}) {
+  const index = typeof scenario === "number" ? scenario : SCENARIO_SEED[scenario];
   const seed = seedFor(index);
-  const card = cardProduct(index, { bangla: scenario === "bangla" });
+  const card = cardProduct(index, { bangla: flags.bangla ?? scenario === "bangla" });
   const colors = seed.colors ?? [];
   const sizes = seed.sizes ?? [];
   const options = [
@@ -359,12 +374,12 @@ export function productDetail(scenario: ProductScenario) {
     (rows, axis) => rows.flatMap((row) => axis.values.map((value) => [...row, { axis, value }])),
     [[]],
   );
-  const imageIds = seed.noImage ? [] : [0, 1, 2, 3, 4].map((offset) => `product-${(index + offset * 5) % 24}`);
+  const imageIds = seed.noImage ? [] : [0, 1, 2, 3, 4].slice(0, seed.images ?? 5).map((offset) => `product-${(index + offset * 5) % 24}`);
   const variants = combos.map((combo, position) => ({
     id: combo.length ? `sku_${index}_${combo.map((part) => part.value.id).join("_")}` : `sku_${index}`,
     productId: card.id,
     optionCombinationKey: combo.length ? combo.map((part) => `${part.axis.id}=${part.value.id}`).join("&") : null,
-    imageId: combo.length && position === 1 && imageIds[1] ? imageIds[1] : null,
+    imageId: combo.length && position === 1 && imageIds[1] ? `pm_${imageIds[1]}` : null,
     imageMediaId: null,
     imageUrl: combo.length && position === 1 && imageIds[1] ? imageUrl(imageIds[1]) : card.imageUrl,
     selectedOptions: combo.map((part) => ({
@@ -396,8 +411,7 @@ export function productDetail(scenario: ProductScenario) {
   });
   const product = {
     ...card,
-    slug: PRODUCT_SCENARIO_SLUGS[scenario],
-    description: scenario === "bangla"
+    description: flags.bangla ?? scenario === "bangla"
       ? `<p>${BANGLA_LONG}।</p><p>প্রতিটি পিস হাতে তৈরি, তাই রঙে সামান্য পার্থক্য থাকতে পারে।</p>`
       : "<p>Woven on a pit loom over three weeks. Each piece is unique, so small variations in the motif are part of the craft.</p><ul><li>Dry clean only</li><li>Blouse piece included</li></ul>",
     hasVariants: options.length > 0,
@@ -410,7 +424,7 @@ export function productDetail(scenario: ProductScenario) {
     pageTemplate: null,
     warranty: seed.specs ? { name: "Official warranty", provider: "brand", duration: { value: 1, unit: "years" }, replacementDays: 7, terms: "Covers manufacturing defects. Physical and liquid damage are not covered." } : null,
     emi: seed.price > 20000 ? { provider: "City Bank", months: 12, monthly: Math.round(seed.price / 12), monthlyMinor: Math.round(seed.price / 12) * 100 } : null,
-    bundles: scenario === "simple" ? [{ quantity: 2, discountType: "percentage", discountPercentage: 10, price: null, label: "Buy 2, save 10%", isActive: true }] : [],
+    bundles: index === SCENARIO_SEED.simple ? [{ quantity: 2, discountType: "percentage", discountPercentage: 10, price: null, label: "Buy 2, save 10%", isActive: true }] : [],
     offers: [],
     customization: null,
     contentBlocks: [],
@@ -438,7 +452,7 @@ export function productDetail(scenario: ProductScenario) {
       isPrimary: sortOrder === 0, sortOrder, status: "ready",
     })),
     variants,
-    recommendations: { reason: "also_bought", products: cardProducts(8, index + 1) },
+    recommendations: { reason: "also_bought", products: cardProducts(8, index + 1, { bangla: flags.bangla ?? scenario === "bangla" }) },
   };
 }
 

@@ -26,7 +26,7 @@ import { customers } from "./customers";
 import { promotions } from "./promotions";
 
 /** Mirrors `MARKETING_CHANNELS` in `@scalius/shared/customer-marketing`. */
-export const MARKETING_CHANNEL_VALUES = ["email", "sms", "whatsapp"] as const;
+export const MARKETING_CHANNEL_VALUES = ["email", "sms", "whatsapp", "push"] as const;
 /** Mirrors `MARKETING_CONSENT_STATES`. `pending` is e-mail double opt-in only. */
 export const MARKETING_CONSENT_STATE_VALUES = ["subscribed", "unsubscribed", "pending"] as const;
 /** Mirrors `MARKETING_CONSENT_SOURCES`. */
@@ -43,6 +43,85 @@ export const MARKETING_CONSENT_SOURCE_VALUES = [
 export const MARKETING_CONSENT_ACTOR_VALUES = ["buyer", "staff", "plugin", "system"] as const;
 
 const inList = (values: readonly string[]) => values.map((value) => `'${value}'`).join(", ");
+
+/** Immutable reviewed content and audience; drafts remain in the authoring app. */
+export const marketingRuns = sqliteTable("marketing_runs", {
+    id: text("id").primaryKey(),
+    pluginId: text("plugin_id").notNull(),
+    draftId: text("draft_id").notNull(),
+    draftRevision: integer("draft_revision").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    name: text("name").notNull(),
+    channel: text("channel", { enum: MARKETING_CHANNEL_VALUES }).notNull(),
+    contentJson: text("content_json").notNull(),
+    audienceJson: text("audience_json").notNull(),
+    segmentId: text("segment_id").notNull(),
+    segmentRevision: integer("segment_revision").notNull(),
+    segmentName: text("segment_name").notNull(),
+    timeZone: text("time_zone").notNull(),
+    evaluatedAt: integer("evaluated_at"),
+    scheduledAt: integer("scheduled_at").notNull(),
+    status: text("status", { enum: ["scheduled", "enrolling", "sending", "completed", "cancelled", "failed"] }).notNull().default("scheduled"),
+    revision: integer("revision").notNull().default(1),
+    enrollCursor: text("enroll_cursor"),
+    dispatchCursor: text("dispatch_cursor"),
+    step: integer("step").notNull().default(0),
+    enrolledCount: integer("enrolled_count").notNull().default(0),
+    deduplicatedCount: integer("deduplicated_count").notNull().default(0),
+    createdBy: text("created_by").notNull(),
+    cancelledBy: text("cancelled_by"),
+    startedAt: integer("started_at"),
+    finishedAt: integer("finished_at"),
+    cancelledAt: integer("cancelled_at"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("marketing_runs_request_unique").on(table.pluginId, table.idempotencyKey),
+    index("marketing_runs_due_idx").on(table.status, table.scheduledAt, table.id),
+    index("marketing_runs_app_list_idx").on(table.pluginId, table.createdAt, table.id),
+    check("marketing_runs_channel", sql`${table.channel} IN ('email', 'sms', 'whatsapp', 'push')`),
+    check("marketing_runs_status", sql`${table.status} IN ('scheduled', 'enrolling', 'sending', 'completed', 'cancelled', 'failed')`),
+    check("marketing_runs_content", sql`json_valid(${table.contentJson}) AND length(${table.contentJson}) <= 64000`),
+    check("marketing_runs_audience", sql`json_valid(${table.audienceJson}) AND length(${table.audienceJson}) <= 8000`),
+    check("marketing_runs_revision", sql`${table.revision} > 0 AND ${table.draftRevision} > 0 AND ${table.segmentRevision} > 0`),
+    check("marketing_runs_counts", sql`${table.step} >= 0 AND ${table.enrolledCount} >= 0 AND ${table.deduplicatedCount} >= 0`),
+]);
+
+/** A fixed target identity; never retarget after a customer's address changes. */
+export const marketingRunRecipients = sqliteTable("marketing_run_recipients", {
+    id: text("id").primaryKey(),
+    runId: text("run_id").notNull().references(() => marketingRuns.id, { onDelete: "cascade" }),
+    customerId: text("customer_id").notNull(),
+    recipientHash: text("recipient_hash").notNull(),
+    outboxId: text("outbox_id"),
+    status: text("status", { enum: ["enrolled", "queued", "sending", "accepted", "delivered", "failed", "unconfirmed", "skipped", "cancelled"] }).notNull().default("enrolled"),
+    reason: text("reason"),
+    dispatchStartedAt: integer("dispatch_started_at"),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("marketing_run_recipients_target_unique").on(table.runId, table.recipientHash),
+    uniqueIndex("marketing_run_recipients_outbox_unique").on(table.outboxId).where(sql`${table.outboxId} IS NOT NULL`),
+    index("marketing_run_recipients_progress_idx").on(table.runId, table.status, table.id),
+    check("marketing_run_recipients_status", sql`${table.status} IN ('enrolled', 'queued', 'sending', 'accepted', 'delivered', 'failed', 'unconfirmed', 'skipped', 'cancelled')`),
+    check("marketing_run_recipients_hash", sql`length(${table.recipientHash}) = 64`),
+]);
+
+/** The default marketing frequency cap is one attempted send per channel/contact/local day. */
+export const marketingContactSlots = sqliteTable("marketing_contact_slots", {
+    channel: text("channel", { enum: MARKETING_CHANNEL_VALUES }).notNull(),
+    recipientHash: text("recipient_hash").notNull(),
+    day: text("day").notNull(),
+    runId: text("run_id").notNull(),
+    recipientId: text("recipient_id").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    primaryKey({ columns: [table.channel, table.recipientHash, table.day] }),
+    index("marketing_contact_slots_retention_idx").on(table.day),
+    check("marketing_contact_slots_channel", sql`${table.channel} IN ('email', 'sms', 'whatsapp', 'push')`),
+    check("marketing_contact_slots_hash", sql`length(${table.recipientHash}) = 64`),
+    check("marketing_contact_slots_day", sql`length(${table.day}) = 10`),
+]);
 
 export const customerMarketingConsents = sqliteTable("customer_marketing_consents", {
     customerId: text("customer_id")

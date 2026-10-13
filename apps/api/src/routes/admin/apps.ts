@@ -129,7 +129,7 @@ const appTranslationsSchema = z.object({
     timeline: z.record(z.string(), z.string()).optional(),
     tabs: z.record(z.string(), z.record(z.string(), z.string())).optional(),
     settingsGroups: z.record(z.string(), z.object({ title: z.string().optional(), description: z.string().optional() })).optional(),
-    settings: z.record(z.string(), z.object({ label: z.string().optional(), help: z.string().optional() })).optional(),
+    settings: z.record(z.string(), z.object({ label: z.string().optional(), help: z.string().optional(), options: z.record(z.string(), z.string()).optional() })).optional(),
   }).optional(),
 }).nullable().openapi("AppTranslations", { description: "Name, tagline, description and surface titles in other dashboard languages (null: English only)." });
 

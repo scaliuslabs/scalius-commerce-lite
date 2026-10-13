@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { PermissionProvider } from "~/contexts/PermissionContext";
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -44,14 +45,14 @@ describe("FolderBrowser", () => {
 
   function render(currentFolderId: string | null | "all") {
     act(() => root.render(
-      <FolderBrowser
+      <PermissionProvider isSuperAdmin><FolderBrowser
         folders={[folder]}
         currentFolderId={currentFolderId}
         onFolderSelect={vi.fn()}
         onFolderCreate={vi.fn()}
         onFolderRename={vi.fn()}
         onFolderDelete={onFolderDelete}
-      />,
+      /></PermissionProvider>,
     ));
   }
 

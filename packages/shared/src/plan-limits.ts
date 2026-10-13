@@ -69,6 +69,14 @@ export interface PlanLimits {
   readonly maintenance: {
     /** The cron rotates through this many groups of sweeps, one group a run (1: every sweep every run). */
     readonly slices: number;
+    /** Run row-by-row maintenance through separate existing jobs invocations. */
+    readonly queueSweeps: boolean;
+    /** Order cleanup includes inventory/gift-card repair; reserve one invocation per bounded page. */
+    readonly staleOrdersPerRun: number;
+    /** Each stale/replaced upload requires its own guarded write. */
+    readonly digitalUploadsPerState: number;
+    /** Each unattached image requires a guarded row delete. */
+    readonly orphanAttachmentsPerRun: number;
     /** Each sweep's row limit is this fraction of its full limit (1: the full limit). */
     readonly limitScale: number;
     /** Images the cron renders itself, without the queue, when the queue cannot take them. */
@@ -123,7 +131,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       renditionsFromPublicReads: false,
     }),
     kv: Object.freeze({ checkoutRecoveryHints: false, permissionCache: false }),
-    maintenance: Object.freeze({ slices: 4, limitScale: 0.2, inlineRenditionsPerRun: 1 }),
+    maintenance: Object.freeze({ slices: 4, queueSweeps: true, staleOrdersPerRun: 1, digitalUploadsPerState: 10, orphanAttachmentsPerRun: 10, limitScale: 0.2, inlineRenditionsPerRun: 1 }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8 }),
     plugins: Object.freeze({
       cpuMs: 50,
@@ -149,7 +157,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       renditionsFromPublicReads: true,
     }),
     kv: Object.freeze({ checkoutRecoveryHints: true, permissionCache: true }),
-    maintenance: Object.freeze({ slices: 1, limitScale: 1, inlineRenditionsPerRun: 240 }),
+    maintenance: Object.freeze({ slices: 1, queueSweeps: false, staleOrdersPerRun: 25, digitalUploadsPerState: 25, orphanAttachmentsPerRun: 50, limitScale: 1, inlineRenditionsPerRun: 240 }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90 }),
     plugins: Object.freeze({
       cpuMs: 200,

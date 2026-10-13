@@ -90,15 +90,20 @@ export function useFormSaveBar<T extends FieldValues, R extends FieldValues>({
   reload,
 }: FormSaveBarOptions<T, R>) {
   const { isDirty, errors } = form.formState;
+  const latestLocked = React.useRef(locked);
+  latestLocked.current = locked;
   useSaveBar({
-    dirty: isDirty,
+    dirty: isDirty && !locked,
+    navigationDirty: isDirty,
     saving,
     invalid: locked || Object.keys(errors).length > 0,
     save: () =>
       new Promise<void>((resolve, reject) => {
+        if (latestLocked.current) { reject(new SaveNotCompleted(translate(resourceMessages, "readOnly"))); return; }
         form
           .handleSubmit(
             async (values) => {
+              if (latestLocked.current) throw new SaveNotCompleted(translate(resourceMessages, "readOnly"));
               const sent = copyValues(form.getValues());
               const result = await save(values);
               rebaseForm(form, sent, { ...sent, ...savedValues?.(result) });

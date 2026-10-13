@@ -1,3 +1,4 @@
+import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
@@ -157,8 +158,9 @@ export function GiftCardDetail({ card, transactions }: { card: GiftCardDetailRec
   ) : null;
 
   return (
-    <Page width="detail">
+    <Page width="detail" data-presence-root={presenceKey("gift-card", card.id)}>
       <PageHeader
+        presence={<PresenceSlot presenceKey={presenceKey("gift-card", card.id)} revision={card.version} dirty={false} readOnly={!canManage} />}
         backTo="/admin/gift-cards"
         title={t("detailTitle", { last4: card.last4 })}
         status={<GiftCardStatusBadge card={card} />}

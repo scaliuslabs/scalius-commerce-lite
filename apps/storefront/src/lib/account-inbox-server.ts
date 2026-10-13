@@ -22,7 +22,7 @@ import {
   isConversationAttachmentId,
   isConversationId,
   isOrderId,
-  renderConversationMessages,
+  renderConversationItems,
   safeConversationReturnPath,
   statusFlagForApiStatus,
   withConversationStatus,
@@ -55,7 +55,7 @@ export function isReceiptTarget(
 
 export type ReadResult<T> =
   | { ok: true; data: T }
-  | { ok: false; reason: "signed_out" | "no_access" | "unavailable" };
+  | { ok: false; reason: "signed_out" | "no_access" | "unavailable"; retryAfter?: string };
 
 /** Only the account session cookie, never the rest of the buyer's cookies. */
 export function sessionCookieOf(request: Request): string | null {
@@ -115,7 +115,7 @@ export function conversationApiPaths(target: ConversationTarget) {
     return {
       read: base,
       post: base,
-      markRead: null,
+      markRead: `${base}/read`,
       upload: "/api/v1/customer-auth/conversation-attachments",
       attachment: null,
     };
@@ -182,7 +182,7 @@ export async function readInbox(request: Request, cursor?: string): Promise<Read
     { method: "GET", headers },
     READ_TIMEOUT_MS,
   );
-  if (!response?.ok) return readFailure(response?.status ?? null);
+  if (!response?.ok) return { ...readFailure(response?.status ?? null), ...(response?.status === 429 ? { retryAfter: response.headers.get("Retry-After") ?? "30" } : {}) };
   const data = await envelopeData<BuyerInboxPage>(response);
   if (!data || !Array.isArray(data.items)) return { ok: false, reason: "unavailable" };
   return {
@@ -200,41 +200,20 @@ export async function readConversation(
   request: Request,
   target: ConversationTarget,
   beforeSeq?: number,
+  afterSeq?: number,
 ): Promise<ReadResult<BuyerConversationThread | null>> {
   const headers = buyerCredentialHeaders(request, target);
   if (!headers) return { ok: false, reason: isReceiptTarget(target) ? "no_access" : "signed_out" };
   const response = await callApi(
-    withQuery(conversationApiPaths(target).read, { beforeSeq }),
+    withQuery(conversationApiPaths(target).read, { beforeSeq, afterSeq }),
     { method: "GET", headers },
     READ_TIMEOUT_MS,
   );
-  if (!response?.ok) return readFailure(response?.status ?? null);
+  if (!response?.ok) return { ...readFailure(response?.status ?? null), ...(response?.status === 429 ? { retryAfter: response.headers.get("Retry-After") ?? "30" } : {}) };
   const data = await envelopeData<{ conversation?: unknown }>(response);
   if (!data) return { ok: false, reason: "unavailable" };
   if (data.conversation === null) return { ok: true, data: null };
   return isThread(data.conversation) ? { ok: true, data: data.conversation } : { ok: false, reason: "unavailable" };
-}
-
-/**
- * Marks the thread read up to the last message shown. Best effort: a failed
- * marker only leaves the unread dot until the next view.
- */
-export async function markConversationRead(
-  request: Request,
-  target: ConversationTarget,
-  thread: BuyerConversationThread,
-): Promise<void> {
-  const lastShown = thread.messages.reduce((max, message) => Math.max(max, message.seq), 0);
-  if (lastShown <= thread.readSeq) return;
-  // An account order thread is marked through its conversation id.
-  const readTarget: ConversationTarget = target.kind === "order" && target.access === "account"
-    ? { kind: "thread", conversationId: thread.id }
-    : target;
-  const path = conversationApiPaths(readTarget).markRead;
-  const headers = buyerCredentialHeaders(request, readTarget);
-  if (!path || !headers) return;
-  headers.set("Content-Type", "application/json");
-  await callApi(path, { method: "POST", headers, body: JSON.stringify({ seq: lastShown }) }, READ_TIMEOUT_MS);
 }
 
 /** The image URL builder for a thread as this buyer reaches it. */
@@ -434,6 +413,7 @@ const PRIVATE_HEADERS = {
   Pragma: "no-cache",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "same-origin",
+  "Cross-Origin-Resource-Policy": "same-origin",
 } as const;
 
 /** An enhanced (fetch) post asks for JSON; a plain form post gets a redirect. */
@@ -485,9 +465,8 @@ export function respondToConversationPost(
         conversationId: result.thread.id,
         redirect: options.redirectOnSuccess ?? null,
         message: conversationStatusMessage(result.flag).text,
-        messagesHtml: renderConversationMessages(result.thread.messages, {
-          attachmentUrl: attachmentUrlFor(target, result.thread),
-        }),
+        items: renderConversationItems(result.thread.messages, { attachmentUrl: attachmentUrlFor(target, result.thread) }),
+        hasOlder: result.thread.hasMore,
       },
     }, 201);
   }
@@ -528,4 +507,55 @@ export async function handleConversationMessagePost(
 export function orderTarget(orderId: string | undefined, access: unknown): ConversationTarget | null {
   if (!isOrderId(orderId)) return null;
   return { kind: "order", orderId, access: access === "account" ? "account" : "receipt" };
+}
+
+/** Private incremental HTML, through the same authorization as the initial page. */
+export async function handleConversationPoll(request: Request, target: ConversationTarget | null): Promise<Response> {
+  const site = request.headers.get("Sec-Fetch-Site");
+  if ((site && site !== "same-origin" && site !== "none") || !wantsJson(request)) {
+    return conversationJson({ success: false }, 403);
+  }
+  const url = new URL(request.url);
+  const after = url.searchParams.get("afterSeq");
+  const before = url.searchParams.get("beforeSeq");
+  if (!target) return conversationJson({ success: false }, 404);
+  const cursor = after ?? before;
+  if (cursor === null || (after !== null && before !== null) || !/^\d{1,10}$/.test(cursor) || Number(cursor) > 2_147_483_647 || (before !== null && Number(before) < 1)) {
+    return conversationJson({ success: false }, 400);
+  }
+  const result = await readConversation(request, target, before === null ? undefined : Number(before), after === null ? undefined : Number(after));
+  if (!result.ok) {
+    const response = conversationJson({ success: false }, result.retryAfter ? 429 : result.reason === "signed_out" ? 401 : result.reason === "no_access" ? 404 : 503);
+    if (result.retryAfter) response.headers.set("Retry-After", result.retryAfter);
+    return response;
+  }
+  const thread = result.data;
+  return conversationJson({ success: true, data: thread ? {
+    conversationId: thread.id,
+    status: thread.status,
+    readSeq: thread.readSeq,
+    hasNewer: (thread as BuyerConversationThread & { hasNewer?: boolean }).hasNewer === true,
+    hasOlder: thread.hasMore,
+    items: renderConversationItems(thread.messages, { attachmentUrl: attachmentUrlFor(target, thread) }),
+  } : { conversationId: null, items: [], hasNewer: false, readSeq: 0 } }, 200);
+}
+
+/** Explicit display acknowledgment. A GET, hidden tab, or prefetch never calls this. */
+export async function handleConversationRead(request: Request, target: ConversationTarget | null): Promise<Response> {
+  if (!target) return conversationJson({ success: false }, 404);
+  const form = wantsJson(request) ? null : await request.formData().catch(() => null);
+  const payload = form ? { seq: Number(form.get("seq")) } : await request.json().catch(() => null) as { seq?: unknown } | null;
+  if (!Number.isSafeInteger(payload?.seq) || Number(payload?.seq) < 0 || Number(payload?.seq) > 2_147_483_647) {
+    return conversationJson({ success: false }, 400);
+  }
+  const headers = buyerCredentialHeaders(request, target);
+  if (!headers) return conversationJson({ success: false }, isReceiptTarget(target) ? 404 : 401);
+  headers.set("Content-Type", "application/json");
+  const response = await callApi(conversationApiPaths(target).markRead!, {
+    method: "POST", headers, body: JSON.stringify({ seq: payload?.seq }),
+  }, READ_TIMEOUT_MS);
+  if (form && !response?.ok) return conversationRedirect(withConversationStatus(formReturnPath(form, "/account/inbox"), "unavailable"));
+  return response?.ok
+    ? form ? conversationRedirect(formReturnPath(form, "/account/inbox")) : new Response(null, { status: 204, headers: PRIVATE_HEADERS })
+    : conversationJson({ success: false }, response?.status === 401 ? 401 : response?.status === 403 || response?.status === 404 ? 404 : 503);
 }

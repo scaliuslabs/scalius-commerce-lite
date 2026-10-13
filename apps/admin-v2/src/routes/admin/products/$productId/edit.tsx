@@ -142,6 +142,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
   const [isReloadingLatest, setIsReloadingLatest] = useState(false);
   const [reloadLatestError, setReloadLatestError] = useState<string | null>(null);
   const [matrixDirty, setMatrixDirty] = useState(false);
+  const [matrixNavigationDirty, setMatrixNavigationDirty] = useState(false);
   const [matrixSaving, setMatrixSaving] = useState(false);
   const [matrixIssue, setMatrixIssue] = useState<string | null>(null);
   const currentMatrix = useRef({ dirty: matrixDirty, snapshot: matrixSnapshot });
@@ -380,16 +381,18 @@ function ProductEditor({ productId, initialProduct, categories }: {
         }}
         optionMatrixIssue={matrixIssue}
         optionMatrixDirty={matrixDirty}
+        optionMatrixNavigationDirty={matrixNavigationDirty}
         optionMatrixSaving={matrixSaving}
         matrixRef={matrixRef}
         variantIds={matrixSnapshot.variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id)}
         customizationSchemaInvalid={formSnapshot.customizationSchemaInvalid}
         brandName={formSnapshot.brandName}
-        presence={(dirty) => (
+        presence={(dirty, readOnly) => (
           <PresenceSlot
             presenceKey={presenceKey("product", productId)}
             revision={aggregateRevision}
             dirty={dirty}
+            readOnly={readOnly}
             changedFields={readChangedFields}
             onLoadLatest={() => void (dirty ? applyMineToLatest() : reloadLatest())}
           />
@@ -422,6 +425,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
               aggregateRevision={aggregateRevision}
               onAggregateRevisionChange={updateRevision}
               onDirtyChange={setMatrixDirty}
+              onNavigationDirtyChange={setMatrixNavigationDirty}
               onDraftIssueChange={setMatrixIssue}
               onSavingChange={setMatrixSaving}
               onRevisionConflict={(conflict) => {

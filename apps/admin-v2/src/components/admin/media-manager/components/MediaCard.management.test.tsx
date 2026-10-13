@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { PermissionProvider } from "~/contexts/PermissionContext";
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -51,7 +52,7 @@ describe("MediaCard picker management boundary", () => {
 
   function render(allowManagement: boolean, unavailable = false, selectionMode = false) {
     act(() => root.render(
-      <MediaCard
+      <PermissionProvider isSuperAdmin><MediaCard
         file={file}
         selected={false}
         selectionMode={selectionMode}
@@ -62,7 +63,7 @@ describe("MediaCard picker management boundary", () => {
         onPreview={vi.fn()}
         onToggle={vi.fn()}
         onLifecycle={vi.fn()}
-      />,
+      /></PermissionProvider>,
     ));
   }
 
@@ -117,7 +118,7 @@ describe("MediaCard usage", () => {
 
   function render(view: "ready" | "trash", usage: Partial<LibraryMediaFile>) {
     act(() => root.render(
-      <MediaCard
+      <PermissionProvider isSuperAdmin><MediaCard
         file={{ ...file, ...usage }}
         selected={false}
         selectionMode={false}
@@ -127,7 +128,7 @@ describe("MediaCard usage", () => {
         onPreview={vi.fn()}
         onToggle={vi.fn()}
         onLifecycle={vi.fn()}
-      />,
+      /></PermissionProvider>,
     ));
   }
 

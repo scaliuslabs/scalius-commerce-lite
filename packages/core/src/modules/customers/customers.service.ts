@@ -116,7 +116,7 @@ export function customerListFilterSql(filters: CustomerListFilters = {}): SQL[] 
     }
     if (filters.segment) conditions.push(segmentWhereSql(filters.segment));
     if (filters.subscribed) {
-        const channels = filters.subscribed === "any" ? (["email", "sms", "whatsapp"] as const) : [filters.subscribed];
+        const channels = filters.subscribed === "any" ? MARKETING_CHANNELS : [filters.subscribed];
         const subscribed = channels.map((channel) => sql`EXISTS (SELECT 1 FROM ${customerMarketingConsents} WHERE ${customerMarketingConsents.customerId} = ${customers.id} AND ${customerMarketingConsents.channel} = ${channel} AND ${customerMarketingConsents.state} = 'subscribed' AND ${customerMarketingConsents.contact} = ${currentMarketingContactSql(channel)})`);
         conditions.push(sql`(${sql.join(subscribed, sql` OR `)})`);
     }

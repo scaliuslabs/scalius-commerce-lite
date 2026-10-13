@@ -1,8 +1,8 @@
 // Web Push service worker for the dashboard's staff notifications (My account →
 // "Notifications on this device"). The page registers it with a scope of its own
 // (`<dashboard base>/web-push/`). The server sends a JSON payload
-// `{ recipient, notification: { title, body, url?, tag? } }`; private content is
-// shown only for the current staff session. `url` is an absolute dashboard address.
+// `{ v: 2, recipient, requires, content: { title, body, url?, tag? } }`; private
+// content requires the current staff session and permission. Older payloads stay neutral.
 
 // This file sits at the dashboard root, e.g. "/" or "/dashboard/".
 const dashboardRoot = new URL("./", self.location.href).href;
@@ -48,8 +48,11 @@ self.addEventListener("message", (event) => {
   }
 });
 
-async function ownsPush(recipient) {
-  if (!recipient || recipient.audience !== "staff" || typeof recipient.id !== "string" || !recipient.id) return false;
+async function ownsPush(payload) {
+  const recipient = payload?.recipient;
+  const requires = payload?.requires;
+  if (payload?.v !== 2 || !recipient || recipient.audience !== "staff" || typeof recipient.id !== "string" || !recipient.id) return false;
+  if (typeof requires !== "string" || !requires || requires.length > 100) return false;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 2_000);
   try {
@@ -58,7 +61,11 @@ async function ownsPush(recipient) {
     });
     if (!response.ok) return false;
     const session = await response.json();
-    return session?.session?.user?.id === recipient.id && Array.isArray(session.session.permissions);
+    const current = session?.session;
+    if (current?.user?.id !== recipient.id || !Array.isArray(current.permissions)) return false;
+    if (requires === "self") return true;
+    if (requires === "super_admin") return current.user.isSuperAdmin === true;
+    return current.permissions.includes(requires);
   } catch { return false; }
   finally { clearTimeout(timer); }
 }
@@ -74,8 +81,8 @@ self.addEventListener("push", (event) => {
   const text = (value) => (typeof value === "string" ? value : "");
   event.waitUntil((async () => {
     const epoch = displayEpoch;
-    const notification = payload.notification;
-    if (signingOut || !notification || typeof notification !== "object" || !await ownsPush(payload.recipient)
+    const notification = payload.content;
+    if (signingOut || !notification || typeof notification !== "object" || !await ownsPush(payload)
       || signingOut || epoch !== displayEpoch) {
       await self.registration.showNotification("Scalius", { icon, badge: icon, tag: "scalius-private", data: { url: "" } });
       return;
@@ -88,7 +95,7 @@ self.addEventListener("push", (event) => {
     });
     pendingDisplays.add(display);
     try { await display; } finally { pendingDisplays.delete(display); }
-    if (signingOut || epoch !== displayEpoch || !await ownsPush(payload.recipient)) {
+    if (signingOut || epoch !== displayEpoch || !await ownsPush(payload)) {
       await closePushNotifications(epoch, payload.recipient.id).catch(() => undefined);
       return;
     }
@@ -112,18 +119,19 @@ function targetOf(value) {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = targetOf(event.notification.data && event.notification.data.url);
+  const raw = event.notification.data && event.notification.data.url;
+  const target = targetOf(raw);
   event.waitUntil(
     (async () => {
-      const windows = await clients.matchAll({ type: "window", includeUncontrolled: true });
+      const windows = await clients.matchAll({ type: "window", includeUncontrolled: true }).catch(() => []);
       const tab = windows.find((client) => client.url.startsWith(dashboardRoot));
       if (tab) {
         try {
+          if (!raw || tab.url === target) { if (await tab.focus()) return; }
           // A tab this worker does not control cannot be moved; then a new one opens.
-          const shown = tab.url === target ? tab : await tab.navigate(target);
-          if (shown) {
-            await shown.focus();
-            return;
+          else {
+            const shown = await tab.navigate(target);
+            if (shown) { await shown.focus().catch(() => undefined); return; }
           }
         } catch {
           // fall through to a new tab

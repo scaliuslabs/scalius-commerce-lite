@@ -79,10 +79,10 @@ self.addEventListener("message", (event) => {
   }
 });
 
-async function ownsPush(recipient) {
+async function ownsPush(recipient, timeoutMs = 2_000) {
   if (!recipient || recipient.audience !== "customer" || typeof recipient.id !== "string" || !recipient.id) return false;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 2_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(new URL("/api/customer-auth/me", self.location.origin).href, {
       credentials: "same-origin", cache: "no-store", redirect: "error", signal: controller.signal,
@@ -126,10 +126,17 @@ self.addEventListener("push", function (event) {
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
-  var pushed = event.notification.data && event.notification.data.url;
-  var target = typeof pushed === "string" && pushed ? sameOriginPath(pushed) : "";
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (windows) {
+    (async () => {
+      const data = event.notification.data;
+      const epoch = displayEpoch;
+      // An old account's notification must not move the current account to its private destination.
+      // Keep the click's window-opening allowance; a slow identity read falls back home.
+      const [owned, windows] = await Promise.all([
+        !signingOut && ownsPush({ audience: "customer", id: data?.pushOwner }, 800),
+        self.clients.matchAll({ type: "window", includeUncontrolled: true }).catch(() => []),
+      ]);
+      const target = owned && !signingOut && epoch === displayEpoch ? (typeof data?.url === "string" && data.url ? sameOriginPath(data.url) : "") : "/";
       var open = windows.filter(function (client) {
         return new URL(client.url).origin === self.location.origin;
       });
@@ -139,15 +146,17 @@ self.addEventListener("notificationclick", function (event) {
             return url.pathname + url.search + url.hash === target;
           })[0]
         : undefined;
-      if (exact) return exact.focus();
-      var first = open[0];
-      if (first && !target) return first.focus();
-      if (first && typeof first.navigate === "function") {
-        return first.focus().then(function (focused) {
-          return (focused || first).navigate(target);
-        });
+      try {
+        const focusOnly = exact || (!target ? open[0] : undefined);
+        if (focusOnly) { if (await focusOnly.focus()) return; }
+        else if (open[0] && typeof open[0].navigate === "function") {
+          const moved = await open[0].navigate(target);
+          if (moved) { await moved.focus().catch(() => undefined); return; }
+        }
+      } catch {
+        // A closed or uncontrolled tab must not swallow the requested destination.
       }
       return self.clients.openWindow(target || "/");
-    }),
+    })(),
   );
 });

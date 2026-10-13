@@ -20,6 +20,7 @@ import {
   orders,
 } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { conversationProductSnapshots } from "@scalius/shared/conversation";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { isReady } from "@scalius/shared/readiness";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
@@ -80,6 +81,8 @@ interface ThreadFacts {
   visibility: string;
   authorType: string;
   body: string | null;
+  eventKind: string | null;
+  eventData: string | null;
 }
 
 async function readThreadLine(db: Database, conversationId: string, seq: number): Promise<ThreadFacts | undefined> {
@@ -94,11 +97,27 @@ async function readThreadLine(db: Database, conversationId: string, seq: number)
       visibility: conversationMessages.visibility,
       authorType: conversationMessages.authorType,
       body: conversationMessages.body,
+      eventKind: conversationMessages.eventKind,
+      eventData: conversationMessages.eventData,
     })
     .from(conversationMessages)
     .innerJoin(conversations, eq(conversations.id, conversationMessages.conversationId))
     .where(and(eq(conversationMessages.conversationId, conversationId), eq(conversationMessages.seq, seq)))
     .get();
+}
+
+function replyProducts(thread: ThreadFacts) {
+  if (thread.kind !== "event" || thread.eventKind !== "product_reply" || thread.visibility !== "public" || thread.authorType !== "staff") return [];
+  try { return conversationProductSnapshots(JSON.parse(thread.eventData ?? "null")); }
+  catch { return []; }
+}
+
+/** Notification display only; a card-only message keeps its stored body null. */
+function displayBody(thread: ThreadFacts, language: MessageLanguage): string | null {
+  const cards = replyProducts(thread);
+  if (!cards.length) return thread.body;
+  const titles = cards.map((card) => `${card.title}${card.variantLabel ? ` (${card.variantLabel})` : ""}`).join("\n");
+  return [thread.body?.trim(), `${MESSAGE_COPY[language].conversation.sharedProducts(cards.length)}\n${titles}`].filter(Boolean).join("\n\n");
 }
 
 interface ThreadParty {
@@ -243,7 +262,7 @@ export async function sendConversationNotification(
   if (!Number.isInteger(claim.seq) || claim.seq < 1) return { kind: "nothing_to_send", reason: "missing_seq" };
   const thread = await readThreadLine(db, claim.conversationId, claim.seq);
   if (!thread) return { kind: "nothing_to_send", reason: "message_missing" };
-  if (thread.kind !== "message" || thread.visibility !== "public") {
+  if (thread.visibility !== "public" || (thread.kind !== "message" && !replyProducts(thread).length)) {
     return { kind: "nothing_to_send", reason: "not_a_public_message" };
   }
   const buyerLine = thread.authorType === "customer" || thread.authorType === "guest_receipt";
@@ -313,7 +332,7 @@ async function sendReplyToBuyer(
             store,
             subject: copy.replySubject(store.name, order),
             intro: copy.replyIntro(store.name, order),
-            message: thread.body,
+            message: displayBody(thread, store.language),
             action: link ? { label: copy.replyAction, href: link } : null,
             footer: copy.replyNoReply,
           });

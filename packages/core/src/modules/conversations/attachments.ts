@@ -11,7 +11,7 @@ import {
   CONVERSATION_LIMITS,
   conversationAttachmentR2Key,
 } from "@scalius/shared/conversation";
-import { and, asc, eq, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lt } from "drizzle-orm";
 import { NotFoundError, RateLimitError, ValidationError } from "../../errors";
 import { newConversationAttachmentId } from "./threads";
 import type { ConversationActor } from "./types";
@@ -144,8 +144,8 @@ export async function resolveConversationAttachment(
 export async function sweepOrphanConversationAttachments(
   db: Database,
   bucket: R2Bucket | undefined,
-  options: { now?: number; limit?: number } = {},
-): Promise<{ scanned: number; deleted: number }> {
+  options: { now?: number; limit?: number; afterId?: string } = {},
+): Promise<{ scanned: number; deleted: number; lastId?: string | null }> {
   if (!bucket) return { scanned: 0, deleted: 0 };
   const now = options.now ?? Math.floor(Date.now() / 1000);
   const rows = await db
@@ -153,9 +153,10 @@ export async function sweepOrphanConversationAttachments(
     .from(conversationAttachments)
     .where(and(
       isNull(conversationAttachments.messageId),
+      options.afterId ? gt(conversationAttachments.id, options.afterId) : undefined,
       lt(conversationAttachments.createdAt, now - CONVERSATION_LIMITS.orphanAttachmentSeconds),
     ))
-    .orderBy(asc(conversationAttachments.createdAt))
+    .orderBy(asc(conversationAttachments.id))
     .limit(Math.max(1, Math.min(options.limit ?? SWEEP_BATCH, SWEEP_BATCH)))
     .all();
   let deleted = 0;
@@ -172,5 +173,5 @@ export async function sweepOrphanConversationAttachments(
     });
     deleted += 1;
   }
-  return { scanned: rows.length, deleted };
+  return { scanned: rows.length, deleted, lastId: rows.at(-1)?.id ?? null };
 }

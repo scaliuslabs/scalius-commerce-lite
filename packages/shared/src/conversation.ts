@@ -45,7 +45,41 @@ export const CONVERSATION_LIMITS = {
   orphanAttachmentSeconds: 60 * 60,
   /** Messages per thread page. */
   pageSize: 50,
+  productsPerMessage: 3,
 } as const;
+
+export interface ConversationProductReference { productId: string; skuId: string }
+/** Names are fallback display snapshots only; prices and availability are always live. */
+export interface ConversationProductSnapshot extends ConversationProductReference {
+  title: string;
+  variantLabel: string | null;
+}
+export interface ConversationProductCard extends ConversationProductSnapshot {
+  status: "available" | "sold_out" | "unavailable";
+  price: { amount: number; currency: string } | null;
+  imageUrl: string | null;
+  pdpUrl: string | null;
+}
+
+/** Defensive read of the public product-reply payload; rejects partial/malformed legacy data. */
+export function conversationProductSnapshots(data: unknown): ConversationProductSnapshot[] {
+  if (!data || typeof data !== "object") return [];
+  const value = data as { v?: unknown; cards?: unknown };
+  if (value.v !== 1 || !Array.isArray(value.cards) || value.cards.length < 1 || value.cards.length > 3) return [];
+  const ids = new Set<string>();
+  const cards: ConversationProductSnapshot[] = [];
+  for (const card of value.cards) {
+    if (!card || typeof card !== "object") return [];
+    const { productId, skuId, title, variantLabel } = card as Record<string, unknown>;
+    if (typeof productId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(productId)
+      || typeof skuId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(skuId)
+      || ids.has(skuId) || typeof title !== "string" || !title.trim() || [...title].length > 160
+      || (variantLabel !== null && (typeof variantLabel !== "string" || [...variantLabel].length > 80))) return [];
+    ids.add(skuId);
+    cards.push({ productId, skuId, title, variantLabel });
+  }
+  return cards;
+}
 
 /** Upload types accepted from a browser; every stored attachment is re-encoded WebP. */
 export const CONVERSATION_ATTACHMENT_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;

@@ -31,14 +31,15 @@ import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { useMessages } from "~/i18n";
+import { formatDateTime, getLocale, useMessages } from "~/i18n";
+import { formatList } from "@scalius/shared/locale-words";
 import { pageFormMessages } from "~/i18n/page-form";
 import { defaultPageScheduleDate, toDateTimeLocalValue, type PagePublicationMode } from "@/lib/page-publication";
 import { toCreatePageInput, toUpdatePageInput } from "@/lib/page-form-input";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
-import { Field, ChoiceField } from "~/components/ui/field";
+import { Field, ChoiceField, ReadOnlyValue } from "~/components/ui/field";
 import { richTextOrEmpty } from "~/lib/rich-text-value";
 
 interface PageFormProps {
@@ -175,11 +176,11 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
     [form],
   );
 
-  const title = form.watch("title");
-  const slug = form.watch("slug");
-  const content = form.watch("content");
-  const excerpt = form.watch("excerpt");
-  const publicationMode = form.watch("publicationMode");
+  const draft = form.watch();
+  const saved = form.formState.defaultValues as PageFormInput;
+  const shown = canSave ? draft : saved;
+  const { title, slug, content, excerpt } = shown;
+  const publicationMode = canSave && canPublish ? draft.publicationMode : saved.publicationMode;
   const errors = form.formState.errors;
   const committedSlug = defaultValues?.slug;
   const isCommittedLivePage = isEdit && Boolean(committedSlug) && defaultValues?.publicationMode === "published";
@@ -206,7 +207,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
         rebaseForm(form, copyValues(form.formState.defaultValues as PageFormInput), toPageFormValues(latest) as PageFormInput);
       } : undefined}
     >
-      {/* FormContainer shows the read-only notice and disables the fields when saving isn't allowed. */}
+      {/* The fieldset remains a backstop for independently permissioned app extensions. */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="min-w-0 space-y-4 lg:col-span-2">
           <Card>
@@ -214,7 +215,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
               <FormField
                 control={form.control}
                 name="title"
-                render={({ field, fieldState }) => (
+                render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("title")} value={saved.title} /> : (
                   <Field label={t("title")} error={fieldState.error?.message}>
                     <Input placeholder={t(isArticle ? "titlePlaceholder_article" : "titlePlaceholder_page")} {...field} />
                   </Field>
@@ -223,19 +224,15 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
               <FormField
                 control={form.control}
                 name="content"
-                render={({ field, fieldState }) => (
+                render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("content")} value={saved.content ? <RichContent content={saved.content} /> : null} /> : (
                   <Field label={t("content")} error={fieldState.error?.message}>
-                    {canSave ? (
-                      <DeferredTiptapEditor
-                        content={field.value}
-                        onChange={field.onChange}
-                        placeholder={t(isArticle ? "contentPlaceholder_article" : "contentPlaceholder_page")}
-                        ariaLabel={t("content")}
-                        compact
-                      />
-                    ) : (
-                      <RichContent content={field.value} />
-                    )}
+                    <DeferredTiptapEditor
+                      content={field.value}
+                      onChange={field.onChange}
+                      placeholder={t(isArticle ? "contentPlaceholder_article" : "contentPlaceholder_page")}
+                      ariaLabel={t("content")}
+                      compact
+                    />
                   </Field>
                 )}
               />
@@ -243,7 +240,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                 <FormField
                   control={form.control}
                   name="excerpt"
-                  render={({ field, fieldState }) => (
+                  render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("excerpt")} value={saved.excerpt} /> : (
                     <Field label={t("excerpt")} help={t("excerptHelp")} error={fieldState.error?.message}>
                       <Textarea
                         rows={3}
@@ -269,7 +266,8 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                 render={({ field, fieldState }) => (
                   <Field error={fieldState.error?.message}>
                     <FormImageUploadField
-                      value={field.value}
+                      value={canSave ? field.value : saved.featuredImage}
+                      readOnly={!canSave}
                       onChange={field.onChange}
                       triggerLabel={t("chooseImage")}
                       changeTriggerLabel={t("changeImage")}
@@ -284,10 +282,10 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
           <SearchListingCard
             resource={isArticle ? "blogPost" : "page"}
             value={{
-              title: form.watch("metaTitle") ?? "",
-              description: form.watch("metaDescription") ?? "",
+              title: shown.metaTitle ?? "",
+              description: shown.metaDescription ?? "",
               handle: slug ?? "",
-              hidden: form.watch("noIndex") === true,
+              hidden: shown.noIndex === true,
             }}
             autoHandle={!isEdit && !slug ? autoHandleFor(title ?? "", isArticle ? "post" : "page") : undefined}
             onChange={(next) => {
@@ -328,7 +326,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
               <FormField
                 control={form.control}
                 name="publicationMode"
-                render={({ field, fieldState }) => (
+                render={({ field, fieldState }) => !canSave || !canPublish ? <ReadOnlyValue label={t("visibility")} value={t(saved.publicationMode === "published" ? "visible" : saved.publicationMode === "scheduled" ? "scheduled" : "draft")} help={canSave && !canPublish ? t("publishPermission") : undefined} /> : (
                   <Field
                     help={!canPublish
                       ? t("publishPermission")
@@ -352,7 +350,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                 <FormField
                   control={form.control}
                   name="publishedAt"
-                  render={({ field, fieldState }) => (
+                  render={({ field, fieldState }) => !canSave || !canPublish ? <ReadOnlyValue label={t("publishAt")} value={saved.publishedAt ? formatDateTime(saved.publishedAt, { dateStyle: "medium", timeStyle: "short" }) : null} /> : (
                     <Field label={t("publishAt")} error={fieldState.error?.message}>
                       <Input
                         type="datetime-local"
@@ -385,7 +383,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                 <FormField
                   control={form.control}
                   name="author"
-                  render={({ field, fieldState }) => (
+                  render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("author")} value={saved.author} /> : (
                     <Field label={t("author")} error={fieldState.error?.message}>
                       <Input value={field.value ?? ""} onChange={(event) => field.onChange(event.target.value || null)} />
                     </Field>
@@ -394,7 +392,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                 <FormField
                   control={form.control}
                   name="tags"
-                  render={({ field, fieldState }) => (
+                  render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("tags")} value={formatList(saved.tags ?? [], getLocale())} /> : (
                     <Field label={t("tags")} help={t("tagsHelp")} error={fieldState.error?.message}>
                       <ArticleTagsInput value={field.value} onChange={field.onChange} />
                     </Field>
@@ -415,7 +413,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                     key={name}
                     control={form.control}
                     name={name}
-                    render={({ field }) => (
+                    render={({ field }) => !canSave ? <ReadOnlyValue label={t(name)} value={t(saved[name] ? "yes" : "no")} /> : (
                       <ChoiceField
                         id={`page-${name}`}
                         label={t(name)}

@@ -566,11 +566,11 @@ describe("cart server order processing: delivery, pickup and nothing to deliver"
       },
     });
 
-    await processOrder(formWith({ deliveryMode: "pickup", shippingLocation: "pickup_1", customerWhatsapp: " 01812345678 ", marketingConsent: "bn" }));
+    await processOrder(formWith({ deliveryMode: "pickup", shippingLocation: "pickup_1", customerWhatsapp: " 01812345678 ", marketingConsent_sms: "bn" }));
 
     expect(mocks.createOrder.mock.calls[0]![0]).toMatchObject({
       customerWhatsapp: "01812345678",
-      marketingConsent: { language: "bn" },
+      marketingConsent: { language: "bn", channels: ["sms"] },
     });
   });
 

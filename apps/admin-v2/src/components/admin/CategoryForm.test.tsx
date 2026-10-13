@@ -307,5 +307,27 @@ describe("CategoryForm", () => {
     expect(document.querySelector("fieldset")?.disabled).toBe(true);
     expect(queryButton("Save")).toBeUndefined();
     expect(document.querySelector('textarea[aria-label="Description"]')).toBeNull();
+    expect(document.querySelector("input, textarea, [role=combobox]")).toBeNull();
+    expect(document.body.textContent).toContain("Cotton and silk panjabi.");
+    expect(queryButton("Edit search engine listing")).toBeUndefined();
+  });
+
+  it("shows saved category and template facts when editing is revoked", async () => {
+    const values = { ...saved, listingTemplate: "retired-layout" };
+    await render({ defaultValues: values, isEdit: true });
+    type(byLabel("Name"), "Unsaved category name");
+    type(byLabel("Description"), "<p>Unsaved description</p>");
+    await settle();
+    permissions.canEdit = false;
+    await render({ defaultValues: values, isEdit: true });
+    expect(document.querySelector("input, textarea, [role=combobox]")).toBeNull();
+    expect(document.body.textContent).toContain("retired-layout (no longer offered)");
+    expect(document.body.textContent).toContain("Cotton and silk panjabi.");
+    expect(document.body.textContent).not.toContain("Unsaved category name");
+    expect(document.body.textContent).not.toContain("Unsaved description");
+    expect(api.update).not.toHaveBeenCalled();
+    permissions.canEdit = true;
+    await render({ defaultValues: values, isEdit: true });
+    expect(byLabel<HTMLInputElement>("Name").value).toBe("Unsaved category name");
   });
 });

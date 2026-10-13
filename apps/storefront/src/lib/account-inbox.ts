@@ -10,11 +10,14 @@
 
 import { formatStoreDateTime, storeTimeZone } from "./store-time-zone";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { groupConversationMessages } from "@scalius/shared/conversation-grouping";
+import { formatMoney } from "@/lib/currency";
 import {
   CONVERSATION_ATTACHMENT_UPLOAD_TYPES,
   CONVERSATION_LIMITS,
   isConversationAttachmentId,
   isConversationId,
+  type ConversationProductCard,
 } from "@scalius/shared/conversation";
 import type {
   GetApiV1CustomerAuthConversationsByIdResponses,
@@ -327,8 +330,21 @@ function renderAttachments(message: BuyerConversationMessage, options: RenderMes
     const size = attachment.width && attachment.height
       ? ` width="${attachment.width}" height="${attachment.height}"`
       : "";
-    return `<a href="${url}" target="_blank" rel="noopener" class="block overflow-hidden rounded-lg border border-border bg-background"><img src="${url}" alt="${escapeHtml(alt)}"${size} loading="lazy" decoding="async" class="h-28 w-28 object-cover" /></a>`;
+    return `<a href="${url}" target="_blank" rel="noopener" class="block min-w-0 max-w-full overflow-hidden rounded-lg border border-border bg-background"><img data-message-image src="${url}" alt="${escapeHtml(alt)}"${size} loading="lazy" decoding="async" class="${images.length === 1 ? "max-h-60 max-w-full object-contain" : "h-24 w-24 object-cover"}" /><span hidden data-message-image-error class="flex h-24 w-24 items-center justify-center p-2 text-center text-sm text-muted-foreground">Image unavailable</span></a>`;
   }).join("")}</div>`;
+}
+
+function renderProducts(products: readonly ConversationProductCard[]): string {
+  return products.slice(0, 3).map((product) => {
+    const href = product.pdpUrl?.startsWith("/") && !product.pdpUrl.startsWith("//") && !product.pdpUrl.includes("\\") ? product.pdpUrl : null;
+    const image = product.imageUrl && /^https?:\/\//.test(product.imageUrl) ? product.imageUrl : null;
+    const price = product.price ? formatMoney(product.price.amount, { code: product.price.currency }) : "";
+    const availability = product.status === "unavailable" ? "No longer available" : product.status === "sold_out" ? "Sold out" : "";
+    return `<div class="mt-2 flex gap-3 rounded-lg border border-border bg-card p-3 text-card-foreground">
+      ${image ? `<img src="${escapeHtml(image)}" alt="" width="48" height="48" loading="lazy" class="h-12 w-12 shrink-0 rounded-md object-cover" />` : ""}
+      <div class="min-w-0 flex-1"><p class="break-words text-sm font-medium">${escapeHtml(product.title)}</p>${product.variantLabel ? `<p class="text-xs text-muted-foreground">${escapeHtml(product.variantLabel)}</p>` : ""}${price ? `<p class="mt-1 text-sm">${escapeHtml(price)}</p>` : ""}${availability ? `<p class="text-xs text-muted-foreground">${availability}</p>` : ""}${href ? `<a href="${escapeHtml(href)}" class="inline-flex min-h-11 items-center text-sm font-medium text-primary underline">View product</a>` : ""}</div>
+    </div>`;
+  }).join("");
 }
 
 /** The thread as list items: the buyer's lines on the right, the store's on the left, events centered. */
@@ -337,9 +353,15 @@ export function renderConversationMessages(
   options: RenderMessagesOptions,
 ): string {
   let dividerShown = false;
-  return messages.map((message) => {
+  return groupConversationMessages(messages.map((message) => ({ ...message, kind: message.eventKind === "product_reply" ? "message" as const : message.kind, authorType: message.from, visibility: "public" })), {
+    dayKey: (time) => formatStoreDateTime(time * 1000, "en", { dateStyle: "medium" }),
+  }).map(({ message, groupStart, showAuthor, startsDay }) => {
     const time = formatConversationTime(message.createdAt);
-    const timeTag = time ? `<time datetime="${escapeHtml(isoTime(message.createdAt))}">${escapeHtml(time)}</time>` : "";
+    const clock = formatStoreDateTime(message.createdAt * 1000, "en", { timeStyle: "short" });
+    const day = formatStoreDateTime(message.createdAt * 1000, "en", { dateStyle: "medium" });
+    const timeTag = time ? `<time datetime="${escapeHtml(isoTime(message.createdAt))}" title="${escapeHtml(time)}">${escapeHtml(clock)}</time>` : "";
+    const dayLine = `<div data-message-day${startsDay ? "" : " hidden"} class="my-4 text-center text-xs text-muted-foreground">${escapeHtml(day)}</div>`;
+    const meta = `data-seq="${message.seq}" data-message-id="${escapeHtml(message.id)}" data-from="${message.from}" data-created="${message.createdAt}" data-day="${escapeHtml(day)}" data-kind="${message.kind}"`;
     const divider = !dividerShown
       && typeof options.readSeq === "number"
       && message.seq > options.readSeq
@@ -347,8 +369,9 @@ export function renderConversationMessages(
       ? (dividerShown = true, `<li class="flex items-center gap-3 text-xs font-medium text-primary" role="separator"><span class="h-px flex-1 bg-primary/30"></span>${escapeHtml(CONVERSATION_COPY.newDivider)}<span class="h-px flex-1 bg-primary/30"></span></li>`)
       : "";
 
-    if (message.kind === "event" || message.from === "system") {
-      return `${divider}<li class="px-2 text-center text-xs text-muted-foreground" data-seq="${message.seq}"><p>${escapeHtml(conversationEventLine(message))}</p>${timeTag ? `<p class="mt-0.5">${timeTag}</p>` : ""}</li>`;
+    const products = (message as BuyerConversationMessage & { products?: ConversationProductCard[] }).products ?? [];
+    if ((message.kind === "event" && products.length === 0) || message.from === "system") {
+      return `${divider}<li class="px-2 text-center text-xs text-muted-foreground" ${meta}>${dayLine}<p>${escapeHtml(conversationEventLine(message))}</p>${timeTag ? `<p class="mt-0.5">${timeTag}</p>` : ""}</li>`;
     }
 
     const mine = message.from === "buyer";
@@ -356,14 +379,24 @@ export function renderConversationMessages(
     const bubble = mine
       ? "rounded-2xl rounded-ee-md bg-primary px-4 py-2.5 text-primary-foreground"
       : "rounded-2xl rounded-es-md border border-border bg-muted px-4 py-2.5 text-foreground";
-    const body = message.body ? `<p class="whitespace-pre-line break-words text-sm">${escapeHtml(message.body)}</p>` : "";
-    return `${divider}<li class="flex ${mine ? "justify-end" : "justify-start"}" data-seq="${message.seq}">
-  <div class="max-w-[85%] sm:max-w-[75%]">
-    <div class="${bubble}"><span class="sr-only">${escapeHtml(author)}: </span>${body}${renderAttachments(message, options, mine)}</div>
-    <p class="mt-1 text-xs text-muted-foreground ${mine ? "text-end" : "text-start"}">${escapeHtml(author)}${timeTag ? ` · ${timeTag}` : ""}</p>
-  </div>
+    const body = message.body ? `<p data-message-body class="whitespace-pre-line break-words [overflow-wrap:anywhere] text-base leading-relaxed sm:text-sm">${escapeHtml(message.body)}</p><button type="button" hidden data-message-expand class="mt-1 min-h-11 text-sm underline">Show more</button>` : "";
+    return `${divider}<li class="${groupStart ? "mt-4" : "mt-1"} ${mine ? "justify-end" : "justify-start"}" ${meta}>
+  ${dayLine}
+  <div class="flex ${mine ? "justify-end" : "justify-start"}"><div class="min-w-0 max-w-[min(36rem,90%)]">
+    <p data-message-author${showAuthor ? "" : " hidden"} class="mb-1 text-xs text-muted-foreground ${mine ? "text-end" : "text-start"}">${escapeHtml(author)}${timeTag ? ` · ${timeTag}` : ""}</p>
+    <div class="${bubble}"><span class="sr-only">${escapeHtml(author)}: </span>${body}${renderAttachments(message, options, mine)}${renderProducts(products)}</div>
+  </div></div>
 </li>`;
   }).join("");
+}
+
+/** Independent rows for incremental reads and sends; dividers stay with the initial page. */
+export function renderConversationItems(messages: readonly BuyerConversationMessage[], options: RenderMessagesOptions) {
+  return messages.map((message) => ({
+    id: message.id,
+    seq: message.seq,
+    html: renderConversationMessages([message], { attachmentUrl: options.attachmentUrl }),
+  }));
 }
 
 /** The Inbox list: one row per conversation with an unread dot. */
@@ -372,6 +405,8 @@ export function renderInboxItems(items: readonly BuyerConversationSummary[]): st
     const href = `/account/inbox/${encodeURIComponent(item.id)}`;
     const unread = item.unread > 0;
     const time = formatConversationTime(item.lastMessageAt);
+    const day = (value: number) => formatStoreDateTime(value, "en", { dateStyle: "short" });
+    const compactTime = item.lastMessageAt ? formatStoreDateTime(item.lastMessageAt * 1000, "en", day(item.lastMessageAt * 1000) === day(Date.now()) ? { timeStyle: "short" } : { month: "short", day: "numeric" }) : "";
     return `<li>
   <a href="${escapeHtml(href)}" data-astro-prefetch="false" class="flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
     <span aria-hidden="true" class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${unread ? "bg-primary" : "bg-transparent"}"></span>
@@ -379,7 +414,7 @@ export function renderInboxItems(items: readonly BuyerConversationSummary[]): st
       <span class="block break-words text-sm ${unread ? "font-semibold" : "font-medium"} text-foreground">${escapeHtml(conversationTitle(item))}</span>
       <span class="mt-0.5 block text-sm text-muted-foreground">${escapeHtml(conversationStatusLabel(item.status))}${unread ? ` · <span class="font-medium text-primary">${escapeHtml(unreadLabel(item.unread))}</span>` : ""}</span>
     </span>
-    ${time ? `<span class="shrink-0 text-xs text-muted-foreground">${escapeHtml(time)}</span>` : ""}
+    ${time ? `<time datetime="${escapeHtml(isoTime(item.lastMessageAt!))}" title="${escapeHtml(time)}" class="shrink-0 text-xs text-muted-foreground">${escapeHtml(compactTime)}</time>` : ""}
   </a>
 </li>`;
   }).join("");

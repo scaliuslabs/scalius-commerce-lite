@@ -2,8 +2,8 @@
 import { describe, expect, it } from "vitest";
 import { homeSectionMediaIds, homeSectionRequests, resolveStorefrontTheme } from "@scalius/shared/storefront-theme";
 import { answerFixtureApi, entryTheme, galleryApiBase, galleryStoreShape } from "./api";
-import { galleryEntry, type GalleryEntry } from "./entries";
-import { cardProducts, type CardProduct } from "./fixtures";
+import { galleryEntry, galleryEntries, type GalleryEntry } from "./entries";
+import { cardProduct, cardProducts, productDetail, PRODUCT_SCENARIO_SLUGS, type CardProduct } from "./fixtures";
 import { galleryIndex } from "./server";
 
 const origin = "http://127.0.0.1:4799";
@@ -143,5 +143,86 @@ describe("finite gallery catalogs", () => {
     const present = await read<Sections>({ ...fixture, scenario: { ...fixture.scenario, missingSectionMedia: false } }, "/api/v1/storefront/homepage");
     expect(present.sections.media.map((media) => media.id)).toEqual(requested);
     expect(JSON.stringify(fixture.theme)).toBe(before);
+  });
+});
+
+
+describe("gallery product journeys", () => {
+  it("resolves card and recommendation identities without swapping their product", async () => {
+    const fixture = entry(200);
+    const cards = cardProducts(33);
+    const recommended = await read<{ products: CardProduct[] }>(fixture, "/api/v1/products/recommendations?productIds=prod_0&limit=8");
+    for (const card of [...cards, ...recommended.products]) {
+      const detail = await read<ReturnType<typeof productDetail>>(fixture, `/api/v1/products/${card.slug}`);
+      expect(detail.product).toMatchObject({ id: card.id, slug: card.slug, name: card.name, price: card.price, discountedPrice: card.discountedPrice, hasVariants: card.hasVariants });
+      expect(detail.variants.every((variant) => variant.productId === card.id)).toBe(true);
+      expect(detail.variants.every((variant) => !variant.imageId || detail.media.some((media) => media.id === variant.imageId))).toBe(true);
+    }
+  });
+
+  it("resolves the declared product of every existing product case", async () => {
+    for (const fixture of galleryEntries().filter((candidate) => candidate.page === "product")) {
+      const slug = PRODUCT_SCENARIO_SLUGS[fixture.scenario.product ?? "fashion"];
+      const detail = await read<ReturnType<typeof productDetail>>(fixture, `/api/v1/products/${slug}`);
+      expect(detail.product.slug).toBe(slug);
+    }
+  });
+
+  it.each(["product-state-bangla", "noor-product-bn"])("keeps localized listing and recommendation identities in %s", async (id) => {
+    const fixture = galleryEntry(id)!;
+    const listed = await read<Listing>(fixture, "/api/v1/products?limit=16");
+    const recommended = await read<{ products: CardProduct[] }>(fixture, "/api/v1/products/recommendations?productIds=prod_0&limit=8");
+    for (const card of [...listed.products, ...recommended.products]) {
+      const detail = await read<ReturnType<typeof productDetail>>(fixture, `/api/v1/products/${card.slug}`);
+      expect(detail.product).toMatchObject({ id: card.id, name: card.name, slug: card.slug, price: card.price });
+    }
+  });
+
+  it("refuses forged or out-of-catalog slugs", async () => {
+    for (const slug of ["forged-3", "cotton-panjabi-999999", cardProduct(1).slug]) {
+      const response = await answerFixtureApi(entry(1), new Request(`${galleryApiBase(origin, entry(1).id)}/api/v1/products/${slug}`));
+      expect(response.status).toBe(404);
+    }
+  });
+
+  it("gives the one-image case exactly one image and no hover image", async () => {
+    const fixture = galleryEntry("product-state-one-image")!;
+    const detail = await read<ReturnType<typeof productDetail>>(fixture, "/api/v1/products/mi-tv-box");
+    expect(detail.media).toHaveLength(1);
+    expect(detail.product.secondaryImageUrl).toBeNull();
+    expect(fixture.focus.include.join()).toContain("data-product-gallery");
+  });
+
+  it("makes body blocks and dense RTL tabs real required subjects", async () => {
+    const fixture = galleryEntry("product-content-blocks")!;
+    const detail = await read<{ product: { contentBlocks: Array<{ type: string }> } }>(fixture, "/api/v1/products/jamdani-saree");
+    expect(detail.product.contentBlocks.map((block) => block.type)).toEqual(["rich-text", "feature-list", "faq"]);
+    expect(fixture.theme.blocks.product.below).toContain("content-blocks");
+    expect(fixture.focus.include).toEqual(["[data-product-content-blocks] [data-content-block]"]);
+    const rtl = galleryEntry("product-tabs-dense-rtl")!;
+    const tabs = await read<{ product: { additionalInfo: unknown[] } }>(rtl, "/api/v1/products/jamdani-saree");
+    expect(tabs.product.additionalInfo).toHaveLength(5);
+    expect(rtl.scenario.locale).toBe("ar");
+    expect(rtl.theme.blocks.product.sticky.desktop).toBe("none");
+  });
+
+  it("keeps remembered public products after the exact-id check and omits gone ids", async () => {
+    const fixture = galleryEntry("home-recently-viewed")!;
+    const remembered = JSON.parse(fixture.scenario.storage!["scalius:recently-viewed:v2"]!) as Array<{ id: string; slug: string; image: string }>;
+    expect(remembered).toHaveLength(3);
+    const result = await read<Listing>(fixture, `/api/v1/products?ids=${remembered.map((product) => product.id).join(",")},prod_99999&limit=12`);
+    expect(ids(result.products)).toEqual(remembered.map((product) => product.id));
+    for (const product of remembered) {
+      expect(product.image).toMatch(/^\/(?!\/)/);
+      expect((await read<ReturnType<typeof productDetail>>(fixture, `/api/v1/products/${product.slug}`)).product.id).toBe(product.id);
+    }
+    expect(fixture.focus.include[0]).toContain(":not([hidden])");
+  });
+
+  it("models unavailable COD separately from the working landing checkout", async () => {
+    const fixture = galleryEntry("noor-landing-no-cod")!;
+    expect((await read<{ gateways: unknown[] }>(fixture, "/api/v1/checkout/config")).gateways).toEqual([]);
+    expect(fixture.focus.include).toEqual([".scalius-order-form-unavailable"]);
+    expect(JSON.stringify(fixture.theme.pages.landing)).not.toMatch(/cash on delivery|\bCOD\b/i);
   });
 });

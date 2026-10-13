@@ -19,6 +19,9 @@ import {
 } from "@scalius/database/schema";
 import {
   CONVERSATION_LIMITS,
+  conversationProductSnapshots,
+  type ConversationProductSnapshot,
+  type ConversationProductReference,
   normalizeConversationBody,
   normalizeConversationSubject,
   type ConversationAuthorType,
@@ -30,6 +33,8 @@ import {
 import { formatOrderNumber, parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
+import { staffPermissionSql } from "../../auth/rbac/helpers";
+import { planConversationSearchIndex, conversationBodySearchCondition, getConversationSearchCoverage } from "./search";
 import { containsText } from "../../utils/text-match";
 import { staffUnreadMessageCondition } from "../../utils/conversation-unread";
 import { nanoid } from "nanoid";
@@ -241,7 +246,7 @@ interface PlannedAppend {
 
 /** The status a line leaves the thread in, or null when it changes nothing. */
 function statusAfter(line: ConversationLine): ConversationStatus | null {
-  if (line.kind !== "message" || line.visibility !== "public") return null;
+  if ((line.kind !== "message" && line.eventKind !== "product_reply") || line.visibility !== "public") return null;
   if (line.authorType === "customer" || line.authorType === "guest_receipt") return "open";
   if (line.authorType === "staff") return "pending";
   return null;
@@ -249,7 +254,7 @@ function statusAfter(line: ConversationLine): ConversationStatus | null {
 
 function notificationFor(threadId: string, planned: PlannedLine): NotificationInput | null {
   const { line, seq } = planned;
-  if (line.kind !== "message" || line.visibility !== "public") return null;
+  if ((line.kind !== "message" && line.eventKind !== "product_reply") || line.visibility !== "public") return null;
   if (line.authorType === "customer" || line.authorType === "guest_receipt") {
     return {
       subjectType: "conversation",
@@ -329,6 +334,8 @@ export function planConversationAppend(
       createdAt: now,
     }));
 
+    statements.push(...planConversationSearchIndex(db, { id, conversationId: thread.id, seq, body: line.body ?? null, eventKind: line.eventKind ?? null, eventData: line.eventData ?? null }));
+
     if (line.attachmentIds && line.attachmentIds.length > 0) {
       statements.push(db.update(conversationAttachments).set({
         messageId: id,
@@ -369,7 +376,7 @@ export async function enqueueConversationNotifications(
 
 async function readMessageByClientKey(db: Database, conversationId: string, clientMessageKey: string) {
   return await db
-    .select({ id: conversationMessages.id })
+    .select()
     .from(conversationMessages)
     .where(and(
       eq(conversationMessages.conversationId, conversationId),
@@ -434,7 +441,8 @@ async function assertAttachable(
 
 export interface PostMessageInput {
   actor: ConversationActor;
-  body: unknown;
+  body?: unknown;
+  products?: readonly ConversationProductSnapshot[];
   visibility?: ConversationMessageVisibility;
   clientMessageKey?: string | null;
   attachmentIds?: readonly string[];
@@ -457,36 +465,35 @@ export async function postConversationMessage(
   input: PostMessageInput,
   options: { queue?: NotificationQueue } = {},
 ): Promise<PostMessageResult> {
-  const body = normalizeConversationBody(input.body);
-  if (!body.ok) {
-    throw new ValidationError(body.reason === "too_long"
-      ? `Messages can be up to ${CONVERSATION_LIMITS.bodyLength} characters.`
-      : body.reason === "invalid_characters"
-        ? "The message contains characters that can't be sent."
-        : "Write a message first.");
-  }
   const buyer = input.actor.kind !== "staff";
   const visibility = buyer ? "public" : (input.visibility ?? "public");
+  const products = input.products?.length ? conversationProductSnapshots({ v: 1, cards: input.products }) : [];
+  if (input.products?.length && (buyer || visibility !== "public" || products.length !== input.products.length)) {
+    throw new ValidationError("Share up to three valid products in a public staff reply.");
+  }
+  const body = normalizedPostBody(input.body, products.length > 0);
   const clientMessageKey = input.clientMessageKey?.trim() || null;
   if (clientMessageKey && clientMessageKey.length > CONVERSATION_LIMITS.clientMessageKeyLength) {
     throw new ValidationError("The message key is too long.");
   }
   const attachmentIds = input.attachmentIds ?? [];
-
-  if (clientMessageKey) {
-    const existing = await readMessageByClientKey(db, thread.id, clientMessageKey);
-    if (existing) return replayResult(db, thread.id, existing.id);
-  }
+  const replay = await replayConversationPost(db, thread.id, input);
+  if (replay) return replay;
   if (buyer) await assertBuyerDailyCap(db, thread.id);
   await assertAttachable(db, thread.id, input.actor, attachmentIds);
-
+  const eventData = products.length ? { v: 1, cards: products } : null;
+  if (eventData && JSON.stringify(eventData).length > CONVERSATION_LIMITS.eventDataLength) {
+    throw new ValidationError("These product details are too long to share together.");
+  }
   const line: ConversationLine = {
-    kind: "message",
+    kind: products.length ? "event" : "message",
+    eventKind: products.length ? "product_reply" : null,
+    eventData,
     visibility,
     authorType: input.actor.kind,
     authorCustomerId: input.actor.kind === "customer" ? input.actor.customerId : null,
     authorUserId: input.actor.kind === "staff" ? input.actor.userId : null,
-    body: body.value,
+    body,
     clientMessageKey,
     attachmentIds,
     readBy: buyer ? ["customer"] : [],
@@ -502,8 +509,8 @@ export async function postConversationMessage(
       return { conversationId: thread.id, messageId: posted!.id, seq: posted!.seq, created: true };
     } catch (error) {
       if (clientMessageKey && isClientKeyConflict(error)) {
-        const existing = await readMessageByClientKey(db, thread.id, clientMessageKey);
-        if (existing) return replayResult(db, thread.id, existing.id);
+        const replay = await replayConversationPost(db, thread.id, input);
+        if (replay) return replay;
       }
       if (!isConstraintError(error) || attempt === POST_ATTEMPTS) {
         if (isConstraintError(error)) {
@@ -519,10 +526,40 @@ export async function postConversationMessage(
   throw new ConflictError("The conversation changed while you were sending. Please try again.");
 }
 
-async function replayResult(db: Database, conversationId: string, messageId: string): Promise<PostMessageResult> {
-  const row = await db.select({ seq: conversationMessages.seq }).from(conversationMessages)
-    .where(eq(conversationMessages.id, messageId)).get();
-  return { conversationId, messageId, seq: row?.seq ?? 0, created: false };
+function normalizedPostBody(input: unknown, hasProducts: boolean): string | null {
+  const body = normalizeConversationBody(input);
+  if (body.ok) return body.value;
+  if (hasProducts && body.reason === "empty") return null;
+  throw new ValidationError(body.reason === "too_long"
+    ? `Messages can be up to ${CONVERSATION_LIMITS.bodyLength} characters.`
+    : body.reason === "invalid_characters" ? "The message contains characters that can't be sent." : "Write a message first.");
+}
+
+/** Compare the original request before resolving live catalog facts, so a sold/unpublished SKU cannot break a safe retry. */
+export async function replayConversationPost(
+  db: Database,
+  conversationId: string,
+  input: Omit<PostMessageInput, "products"> & { products?: readonly ConversationProductReference[] },
+): Promise<PostMessageResult | null> {
+  const key = input.clientMessageKey?.trim();
+  if (!key) return null;
+  const existing = await readMessageByClientKey(db, conversationId, key);
+  if (!existing) return null;
+  const body = normalizedPostBody(input.body, Boolean(input.products?.length));
+  const attachments = await db.select({ id: conversationAttachments.id }).from(conversationAttachments)
+    .where(eq(conversationAttachments.messageId, existing.id)).all();
+  const refs = (cards: readonly ConversationProductReference[]) => cards.map(({ productId, skuId }) => `${productId}:${skuId}`).sort();
+  const storedProducts = existing.eventKind === "product_reply" ? conversationProductSnapshots(parseEventData(existing.eventData)) : [];
+  const visibility = input.actor.kind === "staff" ? input.visibility ?? "public" : "public";
+  const actorMatches = existing.authorType === input.actor.kind
+    && (input.actor.kind !== "staff" || existing.authorUserId === input.actor.userId)
+    && (input.actor.kind !== "customer" || existing.authorCustomerId === input.actor.customerId);
+  if (!actorMatches || existing.body !== body || existing.visibility !== visibility
+    || JSON.stringify(refs(storedProducts)) !== JSON.stringify(refs(input.products ?? []))
+    || JSON.stringify(attachments.map(({ id }) => id).sort()) !== JSON.stringify([...(input.attachmentIds ?? [])].sort())) {
+    throw new ConflictError("This message request was already used for different content. Review the conversation before sending again.");
+  }
+  return { conversationId, messageId: existing.id, seq: existing.seq, created: false };
 }
 
 /** A buyer's post to an order thread, which starts the thread on the first message. */
@@ -647,21 +684,32 @@ function parseEventData(value: string | null): Record<string, unknown> | null {
 async function readMessagePage(
   db: Database,
   conversationId: string,
-  options: { beforeSeq?: number; publicOnly: boolean; withAuthorNames: boolean },
-): Promise<{ messages: ConversationMessageRecord[]; hasMore: boolean }> {
+  options: { beforeSeq?: number; afterSeq?: number; aroundSeq?: number; publicOnly: boolean; withAuthorNames: boolean },
+): Promise<{ messages: ConversationMessageRecord[]; hasMore: boolean; hasNewer: boolean }> {
+  const forward = options.afterSeq !== undefined || options.aroundSeq !== undefined;
   const conditions: SQL[] = [eq(conversationMessages.conversationId, conversationId)];
+  if (options.aroundSeq !== undefined) conditions.push(gt(conversationMessages.seq, Math.max(0, options.aroundSeq - 25)));
   if (options.beforeSeq && options.beforeSeq > 0) conditions.push(lt(conversationMessages.seq, options.beforeSeq));
+  if (options.afterSeq !== undefined) conditions.push(gt(conversationMessages.seq, options.afterSeq));
   if (options.publicOnly) conditions.push(eq(conversationMessages.visibility, "public"));
   const rows = await db
     .select()
     .from(conversationMessages)
     .where(and(...conditions))
-    .orderBy(desc(conversationMessages.seq))
+    .orderBy(forward ? asc(conversationMessages.seq) : desc(conversationMessages.seq))
     .limit(CONVERSATION_LIMITS.pageSize + 1)
     .all();
-  const hasMore = rows.length > CONVERSATION_LIMITS.pageSize;
-  const page = rows.slice(0, CONVERSATION_LIMITS.pageSize).reverse();
-  if (page.length === 0) return { messages: [], hasMore: false };
+  const overflow = rows.length > CONVERSATION_LIMITS.pageSize;
+  const page = rows.slice(0, CONVERSATION_LIMITS.pageSize);
+  if (!forward) page.reverse();
+  if (page.length === 0) return { messages: [], hasMore: false, hasNewer: false };
+  const older = forward && page[0]!.seq > 1
+    ? await db.select({ id: conversationMessages.id }).from(conversationMessages).where(and(
+      eq(conversationMessages.conversationId, conversationId),
+      lt(conversationMessages.seq, page[0]!.seq),
+      options.publicOnly ? eq(conversationMessages.visibility, "public") : undefined,
+    )).limit(1).get()
+    : undefined;
 
   const attachments = await db
     .select({
@@ -694,7 +742,8 @@ async function readMessagePage(
   }
 
   return {
-    hasMore,
+    hasMore: !forward ? overflow : Boolean(older),
+    hasNewer: forward && overflow,
     messages: page.map((row) => ({
       id: row.id,
       seq: row.seq,
@@ -752,10 +801,14 @@ function advanceMarker(column: typeof conversations.staffReadSeq | typeof conver
 export async function getBuyerThread(
   db: Database,
   thread: ThreadRow,
-  options: { beforeSeq?: number } = {},
+  options: { beforeSeq?: number; afterSeq?: number } = {},
 ): Promise<BuyerConversationThread> {
+  if (options.beforeSeq !== undefined && options.afterSeq !== undefined) throw new ValidationError("Choose one message page direction.");
+  if (options.afterSeq !== undefined && (!Number.isSafeInteger(options.afterSeq) || options.afterSeq < 0)) throw new ValidationError("Invalid message page position.");
   const [page, unread, numbers] = await Promise.all([
-    readMessagePage(db, thread.id, { beforeSeq: options.beforeSeq, publicOnly: true, withAuthorNames: false }),
+    options.afterSeq !== undefined && options.afterSeq >= thread.lastSeq
+      ? Promise.resolve({ messages: [], hasMore: false, hasNewer: false })
+      : readMessagePage(db, thread.id, { ...options, publicOnly: true, withAuthorNames: false }),
     buyerUnreadCounts(db, [thread.id]),
     orderNumbersById(db, thread.orderId ? [thread.orderId] : []),
   ]);
@@ -772,6 +825,7 @@ export async function getBuyerThread(
     readSeq: thread.customerReadSeq,
     messages: projectMessagesForBuyer(page.messages),
     hasMore: page.hasMore,
+    hasNewer: page.hasNewer,
   };
 }
 
@@ -892,6 +946,8 @@ export interface StaffInboxFilters {
   subjectType?: ConversationSubjectType;
   q?: string;
   cursor?: string | null;
+  unread?: boolean;
+  sort?: "latest" | "waiting_longest";
 }
 
 async function staffSummaries(db: Database, rows: Array<{
@@ -900,6 +956,7 @@ async function staffSummaries(db: Database, rows: Array<{
   orderCustomerName: string | null;
   customerName: string | null;
   assigneeName: string | null;
+  assigneeEligible: boolean;
 }>): Promise<StaffConversationSummary[]> {
   if (rows.length === 0) return [];
   const unreadMessages = alias(conversationMessages, "unread_message");
@@ -907,6 +964,7 @@ async function staffSummaries(db: Database, rows: Array<{
     .select({
       conversationId: conversationMessages.conversationId,
       kind: conversationMessages.kind,
+      visibility: conversationMessages.visibility,
       body: conversationMessages.body,
       unread: sql<number>`(SELECT count(*) FROM ${conversationMessages} AS unread_message WHERE ${staffUnreadMessageCondition(unreadMessages)})`,
     })
@@ -921,10 +979,11 @@ async function staffSummaries(db: Database, rows: Array<{
     row.conversationId,
     {
       preview: row.kind === "message" && row.body ? row.body.replace(/\s+/g, " ").trim().slice(0, PREVIEW_LENGTH) : null,
+      visibility: row.visibility,
       unread: Number(row.unread),
     },
   ]));
-  return rows.map(({ thread, orderNumber, orderCustomerName, customerName, assigneeName }) => ({
+  return rows.map(({ thread, orderNumber, orderCustomerName, customerName, assigneeName, assigneeEligible }) => ({
     id: thread.id,
     subjectType: thread.subjectType,
     subjectId: thread.subjectId,
@@ -936,9 +995,11 @@ async function staffSummaries(db: Database, rows: Array<{
     customerName: customerName ?? orderCustomerName ?? null,
     assigneeUserId: thread.assigneeUserId,
     assigneeName,
+    assigneeEligible: Boolean(assigneeEligible),
     lastMessageAt: thread.lastMessageAt,
     lastAuthorType: thread.lastAuthorType,
     preview: previewById.get(thread.id)?.preview ?? null,
+    lastMessageVisibility: previewById.get(thread.id)?.visibility ?? null,
     unread: previewById.get(thread.id)?.unread ?? 0,
     version: thread.version,
   }));
@@ -950,6 +1011,7 @@ const staffRowSelect = {
   orderCustomerName: orders.customerName,
   customerName: customers.name,
   assigneeName: user.name,
+  assigneeEligible: sql<boolean>`${staffPermissionSql(conversations.assigneeUserId, "conversations.reply")}`,
 };
 
 /** One keyset page (25) of the staff inbox, newest activity first. */
@@ -997,6 +1059,65 @@ export async function listStaffInbox(
   };
 }
 
+/** Bounded search windows keep a no-match query independent of message history size. */
+export async function queryStaffInbox(db: Database, userId: string, filters: StaffInboxFilters = {}) {
+  const cursor = decodeConversationCursor(filters.cursor);
+  const oldest = filters.sort === "waiting_longest";
+  const conditions: Array<SQL | undefined> = [isNotNull(conversations.lastMessageAt)];
+  if (cursor) conditions.push(oldest
+    ? or(gt(conversations.lastMessageAt, cursor.lastMessageAt), and(eq(conversations.lastMessageAt, cursor.lastMessageAt), gt(conversations.id, cursor.id)))
+    : keysetAfter(cursor));
+  const status = filters.status ?? "open";
+  if (status !== "all") conditions.push(eq(conversations.status, status));
+  if (filters.assignee === "me") conditions.push(eq(conversations.assigneeUserId, userId));
+  else if (filters.assignee === "none") conditions.push(isNull(conversations.assigneeUserId));
+  else if (filters.assignee) conditions.push(eq(conversations.assigneeUserId, filters.assignee));
+  if (filters.subjectType) conditions.push(eq(conversations.subjectType, filters.subjectType));
+  const q = filters.q?.normalize("NFC").trim();
+  if (q && [...q].length > 100) throw new ValidationError("Search with up to 100 characters.");
+  const number = q ? parseOrderNumberSearch(q) : null;
+  const searchMatch = q ? or(
+    ...(number ? [eq(orders.orderNumber, number)] : []),
+    containsText(conversations.subject, q), containsText(orders.customerName, q), containsText(customers.name, q),
+    conversationBodySearchCondition(conversations.id, q),
+  )! : sql`1 = 1`;
+  const unreadMessages = alias(conversationMessages, "unread_message");
+  const unreadMatch = filters.unread === undefined ? sql`1 = 1`
+    : sql`(${filters.unread ? sql`EXISTS` : sql`NOT EXISTS`} (SELECT 1 FROM ${conversationMessages} AS unread_message WHERE ${staffUnreadMessageCondition(unreadMessages)}))`;
+  const rows = await db.select({ ...staffRowSelect, matches: sql<boolean>`(${searchMatch}) AND (${unreadMatch})` })
+    .from(conversations).leftJoin(orders, eq(orders.id, conversations.orderId))
+    .leftJoin(customers, eq(customers.id, conversations.customerId)).leftJoin(user, eq(user.id, conversations.assigneeUserId))
+    .where(and(...conditions))
+    .orderBy(oldest ? asc(conversations.lastMessageAt) : desc(conversations.lastMessageAt), oldest ? asc(conversations.id) : desc(conversations.id))
+    .limit(2001).all();
+  const window = rows.slice(0, 2000);
+  const selected: typeof rows = [];
+  let scanned = 0;
+  for (const row of window) {
+    scanned += 1;
+    if (row.matches) selected.push(row);
+    if (selected.length === INBOX_PAGE_SIZE) break;
+  }
+  const hasContinuation = scanned < window.length || rows.length > 2000;
+  const last = window[scanned - 1]?.thread;
+  return {
+    items: await staffSummaries(db, selected),
+    nextCursor: hasContinuation && last?.lastMessageAt ? encodeConversationCursor({ lastMessageAt: last.lastMessageAt, id: last.id }) : null,
+    scanExhausted: !hasContinuation,
+    scanned,
+    bodyCoverage: await getConversationSearchCoverage(db),
+  };
+}
+
+/** Eligible names only; permissions are checked again inside the assignment write. */
+export async function listConversationAssignees(db: Database, cursor?: string) {
+  const rows = await db.select({ id: user.id, name: user.name }).from(user)
+    .where(and(staffPermissionSql(user.id, "conversations.reply"), cursor ? gt(user.id, cursor) : undefined))
+    .orderBy(asc(user.id)).limit(51).all();
+  const items = rows.slice(0, 50);
+  return { items, nextCursor: rows.length > 50 ? items.at(-1)!.id : null };
+}
+
 export async function getStaffInboxSummary(db: Database, userId: string): Promise<StaffInboxSummary> {
   const mine = alias(conversationInboxCounts, "mine_inbox_counts");
   const row = await db
@@ -1023,7 +1144,7 @@ export async function getStaffInboxSummary(db: Database, userId: string): Promis
 export async function getStaffThread(
   db: Database,
   conversationId: string,
-  options: { beforeSeq?: number } = {},
+  options: { beforeSeq?: number; aroundSeq?: number } = {},
 ): Promise<StaffConversationThread> {
   const row = await db
     .select(staffRowSelect)
@@ -1041,7 +1162,7 @@ export async function getStaffThread(
 export async function getStaffOrderThread(
   db: Database,
   orderId: string,
-  options: { beforeSeq?: number } = {},
+  options: { beforeSeq?: number; aroundSeq?: number } = {},
 ): Promise<StaffConversationThread | null> {
   const row = await db
     .select(staffRowSelect)
@@ -1062,13 +1183,14 @@ async function buildStaffThread(
     orderCustomerName: string | null;
     customerName: string | null;
     assigneeName: string | null;
+  assigneeEligible: boolean;
   },
-  options: { beforeSeq?: number },
+  options: { beforeSeq?: number; aroundSeq?: number },
 ): Promise<StaffConversationThread> {
   const { thread } = row;
   const [[summary], page, order, cases] = await Promise.all([
     staffSummaries(db, [row]),
-    readMessagePage(db, thread.id, { beforeSeq: options.beforeSeq, publicOnly: false, withAuthorNames: true }),
+    readMessagePage(db, thread.id, { beforeSeq: options.beforeSeq, aroundSeq: options.aroundSeq, publicOnly: false, withAuthorNames: true }),
     thread.orderId
       ? db.select({
         id: orders.id,
@@ -1089,6 +1211,7 @@ async function buildStaffThread(
     customerReadSeq: thread.customerReadSeq,
     messages: page.messages,
     hasMore: page.hasMore,
+    hasNewer: page.hasNewer,
     order: order
       ? {
         id: order.id,
@@ -1124,10 +1247,6 @@ export async function updateStaffThread(
   conversationId: string,
   input: { version: number; status?: ConversationStatus; assigneeUserId?: string | null },
 ): Promise<StaffConversationThread> {
-  if (input.assigneeUserId) {
-    const staff = await db.select({ id: user.id }).from(user).where(eq(user.id, input.assigneeUserId)).get();
-    if (!staff) throw new ValidationError("Choose a staff member to assign.");
-  }
   const now = nowSeconds();
   const rows = await db.update(conversations).set({
     ...(input.status ? { status: input.status, closedAt: input.status === "closed" ? now : null } : {}),
@@ -1137,10 +1256,12 @@ export async function updateStaffThread(
   }).where(and(
     eq(conversations.id, conversationId),
     eq(conversations.version, input.version),
+    input.assigneeUserId ? staffPermissionSql(sql`${input.assigneeUserId}`, "conversations.reply") : undefined,
   )).returning({ id: conversations.id });
   if (rows.length === 0) {
     const exists = await readThread(db, conversationId);
     if (!exists) throw new NotFoundError("Conversation not found");
+    if (input.assigneeUserId && exists.version === input.version) throw new ValidationError("Choose an active teammate who can reply to conversations.");
     throw new ConflictError("Someone else changed this conversation. Refresh and try again.");
   }
   return getStaffThread(db, conversationId);

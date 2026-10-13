@@ -3,6 +3,8 @@ import { defineMessages } from "./index";
 /** Marketing consent on the customer page, and Settings → Customer accounts → Marketing. */
 export const customerMarketingMessages = defineMessages({
   en: {
+    pushChannel: "Browser news and offers",
+    noAccount: "A customer account is required for marketing push. Browser permission is separate.",
     // Marketing consent (customer page)
     marketing: "Marketing",
     editMarketing: "Edit",
@@ -46,10 +48,10 @@ export const customerMarketingMessages = defineMessages({
     // Settings → Customer accounts → Marketing
     marketingSettingsTitle: "Marketing",
     marketingSettingsDescription: "How customers subscribe to your news and offers.",
-    checkoutCheckbox: "Show a marketing checkbox at checkout",
+    checkoutCheckbox: "Show marketing channel choices at checkout",
     checkoutCheckboxHelp: "It starts unticked and is never required.",
-    checkboxChannels: "Ticking it subscribes the customer to",
-    checkboxChannelsHelp: "Only channels the order has a contact for.",
+    checkboxChannels: "Channels the customer may choose",
+    checkboxChannelsHelp: "Each choice starts unticked. Only the channels they select are subscribed.",
     channelsRequired: "Choose at least one channel.",
     checkboxText: "Checkbox text",
     checkboxTextEn: "Text in English",
@@ -61,6 +63,8 @@ export const customerMarketingMessages = defineMessages({
     loadMarketingSettings: "Couldn't load marketing settings.",
   },
   bn: {
+    pushChannel: "ব্রাউজারে খবর ও অফার",
+    noAccount: "মার্কেটিং পুশের জন্য কাস্টমার অ্যাকাউন্ট প্রয়োজন। ব্রাউজারের অনুমতি আলাদা।",
     // Marketing consent (customer page)
     marketing: "মার্কেটিং",
     editMarketing: "এডিট",
@@ -104,10 +108,10 @@ export const customerMarketingMessages = defineMessages({
     // Settings → Customer accounts → Marketing
     marketingSettingsTitle: "মার্কেটিং",
     marketingSettingsDescription: "কাস্টমাররা কীভাবে আপনার খবর ও অফার পেতে সাবস্ক্রাইব করেন।",
-    checkoutCheckbox: "চেকআউটে মার্কেটিং চেকবক্স দেখান",
+    checkoutCheckbox: "চেকআউটে মার্কেটিংয়ের মাধ্যম বাছাই দেখান",
     checkoutCheckboxHelp: "শুরুতে টিক দেওয়া থাকে না, আর কখনো বাধ্যতামূলক নয়।",
-    checkboxChannels: "টিক দিলে কাস্টমার সাবস্ক্রাইব হবেন",
-    checkboxChannelsHelp: "শুধু যে চ্যানেলের যোগাযোগ অর্ডারে আছে।",
+    checkboxChannels: "কাস্টমার যে মাধ্যমগুলো বেছে নিতে পারবেন",
+    checkboxChannelsHelp: "শুরুতে কোনোটি টিক দেওয়া থাকে না। কাস্টমার শুধু বেছে নেওয়া মাধ্যমেই সাবস্ক্রাইব হবেন।",
     channelsRequired: "অন্তত একটি চ্যানেল বাছাই করুন।",
     checkboxText: "চেকবক্সের লেখা",
     checkboxTextEn: "ইংরেজিতে লেখা",

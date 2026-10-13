@@ -64,6 +64,8 @@ export class SaveConflict extends SaveNotCompleted {
 /** One editable card (or dialog form) registered with a save scope. */
 export interface SaveBarEntry {
   dirty: boolean;
+  /** Protect retained edits even when permission revocation hides the save controls. Defaults to dirty. */
+  navigationDirty?: boolean;
   saving?: boolean;
   /** Dirty but not savable yet (inline validation, fail-closed lock, role). */
   invalid?: boolean;
@@ -94,6 +96,7 @@ export type SaveFailureKind = "validation" | "connection" | "conflict";
 
 export interface SaveScopeState {
   dirty: boolean;
+  navigationDirty: boolean;
   busy: boolean;
   invalid: boolean;
   /** Problems from the last save that no field shows, one line each. */
@@ -262,6 +265,7 @@ export function SaveScope({
       if (
         !previous ||
         previous.dirty !== entry.dirty ||
+        (previous.navigationDirty ?? previous.dirty) !== (entry.navigationDirty ?? entry.dirty) ||
         Boolean(previous.saving) !== Boolean(entry.saving) ||
         Boolean(previous.invalid) !== Boolean(entry.invalid)
       ) {
@@ -276,6 +280,7 @@ export function SaveScope({
   const list = [...entries.current.values()];
   const state: SaveScopeState = {
     dirty: list.some((entry) => entry.dirty),
+    navigationDirty: list.some((entry) => entry.navigationDirty ?? entry.dirty),
     busy: saving || list.some((entry) => entry.saving),
     invalid: list.some((entry) => entry.dirty && entry.invalid),
     errors: failure.errors,
@@ -390,6 +395,8 @@ export function SaveErrorBanner() {
   const anchor = useRef<HTMLSpanElement>(null);
   const [inDialog, setInDialog] = useState(false);
   const [reloading, setReloading] = useState(false);
+  const [reloadError, setReloadError] = useState<string | null>(null);
+  useEffect(() => setReloadError(null), [attempt]);
   useLayoutEffect(() => {
     setInDialog(Boolean(anchor.current?.closest("[role=dialog]")));
   }, []);
@@ -448,8 +455,15 @@ export function SaveErrorBanner() {
                   loading={reloading}
                   onClick={async () => {
                     setReloading(true);
+                    setReloadError(null);
                     try {
                       await reloadConflicts();
+                    } catch (error) {
+                      // Cancelled merge choices keep the existing conflict; failed reads stay retryable.
+                      if (!(error instanceof SaveConflict)) {
+                        const kind = classifyFailure(error);
+                        setReloadError(t(kind === "offline" || kind === "unreachable" ? "offline" : "serverError"));
+                      }
                     } finally {
                       setReloading(false);
                     }
@@ -458,6 +472,7 @@ export function SaveErrorBanner() {
                   {t("reloadKeepEdits")}
                 </Button>
               )}
+              {reloadError ? <p className="mt-2">{reloadError}</p> : null}
               {/* A dialog's own Save sits right below; a page gets Retry here. */}
               {kind === "connection" && scope && !inDialog ? (
                 <Button
@@ -565,7 +580,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
   }, [dirty]);
   return (
     <>
-      <UnsavedChangesGuard isDirty={dirty} isSubmitting={busy} />
+      <UnsavedChangesGuard isDirty={state.navigationDirty} isSubmitting={busy} />
       <ConfirmDialog
         open={confirmDiscard && dirty}
         onOpenChange={setConfirmDiscard}

@@ -4,7 +4,7 @@
 // message is posted with their ids.
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { crossOriginRefusal, handleConversationMessagePost } from "@/lib/account-inbox-server";
+import { crossOriginRefusal, handleConversationMessagePost, handleConversationPoll } from "@/lib/account-inbox-server";
 import { isConversationId } from "@/lib/account-inbox";
 
 export const prerender = false;
@@ -17,4 +17,9 @@ export const POST: APIRoute = async ({ request, params }) => {
     conversationId ? { kind: "thread", conversationId } : null,
     conversationId ? `/account/inbox/${encodeURIComponent(conversationId)}` : "/account/inbox",
   );
+};
+
+export const GET: APIRoute = async ({ request, params }) => {
+  const conversationId = isConversationId(params.id) ? params.id : null;
+  return handleConversationPoll(request, conversationId ? { kind: "thread", conversationId } : null);
 };

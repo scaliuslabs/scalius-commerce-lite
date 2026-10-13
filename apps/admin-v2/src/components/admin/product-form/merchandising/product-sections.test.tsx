@@ -85,3 +85,33 @@ describe("product section conflict rebase", () => {
     act(() => root.unmount());
   });
 });
+
+it("retains navigation protection for a revoked section draft without making it savable", async () => {
+  const root = createRoot(document.createElement("div"));
+  let section!: ReturnType<typeof useSectionDraft<string>>;
+  let sections!: ReturnType<typeof useProductSections>;
+  function Card({ readOnly }: { readOnly: boolean }) {
+    section = useSectionDraft("Saved");
+    useProductSection({ label: "Content", dirty: !readOnly && section.dirty, navigationDirty: section.dirty,
+      problems: null, changes: () => ({}), saved: () => undefined, prepareRebase: async () => () => () => {} });
+    return null;
+  }
+  function Editor({ readOnly }: { readOnly: boolean }) {
+    sections = useProductSections();
+    return <ProductSectionsProvider registry={sections.registry}><Card readOnly={readOnly} /></ProductSectionsProvider>;
+  }
+  try {
+    await act(async () => root.render(<Editor readOnly={false} />));
+    await act(async () => section.setDraft("My edit"));
+    expect(sections.dirty).toBe(true);
+    await act(async () => root.render(<Editor readOnly />));
+    expect(sections.dirty).toBe(false);
+    expect(sections.dirtyHandles()).toEqual([]);
+    expect(sections.navigationDirty).toBe(true);
+    await act(async () => root.render(<Editor readOnly={false} />));
+    expect(section.draft).toBe("My edit");
+    expect(sections.dirty).toBe(true);
+    await act(async () => section.setDraft("Saved"));
+    expect(sections.navigationDirty).toBe(false);
+  } finally { act(() => root.unmount()); }
+});

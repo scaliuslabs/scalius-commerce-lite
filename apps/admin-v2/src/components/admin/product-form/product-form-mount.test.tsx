@@ -214,6 +214,19 @@ describe("a product page nobody has edited", () => {
     expect(probe.dirty).toBe(false);
   });
 
+  it("keeps the digital delivery disclosure usable for a view-only product", async () => {
+    const probe = await mount(true, savedValues, true);
+    const card = container.querySelector("#product-digital")!;
+    const toggle = card.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
+    expect(toggle.matches(":disabled")).toBe(false);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(probe.dirty).toBe(false);
+  });
+
   it("a new product is not unsaved and does not loop", async () => {
     const probe = await mount(false);
     expect(errors.filter((line) => /Maximum update depth|render loop/.test(line))).toEqual([]);

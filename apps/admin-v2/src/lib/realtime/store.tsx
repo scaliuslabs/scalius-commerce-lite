@@ -14,13 +14,13 @@
  * notice, focus reporting) a moment later, so no route pays for it up front.
  */
 import { createContext, lazy, Suspense, useEffect, useRef } from "react";
-import type { PresenceListPrefix, RealtimeChange, RealtimeTopic } from "@scalius/shared/realtime";
+import type { PresenceKeyPrefix, PresenceListPrefix, RealtimeChange, RealtimeTopic } from "@scalius/shared/realtime";
 import type { RealtimeConnection, RealtimeListener } from "./connection";
 import { setRealtimeOpen } from "../admin-query-client";
 
 export { pollWhileOffline } from "../admin-query-client";
 
-export type PresencePrefix = "order" | "product" | "category" | "collection" | "page" | "theme" | "settings";
+export type PresencePrefix = PresenceKeyPrefix;
 
 /**
  * `<prefix>:<id>`, as `presenceKey` in `@scalius/shared/realtime` (whose
@@ -182,6 +182,8 @@ export interface PresenceSlotProps {
   revision?: number | null;
   /** This editor has unsaved changes. */
   dirty: boolean;
+  /** Join as a viewer; focused immutable controls must not report editing. */
+  readOnly?: boolean;
   /** The fields this draft changed (form names), to tell a clean merge from a clash. */
   changedFields?: () => readonly string[];
   /** Loads the latest saved record under this draft's edits (a merge), or simply the latest when clean. */

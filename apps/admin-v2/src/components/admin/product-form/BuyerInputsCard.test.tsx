@@ -32,11 +32,11 @@ function setValue(input: HTMLInputElement, value: string) {
 }
 
 let form: UseFormReturn<ProductFormValues>;
-function Harness({ initial, conflict }: { initial: BuyerInputDraft[]; conflict?: { onReview: () => void } | null }) {
+function Harness({ initial, conflict, readOnly = false }: { initial: BuyerInputDraft[]; conflict?: { onReview: () => void } | null; readOnly?: boolean }) {
   form = useForm<ProductFormValues>({ defaultValues: { customizationSchema: initial, fulfillmentKind: "physical" } as ProductFormValues });
   // Subscribe to dirtiness, as the product page does.
   void form.formState.isDirty;
-  return <BuyerInputsCard form={form} conflict={conflict ?? null} />;
+  return <BuyerInputsCard form={form} readOnly={readOnly} conflict={conflict ?? null} />;
 }
 
 describe("BuyerInputsCard", () => {
@@ -90,6 +90,21 @@ describe("BuyerInputsCard", () => {
     await settle();
     expect(host.querySelector('[id="line-property-engraving_text"]')).not.toBeNull();
     expect(host.textContent).toContain("+৳200");
+  });
+
+  it("shows the saved buyer preview after revocation without retaining an open mutation dialog", async () => {
+    const initial = [text("engraving", "Engraving")];
+    await render(initial);
+    await openAdd();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => root.render(<Harness initial={initial} readOnly />));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(button(en.addBuyerInput)).toBeUndefined();
+    await act(async () => button(en.showPreview)!.click());
+    await settle();
+    expect(host.querySelector('[id="line-property-engraving"]')).not.toBeNull();
+    expect(form.getValues("customizationSchema")).toEqual(initial);
+    expect(form.formState.isDirty).toBe(false);
   });
 
   it("refuses an input without a label or a choice list without choices", async () => {

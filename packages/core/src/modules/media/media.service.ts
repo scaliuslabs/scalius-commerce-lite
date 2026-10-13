@@ -108,6 +108,15 @@ async function readPresentedMedia(db: Database, id: string) {
     return row ? presentMediaProjection(row) : null;
 }
 
+/** Current metadata for inspection and optimistic-version conflict recovery. */
+export async function getMediaFile(db: Database, id: string) {
+    const file = await readPresentedMedia(db, id);
+    if (!file || (file.status !== "ready" && file.status !== "trashed")) {
+        throw new NotFoundError("Media file not found");
+    }
+    return file;
+}
+
 function expectedPartCount(size: number): number {
     return Math.ceil(size / MEDIA_MULTIPART_PART_SIZE_BYTES);
 }

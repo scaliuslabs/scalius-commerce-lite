@@ -34,7 +34,7 @@ beforeEach(() => {
 describe("newsletter signup endpoint", () => {
   it("forwards the signup and redirects with only the outcome", async () => {
     api(200, { success: true, data: { result: "pending" } });
-    const response = await call(post({ phone: PHONE, email: EMAIL, language: "en", company_website: "" }));
+    const response = await call(post({ phone: PHONE, email: EMAIL, language: "en", channel: "email", company_website: "" }));
 
     expect(response.status).toBe(303);
     const location = response.headers.get("Location")!;
@@ -45,15 +45,15 @@ describe("newsletter signup endpoint", () => {
     const [path, init, policy] = mocks.apiFetch.mock.calls[0]!;
     expect(path).toBe("/marketing/subscribe");
     expect(policy).toMatchObject({ auth: true, retries: 0 });
-    expect(Object.keys(JSON.parse(String(init.body))).sort()).toEqual(["consentText", "email", "language", "phone"]);
+    expect(Object.keys(JSON.parse(String(init.body))).sort()).toEqual(["channels", "email", "language", "phone"]);
   });
 
   it("answers the enhanced form with JSON", async () => {
     api(200, { success: true, data: { result: "subscribed" } });
-    const response = await call(post({ phone: PHONE, whatsapp: "1", language: "bn" }, { Accept: "application/json" }));
+    const response = await call(post({ phone: PHONE, channel: "whatsapp", language: "bn" }, { Accept: "application/json" }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true, status: "subscribed" });
-    expect(JSON.parse(String(mocks.apiFetch.mock.calls[0]![1].body))).toMatchObject({ whatsapp: true, language: "bn" });
+    expect(JSON.parse(String(mocks.apiFetch.mock.calls[0]![1].body))).toMatchObject({ channels: ["whatsapp"], language: "bn" });
   });
 
   it("pretends success for a filled honeypot and calls nothing", async () => {
@@ -70,7 +70,7 @@ describe("newsletter signup endpoint", () => {
     [500, { success: false, error: { code: "INTERNAL" } }, "error"],
   ])("maps an API %s to ?status=%s", async (status, body, flag) => {
     api(status, body);
-    const response = await call(post({ phone: PHONE }));
+    const response = await call(post({ phone: PHONE, channel: "sms" }));
     expect(response.headers.get("Location")).toBe(`/newsletter?status=${flag}`);
   });
 

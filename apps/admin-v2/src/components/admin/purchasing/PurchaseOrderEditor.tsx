@@ -1,3 +1,4 @@
+import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
@@ -229,9 +230,10 @@ export function PurchaseOrderEditor({ order, onReload }: {
   );
 
   return (
-    <Page width="form">
+    <Page data-presence-root={order ? presenceKey("purchase-order", order.id) : undefined} width="form">
       <UnsavedChangesGuard isDirty={dirty && !leaving} isSubmitting={busy !== null || remove.isPending} />
       <PageHeader
+        presence={<PresenceSlot presenceKey={order ? presenceKey("purchase-order", order.id) : null} revision={revision} dirty={dirty} />}
         backTo="/admin/inventory/purchase-orders"
         title={order?.displayNumber ?? t("newPurchaseOrder")}
         status={order ? <PurchaseOrderStatusBadge status={order.status} /> : null}

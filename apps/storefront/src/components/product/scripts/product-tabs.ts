@@ -5,8 +5,8 @@ interface TabElements {
   buttons: HTMLButtonElement[];
   panels: HTMLElement[];
   nav: HTMLElement | null;
-  scrollLeftBtn: HTMLElement | null;
-  scrollRightBtn: HTMLElement | null;
+  scrollLeftBtn: HTMLButtonElement | null;
+  scrollRightBtn: HTMLButtonElement | null;
   fadeLeft: HTMLElement | null;
   fadeRight: HTMLElement | null;
 }
@@ -44,8 +44,9 @@ function setTabHash(button: HTMLButtonElement): void {
 function centerTabInNav(button: HTMLButtonElement): void {
   if (!elements?.nav) return;
 
-  const left = button.offsetLeft - (elements.nav.clientWidth - button.clientWidth) / 2;
-  elements.nav.scrollTo({ left: Math.max(0, left), behavior: scrollBehavior() });
+  const nav = elements.nav.getBoundingClientRect();
+  const tab = button.getBoundingClientRect();
+  elements.nav.scrollBy({ left: tab.left + tab.width / 2 - (nav.left + nav.width / 2), behavior: scrollBehavior() });
 }
 
 function switchTab(
@@ -104,21 +105,28 @@ function initTabSwitching(): void {
   });
 }
 
+function isRtl(): boolean {
+  return Boolean(elements?.nav && getComputedStyle(elements.nav).direction === "rtl");
+}
+
 function updateScrollUI(): void {
   if (!elements?.nav || !elements.fadeLeft || !elements.fadeRight) return;
 
   const { scrollLeft, scrollWidth, clientWidth } = elements.nav;
-  const canScrollLeft = scrollLeft > 0;
-  const canScrollRight = scrollLeft < scrollWidth - clientWidth - 10;
+  const max = Math.max(0, scrollWidth - clientWidth);
+  const position = Math.min(max, Math.max(0, isRtl() ? -scrollLeft : scrollLeft));
+  const canScrollLeft = position > 1;
+  const canScrollRight = position < max - 1;
 
   elements.fadeLeft.style.opacity = canScrollLeft ? "1" : "0";
   elements.fadeRight.style.opacity = canScrollRight ? "1" : "0";
 
-  if (elements.scrollLeftBtn) {
-    elements.scrollLeftBtn.style.opacity = canScrollLeft ? "0.7" : "0";
-  }
-  if (elements.scrollRightBtn) {
-    elements.scrollRightBtn.style.opacity = canScrollRight ? "0.7" : "0";
+  for (const [button, canScroll] of [[elements.scrollLeftBtn, canScrollLeft], [elements.scrollRightBtn, canScrollRight]] as const) {
+    if (!button) continue;
+    if (!canScroll && document.activeElement === button) {
+      elements.buttons.find((tab) => tab.getAttribute("aria-selected") === "true")?.focus({ preventScroll: true });
+    }
+    button.disabled = !canScroll;
   }
 }
 
@@ -126,16 +134,17 @@ function initScrollNavigation(): void {
   if (!elements) return;
 
   elements.scrollLeftBtn?.addEventListener("click", () => {
-    elements?.nav?.scrollBy({ left: -200, behavior: scrollBehavior() });
+    elements?.nav?.scrollBy({ left: isRtl() ? 200 : -200, behavior: scrollBehavior() });
   });
   elements.scrollRightBtn?.addEventListener("click", () => {
-    elements?.nav?.scrollBy({ left: 200, behavior: scrollBehavior() });
+    elements?.nav?.scrollBy({ left: isRtl() ? -200 : 200, behavior: scrollBehavior() });
   });
 
   if (!elements.nav) return;
   elements.nav.addEventListener("scroll", updateScrollUI, { passive: true });
 
   requestAnimationFrame(updateScrollUI);
+  void document.fonts?.ready.then(updateScrollUI);
   let resizeTimeout: ReturnType<typeof setTimeout>;
   window.addEventListener(
     "resize",
@@ -155,9 +164,9 @@ function initKeyboardNavigation(): void {
       const buttons = elements?.buttons ?? [];
       let targetIndex: number | null = null;
 
-      if (event.key === "ArrowLeft") {
+      if (event.key === (isRtl() ? "ArrowRight" : "ArrowLeft")) {
         targetIndex = index > 0 ? index - 1 : buttons.length - 1;
-      } else if (event.key === "ArrowRight") {
+      } else if (event.key === (isRtl() ? "ArrowLeft" : "ArrowRight")) {
         targetIndex = index < buttons.length - 1 ? index + 1 : 0;
       } else if (event.key === "Home") {
         targetIndex = 0;
@@ -172,7 +181,7 @@ function initKeyboardNavigation(): void {
       const tabId = targetButton?.dataset.tabId;
       if (!targetButton || !tabId) return;
 
-      targetButton.focus();
+      targetButton.focus({ preventScroll: true });
       switchTab(tabId, { updateHash: true });
     });
   });

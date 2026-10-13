@@ -1,3 +1,4 @@
+import { presenceKey } from "~/lib/realtime/store";
 import { useState } from "react";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
@@ -251,7 +252,9 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <CustomFieldsCard ownerType="customer" ownerId={defaultValues.id} canEdit={canSave} />
         </>
       ) : null}
-      {isEdit && defaultValues?.id && !trashed ? <AppResourceCards target="customer" id={defaultValues.id} /> : null}
+      {isEdit && defaultValues?.id && !trashed ? (
+        <fieldset disabled={!canSave} className="min-w-0 empty:hidden"><AppResourceCards target="customer" id={defaultValues.id} /></fieldset>
+      ) : null}
     </>
   );
 
@@ -263,7 +266,9 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
       actions={isEdit && defaultValues?.id && !trashed ? <AppActionsMenu target="customer" id={defaultValues.id} /> : undefined}
       isSubmitting={isSubmitting}
       backUrl="/admin/customers"
+      presenceKey={defaultValues?.id ? presenceKey("customer", defaultValues.id) : null}
       canSave={canSave}
+      disableFieldsWhenReadOnly={false}
       form={form}
       onSave={submitEntity}
       readOnlyNotice={trashed && record ? (

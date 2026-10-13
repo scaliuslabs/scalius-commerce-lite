@@ -42,6 +42,7 @@ import { AppProviderSheetHost } from "./AppProviderSheetHost";
 import { AppSettingsTab } from "./AppSettingsTab";
 import { AppWhereItAppears } from "./AppWhereItAppears";
 import { AppStatusBadge } from "./app-status";
+import { appJobScheduleText } from "./app-job-schedule";
 
 // The lifecycle additions (Stop now, why an app is stopped, a registry update, who signed it)
 // load after the page: none of them is needed to read it.
@@ -121,10 +122,14 @@ function Jobs({ app }: { app: AppDetail }) {
                 {run ? <Badge variant={JOB_VARIANT[run.status]}>{t(`job_${run.status}`)}</Badge> : <Badge variant="secondary">{t("job_never")}</Badge>}
               </div>
               <p className="text-muted-foreground">
-                {t("schedule")} <code>{job.schedule}</code>
+                {t("scheduleDeclared", { schedule: appJobScheduleText(job.schedule) })}
                 {when ? ` · ${t("lastRun", { when })}` : null}
                 {took ? ` · ${took}` : null}
               </p>
+              <details className="text-muted-foreground">
+                <summary className="cursor-pointer">{t("scheduleTechnical")}</summary>
+                <code dir="ltr" translate="no" className="break-all">{job.schedule}</code>
+              </details>
               {run?.error ? <p className="break-words text-destructive">{run.error}</p> : null}
             </li>
           );

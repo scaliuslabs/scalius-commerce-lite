@@ -29,6 +29,13 @@ export async function recordStaffAlert(db: Database, outboxId: string | undefine
   const required = staffPushPermission(event.kind);
   if (!scope || !required) return;
   const pending = sql`EXISTS (SELECT 1 FROM staff_alerts WHERE id = ${outboxId} AND fanout_complete = 0)`;
+  // Resolve assignment inside the transaction: a stale/deactivated assignee
+  // must not swallow a new message. Null falls back to the authorized team.
+  const assignedRecipient = (ownerId: SQL) => event.kind === "conversation_message"
+    ? sql`${ownerId} = coalesce((SELECT c.assignee_user_id FROM conversations c
+        INNER JOIN notification_outbox n ON n.conversation_id = c.id
+        WHERE n.id = ${outboxId} AND ${staffPermissionSql(sql`c.assignee_user_id`, "conversations.reply")}), ${ownerId})`
+    : sql`1 = 1`;
   // One transaction fixes the first recipient set, even when empty. Provider
   // retries cannot retroactively deliver old facts to newly granted staff.
   await safeBatch(db, [
@@ -36,11 +43,12 @@ export async function recordStaffAlert(db: Database, outboxId: string | undefine
       occurredAt: Number(event.occurred_at), orderNumber: event.order_number }).onConflictDoNothing(),
     db.insert(staffAlertState).select(sql`
       SELECT ${user.id}, '*', 0, NULL, 0, 0, 0, 0, 0, NULL FROM ${user}
-      WHERE ${pending} AND ${staffPermissionSql(user.id, required)}`).onConflictDoNothing(),
+      WHERE ${pending} AND ${staffPermissionSql(user.id, required)} AND ${assignedRecipient(sql`${user.id}`)}`).onConflictDoNothing(),
     // Lock/update the sentinel before selecting its sequence. PostgreSQL retries
     // 40001/40P01, not a later inbox PK violation (23505).
     db.update(staffAlertState).set({ lastSeq: sql`last_seq + 1`, allocatedAlertId: outboxId })
       .where(sql`scope = '*' AND ${pending} AND ${staffPermissionSql(staffAlertState.userId, required)}
+        AND ${assignedRecipient(sql`${staffAlertState.userId}`)}
         AND NOT EXISTS (SELECT 1 FROM staff_alert_inbox i WHERE i.user_id = staff_alert_state.user_id AND i.alert_id = ${outboxId})`),
     db.insert(staffAlertInbox).select(sql`
       SELECT user_id, last_seq, ${outboxId}, ${scope}, NULL FROM staff_alert_state

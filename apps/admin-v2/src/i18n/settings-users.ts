@@ -270,6 +270,7 @@ export const permissionMessages = defineMessages<PermissionName>({
     "attributes.delete": "Delete product attributes",
 
     "customers.view": "View customers",
+    "marketing.send": "Approve, schedule and cancel marketing messages",
     "customers.create": "Add customers",
     "customers.edit": "Edit customers",
     "customers.delete": "Delete customers",
@@ -378,6 +379,7 @@ export const permissionMessages = defineMessages<PermissionName>({
     "attributes.delete": "প্রোডাক্ট অ্যাট্রিবিউট ডিলিট করা",
 
     "customers.view": "কাস্টমার দেখা",
+    "marketing.send": "মার্কেটিং বার্তা অনুমোদন, সময় নির্ধারণ ও বাতিল করা",
     "customers.create": "কাস্টমার যোগ করা",
     "customers.edit": "কাস্টমার এডিট করা",
     "customers.delete": "কাস্টমার ডিলিট করা",

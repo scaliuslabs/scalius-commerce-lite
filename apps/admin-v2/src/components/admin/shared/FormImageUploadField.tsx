@@ -5,7 +5,6 @@ import type { MediaFile } from "../media-manager";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
-import { mediaMessages } from "~/i18n/media";
 import { mediaPickerMessages } from "~/i18n/media-picker";
 
 interface FormImageUploadFieldProps {
@@ -14,10 +13,12 @@ interface FormImageUploadFieldProps {
   onChange: (file: MediaFile | null) => void;
   triggerLabel?: string;
   changeTriggerLabel?: string;
-  aspectRatio?: "aspect-video" | "aspect-square" | "aspect-[4/3]" | "aspect-[3/2]";
+  aspectRatio?: "aspect-video" | "aspect-square" | "aspect-4/3" | "aspect-3/2";
   maxWidth?: string;
   placeholder?: string;
   className?: string;
+  /** Keep the saved image visible without mounting upload or selection actions. */
+  readOnly?: boolean;
 }
 
 /** Single-image field for a react-hook-form FormField: preview + remove, and the file picker. */
@@ -30,9 +31,9 @@ export function FormImageUploadField({
   maxWidth = "max-w-sm",
   placeholder,
   className,
+  readOnly = false,
 }: FormImageUploadFieldProps) {
-  const t = useMessages(mediaMessages);
-  const picker = useMessages(mediaPickerMessages);
+  const t = useMessages(mediaPickerMessages);
   return (
     <div className={cn("space-y-4", className)}>
       {value ? (
@@ -44,7 +45,7 @@ export function FormImageUploadField({
             loading="lazy"
             decoding="async"
           />
-          <Button
+          {readOnly ? null : <Button
             type="button"
             variant="destructive"
             size="icon"
@@ -53,7 +54,7 @@ export function FormImageUploadField({
             aria-label={t("removeImage", { name: value.filename })}
           >
             <X className="h-4 w-4" />
-          </Button>
+          </Button>}
         </div>
       ) : (
         <div
@@ -66,12 +67,12 @@ export function FormImageUploadField({
           <span className="text-body">{placeholder ?? t("noImage")}</span>
         </div>
       )}
-      <MediaManager
+      {readOnly ? null : <MediaManager
         capability="image"
         selectedFiles={value ? [value] : []}
         onSelect={(file) => onChange(file)}
-        triggerLabel={value ? changeTriggerLabel ?? t("changeImage") : triggerLabel ?? picker("chooseImage")}
-      />
+        triggerLabel={value ? changeTriggerLabel ?? t("changeImage") : triggerLabel ?? t("chooseImage")}
+      />}
     </div>
   );
 }

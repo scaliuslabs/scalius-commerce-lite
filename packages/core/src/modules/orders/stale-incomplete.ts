@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import {
     abandonedCheckouts,
@@ -80,6 +80,8 @@ const noActivePaymentSessionClaimCondition = sql`NOT EXISTS (
 
 export interface StaleIncompleteOrderCleanupOptions {
     limit?: number;
+    afterOrderId?: string;
+    afterGiftCardOrderId?: string;
 }
 
 export interface StaleIncompleteOrderCleanupResult {
@@ -92,6 +94,8 @@ export interface StaleIncompleteOrderCleanupResult {
     errors: Array<{ orderId: string; error: string }>;
     /** Cancelled orders whose leftover gift-card holds this run gave back (self-heal). */
     releasedGiftCardHoldOrderIds?: string[];
+    lastOrderId?: string | null;
+    lastGiftCardOrderId?: string | null;
 }
 
 function normalizeCleanupLimit(limit: number | undefined): number {
@@ -151,6 +155,7 @@ export async function archiveStaleIncompleteOrders(
     const candidates = await db.select().from(orders).where(
         and(
             eq(orders.status, OrderStatus.INCOMPLETE),
+            options.afterOrderId ? gt(orders.id, options.afterOrderId) : undefined,
             onlinePaymentMethodCondition(orders.paymentMethod),
             inArray(orders.paymentStatus, STALE_INCOMPLETE_PAYMENT_STATUSES),
             onlyGiftCardMoneyCondition,
@@ -160,10 +165,11 @@ export async function archiveStaleIncompleteOrders(
             noActivePaymentClaimCondition,
             noActivePaymentSessionClaimCondition,
         ),
-    ).limit(limit + 1);
+    ).orderBy(asc(orders.id)).limit(limit + 1);
 
     const incompleteOrders = candidates.slice(0, limit);
     result.found = incompleteOrders.length;
+    result.lastOrderId = incompleteOrders.at(-1)?.id ?? null;
     result.hasMore = candidates.length > limit;
 
     for (const order of incompleteOrders) {
@@ -320,7 +326,7 @@ export async function archiveStaleIncompleteOrders(
         }
     }
 
-    await releaseLeftoverCancelledGiftCardHolds(db, limit, result);
+    await releaseLeftoverCancelledGiftCardHolds(db, limit, result, options.afterGiftCardOrderId);
     return result;
 }
 
@@ -336,6 +342,7 @@ async function releaseLeftoverCancelledGiftCardHolds(
     db: Database,
     limit: number,
     result: StaleIncompleteOrderCleanupResult,
+    afterOrderId?: string,
 ): Promise<void> {
     const held = await db
         .select({
@@ -348,6 +355,7 @@ async function releaseLeftoverCancelledGiftCardHolds(
         .innerJoin(orders, eq(orders.id, orderPayments.orderId))
         .where(and(
             eq(orderPayments.paymentMethod, GIFT_CARD_PAYMENT_METHOD),
+            afterOrderId ? gt(orders.id, afterOrderId) : undefined,
             sql`${orderPayments.providerRef} IS NOT NULL`,
             eq(orderPayments.status, PaymentRecordStatus.SUCCEEDED),
             eq(orders.status, OrderStatus.CANCELLED),
@@ -357,7 +365,9 @@ async function releaseLeftoverCancelledGiftCardHolds(
             sql`${orders.updatedAt} <= unixepoch() - ${LEFTOVER_HOLD_GRACE_SECONDS}`,
         ))
         .groupBy(orders.id)
+        .orderBy(asc(orders.id))
         .limit(limit);
+    result.lastGiftCardOrderId = held.at(-1)?.id ?? null;
 
     for (const order of held) {
         try {

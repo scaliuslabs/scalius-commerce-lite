@@ -7,8 +7,10 @@ import {
   MAX_SAVED_FIELDS,
   MAX_WATCHED_KEYS,
   PRESENCE_LIST_PREFIXES,
+  PRESENCE_PREFIXES,
   REALTIME_CLOSE_REAUTH,
   REALTIME_TOPICS,
+  presenceEditMask,
 } from "@scalius/shared/realtime";
 import { REALTIME_PROOF_SECONDS, RealtimeHub, presenceOf } from "./hub";
 
@@ -51,7 +53,7 @@ describe("RealtimeHub proof window", () => {
 
   function join(userId: string, exp: number, keys: string[]) {
     const socket = new FakeSocket();
-    socket.serializeAttachment({ userId, name: userId, topics: ["products"], exp, keys });
+    socket.serializeAttachment({ userId, name: userId, topics: ["products"], w: (1 << PRESENCE_PREFIXES.length) - 1, exp, keys });
     sockets.push(socket);
     return socket;
   }
@@ -92,13 +94,45 @@ describe("RealtimeHub field presence, lists and save fields", () => {
     vi.useRealTimers();
   });
 
-  function connect(userId: string, topics: string[]) {
+  function connect(userId: string, topics: string[], w: number | undefined = (1 << PRESENCE_PREFIXES.length) - 1) {
     const socket = new FakeSocket();
-    socket.serializeAttachment({ userId, name: userId.replace("usr_", ""), topics, exp: now() + REALTIME_PROOF_SECONDS, keys: [] });
+    socket.serializeAttachment({ userId, name: userId.replace("usr_", ""), topics, w, exp: now() + REALTIME_PROOF_SECONDS, keys: [] });
     sockets.push(socket);
     return socket;
   }
   const say = (socket: FakeSocket, message: unknown) => hub.webSocketMessage(socket as never, JSON.stringify(message));
+
+  it("lets viewers watch while refusing their field and save hints, including legacy attachments", async () => {
+    const editor = connect("usr_editor", ["customers", "discounts", "gift_cards"]);
+    const viewer = connect("usr_viewer", ["customers", "discounts", "gift_cards"], 0);
+    const legacy = connect("usr_legacy", ["customers"], 0);
+    const attachment = legacy.deserializeAttachment() as Record<string, unknown>;
+    delete attachment.w;
+    legacy.serializeAttachment(attachment);
+    await say(editor, { t: "watch", keys: ["customer:cus_1"] });
+    for (const socket of [viewer, legacy]) {
+      await say(socket, { t: "watch", keys: ["customer:cus_1", "product:prd_forbidden"] });
+      expect((socket.deserializeAttachment() as { keys: string[] }).keys).toEqual(["customer:cus_1"]);
+      const before = editor.sent.length;
+      await say(socket, { t: "focus", key: "customer:cus_1", field: "name", editing: true });
+      await say(socket, { t: "saved", key: "customer:cus_1", rev: null, fields: ["name"] });
+      expect(editor.sent.length).toBe(before);
+      expect((socket.deserializeAttachment() as { act?: unknown }).act).toBeUndefined();
+    }
+    await say(editor, { t: "saved", key: "customer:cus_1", rev: null });
+    expect(viewer.sent.at(-1)).toMatchObject({ t: "saved", key: "customer:cus_1", rev: null });
+  });
+
+  it("treats conversations as viewing even for staff who can reply", async () => {
+    const sender = connect("usr_sender", ["inbox"], presenceEditMask(["conversations.view", "conversations.reply"]));
+    const viewer = connect("usr_viewer", ["inbox"], 0);
+    for (const socket of [sender, viewer]) await say(socket, { t: "watch", keys: ["conversation:cnv_1"] });
+    const before = viewer.sent.length;
+    await say(sender, { t: "focus", key: "conversation:cnv_1", field: "body", editing: true });
+    await say(sender, { t: "saved", key: "conversation:cnv_1", rev: 4 });
+    expect(viewer.sent.length).toBe(before);
+    expect(viewer.sent.at(-1)).toMatchObject({ people: [{ id: "usr_sender", name: "sender" }, { id: "usr_viewer", name: "viewer" }] });
+  });
 
   it("sends the focused field and editing state inside presence, never a value", async () => {
     const rahim = connect("usr_rahim", ["products"]);
@@ -184,11 +218,12 @@ describe("RealtimeHub field presence, lists and save fields", () => {
   });
 
   it("keeps the worst-case attachment under the runtime's 2 KB limit", () => {
-    const keys = Array.from({ length: MAX_WATCHED_KEYS }, (_, index) => `collection:${"c".repeat(78)}${String(index).padStart(2, "0")}`);
+    const keys = Array.from({ length: MAX_WATCHED_KEYS }, (_, index) => `purchase-order:${"c".repeat(78)}${String(index).padStart(2, "0")}`);
     const state = {
-      userId: "u".repeat(64),
+      userId: "u".repeat(128),
       name: "র".repeat(80),
       topics: [...REALTIME_TOPICS],
+      w: (1 << PRESENCE_PREFIXES.length) - 1,
       exp: now(),
       keys,
       lists: [...PRESENCE_LIST_PREFIXES],

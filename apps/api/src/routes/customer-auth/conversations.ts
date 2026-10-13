@@ -1,3 +1,4 @@
+import { getBuyerConversationView } from "../../utils/conversation-view";
 // Signed-in buyer conversation routes (Wave A §6.1): the account Inbox (store
 // threads of verified accounts and the threads of orders the account owns),
 // order threads, reads, posts and private image attachments. Message
@@ -8,7 +9,6 @@ import {
   assertBuyerOrderAccess,
   countBuyerUnread,
   createStoreThread,
-  getBuyerThread,
   getOrCreateOrderThread,
   isVerifiedCustomerAccount,
   listBuyerThreads,
@@ -16,6 +16,9 @@ import {
   postBuyerOrderMessage,
   postConversationMessage,
   readOrderThread,
+  readConversationCartShare,
+  shareConversationCart,
+  withdrawConversationCart,
   resolveBuyerThread,
   resolveConversationAttachment,
   stageConversationAttachment,
@@ -27,10 +30,13 @@ import { conflictResponse, errorResponses, serviceUnavailableResponse, successEn
 import {
   attachmentUploadRequest,
   attachmentUploadResponseSchema,
-  beforeSeqQuerySchema,
+  buyerMessagePageQuerySchema,
   buyerConversationSummarySchema,
   buyerConversationThreadSchema,
   buyerPostBodySchema,
+  cartShareSchema,
+  cartSharePutBodySchema,
+  cartShareDeleteBodySchema,
   clientMessageKeySchema,
   conversationAttachmentIdSchema,
   conversationIdSchema,
@@ -43,8 +49,9 @@ import {
   readAttachmentForm,
   serveConversationAttachment,
 } from "../../utils/conversation-http";
-import { UnauthorizedError, ValidationError } from "../../utils/api-error";
+import { NotFoundError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 import { requireCustomerSession, setPrivateNoStoreHeaders } from "./shared";
+import { prepareConversationCartLines, projectConversationCartShare } from "../../utils/conversation-cart-share";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -138,7 +145,7 @@ app.openapi(createRoute({
   await enforceBuyerWriteLimits(c, "store-thread", { customerId });
   const posted = await createStoreThread(db, customerId, body, { queue: c.env.JOBS_QUEUE });
   const thread = await resolveBuyerThread(db, actor, posted.conversationId);
-  return created(c, { conversation: await getBuyerThread(db, thread) });
+  return created(c, { conversation: await getBuyerConversationView(db, thread) });
 });
 
 app.openapi(createRoute({
@@ -146,7 +153,7 @@ app.openapi(createRoute({
   path: "/conversations/{id}",
   tags: ["Customer Auth"],
   summary: "Read one conversation (50 messages per page, public lines only)",
-  request: { params: conversationParam, query: beforeSeqQuerySchema },
+  request: { params: conversationParam, query: buyerMessagePageQuerySchema },
   responses: {
     200: { description: "The conversation", content: { "application/json": { schema: threadEnvelope } } },
     ...errorResponses,
@@ -156,7 +163,7 @@ app.openapi(createRoute({
   const { actor } = await customerActor(c);
   const db = c.get("db");
   const thread = await resolveBuyerThread(db, actor, c.req.valid("param").id);
-  return ok(c, { conversation: await getBuyerThread(db, thread, { beforeSeq: c.req.valid("query").beforeSeq }) });
+  return ok(c, { conversation: await getBuyerConversationView(db, thread, c.req.valid("query")) });
 });
 
 app.openapi(createRoute({
@@ -183,7 +190,7 @@ app.openapi(createRoute({
     attachmentIds: body.attachmentIds,
   }, { queue: c.env.JOBS_QUEUE });
   const fresh = await resolveBuyerThread(db, actor, thread.id);
-  return created(c, { conversation: await getBuyerThread(db, fresh) });
+  return created(c, { conversation: await getBuyerConversationView(db, fresh) });
 });
 
 app.openapi(createRoute({
@@ -209,7 +216,7 @@ app.openapi(createRoute({
   path: "/orders/{id}/conversation",
   tags: ["Customer Auth"],
   summary: "Read an owned order's conversation, or null before anyone wrote",
-  request: { params: orderParam, query: beforeSeqQuerySchema },
+  request: { params: orderParam, query: buyerMessagePageQuerySchema },
   responses: {
     200: { description: "The order thread", content: { "application/json": { schema: nullableThreadEnvelope } } },
     ...errorResponses,
@@ -222,9 +229,30 @@ app.openapi(createRoute({
   await assertBuyerOrderAccess(db, actor, orderId);
   const thread = await readOrderThread(db, orderId);
   const conversation = thread && thread.lastSeq > 0
-    ? await getBuyerThread(db, thread, { beforeSeq: c.req.valid("query").beforeSeq })
+    ? await getBuyerConversationView(db, thread, c.req.valid("query"))
     : null;
   return ok(c, { conversation });
+});
+
+app.openapi(createRoute({
+  method: "post",
+  path: "/orders/{id}/conversation/read",
+  tags: ["Customer Auth"],
+  summary: "Mark an owned order's conversation read up to a displayed message",
+  request: { params: orderParam, body: { required: true, content: { "application/json": { schema: readBodySchema } } } },
+  responses: {
+    200: { description: "Read marker", content: { "application/json": { schema: successEnvelope(z.object({ readSeq: z.number().int() })) } } },
+    ...errorResponses,
+  },
+}), async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { actor } = await customerActor(c);
+  const db = c.get("db");
+  const orderId = c.req.valid("param").id;
+  await assertBuyerOrderAccess(db, actor, orderId);
+  const thread = await readOrderThread(db, orderId);
+  if (!thread) throw new NotFoundError("Conversation not found");
+  return ok(c, { readSeq: await markBuyerRead(db, thread, c.req.valid("json").seq) });
 });
 
 app.openapi(createRoute({
@@ -252,7 +280,7 @@ app.openapi(createRoute({
     attachmentIds: body.attachmentIds,
   }, { queue: c.env.JOBS_QUEUE });
   const thread = await resolveBuyerThread(db, actor, posted.conversationId);
-  return created(c, { conversation: await getBuyerThread(db, thread) });
+  return created(c, { conversation: await getBuyerConversationView(db, thread) });
 });
 
 app.openapi(createRoute({
@@ -303,6 +331,141 @@ app.openapi(createRoute({
   const thread = await resolveBuyerThread(db, actor, id);
   const attachment = await resolveConversationAttachment(db, { conversationId: thread.id, attachmentId, reader: actor });
   return serveConversationAttachment(c.env, attachment);
+});
+
+app.openapi(createRoute({
+  method: "get",
+  path: "/conversations/{id}/cart-share",
+  operationId: "storefront.customer_auth_conversation_cart_share.get",
+  tags: ["Customer Auth"],
+  summary: "Read the explicitly shared cart for a conversation",
+  request: { params: conversationParam },
+  responses: {
+    200: { description: "Shared cart or null", content: { "application/json": { schema: successEnvelope(z.object({ cartShare: cartShareSchema.nullable() })) } } },
+    ...errorResponses,
+  },
+}), async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { actor } = await customerActor(c);
+  const db = c.get("db");
+  const thread = await resolveBuyerThread(db, actor, c.req.valid("param").id);
+  const share = await readConversationCartShare(db, thread.id);
+  return ok(c, { cartShare: share ? await projectConversationCartShare(db, share, { orderId: thread.orderId }) : null });
+});
+
+app.openapi(createRoute({
+  method: "put",
+  path: "/conversations/{id}/cart-share",
+  operationId: "storefront.customer_auth_conversation_cart_share.put",
+  tags: ["Customer Auth"],
+  summary: "Explicitly share or update cart details for a conversation",
+  request: { params: conversationParam, body: { required: true, content: { "application/json": { schema: cartSharePutBodySchema } } } },
+  responses: {
+    200: { description: "The shared cart", content: { "application/json": { schema: successEnvelope(z.object({ cartShare: cartShareSchema })) } } },
+    ...writeResponses,
+  },
+}), async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { customerId, actor } = await customerActor(c);
+  const db = c.get("db");
+  const thread = await resolveBuyerThread(db, actor, c.req.valid("param").id);
+  await enforceBuyerWriteLimits(c, "cart-share", { customerId });
+  const body = c.req.valid("json");
+  const lines = await prepareConversationCartLines(db, body.lines, { orderId: thread.orderId });
+  const share = await shareConversationCart(db, actor, thread.id, { lines, expectedVersion: body.expectedVersion });
+  return ok(c, { cartShare: await projectConversationCartShare(db, share, { orderId: thread.orderId }) });
+});
+
+app.openapi(createRoute({
+  method: "delete",
+  path: "/conversations/{id}/cart-share",
+  operationId: "storefront.customer_auth_conversation_cart_share.delete",
+  tags: ["Customer Auth"],
+  summary: "Withdraw the shared cart for a conversation",
+  request: { params: conversationParam, body: { required: true, content: { "application/json": { schema: cartShareDeleteBodySchema } } } },
+  responses: {
+    200: { description: "The withdrawn cart", content: { "application/json": { schema: successEnvelope(z.object({ cartShare: cartShareSchema })) } } },
+    ...writeResponses,
+  },
+}), async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { customerId, actor } = await customerActor(c);
+  const db = c.get("db");
+  const thread = await resolveBuyerThread(db, actor, c.req.valid("param").id);
+  await enforceBuyerWriteLimits(c, "cart-share", { customerId });
+  const share = await withdrawConversationCart(db, actor, thread.id, c.req.valid("json").expectedVersion);
+  return ok(c, { cartShare: await projectConversationCartShare(db, share, { orderId: thread.orderId }) });
+});
+
+app.openapi(createRoute({
+  method: "get",
+  path: "/orders/{id}/conversation/cart-share",
+  operationId: "storefront.customer_auth_order_conversation_cart_share.get",
+  tags: ["Customer Auth"],
+  summary: "Read the explicitly shared cart for an owned order",
+  request: { params: orderParam },
+  responses: {
+    200: { description: "Shared cart or null", content: { "application/json": { schema: successEnvelope(z.object({ cartShare: cartShareSchema.nullable() })) } } },
+    ...errorResponses,
+  },
+}), async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { actor } = await customerActor(c);
+  const db = c.get("db");
+  const orderId = c.req.valid("param").id;
+  await assertBuyerOrderAccess(db, actor, orderId);
+  const thread = await readOrderThread(db, orderId);
+  const share = thread ? await readConversationCartShare(db, thread.id) : null;
+  return ok(c, { cartShare: share ? await projectConversationCartShare(db, share, { orderId }) : null });
+});
+
+app.openapi(createRoute({
+  method: "put",
+  path: "/orders/{id}/conversation/cart-share",
+  operationId: "storefront.customer_auth_order_conversation_cart_share.put",
+  tags: ["Customer Auth"],
+  summary: "Explicitly share or update cart details for an owned order",
+  request: { params: orderParam, body: { required: true, content: { "application/json": { schema: cartSharePutBodySchema } } } },
+  responses: {
+    200: { description: "The shared cart", content: { "application/json": { schema: successEnvelope(z.object({ cartShare: cartShareSchema })) } } },
+    ...writeResponses,
+  },
+}), async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { customerId, actor } = await customerActor(c);
+  const db = c.get("db");
+  const orderId = c.req.valid("param").id;
+  await assertBuyerOrderAccess(db, actor, orderId);
+  await enforceBuyerWriteLimits(c, "cart-share", { customerId });
+  const body = c.req.valid("json");
+  const lines = await prepareConversationCartLines(db, body.lines, { orderId });
+  const thread = await getOrCreateOrderThread(db, orderId);
+  const share = await shareConversationCart(db, actor, thread.id, { lines, expectedVersion: body.expectedVersion });
+  return ok(c, { cartShare: await projectConversationCartShare(db, share, { orderId }) });
+});
+
+app.openapi(createRoute({
+  method: "delete",
+  path: "/orders/{id}/conversation/cart-share",
+  operationId: "storefront.customer_auth_order_conversation_cart_share.delete",
+  tags: ["Customer Auth"],
+  summary: "Withdraw the shared cart for an owned order",
+  request: { params: orderParam, body: { required: true, content: { "application/json": { schema: cartShareDeleteBodySchema } } } },
+  responses: {
+    200: { description: "The withdrawn cart", content: { "application/json": { schema: successEnvelope(z.object({ cartShare: cartShareSchema })) } } },
+    ...writeResponses,
+  },
+}), async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { customerId, actor } = await customerActor(c);
+  const db = c.get("db");
+  const orderId = c.req.valid("param").id;
+  await assertBuyerOrderAccess(db, actor, orderId);
+  const thread = await readOrderThread(db, orderId);
+  if (!thread) throw new NotFoundError("Conversation not found");
+  await enforceBuyerWriteLimits(c, "cart-share", { customerId });
+  const share = await withdrawConversationCart(db, actor, thread.id, c.req.valid("json").expectedVersion);
+  return ok(c, { cartShare: await projectConversationCartShare(db, share, { orderId }) });
 });
 
 export { app as customerConversationRoutes };

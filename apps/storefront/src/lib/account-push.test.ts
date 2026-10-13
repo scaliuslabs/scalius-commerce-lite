@@ -220,7 +220,7 @@ describe("pure helpers", () => {
 
   it("waits for the returned push registration to activate instead of another worker's ready promise", async () => {
     const installing = Object.assign(new EventTarget(), { state: "installing" });
-    const registration = { installing, waiting: null, active: { state: "activated" } };
+    const registration = { installing, waiting: null, active: null };
     const serviceWorker = {
       register: vi.fn(async () => registration),
       get ready() { throw new Error("Unrelated registration must not be used"); },
@@ -234,6 +234,22 @@ describe("pure helpers", () => {
     installing.dispatchEvent(new Event("statechange"));
     expect(await pending).toBe(registration);
     expect(serviceWorker.register).toHaveBeenCalledWith("/push-sw.js", { scope: "/" });
+  });
+
+  it("returns an actionable off state when activation stalls, without subscribing", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fakeDeps();
+      const subscribe = vi.fn();
+      const worker = Object.assign(new EventTarget(), { state: "installing" });
+      const win = { navigator: { serviceWorker: { register: async () => ({ installing: worker, active: null, pushManager: { subscribe } }) } }, document: { querySelector: () => null } } as unknown as Window & typeof globalThis;
+      f.deps.register = browserPushDeps(win).register;
+      const pending = turnPushOn(f.deps, "AQAB");
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(await pending).toEqual({ ok: false, view: "off" });
+      expect(subscribe).not.toHaveBeenCalled();
+      expect(f.post).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
   });
 });
 

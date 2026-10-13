@@ -24,7 +24,7 @@ import { CUSTOMER_ADDRESS_ID_PREFIX, customerAddresses, customerHistory, custome
 import { and, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
-import { CUSTOMER_TAGS_PER_CUSTOMER_MAX, type MarketingChannel } from "@scalius/shared/customer-marketing";
+import { CUSTOMER_TAGS_PER_CUSTOMER_MAX, MARKETING_CONTACT_CHANNELS } from "@scalius/shared/customer-marketing";
 import type { CustomerImportBatch, CustomerImportItem } from "@scalius/shared/store-transfer/customers";
 import { readAcceptedCustomerCountries } from "../settings";
 import { customerAddressColumns, resolveAddressFromRows, type AddressValidationError } from "../customers";
@@ -51,7 +51,7 @@ export interface CustomerImportResult {
   status: CustomerImportStatus;
   customerId: string | null;
   /** Channels this row subscribed (a dry run: would subscribe). */
-  subscribed: MarketingChannel[];
+  subscribed: (typeof MARKETING_CONTACT_CHANNELS)[number][];
   issues: CustomerImportIssue[];
 }
 
@@ -132,10 +132,10 @@ function displayName(item: CustomerImportItem): string {
   return name.length >= 3 ? name : item.phone;
 }
 
-function consentChanges(item: CustomerImportItem, actorId: string | null, recordEmail: string | null): { changes: ConsentChange[]; skipped: CustomerImportIssue[] } {
+function consentChanges(item: CustomerImportItem, actorId: string | null, recordEmail: string | null): { changes: Array<ConsentChange & { channel: (typeof MARKETING_CONTACT_CHANNELS)[number] }>; skipped: CustomerImportIssue[] } {
   const note = (item.consentEvidence ?? "Marked as subscribed in the imported file").slice(0, 500);
   const author = { source: "import" as const, actor: "staff" as const, actorId, note };
-  const changes: ConsentChange[] = [];
+  const changes: Array<ConsentChange & { channel: (typeof MARKETING_CONTACT_CHANNELS)[number] }> = [];
   const skipped: CustomerImportIssue[] = [];
   if (item.marketing.email) {
     if (recordEmail && item.email && lower(recordEmail) === lower(item.email)) {
@@ -327,7 +327,7 @@ export async function importCustomers(
       if (write.consent) {
         result.subscribed = readConsentChangeResults(write.consent, outcome.slice(offset, offset + write.statements.length))
           .filter((change) => change.changed)
-          .map((change) => change.channel);
+          .map((change) => change.channel).filter((channel): channel is (typeof MARKETING_CONTACT_CHANNELS)[number] => channel !== "push");
         await enqueueConsentNotifications(db, context.queue, write.consent.outboxIds);
       }
       offset += write.statements.length;

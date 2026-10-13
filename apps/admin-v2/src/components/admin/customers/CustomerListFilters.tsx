@@ -1,16 +1,17 @@
 import { lazy, Suspense, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { FilterControl } from "~/components/admin/data-table/FilterControl";
 import { useAppResourceColumns } from "~/components/admin/apps/ui/list-columns";
-import { fetchCustomerTags, customerSegmentsQueryOptions } from "~/lib/api-query-options/customers";
+import { fetchCustomerTags, customerSegmentQueryOptions, customerSegmentsQueryOptions } from "~/lib/api-query-options/customers";
 import { queryKeys } from "~/lib/query-keys";
 import { NO_CURSOR } from "~/lib/list-helpers";
 import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
 import { CUSTOMER_CHANNELS, type CustomerChannel, type CustomerListSearch } from "./customer-list-search";
+import { filterCustomerSegments } from "./segment-list-search";
 
 
 // Loads only when an active app has a column to filter by.
@@ -24,7 +25,8 @@ const AppListFilter = lazy(() => import("~/components/admin/apps/AppListFilter")
 export function CustomerListFilters({ search }: { search: CustomerListSearch }) {
   const t = useMessages(customersMessages);
   const navigate = useNavigate();
-  const segments = useQuery(customerSegmentsQueryOptions());
+  const queryClient = useQueryClient();
+  const selectedSegment = useQuery({ ...customerSegmentQueryOptions(search.segmentId ?? ""), enabled: Boolean(search.segmentId) });
   const { all: appColumns } = useAppResourceColumns("customer");
   const appFilterable = appColumns.some((column) => column.filterable);
   const set = (updates: Partial<Record<"tag" | "segmentId" | "channel" | "appFilter", string | undefined>>) =>
@@ -44,6 +46,15 @@ export function CustomerListFilters({ search }: { search: CustomerListSearch }) 
       hasMore: false,
     };
   }, [t]);
+
+  const loadSegments = useCallback<SearchableSelectLoader>(async ({ search: typed, page }) => {
+    const { segments } = await queryClient.fetchQuery(customerSegmentsQueryOptions());
+    const matches = filterCustomerSegments(segments, typed);
+    return {
+      options: matches.slice((page - 1) * 20, page * 20).map((segment) => ({ value: segment.id, label: segment.name })),
+      hasMore: matches.length > page * 20,
+    };
+  }, [queryClient]);
 
   return (
     <>
@@ -79,13 +90,15 @@ export function CustomerListFilters({ search }: { search: CustomerListSearch }) 
       <FilterControl label={t("labelSegment")}>
       <SearchableSelect
         value={search.segmentId ?? ""}
+        selectedLabel={selectedSegment.isError ? t("segmentUnavailable") : selectedSegment.data?.name}
         onValueChange={(value) => set({ segmentId: value || undefined })}
-        options={(segments.data?.segments ?? []).map((segment) => ({ value: segment.id, label: segment.name }))}
+        load={loadSegments}
+        queryKey={[...queryKeys.customers.segments(), "filter"]}
         placeholder={t("anySegment")}
         searchPlaceholder={t("searchSegments")}
         emptyMessage={t("noSegments")}
         ariaLabel={t("filterSegment")}
-        busy={segments.isPending}
+        busy={Boolean(search.segmentId) && selectedSegment.isPending}
         clearable
       />
       </FilterControl>

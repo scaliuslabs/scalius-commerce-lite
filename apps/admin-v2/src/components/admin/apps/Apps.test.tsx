@@ -528,6 +528,21 @@ describe("App page", () => {
     ]);
   });
 
+  it("shows readable declared schedules with honest cadence and collapsed exact cron details", async () => {
+    const expressions = ["*/5 * * * *", " 0 9 1-31 * 1 "];
+    await renderApp(detail({ cron: expressions.map((schedule, index) => ({ name: `job-${index}`, schedule, lastRun: null })) }), VIEWER);
+    expect(text()).toContain("Declared schedule: Every 5 minutes (at most once per check)");
+    expect(text()).toContain("Declared schedule: App-defined schedule");
+    expect(text()).toContain("store's time zone");
+    expect(text()).toContain("Due work is checked every 15 minutes");
+    const disclosures = [...host.querySelectorAll<HTMLDetailsElement>("details")].filter((element) => element.querySelector("summary")?.textContent === "Technical schedule");
+    expect(disclosures.map((element) => element.open)).toEqual([false, false]);
+    expect(disclosures.map((element) => element.querySelector("code")?.textContent)).toEqual(expressions);
+    await act(async () => setLocale("bn"));
+    expect(text()).toContain("ঘোষিত সময়সূচি: প্রতি ৫ মিনিটে");
+    expect(text()).toContain("কারিগরি সময়সূচি");
+  });
+
   it("has no checkout functions section when the app implements none", async () => {
     await renderApp(detail(), VIEWER);
     expect(text()).not.toContain("Checkout functions");

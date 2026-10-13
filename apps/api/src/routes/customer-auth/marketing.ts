@@ -59,6 +59,7 @@ const updateRoute = createRoute({
                         email: z.boolean().optional(),
                         sms: z.boolean().optional(),
                         whatsapp: z.boolean().optional(),
+                        push: z.boolean().optional(),
                         /** Storefront language, for the consent text recorded. */
                         language: z.string().max(16).optional(),
                     }).strict(),

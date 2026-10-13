@@ -19,6 +19,7 @@ const classRule = (pattern, message) => [
 ];
 
 const designRules = [
+  ...classRule(`(^|\\s)container(\\s|$)`, "Use explicit w-full max-w-* sizing instead of container; dashboard widths have one authority."),
   {
     selector: ":matches(Identifier, JSXIdentifier)[name='NativeSelect']",
     message: "NativeSelect was removed: use SearchableSelect.",

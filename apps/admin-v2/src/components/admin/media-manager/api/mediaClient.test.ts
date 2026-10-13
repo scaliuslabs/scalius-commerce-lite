@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const sdk = vi.hoisted(() => ({ getApiV1AdminMedia: vi.fn() }));
+const sdk = vi.hoisted(() => ({ getApiV1AdminMedia: vi.fn(), getApiV1AdminMediaById: vi.fn() }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
 
 import { MediaApiClient, toMediaFile, type MediaFileDto } from "./mediaClient";
@@ -48,6 +48,13 @@ describe("MediaApiClient reads", () => {
       },
     };
   }
+
+  it("reads an exact current file independently of filters and pagination", async () => {
+    sdk.getApiV1AdminMediaById.mockResolvedValue({ data: { success: true, data: { file: dto(null) } } });
+    expect(await MediaApiClient.fetchFile("media_video_1")).toMatchObject({ id: "media_video_1", version: 2 });
+    expect(sdk.getApiV1AdminMediaById).toHaveBeenCalledExactlyOnceWith({ path: { id: "media_video_1" } });
+    expect(sdk.getApiV1AdminMedia).not.toHaveBeenCalled();
+  });
 
   it("omits blank search and maps the listed files", async () => {
     sdk.getApiV1AdminMedia.mockResolvedValue(listResponse([dto(null)]));

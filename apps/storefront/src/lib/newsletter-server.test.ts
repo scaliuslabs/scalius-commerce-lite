@@ -20,7 +20,7 @@ import {
   unsubscribeFromNewsletter,
 } from "./newsletter-server";
 import { oneClickUnsubscribeRequest } from "./newsletter-one-click";
-import { newsletterConsentText } from "./newsletter-copy";
+import { newsletterMarketingConsentText } from "@scalius/shared/customer-marketing";
 import { isValidResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import { isPrivateStorefrontPathname } from "./cache-policy";
 
@@ -52,12 +52,12 @@ beforeEach(() => {
 });
 
 describe("newsletter signup", () => {
-  it("sends only the fields the API accepts, with the consent text the form showed", async () => {
+  it("sends only the selected channels and accepted fields; core owns consent evidence", async () => {
     api(200, { success: true, data: { result: "pending" } });
     const signup = readNewsletterSignup(signupForm({
       phone: " 01712345678 ",
       email: "rina@example.com",
-      whatsapp: "1",
+      channel: "whatsapp",
       language: "bn",
       company_website: "",
       utm_source: "fb",
@@ -73,21 +73,26 @@ describe("newsletter signup", () => {
     expect(JSON.parse(String(init.body))).toEqual({
       phone: "01712345678",
       email: "rina@example.com",
-      whatsapp: true,
+      channels: ["whatsapp"],
       language: "bn",
-      consentText: "এসএমএস ও ইমেইলে নতুন খবর ও অফার পাবেন। যেকোনো সময় আনসাবস্ক্রাইব করতে পারবেন। এই নম্বরে হোয়াটসঅ্যাপেও অফার পাঠান।",
     });
   });
 
-  it("leaves out an empty e-mail and an unticked WhatsApp box, and names e-mail only when the form asked", async () => {
+  it("sends only the separately selected SMS channel and leaves an empty email out", async () => {
     api(200, { success: true, data: { result: "subscribed" } });
-    await subscribeToNewsletter(buyer(), readNewsletterSignup(signupForm({ phone: "01712345678", email: "", language: "en" })));
+    await subscribeToNewsletter(buyer(), readNewsletterSignup(signupForm({ phone: "01712345678", email: "", language: "en", channel: "sms" })));
     expect(JSON.parse(String(mocks.apiFetch.mock.calls[0]![1].body))).toEqual({
       phone: "01712345678",
+      channels: ["sms"],
       language: "en",
-      consentText: "Get news and offers by SMS and email. Unsubscribe anytime.",
     });
-    expect(newsletterConsentText("en", { emailOffered: false, whatsapp: false })).toBe("Get news and offers by SMS. Unsubscribe anytime.");
+    expect(newsletterMarketingConsentText("en", ["sms"])).toBe("Choose channels for news and offers. Unsubscribe anytime. [SMS]");
+  });
+
+  it("asks for a channel without contacting the API when none was selected", async () => {
+    const outcome = await subscribeToNewsletter(buyer(), readNewsletterSignup(signupForm({ phone: "01712345678" })));
+    expect(outcome).toEqual({ status: "invalid", field: "channel" });
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
   });
 
   it("answers a filled honeypot like a success and calls nothing", async () => {
@@ -106,7 +111,7 @@ describe("newsletter signup", () => {
   });
 
   it("maps refusals, limits and failures to outcome flags", async () => {
-    const signup = readNewsletterSignup(signupForm({ phone: "123" }));
+    const signup = readNewsletterSignup(signupForm({ phone: "123", channel: "sms" }));
     api(400, { success: false, error: { code: "VALIDATION_ERROR", message: "Enter a valid phone number.", details: { field: "email" } } });
     expect(await subscribeToNewsletter(buyer(), signup)).toEqual({ status: "invalid", field: "email" });
     api(429, { success: false, error: { code: "RATE_LIMIT", details: { retryAfterSeconds: 42 } } });

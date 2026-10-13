@@ -2,6 +2,8 @@
 // request names, one-time codes), in the store's checkout language. The
 // message text itself is the merchant's template (notification-templates.ts).
 import type { CustomerRequestType } from "../settings/browser";
+import { formatNumber } from "@scalius/shared/locale-format";
+import { pluralCategory } from "@scalius/shared/locale-words";
 
 export type MessageLanguage = "en" | "bn";
 
@@ -66,6 +68,7 @@ interface MessageCopy {
     replyIntro: (store: string | null, order: string | null) => string;
     replyAction: string;
     replyNoReply: string;
+    sharedProducts: (count: number) => string;
     /** No message text in SMS. */
     replySms: (store: string | null, order: string | null) => string;
     staffTitle: (order: string | null) => string;
@@ -166,6 +169,7 @@ const EN: MessageCopy = {
     replyIntro: (store, order) => `${store ?? "The store"} sent you a message${order ? ` about order ${order}` : ""}:`,
     replyAction: "Reply",
     replyNoReply: "Please reply from the store's website, not to this email.",
+    sharedProducts: (count) => `Shared ${formatNumber(count, "en")} ${pluralCategory(count, "en") === "one" ? "product" : "products"}`,
     replySms: (store, order) => `${store ?? "The store"} replied to your message${order ? ` about order ${order}` : ""}. Check your email or your account to read it.`,
     staffTitle: (order) => (order ? `New message about ${order}` : "New customer message"),
     staffBody: "Open the inbox to read and reply.",
@@ -267,6 +271,7 @@ const BN: MessageCopy = {
     replyIntro: (store, order) => `${store ?? "স্টোর"} আপনাকে একটি মেসেজ পাঠিয়েছে${order ? ` (অর্ডার ${order})` : ""}:`,
     replyAction: "উত্তর দিন",
     replyNoReply: "এই ইমেইলে উত্তর দেবেন না, স্টোরের ওয়েবসাইট থেকে উত্তর দিন।",
+    sharedProducts: (count) => `${formatNumber(count, "bn-BD")}টি পণ্য শেয়ার করা হয়েছে`,
     replySms: (store, order) => `${store ?? "স্টোর"} আপনার মেসেজের উত্তর দিয়েছে${order ? ` (অর্ডার ${order})` : ""}। পড়তে ইমেইল বা অ্যাকাউন্ট দেখুন।`,
     staffTitle: (order) => (order ? `${order} নিয়ে নতুন মেসেজ` : "ক্রেতার নতুন মেসেজ"),
     staffBody: "পড়তে ও উত্তর দিতে ইনবক্স খুলুন।",

@@ -14,16 +14,20 @@ export function OnlineStorePage({
   title,
   back,
   actions,
+  presence,
+  presenceKey,
   children,
 }: {
   title: ReactNode;
   /** A parent page: shows the back arrow. */
   back?: { to: "/admin/online-store/navigation"; label: string };
   actions?: ReactNode;
+  presence?: ReactNode;
+  presenceKey?: string;
   children: ReactNode;
 }) {
   return (
-    <Page width="settings" className="@container space-y-4 pb-10">
+    <Page width="settings" className="@container space-y-4 pb-10" data-presence-root={presenceKey}>
       <div className="flex min-h-11 flex-wrap items-center gap-2 lg:min-h-9">
         {back ? (
           <Link
@@ -35,6 +39,7 @@ export function OnlineStorePage({
           </Link>
         ) : null}
         <h1 className="me-auto min-w-0 text-heading-lg">{title}</h1>
+        {presence}
         {actions}
       </div>
       <SaveErrorBanner />

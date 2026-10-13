@@ -523,7 +523,7 @@ const secondaryButtonClass =
           </div>
         )}
 
-        <MarketingConsentField consent={marketingConsent} checked={form.marketingConsent !== ""} idPrefix="quick" />
+        <MarketingConsentField consent={marketingConsent} selected={Object.keys(form.marketingConsent).map((key) => key.replace("marketingConsent_", ""))} idPrefix="quick" />
 
         {quote && codAvailable && codServesDestination ? (
           <div class="space-y-2">

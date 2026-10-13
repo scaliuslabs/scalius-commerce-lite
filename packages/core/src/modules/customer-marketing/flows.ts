@@ -1,15 +1,17 @@
 // The surfaces that change marketing consent: the storefront newsletter
 // form, the buyer's account, staff (and plugins) in the dashboard, and the
-// checkout checkbox (`checkoutConsentChanges`, written inside the commit).
+// independent checkout choices (`checkoutConsentChanges`).
 
 import type { Database } from "@scalius/database/client";
 import { customerHistory, customers } from "@scalius/database/schema";
 import {
     MARKETING_CHANNELS,
+    accountMarketingConsentText,
     marketingConsentContact,
     marketingConsentLabel,
     marketingConsentTextVersion,
     newsletterSubscribeSchema,
+    newsletterMarketingConsentText,
     type MarketingChannel,
     type MarketingConsentSettings,
 } from "@scalius/shared/customer-marketing";
@@ -54,24 +56,13 @@ function normalizeEmail(value: string | undefined): string | null {
 
 // ── Newsletter ───────────────────────────────────────────────────────────
 
-/** The storefront's default consent line when the form sends none. */
-export function newsletterConsentText(language: string | null | undefined, channels: { email: boolean; whatsapp: boolean }): string {
-    const bn = language?.toLowerCase().startsWith("bn");
-    if (bn) {
-        const via = ["এসএমএস", channels.email ? "ইমেইল" : null, channels.whatsapp ? "হোয়াটসঅ্যাপ" : null].filter(Boolean).join(", ");
-        return `${via}-এ নতুন খবর ও অফার পেতে সাবস্ক্রাইব করছি। যেকোনো সময় আনসাবস্ক্রাইব করা যাবে।`;
-    }
-    const via = ["SMS", channels.email ? "email" : null, channels.whatsapp ? "WhatsApp" : null].filter(Boolean).join(", ");
-    return `Subscribe to news and offers by ${via}. Unsubscribe anytime.`;
-}
-
 /**
  * A newsletter signup: the phone (mandatory customer identity) and an
  * optional e-mail resolve to a customer record by the identity rules
  * (verified phone owner, verified e-mail owner, the phone's guest record,
- * else a new guest record). The phone subscribes to SMS (and WhatsApp when
- * asked); the e-mail waits for its confirmation link when double opt-in is
- * on. The result depends only on the input and the settings, never on
+ * else a new guest record). Only individually selected channels subscribe;
+ * e-mail waits for its confirmation link when double opt-in is on.
+ * The result depends only on the input and the settings, never on
  * whether the contact was known.
  */
 export async function subscribeToNewsletter(
@@ -80,7 +71,10 @@ export async function subscribeToNewsletter(
     runtime: ConsentRuntime & { ip: string; rateLimitKey?: string },
 ): Promise<{ result: "subscribed" | "pending" }> {
     const parsed = newsletterSubscribeSchema.safeParse(raw);
-    if (!parsed.success) throw new ValidationError("Enter a valid phone number.", { field: "phone" });
+    if (!parsed.success) {
+        const channelIssue = parsed.error.issues.some((issue) => issue.path[0] === "channels");
+        throw new ValidationError(channelIssue ? "Choose at least one contact channel." : "Enter a valid phone number.", { field: channelIssue ? "channel" : "phone" });
+    }
     const input = parsed.data;
     let phone: string;
     try {
@@ -95,15 +89,15 @@ export async function subscribeToNewsletter(
         hashKey: runtime.rateLimitKey,
     });
     const settings = await readMarketingConsentSettings(db);
+    if (input.channels.includes("email") && !email) throw new ValidationError("Add your email address for email offers.", { field: "email" });
     const customerId = await resolveSubscriberCustomer(db, { phone, email });
-
-    const consentTextValue = input.consentText ?? newsletterConsentText(input.language, { email: email !== null, whatsapp: input.whatsapp === true });
+    const consentTextValue = newsletterMarketingConsentText(input.language, input.channels);
     const consentText: ConsentText = { text: consentTextValue, version: await marketingConsentTextVersion("newsletter", consentTextValue) };
     const author = { source: "newsletter" as const, actor: "buyer" as const };
     const changes: ConsentChange[] = [
-        { ...author, channel: "sms", action: "subscribe", contact: phone, consentText },
-        ...(input.whatsapp ? [{ ...author, channel: "whatsapp" as const, action: "subscribe" as const, contact: phone, consentText }] : []),
-        ...(email ? [{
+        ...(input.channels.includes("sms") ? [{ ...author, channel: "sms" as const, action: "subscribe" as const, contact: phone, consentText }] : []),
+        ...(input.channels.includes("whatsapp") ? [{ ...author, channel: "whatsapp" as const, action: "subscribe" as const, contact: phone, consentText }] : []),
+        ...(email && input.channels.includes("email") ? [{
             ...author,
             channel: "email" as const,
             action: "subscribe" as const,
@@ -114,7 +108,7 @@ export async function subscribeToNewsletter(
         }] : []),
     ];
     await applyConsentChanges(db, { customerId, changes, env: runtime.env, queue: runtime.queue });
-    return { result: email && settings.emailDoubleOptIn ? "pending" : "subscribed" };
+    return { result: input.channels.includes("email") && email && settings.emailDoubleOptIn ? "pending" : "subscribed" };
 }
 
 /** The record a subscriber's contact files under, creating a guest record when there is none. */
@@ -179,20 +173,24 @@ export async function updateAccountMarketingPreferences(
     runtime: ConsentRuntime,
 ): Promise<{ channels: AccountMarketingChannel[]; confirmationRequested: boolean }> {
     const customer = await db.select({
+        id: customers.id,
+        accountClaimedAt: customers.accountClaimedAt,
         email: customers.email,
         phone: customers.phone,
         emailVerifiedAt: customers.emailVerifiedAt,
     }).from(customers).where(and(eq(customers.id, customerId), isNull(customers.deletedAt), sql`${customers.accountClaimedAt} IS NOT NULL`)).get();
     if (!customer) throw new NotFoundError("Account not found");
     const settings = await readMarketingConsentSettings(db);
-    const label = marketingConsentLabel(settings, input.language);
-    const consentText: ConsentText = { text: label, version: await marketingConsentTextVersion("account", label) };
     const changes: ConsentChange[] = [];
     for (const channel of MARKETING_CHANNELS) {
         const wanted = input[channel];
         if (wanted === undefined) continue;
         const contact = marketingConsentContact(channel, customer);
-        if (wanted && !contact) throw new ValidationError(channel === "email" ? "Add an email address first." : "Add a phone number first.", { field: channel });
+        if (wanted && !contact) throw new ValidationError(channel === "push" ? "A customer account is required for marketing push." : channel === "email" ? "Add an email address first." : "Add a phone number first.", { field: channel });
+        const text = accountMarketingConsentText(input.language, channel);
+        const consentText: ConsentText | null = wanted
+            ? { text, version: await marketingConsentTextVersion("account", text) }
+            : null;
         changes.push(wanted
             ? {
                 channel,
@@ -226,11 +224,11 @@ export async function setCustomerMarketingConsent(
     author: { actor: "staff" | "plugin"; actorId: string | null },
     runtime: ConsentRuntime,
 ): Promise<{ consents: MarketingConsentView[]; result: ConsentChangeResult }> {
-    const customer = await db.select({ email: customers.email, phone: customers.phone })
+    const customer = await db.select({ id: customers.id, accountClaimedAt: customers.accountClaimedAt, email: customers.email, phone: customers.phone })
         .from(customers).where(and(eq(customers.id, customerId), isNull(customers.deletedAt))).get();
     if (!customer) throw new NotFoundError("Customer not found");
     const contact = marketingConsentContact(input.channel, customer);
-    if (!contact) throw new ValidationError(input.channel === "email" ? "This customer has no email address." : "This customer has no phone number.", { field: "channel" });
+    if (input.state === "subscribed" && !contact) throw new ValidationError(input.channel === "push" ? "Marketing push requires a customer account." : input.channel === "email" ? "This customer has no email address." : "This customer has no phone number.", { field: "channel" });
     const note = input.note?.trim() || null;
     if (input.state === "subscribed" && author.actor === "staff" && !note) {
         throw new ValidationError("Add a note saying how the customer agreed.", { field: "note" });
@@ -259,6 +257,7 @@ export async function recordCheckoutMarketingConsent(
         signedInCustomerId: string | null;
         order: { phone: string | null; email: string | null; whatsapp: string | null };
         language: string | null | undefined;
+        channels: readonly MarketingChannel[];
     },
     runtime: ConsentRuntime,
 ): Promise<ConsentChangeResult[]> {
@@ -271,6 +270,7 @@ export async function recordCheckoutMarketingConsent(
         const changes = await checkoutConsentChanges({
             settings,
             language: input.language,
+            channels: input.channels,
             order: input.order,
             signedInVerifiedEmail: account?.email ?? null,
         });
@@ -294,13 +294,15 @@ export async function checkoutConsentChanges(input: {
     language: string | null | undefined;
     order: { phone: string | null; email: string | null; whatsapp: string | null };
     signedInVerifiedEmail: string | null;
+    channels?: readonly MarketingChannel[];
 }): Promise<ConsentChange[]> {
     if (!input.settings.checkout.enabled) return [];
     const label = marketingConsentLabel(input.settings, input.language);
-    const consentText: ConsentText = { text: label, version: await marketingConsentTextVersion("checkout", label) };
+
     const email = normalizeContactEmail(input.order.email);
     const changes: ConsentChange[] = [];
     for (const channel of input.settings.checkout.channels) {
+        if (!input.channels?.includes(channel)) continue;
         const contact = channel === "email" ? email : channel === "whatsapp" ? (input.order.whatsapp ?? input.order.phone) : input.order.phone;
         if (!contact) continue;
         changes.push({
@@ -309,7 +311,7 @@ export async function checkoutConsentChanges(input: {
             source: "checkout",
             actor: "buyer",
             contact,
-            consentText,
+            consentText: { text: `${label} [${channel}]`, version: await marketingConsentTextVersion("checkout", `${label} [${channel}]`) },
             doubleOptIn: channel === "email" && input.settings.emailDoubleOptIn
                 && normalizeContactEmail(input.signedInVerifiedEmail) !== contact,
         });

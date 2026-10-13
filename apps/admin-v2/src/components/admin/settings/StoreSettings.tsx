@@ -1,18 +1,15 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, ImageIcon, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ImageIcon, Plus, Trash2 } from "lucide-react";
 import { z } from "zod";
 import {
   getApiV1AdminSettingsBusiness,
   getApiV1AdminSettingsPlatform,
   postApiV1AdminSettingsBusiness,
   postApiV1AdminSettingsCurrency,
-  postApiV1AdminSettingsStoreDefaults,
-  getApiV1AdminSettingsStoreDefaults,
-  putApiV1AdminSettingsAllowedCountries,
   putApiV1AdminSettingsPlatform,
 } from "@scalius/api-client/sdk";
-import { formatBdLandline, getCountries, getCountryCallingCode, normalizeBdLandline } from "@scalius/shared/customer-utils";
+import { formatBdLandline, normalizeBdLandline } from "@scalius/shared/customer-utils";
 import {
   SUPPORTED_CURRENCY_CODES,
   normalizeSupportedCurrencyCode,
@@ -27,7 +24,6 @@ import {
 } from "@scalius/shared/platform-config";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
@@ -36,17 +32,14 @@ import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
 import { normalizeCurrencySettingsInput, type CurrencySettingsPayload } from "~/lib/api-query-options/currency";
-import { storeDefaultsQueryOptions, type StoreDefaultsPayload } from "~/lib/api-query-options/store-defaults";
-import { setStoreTimeZone } from "~/lib/store-time-zone";
-import { timeZoneLabel, timeZoneOptions } from "~/lib/time-zone-options";
-import { SYSTEM_WEIGHT_UNITS, type UnitSystem, type WeightUnit } from "@scalius/shared/store-defaults";
+import { storeDefaultsQueryOptions } from "~/lib/api-query-options/store-defaults";
+import { timeZoneLabel } from "~/lib/time-zone-options";
 import { marketKeys } from "~/lib/api-query-options/markets";
 import {
   businessQuery,
   countriesQuery,
   currencyQuery,
   platformQuery,
-  type CountryPolicy,
 } from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { getLocale, useMessages } from "~/i18n";
@@ -56,17 +49,19 @@ import { fieldErrorMessages } from "~/i18n/save-bar";
 import { MediaManager } from "../media-manager";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { AdminPhoneInput, adminPhoneProblem, normalizeAdminPhone, type PhoneCountryPolicy } from "../shared/AdminPhoneInput";
-import { sortedUniqueStrings } from "~/lib/form-values";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 import { FieldSet } from "~/components/ui/field";
+
+const loadStoreDefaultsFields = () => import("./StoreDefaultsFields");
+const TimeZoneFields = lazy(() => loadStoreDefaultsFields().then((module) => ({ default: module.TimeZoneFields })));
+const UnitFields = lazy(() => loadStoreDefaultsFields().then((module) => ({ default: module.UnitFields })));
+const CountryFields = lazy(() => loadStoreDefaultsFields().then((module) => ({ default: module.CountryFields })));
 
 const ImageField = lazy(() => import("../online-store/ImageField").then((module) => ({ default: module.ImageField })));
 
 type Business = Omit<ApiResult<typeof getApiV1AdminSettingsBusiness>, "revision">;
 type SocialLink = Business["socialLinks"][number];
 type Platform = Omit<ApiResult<typeof getApiV1AdminSettingsPlatform>, "revision">;
-type Country = CountryPolicy["allowedCountries"][number];
-type CountryMode = CountryPolicy["allowedCountriesMode"];
 
 const BUSINESS_DEFAULTS: Business = {
   companyName: "",
@@ -676,199 +671,6 @@ function CurrencyFields() {
 // ── Time zone and units ─────────────────────────────────────────────────
 
 const storeDefaultsQuery = storeDefaultsQueryOptions();
-const STORE_DEFAULTS_FALLBACK: StoreDefaultsPayload = { timeZone: "Asia/Dhaka", unitSystem: "metric", weightUnit: "g", revision: 0, countryCode: "BD" };
-
-function useStoreDefaultsForm() {
-  const common = useMessages(settingsMessages);
-  return useSettingsForm<StoreDefaultsPayload>({
-    queryKey: storeDefaultsQuery.queryKey,
-    fetchFn: () => apiData(getApiV1AdminSettingsStoreDefaults()),
-    saveFn: async (draft, expectedRevision) => {
-      const saved = await apiData(postApiV1AdminSettingsStoreDefaults({
-        body: { expectedRevision, timeZone: draft.timeZone, unitSystem: draft.unitSystem, weightUnit: draft.weightUnit },
-      }));
-      setStoreTimeZone(saved.timeZone);
-      // The country is Settings → Markets'; this card leaves it as read.
-      return { ...saved, countryCode: draft.countryCode };
-    },
-    defaultValues: STORE_DEFAULTS_FALLBACK,
-    // The platform document holds them: the web addresses card reloads its revision.
-    invalidateQueryKeys: [platformQuery.queryKey, queryKeys.settings.storefrontUrl()],
-    errorMessage: common("saveFailed"),
-    canEdit: useCanEditStore(),
-  });
-}
-
-function TimeZoneFields() {
-  const t = useMessages(storeSettingsMessages);
-  const { values, setValue } = useStoreDefaultsForm();
-  const options = useMemo(() => timeZoneOptions(values.timeZone, getLocale()), [values.timeZone]);
-  return (
-    <SettingsField id="store-time-zone" label={t("timeZoneRow")} help={t("timeZoneHelp")}>
-      <SearchableSelect
-        id="store-time-zone"
-        value={values.timeZone}
-        options={options}
-        searchPlaceholder={t("timeZoneSearch")}
-        emptyMessage={t("timeZoneNone")}
-        triggerClassName="w-full"
-        onValueChange={(zone) => setValue("timeZone", zone)}
-      />
-    </SettingsField>
-  );
-}
-
-function UnitFields() {
-  const t = useMessages(storeSettingsMessages);
-  const { values, setValues } = useStoreDefaultsForm();
-  const units = SYSTEM_WEIGHT_UNITS[values.unitSystem];
-  return (
-    <>
-      <SettingsField id="store-unit-system" label={t("unitSystemRow")}>
-        <RadioGroup
-          id="store-unit-system"
-          value={values.unitSystem}
-          onValueChange={(system) => setValues((draft) => ({
-            ...draft,
-            unitSystem: system as UnitSystem,
-            // A new system starts at its default unit, as in Shopify.
-            weightUnit: system === draft.unitSystem ? draft.weightUnit : SYSTEM_WEIGHT_UNITS[system as UnitSystem][0]!,
-          }))}
-        >
-          {(["metric", "imperial"] as const).map((system) => (
-            <label key={system} className="flex min-h-11 items-center gap-2 text-body md:min-h-9">
-              <RadioGroupItem value={system} />
-              {t(system)}
-            </label>
-          ))}
-        </RadioGroup>
-      </SettingsField>
-      <SettingsField id="store-weight-unit" label={t("weightUnitRow")} help={t("unitsHelp")}>
-        <SearchableSelect
-          id="store-weight-unit"
-          value={values.weightUnit}
-          options={units.map((unit) => ({ value: unit, label: t(`unit_${unit}`) }))}
-          triggerClassName="w-full"
-          onValueChange={(unit) => setValues((draft) => ({ ...draft, weightUnit: unit as WeightUnit }))}
-        />
-      </SettingsField>
-    </>
-  );
-}
-
-// ── Customer countries ──────────────────────────────────────────────────
-
-function countryName(code: string): string {
-  try {
-    return new Intl.DisplayNames([getLocale() === "bn" ? "bn" : "en"], { type: "region" }).of(code) ?? code;
-  } catch {
-    return code;
-  }
-}
-
-function CountryFields() {
-  const t = useMessages(storeSettingsMessages);
-  const common = useMessages(settingsMessages);
-  const [search, setSearch] = useState("");
-  const { values, setValue } = useSettingsForm<CountryPolicy>({
-    queryKey: countriesQuery.queryKey,
-    fetchFn: countriesQuery.queryFn,
-    saveFn: (draft, expectedRevision) =>
-      apiData(putApiV1AdminSettingsAllowedCountries({
-        body: { allowedCountries: draft.allowedCountries, mode: draft.allowedCountriesMode, expectedRevision },
-      })),
-    invalidateQueryKeys: [queryKeys.settings.checkoutReadiness()],
-    defaultValues: { allowedCountries: [], allowedCountriesMode: "include" },
-    toDraft: (values) => ({ ...values, allowedCountries: sortedUniqueStrings(values.allowedCountries) }),
-    errorMessage: common("saveFailed"),
-    canEdit: useCanEditStore(),
-  });
-  const countries = useMemo(
-    () =>
-      getCountries()
-        .map((code) => ({ code, name: countryName(code), callingCode: getCountryCallingCode(code) }))
-        .sort((left, right) => left.name.localeCompare(right.name)),
-    [],
-  );
-  const needle = search.trim().toLocaleLowerCase();
-  const matches = countries.filter(
-    (country) =>
-      !needle ||
-      country.name.toLocaleLowerCase().includes(needle) ||
-      country.code.toLowerCase().includes(needle) ||
-      `+${country.callingCode}`.includes(needle),
-  );
-  const selected = values.allowedCountries;
-  const toggle = (code: Country) =>
-    setValue(
-      "allowedCountries",
-      selected.includes(code) ? selected.filter((item) => item !== code) : sortedUniqueStrings([...selected, code]),
-    );
-
-  return (
-    <>
-      <p className="text-body text-muted-foreground">{t("countriesHelp")}</p>
-      <RadioGroup
-        value={values.allowedCountriesMode}
-        onValueChange={(mode) => setValue("allowedCountriesMode", mode as CountryMode)}
-      >
-        {(["include", "exclude"] as const).map((mode) => (
-          <label key={mode} className="flex min-h-11 items-start gap-2 py-3 text-body">
-            <span className="flex h-lh items-center"><RadioGroupItem value={mode} /></span>
-            {mode === "include" ? t("onlySelected") : t("allExceptSelected")}
-          </label>
-        ))}
-      </RadioGroup>
-      {selected.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {selected.map((code) => (
-            <span key={code} className="inline-flex items-center gap-1 rounded-lg bg-secondary py-0.5 ps-2 pe-0.5 text-body text-secondary-foreground">
-              {countryName(code)}
-              <button
-                type="button"
-                aria-label={t("removeCountry", { country: countryName(code) })}
-                className="grid size-8 place-items-center rounded-full hover:bg-muted-foreground/20 sm:size-6"
-                onClick={() => toggle(code)}
-              >
-                <X className="size-3.5" aria-hidden="true" />
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : null}
-      <div className="relative">
-        <Search className="pointer-events-none absolute inset-s-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <Input
-          type="search"
-          value={search}
-          placeholder={t("countrySearch")}
-          aria-label={t("countrySearch")}
-          // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
-          className="ps-9"
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      </div>
-      <div className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-        {matches.length === 0 ? (
-          <p className="p-4 text-center text-body text-muted-foreground">{t("countryNone")}</p>
-        ) : (
-          matches.map((country) => (
-            <label key={country.code} className="flex min-h-11 items-center gap-3 px-3 text-body hover:bg-muted/50">
-              <input
-                type="checkbox"
-                className="size-4 accent-primary"
-                checked={selected.includes(country.code)}
-                onChange={() => toggle(country.code)}
-              />
-              <span className="flex-1">{country.name}</span>
-              <span className="text-muted-foreground">+{country.callingCode}</span>
-            </label>
-          ))
-        )}
-      </div>
-    </>
-  );
-}
 
 export function StoreDefaultsCard() {
   const t = useMessages(storeSettingsMessages);
@@ -918,7 +720,7 @@ export function StoreDefaultsCard() {
               />
             }
           >
-            <UnitFields />
+            <Suspense fallback={<Skeleton className="h-32 w-full" />}><UnitFields /></Suspense>
           </SettingsDialog>
           <SettingsDialog
             title={t("timeZoneTitle")}
@@ -930,7 +732,7 @@ export function StoreDefaultsCard() {
               />
             }
           >
-            <TimeZoneFields />
+            <Suspense fallback={<Skeleton className="h-32 w-full" />}><TimeZoneFields /></Suspense>
           </SettingsDialog>
           <SettingsDialog
             title={t("countriesTitle")}
@@ -948,7 +750,7 @@ export function StoreDefaultsCard() {
               />
             }
           >
-            <CountryFields />
+            <Suspense fallback={<Skeleton className="h-32 w-full" />}><CountryFields /></Suspense>
           </SettingsDialog>
         </>
       }

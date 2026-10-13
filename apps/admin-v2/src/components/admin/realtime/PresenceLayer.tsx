@@ -41,7 +41,19 @@ const EDITING_KEY = {
   page: "editingPage",
   theme: "editingTheme",
   settings: "editingSettings",
-} as const;
+  customer: "editingCustomer",
+  discount: "editingDiscount",
+  "gift-card": "editingGiftCard",
+  "purchase-order": "editingPurchaseOrder",
+  transfer: "editingTransfer",
+  supplier: "editingSupplier",
+  brand: "editingBrand",
+  conversation: "editingConversation",
+  "price-list": "editingPriceList",
+  media: "editingMedia",
+  attribute: "editingAttribute",
+  menu: "editingMenu",
+} as const satisfies Record<PresencePrefix, string>;
 
 /** The element that holds field `field` inside `root`, by form name or `data-field`. */
 export function fieldElement(root: Element | null, field: string): HTMLElement | null {
@@ -96,9 +108,11 @@ export function saveOutcome(save: RemoteSave, dirty: boolean, mine: readonly str
 
 // ── The banner ───────────────────────────────────────────────────────────
 
-function EditingBanner({ editors, presenceKey, dismissedFor, setDismissedFor }: {
+function EditingBanner({ editors, presenceKey, canMerge, readOnly, dismissedFor, setDismissedFor }: {
   editors: RealtimePresence[];
   presenceKey: string;
+  canMerge: boolean;
+  readOnly?: boolean;
   /** Dismissed for these people; someone new editing brings it back. */
   dismissedFor: ReadonlySet<string>;
   setDismissedFor(people: ReadonlySet<string>): void;
@@ -117,7 +131,7 @@ function EditingBanner({ editors, presenceKey, dismissedFor, setDismissedFor }: 
       <PersonAvatar person={editors[0]!} />
       <p className="min-w-0 flex-1">
         <span className="font-medium">{t(EDITING_KEY[presencePrefixOf(presenceKey)], { names, count: editors.length })}</span>{" "}
-        <span className="text-muted-foreground">{t("mergeHint")}</span>
+        {!readOnly ? <span className="text-muted-foreground">{t(canMerge ? "mergeHint" : "reviewHint")}</span> : null}
       </p>
       <Button
         type="button"
@@ -154,6 +168,7 @@ function FieldLinks({ root, fields }: { root: Element | null; fields: readonly {
 function SaveNotice({ presence }: { presence: EditorPresenceValue }) {
   const t = useMessages(realtimeMessages);
   const save = presence.remoteSave!;
+  const canMerge = Boolean(presence.onLoadLatest && presence.changedFields);
   const [outcome, setOutcome] = useState<"merged" | "reload" | "both" | null>(null);
   const handled = useRef<number | null>(null);
   // Decide once per save: merge a dirty draft at once when the fields do not overlap.
@@ -184,13 +199,14 @@ function SaveNotice({ presence }: { presence: EditorPresenceValue }) {
       ? (fields ? sentence("savedMerged") : t("savedChanges", { name }))
       : outcome === "reload"
         ? (fields ? sentence("savedReloadFields") : t("savedReload", { name }))
-        : (fields ? sentence("savedBoth") : t("savedChanges", { name }));
+        : (fields && fieldsOverlap(save.fields, presence.changedFields?.() ?? []) ? sentence("savedBoth") : t("savedChanges", { name }));
   return (
     <Alert variant="info" className="pointer-events-auto">
       <Users />
       <AlertTitle>{title}</AlertTitle>
       <AlertDescription>
-        {outcome === "both" ? <p>{t("savedBothHint")}</p> : null}
+        {outcome === "both" ? <p>{t(canMerge ? "savedBothHint" : "savedReviewHint")}</p> : null}
+        {outcome === "reload" && !presence.onLoadLatest ? <p>{t("savedReloadManual")}</p> : null}
         <div className="mt-2 flex flex-wrap gap-2">
           {outcome !== "merged" && presence.onLoadLatest ? (
             <Button
@@ -268,7 +284,7 @@ export default function PresenceLayer({ presence }: { presence: EditorPresenceVa
         {/* One notice at a time: a save notice already names who is working here. */}
         {presence.remoteSave
           ? <SaveNotice key={presence.remoteSave.at} presence={presence} />
-          : <EditingBanner editors={editors} presenceKey={presence.presenceKey} dismissedFor={dismissedFor} setDismissedFor={setDismissedFor} />}
+          : <EditingBanner editors={editors} presenceKey={presence.presenceKey} canMerge={Boolean(presence.onLoadLatest && presence.changedFields)} readOnly={presence.readOnly} dismissedFor={dismissedFor} setDismissedFor={setDismissedFor} />}
       </div>
     </>
   );

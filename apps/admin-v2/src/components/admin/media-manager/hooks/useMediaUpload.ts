@@ -19,6 +19,7 @@ import { canEncodeMediaVariants, encodeMediaVariants } from "../utils/media-vari
 const MAX_CONCURRENT_FILES = 2;
 /** A finished row stays long enough to read "Uploaded", then leaves the panel. */
 export const DONE_ROW_MS = 2500;
+const ABORTABLE = new Set<UploadQueueItem["status"]>(["queued", "uploading"]);
 const IN_FLIGHT = new Set<UploadQueueItem["status"]>(["queued", "uploading", "processing"]);
 /** Server session states a retry continues instead of starting over. */
 const RESUMABLE = new Set<MediaUploadSession["state"]>(["initiated", "uploading", "completing", "committed"]);
@@ -65,6 +66,7 @@ function serverError(error: unknown, item: UploadQueueItem, capability: MediaCap
 
 export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMediaUploadOptions) {
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
+  const [validating, setValidating] = useState(0);
   const queueRef = useRef<UploadQueueItem[]>([]);
   const activeCountRef = useRef(0);
   const controllersRef = useRef(new Map<string, AbortController>());
@@ -83,11 +85,15 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
     return () => {
       aliveRef.current = false;
       controllers.forEach((controller) => controller.abort());
+      for (const item of queueRef.current) {
+        if (item.sessionId && ABORTABLE.has(item.status)) void MediaApiClient.abortUpload(item.sessionId).catch(() => undefined);
+      }
       timers.forEach(clearTimeout);
     };
   }, []);
 
-  const inFlight = queue.some((item) => IN_FLIGHT.has(item.status));
+  const pendingCount = validating + queue.filter((item) => IN_FLIGHT.has(item.status)).length;
+  const inFlight = pendingCount > 0;
   useEffect(() => {
     if (!inFlight) return;
     // A browser File can't be recovered after this document closes.
@@ -158,8 +164,10 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
       rejectsContent = false;
 
       if (!stillWanted()) return;
-      mutate(id, { status: "processing", progress: 100 });
       const variants = await encodedVariants;
+      if (!stillWanted()) return;
+      // Completion has crossed the commit boundary; closing must not abort it.
+      mutate(id, { status: "processing", progress: 100 });
       let result = await MediaApiClient.completeUpload(session.id, variants ? "client" : "server");
       let warning: UploadQueueItem["warning"] = null;
       if (variants) {
@@ -198,6 +206,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
   }, [capability, folderId, mutate, remove]);
 
   const pump = useCallback(() => {
+    if (!aliveRef.current) return;
     while (activeCountRef.current < MAX_CONCURRENT_FILES) {
       const next = queueRef.current.find((item) => item.status === "queued");
       if (!next) break;
@@ -218,22 +227,30 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
       toast.error(t("tooManyFiles", { count: MEDIA_MAX_FILES_PER_UPLOAD }));
       return;
     }
-    const items = await Promise.all(incoming.map(async (file): Promise<UploadQueueItem> => {
-      const error = await checkFile(file, capability);
-      return {
-        id: queueId(),
-        file,
-        kind: error ? null : file.type.startsWith("video/") ? "video" : "image",
-        status: error ? "failed" : "queued",
-        progress: 0,
-        sessionId: null,
-        error,
-        warning: null,
-        result: null,
-      };
-    }));
-    commit([...queueRef.current, ...items]);
-    pumpRef.current();
+    setValidating((count) => count + 1);
+    try {
+      const items = await Promise.all(incoming.map(async (file): Promise<UploadQueueItem> => {
+        const error = await checkFile(file, capability);
+        return {
+          id: queueId(),
+          file,
+          kind: error ? null : file.type.startsWith("video/") ? "video" : "image",
+          status: error ? "failed" : "queued",
+          progress: 0,
+          sessionId: null,
+          error,
+          warning: null,
+          result: null,
+        };
+      }));
+      if (!aliveRef.current) return;
+      commit([...queueRef.current, ...items]);
+      pumpRef.current();
+    } catch {
+      if (aliveRef.current) toast.error(t("failed"));
+    } finally {
+      if (aliveRef.current) setValidating((count) => count - 1);
+    }
   }, [capability, commit]);
 
   const retry = useCallback((id: string) => {
@@ -248,8 +265,8 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
     if (!item) return;
     remove(id);
     controllersRef.current.get(id)?.abort();
-    if (item.sessionId && item.status !== "done") void MediaApiClient.abortUpload(item.sessionId).catch(() => undefined);
+    if (item.sessionId && ABORTABLE.has(item.status)) void MediaApiClient.abortUpload(item.sessionId).catch(() => undefined);
   }, [remove]);
 
-  return { queue, isUploading: inFlight, uploadFiles, retry, dismiss };
+  return { queue, pendingCount, isUploading: inFlight, uploadFiles, retry, dismiss };
 }

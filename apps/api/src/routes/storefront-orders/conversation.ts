@@ -1,3 +1,4 @@
+import { getBuyerConversationView } from "../../utils/conversation-view";
 // Guest order conversation routes (Wave A §6.1). The receipt proof travels in
 // the X-Receipt-Token header (or the JSON body of a post), never the URL; the
 // storefront keeps it in an HttpOnly cookie and adds the header server-side.
@@ -5,24 +6,29 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
-  getBuyerThread,
   getOrCreateOrderThread,
   markBuyerRead,
   postBuyerOrderMessage,
   readOrderThread,
+  readConversationCartShare,
+  shareConversationCart,
+  withdrawConversationCart,
   resolveBuyerThread,
   resolveConversationAttachment,
   stageConversationAttachment,
   type ConversationActor,
 } from "@scalius/core/modules/conversations";
 import { created, ok } from "../../utils/api-response";
-import { errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
+import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import {
   attachmentUploadRequest,
   attachmentUploadResponseSchema,
-  beforeSeqQuerySchema,
+  buyerMessagePageQuerySchema,
   buyerConversationThreadSchema,
   buyerPostBodySchema,
+  cartShareSchema,
+  cartSharePutBodySchema,
+  cartShareDeleteBodySchema,
   conversationAttachmentIdSchema,
   readBodySchema,
 } from "../../schemas/conversations";
@@ -35,6 +41,7 @@ import {
   serveConversationAttachment,
 } from "../../utils/conversation-http";
 import { NotFoundError } from "../../utils/api-error";
+import { prepareConversationCartLines, projectConversationCartShare } from "../../utils/conversation-cart-share";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -65,7 +72,7 @@ app.openapi(createRoute({
   path: "/receipt/{id}/conversation",
   tags: ["Orders"],
   summary: "Read the order's conversation with a receipt proof (header only)",
-  request: { params: orderIdParam, headers: receiptHeaders, query: beforeSeqQuerySchema },
+  request: { params: orderIdParam, headers: receiptHeaders, query: buyerMessagePageQuerySchema },
   responses: {
     200: { description: "The order thread, or null before anyone wrote", content: { "application/json": { schema: threadEnvelope } } },
     ...errorResponses,
@@ -76,7 +83,7 @@ app.openapi(createRoute({
   await receiptActor(c, orderId);
   const thread = await readOrderThread(c.get("db"), orderId);
   const conversation = thread && thread.lastSeq > 0
-    ? await getBuyerThread(c.get("db"), thread, { beforeSeq: c.req.valid("query").beforeSeq })
+    ? await getBuyerConversationView(c.get("db"), thread, c.req.valid("query"))
     : null;
   return ok(c, { conversation });
 });
@@ -113,7 +120,7 @@ app.openapi(createRoute({
     attachmentIds: body.attachmentIds,
   }, { queue: c.env.JOBS_QUEUE });
   const thread = await resolveBuyerThread(db, actor, posted.conversationId);
-  return created(c, { conversation: await getBuyerThread(db, thread) });
+  return created(c, { conversation: await getBuyerConversationView(db, thread) });
 });
 
 app.openapi(createRoute({
@@ -186,6 +193,78 @@ app.openapi(createRoute({
   await resolveBuyerThread(c.get("db"), actor, thread.id);
   const attachment = await resolveConversationAttachment(c.get("db"), { conversationId: thread.id, attachmentId, reader: actor });
   return serveConversationAttachment(c.env, attachment);
+});
+
+app.openapi(createRoute({
+  method: "get",
+  path: "/receipt/{id}/conversation/cart-share",
+  operationId: "storefront.orders_receipt_conversation_cart_share.get",
+  tags: ["Orders"],
+  summary: "Read the order conversation cart with receipt proof (header only)",
+  request: { params: orderIdParam, headers: receiptHeaders },
+  responses: {
+    200: { description: "Shared cart", content: { "application/json": { schema: successEnvelope(z.object({ cartShare: cartShareSchema.nullable() })) } } },
+    ...errorResponses,
+  },
+}), async (c) => {
+  noStore(c);
+  const db = c.get("db");
+  const orderId = c.req.valid("param").id;
+  await receiptActor(c, orderId);
+  const thread = await readOrderThread(db, orderId);
+  const share = thread ? await readConversationCartShare(db, thread.id) : null;
+  return ok(c, { cartShare: share ? await projectConversationCartShare(db, share, { orderId }) : null });
+});
+
+app.openapi(createRoute({
+  method: "put",
+  path: "/receipt/{id}/conversation/cart-share",
+  operationId: "storefront.orders_receipt_conversation_cart_share.put",
+  tags: ["Orders"],
+  summary: "Explicitly share or update the order conversation cart with receipt proof (header only)",
+  request: { params: orderIdParam, headers: receiptHeaders, body: { required: true, content: { "application/json": { schema: cartSharePutBodySchema } } } },
+  responses: {
+    200: { description: "Shared cart", content: { "application/json": { schema: successEnvelope(z.object({ cartShare: cartShareSchema })) } } },
+    ...errorResponses,
+    409: conflictResponse,
+    503: serviceUnavailableResponse,
+  },
+}), async (c) => {
+  noStore(c);
+  const db = c.get("db");
+  const orderId = c.req.valid("param").id;
+  const actor = await receiptActor(c, orderId);
+  await enforceBuyerWriteLimits(c, "cart-share", { orderId });
+  const body = c.req.valid("json");
+  const lines = await prepareConversationCartLines(db, body.lines, { orderId });
+  const thread = await getOrCreateOrderThread(db, orderId);
+  const share = await shareConversationCart(db, actor, thread.id, { lines, expectedVersion: body.expectedVersion });
+  return ok(c, { cartShare: await projectConversationCartShare(db, share, { orderId }) });
+});
+
+app.openapi(createRoute({
+  method: "delete",
+  path: "/receipt/{id}/conversation/cart-share",
+  operationId: "storefront.orders_receipt_conversation_cart_share.delete",
+  tags: ["Orders"],
+  summary: "Withdraw the order conversation cart with receipt proof (header only)",
+  request: { params: orderIdParam, headers: receiptHeaders, body: { required: true, content: { "application/json": { schema: cartShareDeleteBodySchema } } } },
+  responses: {
+    200: { description: "Shared cart", content: { "application/json": { schema: successEnvelope(z.object({ cartShare: cartShareSchema })) } } },
+    ...errorResponses,
+    409: conflictResponse,
+    503: serviceUnavailableResponse,
+  },
+}), async (c) => {
+  noStore(c);
+  const db = c.get("db");
+  const orderId = c.req.valid("param").id;
+  const actor = await receiptActor(c, orderId);
+  const thread = await readOrderThread(db, orderId);
+  if (!thread) throw new NotFoundError("Conversation not found");
+  await enforceBuyerWriteLimits(c, "cart-share", { orderId });
+  const share = await withdrawConversationCart(db, actor, thread.id, c.req.valid("json").expectedVersion);
+  return ok(c, { cartShare: await projectConversationCartShare(db, share, { orderId }) });
 });
 
 export { app as orderConversationRoutes };

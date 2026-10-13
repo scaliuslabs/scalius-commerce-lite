@@ -272,6 +272,7 @@ export class PluginHost {
     options: {
       /** Storefront output: read-only bridge over these collections, and a wall time capped like functions. */
       render?: { collections: string[]; wallMs: number };
+      operator?: { userId: string };
     } = {},
   ): Promise<PluginInvocationOutcome<{ status: number; headers: Record<string, string>; body: unknown }>> {
     const source = `route:${surface}/${name}`;
@@ -281,7 +282,7 @@ export class PluginHost {
       { kind: "route", surface, name, request },
       source,
       wallMs,
-      options.render ? { render: { collections: [...options.render.collections] } } : {},
+      { ...(options.render ? { render: { collections: [...options.render.collections] } } : {}), ...(surface === "admin" && options.operator ? { operator: options.operator } : {}) },
     );
     if (!outcome.ok) return failed(outcome);
     const response = validatePluginRouteResponse(outcome.value);
@@ -370,6 +371,7 @@ export class PluginHost {
       },
       ...(mode.render ? { render: mode.render } : {}),
       ...(mode.provider ? { provider: mode.provider } : {}),
+      ...(mode.operator ? { operator: mode.operator } : {}),
     };
   }
 
@@ -569,7 +571,7 @@ export class PluginHost {
 }
 
 /** What the bridge is set up for besides the default: a storefront render, or a provider operation. */
-type BridgeMode = Pick<PluginBridgeProps, "render" | "provider">;
+type BridgeMode = Pick<PluginBridgeProps, "render" | "provider" | "operator">;
 
 /** A `ProviderError` an operation raised, as it crossed the loader (message already masked). */
 interface RunProviderError {

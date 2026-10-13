@@ -67,6 +67,7 @@ function escapeHtml(value: string): string {
 
 /** Marketing sends: the subscribed address and what the message must carry, or null (not subscribed). */
 async function marketingPermission(context: PluginMessagingContext, customerId: string | undefined, channel: "email" | "sms") {
+  if (!context.permissions.includes("marketing.send")) throw new PluginError("messaging.not_allowed", "Marketing messages require marketing.send.");
   if (customerId === undefined) {
     throw new PluginError("messaging.invalid", "Marketing messages go to a customerId (consent is per customer).");
   }
@@ -156,7 +157,8 @@ export async function sendPluginSms(
   const { getActiveSmsProvider } = await import("@scalius/core/integrations/sms");
   const provider = await getActiveSmsProvider(db, encryptionKey, appProviders);
   if (!provider) throw new PluginError("messaging.unavailable", "No SMS provider is configured.");
-  const result = await provider.send({ to: phone, message }, {});
+  const finalMessage = marketing ? `${message}\n\n${marketing.footer.text}\n${marketing.footer.unsubscribeLabel}: ${marketing.unsubscribeUrl}` : message;
+  const result = await provider.send({ to: phone, message: finalMessage }, {});
   return { queued: result.success };
 }
 

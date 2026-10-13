@@ -7,6 +7,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MediaManager } from "./LazyMediaManager";
 
+vi.mock("@tanstack/react-router", async (original) => ({ ...(await original<object>()), useBlocker: () => ({ status: "idle" }) }));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const gate = vi.hoisted(() => {

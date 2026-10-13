@@ -1,6 +1,6 @@
 // Progressive enhancement for conversation forms (ConversationReplyForm.astro).
 // The form already works as a plain POST; this sends the same FormData with
-// fetch, asks for JSON, and swaps in the re-rendered thread. The message text
+// fetch, asks for JSON, and merges new rows into the thread. The message text
 // stays in the request body and is never logged or sent to analytics.
 
 import {
@@ -9,12 +9,13 @@ import {
   newClientMessageKey,
 } from "@/lib/account-inbox";
 import { pagePath } from "@/lib/presence-url";
+import { appendConversationItems, conversationRequest, notifyConversationSent, type ConversationItem } from "./conversation-live";
 
 type Tone = "success" | "error";
 
 interface PostAnswer {
   success?: boolean;
-  data?: { messagesHtml?: unknown; message?: unknown; redirect?: unknown };
+  data?: { message?: unknown; redirect?: unknown; conversationId?: string; items?: ConversationItem[]; hasOlder?: boolean };
   error?: { message?: unknown };
 }
 
@@ -28,6 +29,7 @@ function setStatus(element: HTMLElement | null, text: string, tone: Tone): void 
 function bindForm(form: HTMLFormElement): void {
   if (form.dataset.conversationBound === "true") return;
   form.dataset.conversationBound = "true";
+  form.dataset.enhanced = "true";
 
   const status = form.querySelector<HTMLElement>("[data-conversation-status]");
   const button = form.querySelector<HTMLButtonElement>("button[type=submit]");
@@ -35,15 +37,30 @@ function bindForm(form: HTMLFormElement): void {
   const key = form.querySelector<HTMLInputElement>("input[name=clientMessageKey]");
   const files = form.querySelector<HTMLInputElement>("input[type=file][name=images]");
   const previews = form.querySelector<HTMLElement>("[data-conversation-previews]");
+  const fitBody = () => {
+    if (!body) return;
+    body.style.height = "auto";
+    const style = getComputedStyle(body);
+    const max = parseFloat(style.maxHeight) || (form.dataset.conversationDock === "true" ? 160 : 192);
+    const needed = body.scrollHeight + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0);
+    body.style.height = `${Math.min(needed, max)}px`;
+    body.style.overflowY = needed > max ? "auto" : "hidden";
+  };
+  body?.addEventListener("input", fitBody);
+  fitBody();
   let previewUrls: string[] = [];
+  let filesGeneration = 0;
+  let unknownDraft: { body: string; files: number } | null = null;
 
   const clearPreviews = () => {
     previewUrls.forEach((url) => URL.revokeObjectURL(url));
     previewUrls = [];
     previews?.replaceChildren();
   };
+  form.addEventListener("reset", clearPreviews);
 
   files?.addEventListener("change", () => {
+    filesGeneration += 1;
     clearPreviews();
     const check = checkAttachmentFiles(Array.from(files.files ?? []));
     if (!check.ok) {
@@ -71,6 +88,10 @@ function bindForm(form: HTMLFormElement): void {
     event.preventDefault();
     if (form.dataset.sending === "true") return;
     if (!form.reportValidity()) return;
+    if (unknownDraft && (body?.value !== unknownDraft.body || filesGeneration !== unknownDraft.files) && key) key.value = newClientMessageKey();
+    const sentBody = body?.value ?? "";
+    const sentFiles = filesGeneration;
+    const identity = identityVersion;
 
     form.dataset.sending = "true";
     if (button) {
@@ -81,6 +102,7 @@ function bindForm(form: HTMLFormElement): void {
 
     let answer: PostAnswer | null = null;
     let ok = false;
+    const pending = conversationRequest(90_000);
     try {
       const response = await fetch(form.action, {
         method: "POST",
@@ -88,14 +110,17 @@ function bindForm(form: HTMLFormElement): void {
         headers: { Accept: "application/json" },
         credentials: "same-origin",
         cache: "no-store",
+        signal: pending.signal,
       });
       answer = await response.json().catch(() => null) as PostAnswer | null;
       ok = response.ok && answer?.success === true;
     } catch {
       answer = null;
-    }
+    } finally { pending.done(); }
 
     form.dataset.sending = "false";
+    // Navigation and account changes invalidate DOM work, not a committed POST.
+    if (!form.isConnected || identity !== identityVersion) return;
     if (button) {
       button.disabled = false;
       button.textContent = button.dataset.idleLabel ?? button.textContent;
@@ -107,6 +132,7 @@ function bindForm(form: HTMLFormElement): void {
         ? answer.error.message
         : conversationStatusMessage("unavailable").text;
       setStatus(status, message, "error");
+      unknownDraft = { body: sentBody, files: sentFiles };
       body?.focus();
       return;
     }
@@ -115,20 +141,44 @@ function bindForm(form: HTMLFormElement): void {
       window.location.assign(pagePath(answer.data.redirect));
       return;
     }
-    if (typeof answer?.data?.messagesHtml === "string") {
-      list.innerHTML = answer.data.messagesHtml;
-      list.hidden = false;
-      list.lastElementChild?.scrollIntoView({ block: "nearest" });
+    unknownDraft = null;
+    if (Array.isArray(answer?.data?.items)) {
+      const update = { conversationId: answer?.data?.conversationId ?? null, items: answer.data.items, hasOlder: answer.data.hasOlder };
+      if (!notifyConversationSent(list, update)) {
+        const cursor = Math.max(0, ...Array.from(list.querySelectorAll<HTMLElement>("[data-seq]")).map((node) => Number(node.dataset.seq) || 0));
+        appendConversationItems(list, update.items, cursor);
+      }
     }
-    form.reset();
-    clearPreviews();
+    if (body?.value === sentBody) body.value = "";
+    fitBody();
+    if (filesGeneration === sentFiles) {
+      if (files) files.value = "";
+      clearPreviews();
+    }
     if (key) key.value = newClientMessageKey();
     setStatus(status, typeof answer?.data?.message === "string" ? answer.data.message : conversationStatusMessage("sent").text, "success");
     body?.focus();
   });
 }
 
+let identityVersion = 0;
+let identityBound = false;
+
 /** Enhances every conversation form on the page once. */
 export function bindConversationForms(): void {
+  if (!identityBound) {
+    identityBound = true;
+    const changed = () => {
+      identityVersion += 1;
+      document.querySelectorAll<HTMLFormElement>("form[data-conversation-form]").forEach((form) => {
+        form.reset();
+        form.querySelectorAll<HTMLTextAreaElement>("textarea[name=body]").forEach((body) => { body.value = ""; });
+        form.querySelectorAll<HTMLButtonElement>("button[type=submit]").forEach((button) => { button.disabled = true; });
+        setStatus(form.querySelector("[data-conversation-status]"), "Your account changed. Reload before sending a message.", "error");
+      });
+    };
+    window.addEventListener("customer-login", changed);
+    window.addEventListener("customer-logout", changed);
+  }
   document.querySelectorAll<HTMLFormElement>("form[data-conversation-form]").forEach(bindForm);
 }

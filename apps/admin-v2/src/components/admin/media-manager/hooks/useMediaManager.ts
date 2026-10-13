@@ -15,6 +15,7 @@ import {
   type MediaWorkspaceRouteUpdateOptions,
 } from "../types";
 import { resolveSelectedMedia, selectAllVisibleMedia, updateMediaSelection } from "../utils/selection";
+import { isMediaVersionConflict } from "../utils/metadata";
 import { mergeUploadedFiles } from "../utils/uploaded-files";
 
 interface UseMediaManagerOptions {
@@ -434,18 +435,24 @@ export function useMediaManager({
     }
   }, [load, selectedLibraryFiles]);
 
+  const adoptFile = useCallback((file: LibraryMediaFile) => {
+    // A detail read has no usage counts; retain the list's independently loaded usage.
+    const adopt = (current: LibraryMediaFile) => ({ ...file, usageCount: current.usageCount, keptForOrders: current.keptForOrders });
+    media.setFiles((current) => current.map((item) => item.id === file.id ? adopt(item) : item));
+    setPreviewFile((current) => current?.id === file.id ? adopt(current) : current);
+  }, [media]);
+
   const updateFile = useCallback(async (file: LibraryMediaFile, updates: Parameters<typeof MediaApiClient.updateFile>[1]) => {
     try {
       const updated = await MediaApiClient.updateFile(file, updates);
-      media.setFiles((current) => current.map((item) => item.id === updated.id ? updated : item));
-      setPreviewFile((current) => current?.id === updated.id ? updated : current);
+      adoptFile(updated);
       toast.success(t("fileSaved"));
       return updated;
     } catch (error) {
-      toast.error(t("saveFailed"), { description: failureText(error) });
+      if (!isMediaVersionConflict(error)) toast.error(t("saveFailed"), { description: failureText(error) });
       throw error;
     }
-  }, [media]);
+  }, [adoptFile]);
 
   const addSelected = useCallback(() => {
     if (!onSelectMultiple || !selectedFiles.length) return;
@@ -489,6 +496,8 @@ export function useMediaManager({
     mutateSelected,
     moveSelected,
     updateFile,
+    adoptFile,
+    fetchFile: MediaApiClient.fetchFile,
     addSelected,
   };
 }

@@ -17,6 +17,7 @@ import {
     deleteMediaFolder,
     enqueueMediaVariantsJob,
     getMediaUploadSession,
+    getMediaFile,
     initiateMediaUpload,
     initiateMediaUploadSchema,
     listMediaFiles,
@@ -288,6 +289,20 @@ const reconcileRoute = createRoute({
 });
 app.openapi(reconcileRoute, async (c) => ok(c, await reconcileExpiredMediaUploads(c.get("db"), c.env.BUCKET, c.req.valid("query").limit)));
 
+const getMediaRoute = createRoute({
+    method: "get",
+    path: "/{id}",
+    tags: ["Admin - Media"],
+    summary: "Read current media metadata",
+    operationId: "dashboard.media.get",
+    request: { params: idParam },
+    responses: {
+        200: { description: "Current file", content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } },
+        ...mediaErrorResponses,
+    },
+});
+
+
 const patchMediaRoute = createRoute({
     method: "patch",
     path: "/{id}",
@@ -473,6 +488,12 @@ const deleteFolderRoute = createRoute({
 app.openapi(deleteFolderRoute, async (c) => {
     await deleteMediaFolder(c.get("db"), c.req.valid("param").id, c.req.valid("query").expectedVersion);
     return noContent(c);
+});
+
+// Static reads must precede the single-segment detail route.
+app.openapi(getMediaRoute, async (c) => {
+    c.header("Cache-Control", "no-store");
+    return ok(c, { file: await getMediaFile(c.get("db"), c.req.valid("param").id) });
 });
 
 export { app as adminMediaRoutes };

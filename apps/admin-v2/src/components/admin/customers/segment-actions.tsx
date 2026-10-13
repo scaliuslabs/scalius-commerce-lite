@@ -1,9 +1,10 @@
-// What the segments list and a segment's page share: the live member count,
+// What the segments list and a segment's page share: member counts on request,
 // the CSV export of a segment and the delete confirmation.
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
-import { Skeleton } from "~/components/ui/skeleton";
+import { RefreshCw } from "lucide-react";
+import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { getServerFnError } from "~/lib/api-helpers";
 import { deleteCustomerSegment } from "~/lib/api-mutations/customers";
@@ -22,13 +23,21 @@ export function segmentMembersLabel(t: Translate, count: { count: number; capped
   return count.count === 1 ? t("membersOne") : t("members", { count: count.count });
 }
 
-/** The live member count of a saved segment (cached for a minute). */
-export function SegmentMemberCount({ segmentId }: { segmentId: string }) {
+/** Counting live members can scan a large audience: never do it on list mount. */
+export function SegmentMemberCount({ segmentId, name }: { segmentId: string; name: string }) {
   const t = useMessages(customerSegmentMessages);
-  const count = useQuery(customerSegmentCountQueryOptions(segmentId));
-  if (count.isPending) return <Skeleton className="ms-auto h-4 w-20" />;
-  if (count.isError) return <span className="text-muted-foreground">{t("countFailed")}</span>;
-  return <span className="tabular-nums">{segmentMembersLabel(t, count.data)}</span>;
+  const count = useQuery({ ...customerSegmentCountQueryOptions(segmentId), enabled: false });
+  const label = t(count.isError ? "retryCountFor" : count.data ? "refreshCountFor" : "countFor", { name });
+  return (
+    <span className="inline-flex flex-wrap items-center justify-end gap-1" aria-live="polite" aria-busy={count.isFetching}>
+      {count.data ? <span className="tabular-nums">{segmentMembersLabel(t, count.data)}</span> : null}
+      {count.isError ? <span className="text-muted-foreground">{t("countFailed")}</span> : null}
+      <Button variant="ghost" size={count.data || count.isError ? "icon-sm" : "sm"}
+        aria-label={label} title={label} loading={count.isFetching} onClick={() => void count.refetch({ cancelRefetch: false })}>
+        {count.data || count.isError ? <RefreshCw aria-hidden="true" /> : t("count")}
+      </Button>
+    </span>
+  );
 }
 
 /** Downloads a segment's customers as CSV (up to the export cap). */

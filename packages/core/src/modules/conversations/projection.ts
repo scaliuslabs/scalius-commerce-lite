@@ -2,7 +2,7 @@
 // Internal notes never pass; staff identity collapses to "the store". Pure,
 // so the storefront, the API and the tests share one rule.
 
-import { isBuyerVisibleMessage } from "@scalius/shared/conversation";
+import { conversationProductSnapshots, isBuyerVisibleMessage } from "@scalius/shared/conversation";
 import type { BuyerConversationMessage, ConversationMessageRecord } from "./types";
 
 /** Event data keys a buyer may see (ids and state words, never staff notes). */
@@ -31,7 +31,9 @@ export function projectMessageForBuyer(message: ConversationMessageRecord): Buye
         : "buyer",
     body: message.body,
     eventKind: message.eventKind,
-    eventData: projectEventData(message.eventData),
+    eventData: message.eventKind === "product_reply" && message.authorType === "staff"
+      ? { v: 1, cards: conversationProductSnapshots(message.eventData) }
+      : projectEventData(message.eventData),
     createdAt: message.createdAt,
     attachments: message.attachments,
   };

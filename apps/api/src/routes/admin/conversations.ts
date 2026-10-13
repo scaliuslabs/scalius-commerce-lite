@@ -1,3 +1,4 @@
+import { presentStaffConversation } from "../../utils/conversation-view";
 // Dashboard inbox routes, mounted at /admin/conversations (Wave A §6.2).
 // Reads need conversations.view; replies, notes, uploads, status and
 // assignment need conversations.reply (route-permissions/conversations.ts).
@@ -10,6 +11,11 @@ import {
   getStaffOrderThread,
   getStaffThread,
   listStaffInbox,
+  queryStaffInbox,
+  listConversationAssignees,
+  findConversationMessages,
+  getConversationContext,
+  replayConversationPost,
   markStaffRead,
   postConversationMessage,
   postStaffOrderMessage,
@@ -25,7 +31,9 @@ import { conflictResponse, errorResponses, serviceUnavailableResponse, successEn
 import {
   attachmentUploadRequest,
   attachmentUploadResponseSchema,
-  beforeSeqQuerySchema,
+  staffMessagePageQuerySchema,
+  conversationProductReferenceSchema,
+  cartShareSchema,
   clientMessageKeySchema,
   conversationAttachmentIdSchema,
   conversationIdSchema,
@@ -39,6 +47,10 @@ import {
   readAttachmentForm,
   serveConversationAttachment,
 } from "../../utils/conversation-http";
+import { adminConversationSavedReplyRoutes } from "./conversation-saved-replies";
+import { validateConversationProductRefs, projectConversationProductCards } from "../../utils/conversation-products";
+import { fromMinor } from "@scalius/shared/money";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -60,7 +72,8 @@ const writeResponses = { ...errorResponses, 409: conflictResponse };
 
 /** A staff post: a public reply or an internal note, idempotent by `requestKey`. */
 const staffPostBodySchema = z.object({
-  body: z.string().max(CONVERSATION_LIMITS.bodyLength * 2),
+  body: z.string().max(CONVERSATION_LIMITS.bodyLength * 2).optional(),
+  products: z.array(conversationProductReferenceSchema).min(1).max(3).optional(),
   visibility: z.enum(["public", "internal"]),
   requestKey: clientMessageKeySchema,
   attachmentIds: z.array(conversationAttachmentIdSchema).max(CONVERSATION_LIMITS.attachmentsPerMessage).optional(),
@@ -77,7 +90,6 @@ app.openapi(createRoute({
       status: z.enum(["open", "pending", "closed", "all"]).optional(),
       assignee: z.string().max(128).optional().openapi({ description: "`me`, `none` or a staff user id" }),
       subjectType: z.enum(CONVERSATION_SUBJECT_TYPES).optional().openapi({ description: "What the conversation is about: an order, a store question, a review or a warranty claim" }),
-      q: z.string().max(100).optional().openapi({ description: "Subject, customer name or order number" }),
       cursor: z.string().max(100).optional(),
     }),
   },
@@ -92,6 +104,62 @@ app.openapi(createRoute({
   noStore(c);
   const actor = staffActor(c);
   return ok(c, await listStaffInbox(c.get("db"), actor.userId, c.req.valid("query")));
+});
+
+app.route("/", adminConversationSavedReplyRoutes);
+
+const inboxQuerySchema = z.object({
+  status: z.enum(["open", "pending", "closed", "all"]).optional(),
+  assignee: z.string().max(128).optional(), subjectType: z.enum(CONVERSATION_SUBJECT_TYPES).optional(),
+  q: z.string().max(100).optional(), cursor: z.string().max(100).nullable().optional(),
+  unread: z.boolean().optional(), sort: z.enum(["latest", "waiting_longest"]).optional(),
+}).strict();
+app.openapi(createRoute({
+  operationId: "dashboard.conversations.query", method: "post", path: "/query", tags: ["Admin - Conversations"],
+  summary: "Search private conversation text in bounded continuation windows",
+  request: { body: { required: true, content: { "application/json": { schema: inboxQuerySchema } } } },
+  responses: { 200: { description: "Search window", content: { "application/json": { schema: successEnvelope(z.object({
+    items: z.array(staffConversationSummarySchema), nextCursor: z.string().nullable(), scanExhausted: z.boolean(),
+    scanned: z.number().int(), bodyCoverage: z.enum(["complete", "since_index"]),
+  })) } } }, ...errorResponses },
+}), async (c) => { noStore(c); return ok(c, await queryStaffInbox(c.get("db"), staffActor(c).userId, c.req.valid("json"))); });
+
+app.openapi(createRoute({
+  operationId: "dashboard.conversations.assignees", method: "get", path: "/assignees", tags: ["Admin - Conversations"],
+  summary: "Teammates currently allowed to reply", request: { query: z.object({ cursor: z.string().max(128).optional() }) },
+  responses: { 200: { description: "Eligible teammates", content: { "application/json": { schema: successEnvelope(z.object({
+    items: z.array(z.object({ id: z.string(), name: z.string() })), nextCursor: z.string().nullable(),
+  })) } } }, ...errorResponses },
+}), async (c) => { noStore(c); staffActor(c); return ok(c, await listConversationAssignees(c.get("db"), c.req.valid("query").cursor)); });
+
+app.openapi(createRoute({
+  operationId: "dashboard.conversations.search", method: "post", path: "/{id}/search", tags: ["Admin - Conversations"],
+  summary: "Find message positions without putting private text in a URL",
+  request: { params: conversationParam, body: { required: true, content: { "application/json": { schema: z.object({ q: z.string().min(1).max(100), cursor: z.number().int().positive().optional() }).strict() } } } },
+  responses: { 200: { description: "Message positions", content: { "application/json": { schema: successEnvelope(z.object({
+    items: z.array(z.object({ seq: z.number().int() })), nextCursor: z.number().int().nullable(),
+    scanned: z.number().int(), scanExhausted: z.boolean(), bodyCoverage: z.enum(["complete", "since_index"]),
+  })) } } }, ...errorResponses },
+}), async (c) => { noStore(c); staffActor(c); return ok(c, await findConversationMessages(c.get("db"), c.req.valid("param").id, c.req.valid("json"))); });
+
+app.openapi(createRoute({
+  operationId: "dashboard.conversations.context", method: "get", path: "/{id}/context", tags: ["Admin - Conversations"],
+  summary: "Permission-gated buyer history and explicitly shared cart", request: { params: conversationParam },
+  responses: { 200: { description: "Context", content: { "application/json": { schema: successEnvelope(z.object({
+    customer: z.object({ id: z.string(), name: z.string(), email: z.string().nullable(), phone: z.string().nullable() }).nullable(),
+    customerDenied: z.boolean(), ordersDenied: z.boolean(), cartShare: cartShareSchema.nullable(),
+    recentOrders: z.array(z.object({ id: z.string(), orderNumber: z.string(), status: z.string(), paymentStatus: z.string(), total: z.object({ amount: z.number(), currency: z.string() }).nullable(), createdAt: z.number().int() })).nullable(),
+  })) } } }, ...errorResponses },
+}), async (c) => {
+  noStore(c);
+  const db = c.get("db");
+  const context = await getConversationContext(db, c.req.valid("param").id, staffActor(c).userId);
+  const products = context.cartShare ? await projectConversationProductCards(db, context.cartShare.lines.map((line) => ({ productId: line.productId, skuId: line.skuId, title: line.title ?? "", variantLabel: line.variantLabel ?? null })), { orderId: context.orderId }) : [];
+  return ok(c, {
+    customer: context.customer, customerDenied: context.customerDenied, ordersDenied: context.ordersDenied,
+    recentOrders: context.recentOrders?.map(({ totalAmountMinor, currencyCode, ...order }) => ({ ...order, total: currencyCode ? { amount: fromMinor(totalAmountMinor, getDecimalPlaces(currencyCode)), currency: currencyCode } : null })) ?? null,
+    cartShare: context.cartShare ? { ...context.cartShare, lines: context.cartShare.lines.map(({ productId, skuId, quantity }) => ({ productId, skuId, quantity })), products } : null,
+  });
 });
 
 app.openapi(createRoute({
@@ -148,7 +216,7 @@ app.openapi(createRoute({
   path: "/order/{orderId}",
   tags: ["Admin - Conversations"],
   summary: "The order's conversation, or null before anyone wrote",
-  request: { params: orderParam, query: beforeSeqQuerySchema },
+  request: { params: orderParam, query: staffMessagePageQuerySchema },
   responses: {
     200: {
       description: "The order thread",
@@ -160,7 +228,7 @@ app.openapi(createRoute({
   noStore(c);
   staffActor(c);
   return ok(c, {
-    conversation: await getStaffOrderThread(c.get("db"), c.req.valid("param").orderId, { beforeSeq: c.req.valid("query").beforeSeq }),
+    conversation: await (async () => { const thread = await getStaffOrderThread(c.get("db"), c.req.valid("param").orderId, c.req.valid("query")); return thread ? presentStaffConversation(c.get("db"), staffActor(c).userId, thread) : null; })(),
   });
 });
 
@@ -180,14 +248,19 @@ app.openapi(createRoute({
   const actor = staffActor(c);
   const db = c.get("db");
   const body = c.req.valid("json");
-  const posted = await postStaffOrderMessage(db, c.req.valid("param").orderId, {
+  const thread = await getOrCreateOrderThread(db, c.req.valid("param").orderId);
+  const request = { actor, body: body.body, visibility: body.visibility, clientMessageKey: body.requestKey, attachmentIds: body.attachmentIds, products: body.products };
+  const replay = await replayConversationPost(db, thread.id, request);
+  const products = !replay && body.products?.length ? await validateConversationProductRefs(db, body.products, { orderId: thread.orderId }) : undefined;
+  const posted = replay ?? await postStaffOrderMessage(db, c.req.valid("param").orderId, {
     actor,
+    products,
     body: body.body,
     visibility: body.visibility,
     clientMessageKey: body.requestKey,
     attachmentIds: body.attachmentIds,
   }, { queue: c.env.JOBS_QUEUE });
-  return created(c, { conversation: await getStaffThread(db, posted.conversationId) });
+  return created(c, { conversation: await presentStaffConversation(db, actor.userId, await getStaffThread(db, posted.conversationId)) });
 });
 
 app.openapi(createRoute({
@@ -196,7 +269,7 @@ app.openapi(createRoute({
   path: "/{id}",
   tags: ["Admin - Conversations"],
   summary: "One conversation with internal notes, order context and cases",
-  request: { params: conversationParam, query: beforeSeqQuerySchema },
+  request: { params: conversationParam, query: staffMessagePageQuerySchema },
   responses: {
     200: { description: "The conversation", content: { "application/json": { schema: threadEnvelope } } },
     ...errorResponses,
@@ -204,7 +277,7 @@ app.openapi(createRoute({
 }), async (c) => {
   noStore(c);
   staffActor(c);
-  return ok(c, { conversation: await getStaffThread(c.get("db"), c.req.valid("param").id, { beforeSeq: c.req.valid("query").beforeSeq }) });
+  return ok(c, { conversation: await presentStaffConversation(c.get("db"), staffActor(c).userId, await getStaffThread(c.get("db"), c.req.valid("param").id, c.req.valid("query"))) });
 });
 
 app.openapi(createRoute({
@@ -235,7 +308,7 @@ app.openapi(createRoute({
 }), async (c) => {
   noStore(c);
   staffActor(c);
-  return ok(c, { conversation: await updateStaffThread(c.get("db"), c.req.valid("param").id, c.req.valid("json")) });
+  return ok(c, { conversation: await presentStaffConversation(c.get("db"), staffActor(c).userId, await updateStaffThread(c.get("db"), c.req.valid("param").id, c.req.valid("json"))) });
 });
 
 app.openapi(createRoute({
@@ -256,14 +329,18 @@ app.openapi(createRoute({
   const body = c.req.valid("json");
   const thread = await readThread(db, c.req.valid("param").id);
   if (!thread) throw new NotFoundError("Conversation not found");
-  await postConversationMessage(db, thread, {
+  const request = { actor, body: body.body, visibility: body.visibility, clientMessageKey: body.requestKey, attachmentIds: body.attachmentIds, products: body.products };
+  const replay = await replayConversationPost(db, thread.id, request);
+  const products = !replay && body.products?.length ? await validateConversationProductRefs(db, body.products, { orderId: thread.orderId }) : undefined;
+  if (!replay) await postConversationMessage(db, thread, {
     actor,
+    products,
     body: body.body,
     visibility: body.visibility,
     clientMessageKey: body.requestKey,
     attachmentIds: body.attachmentIds,
   }, { queue: c.env.JOBS_QUEUE });
-  return created(c, { conversation: await getStaffThread(db, thread.id) });
+  return created(c, { conversation: await presentStaffConversation(db, actor.userId, await getStaffThread(db, thread.id)) });
 });
 
 app.openapi(createRoute({

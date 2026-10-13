@@ -164,6 +164,19 @@ describe("cart store", () => {
   });
 
   it.each([
+    { code: "JPY", price: 3, threshold: 10, subtotal: 9, fee: 2 },
+    { code: "USD", price: 0.1, threshold: 0.3, subtotal: 0.3, fee: 0 },
+    { code: "KWD", price: 3.337, threshold: 10.011, subtotal: 10.011, fee: 0 },
+  ])("uses $code minor units at the free-delivery boundary", async ({ code, price, threshold, subtotal, fee }) => {
+    Object.assign(window, { __CURRENCY_CODE__: code });
+    const { cartItemsSubtotal, getEffectiveCartShippingFee } = await importFreshCartModule();
+    const items = { line: { price, quantity: 3 } };
+    expect(cartItemsSubtotal(items)).toBe(subtotal);
+    expect(getEffectiveCartShippingFee(items, 2, threshold)).toBe(fee);
+    expect(getEffectiveCartShippingFee(items, 2, threshold, true)).toBe(2);
+  });
+
+  it.each([
     { free: false, threshold: null, quoted: false, expected: 80 },
     { free: true, threshold: null, quoted: false, expected: 0 },
     { free: false, threshold: 100, quoted: false, expected: 0 },

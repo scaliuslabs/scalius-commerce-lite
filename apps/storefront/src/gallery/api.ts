@@ -18,6 +18,8 @@ import {
   FIXTURE_POLICIES,
   STORE_NAME,
   cardProducts,
+  cardProduct,
+  fixtureProductIndexOf,
   categoryDetail,
   fixtureBrands,
   fixtureBusiness,
@@ -32,7 +34,6 @@ import {
   homeCategory,
   mediaAsset,
   productDetail,
-  productScenarioOf,
 } from "./fixtures";
 import { fixtureMetaobject, metaobjectMediaIds } from "./metaobjects";
 import { NOOR_EXTENSION, noorSectionSurfaces } from "./noor";
@@ -222,6 +223,14 @@ function positiveInteger(value: string | null, fallback: number): number {
 function listing(entry: GalleryEntry, search: URLSearchParams) {
   const size = entry.scenario.listing ?? "large";
   const total = search.get("q") === "zzz-nothing" || size === "empty" ? 0 : entry.scenario.catalogSize ?? (size === "small" ? 5 : 1240);
+  if (search.has("ids")) {
+    const products = [...new Set((search.get("ids") ?? "").split(","))].flatMap((id) => {
+      const match = /^prod_(\d+)$/.exec(id);
+      const index = match ? Number(match[1]) : -1;
+      return Number.isSafeInteger(index) && index >= 0 && index < total ? [cardProduct(index, { bangla: entry.scenario.locale === "bn" })] : [];
+    }).slice(0, Math.min(60, positiveInteger(search.get("limit"), 20)));
+    return { products, pagination: { page: 1, limit: products.length, total: products.length, totalPages: products.length ? 1 : 0 }, facets: [], ratingFacet: [], priceRange: { min: 0, max: 0 } };
+  }
   // Match the real listing's default and maximum page sizes (product-list-query.ts).
   const page = positiveInteger(search.get("page"), 1);
   const limit = Math.min(60, positiveInteger(search.get("limit"), 20));
@@ -303,7 +312,7 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
     return { sections: sectionData(entry, theme.pages.templates[kind]?.sections ?? []) };
   }
   if (path === "/api/v1/shipping-methods") return { shippingMethods: fixtureShippingMethods() };
-  if (path === "/api/v1/checkout/config") return { gateways: [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }] };
+  if (path === "/api/v1/checkout/config") return { gateways: entry.scenario.checkout === "no-cod" ? [] : [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }] };
   const checkoutApp = /^\/api\/v1\/storefront\/app-blocks\/(checkout)$/.exec(path);
   if (checkoutApp) return checkoutApps(entry);
   const productApp = /^\/api\/v1\/storefront\/product-apps\/([^/]+)$/.exec(path);
@@ -312,15 +321,22 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
     const limit = Math.min(positiveInteger(search.get("limit"), 8), 20);
     const sources = new Set((search.get("productIds") ?? "").split(",").filter(Boolean));
     const products = entry.scenario.catalogSize === undefined
-      ? cardProducts(limit, 3)
+      ? cardProducts(limit, 3, { bangla: entry.scenario.locale === "bn" })
       : catalogProducts(entry, entry.scenario.catalogSize).filter((product) => !sources.has(product.id)).slice(0, limit);
     return { reason: sources.size ? "also_bought" : "popular", products };
   }
   const product = /^\/api\/v1\/products\/([^/]+)$/.exec(path);
   if (product) {
-    const scenario = productScenarioOf(decodeURIComponent(product[1]!));
-    if (!scenario) return undefined;
-    const detail = productDetail(scenario);
+    const index = fixtureProductIndexOf(decodeURIComponent(product[1]!));
+    if (index === null || index >= (entry.scenario.catalogSize ?? 1240)) return undefined;
+    const detail = productDetail(index, { bangla: entry.scenario.locale === "bn" });
+    if (entry.scenario.productContent) {
+      return { ...detail, product: { ...detail.product, contentBlocks: [
+        { id: "pcb_story", type: "rich-text", version: 1, placement: "after-description", settings: { title: "Made with care", html: "<p>Each motif is woven into the fabric on a pit loom, then checked before packing.</p>" } },
+        { id: "pcb_features", type: "feature-list", version: 1, placement: "after-description", settings: { heading: "Materials and care", style: "cards", items: [{ title: "Cotton-silk blend", text: "Lightweight cloth with a soft drape." }, { title: "Dry clean", text: "Protect the woven motifs with gentle professional cleaning." }] } },
+        { id: "pcb_faq", type: "faq", version: 1, placement: "before-reviews", settings: { heading: "Before you choose", items: [{ question: "Is the blouse stitched?", answer: "The matching blouse piece is unstitched so your tailor can adjust the fit." }] } },
+      ] satisfies import("../lib/api").ProductPageContentBlock[] } };
+    }
     if (!entry.scenario.productInfo) return detail;
     const labels = entry.scenario.locale === "bn"
       ? ["মাপ ও উপাদান", "যত্নের নির্দেশনা", "ডেলিভারি ও বিনিময়", "প্যাকেজে যা থাকছে", "হাতে তৈরির বিস্তারিত"]

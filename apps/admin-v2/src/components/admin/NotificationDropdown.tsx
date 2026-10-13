@@ -158,6 +158,8 @@ function AccountNotifications({ userId = "" }: { userId?: string }) {
     try {
       const result = await mutation.mutateAsync(action);
       if (!mounted.current) return;
+      await client.cancelQueries({ queryKey: staffAlertKeys.summary(userId) });
+      if (!mounted.current) return;
       client.setQueryData(staffAlertKeys.summary(userId), result.summary);
       if (action.kind === "read") { if (openRef.current) void feed.refetch(); }
       else newest();

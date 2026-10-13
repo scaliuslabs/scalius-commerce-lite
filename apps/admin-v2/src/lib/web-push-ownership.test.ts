@@ -27,8 +27,9 @@ function worker(config: typeof cases[number]) {
     await pending;
     return ack;
   };
-  const payload = { recipient: { audience: config.audience, id: config.owner }, notification: { title: "PRIVATE", body: "Buyer details", url: "/account/orders/1" } };
-  return { dispatch, payload, fetchSession, showNotification, postMessage, close };
+  const notification = { title: "PRIVATE", body: "Buyer details", url: "/account/orders/1" };
+  const payload = { recipient: { audience: config.audience, id: config.owner }, ...(config.audience === "staff" ? { v: 2, requires: "orders.view", content: notification } : { notification }) };
+  return { dispatch, payload, notification, fetchSession, showNotification, postMessage, close };
 }
 
 describe.each(cases)("$audience native push account guard", (config) => {
@@ -46,7 +47,7 @@ describe.each(cases)("$audience native push account guard", (config) => {
       if (kind === "other") sw.fetchSession.mockResolvedValue(new Response(JSON.stringify(config.session("owner_B"))));
       if (kind === "gone") sw.fetchSession.mockResolvedValue(new Response(JSON.stringify({ session: null, data: { authenticated: false } })));
       if (kind === "offline") sw.fetchSession.mockRejectedValue(new Error("offline"));
-      await sw.dispatch("push", kind === "legacy" ? sw.payload.notification : sw.payload);
+      await sw.dispatch("push", kind === "legacy" ? sw.notification : sw.payload);
       const [title, options] = sw.showNotification.mock.calls[0]!;
       expect(title).not.toBe("PRIVATE");
       expect(options).not.toHaveProperty("body");
@@ -92,5 +93,46 @@ describe.each(cases)("$audience native push account guard", (config) => {
     expect(await sw.dispatch("message", { type: "scalius:push:enrolled", startedAt: Date.now() + 1 })).toHaveBeenCalledWith({ ok: true });
     await sw.dispatch("push", sw.payload);
     expect(sw.showNotification).toHaveBeenLastCalledWith("PRIVATE", expect.objectContaining({ body: "Buyer details" }));
+  });
+});
+
+describe("staff queued push permission guard", () => {
+  it.each([
+    { requires: "orders.view", permissions: [], admin: false, allowed: false },
+    { requires: "unknown.permission", permissions: ["orders.view"], admin: true, allowed: false },
+    { requires: "super_admin", permissions: ["orders.view", "apps.view"], admin: false, allowed: false },
+    { requires: "super_admin", permissions: [], admin: true, allowed: true },
+    { requires: "self", permissions: [], admin: false, allowed: true },
+  ])("checks the current session for $requires (allowed: $allowed)", async ({ requires, permissions, admin, allowed }) => {
+    const sw = worker(cases[0]);
+    sw.fetchSession.mockImplementation(async () => new Response(JSON.stringify({ session: {
+      user: { id: "usr_A", isSuperAdmin: admin }, permissions,
+    } })));
+    await sw.dispatch("push", { ...sw.payload, requires });
+    expect(sw.showNotification.mock.calls[0]![0] === "PRIVATE").toBe(allowed);
+    if (!allowed) expect(sw.showNotification.mock.calls[0]![1]).not.toHaveProperty("body");
+  });
+
+  it("keeps old owner-only envelopes and missing requirements neutral", async () => {
+    const sw = worker(cases[0]);
+    for (const payload of [
+      { recipient: sw.payload.recipient, notification: sw.notification },
+      { ...sw.payload, requires: undefined },
+    ]) await sw.dispatch("push", payload);
+    expect(sw.fetchSession).not.toHaveBeenCalled();
+    for (const [title, options] of sw.showNotification.mock.calls) {
+      expect(title).not.toBe("PRIVATE");
+      expect(options).not.toHaveProperty("body");
+    }
+  });
+
+  it("closes private content if permission is revoked during display and emits no receipt", async () => {
+    const sw = worker(cases[0]);
+    sw.fetchSession.mockResolvedValueOnce(new Response(JSON.stringify(cases[0].session("usr_A"))))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ session: { user: { id: "usr_A" }, permissions: [] } })));
+    await sw.dispatch("push", sw.payload);
+    expect(sw.showNotification).toHaveBeenCalledWith("PRIVATE", expect.objectContaining({ body: "Buyer details" }));
+    expect(sw.close).toHaveBeenCalled();
+    expect(sw.postMessage).not.toHaveBeenCalled();
   });
 });

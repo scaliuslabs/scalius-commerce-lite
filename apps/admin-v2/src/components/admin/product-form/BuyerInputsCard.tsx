@@ -59,7 +59,7 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
   const full = drafts.length >= CUSTOMIZATION_LIMITS.fields;
 
   const commit = (next: BuyerInputDraft[]) =>
-    form.setValue("customizationSchema", next, { shouldDirty: true, shouldValidate: true });
+    !readOnly && form.setValue("customizationSchema", next, { shouldDirty: true, shouldValidate: true });
   const open = (index: number | null) => {
     setEditing({ index, draft: index === null ? emptyBuyerInput() : drafts[index]! });
     setDialogOpen(true);
@@ -195,7 +195,7 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
           </Button>
         </div>
       )}
-      {dialogLoaded ? (
+      {!readOnly && dialogLoaded ? (
         <React.Suspense fallback={null}>
       <BuyerInputDialog
         open={dialogOpen}

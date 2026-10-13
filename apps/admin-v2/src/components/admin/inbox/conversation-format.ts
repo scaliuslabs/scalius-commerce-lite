@@ -19,9 +19,9 @@ export function threadTitle(t: T, thread: ThreadTitleSource): string {
 /** The list's second line: the last text, or who acted last when it was an event or an image. */
 export function threadPreview(
   t: T,
-  item: { preview: string | null; lastAuthorType: string | null },
+  item: { preview: string | null; lastAuthorType: string | null; lastMessageVisibility?: string | null },
 ): string {
-  if (item.preview) return item.preview;
+  if (item.preview) return item.lastMessageVisibility === "internal" ? t("notePreview", { body: item.preview }) : item.lastAuthorType === "staff" ? t("teamPreview", { body: item.preview }) : item.preview;
   switch (item.lastAuthorType) {
     case "customer":
     case "guest_receipt":

@@ -887,7 +887,7 @@ async function latestOrderForProvenContact(db: Database, method: "email" | "phon
                 : eq(orders.customerPhone, identifier),
             isNull(orders.deletedAt),
         ))
-        .orderBy(desc(orders.createdAt))
+        .orderBy(desc(orders.createdAt), desc(orders.id))
         .limit(1)
         .get() ?? null;
 }

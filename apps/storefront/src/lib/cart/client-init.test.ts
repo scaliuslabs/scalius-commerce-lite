@@ -844,20 +844,23 @@ describe("initCartFunctionality", () => {
     );
   });
 
-  it("rotates a failed checkout id before resubmitting a repaired cart", async () => {
+  it.each((["quantity", "remove", "remove_issue", "reduce", "refresh"] as const).flatMap((action) =>
+    [false, true].map((hasRecovery) => ({ action, hasRecovery })),
+  ))("preserves the submitted identity through $action repair (recovery: $hasRecovery)", async ({ action, hasRecovery }) => {
     const failedCheckoutId = "chk_session_failed_claim";
     const issue: CartValidationIssue = {
       index: 0,
       cartKey: CART_LINE_KEY,
       productId: "prod_1",
       variantId: "var_1",
-      code: "QUANTITY_UNAVAILABLE",
-      action: "reduce_quantity",
+      code: action === "refresh" ? "PRICE_CHANGED" : "QUANTITY_UNAVAILABLE",
+      action: action === "refresh" ? "refresh_item" : "reduce_quantity",
       message: "Only 1 left.",
       productName: "Rice",
       variantLabel: null,
       requestedQuantity: 3,
       availableQuantity: 1,
+      currentPrice: 110,
     };
     const staleCart: CartStore = {
       ...cartState,
@@ -874,6 +877,12 @@ describe("initCartFunctionality", () => {
     localStorage.setItem("cart:v3", JSON.stringify(staleCart));
     cartStore.set(staleCart);
     sessionStorage.setItem("checkoutId", failedCheckoutId);
+    if (hasRecovery) {
+      writeHostedPaymentRecoverySession("/order-success?orderId=order_pending&payment=stripe", {
+        checkoutId: failedCheckoutId, cartItems: staleCart.items,
+      });
+      recoveryMocks.inspectCheckoutRecovery.mockResolvedValue("active");
+    }
     sessionStorage.setItem(
       CHECKOUT_CART_REPAIR_STORAGE_KEY,
       JSON.stringify({
@@ -905,22 +914,29 @@ describe("initCartFunctionality", () => {
     const checkoutIdInput = document.getElementById(
       "checkoutIdInput",
     ) as HTMLInputElement;
-    expect(repairStateCheckoutId).toMatch(/^chk_session_/);
-    expect(repairStateCheckoutId).not.toBe(failedCheckoutId);
+    expect(repairStateCheckoutId).toBe(failedCheckoutId);
     expect(checkoutIdInput.value).toBe(repairStateCheckoutId);
 
-    window.reduceCartIssueItem?.(CART_LINE_KEY);
+    if (action === "quantity") window.updateCartQuantity?.(CART_LINE_KEY, 1);
+    else if (action === "remove") window.removeFromCart?.(CART_LINE_KEY);
+    else if (action === "remove_issue") window.removeCartIssueItem?.(CART_LINE_KEY);
+    else if (action === "refresh") window.refreshCartIssueItem?.(CART_LINE_KEY);
+    else window.reduceCartIssueItem?.(CART_LINE_KEY);
     await Promise.resolve();
 
     const resubmitCheckoutId = sessionStorage.getItem("checkoutId");
     const form = document.getElementById("checkoutForm") as HTMLFormElement;
-    expect(cartStore.get().items[CART_LINE_KEY]?.quantity).toBe(1);
-    expect(resubmitCheckoutId).toMatch(/^chk_session_/);
-    expect(resubmitCheckoutId).not.toBe(failedCheckoutId);
-    expect(resubmitCheckoutId).not.toBe(repairStateCheckoutId);
+    if (action === "remove" || action === "remove_issue") expect(cartStore.get().items[CART_LINE_KEY]).toBeUndefined();
+    else if (action === "refresh") expect(cartStore.get().items[CART_LINE_KEY]?.price).toBe(110);
+    else expect(cartStore.get().items[CART_LINE_KEY]?.quantity).toBe(1);
+    expect(resubmitCheckoutId).toBe(failedCheckoutId);
     expect(checkoutIdInput.value).toBe(resubmitCheckoutId);
     expect(new FormData(form).get("checkoutId")).toBe(resubmitCheckoutId);
     expect(sessionStorage.getItem(CHECKOUT_CART_REPAIR_STORAGE_KEY)).toBeNull();
+    if (hasRecovery) {
+      expect(localStorage.getItem("scalius_hosted_payment_recovery")).toContain("order_pending");
+      expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
+    }
   });
 
   const submitCode = (code: string) => {

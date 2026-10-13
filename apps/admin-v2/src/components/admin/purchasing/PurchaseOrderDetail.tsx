@@ -1,3 +1,4 @@
+import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
@@ -135,8 +136,9 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
   ) : null;
 
   return (
-    <Page width="detail">
+    <Page data-presence-root={presenceKey("purchase-order", order.id)} width="detail">
       <PageHeader
+        presence={<PresenceSlot presenceKey={presenceKey("purchase-order", order.id)} revision={order.revision} dirty={false} readOnly={!canEdit} />}
         backTo="/admin/inventory/purchase-orders"
         title={order.displayNumber}
         status={<PurchaseOrderStatusBadge status={order.status} />}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { announceSave, presenceKey } from "~/lib/realtime/store";
 import { useQuery } from "@tanstack/react-query";
 import { CircleAlert } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -142,7 +143,7 @@ function ItemForm({
       ? { ...draft, target: { ...target, url: normalizeWebAddress(target.url) } }
       : draft;
     try {
-      await apiData(editing
+      const saved = await apiData(editing
         ? patchApiV1AdminNavigationMenusByMenuIdItemsByItemId({
             path: { menuId: menu.id, itemId },
             body: { ...body, expectedRevision: menu.revision },
@@ -151,6 +152,7 @@ function ItemForm({
             path: { menuId: menu.id },
             body: { ...body, expectedRevision: menu.revision, parentId: parentId ?? null },
           }));
+      announceSave(presenceKey("menu", menu.id), saved.revision);
       toast.success(t(editing ? "itemSaved" : "itemAdded"));
       onSaved();
     } catch (failure) {

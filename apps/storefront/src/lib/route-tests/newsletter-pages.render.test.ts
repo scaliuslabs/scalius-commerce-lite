@@ -183,6 +183,9 @@ describe("/newsletter", () => {
     expect(refused.querySelector('form[action="/api/newsletter/subscribe"]')).not.toBeNull();
     // The centered-compact footer leaves its own form out here: one signup per page.
     expect(refused.querySelectorAll("form[data-newsletter-form]")).toHaveLength(1);
+    const choices = Array.from(refused.querySelectorAll('input[name="channel"]'));
+    expect(choices.map((input) => input.getAttribute("value"))).toEqual(["sms", "email"]);
+    expect(choices.every((input) => !input.hasAttribute("checked"))).toBe(true);
 
     stubApi({ languageCode: "bn" });
     const plain = parse(await (await renderPage(pages.result, new Request("https://shop.test/newsletter?status=%3Cscript%3E"))).text());

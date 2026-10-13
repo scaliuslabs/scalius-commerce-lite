@@ -183,6 +183,8 @@ describe("buyer-input schema changes fence in-flight checkouts", () => {
       checkoutRequestId: "properties-authority-test",
       requestKey: `checkout_submit:v1:${"a".repeat(64)}`,
       requestHash: "b".repeat(64),
+      legacyRequestHash: "b".repeat(64),
+      customerWhatsapp: null,
       statusToken: `cst_${"a".repeat(64)}`,
     });
     return {

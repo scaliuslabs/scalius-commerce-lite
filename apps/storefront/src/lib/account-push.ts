@@ -8,7 +8,7 @@
  * buyer: it travels in POST bodies to the same-origin account proxy only,
  * never in a URL, a log line or an analytics payload.
  */
-import { messagePushWorker, releasePushBeforeSignOut } from "@scalius/shared/push-sign-out";
+import { messagePushWorker, releasePushBeforeSignOut, waitForActivePushWorker } from "@scalius/shared/push-sign-out";
 import type { AccountPushCopy } from "./account-push-copy";
 
 export const PUSH_SERVICE_WORKER_PATH = "/push-sw.js";
@@ -210,21 +210,7 @@ export function browserPushDeps(win: Window & typeof globalThis): PushDeps {
       const icon = win.document.querySelector<HTMLLinkElement>('link[rel~="icon"]')?.href;
       const url = icon ? `${PUSH_SERVICE_WORKER_PATH}?${new URLSearchParams({ icon })}` : PUSH_SERVICE_WORKER_PATH;
       const registration = await win.navigator.serviceWorker.register(url, { scope });
-      const worker = registration.installing ?? registration.waiting ?? registration.active;
-      if (!worker) throw new Error("The notification worker did not start.");
-      if (worker.state !== "activated") {
-        await new Promise<void>((resolve, reject) => {
-          const settle = () => {
-            if (worker.state !== "activated" && worker.state !== "redundant") return;
-            worker.removeEventListener("statechange", settle);
-            if (worker.state === "activated") resolve();
-            else reject(new Error("The notification worker did not start."));
-          };
-          worker.addEventListener("statechange", settle);
-          settle();
-        });
-      }
-      return registration;
+      return waitForActivePushWorker(registration);
     },
     post: async (path, body, signal) => {
       const response = await win.fetch(`/api/customer-auth${path}`, {

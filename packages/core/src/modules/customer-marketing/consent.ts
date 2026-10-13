@@ -20,6 +20,7 @@
 // `customer.consent_changed` event in the same transaction.
 
 import type { Database } from "@scalius/database/client";
+import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 import { safeBatch } from "@scalius/database/client";
 import {
     customerHistory,
@@ -111,7 +112,8 @@ function cleanText(text: ConsentText | null | undefined): { text: string | null;
 
 /** The customer's current address for a channel, as stored on consent rows. */
 export function currentContactSql(channel: MarketingChannel): SQL {
-    return channel === "email" ? sql`lower(trim(${customers.email}))` : sql`${customers.phone}`;
+    if (channel === "push") return sql`CASE WHEN ${customers.accountClaimedAt} IS NOT NULL THEN ${customers.id} END`;
+    return channel === "email" ? sql`nullif(lower(trim(${customers.email})), '')` : sql`nullif(${customers.phone}, ${NO_PHONE})`;
 }
 
 function contactCondition(channel: MarketingChannel, contact: SQL | string, allowBlankGuestEmail: boolean): SQL {
@@ -213,7 +215,9 @@ function subscribeStatement(db: Database, customerId: string, change: Extract<Co
 }
 
 function unsubscribeStatement(db: Database, customerId: string, change: Extract<ConsentChange, { action: "unsubscribe" }>, at: number) {
-    const current = currentContactSql(change.channel);
+    // Revocation covers the stored consent even after its address was removed or changed.
+    const current = sql`coalesce((SELECT previous_consent.contact FROM customer_marketing_consents AS previous_consent
+        WHERE previous_consent.customer_id = ${customers.id} AND previous_consent.channel = ${change.channel}), ${currentContactSql(change.channel)})`;
     const select = consentRowSelect(db, {
         channel: change.channel,
         state: "unsubscribed",
@@ -233,7 +237,6 @@ function unsubscribeStatement(db: Database, customerId: string, change: Extract<
         set: {
             ...authorFromExcluded,
             state: "unsubscribed",
-            contact: excluded("contact"),
             consentTextVersion: null,
             consentText: null,
             unsubscribedAt: excluded("unsubscribed_at"),
@@ -444,12 +447,15 @@ export async function confirmMarketingOptIn(
     return Array.isArray(updated) && updated.length > 0 ? { status: "confirmed", channel: "email" } : { status: "invalid" };
 }
 
-/** Unsubscribes the channel a signed link names (idempotent; no row means already off). */
+/** A signed opt-out suppresses this normalized channel/contact across customer
+ * records. Canonical row updates preserve each affected row's audit and event. */
 export async function unsubscribeWithLink(
     db: Database,
     link: { customerId: string; channel: MarketingChannel },
     at = nowSeconds(),
 ): Promise<{ status: "unsubscribed" }> {
+    const linkedContact = db.select({ contact: consents.contact }).from(consents)
+        .where(and(eq(consents.customerId, link.customerId), eq(consents.channel, link.channel))).limit(1);
     await db.update(consents)
         .set({
             state: "unsubscribed",
@@ -464,7 +470,7 @@ export async function unsubscribeWithLink(
             consentTextVersion: null,
             updatedAt: at,
         })
-        .where(and(eq(consents.customerId, link.customerId), eq(consents.channel, link.channel), sql`${consents.state} <> 'unsubscribed'`));
+        .where(and(eq(consents.channel, link.channel), sql`${consents.contact} = (${linkedContact})`, sql`${consents.state} <> 'unsubscribed'`));
     return { status: "unsubscribed" };
 }
 
@@ -476,8 +482,9 @@ export async function describeUnsubscribeLink(
     const view = (await getCustomerMarketingConsents(db, link.customerId).catch(() => null))?.find((row) => row.channel === link.channel);
     return {
         channel: link.channel,
-        status: view?.status ?? "not_subscribed",
-        contactMasked: view?.contact ? maskMarketingContact(link.channel, view.contact) : null,
+        // A link revokes the stored row, not eligibility at the replacement address.
+        status: view?.state ?? "not_subscribed",
+        contactMasked: view?.consentContact ? maskMarketingContact(link.channel, view.consentContact) : null,
     };
 }
 
@@ -506,7 +513,7 @@ const iso = (seconds: number | null | undefined) => (seconds ? new Date(Number(s
 /** Every channel's consent for one customer (rows that do not exist read `not_subscribed`). */
 export async function getCustomerMarketingConsents(db: Database, customerId: string): Promise<MarketingConsentView[]> {
     const [customer, rows] = await Promise.all([
-        db.select({ email: customers.email, phone: customers.phone }).from(customers).where(eq(customers.id, customerId)).get(),
+        db.select({ id: customers.id, accountClaimedAt: customers.accountClaimedAt, email: customers.email, phone: customers.phone }).from(customers).where(eq(customers.id, customerId)).get(),
         db.select().from(consents).where(eq(consents.customerId, customerId)),
     ]);
     if (!customer) throw new NotFoundError("Customer not found");

@@ -11,7 +11,7 @@ function worker() {
   const postMessage = vi.fn();
   const secondPost = vi.fn();
   const foreignPost = vi.fn();
-  const clients = { matchAll: vi.fn(async () => [
+  const clients = { openWindow: vi.fn(async (_url: string) => null), matchAll: vi.fn(async (): Promise<Array<Record<string, unknown>>> => [
     { url: "https://shop.example/dashboard/orders", postMessage },
     { url: "https://shop.example/dashboard/", postMessage: secondPost },
     { url: "https://elsewhere.example/dashboard/", postMessage: foreignPost },
@@ -25,10 +25,15 @@ function worker() {
   runInNewContext(SOURCE, { self: scope, clients, URL, fetch: fetchSession, AbortController, setTimeout, clearTimeout });
   const push = async (payload: unknown) => {
     let pending: Promise<unknown> | undefined;
-    listeners.get("push")!({ data: { json: () => ({ recipient: { audience: "staff", id: "usr_A" }, notification: payload }) }, waitUntil: (value: Promise<unknown>) => { pending = value; } });
+    listeners.get("push")!({ data: { json: () => ({ v: 2, requires: "orders.view", recipient: { audience: "staff", id: "usr_A" }, content: payload }) }, waitUntil: (value: Promise<unknown>) => { pending = value; } });
     await pending;
   };
-  return { push, showNotification, postMessage, secondPost, foreignPost, clients };
+  const click = async (url: string) => {
+    let pending: Promise<unknown> | undefined;
+    listeners.get("notificationclick")!({ notification: { close: vi.fn(), data: { url } }, waitUntil: (value: Promise<unknown>) => { pending = value; } });
+    await pending;
+  };
+  return { push, click, showNotification, postMessage, secondPost, foreignPost, clients };
 }
 
 describe("staff push native alerts", () => {
@@ -62,5 +67,32 @@ describe("staff push native alerts", () => {
     await sw.push(null);
     expect(sw.showNotification).toHaveBeenLastCalledWith("Scalius", expect.not.objectContaining({ body: expect.any(String) }));
     expect(sw.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("focuses an open dashboard for a neutral notification without navigating or duplicating it", async () => {
+    const sw = worker();
+    const focus = vi.fn(async () => ({}));
+    const navigate = vi.fn(async () => { throw new Error("uncontrolled"); });
+    sw.clients.matchAll.mockResolvedValue([{ url: "https://shop.example/dashboard/admin/orders", focus, navigate }]);
+    await sw.click("");
+    expect(focus).toHaveBeenCalledOnce();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(sw.clients.openWindow).not.toHaveBeenCalled();
+  });
+
+  it("does not duplicate a reached dashboard destination when focusing fails", async () => {
+    const sw = worker();
+    const focus = vi.fn(async () => { throw new Error("not focusable"); });
+    sw.clients.matchAll.mockResolvedValue([{ url: "https://shop.example/dashboard/admin", navigate: vi.fn(async () => ({ focus })) }]);
+    await sw.click("https://shop.example/dashboard/admin/orders/1");
+    expect(focus).toHaveBeenCalledOnce();
+    expect(sw.clients.openWindow).not.toHaveBeenCalled();
+  });
+
+  it("opens the dashboard when the browser cannot enumerate its existing windows", async () => {
+    const sw = worker();
+    sw.clients.matchAll.mockRejectedValue(new Error("unavailable"));
+    await sw.click("");
+    expect(sw.clients.openWindow).toHaveBeenCalledExactlyOnceWith("https://shop.example/dashboard/");
   });
 });

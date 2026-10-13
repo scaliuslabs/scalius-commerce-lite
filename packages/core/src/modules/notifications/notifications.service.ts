@@ -6,7 +6,6 @@ import { recordStaffAlert } from "./staff-alerts";
 import { staffPushPermission } from "./staff-push-policy";
 import type { Database } from "@scalius/database/client";
 import { adminFcmTokens, orders } from "@scalius/database/schema";
-import { escapeHtml } from "@scalius/shared/html-escape";
 import { isReady } from "@scalius/shared/readiness";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
@@ -244,7 +243,7 @@ export async function sendOrderNotification(
     // absolute HTTPS link; when the dashboard origin is not configured the
     // link is omitted and the service worker falls back to the order list.
     const orderViewLink = resolveDashboardOrderLink(env, order.id);
-    const safeName = escapeHtml(order.customerName || "Unknown Customer");
+    const customerName = order.customerName || "Unknown Customer";
     const label = ORDER_NOTIFICATION_LABELS[notificationType] ?? "Order Update";
     return sendAdminPush(db, env, {
         outboxId: options.outboxId,
@@ -253,11 +252,11 @@ export async function sendOrderNotification(
         logLabel: `order ${order.id}`,
         title: notificationType === "order_created" ? "New Order Created!" : label,
         // Staff never see an order's internal id; the link opens the order.
-        body: `${label} from ${safeName}. Click to view.`,
+        body: `${label} from ${customerName}. Click to view.`,
         link: orderViewLink,
         data: {
             orderId: order.id,
-            customerName: safeName,
+            customerName,
             notificationType,
         },
     });
@@ -382,8 +381,12 @@ async function sendStaffWebPush(db: Database, env: Env, spec: AdminPushSpec, per
         // A Worker that cannot sign reads nothing.
         const sender = await webPushSender(env);
         if (!sender) return [];
-        // Every authorized staff browser, open dashboard or not: a sleeping laptop's socket must never silence a phone.
-        const subscriptions = await readPushSubscriptions(db, { audience: "staff", requiredPermission: permission });
+        // Conversation retries keep the first fanout's users, including after
+        // reassignment. Current resource permission still gates every device.
+        const subscriptions = await readPushSubscriptions(db, {
+            audience: "staff", requiredPermission: permission,
+            ...(spec.outboxId && spec.receipt.notificationType === "conversation_message" ? { staffAlertId: spec.outboxId } : {}),
+        });
         if (subscriptions.length === 0) return [];
         const payload = webPushPayload({
             title: spec.title.slice(0, 120),
@@ -395,7 +398,7 @@ async function sendStaffWebPush(db: Database, env: Env, spec: AdminPushSpec, per
         for (const subscription of subscriptions) {
             const masked = `web-push-${subscription.id.slice(4, 10)}`;
             if (!spec.outboxId) {
-                const outcome = await deliverWebPush(db, sender, subscription, payload);
+                const outcome = await deliverWebPush(db, sender, subscription, payload, { staffRequirement: permission });
                 outcomes.push({ channel: "push", provider: "webpush", recipientMasked: masked, status: outcome === "sent" ? "accepted" : "skipped", retryable: false });
                 continue;
             }
@@ -405,7 +408,7 @@ async function sendStaffWebPush(db: Database, env: Env, spec: AdminPushSpec, per
                 outcomes.push(outcomeFromUnclaimedReceipt(target, claim.reason));
                 continue;
             }
-            const outcome = await deliverWebPush(db, sender, subscription, payload);
+            const outcome = await deliverWebPush(db, sender, subscription, payload, { staffRequirement: permission });
             const result = { provider: "webpush", providerStatus: outcome, rawResponse: outcome };
             outcomes.push(outcome === "sent"
                 ? await markAcceptedOutcome(db, target, claim.receipt, { success: true, ...result })
@@ -461,7 +464,10 @@ async function sendAdminFcmPush(
         const tokensSnapshot = await db
             .select({ token: adminFcmTokens.token })
             .from(adminFcmTokens)
-            .where(and(eq(adminFcmTokens.isActive, true), staffPermissionSql(adminFcmTokens.userId, permission)));
+            .where(and(eq(adminFcmTokens.isActive, true), staffPermissionSql(adminFcmTokens.userId, permission),
+                spec.outboxId && spec.receipt.notificationType === "conversation_message"
+                    ? sql`${adminFcmTokens.userId} IN (SELECT user_id FROM staff_alert_inbox WHERE alert_id = ${spec.outboxId})`
+                    : undefined));
 
         if (tokensSnapshot.length === 0) {
             return EMPTY_DISPATCH_RESULT;

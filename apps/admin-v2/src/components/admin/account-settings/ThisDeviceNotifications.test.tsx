@@ -205,7 +205,7 @@ describe("Notifications on this device", () => {
     expect(api.post.mock.calls.filter(([request]) => (request as { url: string }).url.endsWith("/test"))).toHaveLength(2);
     expect(button("Yes, with sound")).toBeDefined();
     await act(async () => button("Yes, but no sound")!.click());
-    expect(host.textContent).toContain("Some browsers, such as Chrome on Mac, show them without sound.");
+    expect(host.textContent).toContain("The notification appeared without sound. Sound depends on your browser and device settings");
     expect(host.textContent).not.toContain("Turn off Focus or Do Not Disturb.");
     expect(button("Nothing appeared")).toBeUndefined();
     expect(button("Turn off")).toBeDefined();
@@ -295,6 +295,23 @@ describe("Notifications on this device", () => {
       expect(subscription.unsubscribe).toHaveBeenCalledOnce();
       expect(localStorage.getItem("scalius-web-push-device")).toBeNull();
     }
+  });
+
+  it("releases the Turn on action after an activation timeout, without subscribing or sending", async () => {
+    const browser = installBrowser(null, "granted");
+    const worker = Object.assign(new EventTarget(), { state: "installing" });
+    browser.register.mockResolvedValue({ active: null, installing: worker, waiting: null, pushManager: { subscribe: browser.subscribe } });
+    api.get.mockImplementation(() => ok({ publicKey: PUBLIC_KEY, available: true, devices: [] }));
+    await mount();
+    await vi.waitFor(() => expect(button("Turn on")?.disabled).toBe(false));
+    vi.useFakeTimers();
+    try {
+      await act(async () => button("Turn on")!.click());
+      await act(async () => { await vi.advanceTimersByTimeAsync(15_001); });
+      expect(button("Turn on")?.disabled).toBe(false);
+      expect(browser.subscribe).not.toHaveBeenCalled();
+      expect(api.post).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
   });
 
   it("reconnects with the new key even when old server-record cleanup fails", async () => {

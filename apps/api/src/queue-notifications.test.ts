@@ -131,6 +131,19 @@ describe("notification queue messages (outbox id only)", () => {
     expect(mocks.sendOrderNotificationEmail).not.toHaveBeenCalled();
   });
 
+  it("dead-letters a stored retired campaign subject without dispatching or retrying", async () => {
+    const outboxId = await recordOrderRow();
+    sqlite.exec("UPDATE notification_outbox SET subject_type = 'marketing_run', subject_id = 'retired_run', order_id = NULL");
+    await processNotificationMessage({ type: "notification", outboxId }, db, env);
+    expect(status()).toBe("dead_lettered");
+    expect(mocks.sendOrderNotificationEmail).not.toHaveBeenCalled();
+    expect(mocks.sendOrderNotification).not.toHaveBeenCalled();
+    expect(mocks.sendStaffOrderEmails).not.toHaveBeenCalled();
+    expect(mocks.sendResolvedNotification).not.toHaveBeenCalled();
+    await processNotificationMessage({ type: "notification", outboxId }, db, env);
+    expect(status()).toBe("dead_lettered");
+  });
+
   async function recordRow(input: {
     subjectType: "order" | "gift_card";
     subjectId: string;

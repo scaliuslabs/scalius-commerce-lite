@@ -1,3 +1,4 @@
+import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -89,9 +90,10 @@ export function PurchaseOrderReceive({ order, onReload }: { order: PurchaseOrder
   };
 
   return (
-    <Page width="detail">
+    <Page data-presence-root={presenceKey("purchase-order", order.id)} width="detail">
       <UnsavedChangesGuard isDirty={receipt.units > 0} isSubmitting={receive.isPending} />
       <PageHeader
+        presence={<PresenceSlot presenceKey={presenceKey("purchase-order", order.id)} revision={order.revision} dirty={receipt.units > 0} />}
         backTo={`/admin/inventory/purchase-orders/${order.id}`}
         title={t("receiveTitle", { number: order.displayNumber })}
         status={<PurchaseOrderStatusBadge status={order.status} />}

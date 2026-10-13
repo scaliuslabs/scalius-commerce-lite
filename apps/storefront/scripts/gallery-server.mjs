@@ -21,6 +21,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cleanGalleryUrl, galleryContextId, galleryNavigationRedirect, galleryHistoryScript } from "../src/gallery/navigation.mjs";
 
 const STOREFRONT_ROOT = fileURLToPath(new URL("../", import.meta.url));
 export const GALLERY_PREFIX = "/__gallery";
@@ -187,8 +188,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
   /** The entry a fixture API URL names (`/__gallery/api/<id>/...`), or the Referer's entry. */
   const apiEntry = (url, referer) => {
     const named = decodeURIComponent(url.slice(apiPrefix.length).split("/")[0] ?? "");
-    const id = named === REFERER_ENTRY ? /\/__gallery\/e\/([^/?#]+)/.exec(String(referer ?? ""))?.[1] : named;
-    return id ? gallery.galleryEntry(decodeURIComponent(id)) : null;
+    const id = named === REFERER_ENTRY ? galleryContextId(new URL(url), referer, (id) => Boolean(gallery.galleryEntry(id))) : named;
+    return id ? gallery.galleryEntry(id) : null;
   };
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (input, init) => {
@@ -207,6 +208,29 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
     return realFetch(input, init);
   };
 
+  async function finalizeHtml(source, modulePath, fixtureApiUrl, entryId) {
+    if (!source.includes("</head>")) return source;
+    // The page is built with no platform origin; its browser calls (address
+    // suggestions) reach this entry's fixture API.
+    let html = source.replace('window.__API_BASE_URL__="";', `window.__API_BASE_URL__=${JSON.stringify(fixtureApiUrl)};`);
+    const resolved = await vite.moduleGraph.getModuleByUrl(modulePath, true);
+    const styles = collectStyles(vite, resolved?.id ?? modulePath);
+    // Inline, like the production build: a linked sheet can arrive after the
+    // first paint in the dev server and shift the page (a CLS the shop never has).
+    const sheets = await Promise.all(styles.map(async (href) => {
+      const transformed = await vite.transformRequest(`${href}${href.includes("?") ? "&" : "?"}direct`);
+      return transformed?.code ?? "";
+    }));
+    const links = sheets.map((css) => `<style data-gallery-css>${css.replaceAll("</style", "<\\/style")}</style>`).join("");
+    html = html.includes("</head>") ? html.replace("</head>", `${links}</head>`) : `${links}${html}`;
+    // The dev page is large (every component sheet inline, unminified), so the
+    // browser may paint it half parsed: the footer grows as its markup arrives,
+    // a layout shift no shopper sees. Hold the first paint until the whole page
+    // is parsed, as the production page's single small chunk is.
+    html = html.replace("</head>", '<link rel="expect" href="#gallery-page-end" blocking="render"></head>').replace("</body>", '<span id="gallery-page-end" hidden></span></body>');
+    return html.replace("</head>", `${galleryHistoryScript(entryId)}</head>`);
+  }
+
   handle = async (request, response) => {
     const url = new URL(request.url ?? "/", origin);
     try {
@@ -222,7 +246,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const entry = apiEntry(url.href, request.headers.referer);
         if (!entry) return sendJson(response, 404, { error: "unknown entry" });
         const body = request.method === "GET" || request.method === "HEAD" ? undefined : await readBody(request);
-        const answered = await gallery.answerFixtureApi(entry, new Request(url.href, { method: request.method, body, headers: { "content-type": String(request.headers["content-type"] ?? "") } }));
+        const answered = await gallery.answerFixtureApi(entry, new Request(cleanGalleryUrl(url).href, { method: request.method, body, headers: { "content-type": String(request.headers["content-type"] ?? "") } }));
         response.writeHead(answered.status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
         return response.end(Buffer.from(await answered.arrayBuffer()));
       }
@@ -231,7 +255,7 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const entry = apiEntry(`${apiPrefix}${REFERER_ENTRY}`, request.headers.referer);
         if (!entry) return sendJson(response, 404, { error: "unknown entry" });
         const body = request.method === "GET" || request.method === "HEAD" ? undefined : await readBody(request);
-        const target = `${apiPrefix}${encodeURIComponent(entry.id)}${url.pathname}${url.search}`;
+        const target = `${apiPrefix}${encodeURIComponent(entry.id)}${url.pathname}${cleanGalleryUrl(url).search}`;
         const answered = await gallery.answerFixtureApi(entry, new Request(target, { method: request.method, body, headers: { "content-type": String(request.headers["content-type"] ?? "") } }));
         response.writeHead(answered.status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
         return response.end(Buffer.from(await answered.arrayBuffer()));
@@ -265,28 +289,12 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
             }),
           ),
         );
-        // The page is built with no platform origin; its browser calls (address
-        // suggestions) reach this entry's fixture API.
-        let html = (await rendered.text()).replace('window.__API_BASE_URL__="";', `window.__API_BASE_URL__=${JSON.stringify(fixtureApiUrl)};`);
-        const resolved = await vite.moduleGraph.getModuleByUrl(plan.page, true);
-        const styles = collectStyles(vite, resolved?.id ?? plan.page);
-        // Inline, like the production build: a linked sheet can arrive after the
-        // first paint in the dev server and shift the page (a CLS the shop never has).
-        const sheets = await Promise.all(styles.map(async (href) => {
-          const transformed = await vite.transformRequest(`${href}${href.includes("?") ? "&" : "?"}direct`);
-          return transformed?.code ?? "";
-        }));
-        const links = sheets.map((css) => `<style data-gallery-css>${css.replaceAll("</style", "<\\/style")}</style>`).join("");
-        html = html.includes("</head>") ? html.replace("</head>", `${links}</head>`) : `${links}${html}`;
-        // The dev page is large (every component sheet inline, unminified), so the
-        // browser may paint it half parsed: the footer grows as its markup arrives,
-        // a layout shift no shopper sees. Hold the first paint until the whole page
-        // is parsed, as the production page's single small chunk is.
-        html = html.replace("</head>", '<link rel="expect" href="#gallery-page-end" blocking="render"></head>').replace("</body>", '<span id="gallery-page-end" hidden></span></body>');
+        const html = await finalizeHtml(await rendered.text(), plan.page, fixtureApiUrl, id);
         response.writeHead(rendered.status === 200 ? 200 : rendered.status, {
           "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",
           "X-Gallery-Entry": id,
+          "Referrer-Policy": "same-origin",
         });
         return response.end(html);
       }
@@ -295,23 +303,33 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
       }
       // A same-origin storefront route a gallery page calls from the browser
       // (the lazy menu panels, a fragment endpoint): rendered with the fixtures
-      // of the entry that asked (its Referer). Anything else, including a
-      // prefetch of a real page link, is not part of the gallery.
+      // of the entry named by this navigation or its same-origin Referer.
+      // Prefetch stays disabled so it cannot alter journey evidence.
       if (String(request.headers["sec-purpose"] ?? request.headers.purpose ?? "").includes("prefetch")) {
         response.writeHead(204, { "Cache-Control": "no-store" });
         return response.end();
       }
-      const referer = /\/__gallery\/e\/([^/?#]+)/.exec(String(request.headers.referer ?? ""));
-      const route = referer ? routeModule(routes, url.pathname) : null;
-      const plan = referer && route ? gallery.galleryRenderPlan(decodeURIComponent(referer[1]), origin) : null;
-      if (!plan || !route) return sendJson(response, 404, { error: "not in the gallery" });
+      const entryId = galleryContextId(url, request.headers.referer, (id) => Boolean(gallery.galleryEntry(id)));
+      const plan = entryId ? gallery.galleryRenderPlan(entryId, origin) : null;
+      const cleanUrl = cleanGalleryUrl(url);
+      const presence = plan?.runtime.MARKET_PRESENCE;
+      const routePath = presence && cleanUrl.pathname === `/${presence}` ? "/"
+        : presence && cleanUrl.pathname.startsWith(`/${presence}/`) ? cleanUrl.pathname.slice(String(presence).length + 1) : cleanUrl.pathname;
+      const route = plan ? routeModule(routes, routePath) : null;
+      if (!plan || !route) return sendJson(response, 404, { error: "No fixture context or route. Open a case from /__gallery/." });
+      const redirect = galleryNavigationRedirect(url, entryId, request.headers, route.module.endsWith(".astro"));
+      if (redirect) {
+        response.writeHead(307, { Location: redirect, "Cache-Control": "no-store", "Referrer-Policy": "same-origin" });
+        return response.end();
+      }
+      const fixtureApiUrl = plan.runtime.PUBLIC_API_URL;
       const modulePath = route.module;
       const loaded = await vite.ssrLoadModule(modulePath);
       const body = request.method === "GET" || request.method === "HEAD" ? undefined : await readBody(request);
       const rendered = await currentEntry.run(plan.entry, () =>
         runtimeModule.requestRuntime.run(plan.runtime, () =>
           container.renderToResponse(modulePath.endsWith(".ts") ? loaded : loaded.default, {
-            request: new Request(url.href, { method: request.method, headers: { cookie: String(request.headers.cookie ?? ""), "content-type": String(request.headers["content-type"] ?? "") }, body }),
+            request: new Request(cleanUrl.href, { method: request.method, headers: { cookie: String(request.headers.cookie ?? ""), "content-type": String(request.headers["content-type"] ?? "") }, body }),
             params: route.params,
             locals: {},
             ...(modulePath.endsWith(".ts") ? { routeType: "endpoint" } : {}),
@@ -319,8 +337,11 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         ),
       );
       const headers = Object.fromEntries(rendered.headers);
-      response.writeHead(rendered.status, { ...headers, "Cache-Control": "no-store" });
-      return response.end(Buffer.from(await rendered.arrayBuffer()));
+      const html = headers["content-type"]?.includes("text/html")
+        ? await finalizeHtml(await rendered.text(), modulePath, fixtureApiUrl, entryId) : null;
+      if (html !== null) { delete headers["content-length"]; delete headers.etag; }
+      response.writeHead(rendered.status, { ...headers, "Cache-Control": "no-store", "X-Gallery-Entry": entryId, "Referrer-Policy": "same-origin" });
+      return response.end(html ?? Buffer.from(await rendered.arrayBuffer()));
     } catch (error) {
       if (!quiet) console.error(`[gallery] ${url.pathname}:`, error);
       if (!response.headersSent) response.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });

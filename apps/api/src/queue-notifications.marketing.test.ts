@@ -38,7 +38,7 @@ describe("marketing double opt-in through the notification outbox", () => {
 
     it("queues, sends once and confirms through the link", async () => {
         const queued: Array<{ type: string; outboxId: string }> = [];
-        const result = await subscribeToNewsletter(db, { phone: "01755555555", email: "Mina@Example.com", language: "bn" }, {
+        const result = await subscribeToNewsletter(db, { phone: "01755555555", email: "Mina@Example.com", channels: ["email", "sms"], language: "bn" }, {
             env: env as never,
             queue: { send: async (message) => { queued.push(message); } },
             ip: "203.0.113.5",
@@ -73,7 +73,7 @@ describe("marketing double opt-in through the notification outbox", () => {
 
     it("sends nothing without a store URL and never dead-letters the row", async () => {
         const queued: Array<{ type: string; outboxId: string }> = [];
-        await subscribeToNewsletter(db, { phone: "01755555555", email: "mina@example.com" }, {
+        await subscribeToNewsletter(db, { phone: "01755555555", email: "mina@example.com", channels: ["email"] }, {
             env: env as never,
             queue: { send: async (message) => { queued.push(message); } },
             ip: "203.0.113.5",

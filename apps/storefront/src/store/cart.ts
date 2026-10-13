@@ -6,6 +6,8 @@ import {
   NO_PROPERTIES_HASH,
 } from "@scalius/shared/line-properties";
 import { isFulfillmentKind, type FulfillmentKind } from "@scalius/shared/fulfilment";
+import { getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import {
   normalizeCartItemOptions,
   type CartItemOption,
@@ -156,11 +158,17 @@ export function cartHasFreeDeliveryItem(
 
 /** The items subtotal before discounts, which a rate's free-over threshold is measured against. */
 export function cartItemsSubtotal(items: Record<string, ShippingFeeCartItem>): number {
-  const total = Object.values(items).reduce(
-    (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
+  const decimalPlaces = getDecimalPlaces(getCurrencyCode());
+  const totalMinor = Object.values(items).reduce(
+    (sum, item) => {
+      const price = Number(item.price);
+      const quantity = Number(item.quantity);
+      return sum + toMinor(Number.isFinite(price) ? Math.max(0, price) : 0, decimalPlaces)
+        * (Number.isFinite(quantity) ? Math.max(0, Math.trunc(quantity)) : 0);
+    },
     0,
   );
-  return Math.round(total * 100) / 100;
+  return fromMinor(totalMinor, decimalPlaces);
 }
 
 /**

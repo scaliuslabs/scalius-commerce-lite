@@ -15,7 +15,7 @@ import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { isLocationCountry, readForeignAddressFields, shippingCountryOf } from "@/lib/checkout/shipping-country";
 import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
 import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "@/lib/checkout/billing-address";
-import { MARKETING_CONSENT_FIELD, marketingConsentOrderField } from "@/lib/checkout/marketing-consent";
+import { marketingConsentOrderField } from "@/lib/checkout/marketing-consent";
 import { parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
 import {
   checkoutAddressForMode,
@@ -374,7 +374,7 @@ export async function processOrder(
       discountCodes,
       paymentMethod: "cod",
       // Only when the buyer ticked the marketing consent box.
-      ...marketingConsentOrderField(formData.get(MARKETING_CONSENT_FIELD)),
+      ...marketingConsentOrderField(formData),
     };
 
     const result = await createOrder(payload, {

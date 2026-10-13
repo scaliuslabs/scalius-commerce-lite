@@ -290,8 +290,9 @@ describe("PageForm", () => {
     await render({ contentType: "article", defaultValues: savedPost, isEdit: true });
 
     expect(document.body.textContent).toContain("Only staff who can publish can change this.");
-    expect(byLabel<HTMLButtonElement>("Visibility").disabled).toBe(true);
-    expect(byLabel<HTMLInputElement>("Publish on").disabled).toBe(true);
+    expect(document.querySelector('[role="combobox"]')).toBeNull();
+    expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
+    expect(document.body.textContent).toContain("Scheduled");
     expect(byLabel<HTMLInputElement>("Title").disabled).toBe(false);
   });
 
@@ -303,5 +304,29 @@ describe("PageForm", () => {
     expect(document.querySelector("fieldset")?.disabled).toBe(true);
     expect(queryButton("Save")).toBeUndefined();
     expect(document.body.textContent).toContain("Measure your chest.");
+    expect(document.querySelector("input, textarea, [role=combobox], [role=checkbox]")).toBeNull();
+    expect(document.body.textContent).toContain("How to choose a panjabi size");
+    expect(document.body.textContent).toContain("Rahim");
+    expect(queryButton("Edit search engine listing")).toBeUndefined();
+  });
+
+  it("shows saved facts after permission revocation while preserving unsaved work for regrant", async () => {
+    await render({ contentType: "article", defaultValues: savedPost, isEdit: true });
+    type(byLabel("Title"), "Uncommitted heading");
+    type(byLabel("Content"), "<p>Uncommitted content</p>");
+    await click(button("Edit search engine listing"));
+    type(byLabel("Page title"), "Uncommitted search title");
+    await settle();
+    granted.delete("pages.edit");
+    await render({ contentType: "article", defaultValues: savedPost, isEdit: true });
+    expect(document.querySelector("input, textarea, [contenteditable=true]")).toBeNull();
+    expect(document.body.textContent).toContain("Measure your chest.");
+    expect(document.body.textContent).not.toContain("Uncommitted");
+    expect(queryButton("Save")).toBeUndefined();
+    expect(api.update).not.toHaveBeenCalled();
+    granted.add("pages.edit");
+    await render({ contentType: "article", defaultValues: savedPost, isEdit: true });
+    expect(byLabel<HTMLInputElement>("Title").value).toBe("Uncommitted heading");
+    expect(queryButton("Save")).toBeDefined();
   });
 });

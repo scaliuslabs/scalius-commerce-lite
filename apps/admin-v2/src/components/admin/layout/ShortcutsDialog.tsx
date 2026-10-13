@@ -122,7 +122,7 @@ export function ShortcutsDialog({
     if (await save(next)) setRecording(null);
   }
 
-  const groups = (["general", "editing"] as const).map((group) => ({
+  const groups = (["general", "editing", "inbox"] as const).map((group) => ({
     group,
     rows: Object.values(SHORTCUTS).filter((shortcut) => shortcut.group === group),
   }));

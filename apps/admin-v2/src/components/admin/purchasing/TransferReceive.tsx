@@ -1,3 +1,4 @@
+import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -75,9 +76,10 @@ export function TransferReceive({ transfer, onReload }: { transfer: Transfer; on
   };
 
   return (
-    <Page width="detail">
+    <Page data-presence-root={presenceKey("transfer", transfer.id)} width="detail">
       <UnsavedChangesGuard isDirty={receipt.units > 0} isSubmitting={receive.isPending} />
       <PageHeader
+        presence={<PresenceSlot presenceKey={presenceKey("transfer", transfer.id)} revision={transfer.revision} dirty={receipt.units > 0} />}
         backTo={`/admin/inventory/transfers/${transfer.id}`}
         title={t("receiveTitle", { number: transfer.displayNumber })}
         status={<TransferStatusBadge status={transfer.status} />}

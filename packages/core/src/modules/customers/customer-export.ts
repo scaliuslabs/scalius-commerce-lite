@@ -37,6 +37,7 @@ export const CUSTOMER_CSV_HEADERS = [
     "WhatsApp marketing",
     "Customer since",
     "Country",
+    "Push marketing",
 ] as const;
 
 /** City, zone and country come from the default address (Bangladesh: city and thana; elsewhere: locality and region). */
@@ -97,6 +98,7 @@ export async function buildCustomerCsvExport(
             email_status: consentStatusSql("email"),
             sms_status: consentStatusSql("sms"),
             whatsapp_status: consentStatusSql("whatsapp"),
+            push_status: consentStatusSql("push"),
         })
             .from(customers)
             .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
@@ -130,6 +132,7 @@ export async function buildCustomerCsvExport(
                 statuses.whatsapp,
                 isoDate(row.createdAt),
                 row.countryCode ?? "",
+                statuses.push,
             ].map(spreadsheetSafeCsvCell).join(",")}`;
             const bytes = encoder.encode(line).byteLength;
             if (byteLength + bytes > CUSTOMER_EXPORT_MAX_BYTES) {

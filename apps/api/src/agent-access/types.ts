@@ -35,6 +35,8 @@ export interface PluginPrincipal {
   actorUserId: string;
   permissions: Set<string>;
   riskCeiling: AgentRisk;
+  /** Host-attested staff initiating this invocation; absent for background jobs. */
+  operator?: { userId: string };
 }
 
 /** Every non-human principal the operation dispatcher serves. */

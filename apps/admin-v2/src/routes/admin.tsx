@@ -88,6 +88,7 @@ function AdminLayout() {
   // So is the new-store setup step (Shopify's "Tell us about your store").
   const matchRoute = useMatchRoute();
   const fullWindow = Boolean(matchRoute({ to: "/admin/online-store/theme/editor" }) || matchRoute({ to: "/admin/welcome" }));
+  const paneWorkspace = Boolean(matchRoute({ to: "/admin/inbox", fuzzy: true }));
   // Offline: the guard and banner load just after the first paint (states/OfflineShell).
   const offlineBanner = <Suspense fallback={null}><OfflineShell /></Suspense>;
 
@@ -144,13 +145,13 @@ function AdminLayout() {
               {offlineBanner}
               <main
                 id="admin-main-scroll"
-                tabIndex={0}
+                tabIndex={paneWorkspace ? -1 : 0}
                 data-scroll-restoration-id="admin-main-scroll"
-                className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain outline-none lg:[scrollbar-gutter:stable] print:overflow-visible"
+                className={`relative min-h-0 min-w-0 flex-1 outline-none print:overflow-visible ${paneWorkspace ? "flex flex-col overflow-clip" : "overflow-y-auto overscroll-contain lg:[scrollbar-gutter:stable]"}`}
               >
                 {/* Padding sits inside the scroller so sticky table headers meet the canvas' top edge. */}
-                <div className="px-3 py-4 sm:px-4 md:px-6">
-                  <div className="mx-auto max-w-7xl">
+                <div className={`px-3 py-4 sm:px-4 md:px-6 ${paneWorkspace ? "flex min-h-0 flex-1 flex-col" : ""}`}>
+                  <div className={`mx-auto max-w-7xl ${paneWorkspace ? "flex w-full min-h-0 flex-1 flex-col" : ""}`}>
                     <Outlet />
                   </div>
                 </div>

@@ -48,6 +48,7 @@ const HEIGHTS = [{ value: "s", label: "Small" }, { value: "m", label: "Medium" }
 const SCRIMS = [{ value: "none", label: "No" }, { value: "soft", label: "A little" }, { value: "strong", label: "More" }];
 const ENDS_HELP = "The store's local time: 2026-12-31 or 2026-12-31 18:00. Leave empty for no countdown.";
 
+// Neutral defaults also apply when legacy documents omit a value; saved explicit copy wins.
 const sections = [
   // ── Heroes ────────────────────────────────────────────────────────────
   {
@@ -55,12 +56,12 @@ const sections = [
     name: "Hero",
     description: "A large photo with a heading and buttons: the words over the photo, or beside it.",
     settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", default: "New season", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", default: "Made slowly, worn for years", maxLength: 120 },
-      { key: "text", label: "Text", type: "textarea", default: "Handloom cotton and silk from Bangladeshi weavers, delivered in two days.", maxLength: 300 },
+      { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
+      { key: "heading", label: "Heading", type: "text", default: "Explore our products", maxLength: 120 },
+      { key: "text", label: "Text", type: "textarea", maxLength: 300 },
       { key: "image", label: "Image", type: "image" },
       { key: "phone_image", label: "Image on phones", type: "image", help: "A taller crop for phones. Leave empty to use the image." },
-      { key: "primary_label", label: "Button text", type: "text", default: "Shop new arrivals", maxLength: 40 },
+      { key: "primary_label", label: "Button text", type: "text", default: "Shop all", maxLength: 40 },
       { key: "primary_link", label: "Button link", type: "link", default: "/search" },
       { key: "secondary_label", label: "Second button text", type: "text", maxLength: 40 },
       { key: "secondary_link", label: "Second button link", type: "link" },
@@ -141,7 +142,7 @@ const sections = [
     description: "One product in the spotlight: a large photo, the price, a few points and add to cart.",
     settings: [
       { key: "product", label: "Product", type: "product", required: true },
-      { key: "eyebrow", label: "Small heading", type: "text", default: "Bestseller", maxLength: 60 },
+      { key: "eyebrow", label: "Small heading", type: "text", default: "Featured product", maxLength: 60 },
       { key: "heading", label: "Heading", type: "text", maxLength: 120, help: "Leave empty to use the product's name." },
       { key: "text", label: "Text", type: "textarea", maxLength: 400 },
       { key: "image", label: "Image", type: "image", help: "Leave empty to use the product's photos." },
@@ -221,11 +222,11 @@ const sections = [
     name: "Sale banner",
     description: "A sale banner with a live countdown to its end.",
     settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", default: "Limited time", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", default: "The Eid edit: up to 40% off", maxLength: 120 },
+      { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
+      { key: "heading", label: "Heading", type: "text", maxLength: 120 },
       { key: "text", label: "Text", type: "textarea", maxLength: 240 },
       { key: "ends_at", label: "Ends at", type: "text", maxLength: 16, help: ENDS_HELP },
-      { key: "label", label: "Button text", type: "text", default: "Shop the sale", maxLength: 40 },
+      { key: "label", label: "Button text", type: "text", default: "View products", maxLength: 40 },
       { key: "link", label: "Button link", type: "link", default: "/search" },
       { key: "image", label: "Background image", type: "image" },
       {
@@ -299,7 +300,7 @@ const sections = [
     description: "Customer reviews: quotes with stars, or photos of messages and unboxings.",
     settings: [
       { key: "eyebrow", label: "Small heading", type: "text", default: "Reviews", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", default: "Loved across Bangladesh", maxLength: 120 },
+      { key: "heading", label: "Heading", type: "text", default: "Customer reviews", maxLength: 120 },
       { key: "summary", label: "Summary", type: "text", maxLength: 60, help: "Beside the heading, such as “4.9 from 1,200 orders”." },
       {
         key: "items", label: "Reviews", type: "list", itemLabel: "Review", max: 12,
@@ -307,7 +308,7 @@ const sections = [
           { key: "quote", label: "Quote", type: "textarea", maxLength: 400 },
           { key: "name", label: "Name", type: "text", required: true, maxLength: 60 },
           { key: "detail", label: "Detail", type: "text", maxLength: 60, help: "A city, or what they bought." },
-          { key: "rating", label: "Stars", type: "number", default: 5, min: 1, max: 5, integer: true },
+          { key: "rating", label: "Stars", type: "number", min: 1, max: 5, integer: true },
           { key: "photo", label: "Photo", type: "image", help: "A photo of the product, a message or an unboxing." },
         ],
       },
@@ -359,8 +360,8 @@ const sections = [
     description: "Up to twelve square photos, each optionally a link: your Instagram, your customers.",
     settings: [
       { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", default: "As worn by you", maxLength: 120 },
-      { key: "handle", label: "Link text", type: "text", default: "@noor.co", maxLength: 40 },
+      { key: "heading", label: "Heading", type: "text", default: "Gallery", maxLength: 120 },
+      { key: "handle", label: "Link text", type: "text", maxLength: 40 },
       { key: "link", label: "Link", type: "url" },
       {
         key: "images", label: "Photos", type: "list", itemLabel: "Photo", max: 12,
@@ -375,8 +376,8 @@ const sections = [
     description: "Invites buyers to join your list for early access and offers.",
     settings: [
       { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", default: "Be first to know", maxLength: 120 },
-      { key: "text", label: "Text", type: "textarea", default: "New arrivals and members-only offers, a few times a month.", maxLength: 240 },
+      { key: "heading", label: "Heading", type: "text", default: "Stay in touch", maxLength: 120 },
+      { key: "text", label: "Text", type: "textarea", maxLength: 240 },
       { key: "button", label: "Button text", type: "text", default: "Join the list", maxLength: 40 },
       { key: "link", label: "Button link", type: "link", default: "/newsletter" },
       { key: "image", label: "Image", type: "image" },
@@ -394,7 +395,7 @@ const sections = [
     description: "The top of a one-product campaign page: photos, the offer price, points, a countdown and “Order now”.",
     settings: [
       { key: "product", label: "Product", type: "product", required: true },
-      { key: "badge", label: "Badge", type: "text", default: "Special offer", maxLength: 40 },
+      { key: "badge", label: "Badge", type: "text", maxLength: 40 },
       { key: "heading", label: "Heading", type: "text", maxLength: 140, help: "Leave empty to use the product's name." },
       { key: "text", label: "Text", type: "textarea", maxLength: 400 },
       { key: "photos", label: "Photos", type: "list", itemLabel: "Photo", max: 6, fields: [{ key: "image", label: "Image", type: "image", required: true }], help: "Shown before the product's own photos." },
@@ -433,7 +434,7 @@ const sections = [
   {
     type: "landing-order",
     name: "Landing: order form",
-    description: "The order: the product, your assurances and the store's cash-on-delivery order form. Every “Order now” jumps here.",
+    description: "The product, your assurances and the store's order form when available. Order buttons use a product-page fallback when checkout is unavailable.",
     settings: [
       { key: "product", label: "Product", type: "product", required: true },
       { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
@@ -484,10 +485,10 @@ const slots = [
     name: "Noor footer",
     description: "A sign-up band, your contact details and menus, and the payment methods you take.",
     settings: [
-      { key: "newsletter_heading", label: "Sign-up heading", type: "text", default: "Join for early access", maxLength: 80 },
-      { key: "newsletter_text", label: "Sign-up text", type: "text", default: "New drops and members-only offers.", maxLength: 160 },
+      { key: "newsletter_heading", label: "Sign-up heading", type: "text", default: "Stay in touch", maxLength: 80 },
+      { key: "newsletter_text", label: "Sign-up text", type: "text", maxLength: 160 },
       { key: "newsletter_button", label: "Sign-up button", type: "text", default: "Join the list", maxLength: 40 },
-      { key: "tagline", label: "Tagline", type: "text", default: "Handloom clothing from Bangladesh, made to last.", maxLength: 160 },
+      { key: "tagline", label: "Tagline", type: "text", maxLength: 160 },
       {
         key: "payments", label: "Payment methods", type: "list", itemLabel: "Method", max: 8,
         fields: [{ key: "name", label: "Name", type: "text", required: true, maxLength: 24 }],
@@ -555,125 +556,54 @@ const section = (id: string, type: string, values: Record<string, unknown> = {})
   id, type: "app", version: 1, settings: { app: `scalius.noor/${type}`, values },
 });
 
-const PROMISES = [
-  { icon: "truck", title: "Two-day delivery", text: "Inside Dhaka; four days elsewhere" },
-  { icon: "cash", title: "Cash on delivery", text: "Pay when it reaches you" },
-  { icon: "returns", title: "Seven-day exchange", text: "Size swaps, no questions" },
-  { icon: "chat", title: "Real people", text: "WhatsApp us, 10am to 10pm" },
-];
-
+// Templates are starting layouts, not evidence of a merchant's policies or sales.
+// Applying one copies these settings; existing saved content is never rewritten.
 const templates = [
   {
     id: "noor",
     name: "Noor",
-    description: "An editorial store: an overlay hero, tabbed products, collection tiles, a featured product, a sale countdown, reviews and questions; its own header, footer and card, and a landing kit for campaign pages.",
+    description: "An editorial store with a hero, product rows, collection tiles and a featured product. Add your own story, reviews and policies from the section library.",
     theme: {
       tokens,
-      // The header shows the merchant's menu in their order.
       blocks: { navigation: { source: "menu", maxTopItems: 7, linkBudget: 150 } },
       apps: {
-        header: { app: "scalius.noor/noor-header", values: { announcements: [{ text: "Free delivery on orders over ৳3,000" }, { text: "Cash on delivery all over Bangladesh" }] } },
-        footer: { app: "scalius.noor/noor-footer", values: { payments: [{ name: "Cash on delivery" }, { name: "bKash" }, { name: "Nagad" }, { name: "Visa" }, { name: "Mastercard" }] } },
+        header: { app: "scalius.noor/noor-header", values: { announcements: [] } },
+        footer: { app: "scalius.noor/noor-footer", values: { payments: [], tagline: "", newsletter_heading: "Stay in touch", newsletter_text: "" } },
         productCard: { app: "scalius.noor/noor-card", values: {} },
       },
       sections: [
-        section("noor-hero", "hero", { height: "l", scrim: "soft" }),
-        section("noor-promises", "promises", { items: PROMISES, style: "strip", spacing: "s" }),
-        section("noor-new", "products", { eyebrow: "Just in", heading: "New arrivals", tab1_label: "New in", tab2_label: "On sale", tab2_products: "on-sale" }),
+        section("noor-hero", "hero", { eyebrow: "", heading: "Explore our products", text: "", primary_label: "Shop all", height: "l", scrim: "soft" }),
+        section("noor-new", "products", { heading: "New arrivals", tab1_label: "New in", tab2_label: "On sale", tab2_products: "on-sale" }),
         section("noor-tiles", "collection-tiles", { heading: "Shop by category" }),
-        section("noor-feature", "featured-product", { points: [{ text: "Hand-woven in Tangail" }, { text: "Pre-washed, soft from the first wear" }, { text: "Free size exchange within seven days" }] }),
-        section("noor-best", "products", { eyebrow: "Most loved", heading: "Bestsellers", tab1_products: "featured", layout: "row", link_label: "Shop all" }),
-        section("noor-sale", "sale-countdown"),
-        section("noor-story", "image-text", {
-          heading: "Woven by hand, in no hurry",
-          text: "We work with eleven weaving families across Tangail and Narayanganj. Every piece is checked twice before it leaves our studio in Dhaka.",
-          stats: [{ value: "11", label: "Weaving families" }, { value: "48h", label: "Dhaka delivery" }, { value: "4.8", label: "Average rating" }],
-          cta_label: "Our story", cta_link: "/pages/about",
-        }),
-        section("noor-reviews", "testimonials", {
-          summary: "4.9 from 1,200+ orders",
-          items: [
-            { quote: "The fabric is even better than the photos. Delivery took a day and a half.", name: "Nusrat J.", detail: "Dhaka", rating: 5 },
-            { quote: "Ordered on Monday, wore it on Wednesday. Exchanged a size with no fuss at all.", name: "Tanvir A.", detail: "Chattogram", rating: 5 },
-            { quote: "Finally a store that packs like it cares. The kurta fits perfectly.", name: "Farzana R.", detail: "Sylhet", rating: 5 },
-            { quote: "Soft, breathable and the colours have not faded after many washes.", name: "Mahmud H.", detail: "Rajshahi", rating: 4 },
-          ],
-        }),
-        section("noor-faq", "faq", {
-          questions: [
-            { question: "How long does delivery take?", answer: "Two days inside Dhaka and three to four days elsewhere in Bangladesh." },
-            { question: "Can I pay when the order arrives?", answer: "Yes. Every order can be paid in cash on delivery, and you can check the product before you pay." },
-            { question: "How do exchanges work?", answer: "Message us within seven days of delivery and we collect the item and send the new size." },
-            { question: "Do you deliver outside Bangladesh?", answer: "Not yet. We deliver to every district in Bangladesh." },
-          ],
-          contact_label: "Message us", contact_link: "/pages/contact",
-        }),
-        section("noor-signup", "signup"),
+        section("noor-feature", "featured-product", { eyebrow: "Featured product", points: [] }),
+        section("noor-best", "products", { heading: "Popular products", tab1_products: "popular", layout: "row", link_label: "Shop all" }),
+        section("noor-signup", "signup", { heading: "Stay in touch", text: "" }),
       ],
     },
   },
 ] satisfies Template[];
 
-/** A ready-made campaign page: the merchant names it, picks the product, and publishes. */
+/** A campaign starts with product facts; policies and testimonials require merchant content. */
 const pagePresets = [
   {
     id: "product-campaign",
     name: "Product campaign",
-    description: "A single-product page for an ad: the offer, why to buy, reviews, questions and the cash-on-delivery order form.",
+    description: "A single-product page with its price, space for your selling points, checkout guidance and the store's order form when available.",
     sections: [
-      section("lp-hero", "landing-hero", {
-        badge: "Special offer",
-        points: [{ text: "Genuine product, checked before it ships" }, { text: "Delivery in 2 to 4 days, all over Bangladesh" }, { text: "Pay cash when it arrives" }],
-        urgency: "Offer price for a limited time",
-      }),
-      section("lp-promises", "promises", {
-        items: [
-          { icon: "truck", title: "Fast delivery", text: "All over Bangladesh" },
-          { icon: "cash", title: "Cash on delivery", text: "Pay when it arrives" },
-          { icon: "returns", title: "Easy replacement", text: "Within seven days" },
-          { icon: "shield", title: "Quality checked", text: "Before it ships" },
-        ],
-        style: "strip", spacing: "s",
-      }),
-      section("lp-features", "landing-features", {
-        heading: "Why you'll love it",
-        items: [
-          { icon: "leaf", title: "Pure cotton", text: "Breathable handloom cotton that stays soft wash after wash." },
-          { icon: "badge", title: "Made to last", text: "Double-stitched seams and colours that do not fade." },
-          { icon: "heart", title: "Fits beautifully", text: "Cut for Bangladeshi sizes, with an easy exchange if it does not." },
-        ],
-        cta_label: "Order now",
-      }),
+      section("lp-hero", "landing-hero", { badge: "" }),
+      // The existing renderer leaves this section out until the merchant adds items.
+      section("lp-features", "landing-features"),
       section("lp-steps", "landing-features", {
         heading: "How to order",
         style: "steps",
         items: [
-          { title: "Fill in the form", text: "Your name, phone and address: no account needed." },
-          { title: "We call to confirm", text: "Our team confirms your order within a few hours." },
-          { title: "Pay on delivery", text: "Check the product, then pay the delivery person." },
+          { title: "Choose your options", text: "Review the product details and select the options you need." },
+          { title: "Review your order", text: "Check your items, quantities and the total before confirming." },
+          { title: "Place your order", text: "Follow the available checkout steps to complete your order." },
         ],
         tone: "soft",
       }),
-      section("lp-reviews", "testimonials", {
-        heading: "What buyers say",
-        items: [
-          { quote: "Exactly as shown. Delivery was fast and the quality is excellent.", name: "Sadia K.", detail: "Dhaka", rating: 5 },
-          { quote: "Second time ordering, gifted one to my mother. Highly recommended.", name: "Rafiq U.", detail: "Khulna", rating: 5 },
-          { quote: "Paid on delivery, no hassle. Packaging was beautiful.", name: "Mitu A.", detail: "Cumilla", rating: 5 },
-        ],
-      }),
-      section("lp-faq", "faq", {
-        heading: "Questions",
-        questions: [
-          { question: "How much is delivery?", answer: "Delivery is charged by area and shown before you confirm the order." },
-          { question: "Can I check the product before paying?", answer: "Yes. Open the parcel in front of the delivery person and pay only if you are happy." },
-          { question: "What if the size does not fit?", answer: "Message us within seven days and we exchange it." },
-        ],
-        structured_data: false,
-      }),
-      section("lp-order", "landing-order", {
-        assurances: [{ icon: "truck", text: "Delivery in 2 to 4 days" }, { icon: "returns", text: "Seven-day replacement" }],
-      }),
+      section("lp-order", "landing-order"),
     ],
   },
 ] satisfies Preset[];
@@ -683,7 +613,7 @@ export const manifest = {
   name: "Noor theme",
   version: "1.1.0",
   apiVersion: PLUGIN_API_VERSION,
-  description: "A calm, editorial storefront theme with its own header, footer and product card, twenty sections, and a landing kit for single-product campaign pages with a cash-on-delivery order form. Everything is customisable in the theme editor.",
+  description: "An editorial storefront theme with its own header, footer and product card, twenty sections, and a landing kit for single-product campaign pages. The order form follows the store’s checkout readiness. Everything is customisable in the theme editor.",
   tagline: "An editorial theme with campaign landing pages",
   author: { name: "Scalius" },
   icon: "assets/icon.svg",
@@ -694,7 +624,7 @@ export const manifest = {
     bn: {
       name: "নূর থিম",
       tagline: "ক্যাম্পেইন ল্যান্ডিং পেজসহ একটি সম্পাদকীয় থিম",
-      description: "নিজস্ব হেডার, ফুটার ও প্রোডাক্ট কার্ড, বিশটি সেকশন এবং ক্যাশ অন ডেলিভারি অর্ডার ফর্মসহ এক প্রোডাক্টের ক্যাম্পেইন পেজ বানানোর ল্যান্ডিং কিটসহ একটি শান্ত, সম্পাদকীয় স্টোরফ্রন্ট থিম।",
+      description: "নিজস্ব হেডার, ফুটার ও প্রোডাক্ট কার্ড, বিশটি সেকশন এবং একটি পণ্যের ক্যাম্পেইন পেজ বানানোর ল্যান্ডিং কিটসহ একটি সম্পাদকীয় স্টোরফ্রন্ট থিম। অর্ডার ফর্ম স্টোরের চেকআউট প্রস্তুতির ওপর নির্ভর করে।",
     },
   },
   storefront: {

@@ -56,11 +56,11 @@ async function browser(endpoint: string) {
 }
 
 function recordingSender(base: WebPushSender, statuses: Record<string, number>) {
-  const calls: Array<{ url: string; headers: Record<string, string>; bytes: number }> = [];
+  const calls: Array<{ url: string; headers: Record<string, string>; bytes: number; wire: Uint8Array }> = [];
   const sender: WebPushSender = {
     ...base,
     fetch: (async (url: string, init: RequestInit) => {
-      calls.push({ url, headers: init.headers as Record<string, string>, bytes: (init.body as Uint8Array | undefined)?.byteLength ?? 0 });
+      calls.push({ url, headers: init.headers as Record<string, string>, bytes: (init.body as Uint8Array | undefined)?.byteLength ?? 0, wire: Uint8Array.from(init.body as Uint8Array) });
       return new Response(null, { status: statuses[url] ?? 201 });
     }) as typeof fetch,
   };
@@ -168,13 +168,13 @@ describe("web push delivery", () => {
     const { id } = await savePushSubscription(db, owner, parsePushSubscription(input));
     const subscription = { id, userId: "usr_1", customerId: null, endpoint: input.endpoint, ...input.keys };
     const { sender, calls } = recordingSender((await webPushSender(ENV))!, {});
-    expect(await deliverWebPush(db, { ...sender, subject: "http://localhost" }, subscription, "{}" )).toBe("retry");
-    expect(await deliverWebPush(db, sender, subscription, "x".repeat(MAX_WEB_PUSH_PLAINTEXT + 1))).toBe("retry");
+    expect(await deliverWebPush(db, { ...sender, subject: "http://localhost" }, subscription, "{}", { staffRequirement: "orders.view" } )).toBe("retry");
+    expect(await deliverWebPush(db, sender, subscription, "x".repeat(MAX_WEB_PUSH_PLAINTEXT + 1), { staffRequirement: "orders.view" })).toBe("retry");
     expect(calls).toHaveLength(0);
     const offline = { ...sender, fetch: (async () => { throw new Error("offline"); }) as typeof fetch };
-    expect(await deliverWebPush(db, offline, subscription, "{}")).toBe("retry");
+    expect(await deliverWebPush(db, offline, subscription, "{}", { staffRequirement: "orders.view" })).toBe("retry");
     expect(await hasPushSubscription(db, owner, input.endpoint)).toBe(true);
-    expect(await deliverWebPush(db, sender, subscription, "{}")).toBe("sent");
+    expect(await deliverWebPush(db, sender, subscription, "{}", { staffRequirement: "orders.view" })).toBe("sent");
   });
 
   it("removes only proven invalid subscriber key material", async () => {
@@ -186,7 +186,7 @@ describe("web push delivery", () => {
       { ...input.keys, p256dh: base64Url(Uint8Array.from([4, ...new Array<number>(64).fill(0)])) },
     ]) {
       const { id } = await savePushSubscription(db, owner, parsePushSubscription(input));
-      expect(await deliverWebPush(db, sender, { id, userId: "usr_1", customerId: null, endpoint: input.endpoint, ...keys }, "{}")).toBe("gone");
+      expect(await deliverWebPush(db, sender, { id, userId: "usr_1", customerId: null, endpoint: input.endpoint, ...keys }, "{}", { staffRequirement: "orders.view" })).toBe("gone");
       expect(await hasPushSubscription(db, owner, input.endpoint)).toBe(false);
     }
     expect(calls).toHaveLength(0);
@@ -218,6 +218,8 @@ describe("web push delivery", () => {
     expect(await sendStaffTestPush(db, sender, "usr_1", phoneId, note)).toBe("sent");
     expect(calls.map((call) => call.url)).toEqual([phone.endpoint]);
     expect(calls[0]!.headers.Urgency).toBe("high");
+    expect(JSON.parse(new TextDecoder().decode(await decrypt(calls[0]!.wire, phone.pair, phone.keys.auth))))
+      .toEqual({ v: 2, recipient: { audience: "staff", id: "usr_1" }, requires: "self", content: { ...note, tag: "scalius-test-push" } });
     expect(await sendStaffTestPush(db, sender, "usr_1", laptopId, note)).toBe("retry");
     // Another person's device is never theirs to test.
     expect(await sendStaffTestPush(db, sender, "usr_2", phoneId, note)).toBeNull();
@@ -239,6 +241,18 @@ describe("web push delivery", () => {
 
 
 describe("recipient-bound native payload", () => {
+  it("versions staff content so old workers cannot display it without permission checks", () => {
+    const notification = { title: "Private", body: "অর্ডার 🛍️".repeat(1_000), url: "/admin/orders/1" };
+    const recipient = { audience: "staff" as const, id: "usr_1" };
+    const payload = webPushPayload(notification, recipient, "orders.view");
+    const decoded = JSON.parse(payload);
+    expect(decoded).toMatchObject({ v: 2, recipient, requires: "orders.view", content: { title: "Private", url: notification.url } });
+    for (const field of ["notification", "title", "body", "url"]) expect(decoded).not.toHaveProperty(field);
+    expect(new TextEncoder().encode(payload).length).toBeLessThanOrEqual(MAX_WEB_PUSH_PLAINTEXT);
+    expect(notification.body.startsWith(decoded.content.body)).toBe(true);
+    expect(() => webPushPayload(notification, recipient)).toThrow("permission policy");
+  });
+
   it("keeps private text below the envelope so legacy workers show only their neutral fallback", () => {
     const notification = { title: "Private buyer", body: "Order 1042", url: "/account/orders/ord_1", tag: "order:1" };
     const recipient = { audience: "customer" as const, id: "cust_1" };
@@ -312,7 +326,8 @@ it.each(["staff", "customer"] as const)("binds encrypted %s delivery to its actu
   const target = audience === "staff" ? { audience, requiredPermission: "orders.view" as const } : { audience, customerIds: ["cust_1"] };
   expect((await sendWebPushNotification(db, sender, target, notification)).sent).toBe(1);
   const decoded = JSON.parse(new TextDecoder().decode(await decrypt(captured[0]!, input.pair, input.keys.auth)));
-  expect(decoded).toEqual({ recipient: { audience, id: audience === "staff" ? "usr_1" : "cust_1" }, notification });
+  expect(decoded).toEqual({ recipient: { audience, id: audience === "staff" ? "usr_1" : "cust_1" },
+    ...(audience === "staff" ? { v: 2, requires: "orders.view", content: notification } : { notification }) });
   expect(decoded).not.toHaveProperty("title");
   expect(decoded).not.toHaveProperty("body");
 });
@@ -326,4 +341,15 @@ it("does not send or delete a device when owner metadata is missing", async () =
   expect(await deliverWebPush(db, sender, unowned, webPushPayload({ title: "Private", body: "" }))).toBe("retry");
   expect(calls).toHaveLength(0);
   expect(await hasPushSubscription(db, { audience: "staff", userId: "usr_1" }, input.endpoint)).toBe(true);
+});
+
+it("rejects staff delivery without a policy before network or device-status mutations", async () => {
+  const input = await browser("https://fcm.googleapis.com/fcm/send/no-permission");
+  const owner = { audience: "staff" as const, userId: "usr_1" };
+  const { id } = await savePushSubscription(db, owner, input);
+  const { sender, calls } = recordingSender((await webPushSender(ENV))!, {});
+  const before = await listStaffPushDevices(db, "usr_1");
+  await expect(deliverWebPush(db, sender, { id, userId: "usr_1", customerId: null, endpoint: input.endpoint, ...input.keys }, webPushPayload({ title: "Private", body: "" }))).rejects.toThrow("permission policy");
+  expect(calls).toHaveLength(0);
+  expect(await listStaffPushDevices(db, "usr_1")).toEqual(before);
 });

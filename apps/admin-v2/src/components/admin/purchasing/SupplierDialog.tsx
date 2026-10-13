@@ -1,3 +1,4 @@
+import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { useState } from "react";
 import { toast } from "~/lib/toast";
 import { Button } from "~/components/ui/button";
@@ -62,6 +63,9 @@ export function SupplierDialog({
   const [problem, setProblem] = useState<PurchasingProblem | null>(null);
   const set = (key: keyof SupplierFields) => (value: string) => setFields((current) => ({ ...current, [key]: value }));
 
+  const key = open && supplier ? presenceKey("supplier", supplier.id) : null;
+  const dirty = JSON.stringify(fields) !== JSON.stringify(fieldsOf(supplier));
+
   const errors = {
     name: touched && !fields.name.trim() ? t("nameRequired") : null,
     email: touched && fields.email.trim() && !EMAIL.test(fields.email.trim()) ? t("emailInvalid") : null,
@@ -97,9 +101,9 @@ export function SupplierDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!save.isPending) onOpenChange(next); }}>
-      <DialogContent>
+      <DialogContent data-presence-root={key ?? undefined}>
         <DialogHeader>
-          <DialogTitle>{t(supplier ? "editSupplier" : "addSupplier")}</DialogTitle>
+          <div className="flex flex-wrap items-center gap-2"><DialogTitle className="min-w-0 flex-1">{t(supplier ? "editSupplier" : "addSupplier")}</DialogTitle><PresenceSlot presenceKey={key} revision={supplier?.version} dirty={dirty} /></div>
           {supplier ? <DialogDescription>{supplier.name}</DialogDescription> : null}
         </DialogHeader>
         <form

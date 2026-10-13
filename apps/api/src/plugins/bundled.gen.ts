@@ -17,12 +17,12 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   },
   "scalius.nagad": {
     version: "0.1.2",
-    sha256: "b4bef5f7f6dfc8119a4e964691b5dcf02849595fa8c551c2e778e608d2accea0",
+    sha256: "d05c3db6fe9f8a78c7236605317dc287e207a964dc9472fdc5797472ae52ec3c",
     load: () => import("../../../../plugins/nagad/src/index"),
   },
   "scalius.noor": {
     version: "1.1.0",
-    sha256: "7bbdae22f7df92307cb429bbe3eebe0f42561c2411650de49ee37d7aef0e777b",
+    sha256: "d13ac54d36a6ca45e55d45a09bbbe1909b55205c83f7d5996ad9dae9a58f4f93",
     load: () => import("../../../../plugins/noor/src/index"),
   },
 };

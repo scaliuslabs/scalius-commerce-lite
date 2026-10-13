@@ -1925,7 +1925,7 @@ export type CustomerSegmentDefinition = {
         tags: Array<string>;
     } | {
         field: 'marketing_consent';
-        channel: 'email' | 'sms' | 'whatsapp';
+        channel: 'email' | 'sms' | 'whatsapp' | 'push';
         status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
     } | {
         field: 'customer_type';
@@ -2797,6 +2797,9 @@ export type AppTranslations = {
             [key: string]: {
                 label?: string;
                 help?: string;
+                options?: {
+                    [key: string]: string;
+                };
             };
         };
     };
@@ -10748,6 +10751,19 @@ export type PostApiV1CustomerAuthConversationsResponses = {
                 lastSeq: number;
                 readSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -10767,6 +10783,30 @@ export type PostApiV1CustomerAuthConversationsResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
+                cartShare?: {
+                    lines: Array<{
+                        productId: string;
+                        skuId: string;
+                        quantity: number;
+                    }>;
+                    sharedAt: number;
+                    withdrawnAt: number | null;
+                    version: number;
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
+                } | null;
             };
         };
     };
@@ -10831,6 +10871,7 @@ export type GetApiV1CustomerAuthConversationsByIdData = {
     };
     query?: {
         beforeSeq?: number;
+        afterSeq?: number | null;
     };
     url: '/api/v1/customer-auth/conversations/{id}';
 };
@@ -10883,6 +10924,19 @@ export type GetApiV1CustomerAuthConversationsByIdResponses = {
                 lastSeq: number;
                 readSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -10902,6 +10956,30 @@ export type GetApiV1CustomerAuthConversationsByIdResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
+                cartShare?: {
+                    lines: Array<{
+                        productId: string;
+                        skuId: string;
+                        quantity: number;
+                    }>;
+                    sharedAt: number;
+                    withdrawnAt: number | null;
+                    version: number;
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
+                } | null;
             };
         };
     };
@@ -10978,6 +11056,19 @@ export type PostApiV1CustomerAuthConversationsByIdMessagesResponses = {
                 lastSeq: number;
                 readSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -10997,6 +11088,30 @@ export type PostApiV1CustomerAuthConversationsByIdMessagesResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
+                cartShare?: {
+                    lines: Array<{
+                        productId: string;
+                        skuId: string;
+                        quantity: number;
+                    }>;
+                    sharedAt: number;
+                    withdrawnAt: number | null;
+                    version: number;
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
+                } | null;
             };
         };
     };
@@ -11065,6 +11180,7 @@ export type GetApiV1CustomerAuthOrdersByIdConversationData = {
     };
     query?: {
         beforeSeq?: number;
+        afterSeq?: number | null;
     };
     url: '/api/v1/customer-auth/orders/{id}/conversation';
 };
@@ -11117,6 +11233,19 @@ export type GetApiV1CustomerAuthOrdersByIdConversationResponses = {
                 lastSeq: number;
                 readSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -11136,6 +11265,30 @@ export type GetApiV1CustomerAuthOrdersByIdConversationResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
+                cartShare?: {
+                    lines: Array<{
+                        productId: string;
+                        skuId: string;
+                        quantity: number;
+                    }>;
+                    sharedAt: number;
+                    withdrawnAt: number | null;
+                    version: number;
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
+                } | null;
             } | null;
         };
     };
@@ -11212,6 +11365,19 @@ export type PostApiV1CustomerAuthOrdersByIdConversationResponses = {
                 lastSeq: number;
                 readSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -11231,12 +11397,90 @@ export type PostApiV1CustomerAuthOrdersByIdConversationResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
+                cartShare?: {
+                    lines: Array<{
+                        productId: string;
+                        skuId: string;
+                        quantity: number;
+                    }>;
+                    sharedAt: number;
+                    withdrawnAt: number | null;
+                    version: number;
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
+                } | null;
             };
         };
     };
 };
 
 export type PostApiV1CustomerAuthOrdersByIdConversationResponse = PostApiV1CustomerAuthOrdersByIdConversationResponses[keyof PostApiV1CustomerAuthOrdersByIdConversationResponses];
+
+export type PostApiV1CustomerAuthOrdersByIdConversationReadData = {
+    body: {
+        seq: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/orders/{id}/conversation/read';
+};
+
+export type PostApiV1CustomerAuthOrdersByIdConversationReadErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1CustomerAuthOrdersByIdConversationReadError = PostApiV1CustomerAuthOrdersByIdConversationReadErrors[keyof PostApiV1CustomerAuthOrdersByIdConversationReadErrors];
+
+export type PostApiV1CustomerAuthOrdersByIdConversationReadResponses = {
+    /**
+     * Read marker
+     */
+    200: {
+        success: true;
+        data: {
+            readSeq: number;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthOrdersByIdConversationReadResponse = PostApiV1CustomerAuthOrdersByIdConversationReadResponses[keyof PostApiV1CustomerAuthOrdersByIdConversationReadResponses];
 
 export type PostApiV1CustomerAuthConversationAttachmentsData = {
     body: {
@@ -11352,6 +11596,500 @@ export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdRespon
 };
 
 export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponse = GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponses[keyof GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponses];
+
+export type DeleteApiV1CustomerAuthConversationsByIdCartShareData = {
+    body: {
+        expectedVersion: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/conversations/{id}/cart-share';
+};
+
+export type DeleteApiV1CustomerAuthConversationsByIdCartShareErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type DeleteApiV1CustomerAuthConversationsByIdCartShareError = DeleteApiV1CustomerAuthConversationsByIdCartShareErrors[keyof DeleteApiV1CustomerAuthConversationsByIdCartShareErrors];
+
+export type DeleteApiV1CustomerAuthConversationsByIdCartShareResponses = {
+    /**
+     * The withdrawn cart
+     */
+    200: {
+        success: true;
+        data: {
+            cartShare: {
+                lines: Array<{
+                    productId: string;
+                    skuId: string;
+                    quantity: number;
+                }>;
+                sharedAt: number;
+                withdrawnAt: number | null;
+                version: number;
+                products?: Array<{
+                    productId: string;
+                    skuId: string;
+                    title: string;
+                    variantLabel: string | null;
+                    status: 'available' | 'sold_out' | 'unavailable';
+                    price: {
+                        amount: number;
+                        currency: string;
+                    } | null;
+                    imageUrl: string | null;
+                    pdpUrl: string | null;
+                }>;
+            };
+        };
+    };
+};
+
+export type DeleteApiV1CustomerAuthConversationsByIdCartShareResponse = DeleteApiV1CustomerAuthConversationsByIdCartShareResponses[keyof DeleteApiV1CustomerAuthConversationsByIdCartShareResponses];
+
+export type GetApiV1CustomerAuthConversationsByIdCartShareData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/conversations/{id}/cart-share';
+};
+
+export type GetApiV1CustomerAuthConversationsByIdCartShareErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1CustomerAuthConversationsByIdCartShareError = GetApiV1CustomerAuthConversationsByIdCartShareErrors[keyof GetApiV1CustomerAuthConversationsByIdCartShareErrors];
+
+export type GetApiV1CustomerAuthConversationsByIdCartShareResponses = {
+    /**
+     * Shared cart or null
+     */
+    200: {
+        success: true;
+        data: {
+            cartShare: {
+                lines: Array<{
+                    productId: string;
+                    skuId: string;
+                    quantity: number;
+                }>;
+                sharedAt: number;
+                withdrawnAt: number | null;
+                version: number;
+                products?: Array<{
+                    productId: string;
+                    skuId: string;
+                    title: string;
+                    variantLabel: string | null;
+                    status: 'available' | 'sold_out' | 'unavailable';
+                    price: {
+                        amount: number;
+                        currency: string;
+                    } | null;
+                    imageUrl: string | null;
+                    pdpUrl: string | null;
+                }>;
+            } | null;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthConversationsByIdCartShareResponse = GetApiV1CustomerAuthConversationsByIdCartShareResponses[keyof GetApiV1CustomerAuthConversationsByIdCartShareResponses];
+
+export type PutApiV1CustomerAuthConversationsByIdCartShareData = {
+    body: {
+        lines: Array<{
+            productId: string;
+            skuId: string;
+            quantity: number;
+        }>;
+        expectedVersion: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/conversations/{id}/cart-share';
+};
+
+export type PutApiV1CustomerAuthConversationsByIdCartShareErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PutApiV1CustomerAuthConversationsByIdCartShareError = PutApiV1CustomerAuthConversationsByIdCartShareErrors[keyof PutApiV1CustomerAuthConversationsByIdCartShareErrors];
+
+export type PutApiV1CustomerAuthConversationsByIdCartShareResponses = {
+    /**
+     * The shared cart
+     */
+    200: {
+        success: true;
+        data: {
+            cartShare: {
+                lines: Array<{
+                    productId: string;
+                    skuId: string;
+                    quantity: number;
+                }>;
+                sharedAt: number;
+                withdrawnAt: number | null;
+                version: number;
+                products?: Array<{
+                    productId: string;
+                    skuId: string;
+                    title: string;
+                    variantLabel: string | null;
+                    status: 'available' | 'sold_out' | 'unavailable';
+                    price: {
+                        amount: number;
+                        currency: string;
+                    } | null;
+                    imageUrl: string | null;
+                    pdpUrl: string | null;
+                }>;
+            };
+        };
+    };
+};
+
+export type PutApiV1CustomerAuthConversationsByIdCartShareResponse = PutApiV1CustomerAuthConversationsByIdCartShareResponses[keyof PutApiV1CustomerAuthConversationsByIdCartShareResponses];
+
+export type DeleteApiV1CustomerAuthOrdersByIdConversationCartShareData = {
+    body: {
+        expectedVersion: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/orders/{id}/conversation/cart-share';
+};
+
+export type DeleteApiV1CustomerAuthOrdersByIdConversationCartShareErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type DeleteApiV1CustomerAuthOrdersByIdConversationCartShareError = DeleteApiV1CustomerAuthOrdersByIdConversationCartShareErrors[keyof DeleteApiV1CustomerAuthOrdersByIdConversationCartShareErrors];
+
+export type DeleteApiV1CustomerAuthOrdersByIdConversationCartShareResponses = {
+    /**
+     * The withdrawn cart
+     */
+    200: {
+        success: true;
+        data: {
+            cartShare: {
+                lines: Array<{
+                    productId: string;
+                    skuId: string;
+                    quantity: number;
+                }>;
+                sharedAt: number;
+                withdrawnAt: number | null;
+                version: number;
+                products?: Array<{
+                    productId: string;
+                    skuId: string;
+                    title: string;
+                    variantLabel: string | null;
+                    status: 'available' | 'sold_out' | 'unavailable';
+                    price: {
+                        amount: number;
+                        currency: string;
+                    } | null;
+                    imageUrl: string | null;
+                    pdpUrl: string | null;
+                }>;
+            };
+        };
+    };
+};
+
+export type DeleteApiV1CustomerAuthOrdersByIdConversationCartShareResponse = DeleteApiV1CustomerAuthOrdersByIdConversationCartShareResponses[keyof DeleteApiV1CustomerAuthOrdersByIdConversationCartShareResponses];
+
+export type GetApiV1CustomerAuthOrdersByIdConversationCartShareData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/orders/{id}/conversation/cart-share';
+};
+
+export type GetApiV1CustomerAuthOrdersByIdConversationCartShareErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1CustomerAuthOrdersByIdConversationCartShareError = GetApiV1CustomerAuthOrdersByIdConversationCartShareErrors[keyof GetApiV1CustomerAuthOrdersByIdConversationCartShareErrors];
+
+export type GetApiV1CustomerAuthOrdersByIdConversationCartShareResponses = {
+    /**
+     * Shared cart or null
+     */
+    200: {
+        success: true;
+        data: {
+            cartShare: {
+                lines: Array<{
+                    productId: string;
+                    skuId: string;
+                    quantity: number;
+                }>;
+                sharedAt: number;
+                withdrawnAt: number | null;
+                version: number;
+                products?: Array<{
+                    productId: string;
+                    skuId: string;
+                    title: string;
+                    variantLabel: string | null;
+                    status: 'available' | 'sold_out' | 'unavailable';
+                    price: {
+                        amount: number;
+                        currency: string;
+                    } | null;
+                    imageUrl: string | null;
+                    pdpUrl: string | null;
+                }>;
+            } | null;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthOrdersByIdConversationCartShareResponse = GetApiV1CustomerAuthOrdersByIdConversationCartShareResponses[keyof GetApiV1CustomerAuthOrdersByIdConversationCartShareResponses];
+
+export type PutApiV1CustomerAuthOrdersByIdConversationCartShareData = {
+    body: {
+        lines: Array<{
+            productId: string;
+            skuId: string;
+            quantity: number;
+        }>;
+        expectedVersion: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/orders/{id}/conversation/cart-share';
+};
+
+export type PutApiV1CustomerAuthOrdersByIdConversationCartShareErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PutApiV1CustomerAuthOrdersByIdConversationCartShareError = PutApiV1CustomerAuthOrdersByIdConversationCartShareErrors[keyof PutApiV1CustomerAuthOrdersByIdConversationCartShareErrors];
+
+export type PutApiV1CustomerAuthOrdersByIdConversationCartShareResponses = {
+    /**
+     * The shared cart
+     */
+    200: {
+        success: true;
+        data: {
+            cartShare: {
+                lines: Array<{
+                    productId: string;
+                    skuId: string;
+                    quantity: number;
+                }>;
+                sharedAt: number;
+                withdrawnAt: number | null;
+                version: number;
+                products?: Array<{
+                    productId: string;
+                    skuId: string;
+                    title: string;
+                    variantLabel: string | null;
+                    status: 'available' | 'sold_out' | 'unavailable';
+                    price: {
+                        amount: number;
+                        currency: string;
+                    } | null;
+                    imageUrl: string | null;
+                    pdpUrl: string | null;
+                }>;
+            };
+        };
+    };
+};
+
+export type PutApiV1CustomerAuthOrdersByIdConversationCartShareResponse = PutApiV1CustomerAuthOrdersByIdConversationCartShareResponses[keyof PutApiV1CustomerAuthOrdersByIdConversationCartShareResponses];
 
 export type GetApiV1CustomerAuthAccountSummaryData = {
     body?: never;
@@ -12181,7 +12919,7 @@ export type GetApiV1CustomerAuthMarketingResponses = {
         success: true;
         data: {
             channels: Array<{
-                channel: 'email' | 'sms' | 'whatsapp';
+                channel: 'email' | 'sms' | 'whatsapp' | 'push';
                 status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
                 available: boolean;
             }>;
@@ -12196,6 +12934,7 @@ export type PutApiV1CustomerAuthMarketingData = {
         email?: boolean;
         sms?: boolean;
         whatsapp?: boolean;
+        push?: boolean;
         language?: string;
     };
     path?: never;
@@ -12240,7 +12979,7 @@ export type PutApiV1CustomerAuthMarketingResponses = {
         success: true;
         data: {
             channels: Array<{
-                channel: 'email' | 'sms' | 'whatsapp';
+                channel: 'email' | 'sms' | 'whatsapp' | 'push';
                 status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
                 available: boolean;
             }>;
@@ -13128,7 +13867,7 @@ export type PostApiV1MarketingSubscribeData = {
     body: {
         phone: string;
         email?: string;
-        whatsapp?: boolean;
+        channels: Array<'email' | 'sms' | 'whatsapp'>;
         language?: string;
         consentText?: string;
     };
@@ -13278,7 +14017,7 @@ export type PostApiV1MarketingUnsubscribePreviewResponses = {
         success: true;
         data: {
             valid: boolean;
-            channel: 'email' | 'sms' | 'whatsapp' | null;
+            channel: 'email' | 'sms' | 'whatsapp' | 'push' | null;
             status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed' | null;
             contactMasked: string | null;
         };
@@ -13333,7 +14072,7 @@ export type PostApiV1MarketingUnsubscribeResponses = {
         success: true;
         data: {
             status: 'unsubscribed' | 'invalid';
-            channel: 'email' | 'sms' | 'whatsapp' | null;
+            channel: 'email' | 'sms' | 'whatsapp' | 'push' | null;
         };
     };
 };
@@ -17590,6 +18329,7 @@ export type PostApiV1OrdersData = {
         }>;
         marketingConsent?: {
             language: string | null;
+            channels: Array<'email' | 'sms' | 'whatsapp'>;
         } | null;
         /**
          * The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.
@@ -17692,6 +18432,7 @@ export type GetApiV1OrdersReceiptByIdConversationData = {
     };
     query?: {
         beforeSeq?: number;
+        afterSeq?: number | null;
     };
     url: '/api/v1/orders/receipt/{id}/conversation';
 };
@@ -17744,6 +18485,19 @@ export type GetApiV1OrdersReceiptByIdConversationResponses = {
                 lastSeq: number;
                 readSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -17763,6 +18517,30 @@ export type GetApiV1OrdersReceiptByIdConversationResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
+                cartShare?: {
+                    lines: Array<{
+                        productId: string;
+                        skuId: string;
+                        quantity: number;
+                    }>;
+                    sharedAt: number;
+                    withdrawnAt: number | null;
+                    version: number;
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
+                } | null;
             } | null;
         };
     };
@@ -17839,6 +18617,19 @@ export type PostApiV1OrdersReceiptByIdConversationResponses = {
                 lastSeq: number;
                 readSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -17858,6 +18649,30 @@ export type PostApiV1OrdersReceiptByIdConversationResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
+                cartShare?: {
+                    lines: Array<{
+                        productId: string;
+                        skuId: string;
+                        quantity: number;
+                    }>;
+                    sharedAt: number;
+                    withdrawnAt: number | null;
+                    version: number;
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
+                } | null;
             } | null;
         };
     };
@@ -18041,6 +18856,262 @@ export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdRespon
 };
 
 export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponse = GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses[keyof GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses];
+
+export type DeleteApiV1OrdersReceiptByIdConversationCartShareData = {
+    body: {
+        expectedVersion: number;
+    };
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/conversation/cart-share';
+};
+
+export type DeleteApiV1OrdersReceiptByIdConversationCartShareErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type DeleteApiV1OrdersReceiptByIdConversationCartShareError = DeleteApiV1OrdersReceiptByIdConversationCartShareErrors[keyof DeleteApiV1OrdersReceiptByIdConversationCartShareErrors];
+
+export type DeleteApiV1OrdersReceiptByIdConversationCartShareResponses = {
+    /**
+     * Shared cart
+     */
+    200: {
+        success: true;
+        data: {
+            cartShare: {
+                lines: Array<{
+                    productId: string;
+                    skuId: string;
+                    quantity: number;
+                }>;
+                sharedAt: number;
+                withdrawnAt: number | null;
+                version: number;
+                products?: Array<{
+                    productId: string;
+                    skuId: string;
+                    title: string;
+                    variantLabel: string | null;
+                    status: 'available' | 'sold_out' | 'unavailable';
+                    price: {
+                        amount: number;
+                        currency: string;
+                    } | null;
+                    imageUrl: string | null;
+                    pdpUrl: string | null;
+                }>;
+            };
+        };
+    };
+};
+
+export type DeleteApiV1OrdersReceiptByIdConversationCartShareResponse = DeleteApiV1OrdersReceiptByIdConversationCartShareResponses[keyof DeleteApiV1OrdersReceiptByIdConversationCartShareResponses];
+
+export type GetApiV1OrdersReceiptByIdConversationCartShareData = {
+    body?: never;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/conversation/cart-share';
+};
+
+export type GetApiV1OrdersReceiptByIdConversationCartShareErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1OrdersReceiptByIdConversationCartShareError = GetApiV1OrdersReceiptByIdConversationCartShareErrors[keyof GetApiV1OrdersReceiptByIdConversationCartShareErrors];
+
+export type GetApiV1OrdersReceiptByIdConversationCartShareResponses = {
+    /**
+     * Shared cart
+     */
+    200: {
+        success: true;
+        data: {
+            cartShare: {
+                lines: Array<{
+                    productId: string;
+                    skuId: string;
+                    quantity: number;
+                }>;
+                sharedAt: number;
+                withdrawnAt: number | null;
+                version: number;
+                products?: Array<{
+                    productId: string;
+                    skuId: string;
+                    title: string;
+                    variantLabel: string | null;
+                    status: 'available' | 'sold_out' | 'unavailable';
+                    price: {
+                        amount: number;
+                        currency: string;
+                    } | null;
+                    imageUrl: string | null;
+                    pdpUrl: string | null;
+                }>;
+            } | null;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdConversationCartShareResponse = GetApiV1OrdersReceiptByIdConversationCartShareResponses[keyof GetApiV1OrdersReceiptByIdConversationCartShareResponses];
+
+export type PutApiV1OrdersReceiptByIdConversationCartShareData = {
+    body: {
+        lines: Array<{
+            productId: string;
+            skuId: string;
+            quantity: number;
+        }>;
+        expectedVersion: number;
+    };
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/conversation/cart-share';
+};
+
+export type PutApiV1OrdersReceiptByIdConversationCartShareErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PutApiV1OrdersReceiptByIdConversationCartShareError = PutApiV1OrdersReceiptByIdConversationCartShareErrors[keyof PutApiV1OrdersReceiptByIdConversationCartShareErrors];
+
+export type PutApiV1OrdersReceiptByIdConversationCartShareResponses = {
+    /**
+     * Shared cart
+     */
+    200: {
+        success: true;
+        data: {
+            cartShare: {
+                lines: Array<{
+                    productId: string;
+                    skuId: string;
+                    quantity: number;
+                }>;
+                sharedAt: number;
+                withdrawnAt: number | null;
+                version: number;
+                products?: Array<{
+                    productId: string;
+                    skuId: string;
+                    title: string;
+                    variantLabel: string | null;
+                    status: 'available' | 'sold_out' | 'unavailable';
+                    price: {
+                        amount: number;
+                        currency: string;
+                    } | null;
+                    imageUrl: string | null;
+                    pdpUrl: string | null;
+                }>;
+            };
+        };
+    };
+};
+
+export type PutApiV1OrdersReceiptByIdConversationCartShareResponse = PutApiV1OrdersReceiptByIdConversationCartShareResponses[keyof PutApiV1OrdersReceiptByIdConversationCartShareResponses];
 
 export type GetApiV1OrdersReceiptByIdReviewsData = {
     body?: never;
@@ -18594,6 +19665,7 @@ export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdData = {
     };
     query?: {
         beforeSeq?: number;
+        afterSeq?: number | null;
     };
     url: '/api/v1/orders/receipt/{id}/warranty-claims/{claimId}';
 };
@@ -18647,6 +19719,19 @@ export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdResponses = {
                 lastSeq: number;
                 readSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -18666,6 +19751,30 @@ export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
+                cartShare?: {
+                    lines: Array<{
+                        productId: string;
+                        skuId: string;
+                        quantity: number;
+                    }>;
+                    sharedAt: number;
+                    withdrawnAt: number | null;
+                    version: number;
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
+                } | null;
             };
         };
     };
@@ -18747,6 +19856,19 @@ export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesResponses =
                 lastSeq: number;
                 readSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -18766,6 +19888,30 @@ export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesResponses =
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
+                cartShare?: {
+                    lines: Array<{
+                        productId: string;
+                        skuId: string;
+                        quantity: number;
+                    }>;
+                    sharedAt: number;
+                    withdrawnAt: number | null;
+                    version: number;
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
+                } | null;
             };
         };
     };
@@ -22987,7 +24133,7 @@ export type PostApiV1AdminCustomersTagsBulkData = {
                 /**
                  * Customers subscribed on this channel now (any: on at least one)
                  */
-                subscribed?: 'email' | 'sms' | 'whatsapp' | 'any';
+                subscribed?: 'email' | 'sms' | 'whatsapp' | 'push' | 'any';
                 /**
                  * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
                  */
@@ -23134,7 +24280,7 @@ export type GetApiV1AdminCustomersExportData = {
         /**
          * Customers subscribed on this channel now (any: on at least one)
          */
-        subscribed?: 'email' | 'sms' | 'whatsapp' | 'any';
+        subscribed?: 'email' | 'sms' | 'whatsapp' | 'push' | 'any';
         /**
          * Comma-separated customer ids (at most 100)
          */
@@ -23685,7 +24831,7 @@ export type GetApiV1AdminCustomersByIdMarketingResponses = {
         success: true;
         data: {
             consents: Array<{
-                channel: 'email' | 'sms' | 'whatsapp';
+                channel: 'email' | 'sms' | 'whatsapp' | 'push';
                 status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
                 state: 'subscribed' | 'unsubscribed' | 'pending' | null;
                 contact: string | null;
@@ -23699,7 +24845,7 @@ export type GetApiV1AdminCustomersByIdMarketingResponses = {
             }>;
             events: Array<{
                 id: string;
-                channel: 'email' | 'sms' | 'whatsapp';
+                channel: 'email' | 'sms' | 'whatsapp' | 'push';
                 previousState: 'subscribed' | 'unsubscribed' | 'pending' | null;
                 state: 'subscribed' | 'unsubscribed' | 'pending';
                 source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link';
@@ -23720,7 +24866,7 @@ export type GetApiV1AdminCustomersByIdMarketingResponse = GetApiV1AdminCustomers
 
 export type PutApiV1AdminCustomersByIdMarketingData = {
     body: {
-        channel: 'email' | 'sms' | 'whatsapp';
+        channel: 'email' | 'sms' | 'whatsapp' | 'push';
         state: 'subscribed' | 'unsubscribed';
         note?: string | null;
     };
@@ -23768,7 +24914,7 @@ export type PutApiV1AdminCustomersByIdMarketingResponses = {
         success: true;
         data: {
             consents: Array<{
-                channel: 'email' | 'sms' | 'whatsapp';
+                channel: 'email' | 'sms' | 'whatsapp' | 'push';
                 status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
                 state: 'subscribed' | 'unsubscribed' | 'pending' | null;
                 contact: string | null;
@@ -23782,7 +24928,7 @@ export type PutApiV1AdminCustomersByIdMarketingResponses = {
             }>;
             events: Array<{
                 id: string;
-                channel: 'email' | 'sms' | 'whatsapp';
+                channel: 'email' | 'sms' | 'whatsapp' | 'push';
                 previousState: 'subscribed' | 'unsubscribed' | 'pending' | null;
                 state: 'subscribed' | 'unsubscribed' | 'pending';
                 source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link';
@@ -23848,7 +24994,7 @@ export type GetApiV1AdminCustomersData = {
         /**
          * Customers subscribed on this channel now (any: on at least one)
          */
-        subscribed?: 'email' | 'sms' | 'whatsapp' | 'any';
+        subscribed?: 'email' | 'sms' | 'whatsapp' | 'push' | 'any';
         /**
          * Comma-separated app columns to add (<app id>/<column id>, at most 5); the active apps' declared columns are in GET /api/v1/admin/apps/surfaces. Their values come back in appValues.
          */
@@ -24065,7 +25211,7 @@ export type PostApiV1AdminCustomersBulkDeleteData = {
                 /**
                  * Customers subscribed on this channel now (any: on at least one)
                  */
-                subscribed?: 'email' | 'sms' | 'whatsapp' | 'any';
+                subscribed?: 'email' | 'sms' | 'whatsapp' | 'push' | 'any';
                 /**
                  * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
                  */
@@ -24159,7 +25305,7 @@ export type PostApiV1AdminCustomersBulkRestoreData = {
                 /**
                  * Customers subscribed on this channel now (any: on at least one)
                  */
-                subscribed?: 'email' | 'sms' | 'whatsapp' | 'any';
+                subscribed?: 'email' | 'sms' | 'whatsapp' | 'push' | 'any';
                 /**
                  * Filter by an app column the app marks filterable: <app id>/<column id>:<value>, an exact match (up to 3). A money value is in major units of the store currency.
                  */
@@ -24325,7 +25471,7 @@ export type GetApiV1AdminCustomersByIdResponses = {
             } | null;
             tags: Array<string>;
             marketing: Array<{
-                channel: 'email' | 'sms' | 'whatsapp';
+                channel: 'email' | 'sms' | 'whatsapp' | 'push';
                 status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
                 updatedAt: string | null;
             }>;
@@ -27330,6 +28476,85 @@ export type PostApiV1AdminMediaUploadsReconcileResponses = {
 };
 
 export type PostApiV1AdminMediaUploadsReconcileResponse = PostApiV1AdminMediaUploadsReconcileResponses[keyof PostApiV1AdminMediaUploadsReconcileResponses];
+
+export type GetApiV1AdminMediaByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/{id}';
+};
+
+export type GetApiV1AdminMediaByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminMediaByIdError = GetApiV1AdminMediaByIdErrors[keyof GetApiV1AdminMediaByIdErrors];
+
+export type GetApiV1AdminMediaByIdResponses = {
+    /**
+     * Current file
+     */
+    200: {
+        success: true;
+        data: {
+            file: {
+                id: string;
+                filename: string;
+                url: string;
+                kind: 'image' | 'video';
+                objectKey: string;
+                size: number;
+                mimeType: string;
+                altText?: string | null;
+                caption?: string | null;
+                width?: number | null;
+                height?: number | null;
+                variantWidth?: number | null;
+                durationMs?: number | null;
+                posterMediaId?: string | null;
+                posterUrl: string | null;
+                folderId: string | null;
+                status: 'ready' | 'trashed' | 'deleting' | 'deleted';
+                version: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+                trashedAt: NullableTimestamp;
+                deletedAt: NullableTimestamp;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminMediaByIdResponse = GetApiV1AdminMediaByIdResponses[keyof GetApiV1AdminMediaByIdResponses];
 
 export type PatchApiV1AdminMediaByIdData = {
     body: {
@@ -48066,10 +49291,6 @@ export type GetApiV1AdminConversationsData = {
          * What the conversation is about: an order, a store question, a review or a warranty claim
          */
         subjectType?: 'order' | 'store' | 'warranty_claim' | 'review';
-        /**
-         * Subject, customer name or order number
-         */
-        q?: string;
         cursor?: string;
     };
     url: '/api/v1/admin/conversations';
@@ -48123,9 +49344,11 @@ export type GetApiV1AdminConversationsResponses = {
                 customerName: string | null;
                 assigneeUserId: string | null;
                 assigneeName: string | null;
+                assigneeEligible: boolean;
                 lastMessageAt: number | null;
                 lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
                 preview: string | null;
+                lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
             }>;
@@ -48135,6 +49358,577 @@ export type GetApiV1AdminConversationsResponses = {
 };
 
 export type GetApiV1AdminConversationsResponse = GetApiV1AdminConversationsResponses[keyof GetApiV1AdminConversationsResponses];
+
+export type GetApiV1AdminConversationsSavedRepliesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        mode?: 'reply' | 'note';
+        /**
+         * Search saved reply titles only.
+         */
+        q?: string;
+        cursor?: string;
+    };
+    url: '/api/v1/admin/conversations/saved-replies';
+};
+
+export type GetApiV1AdminConversationsSavedRepliesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminConversationsSavedRepliesError = GetApiV1AdminConversationsSavedRepliesErrors[keyof GetApiV1AdminConversationsSavedRepliesErrors];
+
+export type GetApiV1AdminConversationsSavedRepliesResponses = {
+    /**
+     * Active saved replies, newest edits first
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                title: string;
+                body: string;
+                mode: 'reply' | 'note';
+                createdBy: string | null;
+                updatedBy: string | null;
+                archivedAt: number | null;
+                createdAt: number;
+                updatedAt: number;
+                version: number;
+            }>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsSavedRepliesResponse = GetApiV1AdminConversationsSavedRepliesResponses[keyof GetApiV1AdminConversationsSavedRepliesResponses];
+
+export type PostApiV1AdminConversationsSavedRepliesData = {
+    body: {
+        id: string;
+        /**
+         * A one-line title, 1–80 characters after normalization.
+         */
+        title: string;
+        /**
+         * Plain text, 1–5,000 characters after normalization.
+         */
+        body: string;
+        mode: 'reply' | 'note';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/conversations/saved-replies';
+};
+
+export type PostApiV1AdminConversationsSavedRepliesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminConversationsSavedRepliesError = PostApiV1AdminConversationsSavedRepliesErrors[keyof PostApiV1AdminConversationsSavedRepliesErrors];
+
+export type PostApiV1AdminConversationsSavedRepliesResponses = {
+    /**
+     * Saved reply, including its current version and archive state
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            title: string;
+            body: string;
+            mode: 'reply' | 'note';
+            createdBy: string | null;
+            updatedBy: string | null;
+            archivedAt: number | null;
+            createdAt: number;
+            updatedAt: number;
+            version: number;
+        };
+    };
+};
+
+export type PostApiV1AdminConversationsSavedRepliesResponse = PostApiV1AdminConversationsSavedRepliesResponses[keyof PostApiV1AdminConversationsSavedRepliesResponses];
+
+export type GetApiV1AdminConversationsSavedRepliesByReplyIdData = {
+    body?: never;
+    path: {
+        replyId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/conversations/saved-replies/{replyId}';
+};
+
+export type GetApiV1AdminConversationsSavedRepliesByReplyIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminConversationsSavedRepliesByReplyIdError = GetApiV1AdminConversationsSavedRepliesByReplyIdErrors[keyof GetApiV1AdminConversationsSavedRepliesByReplyIdErrors];
+
+export type GetApiV1AdminConversationsSavedRepliesByReplyIdResponses = {
+    /**
+     * Saved reply, including its current version and archive state
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            title: string;
+            body: string;
+            mode: 'reply' | 'note';
+            createdBy: string | null;
+            updatedBy: string | null;
+            archivedAt: number | null;
+            createdAt: number;
+            updatedAt: number;
+            version: number;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsSavedRepliesByReplyIdResponse = GetApiV1AdminConversationsSavedRepliesByReplyIdResponses[keyof GetApiV1AdminConversationsSavedRepliesByReplyIdResponses];
+
+export type PatchApiV1AdminConversationsSavedRepliesByReplyIdData = {
+    body: {
+        version: number;
+        /**
+         * A one-line title, 1–80 characters after normalization.
+         */
+        title?: string;
+        /**
+         * Plain text, 1–5,000 characters after normalization.
+         */
+        body?: string;
+        archived?: boolean;
+    };
+    path: {
+        replyId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/conversations/saved-replies/{replyId}';
+};
+
+export type PatchApiV1AdminConversationsSavedRepliesByReplyIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminConversationsSavedRepliesByReplyIdError = PatchApiV1AdminConversationsSavedRepliesByReplyIdErrors[keyof PatchApiV1AdminConversationsSavedRepliesByReplyIdErrors];
+
+export type PatchApiV1AdminConversationsSavedRepliesByReplyIdResponses = {
+    /**
+     * Saved reply, including its current version and archive state
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            title: string;
+            body: string;
+            mode: 'reply' | 'note';
+            createdBy: string | null;
+            updatedBy: string | null;
+            archivedAt: number | null;
+            createdAt: number;
+            updatedAt: number;
+            version: number;
+        };
+    };
+};
+
+export type PatchApiV1AdminConversationsSavedRepliesByReplyIdResponse = PatchApiV1AdminConversationsSavedRepliesByReplyIdResponses[keyof PatchApiV1AdminConversationsSavedRepliesByReplyIdResponses];
+
+export type PostApiV1AdminConversationsQueryData = {
+    body: {
+        status?: 'open' | 'pending' | 'closed' | 'all';
+        assignee?: string;
+        subjectType?: 'order' | 'store' | 'warranty_claim' | 'review';
+        q?: string;
+        cursor?: string | null;
+        unread?: boolean;
+        sort?: 'latest' | 'waiting_longest';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/conversations/query';
+};
+
+export type PostApiV1AdminConversationsQueryErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminConversationsQueryError = PostApiV1AdminConversationsQueryErrors[keyof PostApiV1AdminConversationsQueryErrors];
+
+export type PostApiV1AdminConversationsQueryResponses = {
+    /**
+     * Search window
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
+                subject: string | null;
+                status: 'open' | 'pending' | 'closed';
+                orderId: string | null;
+                orderNumber: string | null;
+                customerId: string | null;
+                customerName: string | null;
+                assigneeUserId: string | null;
+                assigneeName: string | null;
+                assigneeEligible: boolean;
+                lastMessageAt: number | null;
+                lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
+                preview: string | null;
+                lastMessageVisibility: 'public' | 'internal' | null;
+                unread: number;
+                version: number;
+            }>;
+            nextCursor: string | null;
+            scanExhausted: boolean;
+            scanned: number;
+            bodyCoverage: 'complete' | 'since_index';
+        };
+    };
+};
+
+export type PostApiV1AdminConversationsQueryResponse = PostApiV1AdminConversationsQueryResponses[keyof PostApiV1AdminConversationsQueryResponses];
+
+export type GetApiV1AdminConversationsAssigneesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        cursor?: string;
+    };
+    url: '/api/v1/admin/conversations/assignees';
+};
+
+export type GetApiV1AdminConversationsAssigneesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminConversationsAssigneesError = GetApiV1AdminConversationsAssigneesErrors[keyof GetApiV1AdminConversationsAssigneesErrors];
+
+export type GetApiV1AdminConversationsAssigneesResponses = {
+    /**
+     * Eligible teammates
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                name: string;
+            }>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsAssigneesResponse = GetApiV1AdminConversationsAssigneesResponses[keyof GetApiV1AdminConversationsAssigneesResponses];
+
+export type PostApiV1AdminConversationsByIdSearchData = {
+    body: {
+        q: string;
+        cursor?: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/conversations/{id}/search';
+};
+
+export type PostApiV1AdminConversationsByIdSearchErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminConversationsByIdSearchError = PostApiV1AdminConversationsByIdSearchErrors[keyof PostApiV1AdminConversationsByIdSearchErrors];
+
+export type PostApiV1AdminConversationsByIdSearchResponses = {
+    /**
+     * Message positions
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                seq: number;
+            }>;
+            nextCursor: number | null;
+            scanned: number;
+            scanExhausted: boolean;
+            bodyCoverage: 'complete' | 'since_index';
+        };
+    };
+};
+
+export type PostApiV1AdminConversationsByIdSearchResponse = PostApiV1AdminConversationsByIdSearchResponses[keyof PostApiV1AdminConversationsByIdSearchResponses];
+
+export type GetApiV1AdminConversationsByIdContextData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/conversations/{id}/context';
+};
+
+export type GetApiV1AdminConversationsByIdContextErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminConversationsByIdContextError = GetApiV1AdminConversationsByIdContextErrors[keyof GetApiV1AdminConversationsByIdContextErrors];
+
+export type GetApiV1AdminConversationsByIdContextResponses = {
+    /**
+     * Context
+     */
+    200: {
+        success: true;
+        data: {
+            customer: {
+                id: string;
+                name: string;
+                email: string | null;
+                phone: string | null;
+            } | null;
+            customerDenied: boolean;
+            ordersDenied: boolean;
+            cartShare: {
+                lines: Array<{
+                    productId: string;
+                    skuId: string;
+                    quantity: number;
+                }>;
+                sharedAt: number;
+                withdrawnAt: number | null;
+                version: number;
+                products?: Array<{
+                    productId: string;
+                    skuId: string;
+                    title: string;
+                    variantLabel: string | null;
+                    status: 'available' | 'sold_out' | 'unavailable';
+                    price: {
+                        amount: number;
+                        currency: string;
+                    } | null;
+                    imageUrl: string | null;
+                    pdpUrl: string | null;
+                }>;
+            } | null;
+            recentOrders: Array<{
+                id: string;
+                orderNumber: string;
+                status: string;
+                paymentStatus: string;
+                total: {
+                    amount: number;
+                    currency: string;
+                } | null;
+                createdAt: number;
+            }> | null;
+        };
+    };
+};
+
+export type GetApiV1AdminConversationsByIdContextResponse = GetApiV1AdminConversationsByIdContextResponses[keyof GetApiV1AdminConversationsByIdContextResponses];
 
 export type GetApiV1AdminConversationsSummaryData = {
     body?: never;
@@ -48263,6 +50057,7 @@ export type GetApiV1AdminConversationsOrderByOrderIdData = {
     };
     query?: {
         beforeSeq?: number;
+        aroundSeq?: number;
     };
     url: '/api/v1/admin/conversations/order/{orderId}';
 };
@@ -48315,15 +50110,30 @@ export type GetApiV1AdminConversationsOrderByOrderIdResponses = {
                 customerName: string | null;
                 assigneeUserId: string | null;
                 assigneeName: string | null;
+                assigneeEligible: boolean;
                 lastMessageAt: number | null;
                 lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
                 preview: string | null;
+                lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
                 lastSeq: number;
                 staffReadSeq: number;
                 customerReadSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -48346,6 +50156,7 @@ export type GetApiV1AdminConversationsOrderByOrderIdResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
                 order: {
                     id: string;
                     orderNumber: string | null;
@@ -48372,7 +50183,11 @@ export type GetApiV1AdminConversationsOrderByOrderIdResponse = GetApiV1AdminConv
 
 export type PostApiV1AdminConversationsOrderByOrderIdMessagesData = {
     body: {
-        body: string;
+        body?: string;
+        products?: Array<{
+            productId: string;
+            skuId: string;
+        }>;
         visibility: 'public' | 'internal';
         requestKey: string;
         attachmentIds?: Array<string>;
@@ -48436,15 +50251,30 @@ export type PostApiV1AdminConversationsOrderByOrderIdMessagesResponses = {
                 customerName: string | null;
                 assigneeUserId: string | null;
                 assigneeName: string | null;
+                assigneeEligible: boolean;
                 lastMessageAt: number | null;
                 lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
                 preview: string | null;
+                lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
                 lastSeq: number;
                 staffReadSeq: number;
                 customerReadSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -48467,6 +50297,7 @@ export type PostApiV1AdminConversationsOrderByOrderIdMessagesResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
                 order: {
                     id: string;
                     orderNumber: string | null;
@@ -48498,6 +50329,7 @@ export type GetApiV1AdminConversationsByIdData = {
     };
     query?: {
         beforeSeq?: number;
+        aroundSeq?: number;
     };
     url: '/api/v1/admin/conversations/{id}';
 };
@@ -48550,15 +50382,30 @@ export type GetApiV1AdminConversationsByIdResponses = {
                 customerName: string | null;
                 assigneeUserId: string | null;
                 assigneeName: string | null;
+                assigneeEligible: boolean;
                 lastMessageAt: number | null;
                 lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
                 preview: string | null;
+                lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
                 lastSeq: number;
                 staffReadSeq: number;
                 customerReadSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -48581,6 +50428,7 @@ export type GetApiV1AdminConversationsByIdResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
                 order: {
                     id: string;
                     orderNumber: string | null;
@@ -48670,15 +50518,30 @@ export type PatchApiV1AdminConversationsByIdResponses = {
                 customerName: string | null;
                 assigneeUserId: string | null;
                 assigneeName: string | null;
+                assigneeEligible: boolean;
                 lastMessageAt: number | null;
                 lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
                 preview: string | null;
+                lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
                 lastSeq: number;
                 staffReadSeq: number;
                 customerReadSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -48701,6 +50564,7 @@ export type PatchApiV1AdminConversationsByIdResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
                 order: {
                     id: string;
                     orderNumber: string | null;
@@ -48727,7 +50591,11 @@ export type PatchApiV1AdminConversationsByIdResponse = PatchApiV1AdminConversati
 
 export type PostApiV1AdminConversationsByIdMessagesData = {
     body: {
-        body: string;
+        body?: string;
+        products?: Array<{
+            productId: string;
+            skuId: string;
+        }>;
         visibility: 'public' | 'internal';
         requestKey: string;
         attachmentIds?: Array<string>;
@@ -48791,15 +50659,30 @@ export type PostApiV1AdminConversationsByIdMessagesResponses = {
                 customerName: string | null;
                 assigneeUserId: string | null;
                 assigneeName: string | null;
+                assigneeEligible: boolean;
                 lastMessageAt: number | null;
                 lastAuthorType: 'customer' | 'guest_receipt' | 'staff' | 'system' | null;
                 preview: string | null;
+                lastMessageVisibility: 'public' | 'internal' | null;
                 unread: number;
                 version: number;
                 lastSeq: number;
                 staffReadSeq: number;
                 customerReadSeq: number;
                 messages: Array<{
+                    products?: Array<{
+                        productId: string;
+                        skuId: string;
+                        title: string;
+                        variantLabel: string | null;
+                        status: 'available' | 'sold_out' | 'unavailable';
+                        price: {
+                            amount: number;
+                            currency: string;
+                        } | null;
+                        imageUrl: string | null;
+                        pdpUrl: string | null;
+                    }>;
                     id: string;
                     seq: number;
                     kind: 'message' | 'event';
@@ -48822,6 +50705,7 @@ export type PostApiV1AdminConversationsByIdMessagesResponses = {
                     }>;
                 }>;
                 hasMore: boolean;
+                hasNewer?: boolean;
                 order: {
                     id: string;
                     orderNumber: string | null;

@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, formatCheckoutLanguageText } from "@scalius/shared/checkout-language";
+import { formatMoney } from "@scalius/shared/currency";
 import { cartStore, createCartItemKey, type CartStore } from "../../store/cart";
 import type { DeliveryRate } from "../checkout/shipping-methods";
 import { readCheckoutFormDraft, writeHostedPaymentRecoverySession } from "../checkout/session-state";
@@ -126,6 +127,7 @@ function renderCartDom(): void {
       <div id="discountLines"></div><ul id="appliedCodes" class="hidden"></ul>
       <ul id="discountOffers" class="hidden"></ul><span id="subtotal"></span>
       <span id="shippingCost"></span><div id="taxRow"><span id="taxLabel"></span><span id="taxAmount"></span></div>
+      <p id="shippingProgress" class="hidden"></p>
       <p id="taxStatus"></p><span id="totalLabel" data-final-label="Total"></span><span id="total"></span></div>
       <div id="cartValidationMessage" class="hidden"></div><div id="cartItems"></div>
     </div>`;
@@ -219,6 +221,8 @@ describe("cart discount checkout handoff", () => {
     pageController?.abort();
     pageController = undefined;
     delete window.lastShippingEventDetail;
+    delete window.__CURRENCY_CODE__;
+    deliveryRates.mockResolvedValue([STANDARD]);
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -348,6 +352,36 @@ describe("cart discount checkout handoff", () => {
     await settleCheckout();
     const transferred = JSON.parse(sessionStorage.getItem("scalius_checkout_data")!);
     expect(transferred).toMatchObject({ shippingMethodId: "standard", shippingCharge: "80" });
+  });
+
+  it.each([
+    { code: "JPY", places: 0, feeMinor: 2, discountMinor: 1 },
+    { code: "USD", places: 2, feeMinor: 105, discountMinor: 1 },
+    { code: "KWD", places: 3, feeMinor: 1005, discountMinor: 1 },
+  ])("keeps $code shipping discounts and free-delivery progress exact", async ({ code, places, feeMinor, discountMinor }) => {
+    window.__CURRENCY_CODE__ = code;
+    const scale = 10 ** places;
+    const fee = feeMinor / scale;
+    const discount = discountMinor / scale;
+    deliveryRates.mockResolvedValue([{ ...STANDARD, fee, freeOver: 100 + 1 / scale }]);
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockImplementation(async () => ({
+      ...taxQuote(), currencyCode: code, decimalPlaces: places, subtotalMinor: 100 * scale,
+      shippingMinor: feeMinor, shippingAmount: fee, discountMinor, discountAmount: discount,
+      discounts: [{ promotionId: "shipping", title: "Shipping offer", code: "SHIP", amount: discount, shippingAmount: discount }],
+      totalMinor: 100 * scale + feeMinor - discountMinor, totalAmount: 100 + fee - discount,
+      shippingMethod: { id: "standard", name: "Standard", description: null, baseAmountMinor: feeMinor, feeWaived: false },
+    }));
+    await startCartPage();
+    await settleCheckout();
+    const shipping = document.getElementById("shippingCost")!;
+    expect(shipping.querySelector("s")?.textContent).toBe(formatMoney(fee));
+    expect(shipping.textContent).toContain(formatMoney((feeMinor - discountMinor) / scale));
+    expect(document.getElementById("shippingProgress")?.textContent).toBe(formatCheckoutLanguageText(
+      ENGLISH_CHECKOUT_LANGUAGE_DATA.freeDeliveryProgressText, { amount: formatMoney(1 / scale) },
+    ));
+    submitCheckout();
+    await settleCheckout();
+    expect(JSON.parse(sessionStorage.getItem("scalius_checkout_data")!).shippingCharge).toBe(String(fee));
   });
 
   it("stops Place order to say the delivery fee changed, never blaming the cart items", async () => {

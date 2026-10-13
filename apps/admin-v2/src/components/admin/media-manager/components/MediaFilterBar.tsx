@@ -1,3 +1,4 @@
+import { useMediaPermissions } from "../hooks/useMediaPermissions";
 import { useEffect, useRef, useState } from "react";
 import { FolderInput, RotateCcw, Search, Trash2, Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -61,6 +62,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
   const [search, setSearch] = useState(props.filters.search);
   const sortValue = (Object.entries(MEDIA_SORTS).find(([, value]) => value[0] === props.filters.sortBy && value[1] === props.filters.sortOrder)?.[0] ?? "newest") as MediaSortKey;
   const selecting = props.allowSelection !== false && props.selectionMode;
+  const permissions = useMediaPermissions();
   const canAct = props.allowManagement && props.selectedCount > 0;
   const filtered = Boolean(search.trim()) || (props.capability === "both" && Boolean(props.filters.kind)) || props.currentFolderId !== "all";
 
@@ -161,7 +163,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
           ) : null}
           {canAct && props.view === "ready" ? (
             <>
-              <DropdownMenu>
+              {permissions.folders ? <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button type="button" variant="outline" size="sm" disabled={props.isMutating}>
                     <FolderInput aria-hidden="true" />
@@ -174,22 +176,22 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
                     <DropdownMenuItem key={folder.id} onSelect={() => props.onMove(folder.id)}>{folder.name}</DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
-              </DropdownMenu>
-              <Button type="button" variant="outline" size="sm" disabled={props.isMutating} onClick={() => props.onLifecycle("trash")}>
+              </DropdownMenu> : null}
+              {permissions.delete ? <Button type="button" variant="outline" size="sm" disabled={props.isMutating} onClick={() => props.onLifecycle("trash")}>
                 <Trash2 aria-hidden="true" />
                 {r("moveToTrash")}
-              </Button>
+              </Button> : null}
             </>
           ) : null}
           {canAct && props.view === "trash" ? (
             <>
-              <Button type="button" variant="outline" size="sm" disabled={props.isMutating} onClick={() => props.onLifecycle("restore")}>
+              {permissions.upload ? <Button type="button" variant="outline" size="sm" disabled={props.isMutating} onClick={() => props.onLifecycle("restore")}>
                 <RotateCcw aria-hidden="true" />
                 {r("restore")}
-              </Button>
-              <Button type="button" variant="destructive" size="sm" disabled={props.isMutating} onClick={() => props.onLifecycle("permanent")}>
+              </Button> : null}
+              {permissions.delete ? <Button type="button" variant="destructive" size="sm" disabled={props.isMutating} onClick={() => props.onLifecycle("permanent")}>
                 {r("deletePermanently")}
-              </Button>
+              </Button> : null}
             </>
           ) : null}
           {props.onCancelSelection ? (

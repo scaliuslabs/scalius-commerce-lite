@@ -13,7 +13,7 @@ import {
 
 export const CUSTOMER_SORTS = ["name", "totalOrders", "totalSpent", "lastOrderAt", "createdAt", "updatedAt"] as const;
 export const CUSTOMER_VIEWS = ["subscribers"] as const;
-export const CUSTOMER_CHANNELS = ["email", "sms", "whatsapp"] as const;
+export const CUSTOMER_CHANNELS = ["email", "sms", "whatsapp", "push"] as const;
 export type CustomerChannel = (typeof CUSTOMER_CHANNELS)[number];
 /** URL params set by the list's filters ("Clear filters" resets them). */
 export const CUSTOMER_FILTER_PARAMS = ["tag", "segmentId", "channel", "appFilter"] as const;

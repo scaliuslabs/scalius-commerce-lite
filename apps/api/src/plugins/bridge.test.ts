@@ -222,8 +222,14 @@ describe("plugin messaging", () => {
       .rejects.toThrow(/^\[messaging\.invalid\] /);
   });
 
-  it("sends marketing only to a current subscription, with the unsubscribe footer and list headers", async () => {
+  it("requires marketing.send for marked marketing without weakening transactional access", async () => {
     const bridge = bridgeWith(["customers.view"]);
+    await expect(bridge.messagingEmail({ customerId: "cus_1", subject: "Offer", html: "Offer", marketing: true })).rejects.toThrow(/marketing.send/);
+    await expect(bridge.messagingSms({ customerId: "cus_1", text: "Offer", marketing: true })).rejects.toThrow(/marketing.send/);
+  });
+
+  it("sends marketing only to a current subscription, with the unsubscribe footer and list headers", async () => {
+    const bridge = bridgeWith(["customers.view", "marketing.send"]);
     const env = await environment.composedEnv();
     (env as unknown as Record<string, unknown>).SCALIUS_SECRET = "test-master-secret-that-is-long-enough-123456";
     // Not subscribed: nothing is sent.

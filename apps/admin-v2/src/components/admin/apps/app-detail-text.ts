@@ -48,7 +48,15 @@ export function localizedAppDetail(app: AppDetail, locale: Locale): AppDetail {
       ...app.settings,
       fields: app.settings.fields.map((field) => {
         const own = text.settings?.[field.key];
-        return own ? { ...field, label: own.label ?? field.label, help: own.help ?? field.help } : field;
+        return own ? {
+          ...field,
+          label: own.label ?? field.label,
+          help: own.help ?? field.help,
+          options: field.options?.map((option) => ({
+            ...option,
+            label: own.options && Object.hasOwn(own.options, option.value) ? own.options[option.value]! : option.label,
+          })) ?? field.options,
+        } : field;
       }),
       sections: app.settings.sections.map((section) => (section.group
         ? {

@@ -1,8 +1,7 @@
 import { putApiV1AdminSettingsMarketingConsent } from "@scalius/api-client/sdk";
 import {
-  MARKETING_CHANNELS,
+  MARKETING_CONTACT_CHANNELS,
   MARKETING_CONSENT_LABEL_MAX,
-  type MarketingChannel,
   type MarketingConsentSettings,
 } from "@scalius/shared/customer-marketing";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -20,6 +19,7 @@ import { settingsMessages } from "~/i18n/settings";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsCardLoading, SettingsField } from "./SettingsPage";
 
+type MarketingChannel = MarketingConsentSettings["checkout"]["channels"][number];
 type Values = { settings: MarketingConsentSettings };
 type Language = "en" | "bn";
 
@@ -37,7 +37,7 @@ function toggleChannel(channels: readonly MarketingChannel[], channel: Marketing
   const on = new Set(channels);
   if (on.has(channel)) on.delete(channel);
   else on.add(channel);
-  return MARKETING_CHANNELS.filter((item) => on.has(item));
+  return MARKETING_CONTACT_CHANNELS.filter((item) => on.has(item));
 }
 
 /**
@@ -104,7 +104,7 @@ export function MarketingConsentCard() {
       <div className="space-y-4 border-t border-border pt-4">
         <fieldset id="marketing-channels" className="space-y-1" aria-describedby="marketing-channels-note">
           <legend className="text-body font-medium">{t("checkboxChannels")}</legend>
-          {MARKETING_CHANNELS.map((channel) => {
+          {MARKETING_CONTACT_CHANNELS.map((channel) => {
             const on = checkout.channels.includes(channel);
             return (
               <label key={channel} className="flex min-h-11 items-center gap-3 text-body md:min-h-9">

@@ -11,9 +11,11 @@ import type { Database } from "@scalius/database/client";
 import { measureDuePluginStorageStatement, prunePluginCronRunsStatement } from "@scalius/core/modules/plugins";
 import { safeBatch } from "@scalius/database/client";
 import { syncBundledPlugins, type BundledSyncResult } from "./bundled-sync";
-import { runDuePluginCron, type PluginCronTickResult } from "./cron";
+import { pendingPluginCronAppIds, runDuePluginCron, type PluginCronTickResult } from "./cron";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { maintenanceSliceDue } from "../scheduled/slices";
 import type { MarketFxRefreshResult } from "@scalius/core/modules/markets";
+import { storeTimeZoneOf } from "../utils/store-time-zone";
 
 export async function runScheduledPluginMaintenance(
   db: Database,
@@ -23,7 +25,19 @@ export async function runScheduledPluginMaintenance(
   options: { nightly?: boolean } = {},
 ): Promise<{ bundled: BundledSyncResult; cron: PluginCronTickResult; prunedCronRuns: number; measured: number; fx: MarketFxRefreshResult | null }> {
   const bundled = await syncBundledPlugins(db);
-  const cron = await runDuePluginCron({ db, env, ctx, nowMs: scheduledAtMs ?? Date.now() });
+  let cron: PluginCronTickResult;
+  if (planLimits().maintenance.queueSweeps) {
+    if (!env.JOBS_QUEUE) throw new Error("App schedules require the jobs queue on this profile");
+    const apps = await pendingPluginCronAppIds(db, scheduledAtMs ?? Date.now(), storeTimeZoneOf(env));
+    for (let offset = 0; offset < apps.length; offset += 100)
+      await env.JOBS_QUEUE.sendBatch(apps.slice(offset, offset + 100).map((pluginId) => ({ body: {
+        type: "plugins.cron", pluginId, scheduledAt: scheduledAtMs ?? Date.now(),
+      } })));
+    // Claim and execution results belong to each isolated app invocation.
+    cron = { due: 0, ran: 0, failed: 0, skipped: 0, deferred: 0, expired: 0 };
+  } else {
+    cron = await runDuePluginCron({ db, env, ctx, nowMs: scheduledAtMs ?? Date.now() });
+  }
   // Exchange rates from apps (markets.fx_rate_source), in slice 2 (hourly on
   // Free, every tick on Paid), only while an exchange rate app is active.
   const fx = bundled.fxApps && maintenanceSliceDue(scheduledAtMs, 2)

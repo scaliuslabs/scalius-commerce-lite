@@ -7,14 +7,46 @@
 // customer identity in Bangladesh), so a newsletter signup always carries a
 // phone and may add an e-mail; there is no separate subscriber identity.
 
+import { checkoutLanguageBaseCode } from "./checkout-language";
 import { phoneOrNull } from "./customer-auth-policy";
 import { z } from "zod";
 import { sha256Hex } from "./hash";
 
 // ── Consent ────────────────────────────────────────────────────────────────
 
-export const MARKETING_CHANNELS = ["email", "sms", "whatsapp"] as const;
+export const MARKETING_CONTACT_CHANNELS = ["email", "sms", "whatsapp"] as const;
+export const MARKETING_CHANNELS = [...MARKETING_CONTACT_CHANNELS, "push"] as const;
 export type MarketingChannel = (typeof MARKETING_CHANNELS)[number];
+
+/** The account form and its consent evidence share these exact words. */
+export const ACCOUNT_MARKETING_COPY = {
+  en: {
+    heading: "News and offers",
+    text: "Choose how we may send you news and offers. Order and delivery updates always reach you.",
+    channelLabel: { email: "Email", sms: "SMS", whatsapp: "WhatsApp", push: "Browser news and offers (separate from order updates)" },
+  },
+  bn: {
+    heading: "নতুন খবর ও অফার",
+    text: "কোন মাধ্যমে নতুন খবর ও অফার পাবেন তা বেছে নিন। অর্ডার ও ডেলিভারির খবর সবসময় পাবেন।",
+    channelLabel: { email: "ইমেইল", sms: "এসএমএস", whatsapp: "হোয়াটসঅ্যাপ", push: "ব্রাউজারে খবর ও অফার (অর্ডারের খবর থেকে আলাদা)" },
+  },
+} as const;
+
+export const NEWSLETTER_MARKETING_COPY = {
+  en: "Choose channels for news and offers. Unsubscribe anytime.",
+  bn: "খবর ও অফার পেতে মাধ্যম বেছে নিন। যেকোনো সময় আনসাবস্ক্রাইব করতে পারবেন।",
+} as const;
+
+export function newsletterMarketingConsentText(language: unknown, channels: readonly (typeof MARKETING_CONTACT_CHANNELS)[number][]): string {
+  const locale = checkoutLanguageBaseCode(language) === "bn" ? "bn" : "en";
+  return `${NEWSLETTER_MARKETING_COPY[locale]} [${channels.map((channel) => ACCOUNT_MARKETING_COPY[locale].channelLabel[channel]).join(", ")}]`;
+}
+
+/** The visible heading, explanation and selected channel, never the checkout label. */
+export function accountMarketingConsentText(language: unknown, channel: MarketingChannel): string {
+  const copy = ACCOUNT_MARKETING_COPY[checkoutLanguageBaseCode(language) === "bn" ? "bn" : "en"];
+  return `${copy.heading}: ${copy.text} [${copy.channelLabel[channel]}]`;
+}
 
 /** Stored states. `pending` is e-mail double opt-in only (confirmation sent). */
 export const MARKETING_CONSENT_STATES = ["subscribed", "unsubscribed", "pending"] as const;
@@ -55,7 +87,8 @@ export function isMarketingChannel(value: unknown): value is MarketingChannel {
 }
 
 /** The normalised address a consent covers: lower-case e-mail, E.164 phone. */
-export function marketingConsentContact(channel: MarketingChannel, customer: { email: string | null | undefined; phone: string | null | undefined }): string | null {
+export function marketingConsentContact(channel: MarketingChannel, customer: { id?: string; accountClaimedAt?: unknown; email: string | null | undefined; phone: string | null | undefined }): string | null {
+  if (channel === "push") return customer.accountClaimedAt != null && customer.id ? customer.id : null;
   if (channel === "email") {
     const email = customer.email?.trim().toLowerCase();
     return email ? email : null;
@@ -74,6 +107,7 @@ export function marketingConsentStatus(
 
 /** "a•••@example.com" / "+880 17•••••678": shown to the buyer on link pages. */
 export function maskMarketingContact(channel: MarketingChannel, contact: string): string {
+  if (channel === "push") return "•••";
   if (channel === "email") {
     const [local = "", domain = ""] = contact.split("@");
     return `${local.slice(0, 1)}•••@${domain}`;
@@ -103,7 +137,7 @@ export const marketingConsentSettingsSchema = /* @__PURE__ */ (() => z.object({
   checkout: z.object({
     enabled: z.boolean(),
     /** Channels the one checkbox subscribes (those whose contact the order has). */
-    channels: z.array(z.enum(MARKETING_CHANNELS)).min(1).max(3)
+    channels: z.array(z.enum(MARKETING_CONTACT_CHANNELS)).min(1).max(3)
       .refine((channels) => new Set(channels).size === channels.length, "Channels must be unique."),
     label: z.object({ en: consentLabel, bn: consentLabel }).strict(),
   }).strict(),
@@ -305,8 +339,7 @@ export const NEWSLETTER_HONEYPOT_FIELD = "company_website";
 export const newsletterSubscribeSchema = /* @__PURE__ */ (() => z.object({
   phone: z.string().trim().min(6).max(32),
   email: z.string().trim().max(254).optional().transform((value) => (value ? value : undefined)),
-  /** Subscribe this number to WhatsApp messages too (the section offers it). */
-  whatsapp: z.boolean().optional(),
+  channels: z.array(z.enum(MARKETING_CONTACT_CHANNELS)).min(1).max(3).refine((value) => new Set(value).size === value.length, "Choose each channel once."),
   /** Storefront language the form was shown in (consent text version). */
   language: z.string().trim().max(16).optional(),
   /** The exact consent text the form showed, for the consent record. */

@@ -12,6 +12,7 @@ import { RateLimitError, ValidationError } from "@scalius/core/errors";
 import {
     applyConsentChanges,
     confirmMarketingOptIn,
+    describeUnsubscribeLink,
     getCustomerMarketingConsents,
     listCustomerConsentEvents,
     unsubscribeWithLink,
@@ -30,7 +31,8 @@ import {
     verifyUnsubscribeToken,
 } from "./links";
 import { marketingSendPermission, sendMarketingOptInEmail } from "./messages";
-import { DEFAULT_MARKETING_CONSENT_SETTINGS } from "@scalius/shared/customer-marketing";
+import { ACCOUNT_MARKETING_COPY, DEFAULT_MARKETING_CONSENT_SETTINGS, accountMarketingConsentText, marketingConsentTextVersion } from "@scalius/shared/customer-marketing";
+import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 
 const SECRET = "test-master-secret-that-is-long-enough-123456";
 const env = { SCALIUS_SECRET: SECRET, LOCAL_MAILPIT_URL: "http://127.0.0.1:8025" };
@@ -78,6 +80,27 @@ describe("marketing consent", () => {
         ]);
         expect(all("SELECT topic FROM event_outbox WHERE topic = 'customer.consent_changed'")).toHaveLength(3);
         expect((await getCustomerMarketingConsents(db, "cust_guest")).find((view) => view.channel === "sms")?.status).toBe("subscribed");
+    });
+
+    it("unsubscribes duplicate normalized contacts with one audit/event per affected row, preserving other channels", async () => {
+        sqlite.exec("UPDATE customers SET email = ' KARIM@EXAMPLE.COM ' WHERE id='cust_mail'");
+        await subscribe("cust_acct", "email");
+        await subscribe("cust_mail", "email");
+        await subscribe("cust_acct", "sms");
+        const before = all("SELECT id FROM event_outbox WHERE topic='customer.consent_changed'").length;
+        await unsubscribeWithLink(db, { customerId: "cust_acct", channel: "email" });
+        await unsubscribeWithLink(db, { customerId: "cust_acct", channel: "email" });
+        for (const customerId of ["cust_acct", "cust_mail"]) {
+            expect(one("SELECT state, contact FROM customer_marketing_consents WHERE customer_id=? AND channel='email'", customerId))
+                .toEqual({ state: "unsubscribed", contact: "karim@example.com" });
+            expect((await listCustomerConsentEvents(db, customerId)).filter((event) => event.channel === "email"))
+                .toHaveLength(2);
+            expect((await listCustomerConsentEvents(db, customerId)).find((event) => event.channel === "email" && event.state === "unsubscribed"))
+                .toMatchObject({ state: "unsubscribed", source: "link", actor: "buyer" });
+        }
+        expect(one("SELECT state FROM customer_marketing_consents WHERE customer_id='cust_acct' AND channel='sms'"))
+            .toEqual({ state: "subscribed" });
+        expect(all("SELECT id FROM event_outbox WHERE topic='customer.consent_changed'")).toHaveLength(before + 2);
     });
 
     it("never subscribes an address the customer record does not have", async () => {
@@ -210,32 +233,131 @@ describe("marketing consent", () => {
     it("account: a verified e-mail subscribes at once, channels turn off", async () => {
         const result = await updateAccountMarketingPreferences(db, "cust_acct", { email: true, sms: true }, { env });
         expect(result.confirmationRequested).toBe(false);
-        expect(result.channels.map((channel) => [channel.channel, channel.status])).toEqual([["email", "subscribed"], ["sms", "subscribed"], ["whatsapp", "not_subscribed"]]);
+        expect(result.channels.map((channel) => [channel.channel, channel.status])).toEqual([["email", "subscribed"], ["sms", "subscribed"], ["whatsapp", "not_subscribed"], ["push", "not_subscribed"]]);
         const off = await updateAccountMarketingPreferences(db, "cust_acct", { sms: false }, { env });
         expect(off.channels.find((channel) => channel.channel === "sms")?.status).toBe("unsubscribed");
         await expect(updateAccountMarketingPreferences(db, "cust_guest", { sms: true }, { env })).rejects.toThrow(/Account not found/);
     });
 
+    it.each(["email", "sms", "whatsapp"] as const)("account opt-out preserves and revokes the stored %s contact after removal", async (channel) => {
+        await subscribe("cust_acct", channel);
+        const contact = channel === "email" ? "karim@example.com" : "+8801722222222";
+        if (channel === "email") sqlite.exec("UPDATE customers SET email = NULL WHERE id = 'cust_acct'");
+        else sqlite.prepare("UPDATE customers SET phone = ? WHERE id = 'cust_acct'").run(NO_PHONE);
+        await updateAccountMarketingPreferences(db, "cust_acct", { [channel]: false }, { env });
+        await updateAccountMarketingPreferences(db, "cust_acct", { [channel]: false }, { env });
+        expect(one("SELECT state, contact, confirmation_hash, requested_at FROM customer_marketing_consents WHERE customer_id = ? AND channel = ?", "cust_acct", channel))
+            .toEqual({ state: "unsubscribed", contact, confirmation_hash: null, requested_at: null });
+        const events = await listCustomerConsentEvents(db, "cust_acct");
+        expect(events).toHaveLength(2);
+        expect(events[0]).toMatchObject({ state: "unsubscribed", contact, source: "account", actor: "buyer", consentText: null });
+        expect(all("SELECT id FROM event_outbox WHERE topic = 'customer.consent_changed'")).toHaveLength(2);
+        if (channel === "email") sqlite.prepare("UPDATE customers SET email = ? WHERE id = 'cust_acct'").run(contact);
+        else sqlite.prepare("UPDATE customers SET phone = ? WHERE id = 'cust_acct'").run(contact);
+        expect((await marketingSendPermission(db, { customerId: "cust_acct", channel }, { env, storefrontUrl: STORE })).allowed).toBe(false);
+    });
+
+    it("revokes pending consent with no current email and makes its old confirmation unusable", async () => {
+        sqlite.exec("UPDATE customers SET email_verified_at = NULL WHERE id = 'cust_acct'");
+        await updateAccountMarketingPreferences(db, "cust_acct", { email: true }, { env });
+        const nonce = JSON.parse(String(one("SELECT payload FROM notification_outbox WHERE subject_id = 'cust_acct'")!.payload)).data.nonce as string;
+        const token = await deriveOptInToken(env, { customerId: "cust_acct", nonce });
+        sqlite.exec("UPDATE customers SET email = NULL WHERE id = 'cust_acct'");
+        await updateAccountMarketingPreferences(db, "cust_acct", { email: false, sms: true }, { env });
+        expect(await confirmMarketingOptIn(db, token)).toEqual({ status: "invalid" });
+        expect(one("SELECT email FROM customers WHERE id = 'cust_acct'")).toEqual({ email: null });
+        expect(one("SELECT state FROM customer_marketing_consents WHERE customer_id = 'cust_acct' AND channel = 'sms'")).toEqual({ state: "subscribed" });
+    });
+
+    it("opt-out with no stored row and no channel contact is a no-op, including the missing-phone sentinel", async () => {
+        sqlite.exec("UPDATE customers SET email = NULL WHERE id = 'cust_acct'");
+        await updateAccountMarketingPreferences(db, "cust_acct", { email: false }, { env });
+        sqlite.prepare("UPDATE customers SET email = 'karim@example.com', phone = ? WHERE id = 'cust_acct'").run(NO_PHONE);
+        await updateAccountMarketingPreferences(db, "cust_acct", { sms: false, whatsapp: false }, { env });
+        expect(all("SELECT * FROM customer_marketing_consents")).toEqual([]);
+        expect(await listCustomerConsentEvents(db, "cust_acct")).toEqual([]);
+        expect(all("SELECT id FROM event_outbox WHERE topic = 'customer.consent_changed'")).toEqual([]);
+    });
+
+    it.each(["staff", "plugin"] as const)("%s can record opt-out without a current email, but still cannot subscribe it", async (actor) => {
+        await subscribe("cust_acct", "email");
+        sqlite.exec("UPDATE customers SET email = NULL WHERE id = 'cust_acct'");
+        await setCustomerMarketingConsent(db, "cust_acct", { channel: "email", state: "unsubscribed", note: "Buyer asked to stop" }, { actor, actorId: "fixture_actor" }, { env });
+        expect((await listCustomerConsentEvents(db, "cust_acct"))[0]).toMatchObject({ state: "unsubscribed", contact: "karim@example.com", actor, note: "Buyer asked to stop" });
+        await expect(setCustomerMarketingConsent(db, "cust_acct", { channel: "email", state: "subscribed", note: "Asked" }, { actor, actorId: "fixture_actor" }, { env })).rejects.toThrow(/no email/);
+    });
+
+    it("signed-link preview describes the stored consent, never a replacement address, and GET changes nothing", async () => {
+        await subscribe("cust_acct", "email");
+        sqlite.exec("UPDATE customers SET email = 'replacement@new.example' WHERE id = 'cust_acct'");
+        expect(await describeUnsubscribeLink(db, { customerId: "cust_acct", channel: "email" }))
+            .toEqual({ channel: "email", status: "subscribed", contactMasked: "k•••@example.com" });
+        expect(await listCustomerConsentEvents(db, "cust_acct")).toHaveLength(1);
+        await updateAccountMarketingPreferences(db, "cust_acct", { email: false }, { env });
+        expect(one("SELECT state, contact FROM customer_marketing_consents WHERE customer_id = 'cust_acct' AND channel = 'email'"))
+            .toEqual({ state: "unsubscribed", contact: "karim@example.com" });
+        expect(await describeUnsubscribeLink(db, { customerId: "cust_acct", channel: "email" }))
+            .toEqual({ channel: "email", status: "unsubscribed", contactMasked: "k•••@example.com" });
+    });
+
+    it("a pending newsletter link remains visibly revocable before its guest email is adopted", async () => {
+        await subscribe("cust_guest", "email", { contact: "guest@example.com", allowBlankGuestEmail: true, doubleOptIn: true });
+        expect(await describeUnsubscribeLink(db, { customerId: "cust_guest", channel: "email" }))
+            .toEqual({ channel: "email", status: "pending", contactMasked: "g•••@example.com" });
+        await unsubscribeWithLink(db, { customerId: "cust_guest", channel: "email" });
+        expect(one("SELECT email FROM customers WHERE id = 'cust_guest'")).toEqual({ email: null });
+        expect(one("SELECT state, confirmation_hash FROM customer_marketing_consents WHERE customer_id = 'cust_guest' AND channel = 'email'"))
+            .toEqual({ state: "unsubscribed", confirmation_hash: null });
+    });
+
+    it.each(["en", "bn", "bn-BD", "BN", "fr"])("account consent records the rendered wording and selected channel in %s", async (language) => {
+        await updateAccountMarketingPreferences(db, "cust_acct", { email: true, sms: true, language }, { env });
+        const copy = ACCOUNT_MARKETING_COPY[language.toLowerCase().startsWith("bn") ? "bn" : "en"];
+        for (const channel of ["email", "sms"] as const) {
+            const text = accountMarketingConsentText(language, channel);
+            expect(text).toBe(`${copy.heading}: ${copy.text} [${copy.channelLabel[channel]}]`);
+            expect(text.length).toBeLessThanOrEqual(500);
+            expect(one("SELECT consent_text, consent_text_version FROM customer_marketing_consents WHERE customer_id = ? AND channel = ?", "cust_acct", channel))
+                .toEqual({ consent_text: text, consent_text_version: await marketingConsentTextVersion("account", text) });
+        }
+        expect(all("SELECT channel FROM customer_marketing_consents WHERE channel = 'whatsapp'")).toEqual([]);
+    });
+
     it("checkout subscribes only the configured channels the order has, with double opt-in unless the signed-in e-mail is verified", async () => {
         const settings = { ...DEFAULT_MARKETING_CONSENT_SETTINGS, checkout: { ...DEFAULT_MARKETING_CONSENT_SETTINGS.checkout, channels: ["email", "sms", "whatsapp"] as const } };
-        const guest = await checkoutConsentChanges({ settings: settings as never, language: "bn", order: { phone: "+8801711111111", email: "A@B.com", whatsapp: null }, signedInVerifiedEmail: null });
+        const guest = await checkoutConsentChanges({ channels: ["email", "sms", "whatsapp"], settings: settings as never, language: "bn", order: { phone: "+8801711111111", email: "A@B.com", whatsapp: null }, signedInVerifiedEmail: null });
         expect(guest.map((change) => [change.channel, "contact" in change ? change.contact : null, "doubleOptIn" in change ? change.doubleOptIn : null])).toEqual([
             ["email", "a@b.com", true],
             ["sms", "+8801711111111", false],
             ["whatsapp", "+8801711111111", false],
         ]);
-        expect("consentText" in guest[0]! ? guest[0].consentText?.text : null).toBe(DEFAULT_MARKETING_CONSENT_SETTINGS.checkout.label.bn);
-        const account = await checkoutConsentChanges({ settings: settings as never, language: "en", order: { phone: "+8801722222222", email: "karim@example.com", whatsapp: null }, signedInVerifiedEmail: "karim@example.com" });
+        expect("consentText" in guest[0]! ? guest[0].consentText?.text : null).toBe(`${DEFAULT_MARKETING_CONSENT_SETTINGS.checkout.label.bn} [email]`);
+        const account = await checkoutConsentChanges({ channels: ["email", "sms", "whatsapp"], settings: settings as never, language: "en", order: { phone: "+8801722222222", email: "karim@example.com", whatsapp: null }, signedInVerifiedEmail: "karim@example.com" });
         expect(account[0]).toMatchObject({ channel: "email", doubleOptIn: false });
-        expect(await checkoutConsentChanges({ settings: { ...settings, checkout: { ...settings.checkout, enabled: false } } as never, language: "en", order: { phone: "+8801711111111", email: null, whatsapp: null }, signedInVerifiedEmail: null })).toEqual([]);
+        expect(await checkoutConsentChanges({ channels: ["email", "sms", "whatsapp"], settings: { ...settings, checkout: { ...settings.checkout, enabled: false } } as never, language: "en", order: { phone: "+8801711111111", email: null, whatsapp: null }, signedInVerifiedEmail: null })).toEqual([]);
+    });
+
+    it("push marketing consent is account-owned and independent of order-update device permission", async () => {
+        const before = await getCustomerMarketingConsents(db, "cust_acct");
+        expect(before.find((row) => row.channel === "push")?.status).toBe("not_subscribed");
+        await updateAccountMarketingPreferences(db, "cust_acct", { push: true, language: "bn" }, { env });
+        expect((await getCustomerMarketingConsents(db, "cust_acct")).find((row) => row.channel === "push")).toMatchObject({ status: "subscribed", contact: "cust_acct" });
+        expect((await getCustomerMarketingConsents(db, "cust_guest")).find((row) => row.channel === "push")).toMatchObject({ status: "not_subscribed", contact: null });
+        await updateAccountMarketingPreferences(db, "cust_acct", { push: false }, { env });
+        expect((await getCustomerMarketingConsents(db, "cust_acct")).find((row) => row.channel === "push")?.status).toBe("unsubscribed");
+    });
+    it("checkout ignores configured channels that the buyer did not select", async () => {
+        const input = { settings: DEFAULT_MARKETING_CONSENT_SETTINGS, language: "en", order: { phone: "+8801711111111", email: "a@b.com", whatsapp: null }, signedInVerifiedEmail: null };
+        expect(await checkoutConsentChanges(input)).toEqual([]);
+        expect((await checkoutConsentChanges({ ...input, channels: ["sms", "push", "whatsapp"] })).map((change) => change.channel)).toEqual(["sms"]);
     });
 
     describe("newsletter", () => {
         const runtime = { env, ip: "203.0.113.7" };
 
         it("files a new subscriber as a guest record keyed by the phone and answers the same whether or not it existed", async () => {
-            const fresh = await subscribeToNewsletter(db, { phone: "01755555555", email: "new@example.com" }, runtime);
-            const known = await subscribeToNewsletter(db, { phone: "01722222222", email: "other@example.com" }, runtime);
+            const fresh = await subscribeToNewsletter(db, { channels: ["sms", "email"], phone: "01755555555", email: "new@example.com" }, runtime);
+            const known = await subscribeToNewsletter(db, { channels: ["sms", "email"], phone: "01722222222", email: "other@example.com" }, runtime);
             expect(fresh).toEqual({ result: "pending" });
             expect(known).toEqual({ result: "pending" });
             const created = one("SELECT id, phone, email, origin, account_claimed_at FROM customers WHERE phone = '+8801755555555'");
@@ -243,20 +365,20 @@ describe("marketing consent", () => {
             // The account's phone is subscribed to SMS; its e-mail is never replaced or subscribed by a stranger's address.
             expect(one("SELECT email FROM customers WHERE id = 'cust_acct'")).toEqual({ email: "karim@example.com" });
             expect(all("SELECT channel, state FROM customer_marketing_consents WHERE customer_id = 'cust_acct'")).toEqual([{ channel: "sms", state: "subscribed" }]);
-            expect(await subscribeToNewsletter(db, { phone: "01766666666" }, runtime)).toEqual({ result: "subscribed" });
-            await expect(subscribeToNewsletter(db, { phone: "12" }, runtime)).rejects.toBeInstanceOf(ValidationError);
-            await expect(subscribeToNewsletter(db, { phone: "01766666666", email: "not-an-email" }, runtime)).rejects.toBeInstanceOf(ValidationError);
-            await expect(subscribeToNewsletter(db, { phone: "01766666666", extra: "x" }, runtime)).rejects.toBeInstanceOf(ValidationError);
+            expect(await subscribeToNewsletter(db, { channels: ["sms"], phone: "01766666666" }, runtime)).toEqual({ result: "subscribed" });
+            await expect(subscribeToNewsletter(db, { channels: ["sms"], phone: "12" }, runtime)).rejects.toBeInstanceOf(ValidationError);
+            await expect(subscribeToNewsletter(db, { channels: ["sms"], phone: "01766666666", email: "not-an-email" }, runtime)).rejects.toBeInstanceOf(ValidationError);
+            await expect(subscribeToNewsletter(db, { channels: ["sms"], phone: "01766666666", extra: "x" }, runtime)).rejects.toBeInstanceOf(ValidationError);
         });
 
         it("limits signups per contact and per address", async () => {
-            for (let attempt = 0; attempt < 5; attempt += 1) await subscribeToNewsletter(db, { phone: "01777777777" }, runtime);
-            await expect(subscribeToNewsletter(db, { phone: "01777777777" }, runtime)).rejects.toBeInstanceOf(RateLimitError);
+            for (let attempt = 0; attempt < 5; attempt += 1) await subscribeToNewsletter(db, { channels: ["sms"], phone: "01777777777" }, runtime);
+            await expect(subscribeToNewsletter(db, { channels: ["sms"], phone: "01777777777" }, runtime)).rejects.toBeInstanceOf(RateLimitError);
             const crowd = { env, ip: "198.51.100.1" };
             for (let index = 0; index < 20; index += 1) {
-                await subscribeToNewsletter(db, { phone: `01710${String(index).padStart(6, "0")}` }, crowd);
+                await subscribeToNewsletter(db, { channels: ["sms"], phone: `01710${String(index).padStart(6, "0")}` }, crowd);
             }
-            await expect(subscribeToNewsletter(db, { phone: "01810000000" }, crowd)).rejects.toBeInstanceOf(RateLimitError);
+            await expect(subscribeToNewsletter(db, { channels: ["sms"], phone: "01810000000" }, crowd)).rejects.toBeInstanceOf(RateLimitError);
             // Rate-limit keys are hashed: no phone or address in the table.
             expect(JSON.stringify(all("SELECT key FROM customer_auth_otp_rate_limits"))).not.toMatch(/8801777777777|198\.51/);
         });

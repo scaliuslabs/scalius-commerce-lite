@@ -5,14 +5,15 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
   getApiV1AdminConversations,
+  postApiV1AdminConversationsQuery,
   getApiV1AdminConversationsById,
   getApiV1AdminConversationsOrderByOrderId,
   getApiV1AdminConversationsSummary,
 } from "@scalius/api-client/sdk";
-import { apiData, type ApiQuery, type ApiResult } from "../api";
+import { apiData, type ApiBody, type ApiResult } from "../api";
 import { pollWhileOffline } from "../admin-query-client";
 
-export type InboxQuery = ApiQuery<typeof getApiV1AdminConversations>;
+export type InboxQuery = ApiBody<typeof postApiV1AdminConversationsQuery>;
 export type InboxItem = ApiResult<typeof getApiV1AdminConversations>["items"][number];
 export type StaffThread = ApiResult<typeof getApiV1AdminConversationsById>["conversation"];
 export type StaffMessage = StaffThread["messages"][number];
@@ -60,4 +61,9 @@ export const orderThreadQueryOptions = (orderId: string) =>
 /** Earlier messages of a thread, for "Show earlier messages". */
 export async function fetchOlderMessages(id: string, beforeSeq: number): Promise<StaffThread> {
   return (await apiData(getApiV1AdminConversationsById({ path: { id }, query: { beforeSeq } }))).conversation;
+}
+
+/** The nearest bounded window around a real search-hit sequence. */
+export async function fetchMessagesAround(id: string, aroundSeq: number): Promise<StaffThread> {
+  return (await apiData(getApiV1AdminConversationsById({ path: { id }, query: { aroundSeq } }))).conversation;
 }

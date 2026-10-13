@@ -84,6 +84,11 @@ describe("hub frames and identity", () => {
     expect(parseIdentity("{")).toBeNull();
     expect(parseIdentity(JSON.stringify({ userId: "", topics: [] }))).toBeNull();
     expect(parseIdentity(JSON.stringify({ userId: "usr_1", name: "Rahim", topics: ["orders", "secrets"] })))
-      .toEqual({ userId: "usr_1", name: "Rahim", topics: ["orders"] });
+      .toEqual({ userId: "usr_1", name: "Rahim", topics: ["orders"], edit: 0 });
+  });
+
+  it.each([undefined, null, -1, 1.5, "3", 2 ** 40])("defaults malformed edit grants to viewing only: %s", (edit) => {
+    expect(parseIdentity(JSON.stringify({ userId: "usr_1", topics: ["products", "products"], edit })))
+      .toMatchObject({ edit: 0, topics: ["products"] });
   });
 });

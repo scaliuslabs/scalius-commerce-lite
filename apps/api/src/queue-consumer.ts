@@ -99,6 +99,8 @@ import {
   type PaymentWebhookDlqEvidence,
 } from "./utils/webhook-idempotency";
 import type { PaymentEventQueueMessage } from "./routes/payment/payment-events";
+import type { PluginCronQueueMessage } from "./plugins/cron";
+import type { MaintenanceQueueMessage } from "./scheduled-maintenance";
 import type { EventsQueueMessage } from "@scalius/core/modules/events";
 
 type PaymentConfirmationResult = Awaited<ReturnType<typeof processPaymentConfirmed>>;
@@ -284,11 +286,17 @@ export async function handleQueueBatch(
   // Urgent messages (OTP, payments, notifications) start before bulk ones
   // (renditions, catalogue refreshes) whatever order the batch arrived in.
   const order = queueLaneOrder(batch.messages.map((message) => message.body));
+  const maintenance = order.find((index) => ["maintenance.sweep", "plugins.cron"].includes(batch.messages[index]?.body.type ?? ""));
+  const admitted = maintenance === undefined ? order : [maintenance];
+  // Even a mixed batch or a rollout from a smaller queue profile must not
+  // combine multiple maintenance sweeps in one invocation.
+  const deferred = new Set(order.filter((index) => !admitted.includes(index)));
+  for (const index of deferred) batch.messages[index]?.retry({ delaySeconds: 5 });
   // Notes evented writes and realtime tables (an inbound channel message, a
   // review) so the hub hears them after the batch, as after a request.
   const writes = createEventWriteObserver();
   const processed = await runWithReadObserver(writes, () => runSettledWithConcurrency(
-    order,
+    admitted,
     QUEUE_BATCH_CONCURRENCY_LIMIT,
     (index) => processQueueMessage(
       batch.messages[index] as unknown as Message<QueueBody>,
@@ -298,10 +306,10 @@ export async function handleQueueBatch(
     ),
   ));
   const results: Array<PromiseSettledResult<void>> = new Array(batch.messages.length);
-  order.forEach((index, position) => { results[index] = processed[position]!; });
+  admitted.forEach((index, position) => { results[index] = processed[position]!; });
 
   let acked = 0;
-  let retried = 0;
+  let retried = deferred.size;
 
   // Ack successful, retry failed with backoff
   for (let i = 0; i < batch.messages.length; i++) {
@@ -333,7 +341,7 @@ export async function handleQueueBatch(
   // wrote only a realtime table sends just that notice.
   const tableTopics = [...writes.realtimeTopics];
   let after: Promise<unknown> | null = null;
-  if (batch.messages.some((msg) => EVENT_WRITING_MESSAGE_TYPES.has(String((msg.body as { type?: unknown }).type)))) {
+  if (admitted.some((index) => EVENT_WRITING_MESSAGE_TYPES.has(String(batch.messages[index]?.body.type)))) {
     after = import("./events/flush")
       .then(({ flushEventsAfterWrite }) => flushEventsAfterWrite(db, env, { tableTopics }))
       .catch((error: unknown) => {
@@ -348,7 +356,7 @@ export async function handleQueueBatch(
   }
 }
 
-const EVENT_WRITING_MESSAGE_TYPES: ReadonlySet<string> = new Set(["payment.event", "order.auto_fulfil"]);
+const EVENT_WRITING_MESSAGE_TYPES: ReadonlySet<string> = new Set(["payment.event", "order.auto_fulfil", "maintenance.sweep"]);
 
 /**
  * `jobs-dlq` consumer: a message that exhausted its retries is archived into
@@ -770,6 +778,22 @@ async function processQueueMessage(
     // ── Automatic fulfilment (Wave A §2.6) ─────────────────────────────────
     // Idempotent: the ledger's unique request keys make redeliveries safe.
 
+    case "plugins.cron": {
+      if (typeof payload.pluginId !== "string" || payload.pluginId.trim().length === 0 || !Number.isFinite(payload.scheduledAt)) throw new Error("Invalid app schedule job");
+      const { runDuePluginCron } = await import("./plugins/cron");
+      const pending: Promise<unknown>[] = [];
+      const context = executionCtx ?? { waitUntil: (promise: Promise<unknown>) => { pending.push(promise); }, passThroughOnException() {} } as ExecutionContext;
+      await runDuePluginCron({ db, env, ctx: context, nowMs: payload.scheduledAt, onlyPluginId: payload.pluginId });
+      for (const promise of pending) await promise;
+      break;
+    }
+
+    case "maintenance.sweep": {
+      const { runQueuedMaintenance } = await import("./scheduled-maintenance");
+      await runQueuedMaintenance(env, executionCtx, payload);
+      break;
+    }
+
     case "order.auto_fulfil": {
       // Hand the messages it wrote (gift-card codes, downloads, or the staff
       // key-exhausted alert of a failed run) to the queue now instead of
@@ -845,6 +869,8 @@ export type QueueBody =
   | MediaVariantsQueueMessage
   | CatalogQueueMessage
   | OrderAutoFulfilQueueMessage
+  | MaintenanceQueueMessage
+  | PluginCronQueueMessage
   | EventsQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 

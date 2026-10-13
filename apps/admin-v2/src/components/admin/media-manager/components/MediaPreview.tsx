@@ -1,3 +1,4 @@
+import { announceSave, PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { ChevronLeft, ChevronRight, Copy, ExternalLink, ImageOff, ImagePlus, Loader2 } from "lucide-react";
 import { mediaImageSrcSet, mediaImageUrl, mediaOriginalUrl } from "@scalius/shared/media-variants";
@@ -17,6 +18,7 @@ import type { LibraryMediaFile, MediaFile } from "../types";
 import { formatDate, formatDuration, formatFileSize, formatFileType } from "../utils";
 import { resolveSavedPoster } from "../utils/poster";
 import { MediaUsage } from "./MediaUsage";
+import { isMediaVersionConflict, mediaMetadata } from "../utils/metadata";
 import { Field } from "~/components/ui/field";
 
 interface MediaPreviewProps {
@@ -27,6 +29,9 @@ interface MediaPreviewProps {
   onNavigate: (direction: -1 | 1) => void;
   onUpdate: (file: LibraryMediaFile, updates: { filename?: string; altText?: string | null; caption?: string | null; posterMediaId?: string | null }) => Promise<LibraryMediaFile>;
   onSelect?: (file: MediaFile) => void;
+  canEdit: boolean;
+  onReload: (id: string) => Promise<LibraryMediaFile | null>;
+  onAdopt: (file: LibraryMediaFile) => void;
 }
 
 interface OriginalInspection {
@@ -36,7 +41,7 @@ interface OriginalInspection {
 }
 
 /** File details: bounded preview, metadata, video cover and original access. */
-export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUpdate, onSelect }: MediaPreviewProps) {
+export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUpdate, onSelect, canEdit, onReload, onAdopt }: MediaPreviewProps) {
   const t = useMessages(mediaMessages);
   const r = useMessages(resourceMessages);
   const [filename, setFilename] = useState("");
@@ -48,6 +53,17 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
   const [pendingAction, setPendingAction] = useState<"close" | "select" | -1 | 1 | null>(null);
   const draftKeyRef = useRef("");
   const savingRef = useRef(false);
+  const baseRef = useRef<LibraryMediaFile | null>(null);
+  const [recovery, setRecovery] = useState<"merged" | "unavailable" | "failed" | null>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const recoveryFocus = useRef<"save" | "field" | null>(null);
+  useLayoutEffect(() => {
+    if (saving || !recoveryFocus.current) return;
+    const target = recoveryFocus.current === "save" && !saveRef.current?.disabled
+      ? saveRef.current : document.getElementById("media-filename");
+    recoveryFocus.current = null;
+    target?.focus();
+  }, [saving]);
   const [inspection, setInspection] = useState<OriginalInspection | null>(null);
   const originalButtonRef = useRef<HTMLButtonElement>(null);
   const originalViewportRef = useRef<HTMLDivElement>(null);
@@ -75,6 +91,8 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
   };
 
   const resetDraft = (source: LibraryMediaFile | null) => {
+    baseRef.current = source;
+    setRecovery(null);
     setFilename(source?.filename ?? "");
     setDescription(source?.kind === "video" ? (source.caption ?? "") : (source?.altText ?? ""));
     const savedPoster = resolveSavedPoster(source, files);
@@ -93,11 +111,14 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file, files]);
 
+  const shownPoster = canEdit ? { poster, posterMediaId, posterUrl } : resolveSavedPoster(file, files);
+  useLayoutEffect(() => { if (!canEdit) setPendingAction(null); }, [canEdit]);
   const isVideo = file?.kind === "video";
   const normalizedFilename = filename.trim();
   const normalizedDescription = description.trim() || null;
-  const savedDescription = (isVideo ? file?.caption : file?.altText)?.trim() || null;
-  const dirty = Boolean(file) && (normalizedFilename !== file?.filename.trim() || normalizedDescription !== savedDescription || (isVideo && posterMediaId !== (file?.posterMediaId ?? null)));
+  const base = baseRef.current ?? file;
+  const savedDescription = (isVideo ? base?.caption : base?.altText)?.trim() || null;
+  const dirty = canEdit && Boolean(file) && (normalizedFilename !== base?.filename.trim() || normalizedDescription !== savedDescription || (isVideo && posterMediaId !== (base?.posterMediaId ?? null)));
   const index = file ? files.findIndex((item) => item.id === file.id) : -1;
 
   const requestClose = (nextOpen: boolean) => {
@@ -126,18 +147,54 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
     else if (action) onNavigate(action);
   };
   const save = async () => {
-    if (!file || savingRef.current || !normalizedFilename || !dirty) return;
+    if (!file || !base || !canEdit || recovery === "unavailable" || savingRef.current || !normalizedFilename || !dirty) return;
     savingRef.current = true;
     setSaving(true);
     const savingKey = draftKeyRef.current;
     try {
-      const updated = await onUpdate(file, {
+      const updated = await onUpdate(base, {
         filename: normalizedFilename,
         ...(isVideo ? { caption: normalizedDescription, posterMediaId } : { altText: normalizedDescription }),
       });
+      announceSave(presenceKey("media", updated.id), updated.version);
       if (draftKeyRef.current === savingKey) resetDraft(updated);
-    } catch {
-      // The owning hook shows the error and the merchant's edits stay in place.
+    } catch (error) {
+      if (isMediaVersionConflict(error)) {
+        try {
+          const latest = await onReload(file.id);
+          if (baseRef.current?.id !== base.id) return;
+          if (!latest || latest.status !== "ready") {
+            setRecovery("unavailable");
+            recoveryFocus.current = "field";
+          } else {
+            const { mergeSettingsDraft } = await import("~/lib/merge-document");
+            const merged = await mergeSettingsDraft(mediaMetadata(base), mediaMetadata(latest), {
+              filename: normalizedFilename, description: normalizedDescription, posterMediaId,
+            }, { fields: { filename: "media-filename", description: "media-description", posterMediaId: "media-cover" } });
+            if (baseRef.current?.id !== base.id) return;
+            if (merged) {
+              // Adopt only after the choice; suppress the incoming version's reset effect.
+              draftKeyRef.current = `${latest.id}:${latest.version}`;
+              baseRef.current = latest;
+              setFilename(merged.filename);
+              setDescription(merged.description ?? "");
+              setPosterMediaId(merged.posterMediaId);
+              if (merged.posterMediaId === latest.posterMediaId) {
+                const savedPoster = resolveSavedPoster(latest, files);
+                setPoster(savedPoster.poster);
+                setPosterUrl(savedPoster.posterUrl);
+              }
+              onAdopt(latest);
+              setRecovery("merged");
+              recoveryFocus.current = "save";
+            } else recoveryFocus.current = "field";
+          }
+        } catch {
+          setRecovery("failed");
+          recoveryFocus.current = "field";
+        }
+      }
+      // Other failures are shown by the owning hook; drafts remain unchanged.
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -162,18 +219,19 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
   return (
     <>
       <Dialog open={open && Boolean(file)} onOpenChange={requestClose}>
-        <DialogContent aria-busy={saving || undefined} onEscapeKeyDown={(event) => {
+        <DialogContent data-presence-root={open && file ? presenceKey("media", file.id) : undefined} aria-busy={saving || undefined} onEscapeKeyDown={(event) => {
           if (original?.active) { event.preventDefault(); showFit(); }
         }} className="flex h-[92svh] w-full flex-col gap-0 overflow-hidden p-0 sm:w-[94vw] sm:max-w-[100rem]">
           <div className="flex shrink-0 flex-col gap-1 border-b py-3 ps-4 pe-14">
             <DialogTitle className="line-clamp-2 break-words text-heading-sm">{file?.filename}</DialogTitle>
             <DialogDescription className="break-words">{meta}</DialogDescription>
+            <PresenceSlot presenceKey={open && file ? presenceKey("media", file.id) : null} revision={file?.version ?? null} dirty={dirty} readOnly={!canEdit} />
           </div>
           {file ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto md:grid md:grid-cols-[minmax(0,1fr)_18rem] md:grid-rows-[minmax(0,1fr)] md:overflow-hidden">
               <div className="relative h-[min(14rem,38svh)] max-h-full min-h-0 min-w-0 shrink-0 bg-muted md:h-auto">
                 <div className="absolute inset-3 flex items-center justify-center">
-                  <PreviewAsset key={previewKey} file={file} posterUrl={posterUrl} original={original} onOriginalStatus={finishOriginal} originalViewportRef={originalViewportRef} />
+                  <PreviewAsset key={previewKey} file={file} posterUrl={shownPoster.posterUrl} original={original} onOriginalStatus={finishOriginal} originalViewportRef={originalViewportRef} />
                 </div>
                 <Button type="button" variant="outline" size="icon" className="absolute inset-s-3 top-1/2 -translate-y-1/2" disabled={saving || index <= 0} onClick={() => requestNavigation(-1)} aria-label={t("previousFile")}>
                   <ChevronLeft aria-hidden="true" />
@@ -184,35 +242,35 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
               </div>
               <div className="flex min-h-0 min-w-0 shrink-0 flex-col gap-4 border-t p-4 md:overflow-y-auto md:border-s md:border-t-0">
                 <Field id="media-filename" label={t("fileName")}>
-                  <Input id="media-filename" maxLength={255} disabled={saving} value={filename} onChange={(event) => setFilename(event.target.value)} />
+                  <Input id="media-filename" maxLength={255} disabled={saving} readOnly={!canEdit} value={canEdit ? filename : file.filename} onChange={(event) => setFilename(event.target.value)} />
                 </Field>
                 <Field id="media-description" label={t(isVideo ? "videoDescription" : "altText")} help={t(isVideo ? "videoDescriptionHelp" : "altTextHelp")}>
-                  <Textarea id="media-description" rows={4} maxLength={isVideo ? 2000 : 500} disabled={saving} value={description} onChange={(event) => setDescription(event.target.value)} />
+                  <Textarea id="media-description" rows={4} maxLength={isVideo ? 2000 : 500} disabled={saving} readOnly={!canEdit} value={canEdit ? description : (isVideo ? file.caption : file.altText) ?? ""} onChange={(event) => setDescription(event.target.value)} />
                 </Field>
                 {isVideo ? (
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-body font-medium">{t("coverImage")}</span>
-                    {posterUrl || posterMediaId ? (
+                    <label htmlFor="media-cover" className="text-body font-medium">{t("coverImage")}</label>
+                    {shownPoster.posterUrl || shownPoster.posterMediaId ? (
                       <div className="flex items-center gap-2 rounded-lg border p-2">
-                        {posterUrl ? <img src={mediaImageUrl(posterUrl, 160)} alt="" className="h-10 w-14 rounded-md bg-muted object-contain" /> : null}
-                        <span className="min-w-0 flex-1 truncate text-body">{poster?.filename ?? t("coverImage")}</span>
-                        <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => { setPoster(null); setPosterMediaId(null); setPosterUrl(null); }}>
+                        {shownPoster.posterUrl ? <img src={mediaImageUrl(shownPoster.posterUrl, 160)} alt="" className="h-10 w-14 rounded-md bg-muted object-contain" /> : null}
+                        <span className="min-w-0 flex-1 truncate text-body">{shownPoster.poster?.filename ?? t("coverImage")}</span>
+                        {canEdit ? <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => { setPoster(null); setPosterMediaId(null); setPosterUrl(null); }}>
                           {t("remove")}
-                        </Button>
+                        </Button> : null}
                       </div>
                     ) : (
                       <p className="text-body text-muted-foreground">{t("noCoverImage")}</p>
                     )}
-                    <MediaManager
+                    {canEdit ? <MediaManager
                       capability="image"
                       onSelect={(image) => { setPoster(image); setPosterMediaId(image.id); setPosterUrl(image.url); }}
                       trigger={
-                        <Button type="button" variant="outline" disabled={saving}>
+                        <Button id="media-cover" type="button" variant="outline" disabled={saving}>
                           <ImagePlus aria-hidden="true" />
                           {t(posterMediaId ? "changeCoverImage" : "chooseCoverImage")}
                         </Button>
                       }
-                    />
+                    /> : null}
                   </div>
                 ) : null}
                 {/* The picker keeps the merchant in their editor; "Used in" links live on the Files page. */}
@@ -233,6 +291,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
             </div>
           ) : null}
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t px-4 py-3">
+            {recovery ? <span className="w-full text-body text-muted-foreground" role="status">{t(recovery === "merged" ? "metadataReloaded" : recovery === "unavailable" ? "metadataUnavailable" : "metadataReloadFailed")}</span> : null}
             {dirty ? <span className="w-full text-body text-muted-foreground" aria-live="polite">{r("unsavedChanges")}</span> : null}
             {file?.kind === "image" ? <span className={original?.status === "error" ? "w-full text-body text-muted-foreground" : "sr-only"} role="status">{original?.status === "error" ? t("originalPreviewFailed") : null}</span> : null}
             {file?.kind === "image" ? (
@@ -245,7 +304,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
               {onSelect && file ? (
                 <Button type="button" variant="outline" disabled={saving} onClick={requestSelection}>{t(isVideo ? "useVideo" : "useImage")}</Button>
               ) : null}
-              <Button type="button" loading={saving} aria-label={r("save")} disabled={!normalizedFilename || !dirty} onClick={() => void save()}>{r("save")}</Button>
+              {canEdit ? <Button ref={saveRef} type="button" loading={saving} aria-label={r("save")} disabled={!normalizedFilename || !dirty || recovery === "unavailable"} onClick={() => void save()}>{r("save")}</Button> : null}
             </div>
           </div>
         </DialogContent>

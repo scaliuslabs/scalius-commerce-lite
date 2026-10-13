@@ -137,6 +137,8 @@ async function placeGuestOrder(contact: { phone: string; email: string | null; n
     checkoutRequestId: `request-${++orderCounter}`,
     requestKey: `checkout_submit:v1:${String(orderCounter).padEnd(64, "0")}`,
     requestHash: "b".repeat(64),
+    legacyRequestHash: "b".repeat(64),
+    customerWhatsapp: null,
     statusToken: `cst_${String(orderCounter).padEnd(64, "0")}`,
   });
   const revision = Number(sqlite.prepare("SELECT revision FROM checkout_authority WHERE id = 'default'").get()?.revision);
@@ -646,6 +648,8 @@ describe("one sign-in flow", () => {
   it("pre-fills a new buyer from their latest order and saves its address only when asked (R2-SJ-09)", async () => {
     await placeGuestOrder({ phone: STRANGER_PHONE, email: "Rahim@Example.test", name: "Old Name" });
     await placeGuestOrder({ phone: BUYER_PHONE, email: "rahim@example.test", name: "Rahim Uddin" });
+    // Orders can share a second; make the intended newest fixture explicit.
+    sqlite.exec("UPDATE orders SET created_at = CASE customer_name WHEN 'Old Name' THEN 100 ELSE 200 END");
     const orderNumber = sqlite.prepare(
       "SELECT order_number AS n FROM orders WHERE customer_phone = ? ORDER BY created_at DESC LIMIT 1",
     ).get(BUYER_PHONE)?.n;

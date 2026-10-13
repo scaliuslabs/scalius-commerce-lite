@@ -19,6 +19,7 @@ import {
   cacheDepPostgresTrigger,
 } from "./cache-dep-triggers";
 import { eventOutboxPostgresTrigger } from "./event-outbox-triggers";
+import { conversationSearchPostgresCollation } from "./conversation-workspace";
 
 export const POSTGRES_SCHEMA_BUNDLE_VERSION =
   "scalius-postgres-schema/v1" as const;
@@ -267,7 +268,7 @@ export function compileSqliteDdlForPostgres(sql: string): string {
   if (state !== "normal" && state !== "line") {
     throw new Error("Unterminated SQLite DDL literal or comment.");
   }
-  return output.replace(/\),\s*0\)\s*\)/g, "), false))");
+  return conversationSearchPostgresCollation(output.replace(/\),\s*0\)\s*\)/g, "), false))"));
 }
 
 function splitTriggerStatements(body: string): readonly string[] {

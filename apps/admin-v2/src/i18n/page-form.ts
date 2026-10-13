@@ -3,6 +3,8 @@ import { defineMessages } from "./index";
 /** The page and blog post editor. */
 export const pageFormMessages = defineMessages({
   en: {
+    yes: "Yes",
+    no: "No",
     page: "Page",
     blogPost: "Blog post",
     addPage: "Add page",
@@ -49,6 +51,8 @@ export const pageFormMessages = defineMessages({
     addressTaken: "This web address is taken. Try another.",
   },
   bn: {
+    yes: "হ্যাঁ",
+    no: "না",
     page: "পেজ",
     blogPost: "ব্লগ পোস্ট",
     addPage: "পেজ যোগ করুন",

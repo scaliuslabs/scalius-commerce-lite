@@ -87,4 +87,19 @@ describe("ProductImagesSection", () => {
     expect(host.querySelectorAll("button")).toHaveLength(0);
     expect(host.textContent).not.toContain("Add media");
   });
+  it("reveals image 13 while keeping saved media unchanged and closes an editor after revocation", async () => {
+    await act(async () => button("Edit the description of photo 2 of 3")!.click());
+    expect(host.querySelector("input")).not.toBeNull();
+    await act(async () => root.render(<Harness readOnly />));
+    expect(host.querySelector("input")).toBeNull();
+    const saved = Array.from({ length: 13 }, (_, index) => media(`item-${index}`, `image-${index}.png`, index));
+    act(() => form.reset({ media: saved } as ProductFormValues));
+    expect(host.querySelectorAll("article")).toHaveLength(12);
+    const more = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("13"))!;
+    await act(async () => more.click());
+    expect(host.querySelectorAll("article")).toHaveLength(13);
+    expect(form.getValues("media")).toEqual(saved);
+    expect(host.querySelectorAll("input")).toHaveLength(0);
+  });
+
 });

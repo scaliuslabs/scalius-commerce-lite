@@ -156,7 +156,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                     {showAll ? t("showFewerMedia") : t("showAllMedia", { count: field.value.length })}
                   </Button>
                 ) : null}
-                {editingId ? (
+                {!readOnly && editingId ? (
                   <MediaDetailsEditor
                     item={field.value.find((candidate) => candidate.id === editingId) ?? null}
                     index={field.value.findIndex((candidate) => candidate.id === editingId)}

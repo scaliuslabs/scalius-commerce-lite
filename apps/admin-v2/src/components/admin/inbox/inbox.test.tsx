@@ -8,6 +8,8 @@ import { PermissionProvider } from "~/contexts/PermissionContext";
 import { inboxMessages } from "~/i18n/inbox";
 
 const sdk = vi.hoisted(() => ({
+  userId: "u1",
+  navigate: vi.fn(),
   list: vi.fn(),
   get: vi.fn(),
   getOrder: vi.fn(),
@@ -18,12 +20,21 @@ const sdk = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-router", () => ({
+  useRouteContext: () => sdk.userId,
+  useNavigate: () => sdk.navigate,
   Link: ({ to, children, params: _params, search: _search, ...props }: { to: string; children: ReactNode; params?: unknown; search?: unknown }) =>
     <a href={to} {...props}>{children}</a>,
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1AdminConversations: sdk.list,
+  postApiV1AdminConversationsQuery: sdk.list,
+  getApiV1AdminConversationsAssignees: vi.fn(),
+  getApiV1AdminConversationsSavedReplies: vi.fn(),
+  getApiV1AdminConversationsSavedRepliesByReplyId: vi.fn(),
+  postApiV1AdminConversationsSavedReplies: vi.fn(),
+  patchApiV1AdminConversationsSavedRepliesByReplyId: vi.fn(),
+  postApiV1AdminConversationsByIdSearch: vi.fn(),
   getApiV1AdminConversationsById: sdk.get,
   getApiV1AdminConversationsOrderByOrderId: sdk.getOrder,
   getApiV1AdminConversationsSummary: vi.fn(),
@@ -33,6 +44,9 @@ vi.mock("@scalius/api-client/sdk", () => ({
   postApiV1AdminConversationsOrderByOrderIdMessages: sdk.postOrder,
 }));
 
+vi.mock("~/lib/realtime/store", () => ({ PresenceSlot: () => null, presenceKey: (kind: string, id: string) => `${kind}:${id}` }));
+
+import { clearInboxDrafts } from "~/lib/inbox-drafts";
 import { useMarkRead } from "./inbox-api";
 import { inboxKeys } from "~/lib/api-query-options/inbox";
 import { ConversationComposer } from "./ConversationComposer";
@@ -60,6 +74,8 @@ const thread: StaffThread = {
   customerName: "Rahim Uddin",
   assigneeUserId: null,
   assigneeName: null,
+  assigneeEligible: false,
+  lastMessageVisibility: "public",
   lastMessageAt: 1_780_000_300,
   lastAuthorType: "customer",
   preview: "Any update?",
@@ -104,6 +120,8 @@ describe("dashboard inbox", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    clearInboxDrafts();
+    sdk.userId = "u1";
     intersections.length = 0;
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     vi.stubGlobal("IntersectionObserver", class {
@@ -129,7 +147,7 @@ describe("dashboard inbox", () => {
   it("lists conversations with who wrote, the order, a preview and the unread count", async () => {
     sdk.list.mockImplementation(() => ok({ items: [thread], nextCursor: null }));
     await render(<InboxList search={{}} selectedId={null} onSearchChange={vi.fn()} />);
-    expect(sdk.list).toHaveBeenCalledWith({ query: expect.objectContaining({ status: "open" }) });
+    expect(sdk.list).toHaveBeenCalledWith({ body: expect.objectContaining({ status: "open" }) });
     const row = host.querySelector("li a")!;
     expect(row.textContent).toContain("Rahim Uddin");
     expect(row.textContent).toContain("Order #1057");
@@ -145,20 +163,21 @@ describe("dashboard inbox", () => {
 
     act(() => root.unmount());
     root = createRoot(host);
-    await render(<InboxList search={{ q: "nothing" }} selectedId={null} onSearchChange={onSearchChange} />);
+    await render(<InboxList search={{}} query="nothing" selectedId={null} onSearchChange={onSearchChange} />);
     expect(host.textContent).toContain(en["empty.filtered"]);
     await act(async () => button(en.clearFilters)!.click());
-    expect(onSearchChange).toHaveBeenCalledWith({ q: undefined, assignee: undefined, subject: undefined });
+    expect(onSearchChange).toHaveBeenCalledWith({ assignee: undefined, subject: undefined, unread: undefined, sort: undefined });
   });
 
   it("filters by what the conversation is about, and counts that filter when the list is empty", async () => {
     sdk.list.mockImplementation(() => ok({ items: [], nextCursor: null }));
     const onSearchChange = vi.fn();
     await render(<InboxList search={{ subject: "warranty_claim" }} selectedId={null} onSearchChange={onSearchChange} />);
-    expect(sdk.list).toHaveBeenCalledWith({ query: expect.objectContaining({ subjectType: "warranty_claim" }) });
+    expect(sdk.list).toHaveBeenCalledWith({ body: expect.objectContaining({ subjectType: "warranty_claim" }) });
     expect(host.textContent).toContain(en["empty.filtered"]);
 
-    const select = host.querySelector<HTMLButtonElement>(`button[role="combobox"][aria-label="${en.subjectFilter}"]`)!;
+    await act(async () => host.querySelector<HTMLButtonElement>(`button[aria-label="${en.filters}"]`)!.click());
+    const select = document.querySelector<HTMLButtonElement>(`button[role="combobox"][aria-label="${en.subjectFilter}"]`)!;
     expect(select.textContent).toContain(en["subject.warranty_claim"]);
     await act(async () => select.click());
     const options = () => [...document.querySelectorAll<HTMLButtonElement>('button[role="option"]')];
@@ -185,7 +204,7 @@ describe("dashboard inbox", () => {
 
   it("shows the customer's words and images, colleagues' notes marked internal, and case events", async () => {
     await render(<ConversationMessages thread={thread} currentUserId="u1" />);
-    const items = [...host.querySelectorAll("ol > li")].map((item) => item.textContent ?? "");
+    const items = [...host.querySelectorAll("[data-message-seq]")].map((item) => item.textContent ?? "");
     expect(items[0]).toContain("submitted");
     expect(items[1]).toContain("Rahim Uddin");
     expect(items[1]).toContain("The strap broke");
@@ -193,6 +212,20 @@ describe("dashboard inbox", () => {
     expect(items[2]).toContain("Nadia");
     expect(items[3]).toContain(en.you);
     expect(host.querySelector("img")?.getAttribute("src")).toContain("/api/v1/admin/conversations/cnv_thread0000001/attachments/att_photo0000001");
+  });
+
+  it("returns focus to More actions when Find closes", async () => {
+    sdk.get.mockImplementation(() => ok({ conversation: thread }));
+    await render(<ConversationPane conversationId={thread.id} currentUserId="u1" search={{}} />, ["conversations.view"]);
+    const more = host.querySelector<HTMLButtonElement>(`button[aria-label="${en.moreActions}"]`)!;
+    await act(async () => more.dispatchEvent(new PointerEvent("pointerdown", { button: 0, bubbles: true, ctrlKey: false })));
+    const find = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) => item.textContent === en.find)!;
+    await act(async () => find.click());
+    const input = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+    input.focus();
+    await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(host.querySelector('input[type="search"]')).toBeNull();
+    expect(document.activeElement).toBe(more);
   });
 
   it("sends a reply with Ctrl+Enter, reuses the draft's key after a failure and renews it after a send", async () => {
@@ -221,7 +254,7 @@ describe("dashboard inbox", () => {
   it("adds an internal note from the note tab", async () => {
     sdk.post.mockImplementation(() => ok({ conversation: thread }));
     await render(<ConversationComposer conversationId={thread.id} />);
-    const noteTab = [...host.querySelectorAll('[role="tab"]')].find((tab) => tab.textContent === en.note) as HTMLElement;
+    const noteTab = [...host.querySelectorAll('[role="tab"]')].find((tab) => tab.getAttribute("aria-label") === en.note) as HTMLElement;
     await act(async () => {
       noteTab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
       noteTab.click();
@@ -263,7 +296,7 @@ describe("dashboard inbox", () => {
     sdk.post.mockImplementation(() => ok({ conversation: thread }));
     await render(<OrderConversationCard order={{ id: "ord_1", supportRequests: [] } as unknown as Order} />);
     await act(async () => { await import("./ConversationComposer"); });
-    const noteTab = [...host.querySelectorAll('[role="tab"]')].find((tab) => tab.textContent === en.note) as HTMLElement;
+    const noteTab = [...host.querySelectorAll('[role="tab"]')].find((tab) => tab.getAttribute("aria-label") === en.note) as HTMLElement;
     await act(async () => {
       noteTab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
       noteTab.click();
@@ -280,7 +313,7 @@ describe("dashboard inbox", () => {
   it("marks the thread read, closes it with its version, and hides replies from read-only staff", async () => {
     sdk.get.mockImplementation(() => ok({ conversation: thread }));
     sdk.patch.mockImplementation(() => ok({ conversation: { ...thread, status: "closed", version: 5 } }));
-    await render(<ConversationPane conversationId={thread.id} currentUserId="u1" search={{}} />);
+    await render(<ConversationPane conversationId={thread.id} currentUserId="u1" search={{}} split />);
     expect(sdk.read).not.toHaveBeenCalled();
     await showTail();
     expect(sdk.read).toHaveBeenCalledWith({ path: { id: thread.id }, body: { seq: 4 } });
@@ -289,7 +322,7 @@ describe("dashboard inbox", () => {
 
     act(() => root.unmount());
     root = createRoot(host);
-    await render(<ConversationPane conversationId={thread.id} currentUserId="u1" search={{}} />, ["conversations.view"]);
+    await render(<ConversationPane conversationId={thread.id} currentUserId="u1" search={{}} split />, ["conversations.view"]);
     expect(host.querySelector("textarea")).toBeNull();
     expect(host.textContent).toContain(en.readOnly);
     expect(button(en.close)).toBeUndefined();
@@ -388,7 +421,7 @@ describe("dashboard inbox", () => {
     expect(host.querySelector("textarea")?.value).toBe("");
   });
 
-  it("drops a late image response after owner change and releases staged previews on unmount", async () => {
+  it("drops a late image response after owner change and releases retained previews on sign-out", async () => {
     let resolve!: (value: Response) => void;
     const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>((done) => { resolve = done; }));
     vi.stubGlobal("fetch", fetch);
@@ -411,6 +444,8 @@ describe("dashboard inbox", () => {
     expect(host.querySelector("img")?.getAttribute("src")).toBe("blob:staged");
     act(() => root.unmount());
     root = createRoot(host);
+    expect(revoke).not.toHaveBeenCalled();
+    clearInboxDrafts();
     expect(revoke).toHaveBeenCalledExactlyOnceWith("blob:staged");
   });
 
@@ -461,6 +496,86 @@ describe("dashboard inbox", () => {
     expect(retry.requestKey).toBe(first.requestKey);
     expect(edited.requestKey).not.toBe(first.requestKey);
     expect(edited.body).toBe("Edited reply");
+  });
+
+  const typeDraft = async (value: string) => act(async () => {
+    const input = host.querySelector("textarea")!;
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const chooseMode = async (label: string) => act(async () => {
+    const tab = [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((item) => (item.textContent === label || item.getAttribute("aria-label") === label))!;
+    tab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); tab.click();
+  });
+  it("restores independent reply/note drafts after thread navigation, without crossing accounts", async () => {
+    await render(<ConversationComposer conversationId={thread.id} />);
+    await typeDraft("Public reply");
+    await chooseMode(en.note);
+    expect(host.querySelector("textarea")!.value).toBe("");
+    await typeDraft("Private note");
+    await render(<ConversationComposer conversationId="other" />);
+    expect(host.querySelector("textarea")!.value).toBe("");
+    await render(<ConversationComposer conversationId={thread.id} />);
+    expect(host.querySelector("textarea")!.value).toBe("Public reply");
+    await chooseMode(en.note);
+    expect(host.querySelector("textarea")!.value).toBe("Private note");
+    sdk.userId = "another-staff";
+    await render(<ConversationComposer conversationId={thread.id} />);
+    expect(host.querySelector("textarea")!.value).toBe("");
+    sdk.userId = "u1";
+    await render(<ConversationComposer conversationId={thread.id} />);
+    expect(host.querySelector("textarea")!.value).toBe("");
+  });
+
+  it("settles the sent reply after unmount while preserving the private note", async () => {
+    let done!: (result: Awaited<ReturnType<typeof ok>>) => void;
+    sdk.post.mockImplementationOnce(() => new Promise((resolve) => { done = resolve; }));
+    await render(<ConversationComposer conversationId={thread.id} />);
+    await typeDraft("Sent reply");
+    await act(async () => button(en.send)!.click());
+    await chooseMode(en.note);
+    await typeDraft("Unsent note");
+    await render(<ConversationComposer conversationId="other" />);
+    await act(async () => done(await ok({ conversation: thread })));
+    await render(<ConversationComposer conversationId={thread.id} />);
+    expect(host.querySelector("textarea")!.value).toBe("");
+    await chooseMode(en.note);
+    expect(host.querySelector("textarea")!.value).toBe("Unsent note");
+  });
+
+  it("does not send while composing with an IME", async () => {
+    sdk.post.mockImplementation(() => ok({ conversation: thread }));
+    await render(<ConversationComposer conversationId={thread.id} />);
+    await typeDraft("বাংলা");
+    await act(async () => host.querySelector("textarea")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, isComposing: true, bubbles: true })));
+    expect(sdk.post).not.toHaveBeenCalled();
+  });
+
+  it("updates transient search without navigation, and never replays stale text after an external clear", async () => {
+    sdk.list.mockImplementation(() => ok({ items: [], nextCursor: null }));
+    const onQueryChange = vi.fn();
+    const onSearchChange = vi.fn();
+    await render(<InboxList search={{}} query="before" onQueryChange={onQueryChange} selectedId={null} onSearchChange={onSearchChange} />);
+    await act(async () => {
+      const input = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "private query");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 310)));
+    expect(onQueryChange).toHaveBeenLastCalledWith("private query");
+    expect(onSearchChange).not.toHaveBeenCalled();
+    expect(sdk.navigate).not.toHaveBeenCalled();
+    await render(<InboxList search={{ status: "closed" }} query="" onQueryChange={onQueryChange} selectedId={null} onSearchChange={onSearchChange} />);
+    expect(host.querySelector<HTMLInputElement>('input[type="search"]')!.value).toBe("");
+    expect(validateInboxSearch({ q: "private query", status: "closed" })).toEqual({ status: "closed" });
+  });
+
+  it("offers keyboard browsing to viewers while assignment/status/reply keys stay inert", async () => {
+    sdk.get.mockImplementation(() => ok({ conversation: thread }));
+    await render(<ConversationPane conversationId={thread.id} currentUserId="u1" search={{}} />, ["conversations.view"]);
+    for (const key of ["a", "e", "r", "n"]) await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key, cancelable: true })));
+    expect(sdk.patch).not.toHaveBeenCalled();
+    expect(host.querySelector("textarea")).toBeNull();
   });
 
 });

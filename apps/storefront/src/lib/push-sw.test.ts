@@ -25,10 +25,10 @@ function load(scriptUrl = `${ORIGIN}/push-sw.js`) {
       openWindow,
     },
   };
-  const fetchSession = vi.fn(async () => new Response(JSON.stringify({ success: true, data: { authenticated: true, customer: { customerId: "cust_A" } } })));
+  const fetchSession = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({ success: true, data: { authenticated: true, customer: { customerId: "cust_A" } } })));
   new Function("self", "URL", "fetch", "AbortController", "setTimeout", "clearTimeout", SOURCE)(scope, URL, fetchSession, AbortController, setTimeout, clearTimeout);
   const wait = async (event: { promise?: Promise<unknown> }) => event.promise;
-  return { listeners, showNotification, openWindow, clients, scope, wait };
+  return { listeners, showNotification, openWindow, clients, scope, wait, fetchSession };
 }
 
 function push(worker: ReturnType<typeof load>, payload: unknown, raw = false) {
@@ -40,11 +40,11 @@ function push(worker: ReturnType<typeof load>, payload: unknown, raw = false) {
   return promise;
 }
 
-function click(worker: ReturnType<typeof load>, url: unknown) {
+function click(worker: ReturnType<typeof load>, url: unknown, owner: string | undefined = "cust_A") {
   let promise: Promise<unknown> | undefined;
   const close = vi.fn();
   worker.listeners.get("notificationclick")!({
-    notification: { close, data: { url } },
+    notification: { close, data: { url, pushOwner: owner } },
     waitUntil: (value: Promise<unknown>) => { promise = value; },
   });
   return { promise, close };
@@ -116,8 +116,8 @@ describe("push-sw.js", () => {
 
   it("a click takes another open store tab to the url, else opens it", async () => {
     const worker = load();
-    const navigate = vi.fn(async () => ({}));
-    const focus = vi.fn(async function (this: unknown) { return { navigate }; });
+    const focus = vi.fn(async () => ({}));
+    const navigate = vi.fn(async () => ({ focus }));
     worker.clients.list = [{ url: `${ORIGIN}/cart`, focus, navigate }, { url: "https://other.example/", focus: vi.fn(), navigate: vi.fn() }];
     await click(worker, "/account/orders/ord_1").promise;
     expect(navigate).toHaveBeenCalledWith("/account/orders/ord_1");
@@ -138,5 +138,78 @@ describe("push-sw.js", () => {
     await click(worker, "").promise;
     expect(focus).toHaveBeenCalled();
     expect(worker.openWindow).not.toHaveBeenCalled();
+  });
+
+  it.each(["focus-reject", "focus-null", "navigate-reject", "navigate-null"])("opens the destination when a tab cannot handle %s", async (failure) => {
+    const worker = load();
+    const focus = vi.fn(async () => {
+      if (failure === "focus-reject") throw new Error("closed");
+      return null;
+    });
+    const navigate = vi.fn(async () => {
+      if (failure === "navigate-reject") throw new Error("uncontrolled");
+      return null;
+    });
+    worker.clients.list = [{ url: `${ORIGIN}${failure.startsWith("focus") ? "/account/orders/ord_1" : "/cart"}`, focus, navigate }];
+    await click(worker, "/account/orders/ord_1").promise;
+    expect(worker.openWindow).toHaveBeenCalledExactlyOnceWith("/account/orders/ord_1");
+  });
+
+  it("does not duplicate a successfully navigated destination when focusing it fails", async () => {
+    const worker = load();
+    const focus = vi.fn(async () => { throw new Error("not focusable"); });
+    worker.clients.list = [{ url: `${ORIGIN}/cart`, navigate: vi.fn(async () => ({ focus })) }];
+    await click(worker, "/account/orders/ord_1").promise;
+    expect(focus).toHaveBeenCalledOnce();
+    expect(worker.openWindow).not.toHaveBeenCalled();
+  });
+
+  it.each(["other-account", "signed-out", "offline", "legacy"])("does not open an old private destination for %s", async (kind) => {
+    const worker = load();
+    if (kind === "other-account") worker.fetchSession.mockResolvedValue(new Response(JSON.stringify({ success: true, data: { authenticated: true, customer: { customerId: "cust_B" } } })));
+    if (kind === "signed-out") worker.fetchSession.mockResolvedValue(new Response(JSON.stringify({ success: true, data: { authenticated: false } })));
+    if (kind === "offline") worker.fetchSession.mockRejectedValue(new Error("offline"));
+    await click(worker, "/account/orders/ord_1", kind === "legacy" ? "" : "cust_A").promise;
+    expect(worker.openWindow).toHaveBeenCalledExactlyOnceWith("/");
+  });
+
+  it("takes an existing tab home when its notification belongs to a previous account", async () => {
+    const worker = load();
+    worker.fetchSession.mockResolvedValue(new Response(JSON.stringify({ success: true, data: { authenticated: false } })));
+    const focus = vi.fn(async () => ({}));
+    const navigate = vi.fn(async () => ({ focus }));
+    worker.clients.list = [{ url: `${ORIGIN}/account/orders/old`, focus, navigate }];
+    await click(worker, "/account/orders/old").promise;
+    expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
+    expect(worker.openWindow).not.toHaveBeenCalled();
+  });
+
+  it("does not revive a private click after logout and reenrollment during its identity read", async () => {
+    const worker = load();
+    let finish!: (value: Response) => void;
+    worker.fetchSession.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const pending = click(worker, "/account/orders/old").promise;
+    let logout!: Promise<unknown>;
+    worker.listeners.get("message")!({ data: { type: "scalius:push:sign-out" }, waitUntil: (value: Promise<unknown>) => { logout = value; } });
+    await logout;
+    worker.listeners.get("message")!({ data: { type: "scalius:push:enrolled", startedAt: Date.now() + 1 } });
+    finish(new Response(JSON.stringify({ success: true, data: { authenticated: true, customer: { customerId: "cust_A" } } })));
+    await pending;
+    expect(worker.openWindow).toHaveBeenCalledExactlyOnceWith("/");
+  });
+
+  it("abandons a stalled click identity read before the browser's short window-opening allowance expires", async () => {
+    vi.useFakeTimers();
+    try {
+      const worker = load();
+      worker.fetchSession.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+        init.signal!.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      }));
+      const pending = click(worker, "/account/orders/ord_1").promise;
+      await vi.advanceTimersByTimeAsync(800);
+      await pending;
+      expect(worker.openWindow).toHaveBeenCalledExactlyOnceWith("/");
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
   });
 });

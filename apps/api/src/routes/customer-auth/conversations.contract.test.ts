@@ -30,6 +30,21 @@ async function staffNoteAndReply(orderId: string) {
 }
 
 describe("buyer conversation contract (C4)", () => {
+  it("catches up without acknowledgment and authorizes the order read marker separately", async () => {
+    await staffNoteAndReply("ORDEROWNED000001");
+    const path = "/customer-auth/orders/ORDEROWNED000001/conversation";
+    const response = await harness.request(`${path}?afterSeq=1`, { session: OWNER_SESSION });
+    expect(response.status).toBe(200);
+    const payload = await response.json() as { data: { conversation: { messages: Array<{ seq: number }>; readSeq: number; unread: number } } };
+    expect(payload.data.conversation.messages.map((message) => message.seq)).toEqual([2]);
+    expect(payload.data.conversation.unread).toBe(1);
+    expect((await harness.request(`${path}?afterSeq=0&beforeSeq=2`, { session: OWNER_SESSION })).status).toBe(400);
+    expect((await harness.request(`${path}/read`, { method: "POST", session: OTHER_SESSION, body: json({ seq: 2 }) })).status).toBe(404);
+    const read = await harness.request(`${path}/read`, { method: "POST", session: OWNER_SESSION, body: json({ seq: 2 }) });
+    expect(read.status).toBe(200);
+    expect(await read.json()).toMatchObject({ data: { readSeq: 2 } });
+  });
+
   it("returns only public lines to the account owner, the list and the guest receipt", async () => {
     const posted = await harness.request("/customer-auth/orders/ORDEROWNED000001/conversation", {
       method: "POST",

@@ -5,7 +5,7 @@
 import { safeBatch, type Database } from "@scalius/database/client";
 import { orderItems, orders, OrderStatus, PaymentStatus } from "@scalius/database/schema";
 import type { BatchItem } from "drizzle-orm/batch";
-import { and, asc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import {
     AUTO_FULFILLMENT_TYPES,
     isFulfillmentType,
@@ -211,6 +211,7 @@ export async function listOrdersAwaitingAutoFulfil(
     db: Database,
     limit = AUTO_FULFIL_SWEEP_LIMIT,
     mode?: AutoFulfilMode,
+    afterOrderId?: string,
 ): Promise<string[]> {
     const autoFulfilMode = mode ?? await readAutoFulfilMode(db);
     const rows = await db.selectDistinct({ id: orderItems.orderId })
@@ -218,6 +219,7 @@ export async function listOrdersAwaitingAutoFulfil(
         .innerJoin(orders, eq(orders.id, orderItems.orderId))
         .where(and(
             AUTO_PENDING_LINE,
+            afterOrderId ? gt(orderItems.orderId, afterOrderId) : undefined,
             inArray(orders.paymentStatus, SETTLED_PAYMENT_STATUSES),
             notInArray(orders.status, CLOSED_ORDER_STATUSES),
             isNull(orders.deletedAt),

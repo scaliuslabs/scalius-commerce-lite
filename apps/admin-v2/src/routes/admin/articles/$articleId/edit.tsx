@@ -29,7 +29,7 @@ function EditArticlePage() {
   const { data } = useSuspenseQuery(pageQueryOptions(articleId));
 
   return (
-    <div className="container max-w-7xl py-4 pb-8">
+    <div className="w-full max-w-7xl py-4 pb-8">
       <PageForm
         contentType="article"
         defaultValues={toPageFormValues(data)}

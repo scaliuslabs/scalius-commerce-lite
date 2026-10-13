@@ -3,6 +3,8 @@
 // channels the buyer changed, through the account API with the session
 // cookie; the outcome comes back as a flag in the URL, never a contact.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { accountMarketingConsentText } from "@scalius/shared/customer-marketing";
+import { newsletterCopy, newsletterLanguage } from "./newsletter-copy";
 
 const api = vi.hoisted(() => ({ fetch: vi.fn() }));
 vi.mock("@/lib/api/transport", () => ({
@@ -45,6 +47,15 @@ const CHANNELS = [
 
 beforeEach(() => {
   api.fetch.mockReset();
+});
+
+describe("account consent wording", () => {
+  it.each(["en", "bn", "bn-BD", "BN", "fr"])("records the heading, explanation and selected label rendered in %s", (language) => {
+    const copy = newsletterCopy(newsletterLanguage(language)).account;
+    for (const channel of ["email", "sms", "whatsapp", "push"] as const) {
+      expect(accountMarketingConsentText(language, channel)).toBe(`${copy.heading}: ${copy.text} [${copy.channelLabel[channel]}]`);
+    }
+  });
 });
 
 describe("account marketing preferences form", () => {

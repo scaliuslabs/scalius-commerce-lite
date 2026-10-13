@@ -780,7 +780,7 @@ export const customerDetailSchema = z.object({
   tags: z.array(z.string()),
   /** Marketing consent per channel for the customer's current address. */
   marketing: z.array(z.object({
-    channel: z.enum(["email", "sms", "whatsapp"]),
+    channel: z.enum(["email", "sms", "whatsapp", "push"]),
     status: z.enum(["subscribed", "pending", "unsubscribed", "not_subscribed"]),
     updatedAt: z.string().nullable(),
   })),

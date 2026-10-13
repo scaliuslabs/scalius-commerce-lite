@@ -6,13 +6,13 @@
 // Nothing here logs a body, a contact or a token.
 import {
   NEWSLETTER_HONEYPOT_FIELD,
+  MARKETING_CONTACT_CHANNELS,
   isMarketingChannel,
   type MarketingChannel,
 } from "@scalius/shared/customer-marketing";
 import { apiFetch } from "@/lib/api/transport";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 import {
-  newsletterConsentText,
   newsletterLanguage,
   type NewsletterLanguage,
   type NewsletterStatus,
@@ -32,7 +32,7 @@ export const NEWSLETTER_TOKEN_PAGE_HEADERS: Readonly<Record<string, string>> = {
 };
 
 const OPT_IN_TOKEN = /^[A-Za-z0-9_-]{43}$/;
-const UNSUBSCRIBE_TOKEN = /^u1\.[A-Za-z0-9_-]{1,200}\.(?:email|sms|whatsapp)\.[A-Za-z0-9_-]{43}$/;
+const UNSUBSCRIBE_TOKEN = /^u1\.[A-Za-z0-9_-]{1,200}\.(?:email|sms|whatsapp|push)\.[A-Za-z0-9_-]{43}$/;
 
 /** A double opt-in confirmation token's shape (the API decides whether it is live). */
 export function isNewsletterConfirmToken(value: unknown): value is string {
@@ -83,6 +83,7 @@ export interface NewsletterSignup {
   /** The form had an e-mail field (it posts one, empty or not). */
   emailOffered: boolean;
   whatsapp: boolean;
+  channels: Array<(typeof MARKETING_CONTACT_CHANNELS)[number]>;
   language: NewsletterLanguage;
 }
 
@@ -92,7 +93,8 @@ export function readNewsletterSignup(form: FormData): NewsletterSignup {
     phone: field(form, "phone", 32),
     email: field(form, "email", 254),
     emailOffered: form.has("email"),
-    whatsapp: form.get("whatsapp") !== null,
+    whatsapp: form.getAll("channel").includes("whatsapp"),
+    channels: MARKETING_CONTACT_CHANNELS.filter((channel) => form.getAll("channel").includes(channel)),
     language: newsletterLanguage(field(form, "language", 16)),
   };
 }
@@ -100,7 +102,7 @@ export function readNewsletterSignup(form: FormData): NewsletterSignup {
 export interface NewsletterOutcome {
   status: NewsletterStatus;
   /** The field the API refused (`invalid` only). */
-  field?: "phone" | "email";
+  field?: "phone" | "email" | "channel";
   retryAfterSeconds?: number;
 }
 
@@ -151,7 +153,7 @@ function failure(answer: ApiAnswer | null, refused: NewsletterStatus): Newslette
   }
   if (answer?.status === 400 || answer?.status === 422) {
     const field = answer.details.field;
-    return { status: refused, ...(field === "phone" || field === "email" ? { field } : {}) };
+    return { status: refused, ...(field === "phone" || field === "email" || field === "channel" ? { field } : {}) };
   }
   return { status: "error" };
 }
@@ -164,12 +166,13 @@ function failure(answer: ApiAnswer | null, refused: NewsletterStatus): Newslette
 export async function subscribeToNewsletter(request: Request, signup: NewsletterSignup): Promise<NewsletterOutcome> {
   if (signup.honeypot) return { status: "subscribed" };
   if (!signup.phone) return { status: "invalid", field: "phone" };
+  if (!signup.channels.length) return { status: "invalid", field: "channel" };
   const answer = await postMarketingApi(request, "/marketing/subscribe", {
     phone: signup.phone,
     ...(signup.email ? { email: signup.email } : {}),
-    ...(signup.whatsapp ? { whatsapp: true } : {}),
+    channels: signup.channels,
     language: signup.language,
-    consentText: newsletterConsentText(signup.language, { emailOffered: signup.emailOffered, whatsapp: signup.whatsapp }),
+
   });
   if (answer?.status === 200 && answer.data) {
     return { status: answer.data.result === "pending" ? "pending" : "subscribed" };

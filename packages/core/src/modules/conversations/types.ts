@@ -7,6 +7,7 @@ import type {
   ConversationMessageVisibility,
   ConversationStatus,
   ConversationSubjectType,
+  ConversationProductCard,
 } from "@scalius/shared/conversation";
 
 export interface ConversationAttachmentView {
@@ -19,6 +20,7 @@ export interface ConversationAttachmentView {
 
 /** One stored line: everything a staff view may show. */
 export interface ConversationMessageRecord {
+  products?: ConversationProductCard[];
   id: string;
   seq: number;
   kind: ConversationMessageKind;
@@ -35,6 +37,7 @@ export interface ConversationMessageRecord {
 
 /** A line as a buyer sees it: public only, no staff identity beyond "the store". */
 export interface BuyerConversationMessage {
+  products?: ConversationProductCard[];
   id: string;
   seq: number;
   kind: ConversationMessageKind;
@@ -64,6 +67,8 @@ export interface BuyerConversationThread extends BuyerConversationSummary {
   messages: BuyerConversationMessage[];
   /** More (older) messages exist before the first one returned. */
   hasMore: boolean;
+  /** More newer public lines after an incremental page; absent on older API versions. */
+  hasNewer?: boolean;
 }
 
 export interface StaffConversationSummary {
@@ -79,10 +84,12 @@ export interface StaffConversationSummary {
   customerName: string | null;
   assigneeUserId: string | null;
   assigneeName: string | null;
+  assigneeEligible: boolean;
   lastMessageAt: number | null;
   lastAuthorType: ConversationAuthorType | null;
   /** The last line's text, trimmed for the list; null for events and attachment-only lines. */
   preview: string | null;
+  lastMessageVisibility: ConversationMessageVisibility | null;
   unread: number;
   version: number;
 }
@@ -97,6 +104,7 @@ export interface StaffConversationCase {
 }
 
 export interface StaffConversationThread extends StaffConversationSummary {
+  hasNewer?: boolean;
   lastSeq: number;
   staffReadSeq: number;
   customerReadSeq: number;

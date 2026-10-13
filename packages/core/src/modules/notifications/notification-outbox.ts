@@ -87,7 +87,8 @@ export interface ClaimedNotificationOutbox {
     outboxId: string;
     claimId: string;
     attempts: number;
-    subjectType: NotificationSubjectType;
+    // Stored subjects may outlive a sender; dispatch dead-letters unsupported ones.
+    subjectType: typeof notificationOutbox.$inferSelect.subjectType;
     subjectId: string;
     audience: NotificationAudience;
     notificationType: OutboxNotificationType;

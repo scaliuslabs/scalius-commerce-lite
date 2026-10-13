@@ -17,6 +17,8 @@
 // With no active cron job a tick costs one indexed read.
 
 import type { Database } from "@scalius/database/client";
+import { pluginCronRuns } from "@scalius/database/schema";
+import { sql } from "drizzle-orm";
 import {
   claimPluginCronRun,
   expireStalePluginCronRuns,
@@ -45,6 +47,42 @@ export interface PluginCronTickResult {
   expired: number;
 }
 
+type CronJob = Awaited<ReturnType<typeof listActiveCronJobs>>[number];
+
+function dueCronJobs(jobs: readonly CronJob[], nowMs: number, timeZone: string) {
+  const due: Array<{ job: CronJob; slot: number }> = [];
+  for (const job of jobs) {
+    const declared = job.installation.manifest.cron.find((entry) => entry.name === job.name);
+    const schedule = declared ? parsePluginCronSchedule(declared.schedule) : null;
+    if (!schedule || typeof schedule === "string") continue;
+    const slotMs = latestPluginCronSlot(schedule, nowMs, {
+      timeZone,
+      lookbackMinutes: PLUGIN_CRON_LOOKBACK_MINUTES,
+    });
+    if (slotMs === null) continue;
+    const slot = Math.floor(slotMs / 1000);
+    if (job.installation.activatedAt === null || slot < job.installation.activatedAt) continue;
+    due.push({ job, slot });
+  }
+  return due;
+}
+
+/** Avoid queueing already claimed slots, while retaining missed-tick recovery. */
+export async function pendingPluginCronAppIds(db: Database, nowMs: number, timeZone: string): Promise<string[]> {
+  const due = dueCronJobs(await listActiveCronJobs(db), nowMs, timeZone);
+  if (due.length === 0) return [];
+  const slots = due.map(({ job, slot }) => ({ pluginId: job.installation.pluginId, name: job.name, slot }));
+  const claimed = await db.select({ pluginId: pluginCronRuns.pluginId, name: pluginCronRuns.cronName, slot: pluginCronRuns.scheduledFor })
+    .from(pluginCronRuns)
+    .where(sql`(${pluginCronRuns.pluginId}, ${pluginCronRuns.cronName}, ${pluginCronRuns.scheduledFor}) IN (
+      SELECT json_extract(value, '$.pluginId'), json_extract(value, '$.name'), json_extract(value, '$.slot')
+      FROM json_each(${JSON.stringify(slots)})
+    )`).all();
+  const key = (slot: { pluginId: string; name: string; slot: number }) => JSON.stringify([slot.pluginId, slot.name, slot.slot]);
+  const claimedKeys = new Set(claimed.map(key));
+  return [...new Set(slots.filter((slot) => !claimedKeys.has(key(slot))).map((slot) => slot.pluginId))];
+}
+
 export async function runDuePluginCron(options: {
   db: Database;
   env: Env;
@@ -53,30 +91,18 @@ export async function runDuePluginCron(options: {
   maxRuns?: number;
   budgetMs?: number;
   loaderFor?: PluginHostOptions["loaderFor"];
+  /** Queued limited-profile invocations isolate one app; claims still recheck current registration. */
+  onlyPluginId?: string;
 }): Promise<PluginCronTickResult> {
   const result: PluginCronTickResult = { due: 0, ran: 0, failed: 0, skipped: 0, deferred: 0, expired: 0 };
   const { db } = options;
-  const jobs = await listActiveCronJobs(db);
+  const jobs = (await listActiveCronJobs(db)).filter((job) => options.onlyPluginId === undefined || job.installation.pluginId === options.onlyPluginId);
   if (jobs.length === 0) return result;
   const nowMs = options.nowMs ?? Date.now();
   const started = Date.now();
   result.expired = await expireStalePluginCronRuns(db);
 
-  const due: Array<{ job: (typeof jobs)[number]; slot: number }> = [];
-  for (const job of jobs) {
-    const declared = job.installation.manifest.cron.find((entry) => entry.name === job.name);
-    const schedule = declared ? parsePluginCronSchedule(declared.schedule) : null;
-    if (!schedule || typeof schedule === "string") continue;
-    const slotMs = latestPluginCronSlot(schedule, nowMs, {
-      timeZone: storeTimeZoneOf(options.env),
-      lookbackMinutes: PLUGIN_CRON_LOOKBACK_MINUTES,
-    });
-    if (slotMs === null) continue;
-    const slot = Math.floor(slotMs / 1000);
-    // A slot before this activation belongs to no approved run.
-    if (job.installation.activatedAt === null || slot < job.installation.activatedAt) continue;
-    due.push({ job, slot });
-  }
+  const due = dueCronJobs(jobs, nowMs, storeTimeZoneOf(options.env));
   result.due = due.length;
   if (due.length === 0) return result;
 
@@ -107,4 +133,10 @@ export async function runDuePluginCron(options: {
     if (!outcome.ok) result.failed += 1;
   }
   return result;
+}
+
+export interface PluginCronQueueMessage {
+  type: "plugins.cron";
+  pluginId: string;
+  scheduledAt: number;
 }

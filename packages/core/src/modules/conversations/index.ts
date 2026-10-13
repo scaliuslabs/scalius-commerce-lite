@@ -16,6 +16,9 @@ export {
   isVerifiedCustomerAccount,
   listBuyerThreads,
   listStaffInbox,
+  queryStaffInbox,
+  listConversationAssignees,
+  replayConversationPost,
   markBuyerRead,
   markStaffRead,
   planConversationAppend,
@@ -44,3 +47,8 @@ export {
   updateAdminOrderSupportRequestStatus,
   type CaseSubmitResult,
 } from "./order-cases";
+
+export * from "./saved-replies";
+export * from "./cart-share";
+export { findConversationMessages, backfillConversationSearch } from "./search";
+export { getConversationContext } from "./context";

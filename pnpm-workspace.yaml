@@ -32,12 +32,12 @@ overrides:
   esbuild: "0.28.1"
   mdast-util-to-hast: "^13.2.1"
   markdown-it: ">=14.1.1"
-  devalue: "5.9.1"
+  devalue: "5.9.4"
   h3: ">=1.15.9"
   diff: ">=5.2.2"
   lodash: ">=4.17.23"
-  undici: ">=8.5.0"
-  fast-uri: "3.1.7"
+  undici: "8.11.2"
+  fast-uri: "3.1.8"
   svgo: "4.1.0"
   wrangler: "4.148.0"
   partyserver: "0.5.9"
@@ -47,7 +47,7 @@ overrides:
   ws: "8.21.0"
   qs: "6.16.0"
   js-yaml: "4.3.2"
-  brace-expansion: "5.0.9"
+  brace-expansion: "5.0.12"
   "nanoid@<3.3.17": "3.3.17"
   hono: "4.13.13"
   # One zod for the whole graph (Better Auth's types are re-exported by core).
@@ -58,7 +58,21 @@ overrides:
   # under cmdk alone duplicates the shared primitives in every route bundle.
   "cmdk>@radix-ui/react-dialog": "1.1.23"
   prosemirror-model: "1.25.11"
-  sharp: "0.35.4"
+  sharp: "0.35.5"
+  source-map-js: "1.2.2"
+  "postcss-selector-parser@^7": "7.1.6"
+  # Typography pins v6; v7 makes AST insertions during iteration safe.
+  # Its generated prose CSS must stay equivalent when this override changes.
+  "@tailwindcss/typography@0.5.20>postcss-selector-parser": "7.1.6"
+  # Routine refresh, not a confirmed security patch: the maintainer disputes
+  # GHSA-ch52-4w7c-c8xp (upstream issue 56). Used only by Astro's image build cache.
+  http-cache-semantics: "4.3.0"
+  # The agents server declaration chunk imports ClientOptions, even without
+  # client runtime use. Keep that type dependency patched; server stays on v2.0.
+  "agents@0.22.0>@modelcontextprotocol/client": "2.2.0"
+  # We use only agents/mcp/server, whose runtime and types never import SDK v1.
+  # Reassess this unused peer removal before an agents upgrade or legacy entry use.
+  "agents@0.22.0>@modelcontextprotocol/sdk": "-"
 
 allowBuilds:
   '@firebase/util': true

@@ -1,3 +1,4 @@
+import { NEWSLETTER_MARKETING_COPY } from "@scalius/shared/customer-marketing";
 // The newsletter signup form's model, shared by the homepage section, the
 // newsletter-grey footer and the /newsletter page: which fields it asks for
 // (the theme's newsletter section settings, else phone + optional e-mail),
@@ -59,7 +60,7 @@ export function newsletterFormModel(
     buttonLabel: settings?.buttonLabel?.trim() || copy.button,
     email,
     whatsapp: settings?.whatsapp === true,
-    consentLine: copy.consent({ email: email !== "hidden" }),
+    consentLine: NEWSLETTER_MARKETING_COPY[language],
   };
 }
 

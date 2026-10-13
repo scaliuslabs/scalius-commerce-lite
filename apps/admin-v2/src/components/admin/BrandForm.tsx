@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { presenceKey } from "~/lib/realtime/store";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -28,13 +29,13 @@ import { brandFormSchema, type BrandFormInput, type BrandFormValues } from "@/li
 import { getPlainText } from "@/lib/format-utils";
 import { queryKeys } from "@/lib/query-keys";
 import { readAdminApiErrorCode } from "@/lib/admin-api-error";
-import { useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
 import { brandMessages } from "~/i18n/brands";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { richTextOrNull } from "~/lib/rich-text-value";
-import { Field } from "~/components/ui/field";
+import { Field, ReadOnlyValue } from "~/components/ui/field";
 
 /** The saved brand as editor values (the logo as the file picker's value). */
 export function brandFormValues(brand: BrandDetail): BrandFormInput {
@@ -144,15 +145,16 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
     },
   });
 
-  const name = form.watch("name");
-  const slug = form.watch("slug");
-  const status = form.watch("status");
-  const description = form.watch("description");
+  const draft = form.watch();
+  const saved = form.formState.defaultValues as BrandFormInput;
+  const shown = canSave ? draft : saved;
+  const { name, slug, status, description } = shown;
   const errors = form.formState.errors;
   const committed = defaultValues?.status === "published" && defaultValues.slug;
 
   return (
     <FormContainer
+      presenceKey={defaultValues?.id ? presenceKey("brand", defaultValues.id) : null}
       heading={isEdit ? defaultValues?.name || t("brand") : t("addBrand")}
       actions={isEdit && defaultValues?.id ? <AppActionsMenu target="brand" id={defaultValues.id} /> : undefined}
       isSubmitting={isSubmitting}
@@ -179,7 +181,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
               <FormField
                 control={form.control}
                 name="name"
-                render={({ field, fieldState }) => (
+                render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("name")} value={saved.name} /> : (
                   <Field label={t("name")} error={fieldState.error?.message}>
                     <Input placeholder={t("namePlaceholder")} maxLength={120} {...field} />
                   </Field>
@@ -188,19 +190,15 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
               <FormField
                 control={form.control}
                 name="description"
-                render={({ field, fieldState }) => (
+                render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("description")} value={saved.description ? <RichContent content={saved.description} /> : null} /> : (
                   <Field label={t("description")} error={fieldState.error?.message}>
-                    {canSave ? (
-                      <DeferredTiptapEditor
-                        content={field.value ?? ""}
-                        onChange={(html) => field.onChange(richTextOrNull(html))}
-                        placeholder={t("descriptionPlaceholder")}
-                        ariaLabel={t("description")}
-                        compact
-                      />
-                    ) : (
-                      <RichContent content={field.value ?? ""} />
-                    )}
+                    <DeferredTiptapEditor
+                      content={field.value ?? ""}
+                      onChange={(html) => field.onChange(richTextOrNull(html))}
+                      placeholder={t("descriptionPlaceholder")}
+                      ariaLabel={t("description")}
+                      compact
+                    />
                   </Field>
                 )}
               />
@@ -218,13 +216,14 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
                 render={({ field, fieldState }) => (
                   <Field error={fieldState.error?.message}>
                     <FormImageUploadField
-                      value={selectedLogo?.id === field.value?.id ? selectedLogo : field.value}
+                      value={!canSave ? saved.logo : selectedLogo?.id === field.value?.id ? selectedLogo : field.value}
+                      readOnly={!canSave}
                       onChange={(file) => {
                         setSelectedLogo(file);
                         const saved = form.formState.defaultValues?.logo;
                         field.onChange(file && file.id === saved?.id ? saved : file);
                       }}
-                      aspectRatio="aspect-[3/2]"
+                      aspectRatio="aspect-3/2"
                       triggerLabel={t("chooseLogo")}
                       changeTriggerLabel={t("changeLogo")}
                       placeholder={t("noLogo")}
@@ -238,10 +237,10 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
           <SearchListingCard
             resource="brand"
             value={{
-              title: form.watch("metaTitle") ?? "",
-              description: form.watch("metaDescription") ?? "",
+              title: shown.metaTitle ?? "",
+              description: shown.metaDescription ?? "",
               handle: slug ?? "",
-              hidden: form.watch("noIndex") === true,
+              hidden: shown.noIndex === true,
             }}
             autoHandle={!isEdit && !slug && name?.trim() ? toHandle(name) || "brand" : undefined}
             onChange={(next) => {
@@ -276,7 +275,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
               <FormField
                 control={form.control}
                 name="status"
-                render={({ field }) => (
+                render={({ field }) => !canSave ? <ReadOnlyValue label={t("status")} value={t(saved.status === "published" ? "active" : "draft")} /> : (
                   <Field help={t(status === "published" ? "activeHelp" : "draftHelp")}>
                     <SearchableSelect
                       value={field.value} onValueChange={field.onChange} disabled={!canSave} ariaLabel={t("status")}
@@ -306,7 +305,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
               <FormField
                 control={form.control}
                 name="sortOrder"
-                render={({ field, fieldState }) => (
+                render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("sortOrder")} value={formatNumber(saved.sortOrder ?? 0)} numeric /> : (
                   <Field help={t("sortOrderHelp")} error={fieldState.error?.message}>
                     <Input
                       type="number"

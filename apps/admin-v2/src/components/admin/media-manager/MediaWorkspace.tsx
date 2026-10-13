@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useMediaPermissions } from "./hooks/useMediaPermissions";
+import { ReadOnlyNotice } from "~/components/admin/resource/ReadOnlyNotice";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
@@ -36,7 +39,9 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
   const [dragging, setDragging] = useState(false);
   const [confirm, setConfirm] = useState<{ action: "trash" | "permanent"; file?: LibraryMediaFile } | null>(null);
   const { cancelSelection, selectionMode, showPreview } = mm;
-  const canUpload = mm.view === "ready";
+  const permissions = useMediaPermissions();
+  const canUpload = permissions.upload && mm.view === "ready";
+  const canManage = permissions.upload || permissions.delete || permissions.folders;
   const filtered = Boolean(mm.filters.search) || (capability === "both" && Boolean(mm.filters.kind)) || mm.currentFolderId !== "all";
   const pageStart = mm.pageIndex * mm.pageSize;
   const visibleFiles = mm.files.slice(pageStart, pageStart + mm.pageSize);
@@ -67,10 +72,12 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
   // Trashing an unused file is undoable from the toast; a used one asks first
   // because it keeps showing where it's used.
   const lifecycle = (file: LibraryMediaFile, action: Lifecycle) => {
+    if (!(action === "restore" ? permissions.upload : permissions.delete)) return;
     if (action === "permanent" || (action === "trash" && file.usageCount > 0)) setConfirm({ action, file });
     else void mm.mutateOne(file, action);
   };
   const bulkLifecycle = (action: Lifecycle) => {
+    if (!(action === "restore" ? permissions.upload : permissions.delete)) return;
     if (action === "permanent" && deletable.length > 0) setConfirm({ action });
     else if (action === "trash" && usedSelected > 0) setConfirm({ action });
     else void mm.mutateSelected(action);
@@ -117,7 +124,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
 
   const body = (
     <>
-      <input
+      {canUpload ? <input
         ref={inputRef}
         className="sr-only"
         type="file"
@@ -129,7 +136,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
           void mm.uploadFiles(event.target.files);
           event.currentTarget.value = "";
         }}
-      />
+      /> : null}
       {!picker ? (
         <IndexTabs
           label={t("title")}
@@ -149,7 +156,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
         folders={mm.folders}
         currentFolderId={mm.currentFolderId}
         isMutating={mm.isMutating}
-        allowSelection={!picker || multiple}
+        allowSelection={picker ? multiple : canManage}
         allowManagement={!picker}
         onSearch={mm.applySearch}
         onClearFilters={mm.files.length > 0 ? mm.clearFilters : undefined}
@@ -163,7 +170,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
         onSelectAll={() => mm.selectAllVisible(pageSelectableIds)}
         onClearSelection={() => mm.clearSelection(true)}
         onCancelSelection={!picker ? mm.cancelSelection : undefined}
-        onMove={(folderId) => void mm.moveSelected(folderId)}
+        onMove={(folderId) => { if (permissions.folders) void mm.moveSelected(folderId); }}
         onLifecycle={bulkLifecycle}
       />
       <MediaUploadQueue queue={mm.queue} onRetry={mm.retry} onDismiss={mm.dismiss} />
@@ -246,10 +253,12 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
               </Button>
             ) : null}
           />
+          {!canManage ? <ReadOnlyNotice /> : null}
           <div className="overflow-hidden rounded-xl bg-card shadow-card">{body}</div>
         </>
       )}
 
+      {!picker ? <UnsavedChangesGuard isDirty={mm.isUploading} isSubmitting={false} allowSamePathStateNavigation /> : null}
       <MediaPreview
         open={mm.showPreview}
         file={mm.previewFile}
@@ -257,6 +266,9 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
         onOpenChange={mm.setShowPreview}
         onNavigate={navigate}
         onUpdate={mm.updateFile}
+        onReload={mm.fetchFile}
+        onAdopt={mm.adoptFile}
+        canEdit={permissions.update && mm.previewFile?.status === "ready"}
         onSelect={onSelect}
       />
       <ConfirmDialog

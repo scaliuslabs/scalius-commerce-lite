@@ -36,11 +36,12 @@ import {
   type StorefrontTemplateId,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import { ARABIC_TEXT, BANGLA_LONG, type ProductScenario } from "./fixtures";
+import { ARABIC_TEXT, BANGLA_LONG, cardProduct, type ProductScenario } from "./fixtures";
 import type { GalleryCartSeed } from "./cart-seed";
 import { SECTION_CONTENT } from "./section-content";
 import { settingVariants, settingChoices, settingWith, type SettingsSchema } from "./variants";
 import { noorLandingSections, noorTheme } from "./noor";
+import { NOOR_SECTION_FIXTURES, NOOR_REPEATED_FIXTURES, repeatedNoorValues } from "./noor-content";
 
 export type GalleryPage = "home" | "landing" | "product" | "category" | "collection" | "brand" | "search" | "cart" | "page";
 
@@ -54,6 +55,10 @@ export interface GalleryScenario {
   product?: ProductScenario;
   /** Merchant-authored product detail panels alongside the description. */
   productInfo?: "tabs" | "dense-tabs";
+  /** Real authored body blocks, with their module enabled. */
+  productContent?: boolean;
+  /** Checkout readiness refuses the inline COD form. */
+  checkout?: "no-cod";
   /** The page's presence: `bn` (the root speaks Bangla) or `ar` (an Arabic, RTL subfolder). */
   locale?: "bn" | "ar";
   /** The listing's results: a large catalogue (default), none, or a few. */
@@ -210,6 +215,12 @@ function templateEntries(): GalleryEntry[] {
   );
 }
 
+/** Public product identities and same-origin images survive the post-paint availability check. */
+const recentStorage = () => ({ "scalius:recently-viewed:v2": JSON.stringify([1, 3, 14].map((index) => {
+  const product = cardProduct(index);
+  return { id: product.id, slug: product.slug, name: product.name, image: product.imageUrl ? new URL(product.imageUrl).pathname : null };
+})) });
+
 function sectionEntries(): GalleryEntry[] {
   const entries: GalleryEntry[] = [];
   for (const type of STOREFRONT_SECTION_TYPES) {
@@ -232,8 +243,8 @@ function sectionEntries(): GalleryEntry[] {
         title: `${type}, ${variant.label}`,
         page: "home",
         theme: withHome(baseTheme(), home),
-        focus: sectionFocus("gallery"),
-        scenario: {},
+        focus: type === "recently-viewed" ? { include: ['[data-recently-viewed]:not([hidden]) [data-recently-viewed-id="prod_1"]'] } : sectionFocus("gallery"),
+        scenario: type === "recently-viewed" ? { storage: recentStorage() } : {},
       });
     }
   }
@@ -437,11 +448,11 @@ function productEntries(): GalleryEntry[] {
   for (const module of modules) {
     const theme = clone(base);
     theme.blocks.product = { ...theme.blocks.product, below: [module] };
-    entries.push({ id: entryId("product", "module", module), family: "product:module", title: `Product module ${module}`, page: "product", theme, focus: MAIN, scenario: { product: "electronics" } });
+    entries.push({ id: entryId("product", "module", module), family: "product:module", title: `Product module ${module}`, page: "product", theme, focus: module === "content-blocks" ? { include: ["[data-product-content-blocks] [data-content-block]"] } : MAIN, scenario: { product: "electronics", productContent: module === "content-blocks" } });
   }
   const all = clone(base);
   all.blocks.product = { ...all.blocks.product, below: modules };
-  entries.push({ id: entryId("product", "module", "all"), family: "product:module", title: "Every product module", page: "product", theme: all, focus: MAIN, scenario: { product: "electronics" } });
+  entries.push({ id: entryId("product", "module", "all"), family: "product:module", title: "Every product module", page: "product", theme: all, focus: MAIN, scenario: { product: "electronics", productContent: true } });
   for (const [position, values] of Object.entries(STOREFRONT_PRODUCT_STICKY)) {
     for (const value of values) {
       const theme = clone(base);
@@ -449,9 +460,20 @@ function productEntries(): GalleryEntry[] {
       entries.push({ id: entryId("product", "sticky", `${position}=${value}`), family: "product:sticky", title: `Product sticky ${position} = ${value}`, page: "product", theme, focus: WHOLE_PAGE, scenario: { product: "fashion" } });
     }
   }
-  for (const product of ["fashion", "electronics", "sold-out", "no-image", "bangla", "simple"] as const) {
-    entries.push({ id: entryId("product", "state", product), family: "product:state", title: `Product page, ${product}`, page: "product", theme: clone(base), focus: MAIN, scenario: { product } });
+  for (const product of ["fashion", "electronics", "sold-out", "no-image", "bangla", "simple", "one-image"] as const) {
+    entries.push({ id: entryId("product", "state", product), family: "product:state", title: `Product page, ${product}`, page: "product", theme: clone(base), focus: product === "one-image" ? { include: ["[data-product-gallery] img[data-mobile-main-image], [data-product-gallery] img[data-desktop-main-image]"] } : MAIN, scenario: { product, ...(product === "bangla" ? { locale: "bn" as const } : {}) } });
   }
+  const content = clone(base);
+  content.blocks.product.below = ["description", "content-blocks", "reviews"];
+  entries.push({ id: "product-content-blocks", family: "product:state", title: "Authored body content and FAQ", page: "product", theme: content, focus: { include: ["[data-product-content-blocks] [data-content-block]"] }, scenario: { product: "fashion", productContent: true } });
+  for (const locale of [undefined, "ar"] as const) {
+    const theme = clone(base);
+    theme.blocks.product.sticky = { phoneTop: "none", phoneBottom: "buy-bar", desktop: "none" };
+    entries.push({ id: locale ? "product-tabs-dense-rtl" : "product-tabs-dense", family: "product:state", title: `Dense detail tabs, ${locale ? "RTL" : "LTR"}`, page: "product", theme, focus: { include: ["[data-product-details-tabs] #tab-nav"] }, scenario: { product: "fashion", productInfo: "dense-tabs", ...(locale ? { locale } : {}) } });
+  }
+  const recent = clone(base);
+  recent.pages.home = [contentSection("recently-viewed", "recent")];
+  entries.push({ id: "home-recently-viewed", family: "product:state", title: "Remembered public products", page: "home", theme: recent, focus: { include: ['[data-recently-viewed]:not([hidden]) [data-recently-viewed-id="prod_1"]'] }, scenario: { storage: recentStorage() } });
   return entries;
 }
 
@@ -586,6 +608,31 @@ function localeEntries(): GalleryEntry[] {
 }
 
 /** Cross the real extension/core boundary: header, cards, overlays and core checkout embeds. */
+function noorSectionEntries(): GalleryEntry[] {
+  const entries: GalleryEntry[] = [];
+  const add = (type: keyof typeof NOOR_SECTION_FIXTURES, variant: string, values: import("@scalius/shared/plugins/settings-schema").PluginSettingValues, rtl = false) => {
+    const id = entryId("noor-section", type, variant);
+    const theme = noorTheme(baseTheme());
+    theme.pages.home = [{ id, type: "app", version: 1, settings: { app: `scalius.noor/${type}`, values } }];
+    const scope = `[data-section-id="${id}"]`;
+    const entry: GalleryEntry = {
+      id, family: `noor-section:${type}`, title: `Noor ${type}: ${variant}`, page: "home", theme,
+      focus: { include: [`${scope} ${NOOR_SECTION_FIXTURES[type].subject}`] },
+      scenario: { noor: "active", menu: "compact", ...(rtl ? { locale: "ar" } : {}) },
+    };
+    if (type === "shop-the-look") entry.interact = [{ click: `${scope} .noor-spot:last-of-type summary`, expectVisible: `${scope} .noor-spot:last-of-type[open] .noor-spot-card` }];
+    if (type === "faq" && (values.questions as unknown[]).length > 1) entry.interact = [{ click: `${scope} .noor-faq-item:nth-child(2) summary`, expectVisible: `${scope} .noor-faq-item:nth-child(2)[open] .noor-faq-answer` }];
+    entries.push(entry);
+  };
+  for (const [type, fixture] of Object.entries(NOOR_SECTION_FIXTURES)) add(type as keyof typeof NOOR_SECTION_FIXTURES, "default", structuredClone(fixture.values));
+  for (const { type, max } of NOOR_REPEATED_FIXTURES) {
+    add(type, "one", repeatedNoorValues(type, 1));
+    add(type, "crowded", repeatedNoorValues(type, max));
+    if (["shop-the-look", "testimonials", "faq"].includes(type)) add(type, "rtl", repeatedNoorValues(type, max, true), true);
+  }
+  return entries;
+}
+
 function noorEntries(): GalleryEntry[] {
   const base = noorTheme(baseTheme());
   base.blocks.product = {
@@ -656,6 +703,9 @@ function noorEntries(): GalleryEntry[] {
   const landing = clone(base);
   landing.pages.landing = { "eid-sale": { title: "Noor product campaign", description: "A packed app campaign with the store's actual checkout form.", sections: noorLandingSections() } };
   entries.push({ id: "noor-landing", family: "integration:noor", title: "Noor campaign + actual core order form", page: "landing", theme: landing, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact", product: "fashion" } });
+  const unavailableOrder = clone(landing);
+  unavailableOrder.pages.landing!["eid-sale"]!.sections = noorLandingSections().filter((section) => section.type === "app" && section.settings.app === "scalius.noor/landing-order").map((section) => section.type === "app" ? { ...section, settings: { ...section.settings, values: { ...section.settings.values, assurances: [] } } } : section);
+  entries.push({ id: "noor-landing-no-cod", family: "integration:noor", title: "Noor order section when inline checkout is unavailable", page: "landing", theme: unavailableOrder, focus: { include: [".scalius-order-form-unavailable"] }, scenario: { noor: "active", menu: "compact", product: "fashion", checkout: "no-cod" } });
   return entries;
 }
 
@@ -676,6 +726,7 @@ export function galleryEntries(): GalleryEntry[] {
     ...tokenEntries(),
     ...appEntries(),
     ...noorEntries(),
+    ...noorSectionEntries(),
     ...pageEntries(),
     ...localeEntries(),
   ];

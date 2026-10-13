@@ -5,10 +5,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
-import { SaveBarProvider, SaveErrorBanner, useSaveBar, type SaveBarEntry } from "./SaveBar";
+import { SaveBarProvider, SaveConflict, SaveErrorBanner, useSaveBar, type SaveBarEntry } from "./SaveBar";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock("@tanstack/react-router", () => ({ useBlocker: () => ({ status: "idle" }) }));
+const navigation = vi.hoisted(() => ({ options: undefined as undefined | { shouldBlockFn: (location: { current: object; next: object }) => boolean; enableBeforeUnload: boolean } }));
+vi.mock("@tanstack/react-router", () => ({ useBlocker: (options: typeof navigation.options) => { navigation.options = options; return { status: "idle" }; } }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -109,6 +110,23 @@ describe("page save bar", () => {
     expect(barText()).toContain("Unsaved customer");
   });
 
+  it.each([
+    new TypeError("Failed to fetch"),
+    new SaveConflict("Keep my draft"),
+  ])("keeps a rejected conflict reload retryable without an unhandled rejection", async (reloadFailure) => {
+    const reload = vi.fn().mockRejectedValue(reloadFailure);
+    const save = vi.fn().mockRejectedValue(new SaveConflict("Changed by someone else"));
+    render({ dirty: true, save, discard: vi.fn(), reload });
+    await pressBarSave();
+    await act(async () => bannerButton("Reload and keep my edits")!.click());
+    expect(reload).toHaveBeenCalledOnce();
+    expect(bannerButton("Reload and keep my edits")?.disabled).toBe(false);
+    expect(barText()).toContain("Changed by someone else · Reload");
+    expect(save).toHaveBeenCalledOnce();
+    expect(toast.error).not.toHaveBeenCalled();
+    if (!(reloadFailure instanceof SaveConflict)) expect(document.querySelector("[role=alert]")?.textContent).toContain("Couldn't reach the server");
+  });
+
   it("asks for a fix only when the server refused the input", async () => {
     render({ dirty: true, save: vi.fn(async () => { throw new AdminApiResponseError("Enter a whole number of days.", 400); }), discard: vi.fn() });
 
@@ -152,4 +170,31 @@ describe("page save bar", () => {
     await pressSave();
     expect(entry.save).not.toHaveBeenCalled();
   });
+});
+
+
+it("protects a retained revoked draft without showing save controls and restores the bar on regrant", async () => {
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host);
+  const save = vi.fn(), discard = vi.fn();
+  const render = (dirty: boolean, navigationDirty?: boolean) => act(async () => root.render(
+    <SaveBarProvider><Card dirty={dirty} navigationDirty={navigationDirty} save={save} discard={discard} /></SaveBarProvider>,
+  ));
+  try {
+    await render(true);
+    expect(document.querySelector("[data-save-bar]")).not.toBeNull();
+    expect(navigation.options!.shouldBlockFn({ current: {}, next: {} })).toBe(true);
+    await render(false, true);
+    expect(document.querySelector("[data-save-bar]")).toBeNull();
+    expect(navigation.options!.shouldBlockFn({ current: {}, next: {} })).toBe(true);
+    expect(navigation.options!.enableBeforeUnload).toBe(true);
+    await pressSave();
+    expect(save).not.toHaveBeenCalled(); expect(discard).not.toHaveBeenCalled();
+    await render(true, true);
+    expect(document.querySelector("[data-save-bar]")).not.toBeNull();
+    expect(navigation.options!.shouldBlockFn({ current: {}, next: {} })).toBe(true);
+    await render(false);
+    expect(navigation.options!.shouldBlockFn({ current: {}, next: {} })).toBe(false);
+    expect(navigation.options!.enableBeforeUnload).toBe(false);
+  } finally { act(() => root.unmount()); host.remove(); }
 });

@@ -8,6 +8,7 @@ import {
 
 import { apiData, type ApiBody } from "~/lib/api";
 import { giftCardKeys } from "~/lib/api-query-options/gift-cards";
+import { announceSave, presenceKey } from "~/lib/realtime/store";
 
 export type IssueGiftCardInput = ApiBody<typeof postApiV1AdminGiftCards>;
 export type AdjustGiftCardInput = ApiBody<typeof postApiV1AdminGiftCardsByGiftCardIdAdjust>;
@@ -38,6 +39,7 @@ export function useAdjustGiftCard(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: AdjustGiftCardInput) => apiData(postApiV1AdminGiftCardsByGiftCardIdAdjust({ path: { giftCardId: id }, body: input })),
+    onSuccess: ({ giftCard }) => announceSave(presenceKey("gift-card", id), giftCard.version),
     // A refusal (balance changed) reloads the card too.
     onSettled: () => invalidate(queryClient, id),
   });
@@ -48,6 +50,7 @@ export function useUpdateGiftCard(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateGiftCardInput) => apiData(patchApiV1AdminGiftCardsByGiftCardId({ path: { giftCardId: id }, body: input })),
+    onSuccess: ({ giftCard }) => announceSave(presenceKey("gift-card", id), giftCard.version),
     onSettled: () => invalidate(queryClient, id),
   });
 }

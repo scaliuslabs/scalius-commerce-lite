@@ -70,7 +70,7 @@ export function createPluginDispatchAuthority(db: Database): OperationDispatchAu
   return {
     refresh: async (principal) => {
       const fresh = await resolvePluginPrincipal(db, principal.pluginId);
-      return fresh && fresh.version === principal.version ? fresh : null;
+      return fresh && fresh.version === principal.version ? { ...fresh, operator: principal.operator } : null;
     },
     authorize: async (principal, operation) => authorizePluginOperation(principal, operation),
     surface: () => "dashboard",
@@ -110,6 +110,7 @@ function unwrap(status: number, ok: boolean, body: unknown): PluginApiResult {
 export async function callPluginOperation(options: {
   pluginId: string;
   version: string;
+  operator?: PluginPrincipal["operator"];
   operationId: unknown;
   input: PluginApiCallInput | unknown;
   db: Database;
@@ -131,7 +132,7 @@ export async function callPluginOperation(options: {
     const result = await dispatchOperationAs(createPluginDispatchAuthority(options.db), {
       operation,
       input,
-      principal,
+      principal: { ...principal, operator: options.operator },
       env: options.env,
       ctx: options.ctx,
     });

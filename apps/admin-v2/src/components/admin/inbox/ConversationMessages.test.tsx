@@ -8,7 +8,8 @@ import { inboxMessages } from "~/i18n/inbox";
 import type { StaffMessage, StaffThread } from "~/lib/api-query-options/inbox";
 
 const older = vi.hoisted(() => vi.fn());
-vi.mock("~/lib/api-query-options/inbox", () => ({ fetchOlderMessages: older }));
+const around = vi.hoisted(() => vi.fn());
+vi.mock("~/lib/api-query-options/inbox", () => ({ fetchOlderMessages: older, fetchMessagesAround: around }));
 vi.mock("./inbox-api", () => ({ attachmentUrl: (thread: string, image: string) => `/private/${thread}/${image}` }));
 import { ConversationMessages } from "./ConversationMessages";
 
@@ -21,7 +22,7 @@ function page(id: string, first: number, last: number, hasMore = first > 1): Sta
     createdAt: 1_780_000_000 + first + index, attachments: [],
   }));
   return { id, subjectType: "store", subjectId: null, subject: "Question", status: "open", orderId: null,
-    orderNumber: null, customerId: null, customerName: "Customer", assigneeUserId: null, assigneeName: null,
+    orderNumber: null, customerId: null, customerName: "Customer", assigneeUserId: null, assigneeName: null, assigneeEligible: false, lastMessageVisibility: "public",
     lastMessageAt: 1_780_000_000 + last, lastAuthorType: "customer", preview: null, unread: 0, version: 1,
     lastSeq: last, staffReadSeq: 0, customerReadSeq: 0, hasMore, order: null, cases: [], messages };
 }
@@ -40,12 +41,13 @@ const tailVisible = (visible = true) => intersections.at(-1)!.emit(visible);
 const region = () => host.querySelector<HTMLDivElement>('[role="region"]')!;
 const rows = () => [...host.querySelectorAll<HTMLElement>("[data-message-seq]")];
 const sequences = () => rows().map((row) => Number(row.dataset.messageSeq));
-const button = (label: string) => [...host.querySelectorAll("button")].find((node) => node.textContent?.trim() === label)!;
+const button = (label: string) => [...host.querySelectorAll("button")].find((node) => label === en.newMessages ? /new messages?/i.test(node.textContent ?? "") : node.textContent?.trim() === label)!;
 const render = async (thread: StaffThread, props: Partial<ComponentProps<typeof ConversationMessages>> = {}) => act(async () => root.render(<ConversationMessages thread={thread} currentUserId="staff_1" className="overflow-y-auto" {...props} />));
 const scroll = async (top: number) => act(async () => { region().scrollTop = top; region().dispatchEvent(new Event("scroll")); });
 
 beforeEach(() => {
   older.mockReset();
+  around.mockReset();
   intersections.length = 0;
   vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
   vi.stubGlobal("IntersectionObserver", class {
@@ -73,8 +75,8 @@ beforeEach(() => {
     return new DOMRect(0, index < 0 ? 0 : index * 20 - Math.min(owner!.scrollTop, Math.max(0, owner!.scrollHeight - owner!.clientHeight)), 320, index < 0 ? 200 : 20);
   });
   vi.stubGlobal("ResizeObserver", class {
-    constructor(callback: () => void) { resized = callback; }
-    observe() {}
+    constructor(readonly callback: () => void) {}
+    observe(target: Element) { if (target.matches('[role="region"]')) resized = this.callback; }
     disconnect() {}
   });
 });
@@ -347,4 +349,140 @@ describe("conversation timeline continuity", () => {
     } finally { elsewhere.remove(); }
   });
 
+});
+
+
+it("keeps 500-line history navigable with at most 200 mounted rows and an explicit return to newest", async () => {
+  await render(page("a", 451, 500));
+  for (let end = 450; end >= 50; end -= 50) {
+    older.mockResolvedValueOnce(page("a", end - 49, end));
+    await act(async () => button(en.loadOlder).click());
+    expect(rows().length).toBeLessThanOrEqual(200);
+  }
+  expect(sequences()[0]).toBe(1);
+  expect(button(en.loadOlder)).toBeUndefined();
+  await act(async () => button(en.backNewest).click());
+  expect(sequences()).toEqual(Array.from({ length: 50 }, (_, index) => index + 451));
+  expect(button(en.loadOlder)).toBeDefined();
+});
+
+it("find highlights the selected window without stealing focus and keeps the inspected position on close", async () => {
+  await render(page("a", 451, 500));
+  await scroll(320);
+  const input = document.createElement("input"); host.append(input); input.focus();
+  const pending = deferred();
+  around.mockReturnValueOnce(pending.promise);
+  const request = { seq: 75, serial: 1 };
+  await render(page("a", 451, 500), { finding: true, findRequest: request });
+  await act(async () => pending.resolve(page("a", 50, 99)));
+  expect(sequences()).toHaveLength(50);
+  expect(sequences()).toContain(75);
+  expect(document.activeElement).toBe(input);
+  expect(host.querySelector('[data-message-seq="75"]')?.getAttribute("aria-current")).toBe("true");
+  await scroll(360);
+  await render(page("a", 451, 500), { finding: false, findRequest: request });
+  expect(sequences()[0]).toBe(50);
+  expect(region().scrollTop).toBe(360);
+  expect(host.querySelector("[aria-current]")).toBeNull();
+  input.remove();
+  const stale = deferred(); around.mockReturnValueOnce(stale.promise);
+  await render(page("a", 451, 500), { finding: true, findRequest: { seq: 10, serial: 2 } });
+  await render(page("b", 1, 10));
+  await act(async () => stale.resolve(page("a", 1, 50)));
+  expect(rows().every((row) => row.textContent?.includes("b message"))).toBe(true);
+});
+
+it("groups only matching authors while retaining a visible internal-note label on every private message", async () => {
+  const thread = page("a", 1, 4);
+  thread.messages[2] = { ...thread.messages[2]!, authorType: "staff", authorUserId: "u", authorName: "Staff", visibility: "internal" };
+  thread.messages[3] = { ...thread.messages[3]!, authorType: "staff", authorUserId: "u", authorName: "Staff", visibility: "internal" };
+  await render(thread);
+  expect(rows()[0]!.textContent).toContain("Customer");
+  expect(rows()[1]!.textContent).not.toContain("Customer");
+  expect(rows()[2]!.textContent).toContain(en.internalNote);
+  expect(rows()[3]!.textContent).toContain(en.internalNote);
+});
+
+it("does not follow an incoming message from the bottom of a capped historical window", async () => {
+  await render(page("a", 251, 300));
+  for (let end = 250; end >= 100; end -= 50) {
+    older.mockResolvedValueOnce(page("a", end - 49, end));
+    await act(async () => button(en.loadOlder).click());
+  }
+  expect(sequences()).toHaveLength(200);
+  expect(sequences().at(-1)).toBe(250);
+  await scroll(3800);
+  await render(page("a", 252, 301));
+  expect(region().scrollTop).toBe(3800);
+  expect(sequences().at(-1)).toBe(250);
+  expect(button(en.backNewest)).toBeDefined();
+});
+
+it("retains live arrivals without jumping on find close and retries a failed single hit", async () => {
+  const initial = page("a", 151, 200);
+  await render(initial);
+  around.mockResolvedValueOnce({ ...page("a", 1, 50, false), hasNewer: true });
+  await render(initial, { finding: true, findRequest: { seq: 25, serial: 1 } });
+  await scroll(160);
+  await render(page("a", 153, 202), { finding: true });
+  await render(page("a", 153, 202));
+  expect(sequences().at(-1)).toBe(202);
+  expect(region().scrollTop).toBe(160);
+  around.mockRejectedValueOnce(new Error("offline"));
+  const current = page("a", 153, 202);
+  const request = { seq: 20, serial: 2 };
+  await render(current, { finding: true, findRequest: request });
+  expect(host.querySelector('[role="alert"]')?.textContent).toBe(en.findLoadFailed);
+  around.mockResolvedValueOnce(page("a", 1, 50, false));
+  await act(async () => { button(en.retry).focus(); button(en.retry).click(); });
+  expect(document.activeElement).toBe(region());
+  expect(around).toHaveBeenLastCalledWith("a", 20);
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  await scroll(120);
+  await render(current);
+  await render(page("a", 154, 203));
+  expect(region().scrollTop).toBe(120);
+});
+
+it("offers a route back from an older find window and caps live query rows on return", async () => {
+  const close = vi.fn();
+  const current = page("a", 251, 300);
+  await render(current);
+  around.mockResolvedValueOnce({ ...page("a", 1, 50, false), hasNewer: true });
+  await render(current, { finding: true, findRequest: { seq: 25, serial: 1 }, onCloseFind: close });
+  await act(async () => button(en.backNewest).click());
+  expect(close).toHaveBeenCalledOnce();
+  await render(page("a", 1, 310, false));
+  expect(sequences()).toHaveLength(200);
+  expect(sequences().at(-1)).toBe(310);
+});
+
+it("explicit own-send follows its rendered row even when older history fills the mounted limit", async () => {
+  await render(page("a", 251, 300));
+  for (let end = 250; end >= 100; end -= 50) {
+    older.mockResolvedValueOnce(page("a", end - 49, end));
+    await act(async () => button(en.loadOlder).click());
+  }
+  await scroll(200);
+  await render(page("a", 252, 301), { followRequest: { conversationId: "a", seq: 301 } });
+  expect(sequences()).toHaveLength(200);
+  expect(sequences().at(-1)).toBe(301);
+  expect(region().scrollTop).toBe(region().scrollHeight);
+});
+
+
+it("does not prepend overlapping latest rows above an inspected newest match on close or refresh", async () => {
+  const current = page("a", 51, 100);
+  await render(current);
+  around.mockResolvedValueOnce(page("a", 80, 100));
+  await render(current, { finding: true, findRequest: { seq: 95, serial: 1 } });
+  await scroll(180);
+  await render(current);
+  expect(sequences()[0]).toBe(80);
+  expect(region().scrollTop).toBe(180);
+  await render(page("a", 52, 101));
+  expect(sequences()[0]).toBe(80);
+  expect(sequences().at(-1)).toBe(101);
+  expect(region().scrollTop).toBe(180);
+  expect(button(en.loadOlder)).toBeDefined();
 });

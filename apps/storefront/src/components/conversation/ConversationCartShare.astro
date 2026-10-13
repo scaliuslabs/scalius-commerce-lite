@@ -1,0 +1,38 @@
+---
+import AccountDialog from "@/components/account/AccountDialog.astro";
+import { accountUi as ui } from "@/lib/account-ui";
+import { CART_SHARE_COPY as copy } from "@/lib/conversation-cart-share";
+
+interface Props { endpoint: string; idPrefix: string; compact?: boolean }
+const { endpoint, idPrefix, compact = false } = Astro.props;
+const dialogId = `${idPrefix}-cart-share`;
+---
+
+<div data-conversation-cart-share data-endpoint={endpoint} class={compact ? "conversation-cart-compact flex flex-wrap items-center gap-x-3 gap-y-1" : "mt-3 space-y-2"}>
+  <div data-cart-share-row hidden class={compact ? "min-w-0 flex-1" : "rounded-lg border border-border bg-muted/30 px-3 py-2"}>
+    <div class={compact ? "flex items-center gap-3" : "flex flex-wrap items-center gap-x-3 gap-y-1"}>
+      <button type="button" data-cart-share-expand aria-expanded="false" aria-controls={`${dialogId}-saved`} class={`${ui.textButton} min-w-0 text-start ${compact ? "flex-1 [&>span]:truncate" : ""}`}><span data-cart-share-summary></span></button>
+      <button type="button" data-cart-share-update class={`${ui.textButton} shrink-0`}>Update</button>
+      <button type="button" data-cart-share-stop class={`${ui.textButton} shrink-0`}>Stop sharing</button>
+    </div>
+    <div id={`${dialogId}-saved`} data-cart-share-saved hidden class={compact ? "max-h-40 overflow-y-auto" : undefined}>
+      <p class="mb-2 text-xs text-muted-foreground">Snapshot. Doesn't update with your cart.</p>
+      <ul data-cart-share-saved-lines class="space-y-2 text-sm"></ul>
+    </div>
+  </div>
+  <button type="button" data-cart-share-open aria-haspopup="dialog" aria-controls={dialogId} hidden class={compact ? `${ui.textButton} shrink-0` : `${ui.secondaryButton} rounded-full`}>{copy.share}</button>
+  <p data-cart-share-status role="status" aria-live="polite" class="text-sm text-muted-foreground empty:hidden"></p>
+  <button type="button" data-cart-share-retry hidden class={ui.textButton}>Try again</button>
+  <AccountDialog id={dialogId} title="Share your cart">
+    <div data-cart-share-dialog-body>
+      <ul data-cart-share-preview class="max-h-64 space-y-3 overflow-y-auto text-sm"></ul>
+      <p data-cart-share-note class="mt-4 text-sm leading-relaxed text-muted-foreground">{copy.consent}</p>
+      <p data-cart-share-replaces class="mt-2 text-sm text-muted-foreground empty:hidden"></p>
+      <p data-cart-share-dialog-status role="status" aria-live="polite" class="mt-3 text-sm text-muted-foreground empty:hidden"></p>
+      <div class="mt-5 flex flex-wrap justify-end gap-2">
+        <button type="button" popovertarget={dialogId} popovertargetaction="hide" class={ui.secondaryButton}>Cancel</button>
+        <button type="button" data-cart-share-confirm class={ui.primaryButton}>Share cart</button>
+      </div>
+    </div>
+  </AccountDialog>
+</div>

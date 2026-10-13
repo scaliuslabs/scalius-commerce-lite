@@ -19,6 +19,11 @@ export const REALTIME_TOPICS = [
   "collections",
   "pages",
   "settings",
+  "discounts",
+  "gift_cards",
+  "media",
+  "attributes",
+  "navigation",
 ] as const;
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number];
 
@@ -35,6 +40,11 @@ const TOPIC_PERMISSION: Readonly<Record<Exclude<RealtimeTopic, "settings">, stri
   categories: "categories.view",
   collections: "collections.view",
   pages: "pages.view",
+  discounts: "discounts.view",
+  gift_cards: "gift_cards.view",
+  media: "media.view",
+  attributes: "attributes.view",
+  navigation: "settings.header.edit",
 };
 
 /** The topics a staff member's permissions allow, in catalog order. */
@@ -65,10 +75,63 @@ export const PRESENCE_KEY_TOPICS = {
   page: "pages",
   theme: "settings",
   settings: "settings",
+  customer: "customers",
+  discount: "discounts",
+  "gift-card": "gift_cards",
+  "purchase-order": "inventory",
+  transfer: "inventory",
+  supplier: "inventory",
+  brand: "categories",
+  conversation: "inbox",
+  "price-list": "products",
+  media: "media",
+  attribute: "attributes",
+  menu: "navigation",
 } as const satisfies Record<string, RealtimeTopic>;
 export type PresenceKeyPrefix = keyof typeof PRESENCE_KEY_TOPICS;
 
-const PRESENCE_KEY = /^(order|product|category|collection|page|theme|settings):[A-Za-z0-9_.-]{1,80}$/;
+// Append-only: each position is a bit in a hibernating socket's edit grant.
+export const PRESENCE_PREFIXES = Object.keys(PRESENCE_KEY_TOPICS) as PresenceKeyPrefix[];
+const PRESENCE_KEY = /^([a-z-]+):[A-Za-z0-9_.-]{1,80}$/;
+
+const PRESENCE_EDIT_PERMISSIONS: Readonly<Record<PresenceKeyPrefix, readonly string[] | "settings">> = {
+  order: ["orders.edit", "orders.change_status", "orders.manage_shipments", "orders.refund", "orders.issue_invoice"],
+  product: ["products.edit"],
+  category: ["categories.edit"],
+  collection: ["collections.edit", "collections.toggle_status"],
+  page: ["pages.edit", "pages.publish"],
+  theme: "settings",
+  settings: "settings",
+  customer: ["customers.edit"],
+  discount: ["discounts.edit", "discounts.toggle_status"],
+  "gift-card": ["gift_cards.manage"],
+  "purchase-order": ["inventory.manage"],
+  transfer: ["inventory.manage"],
+  supplier: ["inventory.manage"],
+  brand: ["categories.edit"],
+  // A thread's status revision is not a message draft revision. Viewing only.
+  conversation: [],
+  "price-list": ["products.edit"],
+  media: ["media.upload"],
+  attribute: ["attributes.edit"],
+  menu: ["settings.header.edit"],
+};
+
+/** Who may report editing and saves; watching still requires the view topic. */
+export function presenceEditMask(permissions: ReadonlySet<string> | readonly string[]): number {
+  const granted = permissions instanceof Set ? permissions : new Set(permissions);
+  // Settings retain the existing coarse topic; a view-only grant never edits.
+  const settingsEdit = [...granted].some((permission) => permission.startsWith("settings.") && !permission.endsWith(".view"));
+  return PRESENCE_PREFIXES.reduce((mask, prefix, index) => {
+    const required = PRESENCE_EDIT_PERMISSIONS[prefix];
+    const allowed = required === "settings" ? settingsEdit : required.some((permission) => granted.has(permission));
+    return allowed ? mask | (1 << index) : mask;
+  }, 0);
+}
+
+export function canEditPresence(mask: number, prefix: PresenceKeyPrefix): boolean {
+  return (mask & (1 << PRESENCE_PREFIXES.indexOf(prefix))) !== 0;
+}
 /** Editors one socket may watch at once (a page with a few settings cards). */
 export const MAX_WATCHED_KEYS = 12;
 
@@ -113,7 +176,8 @@ export function presenceKeyTopic(key: unknown): RealtimeTopic | null {
 /** The prefix of a well-formed presence key (`order` of `order:ord_1`), or null. */
 export function presenceKeyPrefix(key: unknown): PresenceKeyPrefix | null {
   if (typeof key !== "string" || !PRESENCE_KEY.test(key)) return null;
-  return key.slice(0, key.indexOf(":")) as PresenceKeyPrefix;
+  const prefix = key.slice(0, key.indexOf(":"));
+  return Object.hasOwn(PRESENCE_KEY_TOPICS, prefix) ? prefix as PresenceKeyPrefix : null;
 }
 
 /** One change: what changed, never its content. `id` and `rev` only when the source knows them. */

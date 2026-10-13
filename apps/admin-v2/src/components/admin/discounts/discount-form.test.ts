@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   combinationPreview,
+  sameDiscountDraft,
   describeValue,
   discountStatus,
   draftFromDiscount,
@@ -63,6 +64,25 @@ function record(input: ReturnType<typeof draftToInput>): DiscountRecord {
 }
 
 describe("discount form model", () => {
+  it("treats eligibility and scope IDs as membership sets when an item is removed and added back", () => {
+    const original = draft("buy_get", {
+      customerSegmentIds: ["vip", "dhaka"],
+      appliesTo: { kind: "products", ids: ["shirt", "bag"] },
+      buyScope: { kind: "collections", ids: ["summer", "winter"] },
+      getScope: { kind: "products", ids: ["gift", "sample"] },
+    });
+    const reverted = { ...original, customerSegmentIds: ["dhaka", "vip"],
+      appliesTo: { kind: "products" as const, ids: ["bag", "shirt"] },
+      buyScope: { kind: "collections" as const, ids: ["winter", "summer"] },
+      getScope: { kind: "products" as const, ids: ["sample", "gift"] },
+    };
+    expect(sameDiscountDraft(original, reverted)).toBe(true);
+    expect(sameDiscountDraft(original, { ...reverted, customerSegmentIds: ["dhaka"] })).toBe(false);
+    expect(sameDiscountDraft(original, { ...reverted, buyScope: { ...reverted.buyScope, kind: "products" } })).toBe(false);
+    expect(sameDiscountDraft(original, { ...reverted, getQuantity: "2" })).toBe(false);
+    expect(original.customerSegmentIds).toEqual(["vip", "dhaka"]);
+  });
+
   it("uses Bangladesh store time for schedules", () => {
     expect(emptyDraft("order", NOW)).toMatchObject({ startDate: "2026-09-24", startTime: "12:00" });
     expect(storeTimeToEpoch("2026-09-24", "12:00")).toBe(NOW_SECONDS);

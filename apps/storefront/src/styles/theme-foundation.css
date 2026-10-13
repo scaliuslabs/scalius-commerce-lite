@@ -309,6 +309,23 @@ html {
   scroll-padding-top: calc(var(--header-height, 3.5rem) + var(--product-sticky-height, 0px) + 0.5rem);
 }
 
+/* Short or zoomed viewports need reading space. The shared header marker
+   covers core and app headers; the purchase bar keeps its single edge slot.
+   Keep positioning relative so dropdowns retain their containing block.
+   Host geometry reads the resulting position and clears sticky offsets. */
+@media (max-height: 30rem) {
+  [data-storefront-header] [data-sticky-header],
+  [data-product-section-nav],
+  .product-details-tab-rail {
+    position: relative !important;
+    inset-block: auto !important;
+  }
+
+  :root {
+    scroll-padding-top: calc(var(--product-sticky-height, 0px) + 0.5rem);
+  }
+}
+
 /* Fluid product grids (Theme -> Layout -> Density). The frame is an
    inline-size container, so a grid beside the filter sidebar simply has less
    room. Columns auto-fill at the density's minimum card width, which steps

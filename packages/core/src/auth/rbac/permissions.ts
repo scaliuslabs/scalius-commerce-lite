@@ -86,6 +86,9 @@ export const PERMISSIONS = {
   CUSTOMERS_VIEW_HISTORY: "customers.view_history",
   CUSTOMERS_SYNC: "customers.sync",
 
+  // Sending marketing messages is separate from managing customer records.
+  MARKETING_SEND: "marketing.send",
+
   // =============================================
   // Discounts (5 permissions) - SENSITIVE
   // =============================================

@@ -1,3 +1,4 @@
+import { clearInboxDrafts } from "~/lib/inbox-drafts";
 import { useEffect } from "react";
 import { getGlobalBroadcastChannel } from "better-auth/client";
 import { clearAdminRouteContextCache } from "../../lib/admin-route-context";
@@ -11,6 +12,7 @@ const ADMIN_LOGIN_PATH = "/auth/login";
  * instead, so a confirmed sign-out must publish the same event explicitly.
  */
 export function broadcastAdminSignOut() {
+  clearInboxDrafts();
   getGlobalBroadcastChannel().post({
     event: "session",
     data: { trigger: "signout" },
@@ -34,6 +36,7 @@ export function AdminSessionSync() {
       ) return;
 
       redirecting = true;
+      clearInboxDrafts();
       clearAdminRouteContextCache();
       window.location.replace(withDashboardBasePath(ADMIN_LOGIN_PATH));
     });

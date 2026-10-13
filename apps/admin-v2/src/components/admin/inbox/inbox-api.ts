@@ -39,6 +39,7 @@ export interface PostInput {
   visibility: "public" | "internal";
   requestKey: string;
   attachmentIds?: string[];
+  products?: Array<{ productId: string; skuId: string }>;
 }
 
 /** Reply or note on a thread, or on an order (which starts its thread when needed). */

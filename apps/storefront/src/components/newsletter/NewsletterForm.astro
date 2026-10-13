@@ -9,7 +9,7 @@
 // a live region; the fields stay as typed when something needs fixing.
 // Nothing buyer-specific is rendered: the cached page carries the same form
 // for everyone.
-import { NEWSLETTER_HONEYPOT_FIELD } from "@scalius/shared/customer-marketing";
+import { ACCOUNT_MARKETING_COPY, NEWSLETTER_HONEYPOT_FIELD } from "@scalius/shared/customer-marketing";
 import { NEWSLETTER_SUBSCRIBE_ENDPOINT, type NewsletterFormModel } from "@/lib/newsletter-form";
 
 interface Props {
@@ -93,12 +93,12 @@ const inline = layout === "inline";
     >
       {model.buttonLabel}
     </button>
-    {model.whatsapp && (
-      <label for={ids.whatsapp} class:list={["flex min-h-11 cursor-pointer items-center gap-2 text-sm", inline && "sm:col-span-full"]}>
-        <input id={ids.whatsapp} name="whatsapp" type="checkbox" value="1" class="size-4 shrink-0 accent-primary" />
-        <span>{copy.whatsappLabel}</span>
+    {(["sms", ...(emailShown ? ["email"] : []), ...(model.whatsapp ? ["whatsapp"] : [])] as const).map((channel) => (
+      <label class:list={["flex min-h-11 cursor-pointer items-center gap-2 text-sm", inline && "sm:col-span-full"]}>
+        <input name="channel" type="checkbox" value={channel} class="size-4 shrink-0 accent-primary" />
+        <span>{ACCOUNT_MARKETING_COPY[model.language].channelLabel[channel as "sms" | "email" | "whatsapp"]}</span>
       </label>
-    )}
+    ))}
     <p id={ids.consent} class:list={["text-xs", inline && "sm:col-span-full"]}>{model.consentLine}</p>
   </div>
   {/* Off-screen, never focusable: only a bot fills it. */}
@@ -182,7 +182,7 @@ const inline = layout === "inline";
       return;
     }
     const invalid = status === "invalid"
-      ? form.querySelector<HTMLInputElement>(`input[name="${outcome.field === "email" ? "email" : "phone"}"]`)
+      ? form.querySelector<HTMLInputElement>(`input[name="${outcome.field === "email" ? "email" : outcome.field === "channel" ? "channel" : "phone"}"]`)
       : null;
     if (invalid) {
       invalid.setAttribute("aria-invalid", "true");

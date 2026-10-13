@@ -1,9 +1,13 @@
 import { defineMessages, translate } from "./index";
+import { mediaPickerMessages } from "./media-picker";
 
 /** Files: the /admin/media page, the file picker, uploads and the file details dialog. */
 export const mediaMessages = defineMessages({
   en: {
     title: "Files",
+    metadataReloaded: "The latest version is loaded with your edits. Review it before saving.",
+    metadataUnavailable: "This file is no longer available to edit. Your changes are kept here so you can copy them.",
+    metadataReloadFailed: "The latest version could not be loaded. Your changes are kept. Try saving again.",
     limitImages: "Images up to 20 MB",
     limitVideos: "MP4 or WebM videos up to 100 MB",
     limitBoth: "Images up to 20 MB, videos up to 100 MB, 50 files at a time",
@@ -142,9 +146,9 @@ export const mediaMessages = defineMessages({
     variantsNotSaved: "Uploaded, but smaller copies weren't saved. Use Optimize images on the Files page.",
     metadataNotSaved: "Uploaded, but its size or length wasn't saved. The file still works.",
     serverError: "Couldn't reach the server. Try again.",
-    changeImage: "Change image",
-    noImage: "No image selected",
-    removeImage: "Remove {name}",
+    changeImage: mediaPickerMessages.en.changeImage,
+    noImage: mediaPickerMessages.en.noImage,
+    removeImage: mediaPickerMessages.en.removeImage,
     usedInOne: "Used in 1 place",
     usedInMany: "Used in {count} places",
     inUseKept: "In use, can't be deleted",
@@ -185,6 +189,9 @@ export const mediaMessages = defineMessages({
   },
   bn: {
     title: "ফাইল",
+    metadataReloaded: "আপনার পরিবর্তনসহ সর্বশেষ সংস্করণ লোড হয়েছে। সংরক্ষণের আগে দেখে নিন।",
+    metadataUnavailable: "এই ফাইলটি আর সম্পাদনা করা যাবে না। কপি করার জন্য আপনার পরিবর্তন এখানে রাখা হয়েছে।",
+    metadataReloadFailed: "সর্বশেষ সংস্করণ লোড করা যায়নি। আপনার পরিবর্তন রাখা হয়েছে। আবার সংরক্ষণের চেষ্টা করুন।",
     limitImages: "ছবি সর্বোচ্চ ২০ MB",
     limitVideos: "MP4 বা WebM ভিডিও সর্বোচ্চ ১০০ MB",
     limitBoth: "ছবি সর্বোচ্চ ২০ MB, ভিডিও ১০০ MB, একবারে ৫০টি ফাইল",
@@ -323,9 +330,9 @@ export const mediaMessages = defineMessages({
     variantsNotSaved: "আপলোড হয়েছে, কিন্তু ছোট কপিগুলো সেভ হয়নি। ফাইল পেজে ছবি অপটিমাইজ করুন ব্যবহার করুন।",
     metadataNotSaved: "আপলোড হয়েছে, কিন্তু এর মাপ বা দৈর্ঘ্য সেভ হয়নি। ফাইলটি তবুও কাজ করবে।",
     serverError: "সার্ভারে পৌঁছানো যায়নি। আবার চেষ্টা করুন।",
-    changeImage: "ছবি বদলান",
-    noImage: "কোনো ছবি বাছাই করা হয়নি",
-    removeImage: "{name} সরান",
+    changeImage: mediaPickerMessages.bn.changeImage,
+    noImage: mediaPickerMessages.bn.noImage,
+    removeImage: mediaPickerMessages.bn.removeImage,
     usedInOne: "১টি জায়গায় ব্যবহার হচ্ছে",
     usedInMany: "{count}টি জায়গায় ব্যবহার হচ্ছে",
     inUseKept: "ব্যবহার হচ্ছে, মোছা যাবে না",

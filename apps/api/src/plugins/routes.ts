@@ -21,7 +21,7 @@
 
 import { Hono, type Context } from "hono";
 import type { Database } from "@scalius/database/client";
-import { getActivePluginInstallation, maskPluginLogText, type PluginInstallation } from "@scalius/core/modules/plugins";
+import { effectivePluginPermissions, getActivePluginInstallation, maskPluginLogText, type PluginInstallation } from "@scalius/core/modules/plugins";
 import { PLUGIN_ID_PATTERN, PLUGIN_NAME_PATTERN } from "@scalius/shared/plugins";
 import type { PluginRouteRequest } from "@scalius/plugin-sdk";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
@@ -245,6 +245,15 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
   if (!methods.includes(method)) {
     return jsonError(405, "METHOD_NOT_ALLOWED", `Use ${methods.join(", ")}.`, { Allow: methods.join(", ") });
   }
+  if (target.surface === "admin") {
+    const permission = installation.manifest.routes.admin.find((route) => route.name === target.name)?.permission;
+    // The app's approved grant cannot elevate the operator opening its UI.
+    // This runs before reading the body or invoking either plugin loader.
+    const staffPermissions = c.get("adminPermissions") as ReadonlySet<string> | undefined;
+    if (permission && (!effectivePluginPermissions(installation.grant).has(permission) || !staffPermissions?.has(permission))) {
+      return jsonError(403, "FORBIDDEN", "You do not have permission to perform this action.");
+    }
+  }
   if (target.surface !== "admin") {
     if (!installation.grant.publicRoutes) return jsonError(404, "NOT_FOUND", "This app is not available.");
     if (c.req.header(PLUGIN_APP_PROXY_HEADER) && !installation.manifest.storefront.proxy) {
@@ -282,7 +291,7 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
 
   const { PluginHost } = await import("./host");
   const host = new PluginHost({ env: c.env, ctx: c.executionCtx as unknown as ExecutionContext, db, ...(deps.loaderFor ? { loaderFor: deps.loaderFor } : {}) });
-  const outcome = await host.invokeRoute(installation, target.surface, target.name, request);
+  const outcome = await host.invokeRoute(installation, target.surface, target.name, request, user?.id ? { operator: { userId: user.id } } : {});
   if (!outcome.ok || !outcome.value) {
     const failure = FAILURE_STATUS[outcome.failure ?? "error"];
     // Staff see the app's own reason (masked like its log); buyers never do.

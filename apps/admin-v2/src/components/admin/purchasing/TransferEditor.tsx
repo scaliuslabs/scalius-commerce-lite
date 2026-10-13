@@ -1,3 +1,4 @@
+import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -278,9 +279,10 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
   const full = draft.lines.length >= PURCHASING_MAX_LINES;
 
   return (
-    <Page width="form">
+    <Page data-presence-root={transfer ? presenceKey("transfer", transfer.id) : undefined} width="form">
       <UnsavedChangesGuard isDirty={dirty && !leaving} isSubmitting={busy !== null || remove.isPending} />
       <PageHeader
+        presence={<PresenceSlot presenceKey={transfer ? presenceKey("transfer", transfer.id) : null} revision={revision} dirty={dirty} />}
         backTo="/admin/inventory/transfers"
         title={transfer?.displayNumber ?? t("newTransfer")}
         status={transfer ? <TransferStatusBadge status={transfer.status} /> : null}

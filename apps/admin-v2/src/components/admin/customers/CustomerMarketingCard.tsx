@@ -56,7 +56,7 @@ function ChannelStatus({ consent }: { consent: CustomerConsent }) {
   const c = useMessages(customerPageMessages);
   const facts = consentFacts(consent);
   const detail = facts.kind === "no_contact"
-    ? t(consent.channel === "email" ? "noEmail" : "noPhone")
+    ? t(consent.channel === "push" ? "noAccount" : consent.channel === "email" ? "noEmail" : "noPhone")
     : facts.kind === "other_address"
       ? t("otherAddress")
       : facts.kind === "dated"
@@ -65,7 +65,7 @@ function ChannelStatus({ consent }: { consent: CustomerConsent }) {
   return (
     <li className="space-y-0.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-body font-medium">{c(`channel.${consent.channel}`)}</span>
+        <span className="text-body font-medium">{consent.channel === "push" ? t("pushChannel") : c(`channel.${consent.channel}`)}</span>
         <Badge variant={CONSENT_BADGE[consent.status]}>{t(`status.${consent.status}`)}</Badge>
       </div>
       {detail ? <p className="text-body text-muted-foreground">{detail}</p> : null}
@@ -84,7 +84,7 @@ function ConsentEvent({ event }: { event: CustomerConsentEvent }) {
   return (
     <li className="text-body">
       <p>
-        <span className="font-medium">{c(`channel.${event.channel}`)}</span>
+        <span className="font-medium">{event.channel === "push" ? t("pushChannel") : c(`channel.${event.channel}`)}</span>
         {": "}
         {t(`status.${event.state}`)}
       </p>
@@ -145,7 +145,7 @@ export function CustomerMarketingCard({ customerId, canEdit }: { customerId: str
   const noContact = !selected?.contact;
   const blocked = change === "subscribed" && noContact;
   const submit = () => {
-    if (blocked) return;
+    if (!canEdit || blocked) return;
     if (change === "subscribed" && !note.trim()) {
       setNoteMissing(true);
       return;
@@ -191,7 +191,7 @@ export function CustomerMarketingCard({ customerId, canEdit }: { customerId: str
         ) : null}
       </CardContent>
 
-      <Dialog open={open} onOpenChange={(next) => { if (!next && !save.isPending) setOpen(false); }}>
+      <Dialog open={canEdit && open} onOpenChange={(next) => { if (!next && !save.isPending) setOpen(false); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("editMarketingTitle")}</DialogTitle>
@@ -205,7 +205,7 @@ export function CustomerMarketingCard({ customerId, canEdit }: { customerId: str
                   <div key={consent.channel} className="flex min-h-9 items-center gap-2">
                     <RadioGroupItem id={`consent-channel-${consent.channel}`} value={consent.channel} />
                     <Label htmlFor={`consent-channel-${consent.channel}`}>
-                      {c(`channel.${consent.channel}`)}
+                      {consent.channel === "push" ? t("pushChannel") : c(`channel.${consent.channel}`)}
                       <span className="font-normal text-muted-foreground"> · {t(`status.${consent.status}`)}</span>
                     </Label>
                   </div>
@@ -224,7 +224,7 @@ export function CustomerMarketingCard({ customerId, canEdit }: { customerId: str
               </RadioGroup>
               {blocked ? (
                 <p className="text-body text-destructive">
-                  {t("needsContact", { contact: t(channel === "email" ? "contactEmail" : "contactPhone") })}
+                  {channel === "push" ? t("noAccount") : t("needsContact", { contact: t(channel === "email" ? "contactEmail" : "contactPhone") })}
                 </p>
               ) : null}
             </fieldset>

@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 142,
-  name: "0142_staff_alerts",
+  version: 145,
+  name: "0145_conversation_search_cursor",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -491,6 +491,21 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 142,
     name: "0142_staff_alerts",
     sourceSha256: "5ddd58e089344b0cdbc23e106b5cf9ef32c0ef0d996f6e25cf5418e49c9f5e08",
+  },
+  {
+    version: 143,
+    name: "0143_remaining_polish",
+    sourceSha256: "d479468027dc2a6b0506b24e8bed8a57a1a9bc82067e2497abea5691fdeacb00",
+  },
+  {
+    version: 144,
+    name: "0144_customer_contact_lookup",
+    sourceSha256: "af1d0f484acdf26802798a42068b659a70e4d8d667db2eed7476432e1968daa7",
+  },
+  {
+    version: 145,
+    name: "0145_conversation_search_cursor",
+    sourceSha256: "b91a94f2a2a37b0a0ff124a49e9b0b5ed03ab943049416c0c2aec709a4a74b8f",
   },
 ] as const;
 

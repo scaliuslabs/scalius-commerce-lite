@@ -79,6 +79,11 @@ const routeSchema = z.object({
   description: description.optional(),
 }).strict();
 
+const adminRouteSchema = routeSchema.extend({
+  /** Additional real-staff permission, beyond apps.view/apps.use. Must be in the app's grant. */
+  permission: z.string().regex(PLUGIN_PERMISSION_PATTERN).optional(),
+});
+
 /**
  * Five-field cron in the store's time zone (cron.ts). The platform checks
  * schedules on its scheduled tick, so a finer schedule runs once per tick.
@@ -368,10 +373,11 @@ const pluginTranslationSchema = z.object({
   tabs: z.record(name, z.record(name, title)).optional(),
   /** Settings section titles and descriptions by group id. */
   settingsGroups: z.record(name, z.object({ title: title.optional(), description: description.optional() }).strict()).optional(),
-  /** Setting labels and help by key (app settings only). */
+  /** Setting labels, help and option labels by stored value (app settings only). */
   settings: z.record(z.string().regex(PLUGIN_SETTING_KEY), z.object({
     label: z.string().trim().min(1).max(80).optional(),
     help: z.string().trim().min(1).max(280).optional(),
+    options: z.record(z.string().min(1).max(64), z.string().trim().min(1).max(80)).optional(),
   }).strict()).optional(),
 }).strict();
 export type PluginTranslation = z.infer<typeof pluginTranslationSchema>;
@@ -444,7 +450,7 @@ export const pluginManifestSchema = z.object({
 
   routes: z.object({
     /** Dashboard-authenticated (`/api/v1/plugins/<id>/admin/<name>`). */
-    admin: z.array(routeSchema).max(40).default([]),
+    admin: z.array(adminRouteSchema).max(40).default([]),
     /** Unauthenticated, rate-limited (`/api/v1/plugins/<id>/public/<name>`). */
     public: z.array(routeSchema).max(20).default([]),
     /** Inbound provider webhooks (`/api/v1/plugins/<id>/webhooks/<name>`), raw body preserved. */
@@ -500,6 +506,11 @@ export const pluginManifestSchema = z.object({
     wallMs: z.number().int().min(100).max(30_000).default(10_000),
   }).strict().default({ cpuMs: 50, wallMs: 10_000 }),
 }).strict().superRefine((manifest, context) => {
+  manifest.routes.admin.forEach((route, index) => {
+    if (route.permission && !manifest.permissions.includes(route.permission)) {
+      context.addIssue({ code: "custom", path: ["routes", "admin", index, "permission"], message: "An admin route permission must be declared in the app's permissions." });
+    }
+  });
   const routes = new Set([...manifest.routes.admin, ...manifest.routes.public].map((route) => route.name));
   const adminRoutes = new Set(manifest.routes.admin.map((route) => route.name));
   const publicRoutes = new Set(manifest.routes.public.map((route) => route.name));
@@ -554,9 +565,20 @@ export const pluginManifestSchema = z.object({
     for (const id of Object.keys(translation.settingsGroups ?? {})) {
       if (!groups.has(id)) context.addIssue({ code: "custom", path: ["translations", locale, "settingsGroups", id], message: `No settings group ${id} to translate.` });
     }
-    const keys = new Set(manifest.settings.map((field) => field.key));
-    for (const key of Object.keys(translation.settings ?? {})) {
-      if (!keys.has(key)) context.addIssue({ code: "custom", path: ["translations", locale, "settings", key], message: `No setting ${key} to translate.` });
+    for (const [key, text] of Object.entries(translation.settings ?? {})) {
+      const field = manifest.settings.find((entry) => entry.key === key);
+      const path = ["translations", locale, "settings", key];
+      if (!field) {
+        context.addIssue({ code: "custom", path, message: `No setting ${key} to translate.` });
+      } else if (text.options !== undefined) {
+        if (field.type !== "select" && field.type !== "multiselect") {
+          context.addIssue({ code: "custom", path: [...path, "options"], message: "Only select and multiselect settings have option labels." });
+        } else {
+          for (const value of Object.keys(text.options)) {
+            if (!field.options.some((option) => option.value === value)) context.addIssue({ code: "custom", path: [...path, "options", value], message: `No option ${value} on setting ${key} to translate.` });
+          }
+        }
+      }
     }
   }
   const needPublicRoute = (path: (string | number)[], route: string) => {

@@ -28,6 +28,8 @@ interface FormContainerProps<
    * consumer deliberately maps its create/edit API permission.
    */
   canSave: boolean;
+  /** Opt out only when every consumer renders permission-aware saved values and browsing controls. */
+  disableFieldsWhenReadOnly?: boolean;
   form: UseFormReturn<TFieldValues, unknown, TTransformedValues>;
   /** Saves valid values; throws when the save failed (after marking any fields). */
   onSave: (values: TTransformedValues) => Promise<unknown>;
@@ -54,6 +56,7 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   form,
   saving,
   canSave,
+  disableFieldsWhenReadOnly = true,
   save,
   savedValues,
   reload,
@@ -67,6 +70,7 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   form: UseFormReturn<TFieldValues, unknown, TTransformedValues>;
   saving: boolean;
   canSave: boolean;
+  disableFieldsWhenReadOnly?: boolean;
   save: (values: TTransformedValues) => Promise<unknown>;
   savedValues?: (result: unknown) => Partial<TFieldValues>;
   reload?: () => Promise<unknown>;
@@ -96,6 +100,7 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
       presenceKey={presenceKey}
       revision={typeof loadedRevision === "number" ? loadedRevision : null}
       dirty={Boolean(scope?.dirty)}
+      readOnly={!canSave}
       changedFields={() => changedFieldNames(form.formState.dirtyFields)}
       onLoadLatest={reload ? () => void reload() : undefined}
     />
@@ -118,7 +123,7 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
         <SaveErrorBanner />
         {canSave ? null : readOnlyNotice ?? <ReadOnlyNotice />}
         {/* Without the save permission the record opens read-only. */}
-        <fieldset disabled={!canSave} className="min-w-0">
+        <fieldset disabled={!canSave && disableFieldsWhenReadOnly} className="min-w-0">
           {children}
         </fieldset>
       </div>
@@ -141,6 +146,7 @@ export function FormContainer<
   backUrl,
   isSubmitting,
   canSave,
+  disableFieldsWhenReadOnly = true,
   form,
   onSave,
   savedValues,
@@ -161,6 +167,7 @@ export function FormContainer<
             form={form}
             saving={isSubmitting}
             canSave={canSave}
+            disableFieldsWhenReadOnly={disableFieldsWhenReadOnly}
             save={onSave}
             savedValues={savedValues}
             reload={reload}

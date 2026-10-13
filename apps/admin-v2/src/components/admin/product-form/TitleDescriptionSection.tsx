@@ -8,7 +8,7 @@ import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
-import { productMerchandisingMessages } from "~/i18n/product-merchandising";
+import { productContentSummaryMessages } from "~/i18n/product-content-summary";
 import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
 import { richTextOrNull } from "~/lib/rich-text-value";
@@ -71,7 +71,7 @@ export function TitleDescriptionSection({ form, readOnly }: SectionProps) {
  * the same title and help, and closed it says how many there are.
  */
 export function AdditionalSectionsCard({ form, readOnly }: SectionProps) {
-  const m = useMessages(productMerchandisingMessages);
+  const m = useMessages(productContentSummaryMessages);
   const sections = useWatch({ control: form.control, name: "additionalInfo" }) ?? [];
   if (readOnly && sections.length === 0) return null;
 

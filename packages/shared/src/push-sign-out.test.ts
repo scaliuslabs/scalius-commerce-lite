@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { messagePushWorker, releasePushBeforeSignOut } from "./push-sign-out";
+import { messagePushWorker, releasePushBeforeSignOut, waitForActivePushWorker } from "./push-sign-out";
 
 function fixture() {
   const unsubscribe = vi.fn(async () => true);
@@ -19,6 +19,49 @@ function fixture() {
 }
 
 afterEach(() => vi.useRealTimers());
+
+describe("bounded notification activation", () => {
+  function activation(state = "installing") {
+    const worker = Object.assign(new EventTarget(), { state });
+    const remove = vi.spyOn(worker, "removeEventListener");
+    const registration = { active: null, installing: worker, waiting: null } as unknown as ServiceWorkerRegistration;
+    return { worker, remove, registration };
+  }
+
+  it("rejects a stalled worker, removes its listener, and permits a later retry", async () => {
+    vi.useFakeTimers();
+    const f = activation();
+    const rejected = expect(waitForActivePushWorker(f.registration)).rejects.toThrow("took too long");
+    await vi.advanceTimersByTimeAsync(15_000);
+    await rejected;
+    expect(f.remove).toHaveBeenCalledExactlyOnceWith("statechange", expect.any(Function));
+    expect(vi.getTimerCount()).toBe(0);
+    f.worker.state = "activated";
+    await expect(waitForActivePushWorker(f.registration)).resolves.toBe(f.registration);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(["activated", "redundant"])("settles %s and removes its timer and listener", async (state) => {
+    vi.useFakeTimers();
+    const f = activation();
+    const pending = waitForActivePushWorker(f.registration);
+    const result = state === "activated" ? expect(pending).resolves.toBe(f.registration) : expect(pending).rejects.toThrow("did not start");
+    f.worker.state = state;
+    f.worker.dispatchEvent(new Event("statechange"));
+    await result;
+    expect(f.remove).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("uses the existing active worker while an update installs and rejects a missing worker", async () => {
+    const f = activation();
+    const add = vi.spyOn(f.worker, "addEventListener");
+    const active = { ...f.registration, active: {} } as ServiceWorkerRegistration;
+    await expect(waitForActivePushWorker(active)).resolves.toBe(active);
+    expect(add).not.toHaveBeenCalled();
+    await expect(waitForActivePushWorker({ active: null, installing: null, waiting: null } as ServiceWorkerRegistration)).rejects.toThrow("did not start");
+  });
+});
 
 describe("bounded device release before sign-out", () => {
   it("delivers the worker fence before subscription lookup and accepts its port acknowledgement", async () => {

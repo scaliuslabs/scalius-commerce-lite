@@ -60,15 +60,22 @@ function subscribe(listener: () => void): () => void {
 export const LIST_DATE_WIDTH = { en: 164, bn: 132 } as const;
 
 /** A list's created or updated date (`listDateLabel`), the full date and time on hover. */
-export function ListDate({ value, className }: { value: Timestamp; className?: string }) {
+export function ListDate({ value, className, compact = false }: { value: Timestamp; className?: string; compact?: boolean }) {
   const t = useMessages(dataTableMessages);
   const minute = useSyncExternalStore(subscribe, currentMinute, currentMinute);
   const date = unixToDate(value ?? null);
   const base = cn("whitespace-nowrap text-muted-foreground", className);
   if (!date || Number.isNaN(date.getTime())) return <span className={base}>—</span>;
+  const now = new Date(Math.max(Date.now(), minute * 60_000));
+  const days = storeDay(now, getStoreTimeZone()).day - storeDay(date, getStoreTimeZone()).day;
+  const label = compact
+    ? days === 0 ? formatDateTime(date, { hour: "numeric", minute: "2-digit" })
+      : days > 0 && days < 7 ? formatDateTime(date, { weekday: "short" })
+        : formatDateTime(date, { month: "short", day: "numeric", ...(storeDay(now, getStoreTimeZone()).year !== storeDay(date, getStoreTimeZone()).year ? { year: "numeric" } as const : {}) })
+    : listDateLabel(date, now, t);
   return (
     <span className={base} title={formatDateTime(date, { dateStyle: "full", timeStyle: "short" })}>
-      {listDateLabel(date, new Date(Math.max(Date.now(), minute * 60_000)), t)}
+      {label}
     </span>
   );
 }

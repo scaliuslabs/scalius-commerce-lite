@@ -4,6 +4,7 @@ import {
   lazy,
   Suspense,
   useCallback,
+  useEffect,
   useState,
   useRef,
   type ComponentType,
@@ -12,6 +13,9 @@ import {
   type PointerEvent,
   type ReactElement,
 } from "react";
+import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTrigger, DialogTitle } from "~/components/ui/dialog";
@@ -22,6 +26,7 @@ import { chooseKey, type MediaManagerProps } from "./types";
 type MediaManagerInternalProps = MediaManagerProps & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onPendingUploadsChange?: (count: number) => void;
 };
 
 const loadMediaManager = () => import("./MediaManager");
@@ -101,6 +106,9 @@ function MediaManagerTriggerShell({
 
 export function MediaManager(props: MediaManagerProps) {
   const [internalOpen, setOpen] = useState(false);
+  const [pendingUploads, setPendingUploads] = useState(0);
+  const afterClose = useRef<(() => void) | null>(null);
+  const t = useMessages(mediaPickerMessages);
   const controlled = props.open !== undefined;
   const open = props.open ?? internalOpen;
   const onOpenChange = props.onOpenChange;
@@ -111,14 +119,33 @@ export function MediaManager(props: MediaManagerProps) {
     setOpen(true);
   }, []);
 
-  const handleOpenChange = useCallback((nextOpen: boolean) => {
-    setOpen(nextOpen);
-    onOpenChange?.(nextOpen);
-  }, [onOpenChange]);
+  const guard = useDirtyDialogClose({ dirty: pendingUploads > 0, onClose: () => {
+    const complete = afterClose.current;
+    afterClose.current = null;
+    setOpen(false);
+    onOpenChange?.(false);
+    complete?.();
+  } });
+  const setAsking = guard.discardDialog.onOpenChange;
+  useEffect(() => {
+    if (pendingUploads === 0) {
+      afterClose.current = null;
+      setAsking(false);
+    }
+  }, [pendingUploads, setAsking]);
+  const requestClose = (complete: (() => void) | null = null) => {
+    afterClose.current = complete;
+    guard.requestClose();
+  };
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) requestClose();
+    else { setOpen(true); onOpenChange?.(true); }
+  };
 
   if (controlled && !open) return null;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       {!controlled && (
         <MediaManagerTriggerShell
@@ -136,8 +163,20 @@ export function MediaManager(props: MediaManagerProps) {
           {...props}
           open={open}
           onOpenChange={handleOpenChange}
+          onPendingUploadsChange={setPendingUploads}
+          onSelect={props.onSelect ? (file) => requestClose(() => props.onSelect?.(file)) : undefined}
+          onSelectMultiple={props.onSelectMultiple ? (files) => requestClose(() => props.onSelectMultiple?.(files)) : undefined}
         />
       </Suspense> : null}
     </Dialog>
+    <ConfirmDialog {...guard.discardDialog}
+      onOpenChange={(asking) => { if (!asking) afterClose.current = null; setAsking(asking); }}
+      title={t("uploadsInProgress")}
+      description={t("uploadsInProgressBody")}
+      cancelLabel={t("keepUploading")}
+      confirmLabel={t("cancelUploads")}
+    />
+    {open ? <UnsavedChangesGuard isDirty={pendingUploads > 0} isSubmitting={false} /> : null}
+    </>
   );
 }

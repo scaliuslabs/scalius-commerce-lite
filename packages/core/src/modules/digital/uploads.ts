@@ -1,7 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { digitalAssets, digitalAssetUploads } from "@scalius/database/schema";
 import { DIGITAL_UPLOAD_STALE_SECONDS } from "@scalius/shared/digital";
-import { and, asc, eq, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, lt, sql } from "drizzle-orm";
 
 /** Upload rows one sweep visits per state (bounded work, sequential R2 calls). */
 const SWEEP_LIMIT = 25;
@@ -15,12 +15,13 @@ const SWEEP_LIMIT = 25;
 export async function sweepDigitalUploads(
     db: Database,
     bucket: R2Bucket | undefined,
-    options: { now?: number } = {},
-): Promise<{ aborted: number }> {
+    options: { now?: number; limit?: number; afterUploadingId?: string; afterReplacedId?: string } = {},
+): Promise<{ aborted: number; lastUploadingId?: string | null; lastReplacedId?: string | null }> {
     if (!bucket) return { aborted: 0 };
     const now = options.now ?? Math.floor(Date.now() / 1000);
     const cutoff = now - DIGITAL_UPLOAD_STALE_SECONDS;
     let aborted = 0;
+    const limit = Math.max(1, Math.min(SWEEP_LIMIT, options.limit ?? SWEEP_LIMIT));
 
     // Driven by the partial index on uploading sessions.
     const stale = await db.select({
@@ -28,9 +29,9 @@ export async function sweepDigitalUploads(
         r2Key: digitalAssetUploads.r2Key,
         r2UploadId: digitalAssetUploads.r2UploadId,
     }).from(digitalAssetUploads)
-        .where(and(sql`${digitalAssetUploads.status} = 'uploading'`, lt(digitalAssetUploads.createdAt, cutoff)))
-        .orderBy(asc(digitalAssetUploads.status), asc(digitalAssetUploads.createdAt))
-        .limit(SWEEP_LIMIT)
+        .where(and(sql`${digitalAssetUploads.status} = 'uploading'`, options.afterUploadingId ? gt(digitalAssetUploads.id, options.afterUploadingId) : undefined, lt(digitalAssetUploads.createdAt, cutoff)))
+        .orderBy(asc(digitalAssetUploads.id))
+        .limit(limit)
         .all();
     for (const upload of stale) {
         try {
@@ -49,10 +50,12 @@ export async function sweepDigitalUploads(
         .innerJoin(digitalAssets, eq(digitalAssets.id, digitalAssetUploads.assetId))
         .where(and(
             eq(digitalAssetUploads.status, "complete"),
+            options.afterReplacedId ? gt(digitalAssetUploads.id, options.afterReplacedId) : undefined,
             lt(digitalAssetUploads.updatedAt, cutoff),
             sql`(${digitalAssets.currentR2Key} IS NULL OR ${digitalAssets.currentR2Key} <> ${digitalAssetUploads.r2Key})`,
         ))
-        .limit(SWEEP_LIMIT)
+        .orderBy(asc(digitalAssetUploads.id))
+        .limit(limit)
         .all();
     for (const upload of replaced) {
         try {
@@ -64,5 +67,5 @@ export async function sweepDigitalUploads(
             console.warn(`[digital] replaced object ${upload.id} delete failed:`, error instanceof Error ? error.name : "unknown");
         }
     }
-    return { aborted };
+    return { aborted, lastUploadingId: stale.at(-1)?.id ?? null, lastReplacedId: replaced.at(-1)?.id ?? null };
 }

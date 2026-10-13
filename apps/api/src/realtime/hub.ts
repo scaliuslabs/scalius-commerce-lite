@@ -26,6 +26,7 @@ import {
   REALTIME_PING,
   REALTIME_PONG,
   isFieldKey,
+  canEditPresence,
   isPresenceListPrefix,
   isRealtimeTopic,
   presenceKeyPrefix,
@@ -43,6 +44,7 @@ export interface RealtimeIdentity {
   userId: string;
   name: string;
   topics: RealtimeTopic[];
+  edit: number;
 }
 
 /** Header the API Worker sets on the internal upgrade request (the hub is reachable only through its binding). */
@@ -65,6 +67,8 @@ interface SocketState {
   userId: string;
   name: string;
   topics: RealtimeTopic[];
+  /** Editing grant by prefix. A pre-grant attachment remains view-only. */
+  w?: number;
   /** Epoch seconds after which the socket must authenticate again. */
   exp: number;
   /** Editors this socket has open (presence keys). */
@@ -114,7 +118,8 @@ export function parseIdentity(raw: string | null): RealtimeIdentity | null {
     if (typeof value.userId !== "string" || value.userId.length === 0 || value.userId.length > 128) return null;
     if (!Array.isArray(value.topics)) return null;
     const name = typeof value.name === "string" ? value.name.slice(0, MAX_NAME_LENGTH) : "";
-    return { userId: value.userId, name, topics: value.topics.filter(isRealtimeTopic) };
+    const edit = typeof value.edit === "number" && Number.isSafeInteger(value.edit) && value.edit >= 0 && value.edit <= 0x7fffffff ? value.edit : 0;
+    return { userId: value.userId, name, topics: [...new Set(value.topics.filter(isRealtimeTopic))], edit };
   } catch {
     return null;
   }
@@ -161,6 +166,7 @@ export class RealtimeHub extends DurableObject<Env> {
       userId: identity.userId,
       name: identity.name,
       topics: identity.topics,
+      w: identity.edit,
       exp: nowSeconds() + REALTIME_PROOF_SECONDS,
       keys: [],
     };
@@ -225,6 +231,8 @@ export class RealtimeHub extends DurableObject<Env> {
       return;
     }
     if (parsed.t === "saved" && typeof parsed.key === "string" && state.keys.includes(parsed.key)) {
+      const prefix = presenceKeyPrefix(parsed.key);
+      if (!prefix || !canEditPresence(state.w ?? 0, prefix)) return;
       const rev = typeof parsed.rev === "number" && Number.isSafeInteger(parsed.rev) ? parsed.rev : null;
       const fields = Array.isArray(parsed.fields) ? [...new Set(parsed.fields.filter(isFieldKey))].slice(0, MAX_SAVED_FIELDS) : [];
       const by: RealtimePerson = { id: state.userId, name: state.name };
@@ -288,6 +296,8 @@ export class RealtimeHub extends DurableObject<Env> {
     if (field !== null && !isFieldKey(field)) return;
     const index = state.keys.indexOf(key);
     if (index < 0) return;
+    const prefix = presenceKeyPrefix(key);
+    if (!prefix || !canEditPresence(state.w ?? 0, prefix)) return;
     // Rate limit: a socket that reports too fast is ignored for the rest of the second.
     if (state.fw === now && (state.fc ?? 0) >= MAX_FOCUS_PER_SECOND) return;
     state.fc = state.fw === now ? (state.fc ?? 0) + 1 : 1;
@@ -396,8 +406,9 @@ function withoutFields(people: readonly RealtimePresence[]): RealtimePresence[] 
  */
 export function presenceOf(key: string, states: readonly SocketState[]): RealtimePresence[] {
   const people = new Map<string, RealtimePresence & { at: number }>();
+  const prefix = presenceKeyPrefix(key);
   for (const state of states) {
-    const act = state.act && state.keys[state.act.i] === key ? state.act : null;
+    const act = prefix && canEditPresence(state.w ?? 0, prefix) && state.act && state.keys[state.act.i] === key ? state.act : null;
     const entry = people.get(state.userId) ?? { id: state.userId, name: state.name, at: -1 };
     if (act && (act.e || act.f)) entry.editing = true;
     if (act?.f && act.at >= entry.at) {

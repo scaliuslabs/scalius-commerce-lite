@@ -49,6 +49,71 @@ describe("atomic checkout attempts", () => {
     expect(changed.requestHash).not.toBe(first.requestHash);
   });
 
+  it("preserves old hashes without separate WhatsApp and binds canonical separate numbers", async () => {
+    const oldHash = "b7f3a8cafc88da3643b34b0825c7e91138ea7b268caf44d6fccf466152300499";
+    for (const customerWhatsapp of [undefined, null, "", "  ", "+8801712345678", "01712345678"]) {
+      const identity = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp }));
+      expect(identity.requestHash).toBe(oldHash);
+      expect(identity.legacyRequestHash).toBe(oldHash);
+    }
+    const first = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: "01812345678" }));
+    const same = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: " +8801812345678 " }));
+    const changed = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: "+8801912345678" }));
+    expect(first).toEqual(same);
+    expect(first.legacyRequestHash).toBe(oldHash);
+    expect(first.requestHash).not.toBe(oldHash);
+    expect(first.requestHash).not.toBe(changed.requestHash);
+  });
+
+  it.each([false, true])("protects changed WhatsApp while preserving exact hash retries (legacy: %s)", async (legacy) => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: "+8801812345678" }));
+    const row = createAttemptRow(identity, {
+      requestHash: legacy ? identity.legacyRequestHash : identity.requestHash,
+      status: "committed", linkedOrderId: "order_existing", linkedOrderCustomerWhatsapp: identity.customerWhatsapp,
+      responsePayload: JSON.stringify({ receiptToken: "chk_existing_secret" }),
+    });
+    expect(resolveCheckoutAttemptRow(row, identity)).toMatchObject({ status: "replay" });
+    for (const customerWhatsapp of [null, "+8801912345678"]) {
+      const changed = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp }));
+      // A pre-upgrade hash cannot distinguish an omitted original number
+      // from an admin-updated contact. Exact hash retries retain priority.
+      if (legacy && customerWhatsapp === null) expect(resolveCheckoutAttemptRow(row, changed)).toMatchObject({ status: "replay" });
+      else expect(() => resolveCheckoutAttemptRow(row, changed)).toThrow(expect.objectContaining({ code: "CHECKOUT_ATTEMPT_CONFLICT" }));
+    }
+    const changed = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: "+8801912345678" }));
+    expect(() => resolveCheckoutAttemptRow({ ...row, linkedOrderAccountOwnerCustomerId: "owner" }, changed))
+      .toThrow(expect.objectContaining({ status: 403 }));
+    expect(() => resolveCheckoutAttemptRow({ ...row, linkedOrderStatus: "cancelled", linkedOrderDeletedAt: 1,
+      linkedOrderPaymentStatus: "unpaid", linkedOrderPaidAmountMinor: 0 }, changed))
+      .toThrow(expect.objectContaining({ code: "CHECKOUT_ATTEMPT_EXPIRED" }));
+  });
+
+  it("replays an exact request without WhatsApp after the order contact was edited", async () => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput());
+    expect(resolveCheckoutAttemptRow(createAttemptRow(identity, {
+      status: "committed", linkedOrderId: "order_existing", linkedOrderCustomerWhatsapp: "+8801812345678",
+      responsePayload: JSON.stringify({ orderId: "order_existing" }),
+    }), identity)).toMatchObject({ status: "replay" });
+  });
+
+  it("replays a new exact WhatsApp request even when contact settings discarded the number", async () => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: "ignored hidden input" }));
+    const row = createAttemptRow(identity, {
+      status: "committed", linkedOrderId: "order_existing", linkedOrderCustomerWhatsapp: null,
+      responsePayload: JSON.stringify({ orderId: "order_existing" }),
+    });
+    expect(resolveCheckoutAttemptRow(row, identity)).toMatchObject({ status: "replay" });
+    expect(() => resolveCheckoutAttemptRow({ ...row, requestHash: identity.legacyRequestHash }, identity))
+      .toThrow(expect.objectContaining({ code: "CHECKOUT_ATTEMPT_CONFLICT" }));
+  });
+
+  it.each(["failed", "processing"])("never applies WhatsApp legacy fallback to a %s attempt", async (status) => {
+    const identity = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: "+8801812345678" }));
+    expect(() => resolveCheckoutAttemptRow(createAttemptRow(identity, {
+      status, requestHash: identity.legacyRequestHash, claimExpiresAt: 0,
+    }), identity)).toThrow(expect.objectContaining({ code: "CHECKOUT_ATTEMPT_CONFLICT" }));
+  });
+
   it("creates a memory-only candidate for the authoritative order transaction", async () => {
     const identity = await buildCheckoutAttemptIdentity(buildInput());
     const attempt = createAtomicCheckoutAttempt(identity);
@@ -282,20 +347,21 @@ describe("atomic checkout attempts", () => {
     }
   });
 
-  it("enforces the joined account owner in direct and batched database recovery", async () => {
+  it("enforces the joined account owner and legacy contact in direct and batched database recovery", async () => {
     const { sqlite, db } = createSqliteD1Database();
     try {
-      const identity = await buildCheckoutAttemptIdentity(buildInput());
+      const identity = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: "+8801812345678" }));
       const response = { orderId: "order_existing", receiptToken: "chk_existing_secret" };
       await db.insert(schema.customers).values({ id: "customer_owner", name: "Buyer", phone: "+8801712345678" });
       await db.insert(schema.orders).values({
         id: response.orderId, customerName: "Buyer", customerPhone: "+8801712345678",
         shippingAddress: "Address", city: "city_1", zone: "zone_1", totalAmountMinor: 12_500,
         accountOwnerCustomerId: "customer_owner",
+        customerWhatsapp: identity.customerWhatsapp,
       });
       await db.insert(schema.checkoutAttempts).values({
         id: "attempt_existing", orderId: response.orderId, checkoutToken: response.receiptToken,
-        requestKey: identity.requestKey, requestHash: identity.requestHash, status: "committed",
+        requestKey: identity.requestKey, requestHash: identity.legacyRequestHash, status: "committed",
         responsePayload: JSON.stringify(response),
       });
       await expect(resolveExistingCheckoutAttempt(db, identity)).rejects.toMatchObject({ status: 403 });
@@ -304,8 +370,12 @@ describe("atomic checkout attempts", () => {
         .resolves.toEqual({ status: "replay", response });
       const [rows] = await db.batch([selectCheckoutAttemptByKey(db, identity.requestKey)]);
       expect(rows[0]?.linkedOrderAccountOwnerCustomerId).toBe("customer_owner");
+      expect(rows[0]?.linkedOrderCustomerWhatsapp).toBe(identity.customerWhatsapp);
       expect(() => resolveCheckoutAttemptRow(rows[0], identity, undefined, "customer_other")).toThrow("Sign in to the account");
       expect(resolveCheckoutAttemptRow(rows[0], identity, undefined, "customer_owner")).toEqual({ status: "replay", response });
+      const changed = await buildCheckoutAttemptIdentity(buildInput({ customerWhatsapp: "+8801912345678" }));
+      await expect(resolveExistingCheckoutAttempt(db, changed, undefined, "customer_owner"))
+        .rejects.toMatchObject({ code: "CHECKOUT_ATTEMPT_CONFLICT" });
     } finally {
       sqlite.close();
     }
@@ -385,6 +455,7 @@ function createAttemptRow(
     linkedOrderPaidAmountMinor: null,
     linkedOrderPaymentMethod: null,
     linkedOrderAccountOwnerCustomerId: null,
+    linkedOrderCustomerWhatsapp: null,
     ...overrides,
   };
 }

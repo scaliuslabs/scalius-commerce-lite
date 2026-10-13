@@ -21,12 +21,14 @@ type ShellProps = {
   actions?: ReactNode;
   readOnlyNotice?: ReactNode;
   canSave: boolean;
+  disableFieldsWhenReadOnly?: boolean;
   form: UseFormReturn<CustomerFormValues>;
 };
 const state = vi.hoisted(() => ({
   permissions: new Set<string>(),
   submit: null as SubmitOptions | null,
   form: null as UseFormReturn<CustomerFormValues> | null,
+  readHistory: vi.fn(),
   post: vi.fn(),
   put: vi.fn(),
 }));
@@ -47,13 +49,13 @@ vi.mock("@scalius/api-client/sdk", async (importOriginal) => ({
 vi.mock("@/lib/api", async (importOriginal) => ({ ...await importOriginal<typeof import("@/lib/api")>(), apiData: (result: Promise<unknown>) => result }));
 vi.mock("@/components/admin/shared/FormContainer", async () => {
   const { Form } = await import("~/components/ui/form");
-  return { FormContainer: ({ heading, children, actions, readOnlyNotice, canSave, form }: ShellProps) => {
+  return { FormContainer: ({ heading, children, actions, readOnlyNotice, canSave, disableFieldsWhenReadOnly = true, form }: ShellProps) => {
     state.form = form;
     void form.formState.isDirty;
-    return <Form {...form}><h1>{heading}</h1>{actions}{readOnlyNotice}<fieldset disabled={!canSave}>{children}</fieldset></Form>;
+    return <Form {...form}><h1>{heading}</h1>{actions}{readOnlyNotice}<fieldset disabled={!canSave && disableFieldsWhenReadOnly}>{children}</fieldset></Form>;
   } };
 });
-vi.mock("./CustomerActivity", () => ({ CustomerActivity: () => null }));
+vi.mock("./CustomerActivity", () => ({ CustomerActivity: () => <button type="button" onClick={() => state.readHistory()}>More orders</button> }));
 vi.mock("./address/AddressFields", () => ({
   AddressFields: () => <div data-testid="first-address" />,
   SkipAddressValidation: () => null,
@@ -79,6 +81,7 @@ describe("customer saved values without edit permission", () => {
   let client: QueryClient;
   beforeEach(() => {
     state.permissions.clear();
+    state.readHistory.mockClear();
     state.submit = null;
     state.form = null;
     state.post.mockReset().mockResolvedValue({ id: "cust_created" });
@@ -166,6 +169,18 @@ describe("customer saved values without edit permission", () => {
     expect(state.put).not.toHaveBeenCalled();
   });
 
+  it("lets viewers browse history without opening any customer mutation controls", async () => {
+    state.permissions.add("customers.view_history");
+    await render();
+    const more = [...host.querySelectorAll("button")].find((button) => button.textContent === "More orders")!;
+    expect(more.closest("fieldset[disabled]")).toBeNull();
+    await act(async () => more.click());
+    expect(state.readHistory).toHaveBeenCalledOnce();
+    expect(host.querySelector("input,textarea,select")).toBeNull();
+    expect(state.post).not.toHaveBeenCalled();
+    expect(state.put).not.toHaveBeenCalled();
+  });
+
   it("keeps the guest heading rule separate from its saved name fact", async () => {
     await render({ isEdit: true, defaultValues: { ...saved, name: "Stored guest name" }, record: { ...record, kind: "guest", name: "Stored guest name" } });
     expect(host.querySelector("h1")?.textContent).toBe(formatPhoneForDisplay(phone, getStoreRegion()));
@@ -189,6 +204,7 @@ describe("customer saved values without edit permission", () => {
     expect(remove).not.toBeNull();
     act(() => remove!.click());
     state.permissions.clear();
+    state.readHistory.mockClear();
     await render();
     expect(fact("Name")).toBe(saved.name);
     expect([...host.querySelectorAll('ul[aria-label="Tags"] li')].map(node => node.textContent)).toEqual(record.tags);

@@ -59,6 +59,30 @@ const FULL: PluginManifestInput = {
 };
 
 describe("plugin manifest", () => {
+  it("declares real-staff route permissions within the approved app grant, on admin routes only", () => {
+    const route = { name: "adjust", methods: ["POST"], permission: "marketing.send" };
+    const manifest = { ...FULL, permissions: [...FULL.permissions!, "marketing.send"], routes: { ...FULL.routes, admin: [...FULL.routes!.admin!.filter((item) => item.name !== "adjust"), route] } };
+    const parsed = parsePluginManifest(manifest);
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.manifest.routes.admin.find((item) => item.name === "adjust")?.permission).toBe("marketing.send");
+    expect(parsePluginManifest({ ...manifest, permissions: FULL.permissions }).ok).toBe(false);
+    expect(parsePluginManifest({ ...FULL, routes: { ...FULL.routes, public: [{ name: "balance", methods: ["GET"], permission: "customers.view" }] } }).ok).toBe(false);
+  });
+
+  it("translates only declared select and multiselect values, leaving stored defaults unchanged", () => {
+    const translations = { bn: { settings: { tier: { options: { gold: "সোনালি" } } } } };
+    const parsed = parsePluginManifest({ ...FULL, translations });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.manifest.translations?.bn?.settings?.tier?.options).toEqual({ gold: "সোনালি" });
+      expect(parsed.manifest.settings.find((field) => field.key === "tier")).toMatchObject({ type: "select", default: "gold" });
+    }
+    expect(parsePluginManifest({ ...FULL, settings: [{ key: "tier", label: "Tiers", type: "multiselect", options: [{ value: "gold", label: "Gold" }] }], translations }).ok).toBe(true);
+    expect(parsePluginManifest({ ...FULL, translations: { bn: { settings: { tier: { options: { missing: "X" } } } } } }).ok).toBe(false);
+    expect(parsePluginManifest({ ...FULL, translations: { bn: { settings: { api_key: { options: {} } } } } }).ok).toBe(false);
+    expect(parsePluginManifest({ ...FULL, translations: { bn: { settings: { tier: { options: { gold: " " } } } } } }).ok).toBe(false);
+  });
+
   it("versions the plugin API with the event catalog", () => {
     expect(PLUGIN_API_VERSION).toBe(EVENTS_API_VERSION);
   });

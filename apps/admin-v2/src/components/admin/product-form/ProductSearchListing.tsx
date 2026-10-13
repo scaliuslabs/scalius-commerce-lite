@@ -6,15 +6,19 @@ import type { ProductFormValues } from "./types";
 
 /** The product's "Search engine listing" card, bound to the product form. */
 export function ProductSearchListing({ form, disabled }: { form: UseFormReturn<ProductFormValues>; disabled?: boolean }) {
-  const [id, name, description, metaTitle, metaDescription, slug, slugEdited, noIndex] = useWatch({
+  const current = useWatch({
     control: form.control,
     name: ["id", "name", "description", "metaTitle", "metaDescription", "slug", "slugEdited", "noIndex"],
   });
-  const { errors } = form.formState;
+  const { errors, defaultValues } = form.formState;
+  const [id, name, description, metaTitle, metaDescription, slug, slugEdited, noIndex] = disabled
+    ? [defaultValues?.id, defaultValues?.name, defaultValues?.description, defaultValues?.metaTitle, defaultValues?.metaDescription, defaultValues?.slug, defaultValues?.slugEdited, defaultValues?.noIndex] as const
+    : current;
   // A new product's address is made from its title on the server unless the merchant types one.
   const autoHandle = !id && (!slugEdited || !slug) ? autoHandleFor(name ?? "", "product") : undefined;
 
   const onChange = (next: Partial<SearchListingValue>) => {
+    if (disabled) return;
     const options = { shouldDirty: true, shouldValidate: true } as const;
     if (next.title !== undefined) form.setValue("metaTitle", next.title || null, options);
     if (next.description !== undefined) form.setValue("metaDescription", next.description || null, options);

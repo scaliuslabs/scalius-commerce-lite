@@ -235,6 +235,7 @@ export function meterR2(counters: () => FreePlanCounters): R2Bucket {
     },
     delete: async (key: string | string[]) => { bump(); for (const name of Array.isArray(key) ? key : [key]) objects.delete(name); },
     list: async () => { bump(); return { objects: [], truncated: false }; },
+    resumeMultipartUpload: (key: string, uploadId: string) => ({ key, uploadId, abort: async () => { bump(); } }),
   };
   return bucket as unknown as R2Bucket;
 }

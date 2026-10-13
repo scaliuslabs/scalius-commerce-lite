@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PresenceSlot, announceSave, presenceKey } from "~/lib/realtime/store";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { CircleAlert, ListTree, Plus } from "lucide-react";
@@ -37,6 +38,7 @@ function MenuEditor({ menuId }: { menuId: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: menu } = useSuspenseQuery(navigationMenuQueryOptions(menuId));
+  const key = presenceKey("menu", menu.id);
   const { data: placements } = useSuspenseQuery(navigationPlacementsQueryOptions());
   const inUse = placements.some(({ placement }) => placement.menuId === menu.id && placement.isEnabled);
   // Menus, this menu and its items all live under one query-key prefix.
@@ -80,11 +82,13 @@ function MenuEditor({ menuId }: { menuId: string }) {
             path: { menuId: menu.id },
             body: { expectedRevision: revision, name: name.trim(), handle: menu.handle },
           }))).revision;
+          announceSave(key, revision);
         }
-        await apiData(postApiV1AdminNavigationMenusByMenuIdPublish({
+        const published = await apiData(postApiV1AdminNavigationMenusByMenuIdPublish({
           path: { menuId: menu.id },
           body: { expectedRevision: revision },
         }));
+        announceSave(key, published.revision);
       } catch (error) {
         failSave(error, () => void refresh());
       } finally {
@@ -106,10 +110,11 @@ function MenuEditor({ menuId }: { menuId: string }) {
       setDiscardError(undefined);
       void (async () => {
         try {
-          await apiData(postApiV1AdminNavigationMenusByMenuIdRollback({
+          const restored = await apiData(postApiV1AdminNavigationMenusByMenuIdRollback({
             path: { menuId: menu.id },
             body: { expectedRevision: menu.revision, sourceRevision },
           }));
+          announceSave(key, restored.revision);
           setName(menu.name);
         } catch (error) {
           setDiscardError(actionErrorText(error));
@@ -123,10 +128,11 @@ function MenuEditor({ menuId }: { menuId: string }) {
 
   const move = async (itemId: string, destination: MoveDestination) => {
     try {
-      await apiData(postApiV1AdminNavigationMenusByMenuIdItemsByItemIdMove({
+      const moved = await apiData(postApiV1AdminNavigationMenusByMenuIdItemsByItemIdMove({
         path: { menuId: menu.id, itemId },
         body: { expectedRevision: menu.revision, ...destination },
       }));
+      announceSave(key, moved.revision);
     } catch (error) {
       toast.error(t("moveFailed"), { description: actionErrorText(error) });
     }
@@ -136,10 +142,11 @@ function MenuEditor({ menuId }: { menuId: string }) {
   const deleteItem = async (item: NavigationMenuItemRow) => {
     setRemoving(true);
     try {
-      await apiData(deleteApiV1AdminNavigationMenusByMenuIdItemsByItemId({
+      const removed = await apiData(deleteApiV1AdminNavigationMenusByMenuIdItemsByItemId({
         path: { menuId: menu.id, itemId: item.id },
         body: { expectedRevision: menu.revision },
       }));
+      announceSave(key, removed.revision);
       toast.success(t("itemDeleted"));
       setDeletingItem(null);
     } catch (error) {
@@ -171,6 +178,8 @@ function MenuEditor({ menuId }: { menuId: string }) {
   return (
     <OnlineStorePage
       title={menu.name}
+      presenceKey={key}
+      presence={<PresenceSlot presenceKey={key} revision={menu.revision} dirty={nameChanged || unpublished} />}
       back={{ to: "/admin/online-store/navigation", label: t("navigationTitle") }}
     >
       {discardError ? (
@@ -182,7 +191,7 @@ function MenuEditor({ menuId }: { menuId: string }) {
       ) : null}
       <Card className="p-4">
         <Field id="menu-name" label={t("menuName")} error={name.trim() ? undefined : t("menuNameRequired")}>
-          <Input id="menu-name" value={name} maxLength={100} onChange={(event) => setName(event.target.value)} />
+          <Input id="menu-name" name="name" value={name} maxLength={100} onChange={(event) => setName(event.target.value)} />
         </Field>
       </Card>
 

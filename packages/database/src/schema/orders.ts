@@ -324,12 +324,13 @@ export const orders = sqliteTable("orders", {
     index("orders_customer_sales_idx")
       .on(table.customerId, table.deletedAt, table.createdAt, table.status)
       .where(sql`${table.customerId} IS NOT NULL`),
-    index("orders_customer_phone_idx").on(table.customerPhone),
+    // Proven-contact sign-in must seek the latest live order without planner statistics.
+    index("orders_customer_phone_lookup_idx").on(table.customerPhone, table.deletedAt, table.createdAt, table.id),
     // Guest repeat-purchase checks must seek by phone before walking history (0129).
     index("orders_guest_sales_idx")
       .on(table.customerPhone, table.deletedAt, table.createdAt, table.status)
       .where(sql`${table.customerId} IS NULL`),
-    index("orders_customer_email_normalized_idx").on(sql`lower(trim(${table.customerEmail}))`),
+    index("orders_customer_email_lookup_idx").on(sql`lower(trim(${table.customerEmail}))`, table.deletedAt, table.createdAt, table.id),
     index("orders_shipment_claim_idx")
         .on(table.shipmentClaimId, table.shipmentClaimExpiresAt)
         .where(sql`${table.shipmentClaimId} IS NOT NULL`),

@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BroadcastListener } from "better-auth/client";
+import { activateInboxDraftAccount, getInboxDrafts, updateInboxDraft } from "~/lib/inbox-drafts";
 import { AdminSessionSync, broadcastAdminSignOut } from "./AdminSessionSync";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -36,6 +37,9 @@ describe("AdminSessionSync", () => {
   let replace: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    sessionStorage.clear();
+    activateInboxDraftAccount("staff-a");
+    updateInboxDraft("staff-a", "conversation:a", "public", (draft) => ({ ...draft, body: "Private draft" }));
     mocks.listener = null;
     mocks.unsubscribe.mockReset();
     mocks.cleanup.mockReset();
@@ -69,11 +73,13 @@ describe("AdminSessionSync", () => {
     }));
 
     expect(mocks.clearRouteContext).toHaveBeenCalledOnce();
+    expect(getInboxDrafts("staff-a", "conversation:a").public.body).toBe("");
     expect(replace).toHaveBeenCalledWith("/auth/login");
   });
 
   it("broadcasts a confirmed sign-out through Better Auth's session channel", () => {
     broadcastAdminSignOut();
+    expect(getInboxDrafts("staff-a", "conversation:a").public.body).toBe("");
 
     expect(mocks.post).toHaveBeenCalledWith({
       event: "session",

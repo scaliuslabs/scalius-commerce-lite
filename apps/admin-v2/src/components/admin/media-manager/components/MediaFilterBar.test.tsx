@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { PermissionProvider } from "~/contexts/PermissionContext";
 
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -38,7 +39,7 @@ describe("MediaFilterBar selection controls", () => {
     const [selectedCount, setSelectedCount] = useState(0);
 
     return (
-      <MediaFilterBar
+      <PermissionProvider isSuperAdmin><MediaFilterBar
         capability="image"
         filters={filters}
         view="ready"
@@ -70,7 +71,7 @@ describe("MediaFilterBar selection controls", () => {
         }}
         onMove={vi.fn()}
         onLifecycle={vi.fn()}
-      />
+      /></PermissionProvider>
     );
   }
 

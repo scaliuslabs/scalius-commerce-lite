@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RowLink } from "~/components/admin/data-table/RowLink";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -13,20 +13,24 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { DataTable } from "~/components/admin/data-table/DataTable";
-import { useStaticTable } from "~/components/admin/data-table/use-static-table";
-import type { ColumnDef } from "~/components/admin/data-table/table-config";
-import { EmptyState } from "~/components/admin/states";
+import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
+import { localeWidth } from "~/components/admin/data-table/column-layout";
+import { serverTableFeatures, useTable, type ColumnDef, type PaginationState } from "~/components/admin/data-table/table-config";
+import { EmptyState, FilteredEmptyState } from "~/components/admin/states";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { customerSegmentsQueryOptions, type CustomerSegment } from "~/lib/api-query-options/customers";
 import { useMessages } from "~/i18n";
 import { customerSegmentMessages } from "~/i18n/customer-segments";
 import { DeleteSegmentDialog, SegmentMemberCount, useSegmentExport } from "./segment-actions";
+import { useListSearch } from "~/lib/list-search";
+import { DEFAULT_PAGE_SIZE, readSavedPageSize } from "~/lib/list-helpers";
+import { filterCustomerSegments } from "./segment-list-search";
 
 /**
- * Customers → Segments: every saved segment with its live member count and
- * the discounts limited to it. Open one to change it; view its customers,
- * export them or delete it from the row menu.
+ * Customers → Segments: search saved segments and request their member counts.
+ * The API caps metadata at 200 rows; only the current page is rendered.
+ * Open one to change it; view its customers, export or delete it from its menu.
  */
 export function SegmentList() {
   const t = useMessages(customerSegmentMessages);
@@ -35,7 +39,20 @@ export function SegmentList() {
   const segments = useQuery(customerSegmentsQueryOptions());
   const exporter = useSegmentExport();
   const [deleting, setDeleting] = useState<CustomerSegment | null>(null);
+  const [term, setTerm] = useListSearch("segments");
+  const [pagination, setPagination] = useState<PaginationState>(() => ({
+    pageIndex: 0, pageSize: readSavedPageSize("segments") ?? DEFAULT_PAGE_SIZE,
+  }));
   const rows = segments.data?.segments ?? [];
+  const filtered = useMemo(() => filterCustomerSegments(segments.data?.segments ?? [], term), [segments.data, term]);
+  const pageIndex = Math.min(pagination.pageIndex, Math.max(0, Math.ceil(filtered.length / pagination.pageSize) - 1));
+  useEffect(() => {
+    if (pagination.pageIndex !== pageIndex) setPagination((current) => ({ ...current, pageIndex }));
+  }, [pageIndex, pagination.pageIndex]);
+  const search = (value: string) => {
+    setTerm(value);
+    setPagination((current) => ({ ...current, pageIndex: 0 }));
+  };
   const create = canEdit ? (
     <Button asChild>
       <Link to="/admin/customers/segments/new">{t("createSegment")}</Link>
@@ -68,8 +85,8 @@ export function SegmentList() {
     {
       id: "customers",
       header: t("customers"),
-      meta: { numeric: true, keep: true, minWidth: 110 },
-      cell: ({ row }) => <SegmentMemberCount segmentId={row.original.id} />,
+      meta: { numeric: true, keep: true, minWidth: localeWidth({ en: 180, bn: 200 }) },
+      cell: ({ row }) => <SegmentMemberCount segmentId={row.original.id} name={row.original.name} />,
     },
     {
       id: "actions",
@@ -103,7 +120,19 @@ export function SegmentList() {
     // `exporter.busy` re-renders the menus; `t` follows the language.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [canEdit, exporter.busy, t]);
-  const { table } = useStaticTable(rows, columns);
+  const page = { ...pagination, pageIndex };
+  const table = useTable({
+    features: serverTableFeatures,
+    data: filtered.slice(pageIndex * page.pageSize, (pageIndex + 1) * page.pageSize),
+    columns,
+    getRowId: (row) => row.id,
+    manualPagination: true,
+    manualSorting: true,
+    enableRowSelection: false,
+    rowCount: filtered.length,
+    state: { pagination: page, sorting: [], rowSelection: {} },
+    onPaginationChange: (updater) => setPagination(typeof updater === "function" ? updater(page) : updater),
+  });
   const nothingYet = !segments.isPending && !segments.isError && rows.length === 0;
 
   return (
@@ -122,7 +151,8 @@ export function SegmentList() {
           what={t("segments")}
           layoutKey="segments"
           defaultSortLabel={false}
-          paginate={false}
+          toolbar={<DataTableToolbar searchValue={term} onSearchChange={search} searchPlaceholder={t("searchSegments")} />}
+          emptyState={<FilteredEmptyState onClearFilters={() => search("")} />}
           getRowHref={(segment) => `/admin/customers/segments/${segment.id}`}
         />
       )}

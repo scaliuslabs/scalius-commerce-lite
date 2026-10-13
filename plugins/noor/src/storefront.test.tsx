@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parsePluginManifest } from "@scalius/plugin-sdk/manifest";
 import { checkPluginHandlers, pluginHandlerInventory, resolveStorefrontSettings } from "@scalius/shared/plugins";
 import { sanitizeStorefrontHtml } from "@scalius/shared/plugins/storefront-html";
+import { validatePluginSettingValues, type PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
 import {
   DEFAULT_STOREFRONT_THEME,
   applyStorefrontAppTemplate,
@@ -59,6 +60,35 @@ function shown(html: string): string {
 const LANDING = { page: { kind: "landing" as const, path: "/pages/offer" } };
 
 describe("Noor manifest", () => {
+  it("supplies valid settings in every template and preset before merchant-required fields are filled", () => {
+    const validate = (label: string, schema: PluginSettingsSchema, values: Record<string, unknown>) => {
+      // Missing required fields (for example a product) await the merchant; supplied values must be valid.
+      const result = validatePluginSettingValues(schema.filter((field) => Object.hasOwn(values, field.key)), values);
+      expect(result.ok ? [] : result.errors, label).toEqual([]);
+    };
+    const sections = declared.storefront.pagePresets.flatMap((preset) => readStorefrontPagePresetSections(preset.sections)!);
+    for (const template of declared.storefront.templates) {
+      const theme = readStorefrontAppTemplateTheme(template.theme)!;
+      sections.push(...(theme.sections ?? []));
+      for (const placement of Object.values(theme.apps ?? {})) {
+        if (!placement) continue;
+        const slot = declared.storefront.slots.find((slot) => `${declared.id}/${slot.id}` === placement.app)!;
+        expect(slot, placement.app).toBeDefined();
+        validate(placement.app, slot.settings, placement.values);
+      }
+    }
+    for (const section of sections) {
+      if (section.type !== "app") continue;
+      const declaration = declared.storefront.sections.find((item) => `${declared.id}/${item.type}` === section.settings.app)!;
+      expect(declaration, section.settings.app).toBeDefined();
+      validate(section.id, declaration.settings, section.settings.values);
+    }
+    const products = declared.storefront.sections.find((section) => section.type === "products")!;
+    const invalid = validatePluginSettingValues(products.settings.filter((field) => field.key === "tab1_products"), { tab1_products: "featured" });
+    expect(invalid.ok).toBe(false);
+    if (!invalid.ok) expect(invalid.errors).toEqual([expect.objectContaining({ key: "tab1_products" })]);
+  });
+
   it("is a valid manifest whose module draws every declared component", () => {
     expect(checkPluginHandlers(pluginHandlerInventory(declared), plugin)).toEqual([]);
     const sections = Object.keys(storefront.definition.sections ?? {}).sort();
@@ -87,6 +117,59 @@ describe("Noor manifest", () => {
     // The merchant's brand and landing pages stay.
     expect(document.brand).toEqual(DEFAULT_STOREFRONT_THEME.brand);
     expect(document.pages.landing).toEqual(DEFAULT_STOREFRONT_THEME.pages.landing);
+  });
+
+  it("starts new stores and campaigns with product facts, without invented trust claims", () => {
+    const template = readStorefrontAppTemplateTheme(declared.storefront.templates[0]!.theme)!;
+    const campaign = readStorefrontPagePresetSections(declared.storefront.pagePresets[0]!.sections)!;
+    const sections = [...(template.sections ?? []), ...campaign];
+    const trustTypes = ["scalius.noor/testimonials", "scalius.noor/faq", "scalius.noor/promises"];
+    for (const section of sections) {
+      if (section.type !== "app") throw new Error("Expected app preset section");
+      expect(trustTypes).not.toContain(section.settings.app);
+      const values = section.settings.values;
+      for (const field of ["assurances", "stats", "summary", "urgency", "ends_at"]) expect(values[field]).toBeUndefined();
+      const rendered = renderSection(storefront, section.settings.app.slice("scalius.noor/".length), settingsFor(section.settings.app.slice("scalius.noor/".length), values));
+      expect(rendered).not.toMatch(/Cash on delivery|two.days|seven.day|40%|1,200\s*(?:happy|customers|reviews|orders)|quality checked|pure cotton|inspect|check the product before/i);
+    }
+    expect(template.apps?.header?.values.announcements).toEqual([]);
+    expect(template.apps?.footer?.values.payments).toEqual([]);
+    expect(template.apps?.footer?.values.tagline).toBe("");
+    expect(campaign.map((section) => section.id)).toEqual(["lp-hero", "lp-features", "lp-steps", "lp-order"]);
+    const appCampaign = campaign.filter((section) => section.type === "app");
+    const hero = appCampaign[0]!.settings.values;
+    const html = renderSection(storefront, "landing-hero", settingsFor("landing-hero", { ...hero, product: "prod_1" }));
+    expect(html).toContain("Linen shirt");
+    expect(html).not.toContain("Special offer");
+    expect(html).not.toContain("noor-urgency");
+    expect(renderSection(storefront, "landing-features", settingsFor("landing-features", appCampaign[1]!.settings.values))).toBe("");
+    const order = renderSection(storefront, "landing-order", settingsFor("landing-order", { ...appCampaign.at(-1)!.settings.values, product: "prod_1" }));
+    expect(order).toContain("scalius-checkout");
+    expect(order).not.toContain("noor-assure");
+  });
+
+  it("resolves omitted copy neutrally while preserving explicit merchant values", () => {
+    expect(settingsFor("hero")).toMatchObject({ heading: "Explore our products", text: null, eyebrow: null });
+    expect(settingsFor("landing-hero")).toMatchObject({ badge: null, urgency: null });
+    expect(settingsFor("sale-countdown")).toMatchObject({ heading: null, eyebrow: null });
+    expect(renderSection(storefront, "sale-countdown", settingsFor("sale-countdown"))).toBe("");
+    expect(settingsFor("testimonials")).toMatchObject({ heading: "Customer reviews", items: [] });
+    const unrated = settingsFor("testimonials", { items: [{ quote: "A merchant-supplied quote without a score", name: "Customer" }] });
+    expect(unrated.items).toEqual([expect.objectContaining({ rating: null })]);
+    expect(renderSection(storefront, "testimonials", unrated)).not.toContain("noor-stars");
+    expect(settingsFor("gallery")).toMatchObject({ heading: "Gallery", handle: null });
+    expect(slotSettings("noor-footer")).toMatchObject({ tagline: null, newsletter_text: null, payments: [] });
+    const saved = { heading: "Our real promotion", text: "Delivery in five days", eyebrow: "Merchant's collection" };
+    expect(settingsFor("hero", saved)).toMatchObject(saved);
+  });
+
+  it("keeps merchant-authored saved claims and testimonials renderable", () => {
+    const saved = [{ id: "lp-reviews", type: "app", version: 1, settings: { app: "scalius.noor/testimonials", values: { heading: "Our customer reviews", items: [{ quote: "A real review supplied by this merchant", name: "Verified customer", rating: 4 }] } } }];
+    const before = JSON.stringify(saved);
+    expect(readStorefrontPagePresetSections(saved)).toEqual(saved);
+    const html = renderSection(storefront, "testimonials", settingsFor("testimonials", saved[0]!.settings.values));
+    expect(html).toContain("A real review supplied by this merchant");
+    expect(JSON.stringify(saved)).toBe(before);
   });
 
   it("offers a campaign page preset built from its own landing sections", () => {
@@ -293,11 +376,22 @@ describe("Noor sections", () => {
     expect(html).toContain('<h2 class="noor-display">One</h2>');
   });
 
+  it.each(["2026-02-29", "1900-02-29", "2026-04-31", "2026-13-01", "2026-00-10", "2026-12-31 24:00", "2026-12-31 23:60", "0050-01-01"])("rejects impossible countdown date %s", (value) => {
+    expect(countdownEnd(value, "Asia/Dhaka")).toBeNull();
+  });
+
+  it("accepts leap days and preserves the invalid-zone fallback", () => {
+    expect(countdownEnd("2028-02-29 12:00", "UTC")).toBe(Date.UTC(2028, 1, 29, 12));
+    expect(countdownEnd("2000-02-29 12:00", "UTC")).toBe(Date.UTC(2000, 1, 29, 12));
+    expect(countdownEnd("2026-12-31 18:00", "not-a-time-zone")).toBe(Date.UTC(2026, 11, 31, 18));
+    expect(shown(renderSection(storefront, "sale-countdown", settingsFor("sale-countdown", { heading: "Sale ends", ends_at: "2026-02-31" })))).not.toContain('data-island="countdown"');
+  });
+
   it("counts the sale down to the store's local time", () => {
     expect(countdownEnd("2026-12-31 18:00", "Asia/Dhaka")).toBe(Date.UTC(2026, 11, 31, 12, 0));
     expect(countdownEnd("2026-12-31", "Asia/Dhaka")).toBe(Date.UTC(2026, 11, 31, 17, 59, 59));
     expect(countdownEnd("31/12/2026", "Asia/Dhaka")).toBeNull();
-    const html = renderSection(storefront, "sale-countdown", settingsFor("sale-countdown", { ends_at: "2026-12-31 18:00" }));
+    const html = renderSection(storefront, "sale-countdown", settingsFor("sale-countdown", { heading: "Sale ends", ends_at: "2026-12-31 18:00" }));
     expect(html).toContain(`data-props="{&quot;end&quot;:${Date.UTC(2026, 11, 31, 12, 0)}}"`);
   });
 });
@@ -330,7 +424,18 @@ describe("Noor landing kit", () => {
     expect(html).toContain('<scalius-checkout data-product="linen-shirt" data-max-quantity="3"></scalius-checkout>');
     expect(html).toContain('data-island="landing-bar"');
     expect(html).toContain("2-day delivery");
-    expect(html).toContain("Cash on delivery: pay when it arrives");
+    expect(html).not.toContain("Cash on delivery: pay when it arrives");
+  });
+
+  it("shows only merchant-authored order assurances", () => {
+    const empty = shown(render("landing-order", { assurances: [] }));
+    expect(empty).not.toContain('class="noor-assure"');
+    expect(empty).not.toContain("Cash on delivery");
+    const merchant = shown(render("landing-order", { assurances: [{ icon: "cash", text: "COD available in Dhaka" }] }));
+    expect(merchant).toContain("COD available in Dhaka");
+    expect(merchant.match(/class="noor-assure"/g)).toHaveLength(1);
+    const bangla = shown(render("landing-order", { assurances: [] }, { store: { name: "দোকান", currency: "BDT", locale: "bn-BD", language: "bn", timeZone: "Asia/Dhaka" } }));
+    expect(bangla).not.toContain("ক্যাশ অন ডেলিভারি");
   });
 
   it("keeps repeated order sections and their phone bars on distinct anchors", () => {
@@ -379,6 +484,6 @@ describe("Noor landing kit", () => {
   it("speaks Bangla on a Bangla store", () => {
     const bangla = { store: { name: "দোকান", currency: "BDT", locale: "bn-BD", language: "bn" as const, timeZone: "Asia/Dhaka" } };
     expect(render("landing-hero", {}, bangla)).toContain("এখনই অর্ডার করুন");
-    expect(render("landing-order", {}, bangla)).toContain("ক্যাশ অন ডেলিভারি");
+    expect(render("landing-order", {}, bangla)).toContain("আপনার অর্ডার");
   });
 });

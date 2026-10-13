@@ -47,10 +47,10 @@ describe("createOrder", () => {
 
     await createOrder(checkoutData, "cod");
     expect(sent(0)).not.toHaveProperty("marketingConsent");
-    await createOrder({ ...checkoutData, marketingConsent: "bn" }, "cod");
-    expect(sent(1).marketingConsent).toEqual({ language: "bn" });
+    await createOrder({ ...checkoutData, marketingConsent_sms: "bn" }, "cod");
+    expect(sent(1).marketingConsent).toEqual({ language: "bn", channels: ["sms"] });
     await createOrder({ ...checkoutData, marketingConsent: "<b>" }, "cod");
-    expect(sent(2).marketingConsent).toEqual({ language: null });
+    expect(sent(2)).not.toHaveProperty("marketingConsent");
     await createOrder({ ...checkoutData, marketingConsent: "" }, "cod");
     expect(sent(3)).not.toHaveProperty("marketingConsent");
   });

@@ -2,8 +2,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "~/lib/toast";
+import { formatList } from "@scalius/shared/locale-words";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 
+import { DiscountSavedView } from "./DiscountSavedView";
+import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
+import { announceSave, PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { DiscountStatusBadge } from "./DiscountStatusBadge";
 import {
   MAX_AMOUNT_MAJOR,
@@ -19,6 +23,7 @@ import {
   generateDiscountCode,
   latinDigits,
   summarizeDraft,
+  sameDiscountDraft,
   validateDraft,
   type DiscountDraft,
   type Scope,
@@ -40,7 +45,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
-import { formatDateTime, formatNumber, useMessages } from "~/i18n";
+import { formatDateTime, formatNumber, getLocale, useMessages } from "~/i18n";
 import { discountsMessages } from "~/i18n/discounts";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { readPromotionRevisionConflict } from "~/lib/admin-api-conflicts";
@@ -140,8 +145,14 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
   const canSave = hasPermission(discount ? ADMIN_PERMISSIONS.DISCOUNTS_EDIT : ADMIN_PERMISSIONS.DISCOUNTS_CREATE);
   const canToggle = hasPermission(ADMIN_PERMISSIONS.DISCOUNTS_TOGGLE_STATUS);
   const canDelete = hasPermission(ADMIN_PERMISSIONS.DISCOUNTS_DELETE);
+  const key = discount ? presenceKey("discount", discount.id) : null;
+  const newerSaved = !canSave && discount && discount.revision > (revision ?? -1) ? discount : null;
+  const savedDraft = newerSaved ? draftFromDiscount(newerSaved, currencyCode) : baseline;
+  const savedRevision = newerSaved?.revision ?? revision;
+  const savedStatus = newerSaved?.status ?? status;
+  const view = canSave ? draft : savedDraft;
   const errors = validateDraft(draft, currencyCode, undefined, priceIncrementMinor);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(baseline);
+  const dirty = canSave && !sameDiscountDraft(draft, baseline);
   const busy = Boolean(scope?.busy) || activeMutation.isPending || deleteMutation.isPending;
   const errorVars = {
     places: formatNumber(getDecimalPlaces(currencyCode)),
@@ -155,25 +166,33 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
   const codeTaken = takenCode !== null && draft.code.trim().toUpperCase() === takenCode;
   const codeError = shown("code") ?? (codeTaken ? t("errorCodeTaken") : undefined);
 
-  const appliesItems = useScopeItems(draft.appliesTo);
-  const buyItems = useScopeItems(draft.buyScope);
-  const getItems = useScopeItems(draft.getScope);
+  const appliesItems = useScopeItems(view.appliesTo);
+  const buyItems = useScopeItems(view.buyScope);
+  const getItems = useScopeItems(view.getScope);
   const scopeLabel = useScopeLabel();
   const items = new Map([...appliesItems, ...buyItems, ...getItems]);
-  const segmentLabel = useSegmentLabel(useSegmentNames(draft.eligibility === "segments").names);
+  const segments = useSegmentNames(view.eligibility === "segments");
+  const segmentLabel = useSegmentLabel(segments.names);
+  const fullSegments = (ids: string[]) => formatList(ids.map((id) => segments.names.get(id) ?? t(segments.query.isPending ? "loading" : segments.query.isError ? "loadFailed" : "segmentDeleted")), getLocale());
+  const fullScope = (picked: Scope) => {
+    const names = picked.ids.flatMap((id) => items.get(id)?.name ? [items.get(id)!.name] : []);
+    const missing = picked.ids.filter((id) => !items.has(id));
+    if (missing.length) names.push(scopeLabel({ kind: picked.kind, ids: missing }, new Map()));
+    return formatList(names, getLocale());
+  };
   const format: SummaryFormat = {
     money: (major) => fmt(Number(major)),
     number: (value) => formatNumber(Number(value)),
     date: (epoch) => formatDateTime(new Date(epoch * 1_000), { dateStyle: "medium", timeStyle: "short" }),
-    scope: (picked: Scope) => scopeLabel(picked, items),
-    segments: segmentLabel,
+    scope: canSave ? (picked: Scope) => scopeLabel(picked, items) : fullScope,
+    segments: canSave ? segmentLabel : fullSegments,
   };
   // The live and scheduled discounts this one may combine with (a page of each).
   const live = useQuery(discountsQueryOptions({ view: "active", limit: 90 }));
   const later = useQuery(discountsQueryOptions({ view: "scheduled", limit: 90 }));
   const allDiscounts = [...(live.data?.discounts ?? []), ...(later.data?.discounts ?? [])];
-  const preview = combinationPreview(draft, allDiscounts, discount?.id);
-  const summary = summarizeDraft(draft, currencyCode, format, preview.filter((item) => item.stacks).length, priceIncrementMinor);
+  const preview = combinationPreview(view, allDiscounts, discount?.id);
+  const summary = summarizeDraft(view, currencyCode, format, preview.filter((item) => item.stacks).length, priceIncrementMinor);
   // Each product's highest price buyers pay: an amount above all of them makes every item free.
   const prices = draft.appliesTo.ids.map((id) => appliesItems.get(id)?.priceRange?.to);
   const aboveEveryPrice = exceedsEveryPrice(
@@ -181,7 +200,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
     prices.every((price) => price !== undefined) ? (prices as number[]) : null,
     currencyCode,
   );
-  const heading = draft.method === "code" ? draft.code.trim().toUpperCase() : draft.title.trim();
+  const heading = view.method === "code" ? view.code.trim().toUpperCase() : view.title.trim();
   function update(patch: Partial<DiscountDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
   }
@@ -205,6 +224,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
 
   /** Runs inside the save bar: throws so the bar stays up and the banner explains. */
   async function save() {
+    if (!canSave) return;
     const input = draftToInput(draft, currencyCode);
     try {
       if (!discount) {
@@ -224,6 +244,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
       setRevision(result.revision);
       setStatus(result.status);
       setBaseline(draft);
+      if (key) announceSave(key, result.revision);
     } catch (error) {
       if (readPromotionRevisionConflict(error)) {
         setConflict(true);
@@ -247,15 +268,19 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
 
   async function loadTheirs() {
     if (!discount) return;
-    const latest = await queryClient.fetchQuery({ ...discountQueryOptions(discount.id), staleTime: 0 });
-    const next = draftFromDiscount(latest, currencyCode);
-    // Clears the failed-save banner; the draft below replaces the discarded one.
-    scope?.discardAll();
-    setDraft(next);
-    setBaseline(next);
-    setRevision(latest.revision);
-    setStatus(latest.status);
-    setConflict(false);
+    try {
+      const latest = await queryClient.fetchQuery({ ...discountQueryOptions(discount.id), staleTime: 0 });
+      const next = draftFromDiscount(latest, currencyCode);
+      // Clears the failed-save banner; the draft below replaces the discarded one.
+      scope?.discardAll();
+      setDraft(next);
+      setBaseline(next);
+      setRevision(latest.revision);
+      setStatus(latest.status);
+      setConflict(false);
+    } catch (error) {
+      toast.error(discountFailureText(error));
+    }
   }
 
   /** Activate/Delete lost a race with another save: say so and offer their version. */
@@ -269,11 +294,15 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
   }
 
   async function setActive(active: boolean) {
-    if (!discount || revision === null) return;
+    if (!canToggle || !discount || savedRevision === null) return;
     try {
-      const result = await activeMutation.mutateAsync({ id: discount.id, expectedRevision: revision, active });
+      const result = await activeMutation.mutateAsync({ id: discount.id, expectedRevision: savedRevision, active });
       setRevision(result.revision);
       setStatus(result.status);
+      // A toggle adopts this saved snapshot; a later permission grant must not revive a stale draft under its newer revision.
+      setBaseline(savedDraft);
+      setDraft(savedDraft);
+      if (key) announceSave(key, result.revision);
       toast.success(t(active ? "toastActivated" : "toastDeactivated"));
     } catch (error) {
       showConflict(error);
@@ -281,9 +310,9 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
   }
 
   async function remove() {
-    if (!discount || revision === null) return;
+    if (!canDelete || !discount || savedRevision === null) return;
     try {
-      await deleteMutation.mutateAsync({ id: discount.id, expectedRevision: revision });
+      await deleteMutation.mutateAsync({ id: discount.id, expectedRevision: savedRevision });
       setDeleteOpen(false);
       toast.success(t("toastDeleted"));
       await navigate({ to: "/admin/discounts", ignoreBlocker: true });
@@ -294,10 +323,11 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
   }
 
   const otherClasses = combinableClasses(draft);
-  const displayRecord = discount ? { ...discount, status } : null;
+  const displayRecord = discount ? { ...discount, status: savedStatus } : null;
 
   return (
     <form
+      data-presence-root={key ?? undefined}
       method="post"
       noValidate
       className="mx-auto max-w-5xl pb-8"
@@ -308,18 +338,19 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
       }}
     >
       <PageHeader
+        presence={<PresenceSlot presenceKey={key} revision={savedRevision} dirty={dirty} readOnly={!canSave} />}
         backTo="/admin/discounts"
-        title={discount ? heading || t(`type_${draft.type}`) : t("newTitle")}
+        title={discount ? heading || t(`type_${view.type}`) : t("newTitle")}
         status={displayRecord ? <DiscountStatusBadge discount={displayRecord} /> : null}
         // An ended discount can't go live: extend its end date instead.
-        actions={displayRecord && canToggle && status !== "archived" && discountStatus(displayRecord) !== "expired" ? (
+        actions={displayRecord && canToggle && savedStatus !== "archived" && discountStatus(displayRecord) !== "expired" ? (
           <Button
             type="button"
             variant="outline"
             disabled={busy || dirty}
-            onClick={() => void setActive(status !== "active")}
+            onClick={() => void setActive(savedStatus !== "active")}
           >
-            {t(status === "active" ? "deactivate" : "activate")}
+            {t(savedStatus === "active" ? "deactivate" : "activate")}
           </Button>
         ) : null}
       />
@@ -332,11 +363,11 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
             <Button type="button" variant="outline" onClick={() => void loadTheirs()}>{t("loadTheirs")}</Button>
           </div>
         ) : null}
-        {!canSave ? <p className="text-body text-muted-foreground">{t("readOnly")}</p> : null}
+        {!canSave ? <ReadOnlyNotice /> : null}
 
-        <div className="grid items-start gap-4 lg:grid-cols-3">
+        {canSave || discount ? <div className="grid items-start gap-4 lg:grid-cols-3">
           {/* Fields stay editable while saving: later edits stay unsaved, and a failed save can focus its field. */}
-          <fieldset disabled={!canSave || activeMutation.isPending || deleteMutation.isPending} className="min-w-0 space-y-4 lg:col-span-2">
+          {canSave ? <fieldset disabled={activeMutation.isPending || deleteMutation.isPending} className="min-w-0 space-y-4 lg:col-span-2">
             <Card>
               <CardHeader>
                 <CardTitle>{t(`type_${draft.type}`)}</CardTitle>
@@ -576,14 +607,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                 ) : null}
               </CardContent>
             </Card>
-
-            {/* Save lives in the save bar (P4); deleting stays at the end of the page. */}
-            {discount && canDelete ? (
-              <div className="flex border-t pt-4">
-                <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>{t("delete")}</Button>
-              </div>
-            ) : null}
-          </fieldset>
+          </fieldset> : <DiscountSavedView draft={view} format={format} redemptionCount={discount?.redemptionCount ?? 0} />}
 
           {/* eslint-disable-next-line no-restricted-syntax -- a side column of bordered cards, not a bar */}
           <aside className="space-y-4 lg:sticky lg:top-4">
@@ -593,9 +617,9 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
-                  <p className="text-heading-sm">{heading || t(draft.method === "code" ? "noCodeYet" : "noTitleYet")}</p>
+                  <p className="text-heading-sm">{heading || t(view.method === "code" ? "noCodeYet" : "noTitleYet")}</p>
                   <p className="text-body text-muted-foreground">
-                    {t(draft.method === "code" ? "methodCodeTab" : "methodAutomaticTab")} · {t(`type_${draft.type}`)}
+                    {t(view.method === "code" ? "methodCodeTab" : "methodAutomaticTab")} · {t(`type_${view.type}`)}
                   </p>
                 </div>
                 <ul className="list-disc space-y-1 ps-5 text-body">
@@ -618,19 +642,25 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
               </CardContent>
             </Card>
           </aside>
-        </div>
+        </div> : null}
+        {/* Save lives in the save bar (P4); deleting stays at the end of the page. */}
+        {discount && canDelete ? (
+          <div className="flex border-t pt-4">
+            <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>{t("delete")}</Button>
+          </div>
+        ) : null}
       </div>
 
-      <ConfirmDialog
+      {canDelete ? <ConfirmDialog
         open={deleteOpen && Boolean(discount)}
         onOpenChange={setDeleteOpen}
-        title={t("deleteTitle", { name: heading || t(`type_${draft.type}`) })}
+        title={t("deleteTitle", { name: heading || t(`type_${view.type}`) })}
         description={t("deleteBody")}
         confirmLabel={t("delete")}
         cancelLabel={t("cancel")}
         isLoading={deleteMutation.isPending}
         onConfirm={() => void remove()}
-      />
+      /> : null}
     </form>
   );
 }

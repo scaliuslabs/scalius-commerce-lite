@@ -1,3 +1,5 @@
+import { sameFormValue } from "~/lib/form-values";
+import { resolveMerge, threeWayMerge } from "~/lib/three-way-merge";
 // A price list's editor values and the requests they save (docs/MARKETS-DESIGN.md
 // D5), and the price grid's rows: each SKU's price for one unit, its
 // compare-at price and its quantity breaks, as the merchant types them.
@@ -65,8 +67,8 @@ function wallTime(iso: string | null): { date: string; time: string } {
   return epochToStoreTime(Math.floor(new Date(iso).getTime() / 1_000));
 }
 
-/** The editor values of a saved list, with the revision it saves against. */
-export function priceListForm(list: PriceList): PriceListForm & { revision: number } {
+/** Editable values only; the saved record owns the revision. */
+export function priceListForm(list: PriceList): PriceListForm {
   const start = wallTime(list.startsAt);
   const end = wallTime(list.endsAt);
   return {
@@ -78,7 +80,6 @@ export function priceListForm(list: PriceList): PriceListForm & { revision: numb
     startTime: start.time,
     endDate: end.date,
     endTime: end.time,
-    revision: list.revision,
   };
 }
 
@@ -88,13 +89,36 @@ function instant(date: string, time: string): string | null | undefined {
   return epoch === null ? undefined : new Date(epoch * 1_000).toISOString();
 }
 
+/** Compare what the PATCH means while keeping invalid dates distinct from cleared dates. */
+export function samePriceListForm(left: PriceListForm, right: PriceListForm): boolean {
+  const comparable = (form: PriceListForm) => {
+    const rawPriority = latinDigits(form.priority.trim());
+    const priority = rawPriority === "" ? "" : Number(rawPriority);
+    return {
+      name: form.name.trim(), description: form.description.trim(), status: form.status,
+      priority: Number.isInteger(priority) ? priority : form.priority,
+      start: instant(form.startDate, form.startTime) ?? (form.startDate ? [form.startDate, form.startTime] : null),
+      end: instant(form.endDate, form.endTime) ?? (form.endDate ? [form.endDate, form.endTime] : null),
+    };
+  };
+  return sameFormValue(comparable(left), comparable(right));
+}
+
+/** Keep each schedule's date and time together when preserving an in-flight edit. */
+export function rebasePriceListForm(current: PriceListForm, base: PriceListForm, incoming: PriceListForm): PriceListForm {
+  const merged = threeWayMerge(base, incoming, current, {
+    coupled: { start: ["startDate", "startTime"], end: ["endDate", "endTime"] },
+  });
+  return resolveMerge(merged, Object.fromEntries(merged.clashes.map((clash) => [clash.key, "mine"])));
+}
+
 export type PriceListFormProblems = Partial<Record<"name" | "priority" | "start" | "end", PriceListMessageKey>>;
 
 export function priceListFormProblems(form: PriceListForm): PriceListFormProblems {
   const problems: PriceListFormProblems = {};
   if (!form.name.trim()) problems.name = "nameRequired";
   const priority = Number(latinDigits(form.priority.trim()));
-  if (!Number.isInteger(priority) || priority < 0 || priority > PRICE_LIST_PRIORITY_MAX) problems.priority = "priorityInvalid";
+  if (!form.priority.trim() || !Number.isInteger(priority) || priority < 0 || priority > PRICE_LIST_PRIORITY_MAX) problems.priority = "priorityInvalid";
   const start = instant(form.startDate, form.startTime);
   const end = instant(form.endDate, form.endTime);
   if (start === undefined) problems.start = "endBeforeStart";

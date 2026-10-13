@@ -103,6 +103,31 @@ describe("the host-owned storefront chrome contract", () => {
     expect(offset()).toBe("0px");
   });
 
+  it("releases header and section offsets together when viewport CSS makes them non-sticky, and restores them on resize", () => {
+    const element = header();
+    box(element, 93);
+    const nav = document.createElement("nav");
+    nav.setAttribute("data-product-topbar", "");
+    nav.style.cssText = "position:sticky;top:93px";
+    document.querySelector("main")!.appendChild(nav);
+    box(nav, 52);
+    bind();
+    expect([offset(), productOffset()]).toEqual(["93px", "52px"]);
+
+    // Markers remain present; actual computed positioning owns the reserve.
+    element.style.cssText = "position:relative;top:auto";
+    nav.style.cssText = "position:relative;top:auto";
+    window.dispatchEvent(new Event("resize"));
+    flush();
+    expect([offset(), productOffset()]).toEqual(["0px", "0px"]);
+
+    element.style.cssText = "position:sticky;top:0";
+    nav.style.cssText = "position:sticky;top:93px";
+    window.dispatchEvent(new Event("resize"));
+    flush();
+    expect([offset(), productOffset()]).toEqual(["93px", "52px"]);
+  });
+
   it("switches from the whole header to only its sticky menu row across a breakpoint", () => {
     const parent = header();
     parent.innerHTML = '<nav data-sticky-header style="position:relative"></nav>';
@@ -181,6 +206,18 @@ describe("the host-owned storefront chrome contract", () => {
     bar.style.display = "none";
     changedSize();
     expect(productOffset()).toBe("0px");
+  });
+
+  it("keeps only the desktop purchase bar's offset when a short viewport releases the header", () => {
+    vi.spyOn(window, "matchMedia").mockReturnValue({ matches: true } as MediaQueryList);
+    box(header("position:relative;top:auto"), 93);
+    const bar = document.createElement("div");
+    bar.setAttribute("data-product-topbar", "desktop");
+    bar.style.cssText = "position:fixed;top:0;visibility:hidden";
+    document.querySelector("main")!.appendChild(bar);
+    box(bar, 61);
+    bind();
+    expect([offset(), productOffset()]).toEqual(["0px", "61px"]);
   });
 
   it("ignores a phone's bottom buy bar even when computed top is a used pixel value", () => {

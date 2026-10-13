@@ -55,6 +55,8 @@ export interface PluginBridgeProps {
    * would call itself), everything else its grant allows is available.
    */
   provider?: { kind: string };
+  /** Private host metadata, never accepted from plugin input. */
+  operator?: { userId: string };
   /**
    * The plan's quotas for this run (docs/platform/PLUGINS.md, "Quotas"):
    * calls per run (counted here for bundled apps; the sandbox counts its
@@ -210,6 +212,7 @@ export class PluginBridgeHost implements PluginBridgeApi {
       return callPluginOperation({
         pluginId: this.pluginId,
         version: this.props.version,
+        operator: this.props.operator,
         operationId,
         input,
         db: this.runtime.db(),

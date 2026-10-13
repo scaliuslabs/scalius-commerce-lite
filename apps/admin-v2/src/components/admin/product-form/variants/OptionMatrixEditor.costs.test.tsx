@@ -101,12 +101,13 @@ describe("OptionMatrixEditor cost per item", () => {
     host.remove();
   });
 
-  function Page({ readOnly = false, variants, options = [], editorRef, onDirtyChange, onSaved }: {
+  function Page({ readOnly = false, variants, options = [], editorRef, onDirtyChange, onNavigationDirtyChange, onSaved }: {
     readOnly?: boolean;
     variants: ProductVariant[];
     options?: (typeof sizeOption)[];
     editorRef: React.Ref<OptionMatrixEditorHandle>;
     onDirtyChange?: (dirty: boolean) => void;
+    onNavigationDirtyChange?: (dirty: boolean) => void;
     onSaved?: () => void;
   }) {
     store = useSkuCostDraft(variants);
@@ -123,6 +124,7 @@ describe("OptionMatrixEditor cost per item", () => {
           images={[]}
           aggregateRevision={3}
           onDirtyChange={onDirtyChange}
+          onNavigationDirtyChange={onNavigationDirtyChange}
           onSaved={onSaved}
         />
       </SkuCostProvider>
@@ -142,8 +144,9 @@ describe("OptionMatrixEditor cost per item", () => {
   it("revokes editing without showing unsaved SKU or cost drafts, and still gates saved costs", async () => {
     const ref = React.createRef<OptionMatrixEditorHandle>();
     const onDirtyChange = vi.fn();
+    const onNavigationDirtyChange = vi.fn();
     const variants = [sized("var_s", "pval_s", "S", 10), sized("var_m", "pval_m", "M", 80)];
-    const page = (readOnly: boolean) => <Page readOnly={readOnly} variants={variants} options={[sizeOption]} editorRef={ref} onDirtyChange={onDirtyChange} />;
+    const page = (readOnly: boolean) => <Page readOnly={readOnly} variants={variants} options={[sizeOption]} editorRef={ref} onDirtyChange={onDirtyChange} onNavigationDirtyChange={onNavigationDirtyChange} />;
     await render(page(false));
     const price = host.querySelector<HTMLInputElement>(`input[aria-label="${translate(productMessages, "priceFor", { name: "S" })}"]`)!;
     await act(async () => {
@@ -164,10 +167,15 @@ describe("OptionMatrixEditor cost per item", () => {
     expect(store.costOf("var_s")).toBe(777); // The route store survived the matrix remount.
     expect(store.costOf("var_s", true)).toBe(10);
     expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(onNavigationDirtyChange).toHaveBeenLastCalledWith(true);
     expect(ref.current!.composition()).toBeNull();
     await act(async () => ref.current!.save());
     expect(mocks.putApiV1AdminProductsByIdOptionsMatrix).not.toHaveBeenCalled();
     expect(mocks.putApiV1AdminInventoryCosts).not.toHaveBeenCalled();
+    await render(page(false));
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(onNavigationDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(ref.current!.composition()).not.toBeNull();
     await render(page(true), false);
     expect(host.textContent).not.toContain(translate(productMessages, "costPerItem"));
     expect(host.textContent).not.toContain("96.0%");

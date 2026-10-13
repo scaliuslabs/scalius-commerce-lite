@@ -11,6 +11,7 @@ import { chooseKey, mediaLimitKey, type MediaManagerProps } from "./types";
 type MediaManagerInternalProps = MediaManagerProps & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onPendingUploadsChange?: (count: number) => void;
 };
 
 export function MediaManager({
@@ -23,6 +24,7 @@ export function MediaManager({
   open,
   onOpenChange,
   onCloseAutoFocus,
+  onPendingUploadsChange,
 }: MediaManagerInternalProps) {
   const t = useMessages(mediaMessages);
   const picker = useMessages(mediaPickerMessages);
@@ -31,9 +33,13 @@ export function MediaManager({
     capability,
     initialSelectedFiles: selectedFiles,
     unavailableFileIds,
-    onSelect: onSelect ? (file) => { onOpenChange(false); onSelect(file); } : undefined,
-    onSelectMultiple: onSelectMultiple ? (files) => { onOpenChange(false); onSelectMultiple(files); } : undefined,
+    onSelect,
+    onSelectMultiple,
   });
+
+  const pendingUploads = manager.pendingCount;
+  useEffect(() => { onPendingUploadsChange?.(pendingUploads); }, [onPendingUploadsChange, pendingUploads]);
+  useEffect(() => () => onPendingUploadsChange?.(0), [onPendingUploadsChange]);
 
   useEffect(() => {
     if (!open) return;
@@ -60,7 +66,7 @@ export function MediaManager({
         <DialogTitle>{picker(chooseKey(capability, !!onSelectMultiple))}</DialogTitle>
         <DialogDescription>{t(mediaLimitKey(capability))}</DialogDescription>
       </div>
-      <MediaWorkspace manager={manager} capability={capability} picker multiple={!!onSelectMultiple} onSelect={onSelect ? (file) => { onOpenChange(false); onSelect(file); } : undefined} onClose={() => onOpenChange(false)} />
+      <MediaWorkspace manager={manager} capability={capability} picker multiple={!!onSelectMultiple} onSelect={onSelect} onClose={() => onOpenChange(false)} />
     </DialogContent>
   );
 }

@@ -18,6 +18,7 @@ import {
     promotionCustomerSegments,
     promotions,
 } from "@scalius/database/schema";
+import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 import { commerceDayStart } from "@scalius/shared/commerce-time";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
 import {
@@ -58,7 +59,8 @@ const QUALIFIED = {
 
 /** The customer's current address for a channel, as consent rows store it. */
 export function currentMarketingContactSql(channel: MarketingChannel): SQL {
-    return channel === "email" ? sql`lower(trim(${QUALIFIED.email}))` : sql`${QUALIFIED.phone}`;
+    if (channel === "push") return sql`CASE WHEN "customers"."account_claimed_at" IS NOT NULL THEN ${QUALIFIED.id} END`;
+    return channel === "email" ? sql`nullif(lower(trim(${QUALIFIED.email})), '')` : sql`nullif(${QUALIFIED.phone}, ${NO_PHONE})`;
 }
 
 function dateFilterSql(column: SQL, filter: CustomerSegmentDateFilter, context: SegmentEvaluationContext): SQL {

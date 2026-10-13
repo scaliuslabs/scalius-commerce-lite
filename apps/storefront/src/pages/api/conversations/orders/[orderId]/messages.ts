@@ -5,7 +5,7 @@
 // header). The first message starts the thread.
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { crossOriginRefusal, handleConversationMessagePost, orderTarget } from "@/lib/account-inbox-server";
+import { crossOriginRefusal, handleConversationMessagePost, handleConversationPoll, orderTarget } from "@/lib/account-inbox-server";
 
 export const prerender = false;
 
@@ -16,4 +16,9 @@ export const POST: APIRoute = async ({ request, params, url }) => {
     ? `/account/orders/${encodeURIComponent(target.orderId)}`
     : "/track-order";
   return handleConversationMessagePost(request, target, fallback);
+};
+
+export const GET: APIRoute = async ({ request, params, url }) => {
+
+  return handleConversationPoll(request, orderTarget(params.orderId, url.searchParams.get("access")));
 };

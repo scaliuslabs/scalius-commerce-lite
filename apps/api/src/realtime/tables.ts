@@ -11,6 +11,7 @@ import type { RealtimeTopic } from "@scalius/shared/realtime";
 export const REALTIME_TABLE_TOPICS: Readonly<Record<string, RealtimeTopic>> = {
   conversations: "inbox",
   conversation_messages: "inbox",
+  conversation_cart_shares: "inbox",
   product_reviews: "reviews",
   delivery_shipments: "orders",
   order_payments: "payments",

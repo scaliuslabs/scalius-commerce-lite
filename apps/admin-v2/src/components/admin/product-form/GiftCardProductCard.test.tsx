@@ -77,6 +77,20 @@ describe("GiftCardProductCard", () => {
   it("can't be changed read-only", async () => {
     await act(async () => root.render(<Harness isGiftCard={false} readOnly />));
     await openCard();
-    expect(toggle()?.disabled).toBe(true);
+    expect(toggle()).toBeNull();
+    expect(host.textContent).toContain(translate(giftCardProductMessages, "productSummaryOff"));
+    expect(form?.getValues("isGiftCard")).toBe(false);
+  });
+
+  it("shows the committed gift-card state after permission is revoked without destroying the draft", async () => {
+    await act(async () => root.render(<Harness isGiftCard={false} />));
+    await openCard();
+    await act(async () => toggle()?.click());
+    expect(form?.getValues("isGiftCard")).toBe(true);
+    await act(async () => root.render(<Harness isGiftCard={false} readOnly />));
+    expect(toggle()).toBeNull();
+    expect(host.textContent).toContain(translate(giftCardProductMessages, "productSummaryOff"));
+    expect(host.textContent).not.toContain(translate(giftCardProductMessages, "productSwitchedOn"));
+    expect(form?.getValues("isGiftCard")).toBe(true);
   });
 });

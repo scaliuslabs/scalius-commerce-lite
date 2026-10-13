@@ -21,7 +21,8 @@ const API = "https://api.shop.test/api/v1";
 const SESSION = "cs_tok=session-token-value; cs_auth=1";
 
 interface Container {
-  renderToResponse(component: unknown, options: { request?: Request; locals?: object }): Promise<Response>;
+  renderToString(component: unknown, options: { request?: Request; props?: object; slots?: Record<string, string> }): Promise<string>;
+  renderToResponse(component: unknown, options: { request?: Request; locals?: object; props?: object; slots?: Record<string, string> }): Promise<Response>;
 }
 interface RuntimeModule {
   requestRuntime: { run<T>(runtime: object, task: () => T): T };
@@ -30,6 +31,7 @@ interface RuntimeModule {
 let server: ViteDevServer;
 let container: Container;
 let ProfilePage: unknown;
+let AccountShell: unknown;
 let runtimeModule: RuntimeModule;
 
 beforeAll(async () => {
@@ -61,6 +63,7 @@ beforeAll(async () => {
     renderer: reactRenderer,
   });
   ProfilePage = (await server.ssrLoadModule("/src/pages/account/profile.astro")).default;
+  AccountShell = (await server.ssrLoadModule("/src/components/account/AccountShell.astro")).default;
   runtimeModule = (await server.ssrLoadModule("/src/lib/api/runtime.ts")) as RuntimeModule;
 }, 120_000);
 
@@ -84,6 +87,7 @@ const CHANNELS = [
   { channel: "email", status: "not_subscribed", available: false },
   { channel: "sms", status: "subscribed", available: true },
   { channel: "whatsapp", status: "not_subscribed", available: true },
+  { channel: "push", status: "not_subscribed", available: true },
 ];
 
 interface Put {
@@ -136,10 +140,12 @@ describe("account news and offers", () => {
     const box = (channel: string) => section.querySelector<HTMLInputElement>(`input[type="checkbox"][value="${channel}"]`)!;
     expect(box("sms").hasAttribute("checked")).toBe(true);
     expect(box("whatsapp").hasAttribute("checked")).toBe(false);
+    expect(box("push").hasAttribute("checked")).toBe(false);
+    expect(text(section)).toContain("separate from order updates");
     expect(box("email").hasAttribute("disabled")).toBe(true);
     expect(text(section)).toContain("Add an email to your account to get offers by email.");
     expect(Array.from(section.querySelectorAll('input[type="hidden"][name^="was_"]')).map((input) => `${input.getAttribute("name")}=${input.getAttribute("value")}`))
-      .toEqual(["was_sms=on", "was_whatsapp=off"]);
+      .toEqual(["was_sms=on", "was_whatsapp=off", "was_push=off"]);
     expect(section.querySelector("form")!.getAttribute("method")).toBe("post");
   });
 
@@ -168,4 +174,18 @@ describe("account news and offers", () => {
     expect(response.headers.get("Location")).toBe("/account/profile?marketing=saved#marketing");
     expect(puts).toEqual([{ path: "/api/v1/customer-auth/marketing", body: { whatsapp: true, language: "en" } }]);
   });
+});
+
+
+it("opts only workspace account shells into the literal activation contract", async () => {
+  const render = async (layout?: "workspace") => parse(await container.renderToString(AccountShell, {
+    request: new Request("https://shop.test/account/inbox"),
+    props: { current: "inbox", summary: null, state: "ok", title: "Conversation", layout },
+    slots: { default: "<p>Conversation content</p>" },
+  }));
+  const workspace = await render("workspace");
+  expect(workspace.querySelector('[data-account-shell]')!.getAttribute('data-account-workspace')).toBe("true");
+  const list = await render();
+  expect(list.querySelector('[data-account-shell]')!.hasAttribute('data-account-workspace')).toBe(false);
+  expect(list.querySelector('[data-account-shell] > p')?.textContent).toBe("Conversation content");
 });

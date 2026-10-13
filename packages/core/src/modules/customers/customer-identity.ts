@@ -10,6 +10,7 @@
 // the buyer always see the same orders.
 import { and, eq, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
+import { nanoid } from "nanoid";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { NO_PHONE, phoneOrNull } from "@scalius/shared/customer-auth-policy";
 import {
@@ -181,15 +182,21 @@ export function buildVerifiedContactOrderLink(
     const emailMatch = email ? sql`lower(trim(${orders.customerEmail})) = ${email}` : null;
     const contactMatch = [phoneMatch, emailMatch].filter((match): match is SQL => match !== null);
     if (contactMatch.length === 0) return [];
-    const joins = sql`${orders.accountOwnerCustomerId} IS NULL AND ${orders.deletedAt} IS NULL AND (${sql.join(contactMatch, sql` OR `)})`;
+    const joiningOrder = (match: SQL) => sql`${orders.accountOwnerCustomerId} IS NULL AND ${orders.deletedAt} IS NULL AND ${match}`;
+    // With both contacts, an OR can choose a scan of all live orders without statistics.
+    // UNION keeps each proven contact on its own index and deduplicates shared matches.
+    const joins = contactMatch.length === 1 ? joiningOrder(contactMatch[0]!)
+        : sql`CASE WHEN ${orders.accountOwnerCustomerId} IS NULL AND ${orders.deletedAt} IS NULL THEN 1 ELSE 0 END = 1
+            AND ${orders.id} IN (${sql.join(contactMatch.map((match) => sql`SELECT ${orders.id} FROM ${orders} WHERE ${joiningOrder(match)}`), sql` UNION `)})`;
     const leaves = and(joins, isNotNull(orders.customerId), ne(orders.customerId, input.customerId))!;
     const via = phoneMatch ? sql`CASE WHEN ${phoneMatch} THEN 'phone' ELSE 'email' END` : sql`'email'`;
     // Guest records whose every order is about to join the account: they are merged into it.
-    // (Aliases are spelled out: an aliased table interpolated into sql`` loses its alias.)
-    const mergingGuestIds = sql`SELECT "merging_guest"."id" FROM "customers" AS "merging_guest"
-        WHERE "merging_guest"."account_claimed_at" IS NULL AND "merging_guest"."deleted_at" IS NULL
-          AND EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = "merging_guest"."id" AND ${joins})
-          AND NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = "merging_guest"."id" AND (${joins}) IS NOT TRUE)`;
+    // Start from the contact index even without planner statistics; CROSS JOIN keeps SQLite
+    // from scanning every live customer. Aliases must be spelled out in raw SQL.
+    const mergingGuestIds = sql`SELECT "merging_guest"."id" FROM ${orders} CROSS JOIN "customers" AS "merging_guest"
+        WHERE ${joins} AND "merging_guest"."id" = ${orders.customerId}
+          AND "merging_guest"."account_claimed_at" IS NULL AND "merging_guest"."deleted_at" IS NULL
+          AND NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = "merging_guest"."id" AND CASE WHEN (${joins}) THEN 0 ELSE 1 END = 1)`;
 
     // All of these read the orders before the last statement moves them.
     return [
@@ -215,12 +222,9 @@ export function buildVerifiedContactOrderLink(
         // Guest records whose every order is about to join the account.
         db.update(customers)
             .set({ deletedAt: sql`unixepoch()`, mergedIntoCustomerId: input.customerId, updatedAt: sql`unixepoch()` })
-            .where(and(
-                isNull(customers.accountClaimedAt),
-                isNull(customers.deletedAt),
-                sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = ${customers.id} AND ${joins})`,
-                sql`NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = ${customers.id} AND (${joins}) IS NOT TRUE)`,
-            )),
+            // Keep a target-row guard for PostgreSQL's concurrent-update recheck without
+            // inviting SQLite to scan the deleted_at index instead of these IDs.
+            .where(sql`${customers.id} IN (${mergingGuestIds}) AND COALESCE(${customers.accountClaimedAt}, ${customers.deletedAt}) IS NULL`),
         // Its order statistics (segments read them) follow the orders, by trigger.
         db.update(orders)
             .set({ customerId: input.customerId, accountOwnerCustomerId: input.customerId })
@@ -269,6 +273,7 @@ function carryMergedGuestFacts(db: Database, accountId: string, mergingGuestIds:
         )),
         // ...and the newest guest consent of each channel the account has none for moves to it.
         db.update(customerMarketingConsents).set({ customerId: accountId }).where(and(
+            sql`${customerMarketingConsents.customerId} IN (${mergingGuestIds})`,
             sql`${customerMarketingConsents.customerId} = (SELECT "guest_consent"."customer_id" FROM "customer_marketing_consents" AS "guest_consent"
                 WHERE "guest_consent"."customer_id" IN (${mergingGuestIds})
                   AND "guest_consent"."channel" = ${customerMarketingConsents.channel}
@@ -289,7 +294,8 @@ function customerSnapshot(owner: typeof customers | typeof account) {
     };
 }
 
-const historyId = () => sql<string>`'chist_' || lower(hex(randomblob(12)))`.as("id");
+// A statement prefix plus its source row keeps multi-order inserts unique on every provider.
+const historyId = (rowId: SQL) => sql<string>`${`chist_${nanoid()}_`} || ${rowId}`.as("id");
 
 /** One change-log row per moving order on one side, with that record's current details. */
 function movedOrderHistory(
@@ -305,7 +311,7 @@ function movedOrderHistory(
     },
 ) {
     return db.insert(customerHistory).select(db.select({
-        id: historyId(),
+        id: historyId(sql`${orders.id}`),
         customerId: sql<string>`${input.ownerId}`.as("customer_id"),
         ...customerSnapshot(input.owner),
         changeType: sql<string>`${input.changeType}`.as("change_type"),
@@ -325,7 +331,7 @@ function movedOrderHistory(
  */
 export function linkedOrderHistory(db: Database, input: { accountId: string; orderId: string; via: VerifiedContact }) {
     return db.insert(customerHistory).select(db.select({
-        id: historyId(),
+        id: historyId(sql`${customers.id}`),
         customerId: customers.id,
         ...customerSnapshot(customers),
         changeType: sql<string>`'order_linked'`.as("change_type"),
@@ -341,7 +347,7 @@ export function linkedOrderHistory(db: Database, input: { accountId: string; ord
 /** The account's "signed up with a verified email/phone" row, from its details as saved in the same batch. */
 export function signedUpHistory(db: Database, input: { accountId: string; via: VerifiedContact }) {
     return db.insert(customerHistory).select(db.select({
-        id: historyId(),
+        id: historyId(sql`${customers.id}`),
         customerId: customers.id,
         ...customerSnapshot(customers),
         changeType: sql<string>`'signed_up'`.as("change_type"),

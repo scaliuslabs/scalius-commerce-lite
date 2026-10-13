@@ -60,15 +60,15 @@ function Announcements({ items, context }: { items: Array<{ text: string; link: 
   );
 }
 
-function Menu({ items, style }: { items: StorefrontMenuItem[]; style: string }) {
+function Menu({ items, style, limit, context }: { items: StorefrontMenuItem[]; style: string; limit: number; context: Context }) {
   return (
     <ul class="noor-nav-list">
-      {items.map((item) => {
+      {items.slice(0, limit).map((item) => {
         const children = item.children;
         const deep = children.some((child) => child.children.length > 0);
         return (
           <li class={cx("noor-nav-item", children.length > 0 && "has-menu")}>
-            <a class="noor-nav-link" href={item.url} aria-haspopup={children.length > 0 ? "true" : undefined}>
+            <a class="noor-nav-link" href={item.url} title={item.title} aria-haspopup={children.length > 0 ? "true" : undefined}>
               <span>{item.title}</span>
               {children.length > 0 ? <Icon name="down" size={14} /> : null}
             </a>
@@ -97,6 +97,14 @@ function Menu({ items, style }: { items: StorefrontMenuItem[]; style: string }) 
           </li>
         );
       })}
+      {items.length > limit ? (
+        <li class="noor-nav-item noor-nav-more-item">
+          <button type="button" class="noor-nav-link noor-nav-more" popovertarget="noor-drawer"
+            aria-label={t(context, { en: "More menu items", bn: "আরও মেনু আইটেম" })}>
+            {t(context, { en: "More", bn: "আরও" })}
+          </button>
+        </li>
+      ) : null}
     </ul>
   );
 }
@@ -176,10 +184,12 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
               ) : null}
             </div>
             {logo}
-            {/* Centred logo: the menu has its own row on computers, so any menu fits. */}
-            <nav class="noor-nav noor-desk-only" aria-label={t(context, { en: "Main", bn: "প্রধান" })}>
-              <Menu items={data.menu} style={choice(settings.menu_style, ["mega", "simple"] as const, "mega")} />
-            </nav>
+            {/* Keep the desktop row bounded; More opens the complete native drawer. */}
+            {data.menu.length > 0 ? (
+              <nav class="noor-nav noor-desk-only" aria-label={t(context, { en: "Main", bn: "প্রধান" })}>
+                <Menu items={data.menu} style={choice(settings.menu_style, ["mega", "simple"] as const, "mega")} limit={layout === "center" ? 6 : 4} context={context} />
+              </nav>
+            ) : null}
             <div class="noor-header-end">
               {settings.show_search ? (
                 <button type="button" class={cx("noor-icon-btn", layout === "center" && "noor-phone-only")} popovertarget="noor-search" aria-label={searchLabel}>

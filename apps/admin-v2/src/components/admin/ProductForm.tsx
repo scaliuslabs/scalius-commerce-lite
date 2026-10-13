@@ -126,6 +126,7 @@ interface ProductFormProps {
   createComposition?: ProductCreateComposition | null;
   optionMatrixIssue?: string | null;
   optionMatrixDirty?: boolean;
+  optionMatrixNavigationDirty?: boolean;
   optionMatrixSaving?: boolean;
   /** Saved SKUs, for printing their labels from the page's menu. */
   variantIds?: string[];
@@ -138,7 +139,7 @@ interface ProductFormProps {
   /** The saved brand's name, for the brand picker. */
   brandName?: string | null;
   /** The avatars for the header's presence slot (realtime presence), given whether this page has unsaved changes. */
-  presence?: (dirty: boolean) => React.ReactNode;
+  presence?: (dirty: boolean, readOnly: boolean) => React.ReactNode;
 }
 
 /** Reads the unsaved fields and rebases without unmounting the section or SKU editors. */
@@ -199,6 +200,7 @@ function ProductEditor({
   createComposition,
   optionMatrixIssue = null,
   optionMatrixDirty = false,
+  optionMatrixNavigationDirty = optionMatrixDirty,
   optionMatrixSaving = false,
   variantIds = [],
   draftRef,
@@ -214,6 +216,8 @@ function ProductEditor({
   const { products: can } = useCatalogActionPermissions();
   // Server checks stay authoritative; this only keeps viewers from editing.
   const readOnly = isEdit ? !can.canEdit : !can.canCreate;
+  const latestReadOnly = React.useRef(readOnly);
+  latestReadOnly.current = readOnly;
   const [trashOpen, setTrashOpen] = React.useState(false);
   const duplicate = useDuplicateProduct();
   const trash = useTrashProduct();
@@ -326,6 +330,7 @@ function ProductEditor({
   const invalidLines = useFieldErrorLines(form);
 
   const save = async () => {
+    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly"));
     if (revisionConflict) {
       onOpenRevisionConflict?.();
       throw new SaveNotCompleted(t("changedElsewhere"));
@@ -363,6 +368,7 @@ function ProductEditor({
       form.setValue("additionalInfo", [], { shouldDirty: true });
       values = { ...values, additionalInfo: [] };
     }
+    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly"));
     await submit(values, aggregateRevision, { ...composition, ...sectionChanges });
     for (const handle of pending) handle.saved();
     if (tabsMoved.current) {
@@ -373,6 +379,7 @@ function ProductEditor({
 
   useSaveBar({
     dirty: !readOnly && (productFormDirty || optionMatrixDirty || sections.dirty || revisionConflict !== null),
+    navigationDirty: productFormDirty || optionMatrixNavigationDirty || sections.navigationDirty || revisionConflict !== null,
     saving: isSubmitting || optionMatrixSaving,
     save,
     discard: () => {
@@ -444,7 +451,7 @@ function ProductEditor({
         title={isEdit ? defaultValues?.name : t("addProduct")}
         backTo="/admin/products"
         status={isEdit ? <ProductStatusBadge isActive={Boolean(defaultValues?.isActive)} /> : null}
-        presence={isEdit ? presence?.(productFormDirty || optionMatrixDirty || sections.dirty) : null}
+        presence={isEdit ? presence?.(productFormDirty || optionMatrixDirty || sections.dirty, readOnly) : null}
         actions={isEdit && productId ? (
           <>
             {moreActions}
@@ -460,7 +467,7 @@ function ProductEditor({
           onSubmit={(event) => {
             event.preventDefault();
             // React bubbles submits from forms in portalled dialogs; only this form saves the page.
-            if (event.target !== event.currentTarget || scope?.busy) return;
+            if (readOnly || event.target !== event.currentTarget || scope?.busy) return;
             if (scope?.dirty) void scope.saveAll();
             // A new product can be saved before anything is typed: say what it needs, as Shopify does.
             else if (!isEdit) void form.trigger(undefined, { shouldFocus: true });
@@ -479,7 +486,9 @@ function ProductEditor({
             <div className="min-w-0 space-y-4 lg:col-span-2">
               <fieldset disabled={readOnly} className="min-w-0 space-y-4">
               <TitleDescriptionSection form={form} readOnly={readOnly} />
+              </fieldset>
               <ProductImagesSection form={form} readOnly={readOnly} />
+              <fieldset disabled={readOnly} className="min-w-0 space-y-4">
               <PricingCard form={form} variantPrices={variantPrices} readOnly={readOnly} />
               <div ref={setInventorySlot} className="empty:hidden" />
               <ShippingCard form={form} hasOptions={variantPrices !== null} weightSlot={setShippingSlot} readOnly={readOnly} />
@@ -505,7 +514,6 @@ function ProductEditor({
                   <ProductVariants form={form} optionManager={optionManager} onPricesChange={setVariantPrices} readOnly={readOnly} />
                 </CardContent>
               </Card>
-              <fieldset disabled={readOnly} className="min-w-0 space-y-4">
               <DigitalDeliveryCard form={form} productId={productId} readOnly={readOnly} />
               <GiftCardProductCard form={form} productId={productId} readOnly={readOnly} />
               {isEdit && productId ? (
@@ -534,8 +542,7 @@ function ProductEditor({
                 <AdditionalSectionsCard form={form} readOnly={readOnly} />
               )}
               <AttributesSection form={form} defaultOpen={readOnly} readOnly={readOnly} />
-              <ProductSearchListing form={form} disabled={readOnly} />
-              </fieldset>
+              <fieldset disabled={readOnly} className="min-w-0"><ProductSearchListing form={form} disabled={readOnly} /></fieldset>
             </div>
             {/* On phones the status comes first; the rest of the side column follows the main cards. */}
             <div className="min-w-0 space-y-4 max-lg:contents">
@@ -545,6 +552,7 @@ function ProductEditor({
               <fieldset disabled={readOnly} className="min-w-0 space-y-4">
               <PublishingCard form={form} readOnly={readOnly} />
               <OrganizationCard form={form} categories={categories} brandName={brandName} readOnly={readOnly} />
+              </fieldset>
               {isEdit && productId ? (
                 <React.Suspense fallback={<LoadingFallback height="h-40" />}>
                   <ProductPageCard productId={productId} readOnly={readOnly} />
@@ -552,6 +560,7 @@ function ProductEditor({
               ) : (
                 <AfterSaveCard title={t("productPage")} />
               )}
+              <fieldset disabled={readOnly} className="min-w-0 space-y-4">
               <WarrantyCard form={form} readOnly={readOnly} />
               {isEdit && productId ? <LazyCustomFieldsCard ownerType="product" ownerId={productId} canEdit={!readOnly} /> : null}
               {isEdit && productId ? <AppResourceCards target="product" id={productId} /> : null}

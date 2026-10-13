@@ -1,42 +1,24 @@
-// The checkout's marketing consent checkbox (Settings → Customers →
-// Marketing consent): shown unchecked, never required, with the merchant's
-// label in the checkout language. Ticked, the form posts `marketingConsent`
-// with the language the label was shown in; the order body then carries
-// `marketingConsent: { language }` and the API records the consent after the
-// order commits (it never blocks the order). Unticked, the body has no
-// `marketingConsent` at all. Client-safe: the payment step's order builder
-// imports it, so it pulls in no copy catalog.
+// Independent optional channel choices survive both hydrated and plain form posts.
+import { MARKETING_CONTACT_CHANNELS, type MarketingConsentSettings } from "@scalius/shared/customer-marketing";
 import type { CheckoutConfig } from "@/lib/api/checkout";
-
 export const MARKETING_CONSENT_FIELD = "marketingConsent";
-
-export interface MarketingConsentCheckbox {
-  label: string;
-  /** The form value: the language the label is in (`en`, `bn`). */
-  language: string;
-}
-
-/** The checkbox to show, or null when the store does not ask (or has no words for it). */
-export function marketingConsentCheckbox(
-  config: Pick<CheckoutConfig, "marketingConsent"> | null | undefined,
-  languageCode: unknown,
-): MarketingConsentCheckbox | null {
+type ContactChannel = MarketingConsentSettings["checkout"]["channels"][number];
+export interface MarketingConsentCheckbox { label: string; language: "en" | "bn"; channels: ContactChannel[] }
+export function marketingConsentCheckbox(config: Pick<CheckoutConfig, "marketingConsent"> | null | undefined, languageCode: unknown): MarketingConsentCheckbox | null {
   const consent = config?.marketingConsent;
   if (!consent?.enabled || consent.channels.length === 0) return null;
   const language = typeof languageCode === "string" && /^bn(?:$|[-_])/i.test(languageCode.trim()) ? "bn" : "en";
   const label = consent.label[language]?.trim() || consent.label.en?.trim() || "";
-  if (!label) return null;
-  return { label, language: label === consent.label[language]?.trim() ? language : "en" };
+  return label ? { label, language: label === consent.label[language]?.trim() ? language : "en", channels: MARKETING_CONTACT_CHANNELS.filter((channel) => consent.channels.includes(channel)) } : null;
 }
-
-const LANGUAGE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/;
-
-/**
- * The order body's consent field from the posted checkbox value: present only
- * when it was ticked (any non-empty value), with its language when readable.
- */
-export function marketingConsentOrderField(value: unknown): { marketingConsent?: { language: string | null } } {
-  if (typeof value !== "string" || value.trim() === "") return {};
-  const language = value.trim().toLowerCase();
-  return { marketingConsent: { language: language.length <= 16 && LANGUAGE.test(language) ? language : null } };
+export function marketingConsentOrderField(input: unknown): { marketingConsent?: { language: "en" | "bn"; channels: ContactChannel[] } } {
+  if (!input || typeof input !== "object") return {};
+  const read = (name: string) => input instanceof FormData ? input.get(name) : (input as Record<string, unknown>)[name];
+  const channels = MARKETING_CONTACT_CHANNELS.filter((channel) => read(`${MARKETING_CONSENT_FIELD}_${channel}`) === "en" || read(`${MARKETING_CONSENT_FIELD}_${channel}`) === "bn");
+  if (!channels.length) return {};
+  return { marketingConsent: { language: read(`${MARKETING_CONSENT_FIELD}_${channels[0]}`) === "bn" ? "bn" : "en", channels } };
+}
+export function marketingConsentFormValues(input: unknown): Record<string, string> {
+  const consent = marketingConsentOrderField(input).marketingConsent;
+  return consent ? Object.fromEntries(consent.channels.map((channel) => [`${MARKETING_CONSENT_FIELD}_${channel}`, consent.language])) : {};
 }

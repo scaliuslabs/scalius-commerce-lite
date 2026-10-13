@@ -32,6 +32,7 @@ export const PUSH_SUBSCRIPTIONS_PER_OWNER = 10;
 const OWNER_CHUNK = 90;
 
 export type PushOwner = { audience: "staff"; userId: string } | { audience: "customer"; customerId: string };
+export type StaffPushRequirement = StaffPermissionRequirement | "self";
 
 export interface PushSubscriptionInput {
   endpoint: string;
@@ -190,7 +191,7 @@ export async function sendStaffTestPush(
   if (!subscription) return null;
   // One tag: a second test replaces the first on the device instead of piling up.
   const payload = webPushPayload({ ...notification, tag: "scalius-test-push" });
-  return deliverWebPush(db, sender, subscription, payload, { urgency: "high" });
+  return deliverWebPush(db, sender, subscription, payload, { urgency: "high", staffRequirement: "self" });
 }
 
 /** Removes one of a staff member's own devices by id. */
@@ -207,6 +208,8 @@ export type PushTarget =
     audience: "staff";
     userIds?: readonly string[];
     requiredPermission: StaffPermissionRequirement;
+    /** Frozen recipients of a conversation notification's first fanout. */
+    staffAlertId?: string;
   }
   | { audience: "customer"; customerIds: readonly string[] };
 
@@ -223,15 +226,18 @@ export async function readPushSubscriptions(db: Database, target: PushTarget): P
   const activeStaffOwner = target.audience === "staff"
     ? staffPermissionSql(pushSubscriptions.userId, target.requiredPermission)
     : undefined;
+  const recordedRecipient = target.audience === "staff" && target.staffAlertId
+    ? sql`${pushSubscriptions.userId} IN (SELECT user_id FROM staff_alert_inbox WHERE alert_id = ${target.staffAlertId})`
+    : undefined;
   if (target.audience === "staff" && target.userIds === undefined) {
-    return db.select(columns).from(pushSubscriptions).where(and(eq(pushSubscriptions.audience, "staff"), activeStaffOwner)).orderBy(asc(pushSubscriptions.id));
+    return db.select(columns).from(pushSubscriptions).where(and(eq(pushSubscriptions.audience, "staff"), activeStaffOwner, recordedRecipient)).orderBy(asc(pushSubscriptions.id));
   }
   const owners = [...new Set(target.audience === "staff" ? target.userIds! : target.customerIds)];
   const found: StoredPushSubscription[] = [];
   for (let start = 0; start < owners.length; start += OWNER_CHUNK) {
     const chunk = owners.slice(start, start + OWNER_CHUNK);
     found.push(...await db.select(columns).from(pushSubscriptions).where(target.audience === "staff"
-      ? and(eq(pushSubscriptions.audience, "staff"), activeStaffOwner, inArray(pushSubscriptions.userId, chunk))
+      ? and(eq(pushSubscriptions.audience, "staff"), activeStaffOwner, recordedRecipient, inArray(pushSubscriptions.userId, chunk))
       : and(eq(pushSubscriptions.audience, "customer"), inArray(pushSubscriptions.customerId, chunk))));
   }
   return found;
@@ -277,15 +283,19 @@ export async function webPushSender(env: { SCALIUS_SECRET?: unknown; BETTER_AUTH
 export function webPushPayload(
   notification: PushNotification,
   recipient?: { audience: "staff" | "customer"; id: string },
+  requires?: StaffPushRequirement,
 ): string {
+  if (recipient?.audience === "staff" && !requires) throw new Error("Staff push requires a permission policy.");
   const payload = {
     title: notification.title,
     body: notification.body,
     ...(notification.url ? { url: notification.url } : {}),
     ...(notification.tag ? { tag: notification.tag } : {}),
   };
-  // Legacy workers see no outer title/body; only owner-aware workers unwrap private content.
-  const encode = () => JSON.stringify(recipient ? { recipient, notification: payload } : payload);
+  // Older staff workers must not unwrap private content without checking current permissions.
+  const encode = () => JSON.stringify(recipient?.audience === "staff"
+    ? { v: 2, recipient, requires, content: payload }
+    : recipient ? { recipient, notification: payload } : payload);
   const encoder = new TextEncoder();
   if (encoder.encode(encode()).length <= MAX_WEB_PUSH_PLAINTEXT) return encode();
 
@@ -317,8 +327,11 @@ export async function deliverWebPush(
   sender: WebPushSender,
   subscription: StoredPushSubscription,
   payload: string,
-  options: { topic?: string; urgency?: "normal" | "high" } = {},
+  options: { topic?: string; urgency?: "normal" | "high"; staffRequirement?: StaffPushRequirement } = {},
 ): Promise<WebPushOutcome> {
+  if (subscription.userId && !subscription.customerId && !options.staffRequirement) {
+    throw new Error("Staff push requires a permission policy.");
+  }
   let outcome: WebPushOutcome;
   try {
     const recipient = subscription.userId && !subscription.customerId
@@ -327,7 +340,7 @@ export async function deliverWebPush(
         ? { audience: "customer" as const, id: subscription.customerId }
         : null;
     if (!recipient) throw new Error("Push recipient is unavailable.");
-    const guardedPayload = webPushPayload(JSON.parse(payload) as PushNotification, recipient);
+    const guardedPayload = webPushPayload(JSON.parse(payload) as PushNotification, recipient, options.staffRequirement);
     ({ outcome } = await sendWebPush({
       subscription: { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
       payload: guardedPayload,
@@ -372,7 +385,8 @@ export async function sendWebPushNotification(
   const result: WebPushSendResult = { subscriptions: subscriptions.length, sent: 0, removed: 0, failed: 0 };
   const payload = webPushPayload(notification);
   for (let start = 0; start < subscriptions.length; start += 4) {
-    const outcomes = await Promise.all(subscriptions.slice(start, start + 4).map((subscription) => deliverWebPush(db, sender, subscription, payload)));
+    const outcomes = await Promise.all(subscriptions.slice(start, start + 4).map((subscription) => deliverWebPush(db, sender, subscription, payload,
+      target.audience === "staff" ? { staffRequirement: target.requiredPermission } : {})));
     for (const outcome of outcomes) {
       if (outcome === "sent") result.sent += 1;
       else if (outcome === "gone") result.removed += 1;

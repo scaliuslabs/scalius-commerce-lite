@@ -46,6 +46,8 @@ const identity = (key: string, hash = "b".repeat(64)): CheckoutAttemptIdentity =
   checkoutRequestId: `request-${key}`,
   requestKey: `checkout_submit:v1:${key.padEnd(64, "0")}`,
   requestHash: hash,
+  legacyRequestHash: hash,
+  customerWhatsapp: null,
   statusToken: `cst_${key.padEnd(64, "0")}`,
 });
 

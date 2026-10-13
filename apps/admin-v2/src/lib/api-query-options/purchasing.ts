@@ -31,6 +31,7 @@ import {
 import { apiData, type ApiBody, type ApiQuery, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
 import { inventoryLocationKeys } from "./inventory-locations";
+import { announceSave, presenceKey } from "../realtime/store";
 
 /** A purchase order or transfer holds at most this many SKUs (the API's limit). */
 export const PURCHASING_MAX_LINES = 100;
@@ -156,6 +157,9 @@ export function useSaveSupplier() {
           body: { ...input.body, expectedVersion: input.version ?? 1 },
         }))
         : apiData(postApiV1AdminInventorySuppliers({ body: input.body })),
+    onSuccess: (supplier, input) => {
+      if (input.id) announceSave(presenceKey("supplier", input.id), supplier.version);
+    },
     onSettled: () => Promise.all([
       queryClient.invalidateQueries({ queryKey: purchasingKeys.suppliers() }),
       // Purchase orders show their supplier's name.
@@ -190,7 +194,10 @@ export function useSavePurchaseOrder() {
           body: { ...input.body, expectedRevision: input.revision ?? 1 },
         }))
         : apiData(postApiV1AdminInventoryPurchaseOrders({ body: input.body })),
-    onSuccess: (order) => queryClient.setQueryData(purchasingKeys.purchaseOrder(order.id), order),
+    onSuccess: (order, input) => {
+      queryClient.setQueryData(purchasingKeys.purchaseOrder(order.id), order);
+      if (input.id) announceSave(presenceKey("purchase-order", order.id), order.revision);
+    },
     onSettled: () => refreshDocuments(queryClient, "purchaseOrder", null, false),
   });
 }
@@ -205,7 +212,10 @@ export function usePurchaseOrderStatus() {
         ? postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrder(options)
         : postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancel(options));
     },
-    onSuccess: (order) => queryClient.setQueryData(purchasingKeys.purchaseOrder(order.id), order),
+    onSuccess: (order) => {
+      queryClient.setQueryData(purchasingKeys.purchaseOrder(order.id), order);
+      announceSave(presenceKey("purchase-order", order.id), order.revision);
+    },
     // Ordered lines are incoming stock; cancelling stops them.
     onSettled: () => refreshDocuments(queryClient, "purchaseOrder", null, true),
   });
@@ -233,6 +243,7 @@ export function useReceivePurchaseOrder() {
         path: { purchaseOrderId: input.id },
         body: { ...input.body, operationKey: input.operationKey },
       })),
+    onSuccess: (receipt, input) => announceSave(presenceKey("purchase-order", input.id), receipt.revision),
     // After a failure the page keeps what it showed, so a retry sends the same intent (and key);
     // a receipt that did land then replays instead of counting twice.
     onSettled: (_result, error, input) => refreshDocuments(queryClient, "purchaseOrder", error ? null : input.id, true),
@@ -251,7 +262,10 @@ export function useSaveTransfer() {
           body: { ...input.body, expectedRevision: input.revision ?? 1 },
         }))
         : apiData(postApiV1AdminInventoryTransfers({ body: input.body })),
-    onSuccess: (transfer) => queryClient.setQueryData(purchasingKeys.transfer(transfer.id), transfer),
+    onSuccess: (transfer, input) => {
+      queryClient.setQueryData(purchasingKeys.transfer(transfer.id), transfer);
+      if (input.id) announceSave(presenceKey("transfer", transfer.id), transfer.revision);
+    },
     onSettled: () => refreshDocuments(queryClient, "transfer", null, false),
   });
 }
@@ -282,6 +296,7 @@ export function useTransferCommand() {
         ? postApiV1AdminInventoryTransfersByTransferIdShip(options)
         : postApiV1AdminInventoryTransfersByTransferIdCancel(options));
     },
+    onSuccess: (result, input) => announceSave(presenceKey("transfer", input.id), result.revision),
     onSettled: (_result, error, input) => refreshDocuments(queryClient, "transfer", error ? null : input.id, true),
   });
 }
@@ -294,6 +309,7 @@ export function useReceiveTransfer() {
         path: { transferId: input.id },
         body: { lines: input.lines, operationKey: input.operationKey },
       })),
+    onSuccess: (result, input) => announceSave(presenceKey("transfer", input.id), result.revision),
     onSettled: (_result, error, input) => refreshDocuments(queryClient, "transfer", error ? null : input.id, true),
   });
 }

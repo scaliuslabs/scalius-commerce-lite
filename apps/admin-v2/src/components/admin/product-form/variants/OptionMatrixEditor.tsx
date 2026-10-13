@@ -115,6 +115,8 @@ type OptionMatrixEditorProps = {
   /** The draft's problem as one banner line ("M / White: …"), or null. */
   onDraftIssueChange?: (issue: string | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  /** Retained SKU/cost drafts still need leave-page protection after edit access is revoked. */
+  onNavigationDirtyChange?: (dirty: boolean) => void;
   /** The variants' price range while the product has options (they carry the prices), else null. */
   onPricesChange?: (range: VariantPriceRange | null) => void;
   onSavingChange?: (saving: boolean) => void;
@@ -127,9 +129,9 @@ type OptionMatrixEditorProps = {
 const NO_OPTIONS: ProductOptionDefinition[] = [];
 const NO_VARIANTS: ProductVariant[] = [];
 
-// Changing permission starts a saved viewer or a fresh editor, never a stale draft.
+// Permission changes project saved facts without discarding the retained editor draft.
 export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEditorProps>(function OptionMatrixEditor(props, ref) {
-  return <OptionMatrix key={props.readOnly ? "view" : "edit"} {...props} ref={ref} />;
+  return <OptionMatrix {...props} ref={ref} />;
 });
 
 const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEditorProps>(function OptionMatrix({
@@ -147,6 +149,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   onDraftChange,
   onDraftIssueChange,
   onDirtyChange,
+  onNavigationDirtyChange,
   onPricesChange,
   onSavingChange,
   onRevisionConflict,
@@ -157,13 +160,16 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   const d = useMessages(digitalMessages);
   const queryClient = useQueryClient();
   const defaultSku = savedVariants.find((variant) => variant.isDefault && !variant.deletedAt);
-  const [simpleSku, setSimpleSku] = React.useState<SimpleSkuDraft>(() => initialSimpleSku(defaultSku));
+  const [simpleSkuDraft, setSimpleSku] = React.useState<SimpleSkuDraft>(() => initialSimpleSku(defaultSku));
   const [simpleStockEdited, setSimpleStockEdited] = React.useState(false);
-  const [options, setOptions] = React.useState<DraftOption[]>(() => initialOptions(savedOptions));
-  const [variants, setVariants] = React.useState<DraftVariant[]>(() => initialVariants(savedVariants));
+  const [optionDraft, setOptions] = React.useState<DraftOption[]>(() => initialOptions(savedOptions));
+  const [variantDraft, setVariants] = React.useState<DraftVariant[]>(() => initialVariants(savedVariants));
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const simpleSku = React.useMemo(() => readOnly ? initialSimpleSku(defaultSku) : simpleSkuDraft, [readOnly, defaultSku, simpleSkuDraft]);
+  const options = React.useMemo(() => readOnly ? initialOptions(savedOptions) : optionDraft, [readOnly, savedOptions, optionDraft]);
+  const variants = React.useMemo(() => readOnly ? initialVariants(savedVariants) : variantDraft, [readOnly, savedVariants, variantDraft]);
   // Dirty is the draft against the last saved one: an edit changed back is no change.
-  const draft = React.useMemo(() => draftSignature(simpleSku, options, variants), [simpleSku, options, variants]);
+  const draft = React.useMemo(() => draftSignature(simpleSkuDraft, optionDraft, variantDraft), [simpleSkuDraft, optionDraft, variantDraft]);
   const [savedDraft, setSavedDraft] = React.useState(draft);
   const sentDraft = React.useRef(draft);
   const dirty = draft !== savedDraft;
@@ -336,6 +342,8 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   usePublishSkuCostRows(costs, costRows);
   const costKeys = costRows.map((row) => row.key);
   const costsDirty = !readOnly && (costs?.isDirty(costKeys) ?? false);
+  const retainedCostKeys = optionDraft.length === 0 ? [simpleCostKey] : variantDraft.map((variant) => variant.id);
+  const navigationCostsDirty = costs?.isDirty(retainedCostKeys) ?? false;
   const costTrouble = readOnly ? null : costs?.problemOf(costKeys) ?? null;
   const costIssue: DraftIssue | null = costTrouble
     ? { message: costTrouble.message, field: "cost", ...(simpleMode ? {} : { variantId: costTrouble.key }) }
@@ -382,6 +390,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   React.useEffect(() => onDraftIssueChange?.(readOnly ? null : draftLine), [readOnly, draftLine, onDraftIssueChange]);
   // Typed costs count as a variant change: the page's Save sends them after the variants.
   React.useEffect(() => onDirtyChange?.(!readOnly && (dirty || costsDirty)), [readOnly, costsDirty, dirty, onDirtyChange]);
+  React.useEffect(() => onNavigationDirtyChange?.(dirty || navigationCostsDirty), [navigationCostsDirty, dirty, onNavigationDirtyChange]);
   const prices = options.length > 0 ? variants.map((variant) => variant.price).filter(Number.isFinite) : [];
   const minPrice = prices.length > 0 ? Math.min(...prices) : null;
   const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
@@ -399,6 +408,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
 
   // Removing saved variants that still hold stock is confirmed first, naming them.
   const [pendingRemoval, setPendingRemoval] = React.useState<{ title: string; stocked: DraftVariant[]; apply: () => void } | null>(null);
+  React.useEffect(() => { if (readOnly) setPendingRemoval(null); }, [readOnly]);
   const confirmRemoval = (title: string, removed: DraftVariant[], apply: () => void) => {
     const stocked = removed.filter((variant) => !variant.id.startsWith("draft_") && variant.trackInventory && variant.stock > 0);
     if (stocked.length === 0) apply();
@@ -430,17 +440,18 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   // Existing rows are matched by option values and keep their data; rows that
   // drop out are retired on save, never deleted.
   React.useEffect(() => {
-    if (combinationsPending && validShape && combinationCount <= MAX_COMBINATIONS) applyOptions();
-  }, [applyOptions, combinationCount, combinationsPending, validShape]);
+    if (!readOnly && combinationsPending && validShape && combinationCount <= MAX_COMBINATIONS) applyOptions();
+  }, [readOnly, applyOptions, combinationCount, combinationsPending, validShape]);
 
   // Unsaved variants follow the title and price until the merchant edits them.
   const productDefaults = React.useRef({ name: productName, price: productPrice });
   React.useEffect(() => {
+    if (readOnly) return;
     const previous = productDefaults.current;
     if (previous.name === productName && previous.price === productPrice) return;
     productDefaults.current = { name: productName, price: productPrice };
     setVariants((current) => followProductDefaults(options, current, previous, { name: productName, price: productPrice }));
-  }, [options, productName, productPrice]);
+  }, [readOnly, options, productName, productPrice]);
 
   // One pass for one row or many (bulk and group edits); untouched rows keep their identity,
   // so only the edited rows of the table re-render.
@@ -892,7 +903,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
         <p className="text-body text-muted-foreground">{t("addOptionValues")}</p>
       ) : null}
       <ConfirmDialog
-        open={pendingRemoval !== null}
+        open={!readOnly && pendingRemoval !== null}
         onOpenChange={(open) => { if (!open) setPendingRemoval(null); }}
         title={pendingRemoval?.title ?? ""}
         description={pendingRemoval ? t("removeStockedBody", {
@@ -902,7 +913,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
         confirmLabel={t("removeAnyway")}
         cancelLabel={t("keepThem")}
         onConfirm={() => {
-          pendingRemoval?.apply();
+          if (!readOnly) pendingRemoval?.apply();
           setPendingRemoval(null);
         }}
       />

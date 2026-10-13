@@ -241,11 +241,9 @@ export function LandingOrder({ settings, context, instanceId }: SectionProps<Lan
                 </div>
               </div>
             </div>
-            <ul class="noor-assure">
-              {/* The form places cash-on-delivery orders: always true here. */}
-              <li><Icon name="cash" size={18} /><span>{t(context, { en: "Cash on delivery: pay when it arrives", bn: "ক্যাশ অন ডেলিভারি: পণ্য হাতে পেয়ে মূল্য দিন" })}</span></li>
+            {assurances.length > 0 ? <ul class="noor-assure">
               {assurances.map((item) => <li><Icon name={iconOf(item.icon)} size={18} /><span>{item.text}</span></li>)}
-            </ul>
+            </ul> : null}
             {call ? (
               <a class="noor-order-call" href={call}>
                 <Icon name="phone" size={18} />

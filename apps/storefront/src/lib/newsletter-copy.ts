@@ -6,7 +6,7 @@
 // checkout language read), so the newsletter speaks like the rest of the
 // store. A merchant's own heading, text or button label replaces the default.
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
-import type { MarketingChannel } from "@scalius/shared/customer-marketing";
+import { ACCOUNT_MARKETING_COPY, type MarketingChannel } from "@scalius/shared/customer-marketing";
 
 export type NewsletterLanguage = "en" | "bn";
 
@@ -99,15 +99,15 @@ const ENGLISH: NewsletterCopy = {
   status: {
     subscribed: {
       title: "You're subscribed",
-      text: "We'll send news and offers to your phone. You can unsubscribe anytime.",
+      text: "Your selected channels are subscribed. You can unsubscribe anytime.",
     },
     pending: {
       title: "Check your email",
-      text: "Your phone number is subscribed. To get offers by email too, tap the link in the email we just sent.",
+      text: "Confirm your email using the link we sent. Other selected channels are subscribed.",
     },
     invalid: {
       title: "Check your details",
-      text: "Enter a valid phone number, and a valid email if you add one.",
+      text: "Choose at least one channel and enter a valid phone number. Email offers also need an email address.",
     },
     rate_limited: {
       title: "Too many tries",
@@ -132,7 +132,7 @@ const ENGLISH: NewsletterCopy = {
   },
   pageTitle: "Newsletter",
   continueShopping: "Continue shopping",
-  channelName: { email: "email", sms: "SMS", whatsapp: "WhatsApp" },
+  channelName: { email: "email", sms: "SMS", whatsapp: "WhatsApp", push: "browser notifications" },
   confirmTitle: "Confirm your subscription",
   confirmText: "Tap the button to get news and offers by email.",
   confirmButton: "Confirm subscription",
@@ -144,9 +144,7 @@ const ENGLISH: NewsletterCopy = {
   oneClickDone: "You're unsubscribed.",
   oneClickInvalid: "This unsubscribe link is not valid.",
   account: {
-    heading: "News and offers",
-    text: "Choose how we may send you news and offers. Order and delivery updates always reach you.",
-    channelLabel: { email: "Email", sms: "SMS", whatsapp: "WhatsApp" },
+    ...ACCOUNT_MARKETING_COPY.en,
     pending: "Waiting for you to confirm by email.",
     needsEmail: "Add an email to your account to get offers by email.",
     needsPhone: "Add a phone number to your account first.",
@@ -172,15 +170,15 @@ const BANGLA: NewsletterCopy = {
   status: {
     subscribed: {
       title: "সাবস্ক্রাইব হয়েছে",
-      text: "আপনার মোবাইলে নতুন খবর ও অফার পাঠানো হবে। যেকোনো সময় আনসাবস্ক্রাইব করতে পারবেন।",
+      text: "নির্বাচিত মাধ্যমগুলোতে সাবস্ক্রাইব হয়েছে। যেকোনো সময় আনসাবস্ক্রাইব করতে পারবেন।",
     },
     pending: {
       title: "আপনার ইমেইল দেখুন",
-      text: "আপনার মোবাইল নম্বর সাবস্ক্রাইব হয়েছে। ইমেইলেও অফার পেতে আমাদের পাঠানো ইমেইলের লিংকে ট্যাপ করুন।",
+      text: "পাঠানো লিংকে ইমেইল নিশ্চিত করুন। অন্য নির্বাচিত মাধ্যমগুলোতে সাবস্ক্রাইব হয়েছে।",
     },
     invalid: {
       title: "তথ্য আবার দেখুন",
-      text: "সঠিক মোবাইল নম্বর দিন। ইমেইল দিলে সেটিও সঠিক হতে হবে।",
+      text: "অন্তত একটি মাধ্যম বাছুন ও সঠিক মোবাইল নম্বর দিন। ইমেইলে অফার পেতে ইমেইল ঠিকানা দিন।",
     },
     rate_limited: {
       title: "অনেকবার চেষ্টা করা হয়েছে",
@@ -205,7 +203,7 @@ const BANGLA: NewsletterCopy = {
   },
   pageTitle: "নিউজলেটার",
   continueShopping: "কেনাকাটা চালিয়ে যান",
-  channelName: { email: "ইমেইল", sms: "এসএমএস", whatsapp: "হোয়াটসঅ্যাপ" },
+  channelName: { email: "ইমেইল", sms: "এসএমএস", whatsapp: "হোয়াটসঅ্যাপ", push: "ব্রাউজার বিজ্ঞপ্তি" },
   confirmTitle: "সাবস্ক্রিপশন নিশ্চিত করুন",
   confirmText: "ইমেইলে নতুন খবর ও অফার পেতে নিচের বাটনে ট্যাপ করুন।",
   confirmButton: "সাবস্ক্রিপশন নিশ্চিত করুন",
@@ -217,9 +215,7 @@ const BANGLA: NewsletterCopy = {
   oneClickDone: "আনসাবস্ক্রাইব হয়েছে।",
   oneClickInvalid: "এই আনসাবস্ক্রাইব লিংকটি সঠিক নয়।",
   account: {
-    heading: "নতুন খবর ও অফার",
-    text: "কোন মাধ্যমে নতুন খবর ও অফার পাবেন তা বেছে নিন। অর্ডার ও ডেলিভারির খবর সবসময় পাবেন।",
-    channelLabel: { email: "ইমেইল", sms: "এসএমএস", whatsapp: "হোয়াটসঅ্যাপ" },
+    ...ACCOUNT_MARKETING_COPY.bn,
     pending: "ইমেইলে নিশ্চিত করার অপেক্ষায়।",
     needsEmail: "ইমেইলে অফার পেতে আপনার অ্যাকাউন্টে একটি ইমেইল যোগ করুন।",
     needsPhone: "আগে আপনার অ্যাকাউন্টে একটি মোবাইল নম্বর যোগ করুন।",
@@ -234,18 +230,4 @@ const COPY: Record<NewsletterLanguage, NewsletterCopy> = { en: ENGLISH, bn: BANG
 
 export function newsletterCopy(language: NewsletterLanguage): NewsletterCopy {
   return COPY[language];
-}
-
-/**
- * The consent the buyer gave, as the form showed it: the consent line for
- * the channels the form offered, plus the WhatsApp box's words when ticked.
- * This exact text is stored with the consent record.
- */
-export function newsletterConsentText(
-  language: NewsletterLanguage,
-  input: { emailOffered: boolean; whatsapp: boolean },
-): string {
-  const copy = COPY[language];
-  const line = copy.consent({ email: input.emailOffered });
-  return input.whatsapp ? `${line} ${copy.whatsappLabel}${language === "bn" ? "।" : "."}` : line;
 }

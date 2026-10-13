@@ -44,7 +44,7 @@ import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { richTextOrNull } from "~/lib/rich-text-value";
-import { Field } from "~/components/ui/field";
+import { Field, ReadOnlyValue } from "~/components/ui/field";
 
 interface CategoryFormProps {
   defaultValues?: Partial<CategoryFormValues>;
@@ -159,10 +159,10 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
     },
   });
 
-  const name = form.watch("name");
-  const slug = form.watch("slug");
-  const status = form.watch("status");
-  const description = form.watch("description");
+  const draft = form.watch();
+  const saved = form.formState.defaultValues as CategoryFormInput;
+  const shown = canSave ? draft : saved;
+  const { name, slug, status, description } = shown;
   const errors = form.formState.errors;
   const committedStatus = defaultValues?.status ?? "draft";
   // An active category with no active products shows an empty page on the store.
@@ -205,7 +205,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="name"
-                render={({ field, fieldState }) => (
+                render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("name")} value={saved.name} /> : (
                   <Field label={t("name")} error={fieldState.error?.message}>
                     <Input placeholder={t("namePlaceholder")} maxLength={100} {...field} />
                   </Field>
@@ -214,19 +214,15 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="description"
-                render={({ field, fieldState }) => (
+                render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("description")} value={saved.description ? <RichContent content={saved.description} /> : null} /> : (
                   <Field label={t("description")} error={fieldState.error?.message}>
-                    {canSave ? (
-                      <DeferredTiptapEditor
-                        content={field.value ?? ""}
-                        onChange={(html) => field.onChange(richTextOrNull(html))}
-                        placeholder={t("descriptionPlaceholder")}
-                        ariaLabel={t("description")}
-                        compact
-                      />
-                    ) : (
-                      <RichContent content={field.value ?? ""} />
-                    )}
+                    <DeferredTiptapEditor
+                      content={field.value ?? ""}
+                      onChange={(html) => field.onChange(richTextOrNull(html))}
+                      placeholder={t("descriptionPlaceholder")}
+                      ariaLabel={t("description")}
+                      compact
+                    />
                   </Field>
                 )}
               />
@@ -241,19 +237,15 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="content"
-                render={({ field, fieldState }) => (
+                render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("belowProducts")} value={saved.content ? <RichContent content={saved.content} /> : null} /> : (
                   <Field error={fieldState.error?.message}>
-                    {canSave ? (
-                      <DeferredTiptapEditor
-                        content={field.value ?? ""}
-                        onChange={(html) => field.onChange(richTextOrNull(html))}
-                        placeholder={t("belowProductsPlaceholder")}
-                        ariaLabel={t("belowProducts")}
-                        compact
-                      />
-                    ) : (
-                      <RichContent content={field.value ?? ""} />
-                    )}
+                    <DeferredTiptapEditor
+                      content={field.value ?? ""}
+                      onChange={(html) => field.onChange(richTextOrNull(html))}
+                      placeholder={t("belowProductsPlaceholder")}
+                      ariaLabel={t("belowProducts")}
+                      compact
+                    />
                   </Field>
                 )}
               />
@@ -271,7 +263,8 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                 render={({ field, fieldState }) => (
                   <Field error={fieldState.error?.message}>
                     <FormImageUploadField
-                      value={selectedImage?.url === field.value?.url ? selectedImage : field.value}
+                      value={!canSave ? saved.image : selectedImage?.url === field.value?.url ? selectedImage : field.value}
+                      readOnly={!canSave}
                       onChange={(file) => {
                         setSelectedImage(file);
                         const saved = form.formState.defaultValues?.image;
@@ -299,10 +292,10 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
           <SearchListingCard
             resource="category"
             value={{
-              title: form.watch("metaTitle") ?? "",
-              description: form.watch("metaDescription") ?? "",
+              title: shown.metaTitle ?? "",
+              description: shown.metaDescription ?? "",
               handle: slug ?? "",
-              hidden: form.watch("noIndex") === true,
+              hidden: shown.noIndex === true,
             }}
             autoHandle={!isEdit && !slug ? autoHandleFor(name ?? "", "category") : undefined}
             onChange={(next) => {
@@ -343,7 +336,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="status"
-                render={({ field, fieldState }) => (
+                render={({ field, fieldState }) => !canSave ? <ReadOnlyValue label={t("status")} value={t(saved.status === "published" ? "active" : saved.status === "internal" ? "hidden" : "draft")} /> : (
                   <Field
                     help={<>
                       {t(status === "published" ? "activeHelp" : status === "internal" ? "hiddenHelp" : "draftHelp")}
@@ -387,9 +380,9 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                   <ParentCategorySelect
                     selfId={defaultValues?.id}
                     name={name ?? ""}
-                    value={field.value ?? null}
+                    value={canSave ? field.value ?? null : saved.parentId ?? null}
                     onChange={field.onChange}
-                    disabled={!canSave}
+                    readOnly={!canSave}
                     error={fieldState.error?.message}
                   />
                 )}
@@ -397,7 +390,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
               <FormField
                 control={form.control}
                 name="listingTemplate"
-                render={({ field }) => (
+                render={({ field }) => !canSave ? <TemplateSelect kind="listing" value={saved.listingTemplate ?? null} onChange={field.onChange} readOnly /> : (
                   <Field id="category-template" label={t("template")} help={t("templateHelp")}>
                     <TemplateSelect
                       id="category-template"
@@ -421,13 +414,13 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
  * The category this one sits under, named by its path. Its own subtree and
  * places that would make a fifth level are left out (the server refuses them).
  */
-function ParentCategorySelect({ selfId, name, value, onChange, disabled, error }: {
+function ParentCategorySelect({ selfId, name, value, onChange, readOnly, error }: {
   error?: string;
   selfId?: string;
   name: string;
   value: string | null;
   onChange: (value: string | null) => void;
-  disabled?: boolean;
+  readOnly?: boolean;
 }) {
   const t = useMessages(categoryFormMessages);
   const { data } = useQuery(categoryFormOptionsQueryOptions());
@@ -441,6 +434,7 @@ function ParentCategorySelect({ selfId, name, value, onChange, disabled, error }
   }));
   const parentPath = value ? categoryPathLabel(value, byId) : "";
   const ownName = name.trim() || t("thisCategory");
+  if (readOnly) return <ReadOnlyValue label={t("parentCategory")} value={value ? parentPath || value : t("topLevel")} />;
   return (
     <Field
       id="category-parent"
@@ -453,7 +447,6 @@ function ParentCategorySelect({ selfId, name, value, onChange, disabled, error }
         options={options}
         selectedLabel={parentPath || undefined}
         clearable
-        disabled={disabled}
         triggerClassName="w-full"
         placeholder={t("topLevel")}
         searchPlaceholder={t("searchCategories")}

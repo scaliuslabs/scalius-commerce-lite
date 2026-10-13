@@ -9,7 +9,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { useMessages } from "~/i18n";
 import { searchListingMessages } from "~/i18n/search-listing";
-import { Field } from "~/components/ui/field";
+import { Field, ReadOnlyValue } from "~/components/ui/field";
 
 /** Recommended lengths; search engines cut longer text. */
 export const SEARCH_TITLE_LENGTH = 70;
@@ -55,6 +55,7 @@ export interface SearchListingCardProps {
   autoHandle?: string;
   /** Inline field errors from the form (already translated). */
   errors?: Partial<Record<"title" | "description" | "handle", string>>;
+  /** Permission-limited display: show readable facts and unmount every editor control. */
   disabled?: boolean;
 }
 
@@ -109,13 +110,13 @@ export function SearchListingCard({
   const shownUrl = path === null ? t("addressOnSave") : `${origin}${path ?? `${prefix}${handle}`}`;
   const title = value.title.trim() || fallbackTitle.trim();
   const description = (value.description.trim() || fallbackDescription.trim()).slice(0, 320);
-  const open = editing || Object.values(errors).some(Boolean);
+  const open = !disabled && (editing || Object.values(errors).some(Boolean));
 
   return (
     <Card>
       <div className="flex items-center justify-between gap-3 p-4">
         <h2 className="text-heading-sm">{t("title")}</h2>
-        <Button
+        {disabled ? null : <Button
           type="button"
           variant="ghost"
           size="icon"
@@ -125,10 +126,16 @@ export function SearchListingCard({
           onClick={() => setEditing((current) => !current)}
         >
           <Pencil className="size-4" />
-        </Button>
+        </Button>}
       </div>
       <div className="space-y-4 px-4 pb-4">
-        {title ? (
+        {disabled ? (
+          <div className="space-y-3">
+            <ReadOnlyValue label={t("pageTitle")} value={title} />
+            <ReadOnlyValue label={t("metaDescription")} value={value.description.trim() || fallbackDescription.trim()} />
+            <ReadOnlyValue label={t("urlHandle")} value={shownUrl} />
+          </div>
+        ) : title ? (
           <SearchListingPreview url={shownUrl} title={title} description={description} />
         ) : (
           <p className="text-body text-muted-foreground">{t(`empty_${resource}`)}</p>

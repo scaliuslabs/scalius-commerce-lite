@@ -1,3 +1,4 @@
+import { useMediaPermissions } from "../hooks/useMediaPermissions";
 import { useState, type MouseEvent } from "react";
 import { Check, Eye, ImageOff, MoreHorizontal, Play, RotateCcw, Trash2 } from "lucide-react";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
@@ -34,7 +35,9 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
   const extra = formatDuration(file.durationMs) ?? (file.width && file.height ? `${file.width} × ${file.height}` : null);
   const metadata = [formatFileType(file.mimeType).replace(/ (Image|Video)$/, ""), formatFileSize(file.size), extra].filter(Boolean).join(" · ");
   const previewUrl = isImage ? mediaImageUrl(file.url, 480) : posterUrl ? mediaImageUrl(posterUrl, 480) : null;
-  const deletable = canDeletePermanently(file);
+  const permissions = useMediaPermissions();
+  const deletable = permissions.delete && canDeletePermanently(file);
+  const canManage = allowManagement && (view === "ready" ? permissions.delete : permissions.upload || deletable);
   // Ready files say where they're used; in Trash a file still in use says why it can't be deleted.
   const usage = view === "trash"
     ? file.usageCount > 0 ? t("inUseKept") : file.keptForOrders ? t("keptForOrders") : null
@@ -112,12 +115,12 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
 
       {!selectionMode ? (
         <div className="absolute inset-e-1.5 top-1.5 flex gap-1">
-          {!allowManagement ? (
+          {!canManage ? (
             <Button type="button" variant="outline" size="icon-sm" onClick={onPreview} aria-label={t("previewFile", { name: file.filename })}>
               <Eye aria-hidden="true" />
             </Button>
           ) : null}
-          {allowManagement ? (
+          {canManage ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="outline" size="icon-sm" onClick={(event) => event.stopPropagation()} aria-label={r("actionsFor", { name: file.filename })}>
@@ -132,10 +135,10 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
                   </DropdownMenuItem>
                 ) : (
                   <>
-                    <DropdownMenuItem onSelect={() => onLifecycle("restore")}>
+                    {permissions.upload ? <DropdownMenuItem onSelect={() => onLifecycle("restore")}>
                       <RotateCcw aria-hidden="true" />
                       {r("restore")}
-                    </DropdownMenuItem>
+                    </DropdownMenuItem> : null}
                     {deletable ? (
                       <DropdownMenuItem variant="destructive" onSelect={() => onLifecycle("permanent")}>
                         <Trash2 aria-hidden="true" />

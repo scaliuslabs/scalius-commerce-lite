@@ -59,19 +59,19 @@ function createApp(options: { limited?: boolean } = {}) {
 
 describe("storefront marketing routes", () => {
     it("serve only the storefront server and honour the native rate limit", async () => {
-        expect((await createApp().post("/subscribe", { phone: "01711111111" }, false)).status).toBe(401);
-        expect((await createApp({ limited: true }).post("/subscribe", { phone: "01711111111" })).status).toBe(429);
+        expect((await createApp().post("/subscribe", { channels: ["sms"], phone: "01711111111" }, false)).status).toBe(401);
+        expect((await createApp({ limited: true }).post("/subscribe", { channels: ["sms"], phone: "01711111111" })).status).toBe(429);
         expect((await createApp({ limited: true }).post("/unsubscribe", { token: "x" })).status).toBe(429);
     });
 
     it("subscribes with the same answer for known and unknown contacts, and confirms only with the e-mail's token", async () => {
         const { sqlite, post, sent } = createApp();
-        const known = await post("/subscribe", { phone: "01722222222", email: "karim@example.com", whatsapp: true, language: "bn" });
-        const unknown = await post("/subscribe", { phone: "01755555555", email: "new@example.com" });
+        const known = await post("/subscribe", { channels: ["sms", "email", "whatsapp"], phone: "01722222222", email: "karim@example.com", language: "bn" });
+        const unknown = await post("/subscribe", { channels: ["sms", "email"], phone: "01755555555", email: "new@example.com" });
         expect(known).toEqual({ status: 200, body: { success: true, data: { result: "pending" } } });
         expect(unknown).toEqual({ status: 200, body: { success: true, data: { result: "pending" } } });
-        expect((await post("/subscribe", { phone: "01766666666" })).body.data).toEqual({ result: "subscribed" });
-        expect((await post("/subscribe", { phone: "01766666666", website: "spam" })).status).toBe(400);
+        expect((await post("/subscribe", { channels: ["sms"], phone: "01766666666" })).body.data).toEqual({ result: "subscribed" });
+        expect((await post("/subscribe", { channels: ["sms"], phone: "01766666666", website: "spam" })).status).toBe(400);
         // Queue messages carry the outbox id only.
         expect(sent.every((message) => JSON.stringify(Object.keys(message as object)) === '["type","outboxId"]')).toBe(true);
         const pending = sqlite.prepare("SELECT customer_id, channel, state FROM customer_marketing_consents WHERE customer_id = 'cust_acct' ORDER BY channel").all();
@@ -91,7 +91,7 @@ describe("storefront marketing routes", () => {
 
     it("previews and applies a signed unsubscribe link, ignoring tampered ones", async () => {
         const { sqlite, post } = createApp();
-        await post("/subscribe", { phone: "01722222222" });
+        await post("/subscribe", { channels: ["sms"], phone: "01722222222" });
         const token = await signUnsubscribeToken({ SCALIUS_SECRET: SECRET }, { customerId: "cust_acct", channel: "sms" });
         expect((await post("/unsubscribe/preview", { token })).body.data).toEqual({ valid: true, channel: "sms", status: "subscribed", contactMasked: "+88017•••••222" });
         expect(sqlite.prepare("SELECT state FROM customer_marketing_consents WHERE channel = 'sms'").get()).toEqual({ state: "subscribed" });

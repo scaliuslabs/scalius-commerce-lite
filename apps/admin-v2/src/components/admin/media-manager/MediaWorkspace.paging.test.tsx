@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { PermissionProvider } from "~/contexts/PermissionContext";
 
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -9,7 +10,8 @@ import type { LibraryMediaFile, MediaCapability, MediaWorkspaceRouteState } from
 import { setLocale } from "~/i18n";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-const api = vi.hoisted(() => ({ fetchFiles: vi.fn() }));
+const api = vi.hoisted(() => ({ fetchFiles: vi.fn(), uploadFiles: vi.fn() }));
+vi.mock("@tanstack/react-router", async (original) => ({ ...(await original<object>()), useBlocker: () => ({ status: "idle" }) }));
 vi.mock("./api", () => ({ MediaApiClient: api }));
 vi.mock("./hooks", async () => ({
   useMediaFiles: (await import("./hooks/useMediaFiles")).useMediaFiles,
@@ -17,7 +19,7 @@ vi.mock("./hooks", async () => ({
     folders: [], currentFolderId: "all", isLoadingFolders: false, folderLoadError: null,
     loadFolders: vi.fn(), createFolder: vi.fn(), renameFolder: vi.fn(), deleteFolder: vi.fn(), moveToFolder: vi.fn(),
   }),
-  useMediaUpload: () => ({ queue: [], uploadFiles: vi.fn(), retry: vi.fn(), dismiss: vi.fn() }),
+  useMediaUpload: () => ({ queue: [], isUploading: false, pendingCount: 0, uploadFiles: api.uploadFiles, retry: vi.fn(), dismiss: vi.fn() }),
 }));
 vi.mock("./components", async () => ({
   MediaGallery: (await import("./components/MediaGallery")).MediaGallery,
@@ -36,6 +38,7 @@ vi.mock("./components/OptimizeImagesButton", () => ({
   OptimizeImagesButton: () => <button type="button">Optimize images</button>,
 }));
 vi.mock("~/components/admin/shared/ConfirmDialog", () => ({ ConfirmDialog: () => null }));
+vi.mock("~/components/admin/states/store-owner", () => ({ useStoreOwnerName: () => "Store owner" }));
 
 function files(count: number): LibraryMediaFile[] {
   const date = new Date("2026-10-12T00:00:00Z");
@@ -50,8 +53,8 @@ function files(count: number): LibraryMediaFile[] {
 
 let latest: ReturnType<typeof useMediaManager>;
 const onAdd = vi.fn();
-function Harness({ picker = false, unavailableFileIds = [], capability = "both", routeControlled = false }: {
-  picker?: boolean; unavailableFileIds?: string[]; capability?: MediaCapability; routeControlled?: boolean;
+function Harness({ picker = false, unavailableFileIds = [], capability = "both", routeControlled = false, permissions }: {
+  picker?: boolean; unavailableFileIds?: string[]; capability?: MediaCapability; routeControlled?: boolean; permissions?: string[];
 }) {
   const [workspaceState, setWorkspaceState] = useState<MediaWorkspaceRouteState>({
     view: "ready", folderId: "all", search: "", sortBy: "createdAt", sortOrder: "desc",
@@ -63,7 +66,7 @@ function Harness({ picker = false, unavailableFileIds = [], capability = "both",
       onWorkspaceStateChange: (updates: Partial<MediaWorkspaceRouteState>) => setWorkspaceState((current) => ({ ...current, ...updates })),
     } : {}),
   });
-  return <MediaWorkspace manager={latest} capability={capability} picker={picker} multiple={picker} />;
+  return <PermissionProvider isSuperAdmin={permissions === undefined} permissions={permissions}><MediaWorkspace manager={latest} capability={capability} picker={picker} multiple={picker} /></PermissionProvider>;
 }
 
 describe("MediaWorkspace page and picker continuity", () => {
@@ -86,6 +89,7 @@ describe("MediaWorkspace page and picker continuity", () => {
   beforeEach(() => {
     setLocale("en");
     api.fetchFiles.mockReset();
+    api.uploadFiles.mockReset();
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -97,6 +101,35 @@ describe("MediaWorkspace page and picker continuity", () => {
     act(() => root.unmount());
     host.remove();
     vi.useRealTimers();
+  });
+
+  it.each([
+    { permissions: ["media.view"], upload: false, folders: false, select: false },
+    { permissions: ["media.view", "media.upload"], upload: true, folders: false, select: true },
+    { permissions: ["media.view", "media.delete"], upload: false, folders: false, select: true },
+    { permissions: ["media.view", "media.manage_folders"], upload: false, folders: true, select: true },
+  ])("matches mutation controls to $permissions", ({ permissions, upload, folders, select }) => {
+    act(() => root.render(<Harness permissions={permissions} />));
+    expect(Boolean(host.querySelector('input[type="file"]'))).toBe(upload);
+    expect(Boolean(button("Upload files"))).toBe(upload);
+    expect(Boolean(button("Optimize images"))).toBe(upload);
+    expect(Boolean(button("Folder actions"))).toBe(folders);
+    expect(Boolean(button("Select"))).toBe(select);
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", { value: { files: [new File(["image"], "image.webp", { type: "image/webp" })] } });
+    act(() => host.querySelector("article")!.dispatchEvent(drop));
+    expect(api.uploadFiles).toHaveBeenCalledTimes(upload ? 1 : 0);
+    act(() => primary(0)!.click());
+    expect(host.querySelector("[data-preview]")?.textContent).toContain("file-0.webp");
+  });
+
+  it("lets a viewer select existing files in a picker without offering uploads or folder edits", () => {
+    act(() => root.render(<Harness picker permissions={["media.view"]} />));
+    expect(host.querySelector('input[type="file"]')).toBeNull();
+    expect(button("Folder actions")).toBeUndefined();
+    act(() => primary(0)!.click());
+    expect(latest.selectedFileIds).toContain("media_0");
+    expect(button("Add 1").disabled).toBe(false);
   });
 
   it("mounts at most 50 tiles and pages cached rows without a read", () => {

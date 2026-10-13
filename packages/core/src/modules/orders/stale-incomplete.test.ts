@@ -107,14 +107,14 @@ function createDbMock(staleOrders: StaleOrder[]) {
                 operations.push({ op: "select.from", table });
                 return {
                     where: () => ({
-                        limit: async (limit: number) => staleOrders.slice(0, limit),
+                        orderBy: () => ({ limit: async (limit: number) => staleOrders.slice(0, limit) }),
                     }),
                     // Held gift-card tenders: none in these fixtures.
                     innerJoin: () => ({
                         where: () => ({
                             all: async () => [],
                             // Cancelled orders still holding gift cards: none.
-                            groupBy: () => ({ limit: async () => [] }),
+                            groupBy: () => ({ orderBy: () => ({ limit: async () => [] }) }),
                         }),
                     }),
                 };

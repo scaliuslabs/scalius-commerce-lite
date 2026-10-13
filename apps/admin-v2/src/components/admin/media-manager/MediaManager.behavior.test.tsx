@@ -8,11 +8,14 @@ import { MediaManager as LazyMediaManager } from "./LazyMediaManager";
 import { Dialog } from "~/components/ui/dialog";
 import type { MediaFile } from "./types";
 
+vi.mock("@tanstack/react-router", async (original) => ({ ...(await original<object>()), useBlocker: () => ({ status: "idle" }) }));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const pickerState = vi.hoisted(() => ({
   onSelect: undefined as ((file: MediaFile) => void) | undefined,
   unmounted: vi.fn(),
+  uploading: false,
 }));
 
 vi.mock("./hooks/useMediaManager", () => ({
@@ -21,6 +24,8 @@ vi.mock("./hooks/useMediaManager", () => ({
     pickerState.onSelect = options.onSelect;
     return {
       currentFolderId: "all",
+      pendingCount: pickerState.uploading ? 1 : 0,
+      queue: pickerState.uploading ? [{ status: "uploading" }] : [],
       load: vi.fn().mockResolvedValue(undefined),
       loadFolders: vi.fn().mockResolvedValue(undefined),
       replaceSelection: vi.fn(),
@@ -72,12 +77,47 @@ describe("MediaManager lazy-open lifecycle", () => {
     document.body.append(host);
     root = createRoot(host);
     pickerState.onSelect = undefined;
+    pickerState.uploading = false;
     pickerState.unmounted.mockClear();
   });
 
   afterEach(() => {
     act(() => root.unmount());
     document.body.innerHTML = "";
+  });
+
+  it("guards selection and close while uploads run, then discards stale pending actions", async () => {
+    pickerState.uploading = true;
+    const onSelect = vi.fn();
+    const renderPicker = () => root.render(<LazyMediaManager trigger={<button>Open picker</button>} onSelect={onSelect} />);
+    await act(async () => renderPicker());
+    await act(async () => host.querySelector("button")!.click());
+    await flush();
+    const press = (label: string) => act(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === label)!.click());
+    press("Choose test image");
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Cancel unfinished uploads?");
+    expect(pickerState.unmounted).not.toHaveBeenCalled();
+    press("Keep uploading");
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    press("Close workspace");
+    expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+    pickerState.uploading = false;
+    await act(async () => renderPicker());
+    await flush();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(onSelect).not.toHaveBeenCalled();
+    pickerState.uploading = true;
+    await act(async () => renderPicker());
+    await flush();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    press("Choose test image");
+    press("Cancel uploads");
+    await flush();
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(pickerState.unmounted).toHaveBeenCalledOnce();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it("closes after a single selection and remains dismissible on later opens", async () => {
@@ -89,7 +129,7 @@ describe("MediaManager lazy-open lifecycle", () => {
           <button type="button" onClick={() => setOpen(true)}>Select image</button>
           <MediaManager
             capability="image"
-            onSelect={onSelect}
+            onSelect={(file) => { setOpen(false); onSelect(file); }}
             open={open}
             onOpenChange={setOpen}
           />

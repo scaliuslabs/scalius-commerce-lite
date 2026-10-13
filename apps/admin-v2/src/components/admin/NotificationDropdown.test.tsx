@@ -205,6 +205,27 @@ describe("server staff notification history", () => {
     expect(rows()[0]!.textContent).toContain("Unread:");
   });
 
+  it("does not let a summary read started before Clear all restore cleared unread alerts", async () => {
+    seed([item(1)], [scope("orders", 7)]); await render(); await open();
+    const beforeClear = structuredClone(state);
+    let finish!: (value: ReturnType<typeof envelope<StaffAlertSummary>>) => void;
+    mocks.summary.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    await focus();
+    mocks.clear.mockImplementation(async () => {
+      seed([item(2)], [scope("orders", 8)]);
+      return envelope({ summary: state });
+    });
+    await click(button("Clear all"));
+    expect(client.getQueryData<StaffAlertSummary>(["staff-alerts", "staff_a", "summary"])?.scopes[0]?.revision).toBe(8);
+    await act(async () => finish(envelope(beforeClear))); await settle();
+    expect(client.getQueryData<StaffAlertSummary>(["staff-alerts", "staff_a", "summary"])).toEqual(state);
+    expect(rows().map((row) => row.dataset.notificationSeq)).toEqual(["2"]);
+    seed([item(3), item(2)], [scope("orders", 8)]);
+    await focus();
+    expect(client.getQueryData<StaffAlertSummary>(["staff-alerts", "staff_a", "summary"])).toEqual(state);
+    expect(button("New alerts")).toBeTruthy();
+  });
+
   it("retries an ambiguous Clear all with the identical operation ID and immutable body", async () => {
     seed([item(1)], [scope("orders", 4)]); await render(); await open();
     mocks.clear.mockRejectedValueOnce(new TypeError("response lost")).mockResolvedValueOnce(envelope({ summary: state }));

@@ -4,12 +4,13 @@ import type { ProductContentBlockType } from "@scalius/shared/product-content-bl
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Field, FieldSet } from "~/components/ui/field";
+import { Field, FieldSet, ReadOnlyValue } from "~/components/ui/field";
+import { RichContent } from "~/components/ui/rich-content";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { MediaManager, type MediaFile } from "@/components/admin/media-manager";
-import { useMessages } from "~/i18n";
+import { formatDateTime, useMessages } from "~/i18n";
 import { productMerchandisingMessages } from "~/i18n/product-merchandising";
 
 /** A file a block names, as the editor shows it. */
@@ -49,6 +50,7 @@ function TextField({ label, value, onChange, max, multiline, disabled, placehold
   placeholder?: string;
 }) {
   const id = useId();
+  if (disabled) return <ReadOnlyValue label={label} value={value ? <span className="whitespace-pre-wrap">{value}</span> : null} />;
   return (
     <Field label={label} id={id}>
       {multiline ? (
@@ -68,6 +70,7 @@ function SelectField({ label, value, onChange, options, disabled }: {
   disabled?: boolean;
 }) {
   const id = useId();
+  if (disabled) return <ReadOnlyValue label={label} value={options.find((option) => option.value === value)?.label ?? value} />;
   return (
     <Field label={label} id={id}>
       <SearchableSelect
@@ -185,7 +188,7 @@ function Rows<T>({ items, max, min, onChange, render, addLabel, blank, removeLab
 /** The settings form of one content block, by type (strict schemas in @scalius/shared/product-content-blocks). */
 export function BlockSettingsEditor({ type, settings, onChange, media, onMediaChosen, disabled }: EditorProps) {
   const t = useMessages(productMerchandisingMessages);
-  const set = (patch: Settings) => onChange({ ...settings, ...patch });
+  const set = (patch: Settings) => { if (!disabled) onChange({ ...settings, ...patch }); };
   const heading = (
     <TextField label={t("heading")} value={str(settings.heading)} max={120} disabled={disabled} onChange={(value) => set({ heading: value })} />
   );
@@ -195,7 +198,7 @@ export function BlockSettingsEditor({ type, settings, onChange, media, onMediaCh
       return (
         <div className="space-y-3">
           <TextField label={t("title")} value={str(settings.title)} max={200} disabled={disabled} onChange={(value) => set({ title: value })} />
-          <DeferredTiptapEditor content={str(settings.html)} onChange={(html) => set({ html })} ariaLabel={t("content")} compact />
+          {disabled ? <ReadOnlyValue label={t("content")} value={str(settings.html) ? <RichContent content={str(settings.html)} /> : null} /> : <DeferredTiptapEditor content={str(settings.html)} onChange={(html) => set({ html })} ariaLabel={t("content")} compact />}
         </div>
       );
     case "image-with-text": {
@@ -338,7 +341,7 @@ export function BlockSettingsEditor({ type, settings, onChange, media, onMediaCh
         <div className="space-y-3">
           <TextField label={t("statementText")} value={str(settings.text)} max={240} multiline disabled={disabled} onChange={(text) => set({ text })} />
           <TextField label={t("accent")} value={str(settings.accent)} max={60} disabled={disabled} onChange={(accent) => set({ accent })} />
-          <p className="text-body text-muted-foreground">{t("accentHelp")}</p>
+          {disabled ? null : <p className="text-body text-muted-foreground">{t("accentHelp")}</p>}
         </div>
       );
     case "comparison": {
@@ -446,7 +449,7 @@ export function BlockSettingsEditor({ type, settings, onChange, media, onMediaCh
         <div className="space-y-3">
           {heading}
           <TextField label={t("submitLabel")} value={str(settings.submitLabel)} max={40} disabled={disabled} onChange={(submitLabel) => set({ submitLabel })} />
-          <p className="text-body text-muted-foreground">{t("orderFormHelp")}</p>
+          {disabled ? null : <p className="text-body text-muted-foreground">{t("orderFormHelp")}</p>}
         </div>
       );
     case "guarantee":
@@ -508,7 +511,7 @@ export function BlockSettingsEditor({ type, settings, onChange, media, onMediaCh
       return (
         <div className="space-y-3">
           {heading}
-          <p className="text-body text-muted-foreground">{t("specTableHelp")}</p>
+          {disabled ? null : <p className="text-body text-muted-foreground">{t("specTableHelp")}</p>}
         </div>
       );
     default:
@@ -552,6 +555,7 @@ function DateTimeField({ label, help, value, onChange, disabled }: {
 }) {
   const id = useId();
   const local = value ? toLocalInput(value) : "";
+  if (disabled) return <ReadOnlyValue label={label} value={local && value ? formatDateTime(new Date(value), { dateStyle: "medium", timeStyle: "short" }) : null} />;
   return (
     <Field label={label} id={id} help={help}>
       <Input

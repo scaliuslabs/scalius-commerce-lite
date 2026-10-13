@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { PresenceSlot, announceSave, presenceKey } from "~/lib/realtime/store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -41,6 +42,7 @@ export function AttributeValueEditor({
   const t = useMessages(attributeValueMessages);
   const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
+  const key = attributeId ? presenceKey("attribute", attributeId) : null;
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [editingValue, setEditingValue] = useState<string | null>(null);
@@ -87,6 +89,7 @@ export function AttributeValueEditor({
     setSavingValue(key);
     try {
       await write();
+      announceSave(presenceKey("attribute", attributeId), null);
       toast.success(success);
       done();
       await queryClient.invalidateQueries({ queryKey: queryKeys.attributes.all }, { throwOnError: false });
@@ -167,6 +170,7 @@ export function AttributeValueEditor({
     <>
       <Dialog open={Boolean(attributeId)} onOpenChange={close}>
         <DialogContent
+          data-presence-root={key ?? undefined}
           className="sm:max-w-2xl"
           showCloseButton={!pending}
           // Esc cancels an open add or rename first; only the next Esc closes the dialog.
@@ -186,7 +190,7 @@ export function AttributeValueEditor({
           }}
         >
           <DialogHeader>
-            <DialogTitle className="break-words">{t("title", { name: attributeName ?? "" })}</DialogTitle>
+            <div className="flex flex-wrap items-center gap-2"><DialogTitle className="min-w-0 flex-1 break-words">{t("title", { name: attributeName ?? "" })}</DialogTitle><PresenceSlot presenceKey={key} dirty={Boolean(newValue || (editingValue && editedValue !== editingValue))} readOnly={readOnly} /></div>
             <DialogDescription>{t(readOnly ? "viewDescription" : "editDescription")}</DialogDescription>
           </DialogHeader>
 

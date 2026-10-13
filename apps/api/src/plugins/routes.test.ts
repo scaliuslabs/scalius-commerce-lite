@@ -32,8 +32,9 @@ const echoManifest = {
   apiVersion: PLUGIN_API_VERSION,
   description: "Returns the request it saw.",
   author: { name: "Acme" },
+  permissions: ["marketing.send"],
   routes: {
-    admin: [{ name: "look", methods: ["GET", "POST"] }],
+    admin: [{ name: "look", methods: ["GET", "POST"] }, { name: "send", methods: ["POST"], permission: "marketing.send" }],
     public: [{ name: "inspect", methods: ["GET", "POST"] }, { name: "boom", methods: ["GET"] }],
     webhooks: ["hook"],
   },
@@ -42,7 +43,7 @@ const echoModule = {
   default: {
     manifest: echoManifest,
     routes: {
-      admin: { look: async (request: unknown) => ({ body: request }) },
+      admin: { look: async (request: unknown) => ({ body: request }), send: async (request: unknown) => ({ body: request }) },
       public: {
         inspect: async (request: unknown) => ({
           headers: { "cache-control": "public, max-age=999", location: "https://evil.example/", "x-echo": "1" },
@@ -85,6 +86,7 @@ const STAFF: Record<string, string[] | null> = {
   owner: null, // Super Admin
   viewer: ["apps.view"],
   operator: ["apps.view", "apps.use"],
+  sender: ["apps.view", "apps.use", "marketing.send"],
   clerk: ["orders.view"],
 };
 
@@ -294,6 +296,17 @@ describe("plugin routes", { timeout: 30_000 }, () => {
     expect(seen.json).toMatchObject({ staffId: "owner", query: { tab: "1" }, headers: {} });
     // RBAC passes for a Super Admin; the route still answers only its declared methods.
     expect((await call("/api/v1/plugins/acme.echo/admin/look", { as: "owner", method: "PATCH" })).status).toBe(405);
+  });
+
+  it("does not let an app grant elevate an operator into sending", async () => {
+    const send = (as: string) => call("/api/v1/plugins/acme.echo/admin/send", { method: "POST", as, headers: { Origin: "https://admin.shop.test" } });
+    expect((await send("operator")).status).toBe(403);
+    expect((await send("viewer")).status).toBe(403);
+    expect(await send("sender")).toMatchObject({ status: 200, json: { staffId: "sender" } });
+    expect((await send("owner")).status).toBe(200);
+    const echo = await requirePluginInstallation(db, "acme.echo");
+    await deactivatePlugin(db, "acme.echo", { expectedRevision: echo.revision });
+    expect((await send("sender")).status).toBe(404);
   });
 });
 

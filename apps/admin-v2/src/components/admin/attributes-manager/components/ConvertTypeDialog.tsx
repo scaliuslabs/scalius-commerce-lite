@@ -1,3 +1,4 @@
+import { announceSave, presenceKey } from "~/lib/realtime/store";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
@@ -66,6 +67,7 @@ export function ConvertTypeDialog({ attribute, open, onClose, onConverted }: {
         return;
       }
       toast.success(result.skipped > 0 ? t("convertedPartly", { count: result.skipped }) : t("converted"));
+      announceSave(presenceKey("attribute", attribute.id), null);
       onConverted(valueType, result.unit);
       onClose();
     },

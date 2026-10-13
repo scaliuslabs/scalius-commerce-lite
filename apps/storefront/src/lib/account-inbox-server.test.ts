@@ -13,15 +13,19 @@ vi.mock("@/lib/api/transport", () => ({
 }));
 
 import {
-  markConversationRead,
   proxyConversationAttachment,
   readConversation,
   readInbox,
+  handleConversationPoll,
+  handleConversationRead,
   type ConversationTarget,
 } from "./account-inbox-server";
 import { getOrderReceiptCookieName } from "./order-receipt-cookie";
 import { POST as postOrderMessage } from "../pages/api/conversations/orders/[orderId]/messages";
 import { POST as postThreadMessage } from "../pages/api/conversations/[id]/messages";
+import { GET as pollOrderMessages } from "../pages/api/conversations/orders/[orderId]/messages";
+import { POST as readOrderMessages } from "../pages/api/conversations/orders/[orderId]/read";
+import { POST as readThreadMessages } from "../pages/api/conversations/[id]/read";
 import { POST as postStoreThread } from "../pages/api/conversations/store";
 import type { BuyerConversationThread } from "./account-inbox";
 
@@ -82,6 +86,69 @@ beforeEach(() => {
 });
 
 describe("reads", () => {
+  it("wires account order polling through its session and no-JS acknowledgment through a safe redirect", async () => {
+    api.fetch.mockResolvedValueOnce(envelope({ conversation: thread() })).mockResolvedValueOnce(envelope({ readSeq: 2 }));
+    const poll = request(`/api/conversations/orders/${ORDER}/messages?access=account&afterSeq=1`, { cookie: SESSION, accept: "application/json" });
+    expect((await pollOrderMessages({ request: poll, params: { orderId: ORDER }, url: new URL(poll.url) } as never)).status).toBe(200);
+    expect(calls()[0]!.headers.get("Cookie")).toBe(SESSION);
+    const read = request(`/api/conversations/orders/${ORDER}/read?access=account`, { method: "POST", cookie: SESSION, body: new URLSearchParams({ seq: "2", returnTo: `/account/orders/${ORDER}` }) });
+    const response = await readOrderMessages({ request: read, params: { orderId: ORDER }, url: new URL(read.url) } as never);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe(`/account/orders/${ORDER}`);
+  });
+
+  it("refuses a foreign-origin read acknowledgment before reading credentials or posting", async () => {
+    const read = request(`/api/conversations/${CNV}/read`, { method: "POST", cookie: SESSION, headers: { Origin: "https://foreign.example" }, accept: "application/json", body: JSON.stringify({ seq: 2 }) });
+    expect((await readThreadMessages({ request: read, params: { id: CNV } } as never)).status).toBe(403);
+    expect(api.fetch).not.toHaveBeenCalled();
+  });
+
+  it("polls only the public after cursor and never acknowledges on a read", async () => {
+    api.fetch.mockResolvedValue(envelope({ conversation: thread({ hasNewer: true }) }));
+    const response = await handleConversationPoll(request(`/api/conversations/${CNV}/messages?afterSeq=1`, { cookie: SESSION, accept: "application/json" }), { kind: "thread", conversationId: CNV });
+    const answer = await response.json() as { data: { items: Array<{ html: string }>; hasNewer: boolean } };
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(answer.data.hasNewer).toBe(true);
+    expect(answer.data.items).toHaveLength(2);
+    expect(answer.data.items[0]!.html).toContain('data-message-id="msg_1"');
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]!.url).toContain("?afterSeq=1");
+    expect(calls()[0]!.init.method).toBe("GET");
+  });
+
+  it("refuses foreign poll contexts and malformed cursors before any API read", async () => {
+    const target = { kind: "thread" as const, conversationId: CNV };
+    for (const query of ["", "?afterSeq=-1", "?afterSeq=1&beforeSeq=2", "?afterSeq=1.2", "?afterSeq=99999999999"]) {
+      expect((await handleConversationPoll(request(`/api/x${query}`, { cookie: SESSION, accept: "application/json" }), target)).status).toBe(400);
+    }
+    expect((await handleConversationPoll(request("/api/x?afterSeq=0", { cookie: SESSION, accept: "application/json", headers: { "Sec-Fetch-Site": "cross-site" } }), target)).status).toBe(403);
+    expect(api.fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps receipt proof only in headers during polling, and exposes no credential", async () => {
+    api.fetch.mockResolvedValue(envelope({ conversation: thread() }));
+    const response = await handleConversationPoll(request("/api/x?afterSeq=0", { cookie: RECEIPT_COOKIE, accept: "application/json" }), { kind: "order", orderId: ORDER, access: "receipt" });
+    expect(await response.text()).not.toContain(PROOF);
+    expect(calls()[0]!.headers.get("X-Receipt-Token")).toBe(PROOF);
+    expect(calls()[0]!.url).not.toContain(PROOF);
+  });
+
+  it("preserves API throttling instead of hot-retrying a rate limit", async () => {
+    api.fetch.mockResolvedValue(new Response(null, { status: 429, headers: { "Retry-After": "90" } }));
+    const response = await handleConversationPoll(request("/api/x?afterSeq=0", { cookie: SESSION, accept: "application/json" }), { kind: "thread", conversationId: CNV });
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("90");
+  });
+
+  it("acknowledges an account order through its owner-authorized endpoint without a second read", async () => {
+    api.fetch.mockResolvedValue(envelope({ readSeq: 2 }));
+    const response = await handleConversationRead(request("/api/x", { method: "POST", cookie: SESSION, accept: "application/json", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ seq: 2 }) }), { kind: "order", orderId: ORDER, access: "account" });
+    expect(response.status).toBe(204);
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]!.url).toContain(`/customer-auth/orders/${ORDER}/conversation/read`);
+  });
+
   it("sends only the session cookie, never the buyer's other cookies", async () => {
     api.fetch.mockResolvedValue(envelope({ items: [], nextCursor: null, canStartStoreConversation: true }));
     const result = await readInbox(request("/account/inbox", { cookie: `_ga=1; ${SESSION}; ${RECEIPT_COOKIE}` }), "abc");
@@ -123,22 +190,7 @@ describe("reads", () => {
     expect(calls()[0]?.url).toBe(`https://api.internal/api/v1/customer-auth/orders/${ORDER}/conversation`);
   });
 
-  it("marks read up to the last shown message, through the thread id for account order threads", async () => {
-    api.fetch.mockResolvedValue(envelope({ readSeq: 2 }));
-    await markConversationRead(request("/account/orders/order_1", { cookie: SESSION }), { kind: "order", orderId: ORDER, access: "account" }, thread());
-    const [call] = calls();
-    expect(call?.url).toBe(`https://api.internal/api/v1/customer-auth/conversations/${CNV}/read`);
-    expect(JSON.parse(String(call?.init.body))).toEqual({ seq: 2 });
 
-    api.fetch.mockClear();
-    await markConversationRead(request("/order-success", { cookie: RECEIPT_COOKIE }), { kind: "order", orderId: ORDER, access: "receipt" }, thread());
-    expect(calls()[0]?.url).toBe(`https://api.internal/api/v1/orders/receipt/${ORDER}/conversation/read`);
-    expect(calls()[0]?.headers.get("X-Receipt-Token")).toBe(PROOF);
-
-    api.fetch.mockClear();
-    await markConversationRead(request("/x", { cookie: SESSION }), { kind: "thread", conversationId: CNV }, thread({ readSeq: 2 }));
-    expect(api.fetch).not.toHaveBeenCalled();
-  });
 });
 
 describe("attachment proxy", () => {
@@ -236,10 +288,10 @@ describe("form posts", () => {
     } as never);
 
     expect(response.status).toBe(201);
-    const payload = await response.json() as { success: boolean; data: { messagesHtml: string } };
+    const payload = await response.json() as { success: boolean; data: { items: Array<{ html: string }> } };
     expect(payload.success).toBe(true);
-    expect(payload.data.messagesHtml).toContain("&lt;b&gt;x&lt;/b&gt;");
-    expect(payload.data.messagesHtml).toContain(`/api/conversations/${CNV}/attachments/${ATT}`);
+    expect(payload.data.items.map((item) => item.html).join("")).toContain("&lt;b&gt;x&lt;/b&gt;");
+    expect(payload.data.items.map((item) => item.html).join("")).toContain(`/api/conversations/${CNV}/attachments/${ATT}`);
     const [upload, post] = calls();
     expect(upload?.url).toBe("https://api.internal/api/v1/customer-auth/conversation-attachments");
     expect((upload?.init.body as FormData).get("conversationId")).toBe(CNV);

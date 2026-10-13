@@ -279,7 +279,10 @@ export function countdownEnd(value: string | null, timeZone: string): number | n
   if (!match) return null;
   const [, year, month, day, hour = "23", minute = "59"] = match;
   const wall = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), hour === "23" && minute === "59" ? 59 : 0);
-  if (!Number.isFinite(wall)) return null;
+  const date = new Date(wall);
+  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() !== Number(month) - 1
+    || date.getUTCDate() !== Number(day) || date.getUTCHours() !== Number(hour)
+    || date.getUTCMinutes() !== Number(minute)) return null;
   try {
     return wall - zoneOffset(wall, timeZone);
   } catch {

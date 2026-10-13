@@ -1,32 +1,17 @@
 ---
-// The checkout's marketing consent checkbox: the merchant's label in the
-// checkout language, unchecked unless the buyer ticked it on this form
-// (a no-JavaScript step re-rendered), never required. Its value is the
-// label's language, which the order carries as `marketingConsent.language`.
+import { ACCOUNT_MARKETING_COPY } from "@scalius/shared/customer-marketing";
 import { MARKETING_CONSENT_FIELD, type MarketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
-
-interface Props {
-  consent: MarketingConsentCheckbox | null;
-  checked?: boolean;
-  idPrefix?: string;
-}
-
-const { consent, checked = false, idPrefix = "checkout" } = Astro.props;
-const id = `${idPrefix}-marketing-consent`;
+interface Props { consent: MarketingConsentCheckbox | null; selected?: readonly string[]; idPrefix?: string }
+const { consent, selected = [], idPrefix = "checkout" } = Astro.props;
 ---
-
 {consent && (
-  <div data-marketing-consent>
-    <label for={id} class="flex min-h-11 cursor-pointer items-start gap-3 py-1 text-sm text-foreground">
-      <input
-        id={id}
-        type="checkbox"
-        name={MARKETING_CONSENT_FIELD}
-        value={consent.language}
-        checked={checked}
-        class="mt-0.5 size-4 shrink-0 accent-primary"
-      />
-      <span class="[overflow-wrap:anywhere]" lang={consent.language}>{consent.label}</span>
-    </label>
-  </div>
+  <fieldset data-marketing-consent>
+    <legend class="text-sm text-foreground" lang={consent.language}>{consent.label}</legend>
+    {consent.channels.map((channel) => (
+      <label for={`${idPrefix}-marketing-${channel}`} class="flex min-h-11 cursor-pointer items-center gap-3 py-1 text-sm text-foreground">
+        <input id={`${idPrefix}-marketing-${channel}`} type="checkbox" name={`${MARKETING_CONSENT_FIELD}_${channel}`} value={consent.language} checked={selected.includes(channel)} class="size-4 shrink-0 accent-primary" />
+        <span lang={consent.language}>{ACCOUNT_MARKETING_COPY[consent.language].channelLabel[channel]}</span>
+      </label>
+    ))}
+  </fieldset>
 )}

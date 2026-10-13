@@ -64,11 +64,11 @@ async function flush() {
   });
 }
 
-function Editor({ dirty = false, changed = [] as string[], onLoadLatest }: { dirty?: boolean; changed?: string[]; onLoadLatest?: () => void }) {
+function Editor({ dirty = false, readOnly = false, changed = [] as string[], onLoadLatest }: { dirty?: boolean; readOnly?: boolean; changed?: string[]; onLoadLatest?: () => void }) {
   return (
     <>
       <h1>Cotton panjabi</h1>
-      <PresenceSlot presenceKey={KEY} revision={4} dirty={dirty} changedFields={() => changed} onLoadLatest={onLoadLatest} />
+      <PresenceSlot presenceKey={KEY} revision={4} dirty={dirty} readOnly={readOnly} changedFields={() => changed} onLoadLatest={onLoadLatest} />
       <form data-presence-root={KEY}>
         <label htmlFor="price">Price</label>
         <input id="price" name="price" />
@@ -115,7 +115,7 @@ describe("editor presence", () => {
   });
 
   it("shows the editing banner, keeps it dismissed for the same people, and brings it back for someone new", async () => {
-    await renderEditor(<Editor />);
+    await renderEditor(<Editor onLoadLatest={vi.fn()} />);
     await act(async () => connection.presence(KEY, [{ id: "usr_rahim", name: "Rahim", editing: true }]));
     await flush();
     const banner = () => document.querySelector("[data-slot=presence-banner]");
@@ -141,6 +141,26 @@ describe("editor presence", () => {
     await act(async () => root.render(<Editor dirty />));
     expect(connection.focus).toHaveBeenLastCalledWith(KEY, null, true);
     expect(JSON.stringify(connection.focus.mock.calls)).not.toContain("1200");
+  });
+
+  it("keeps viewers in presence without claiming they edit focused read-only controls", async () => {
+    await renderEditor(<Editor readOnly dirty />);
+    await act(async () => host.querySelector<HTMLInputElement>("input[name=price]")!.focus());
+    expect(connection.watch).toHaveBeenCalledWith(KEY);
+    expect(connection.focus.mock.calls.every(([, field, dirty]) => field === null && dirty === false)).toBe(true);
+  });
+
+  it("never promises merging or draft preservation on an editor without that capability", async () => {
+    await renderEditor(<Editor dirty changed={["stock"]} />);
+    await act(async () => connection.presence(KEY, [{ id: "usr_rahim", name: "Rahim", editing: true }]));
+    await flush();
+    expect(document.querySelector("[data-slot=presence-banner]")?.textContent).not.toContain("merge automatically");
+    await act(async () => connection.saved(KEY, ["price"]));
+    await flush();
+    const notice = document.querySelector("[data-slot=alert]")!;
+    expect(notice.textContent).not.toContain("which you changed too");
+    expect(notice.textContent).not.toContain("your edits stay");
+    expect(notice.textContent).not.toContain("merged into your draft");
   });
 
   it("merges a save into a dirty draft at once when the fields differ, with links to them", async () => {

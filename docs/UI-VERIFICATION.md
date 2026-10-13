@@ -18,6 +18,8 @@ consumer and a different transition that could violate the same invariant.
 | Buy now removes an existing cart line | Cart changes follow the buyer's action and preserve unrelated lines | Add A then Buy B means A+B, quantity limits, reload/back, checkout recovery and new lines added during checkout |
 | Delivery text disagrees between surfaces | Commerce claims come from the applicable authoritative quote | Free delivery, app rates, markets, unavailable zones and stale merchant-written copy |
 | A portrait preview is clipped | Preview lets the user inspect the whole asset | Panorama, small images, zoom, fullscreen, narrow screens and metadata panels |
+| A customer must scroll past the entire conversation to reply | Conversation history has a bounded reading pane and the composer remains reachable | First unread, older history, live arrival while reading, attachments, narrow/short viewports, no-JavaScript fallback, core templates and plugin headers |
+| An Inbox workspace scrolls out of its frame | The shell owns available height; only its work panes scroll | Route scroll restoration, hidden accessibility labels, focus, offline banners, reply-mode changes and phone/desktop resizing |
 | Canvas scrolling redraws the whole editor | Transient frame geometry updates only its visual overlay | Hover, inline text, duplicate geometry, session replacement, latest scroll restoration and stale frame messages |
 | Choosing a section changes the draft before confirmation | Browsing previews is read-only; Add inserts exactly once at the current anchor | Core and unused active apps, real styles, empty content, rapid selection, expired sessions, cancel, keyboard and touch |
 | A builder notice blocks editing | Notices can collapse without losing recovery actions or covering selection controls | Route, version, conflict and failure notices; hidden-frame refresh; new messages; narrow canvas and retained focus |
@@ -72,6 +74,13 @@ Missing targets, failed actions and missing audit regions fail verification;
 explicitly excluded viewports are not applicable, never counted as passed.
 Screenshots complement geometry, semantics and state assertions; none replaces
 the others. Static accessibility checks do not establish full accessibility.
+
+Budget viewport space for the user's task, including the active theme's header,
+bottom navigation, safe areas and editor chrome. Long content may scroll; routine
+actions should not require scrolling through it. Check short heights as well as
+narrow widths: release sticky chrome when it crowds out reading, and keep one
+clear scroll owner per work pane. A fixed height that merely hides overflow is
+not a solution. Verify this shared contract across core templates and plugins.
 
 ## Completion and evidence
 

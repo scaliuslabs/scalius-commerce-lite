@@ -10,7 +10,7 @@
  */
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { getDb } from "@scalius/database/client";
-import { realtimeTopicsFor } from "@scalius/shared/realtime";
+import { presenceEditMask, realtimeTopicsFor } from "@scalius/shared/realtime";
 import { getAdminSessionFromCookieHeader } from "../middleware/admin-auth";
 import { isForeignDashboardRequest } from "../middleware/cookie-origin-guard";
 import { REALTIME_IDENTITY_HEADER, type RealtimeIdentity } from "./hub";
@@ -43,7 +43,7 @@ export async function handleRealtimeConnect(request: Request, env: Env): Promise
   const topics = realtimeTopicsFor(permissions);
   if (permissions.size === 0) return refuse(403, "Forbidden");
 
-  const identity: RealtimeIdentity = { userId: user.id, name: user.name ?? "", topics };
+  const identity: RealtimeIdentity = { userId: user.id, name: user.name ?? "", topics, edit: presenceEditMask(permissions) };
   const headers = new Headers({ Upgrade: "websocket", [REALTIME_IDENTITY_HEADER]: JSON.stringify(identity) });
   for (const name of ["Sec-WebSocket-Key", "Sec-WebSocket-Version", "Sec-WebSocket-Extensions"]) {
     const value = request.headers.get(name);

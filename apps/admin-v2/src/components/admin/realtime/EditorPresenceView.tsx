@@ -15,11 +15,16 @@ import PresenceLayer from "./PresenceLayer";
  * Reports which field of the editor on `key` this tab is in, and whether its
  * draft is dirty: one document listener, scoped by `data-presence-root`.
  */
-export function usePresenceReporter(key: string, dirty: boolean): void {
+export function usePresenceReporter(key: string, dirty: boolean, readOnly = false): void {
   const field = useRef<string | null>(null);
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
   useEffect(() => {
+    field.current = null;
+    if (readOnly) {
+      reportFocus(key, null, false);
+      return;
+    }
     const inEditor = (target: EventTarget | null) =>
       target instanceof Element && target.closest("[data-presence-root]")?.getAttribute("data-presence-root") === key;
     // A field focused before this loaded counts too.
@@ -41,23 +46,24 @@ export function usePresenceReporter(key: string, dirty: boolean): void {
       document.removeEventListener("focusout", onFocusOut);
       reportFocus(key, null, false);
     };
-  }, [key]);
+  }, [key, readOnly]);
   useEffect(() => {
-    reportFocus(key, field.current, dirty);
-  }, [key, dirty]);
+    reportFocus(key, readOnly ? null : field.current, dirty && !readOnly);
+  }, [key, dirty, readOnly]);
 }
 
 export default function EditorPresenceView({
   presenceKey,
   revision,
   dirty,
+  readOnly = false,
   changedFields,
   onLoadLatest,
   notices = true,
   onRemoteSave,
 }: PresenceSlotProps & { presenceKey: string }) {
   const presence = useEditorPresence(presenceKey, revision);
-  usePresenceReporter(presenceKey, dirty);
+  usePresenceReporter(presenceKey, dirty, readOnly);
   const { others, remoteSave, dismissRemoteSave } = presence;
   // An editor without notices handles another person's save itself.
   useEffect(() => {
@@ -70,7 +76,7 @@ export default function EditorPresenceView({
     <>
       {others.length > 0 ? <PresenceAvatars people={others} /> : null}
       {notices && (others.length > 0 || remoteSave)
-        ? <PresenceLayer presence={{ ...presence, presenceKey, dirty, changedFields, onLoadLatest }} />
+        ? <PresenceLayer presence={{ ...presence, presenceKey, dirty: dirty && !readOnly, readOnly, changedFields, onLoadLatest }} />
         : null}
     </>
   );

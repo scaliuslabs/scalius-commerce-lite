@@ -413,6 +413,16 @@ export const PERMISSION_METADATA: Record<
     isSensitive: false,
   },
 
+  [PERMISSIONS.MARKETING_SEND]: {
+    name: PERMISSIONS.MARKETING_SEND,
+    displayName: "Send Marketing Messages",
+    description: "Review, schedule, send and cancel marketing messages through the store's configured channels",
+    resource: "marketing",
+    action: "send",
+    category: "Customers",
+    isSensitive: true,
+  },
+
   // Discounts (SENSITIVE)
   [PERMISSIONS.DISCOUNTS_VIEW]: {
     name: PERMISSIONS.DISCOUNTS_VIEW,

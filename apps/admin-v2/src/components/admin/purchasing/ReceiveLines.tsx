@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Field } from "~/components/ui/field";
-import { NumberInput } from "~/components/ui/number-input";
+import { parseLocaleNumber } from "~/components/ui/number-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { useIsMobile } from "~/hooks/use-mobile";
 import { formatNumber, useMessages } from "~/i18n";
@@ -92,9 +92,20 @@ export function ReceiveLines({
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [reveal, setReveal] = useState<{ lineId: string; focus: boolean } | null>(null);
+  // Row inputs unmount when paging/filtering or switching layouts. Keep their
+  // unfinished text here; only parsed numbers belong to the receipt payload.
+  const [raw, setRaw] = useState<Record<string, string>>({});
   const { invalid } = readReceipt(lines, quantities);
   const receivable = lines.filter((line) => !line.retired && line.open > 0);
   const byId = new Map(lines.map((line) => [line.id, line]));
+  const retainedRaw = Object.fromEntries(Object.entries(raw).filter(([id, text]) =>
+    byId.has(id) && Object.is(parseLocaleNumber(text), quantities[id] ?? null)));
+  if (Object.keys(retainedRaw).length !== Object.keys(raw).length) setRaw(retainedRaw);
+  const clearRaw = (id: string) => setRaw((current) => {
+    const next = { ...current };
+    delete next[id];
+    return next;
+  });
   // Search and paging only choose which rows render: quantities, scans and
   // the receipt always cover every line of the document.
   const needle = query.trim().toLowerCase();
@@ -134,7 +145,10 @@ export function ReceiveLines({
       code,
     );
     setOutcome(result.outcome);
-    if (result.outcome.kind === "counted") onChange(result.quantities);
+    if (result.outcome.kind === "counted") {
+      clearRaw(result.outcome.lineId);
+      onChange(result.quantities);
+    }
     if (result.outcome.kind !== "unknown") revealLine(result.outcome.lineId);
     setCode("");
   };
@@ -161,19 +175,30 @@ export function ReceiveLines({
     const name = lineName(line, t("unknownProduct"));
     const lineInvalid = invalid.has(line.id);
     const closed = line.retired || line.open === 0;
+    const quantity = quantities[line.id] ?? null;
+    const text = retainedRaw[line.id] ?? (quantity === null || Number.isNaN(quantity) ? "" : String(quantity));
     return (
-      <div className="space-y-1">
+      <div className="space-y-1 tabular-nums">
         <div className="flex items-center justify-end gap-2">
-          <NumberInput
-            integer
+          <Input
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
             className="w-24"
-            value={quantities[line.id] ?? null}
+            value={text}
             placeholder="0"
             disabled={disabled || closed}
             aria-label={t("receivingFor", { name })}
             aria-invalid={lineInvalid ? true : undefined}
             aria-describedby={lineInvalid ? `receive-${line.id}-error` : undefined}
-            onValueChange={(value) => setQuantity(line.id, value)}
+            onFocus={(event) => event.currentTarget.select()}
+            onMouseUp={(event) => event.preventDefault()}
+            onChange={(event) => {
+              const next = event.currentTarget.value;
+              setRaw((current) => ({ ...current, [line.id]: next }));
+              const value = parseLocaleNumber(next);
+              if (!Object.is(value, quantity)) setQuantity(line.id, value);
+            }}
           />
           <Button
             type="button"
@@ -181,7 +206,7 @@ export function ReceiveLines({
             size="sm"
             disabled={disabled || closed}
             aria-label={t("allFor", { name })}
-            onClick={() => setQuantity(line.id, line.open)}
+            onClick={() => { clearRaw(line.id); setQuantity(line.id, line.open); }}
           >
             {t("all")}
           </Button>
@@ -202,7 +227,7 @@ export function ReceiveLines({
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle>{t("products")}</CardTitle>
         <div className="flex gap-2">
-          <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onChange({})}>
+          <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => { setRaw({}); onChange({}); }}>
             {t("clearCounts")}
           </Button>
           <Button
@@ -210,7 +235,7 @@ export function ReceiveLines({
             variant="outline"
             size="sm"
             disabled={disabled || receivable.length === 0}
-            onClick={() => onChange(receiveEverything(lines))}
+            onClick={() => { setRaw({}); onChange(receiveEverything(lines)); }}
           >
             {t("receiveAll")}
           </Button>

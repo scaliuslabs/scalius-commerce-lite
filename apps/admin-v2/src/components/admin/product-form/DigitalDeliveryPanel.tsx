@@ -113,14 +113,28 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
   const [deleting, setDeleting] = React.useState<DigitalAssetDto | null>(null);
   const [importFor, setImportFor] = React.useState<{ variant: ProductVariant; pool: DigitalAssetDto | null } | null>(null);
   const [revokeFor, setRevokeFor] = React.useState<DigitalAssetDto | null>(null);
+  const readOnlyRef = React.useRef(readOnly);
+  readOnlyRef.current = readOnly;
+  React.useEffect(() => {
+    if (!readOnly) return;
+    setEditing(null);
+    setDeleting(null);
+    setImportFor(null);
+    setRevokeFor(null);
+    replaceFor.current = null;
+    uploadRef.current?.controller.abort();
+  }, [readOnly]);
 
   /** Sends the file's parts (resuming a failed upload), then marks the item ready. */
   const send = async (assetId: string, file: File, session: DigitalUploadSessionDto | null, uploadId: string | null = null) => {
+    if (readOnlyRef.current) return;
     const controller = new AbortController();
     setUpload({ assetId, file, uploadId: session?.id ?? uploadId, sent: 0, failed: null, controller });
     let current = session;
     try {
       current ??= await resumeOrRestart(assetId, uploadId, file);
+      if (readOnlyRef.current) controller.abort();
+      controller.signal.throwIfAborted();
       const started = current;
       setUpload((value) => (value?.controller === controller ? { ...value, uploadId: started.id } : value));
       const asset = await sendDigitalFile({
@@ -145,6 +159,7 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
   };
 
   const onFileChosen = async (file: File) => {
+    if (readOnlyRef.current) return;
     if (file.size > DIGITAL_MAX_FILE_BYTES) {
       toast.error(t("tooBig"));
       return;
@@ -167,6 +182,7 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
   };
 
   const pickFile = (assetId: string | null) => {
+    if (readOnlyRef.current) return;
     replaceFor.current = assetId;
     fileRef.current?.click();
   };
@@ -235,6 +251,7 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
           <input
             ref={fileRef}
             type="file"
+            disabled={readOnly}
             hidden
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -271,7 +288,7 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
                     </p>
                     {facts ? <p className="text-muted-foreground">{facts}</p> : null}
                     <p className="text-muted-foreground">{terms}</p>
-                    {mine ? (
+                    {mine && !readOnly ? (
                       <div className="mt-2 space-y-1">
                         <Progress value={Math.round((mine.sent / Math.max(mine.file.size, 1)) * 100)} aria-label={t("statusUploading")} />
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -364,6 +381,7 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
         )}
       </section>
 
+      {!readOnly ? <>
       <FileSettingsDialog asset={editing} onOpenChange={(open) => { if (!open) setEditing(null); }} onSaved={putAsset} onChanged={refresh} />
       <ConfirmDialog
         open={deleting !== null}
@@ -373,7 +391,7 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
         confirmLabel={t("delete")}
         cancelLabel={r("cancel")}
         isLoading={remove.isPending}
-        onConfirm={() => { if (deleting) remove.mutate(deleting); }}
+        onConfirm={() => { if (deleting && !readOnlyRef.current) remove.mutate(deleting); }}
       />
       <KeyImportDialog
         productId={productId}
@@ -387,6 +405,7 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
         onOpenChange={(open) => { if (!open) setRevokeFor(null); }}
         onChanged={refresh}
       />
+      </> : null}
     </>
   );
 }

@@ -9,6 +9,16 @@ export const CONVERSATION_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/conversations/summary": {
     GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW },
   },
+  "/api/v1/admin/conversations/query": { POST: { permission: PERMISSIONS.CONVERSATIONS_VIEW } },
+  "/api/v1/admin/conversations/assignees": { GET: { permission: PERMISSIONS.CONVERSATIONS_REPLY } },
+  "/api/v1/admin/conversations/saved-replies": {
+    GET: { permission: PERMISSIONS.CONVERSATIONS_REPLY }, POST: { permission: PERMISSIONS.CONVERSATIONS_REPLY },
+  },
+  "/api/v1/admin/conversations/saved-replies/*": {
+    GET: { permission: PERMISSIONS.CONVERSATIONS_REPLY }, PATCH: { permission: PERMISSIONS.CONVERSATIONS_REPLY },
+  },
+  "/api/v1/admin/conversations/*/search": { POST: { permission: PERMISSIONS.CONVERSATIONS_VIEW } },
+  "/api/v1/admin/conversations/*/context": { GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW } },
   "/api/v1/admin/conversations/attachments": {
     POST: { permission: PERMISSIONS.CONVERSATIONS_REPLY },
   },

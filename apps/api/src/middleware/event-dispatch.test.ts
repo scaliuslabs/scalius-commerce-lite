@@ -6,7 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { conversations, orders, settings } from "@scalius/database/schema";
+import { conversationCartShares, conversations, orders, settings } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { eventDispatchMiddleware } from "./event-dispatch";
 
@@ -53,6 +53,11 @@ describe("eventDispatchMiddleware", () => {
       await db.update(conversations).set({ status: "pending" }).where(eq(conversations.id, "cnv_missing_1"));
       return c.json({ ok: true });
     });
+    app.put("/cart-share", async (c) => {
+      await db.update(conversationCartShares).set({ linesJson: "[]", withdrawnAt: 1 })
+        .where(eq(conversationCartShares.conversationId, "cnv_missing_1"));
+      return c.json({ ok: true });
+    });
     app.post("/read", async (c) => {
       await db.select().from(orders).all();
       return c.json({ ok: true });
@@ -81,6 +86,13 @@ describe("eventDispatchMiddleware", () => {
     expect(await request("POST", "/inbox")).toEqual({ status: 200, waited: 1 });
     expect(publish).toHaveBeenCalledWith([{ topic: "inbox", kind: "changed" }]);
     expect(sendBatch).not.toHaveBeenCalled();
+  });
+
+  it("refreshes staff context after cart changes without creating messages or customer notifications", async () => {
+    expect(await request("PUT", "/cart-share")).toEqual({ status: 200, waited: 1 });
+    expect(publish).toHaveBeenCalledExactlyOnceWith([{ topic: "inbox", kind: "changed" }]);
+    expect(sendBatch).not.toHaveBeenCalled();
+    expect(sqlite.prepare("SELECT count(*) AS n FROM conversation_messages").get()).toEqual({ n: 0 });
   });
 
   it("does nothing for reads, or for writes to tables without events", async () => {

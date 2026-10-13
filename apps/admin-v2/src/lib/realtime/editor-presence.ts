@@ -68,6 +68,7 @@ export function useEditorPresence(key: string | null, currentRev?: number | null
 export interface EditorPresenceValue extends EditorPresence {
   presenceKey: string;
   dirty: boolean;
+  readOnly?: boolean;
   /** The fields this draft changed (form names), to tell a clean merge from a clash. */
   changedFields?: () => readonly string[];
   /** Loads the latest saved record under this draft's edits (a merge), or simply the latest when clean. */

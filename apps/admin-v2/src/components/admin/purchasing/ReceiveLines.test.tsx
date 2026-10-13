@@ -281,8 +281,7 @@ describe("receive lines on a long document", () => {
     expect(searchField().value).toBe("");
     expect(pagerLabel()).toBe(showing(51, 100, 2000));
     expect(document.activeElement).toBe(quantityOf(50));
-    // NumberInput keeps only the numeric draft across remounts: NaN stays invalid.
-    expect(quantityOf(50)!.value).toBe("");
+    expect(quantityOf(50)!.value).toBe("abc");
     expect(quantityOf(50)!.getAttribute("aria-invalid")).toBe("true");
     await click(buttonByText(pt("clearCounts")));
     expect(receipt()).toEqual({ units: 0, invalid: [] });
@@ -307,7 +306,7 @@ describe("receive lines on a long document", () => {
         </QueryClientProvider>
       </PermissionProvider>,
     );
-    await type(quantityOf(0)!, "9");
+    await type(quantityOf(0)!, "-");
     await type(searchField(), "kori");
     await type(quantityOf(KORI)!, "1");
     expect(quantityOf(0)).toBeNull();
@@ -316,6 +315,50 @@ describe("receive lines on a long document", () => {
     await click(buttonByText(pt("checkQuantities", { count: formatNumber(1) })));
     expect(document.activeElement).toBe(quantityOf(0));
     expect(quantityOf(0)!.getAttribute("aria-invalid")).toBe("true");
+    expect(quantityOf(0)!.value).toBe("-");
     client.clear();
+  });
+
+  it("retains unfinished and localized text through paging, search and layout remounts", async () => {
+    await show(<Harness lines={LINES} />);
+    await type(quantityOf(0)!, "abc");
+    await type(quantityOf(0)!, "abcd"); // NaN → NaN must still update the raw draft.
+    await type(quantityOf(1)!, "-");
+    await type(quantityOf(2)!, "৩");
+    await click(pagerButton("next"));
+    await click(pagerButton("previous"));
+    await type(searchField(), "kori");
+    await type(searchField(), "");
+    mocks.mobile = true;
+    await show(<Harness lines={LINES} />);
+    expect([quantityOf(0)!.value, quantityOf(1)!.value, quantityOf(2)!.value]).toEqual(["abcd", "-", "৩"]);
+    expect(quantityOf(0)!.getAttribute("aria-invalid")).toBe("true");
+    expect(quantityOf(1)!.getAttribute("aria-invalid")).toBe("true");
+    expect(receipt()).toEqual({ units: 3, invalid: ["l0", "l1"] });
+
+    await scan("PJ-0000"); // The existing scanner replaces an invalid count with one.
+    expect(quantityOf(0)!.value).toBe("1");
+    await click(document.querySelector<HTMLButtonElement>(`button[aria-label="${pt("allFor", { name: nameOf(1) })}"]`)!);
+    expect(quantityOf(1)!.value).toBe("5");
+    await type(quantityOf(1)!, "৫");
+    await click(buttonByText(pt("receiveAll")));
+    expect(quantityOf(1)!.value).toBe("5");
+    await click(buttonByText(pt("clearCounts")));
+    expect(quantityOf(2)!.value).toBe("");
+  });
+
+  it("forgets stale raw text after an external quantity reset", async () => {
+    let update!: (next: ReceiveQuantities) => void;
+    function Controlled() {
+      const [quantities, setQuantities] = useState<ReceiveQuantities>({});
+      update = setQuantities;
+      return <ReceiveLines lines={LINES} quantities={quantities} onChange={setQuantities} notOnDocument={() => "Unknown"} />;
+    }
+    await show(<Controlled />);
+    await type(quantityOf(0)!, "৩");
+    await act(async () => update({}));
+    expect(quantityOf(0)!.value).toBe("");
+    await act(async () => update({ l0: 3 }));
+    expect(quantityOf(0)!.value).toBe("3");
   });
 });

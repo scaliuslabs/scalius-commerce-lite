@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PresenceSlot, announceSave, presenceKey } from "~/lib/realtime/store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -52,6 +53,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
   const t = useMessages(catalogMessages);
   const a = useMessages(attributeTypeMessages);
   const queryClient = useQueryClient();
+  const key = open && attribute ? presenceKey("attribute", attribute.id) : null;
   const { data: groupData } = useQuery({ ...attributeGroupsQueryOptions(), enabled: open });
   const [valueType, setValueType] = useState<AttributeValueType>(attribute?.valueType ?? "text");
   const [groupId, setGroupId] = useState<string | null>(attribute?.groupId ?? null);
@@ -104,6 +106,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
         : apiData(postApiV1AdminAttributes({ body: { ...body, valueType, slug: slug || undefined } }));
     },
     onSuccess: () => {
+      if (key) announceSave(key, null);
       toast.success(t("saved"));
       onClose();
     },
@@ -148,9 +151,9 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => !next && requestClose()}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" data-presence-root={key ?? undefined}>
           <DialogHeader>
-            <DialogTitle>{attribute ? t("editAttribute") : t("addAttribute")}</DialogTitle>
+            <div className="flex flex-wrap items-center gap-2"><DialogTitle className="min-w-0 flex-1">{attribute ? t("editAttribute") : t("addAttribute")}</DialogTitle><PresenceSlot presenceKey={key} dirty={dirty} /></div>
           </DialogHeader>
           <form
             id="attribute-form"

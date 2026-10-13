@@ -191,7 +191,7 @@ export const EVENT_FACT_SCHEMAS = {
    */
   "customer.consent_changed": z.object({
     customerId: id,
-    channel: z.enum(["email", "sms", "whatsapp"]),
+    channel: z.enum(["email", "sms", "whatsapp", "push"]),
     previousState: z.enum(["subscribed", "unsubscribed", "pending"]).nullable(),
     state: z.enum(["subscribed", "unsubscribed", "pending"]),
     source: state,

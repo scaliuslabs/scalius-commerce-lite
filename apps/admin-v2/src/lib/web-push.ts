@@ -6,7 +6,7 @@
  * notifications and says exactly why a browser cannot receive them.
  * Not in the generated SDK yet; the response shapes are typed here.
  */
-import { messagePushWorker, releasePushBeforeSignOut } from "@scalius/shared/push-sign-out";
+import { messagePushWorker, releasePushBeforeSignOut, waitForActivePushWorker } from "@scalius/shared/push-sign-out";
 import { apiClient, apiData } from "./api";
 import { withDashboardBasePath } from "./dashboard-base-path";
 
@@ -136,18 +136,7 @@ function workerScope(): string {
 /** This browser's registration, once its worker is active (`subscribe` needs an active worker). */
 async function activeRegistration(): Promise<ServiceWorkerRegistration> {
   const registration = await navigator.serviceWorker.register(workerUrl(), { scope: workerScope() });
-  if (registration.active) return registration;
-  const worker = registration.installing ?? registration.waiting;
-  if (!worker) return registration;
-  await new Promise<void>((resolve, reject) => {
-    const settle = () => {
-      if (worker.state === "activated") resolve();
-      else if (worker.state === "redundant") reject(new Error("The notification worker did not start."));
-    };
-    worker.addEventListener("statechange", settle);
-    settle();
-  });
-  return registration;
+  return waitForActivePushWorker(registration);
 }
 
 /** This browser's push subscription for the dashboard, or null (never registers a worker). */

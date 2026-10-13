@@ -1,13 +1,15 @@
 @import "tailwindcss";
 /* Class names live in components and routes: docs (DESIGN.md lists forbidden classes), tests, message catalogs and generated files are not scanned; their words would add unused utilities. */
 @source not "../../*.md";
+@source not "../../eslint.config.js";
 @source not "../../test-support";
 @source not "../**/*.test.{ts,tsx}";
 @source not "../i18n";
 @source not "../**/*.gen.ts";
 /* Event/state/copy names and DOM style properties, never rendered class names.
-   Exact exclusions keep variants and real transform/animation utilities intact. */
-@source not inline("blur resize invert filter outline collapse backdrop-filter transform isolate static visible paused running shadow transition grow shrink lowercase uppercase table italic accent-foreground");
+   Exact exclusions keep variants and real transform/animation utilities intact.
+   Plain container is lint-prohibited: use explicit w-full max-w-* sizing. */
+@source not inline("blur resize invert filter outline collapse backdrop-filter transform isolate static visible paused running shadow transition grow shrink lowercase uppercase table italic accent-foreground container");
 @import "../components/ui/rich-content.css";
 
 @plugin "tailwindcss-animate";

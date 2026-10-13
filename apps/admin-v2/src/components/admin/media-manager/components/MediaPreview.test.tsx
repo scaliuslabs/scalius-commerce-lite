@@ -7,6 +7,9 @@ import { setLocale, translate } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
 import { resourceMessages } from "~/i18n/resource";
 import type { LibraryMediaFile, MediaFile } from "../types";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { MergeChoiceHost } from "~/components/admin/realtime/MergeChoiceDialog";
+import { realtimeMergeMessages } from "~/i18n/realtime-merge";
 import { MediaPreview } from "./MediaPreview";
 
 vi.mock("./MediaUsage", () => ({ MediaUsage: () => <p>Saved file usage</p> }));
@@ -34,6 +37,8 @@ const onOpenChange = vi.fn();
 const onNavigate = vi.fn();
 const onUpdate = vi.fn<ComponentProps<typeof MediaPreview>["onUpdate"]>();
 const onSelect = vi.fn();
+const onReload = vi.fn<ComponentProps<typeof MediaPreview>["onReload"]>();
+const onAdopt = vi.fn();
 let host: HTMLDivElement;
 let root: Root;
 let current: LibraryMediaFile;
@@ -61,10 +66,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(file = current, picker = false) {
+async function render(file = current, picker = false, canEdit = true) {
   current = file;
-  await act(async () => root.render(<MediaPreview open file={file} files={[media({ id: "previous" }), file, media({ id: "next" })]}
-    onOpenChange={onOpenChange} onNavigate={onNavigate} onUpdate={onUpdate} onSelect={picker ? onSelect : undefined} />));
+  await act(async () => root.render(<><MediaPreview canEdit={canEdit} onReload={onReload} onAdopt={onAdopt} open file={file} files={[media({ id: "previous" }), file, media({ id: "next" })]}
+    onOpenChange={onOpenChange} onNavigate={onNavigate} onUpdate={onUpdate} onSelect={picker ? onSelect : undefined} /><MergeChoiceHost /></>));
 }
 const button = (name: string) => [...document.querySelectorAll<HTMLButtonElement>("button")]
   .find((element) => element.getAttribute("aria-label") === name || element.textContent?.trim() === name)!;
@@ -79,6 +84,87 @@ async function type(id: string, value: string) {
 }
 
 describe("media preview drafts", () => {
+  it("loads a fresh version and preserves local changes without automatically retrying", async () => {
+    onUpdate.mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "CONFLICT"));
+    const fresh = media({ filename: "server-renamed.webp", version: 2 });
+    onReload.mockResolvedValue(fresh);
+    await render();
+    await type("media-description", "My alt text");
+    await act(async () => save().click());
+    expect(onReload).toHaveBeenCalledExactlyOnceWith(current.id);
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(onAdopt).toHaveBeenCalledExactlyOnceWith(fresh));
+    await render(fresh);
+    expect((document.getElementById("media-filename") as HTMLInputElement).value).toBe("server-renamed.webp");
+    expect((document.getElementById("media-description") as HTMLTextAreaElement).value).toBe("My alt text");
+    expect(document.body.textContent).toContain(t("metadataReloaded"));
+    onUpdate.mockResolvedValue({ ...fresh, altText: "My alt text", version: 3 });
+    await act(async () => save().click());
+    expect(onUpdate.mock.calls[1]).toEqual([fresh, { filename: "server-renamed.webp", altText: "My alt text" }]);
+    expect(save().disabled).toBe(true);
+  });
+
+  it("requires a choice for overlapping edits and keeps the old base when cancelled", async () => {
+    onUpdate.mockRejectedValue(new AdminApiResponseError("Changed", 409, "CONFLICT"));
+    onReload.mockResolvedValue(media({ altText: "Their alt text", version: 2 }));
+    await render();
+    await type("media-description", "My alt text");
+    await act(async () => { save().click(); });
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Their alt text"));
+    expect(onAdopt).not.toHaveBeenCalled();
+    expect(button(t("nextFile")).disabled).toBe(true);
+    await act(async () => button(translate(realtimeMergeMessages, "mergeCancel")).click());
+    expect((document.getElementById("media-description") as HTMLTextAreaElement).value).toBe("My alt text");
+    expect(onAdopt).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(save().disabled).toBe(false));
+    await act(async () => { save().click(); });
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Their alt text"));
+    expect(onUpdate.mock.calls[1]?.[0].version).toBe(1);
+    await act(async () => button(translate(realtimeMergeMessages, "mergeCancel")).click());
+  });
+
+  it("retains copyable edits when the file was removed, and never reloads dependency conflicts", async () => {
+    onUpdate.mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "MEDIA_DEPENDENCY_CONFLICT"));
+    await render();
+    await type("media-description", "Keep this text");
+    await act(async () => save().click());
+    expect(onReload).not.toHaveBeenCalled();
+    onUpdate.mockRejectedValueOnce(new AdminApiResponseError("Changed", 409, "CONFLICT"));
+    onReload.mockResolvedValue(null);
+    await act(async () => save().click());
+    expect(save().disabled).toBe(true);
+    expect(document.body.textContent).toContain(t("metadataUnavailable"));
+    expect((document.getElementById("media-description") as HTMLTextAreaElement).value).toBe("Keep this text");
+  });
+
+  it("lets viewers inspect and select without offering metadata mutations", async () => {
+    await render(video(), true, false);
+    expect((document.getElementById("media-filename") as HTMLInputElement).readOnly).toBe(true);
+    expect((document.getElementById("media-description") as HTMLTextAreaElement).readOnly).toBe(true);
+    expect(save()).toBeUndefined();
+    expect(button(t("chooseCoverImage"))).toBeUndefined();
+    click(t("useVideo"));
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith(current);
+  });
+
+  it("shows saved metadata and cover after edit permission is revoked", async () => {
+    const saved = video({ caption: "Saved caption", posterMediaId: "saved_cover", posterUrl: "https://media.example/saved-cover.webp" });
+    await render(saved);
+    await type("media-filename", "Unsaved name.mp4");
+    await type("media-description", "Unsaved caption");
+    click(t("changeCoverImage"));
+    expect(document.querySelector("video")?.getAttribute("poster")).toContain("/cover.webp");
+    click(t("nextFile"));
+    expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+    await render(saved, false, false);
+    expect((document.getElementById("media-filename") as HTMLInputElement).value).toBe(saved.filename);
+    expect((document.getElementById("media-description") as HTMLTextAreaElement).value).toBe("Saved caption");
+    expect(document.querySelector("video")?.getAttribute("poster")).toContain("/saved-cover.webp");
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(save()).toBeUndefined();
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
   it.each(["en", "bn"] as const)("uses save normalization for dirty and revert in %s", async (locale) => {
     setLocale(locale);
     await render(media({ altText: "Portrait" }));
@@ -110,7 +196,7 @@ describe("media preview drafts", () => {
   it("preserves an off-page cover and recognizes removing then restoring its exact ID", async () => {
     await render(video({ posterMediaId: "poster_1", posterUrl: "https://media.example/cover.webp" }));
     expect(save().disabled).toBe(true);
-    expect(document.querySelector("video")?.getAttribute("poster")).toContain("cover.webp");
+    expect(document.querySelector("video")?.getAttribute("poster")).toContain("/cover.webp");
     click(t("remove"));
     expect(save().disabled).toBe(false);
     click(t("chooseCoverImage"));

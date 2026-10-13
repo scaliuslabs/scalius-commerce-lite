@@ -4,6 +4,7 @@ import {
   deleteApiV1AdminMediaFoldersById,
   deleteApiV1AdminMediaUploadsById,
   getApiV1AdminMedia,
+  getApiV1AdminMediaById,
   getApiV1AdminMediaByIdUsage,
   getApiV1AdminMediaFolders,
   getApiV1AdminMediaUploadsById,
@@ -116,6 +117,17 @@ export class MediaApiClient {
       view: filters.view,
     } }));
     return { files: data.files.map(toMediaFile), pagination: data.pagination };
+  }
+
+  /** Fetch the authoritative version independently of library filters and pagination. */
+  static async fetchFile(id: string): Promise<LibraryMediaFile | null> {
+    try {
+      const data = await apiData(getApiV1AdminMediaById({ path: { id } }));
+      return toMediaFile(data.file);
+    } catch (error) {
+      if (error instanceof AdminApiResponseError && error.status === 404) return null;
+      throw error;
+    }
   }
 
   /** Where one file is used (products first) and how many past orders keep it. */

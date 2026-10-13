@@ -138,6 +138,8 @@ export async function marketingSendPermission(
     runtime: Pick<MarketingMessageRuntime, "env" | "storefrontUrl">,
 ): Promise<MarketingSendPermission> {
     const row = await db.select({
+        id: customers.id,
+        accountClaimedAt: customers.accountClaimedAt,
         email: customers.email,
         phone: customers.phone,
         deletedAt: customers.deletedAt,

@@ -8,8 +8,8 @@ import {
   archiveStaleIncompleteOrders,
 } from "@scalius/core/modules/orders";
 import { flushPendingNotificationOutbox } from "@scalius/core/modules/notifications";
-import { sweepAutoFulfilment } from "@scalius/core/modules/fulfilment";
-import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
+import { sweepAutoFulfilment, listOrdersAwaitingAutoFulfil } from "@scalius/core/modules/fulfilment";
+import { backfillConversationSearch, sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
@@ -34,6 +34,7 @@ import {
   queuePostDeployProjectionRebuild,
   runNightlyCatalogMaintenance,
 } from "./scheduled/catalog-projections";
+import { readMaintenanceCursor } from "./scheduled/cursor";
 import { storeTimeZoneOf } from "./utils/store-time-zone";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
@@ -99,6 +100,7 @@ type ScheduledRunContext = {
   cron: string;
   scheduledTime: string;
   scheduledAt: number | undefined;
+  remaining?: number;
 };
 
 /** A sweep's row limit under the plan: the full limit on Paid, a fraction on Free. */
@@ -217,6 +219,8 @@ export interface SweepContext {
 export interface MaintenanceSweep {
   name: string;
   slice: SweepSlice;
+  /** Row-by-row or app work uses a separate existing jobs invocation on limited profiles. */
+  queueOnLimitedPlan?: boolean;
   run(context: SweepContext): Promise<void>;
 }
 
@@ -231,6 +235,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // A reservation expires after 30 minutes; stock waits at most one more tick on Paid, one hour on Free.
     name: "inventory_expiry_sweep",
+    queueOnLimitedPlan: true,
     slice: 0,
     async run({ db, timed }) {
       const result = await timed("inventory_expiry_sweep", () =>
@@ -247,14 +252,27 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "stale_incomplete_order_cleanup",
+    queueOnLimitedPlan: true,
     slice: 1,
-    async run({ db, timed }) {
+    async run({ db, env, runContext, timed }) {
       const staleIncompleteCutoff = Math.floor(Date.now() / 1000) - STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES * 60;
+      const cursor = planLimits().maintenance.queueSweeps ? await readMaintenanceCursor(db, "stale-orders") : null;
       const staleIncompleteOrders = await timed("stale_incomplete_order_cleanup", () =>
         archiveStaleIncompleteOrders(db, staleIncompleteCutoff, {
-          limit: scaled(STALE_INCOMPLETE_ORDER_SWEEP_LIMIT),
+          limit: planLimits().maintenance.staleOrdersPerRun,
+          afterOrderId: cursor?.value.orders,
+          afterGiftCardOrderId: cursor?.value.giftCards,
         }),
       );
+      const advanced = await cursor?.save({ orders: staleIncompleteOrders.lastOrderId, giftCards: staleIncompleteOrders.lastGiftCardOrderId });
+      // Preserve five candidates/hour on Free, with one bounded invocation
+      // each. Only the cursor CAS winner continues; failed sends replay safely.
+      if (advanced && (runContext.remaining ?? 1) > 1
+        && (staleIncompleteOrders.lastOrderId || staleIncompleteOrders.lastGiftCardOrderId)) {
+        if (!env.JOBS_QUEUE) throw new Error("Stale order continuation requires the jobs queue");
+        await env.JOBS_QUEUE.send({ type: "maintenance.sweep", name: "stale_incomplete_order_cleanup",
+          scheduledAt: runContext.scheduledAt ?? runContext.startedAt, remaining: runContext.remaining! - 1 });
+      }
       if (
         staleIncompleteOrders.found > 0 ||
         staleIncompleteOrders.failed > 0 ||
@@ -317,8 +335,19 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     // an automatic fulfiller. The mail it queues (keys, gift cards, the staff
     // key-exhausted alert) goes out with the next notification flush.
     name: "auto_fulfil_sweep",
+    queueOnLimitedPlan: true,
     slice: 1,
     async run({ db, env, timed }) {
+      if (planLimits().maintenance.queueSweeps) {
+        if (!env.JOBS_QUEUE) throw new Error("Automatic fulfilment requires the jobs queue on this profile");
+        const cursor = await readMaintenanceCursor(db, "auto-fulfil");
+        const ids = await listOrdersAwaitingAutoFulfil(db, Math.min(50, planLimits().queue.bulkPageSize), undefined, cursor.value.orders);
+        if (ids.length > 0) await env.JOBS_QUEUE.sendBatch(ids.map((orderId) => ({ body: { type: "order.auto_fulfil" as const, orderId } })));
+        // Advance only after handoff; poison orders are retried on wrap without
+        // keeping a later healthy order permanently behind them.
+        await cursor.save({ orders: ids.at(-1) ?? null });
+        return;
+      }
       const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db, undefined, {
         credentialEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
       }));
@@ -328,6 +357,13 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
             `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
         );
       }
+    },
+  },
+  {
+    name: "conversation_search_backfill",
+    slice: "every",
+    async run({ db, timed }) {
+      await timed("conversation_search_backfill", () => backfillConversationSearch(db, { limit: 100 }));
     },
   },
   {
@@ -358,11 +394,14 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // Conversation images uploaded but never attached within an hour.
     name: "conversation_attachment_sweep",
+    queueOnLimitedPlan: true,
     slice: 2,
     async run({ db, env, timed }) {
+      const cursor = planLimits().maintenance.queueSweeps ? await readMaintenanceCursor(db, "orphan-attachments") : null;
       const orphanAttachments = await timed("conversation_attachment_sweep", () =>
-        sweepOrphanConversationAttachments(db, env.BUCKET),
+        sweepOrphanConversationAttachments(db, env.BUCKET, { limit: planLimits().maintenance.orphanAttachmentsPerRun, afterId: cursor?.value.rows }),
       );
+      await cursor?.save({ rows: orphanAttachments.lastId });
       if (orphanAttachments.scanned > 0) {
         console.log(
           `[scheduled] Conversation attachment sweep: scanned=${orphanAttachments.scanned}, deleted=${orphanAttachments.deleted}`,
@@ -373,11 +412,18 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // Digital file uploads abandoned for 24 hours (Wave B §3.1).
     name: "digital_upload_sweep",
+    queueOnLimitedPlan: true,
     slice: 2,
     async run({ db, env, timed }) {
+      const cursor = planLimits().maintenance.queueSweeps ? await readMaintenanceCursor(db, "digital-uploads") : null;
       const digitalUploads = await timed("digital_upload_sweep", () =>
-        sweepDigitalUploads(db, env.BUCKET),
+        sweepDigitalUploads(db, env.BUCKET, {
+          limit: planLimits().maintenance.digitalUploadsPerState,
+          afterUploadingId: cursor?.value.uploading,
+          afterReplacedId: cursor?.value.replaced,
+        }),
       );
+      await cursor?.save({ uploading: digitalUploads.lastUploadingId, replaced: digitalUploads.lastReplacedId });
       if (digitalUploads.aborted > 0) {
         console.log(`[scheduled] Digital upload sweep: aborted=${digitalUploads.aborted}`);
       }
@@ -385,6 +431,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "meta_purchase_outbox_flush",
+    queueOnLimitedPlan: true,
     slice: 2,
     async run({ db, env, timed }) {
       const metaPurchaseOutbox = await timed("meta_purchase_outbox_flush", () =>
@@ -411,6 +458,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "refund_attempt_reconciliation",
+    queueOnLimitedPlan: true,
     slice: 0,
     async run({ db, env, timed }) {
       const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
@@ -444,6 +492,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
   {
     name: "external_refund_reconciliation",
+    queueOnLimitedPlan: true,
     slice: 0,
     async run({ db, env, timed }) {
       const externalRefunds = await timed("external_refund_reconciliation", () =>
@@ -649,6 +698,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     // the deployed code, then due cron slots (each claimed once). Every tick:
     // a plugin's schedule is the merchant's, not ours to thin out.
     name: "plugin_maintenance",
+    queueOnLimitedPlan: true,
     slice: "every",
     async run({ db, env, executionCtx, runContext, timed }) {
       const { runScheduledPluginMaintenance } = await import("./plugins/scheduled");
@@ -672,6 +722,34 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   },
 ];
 
+export interface MaintenanceQueueMessage {
+  type: "maintenance.sweep";
+  name: string;
+  scheduledAt: number;
+  /** Stale-order scan continuation only; absent legacy jobs process one page. */
+  remaining?: number;
+}
+
+/** Replays re-read durable domain state; a failed/DLQ job is also retried by its next scheduled tick. */
+export async function runQueuedMaintenance(
+  env: Env,
+  executionCtx: ExecutionContext | undefined,
+  message: MaintenanceQueueMessage,
+): Promise<void> {
+  const sweep = MAINTENANCE_SWEEPS.find((item) => item.name === message.name && item.queueOnLimitedPlan);
+  if (!sweep || !Number.isFinite(message.scheduledAt)) throw new Error("Invalid maintenance job");
+  if (message.remaining !== undefined && (message.name !== "stale_incomplete_order_cleanup"
+    || !Number.isInteger(message.remaining) || message.remaining < 1
+    || message.remaining > scaled(STALE_INCOMPLETE_ORDER_SWEEP_LIMIT))) throw new Error("Invalid maintenance continuation");
+  const runContext = createScheduledRunContext({ cron: "queued", scheduledTime: message.scheduledAt });
+  runContext.remaining = message.remaining ?? 1;
+  const timed: SweepContext["timed"] = (name, fn) => timedScheduledOperation(runContext, name, fn);
+  const pending: Promise<unknown>[] = [];
+  const context = executionCtx ?? { waitUntil: (promise: Promise<unknown>) => { pending.push(promise); }, passThroughOnException() {} } as ExecutionContext;
+  await sweep.run({ db: getDb(env), env, executionCtx: context, runContext, timed });
+  for (const promise of pending) await promise;
+}
+
 async function runScheduledMaintenanceInner(
   env: Env,
   executionCtx: ExecutionContext,
@@ -691,10 +769,20 @@ async function runScheduledMaintenanceInner(
 
   const slices = planLimits().maintenance.slices;
   const context: SweepContext = { db, env, executionCtx, runContext, timed };
+  const queued: MessageSendRequest<MaintenanceQueueMessage>[] = [];
   for (const sweep of MAINTENANCE_SWEEPS) {
     if (!maintenanceSliceDue(runContext.scheduledAt, sweep.slice, slices)) continue;
-    await isolated(() => sweep.run(context));
+    if (planLimits().maintenance.queueSweeps && sweep.queueOnLimitedPlan) {
+      queued.push({ body: { type: "maintenance.sweep", name: sweep.name, scheduledAt: runContext.scheduledAt ?? runContext.startedAt,
+        ...(sweep.name === "stale_incomplete_order_cleanup" ? { remaining: scaled(STALE_INCOMPLETE_ORDER_SWEEP_LIMIT) } : {}) } });
+    } else {
+      await isolated(() => sweep.run(context));
+    }
   }
+  if (queued.length > 0) await isolated(async () => {
+    if (!env.JOBS_QUEUE) throw new Error("Maintenance requires the jobs queue on this profile");
+    await env.JOBS_QUEUE.sendBatch(queued);
+  });
 
   // The first tick of a new API version heals writes the previous version
   // committed after the migration (scheduled/catalog-projections.ts).

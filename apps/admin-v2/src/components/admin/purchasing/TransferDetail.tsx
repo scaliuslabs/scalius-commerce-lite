@@ -1,3 +1,4 @@
+import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
@@ -66,8 +67,9 @@ export function TransferDetail({ transfer, onReload }: { transfer: Transfer; onR
   };
 
   return (
-    <Page width="detail">
+    <Page data-presence-root={presenceKey("transfer", transfer.id)} width="detail">
       <PageHeader
+        presence={<PresenceSlot presenceKey={presenceKey("transfer", transfer.id)} revision={transfer.revision} dirty={false} readOnly={!canEdit} />}
         backTo="/admin/inventory/transfers"
         title={transfer.displayNumber}
         status={<TransferStatusBadge status={transfer.status} />}

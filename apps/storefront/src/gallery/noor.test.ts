@@ -9,6 +9,11 @@ import { answerFixtureApi, galleryApiBase, galleryNavigation } from "./api";
 import { galleryEntry } from "./entries";
 import { galleryRenderPlan } from "./server";
 import { NOOR_EXTENSION } from "./noor";
+import { galleryEntries } from "./entries";
+import { NOOR_SECTION_FIXTURES, NOOR_REPEATED_FIXTURES } from "./noor-content";
+import { validatePluginSettingValues } from "@scalius/shared/plugins/settings-schema";
+import { componentSectionSettings, productCardData, storefrontImageOf } from "../lib/extensions/data";
+import { productCardModel, type ProductCardProduct } from "../components/cards/card-model";
 
 const origin = "http://127.0.0.1:4799";
 async function read(id: string, path: string) {
@@ -20,6 +25,65 @@ async function read(id: string, path: string) {
 afterEach(clearExtensionMemo);
 
 describe("packed Noor gallery integration", () => {
+  it("covers every registered Noor section with real host fixtures and scoped visible subjects", () => {
+    const entries = galleryEntries().filter((entry) => entry.scenario.noor === "active");
+    const types = new Set(entries.flatMap((entry) => [
+      ...entry.theme.pages.home,
+      ...Object.values(entry.theme.pages.landing ?? {}).flatMap((page) => page.sections),
+    ]).flatMap((section) => section.type === "app" ? [section.settings.app.slice("scalius.noor/".length)] : []));
+    expect(NOOR_EXTENSION.sections.filter((type) => !types.has(type))).toEqual([]);
+    for (const type of Object.keys(NOOR_SECTION_FIXTURES)) {
+      expect(galleryEntry(`noor-section-${type}-default`)?.focus.include).toEqual([`[data-section-id="noor-section-${type}-default"] ${NOOR_SECTION_FIXTURES[type as keyof typeof NOOR_SECTION_FIXTURES].subject}`]);
+    }
+    for (const { type, field, max } of NOOR_REPEATED_FIXTURES) {
+      for (const [variant, count] of [["one", 1], ["crowded", max]] as const) {
+        const section = galleryEntry(`noor-section-${type}-${variant}`)!.theme.pages.home[0]!;
+        expect(section.type).toBe("app");
+        if (section.type === "app") expect(section.settings.values[field]).toHaveLength(count);
+      }
+    }
+    for (const type of ["shop-the-look", "testimonials", "faq"]) expect(galleryEntry(`noor-section-${type}-rtl`)?.scenario.locale).toBe("ar");
+  });
+
+  it("resolves valid authored section data and renders it through the actual packed host", async () => {
+    await BUNDLED_STOREFRONT_EXTENSIONS[NOOR_EXTENSION.pluginId]!.module();
+    const currency = { symbol: "৳", code: "BDT" };
+    for (const entry of galleryEntries().filter((entry) => entry.family.startsWith("noor-section:"))) {
+      const result = await read(entry.id, "storefront/homepage");
+      const surfaces = readHomepageAppSurfaces((result.sections as { apps: unknown }).apps);
+      expect(surfaces.size, entry.id).toBe(1);
+      const surface = [...surfaces.values()][0]!;
+      const component = surface.component!;
+      const schema = NOOR_EXTENSION.sectionSettings[component.type]!;
+      const valid = validatePluginSettingValues(schema, component.values);
+      expect(valid.ok ? [] : valid.errors, entry.id).toEqual([]);
+      const media = new Map(component.media.flatMap((asset) => {
+        const image = storefrontImageOf(asset);
+        return image ? [[asset.id, image] as const] : [];
+      }));
+      const products = new Map(component.lists.map((list) => [list.source, list.products.map((value) => {
+        const card = value as ProductCardProduct;
+        return productCardData(card, productCardModel(card, { currencySymbol: currency.symbol, currencyCode: currency.code, hoverImage: true, ratings: true }), currency);
+      })]));
+      const host = new ExtensionHost({ runtime: { env: {} }, context: {
+        store: { name: "Gallery store", currency: "BDT", locale: entry.scenario.locale === "ar" ? "ar-AE" : "en-BD", language: "en", timeZone: "Asia/Dhaka" },
+        page: { kind: "home", path: "/" }, assets: "", preview: false,
+      } });
+      const html = await host.render(NOOR_EXTENSION, {
+        kind: "section", type: component.type, instanceId: surface.sectionId,
+        settings: componentSectionSettings(schema, component.values, media, products),
+      });
+      const fixture = NOOR_SECTION_FIXTURES[component.type as keyof typeof NOOR_SECTION_FIXTURES];
+      expect(html, entry.id).toContain(fixture.subject.slice(1));
+      if (component.type === "shop-the-look") expect(html, entry.id).toContain("/products/jamdani-saree");
+      if (component.type === "sale-countdown") expect(html, entry.id).toContain('data-island="countdown"');
+      if (component.type === "video") {
+        expect(html, entry.id).toContain("<img");
+        expect(html, "Poster-only fixture must not claim playback coverage").not.toContain("<video");
+      }
+    }
+  });
+
   it("uses the installed manifest and actual generated release through the public layout contract", async () => {
     const layout = await read("noor-product", "storefront/layout");
     expect(readStorefrontExtensions(layout.appExtensions)).toEqual([NOOR_EXTENSION]);

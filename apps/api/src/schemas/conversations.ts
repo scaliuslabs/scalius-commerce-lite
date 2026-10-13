@@ -19,7 +19,26 @@ export const conversationAttachmentSchema = z.object({
 
 const eventDataSchema = z.record(z.string(), z.unknown()).nullable();
 
+export const conversationProductReferenceSchema = z.object({
+  productId: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/),
+  skuId: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/),
+}).strict();
+export const conversationProductCardSchema = conversationProductReferenceSchema.extend({
+  title: z.string(), variantLabel: z.string().nullable(),
+  status: z.enum(["available", "sold_out", "unavailable"]),
+  price: z.object({ amount: z.number(), currency: z.string() }).nullable(),
+  imageUrl: z.string().nullable(), pdpUrl: z.string().nullable(),
+});
+const cartShareLineSchema = conversationProductReferenceSchema.extend({ quantity: z.number().int().min(1).max(99) }).strict();
+export const cartShareSchema = z.object({
+  lines: z.array(cartShareLineSchema), sharedAt: z.number().int(), withdrawnAt: z.number().int().nullable(),
+  version: z.number().int().positive(), products: z.array(conversationProductCardSchema).optional(),
+});
+export const cartSharePutBodySchema = z.object({ lines: z.array(cartShareLineSchema).max(990), expectedVersion: z.number().int().nonnegative() }).strict();
+export const cartShareDeleteBodySchema = z.object({ expectedVersion: z.number().int().positive() }).strict();
+
 export const buyerConversationMessageSchema = z.object({
+  products: z.array(conversationProductCardSchema).optional(),
   id: z.string(),
   seq: z.number().int(),
   kind: z.enum(["message", "event"]),
@@ -47,6 +66,8 @@ export const buyerConversationThreadSchema = buyerConversationSummarySchema.exte
   readSeq: z.number().int(),
   messages: z.array(buyerConversationMessageSchema),
   hasMore: z.boolean(),
+  hasNewer: z.boolean().optional(),
+  cartShare: cartShareSchema.nullable().optional(),
 });
 
 export const staffConversationSummarySchema = z.object({
@@ -61,14 +82,17 @@ export const staffConversationSummarySchema = z.object({
   customerName: z.string().nullable(),
   assigneeUserId: z.string().nullable(),
   assigneeName: z.string().nullable(),
+  assigneeEligible: z.boolean(),
   lastMessageAt: z.number().int().nullable(),
   lastAuthorType: authorTypeSchema.nullable(),
   preview: z.string().nullable(),
+  lastMessageVisibility: z.enum(["public", "internal"]).nullable(),
   unread: z.number().int(),
   version: z.number().int(),
 });
 
 export const staffConversationMessageSchema = z.object({
+  products: z.array(conversationProductCardSchema).optional(),
   id: z.string(),
   seq: z.number().int(),
   kind: z.enum(["message", "event"]),
@@ -89,6 +113,7 @@ export const staffConversationThreadSchema = staffConversationSummarySchema.exte
   customerReadSeq: z.number().int(),
   messages: z.array(staffConversationMessageSchema),
   hasMore: z.boolean(),
+  hasNewer: z.boolean().optional(),
   order: z.object({
     id: z.string(),
     orderNumber: z.string().nullable(),
@@ -121,6 +146,17 @@ export const readBodySchema = z.object({ seq: z.number().int().nonnegative() }).
 
 export const beforeSeqQuerySchema = z.object({
   beforeSeq: z.coerce.number().int().positive().optional(),
+});
+
+export const staffMessagePageQuerySchema = beforeSeqQuerySchema.extend({
+  aroundSeq: z.coerce.number().int().positive().optional(),
+}).refine((value) => value.beforeSeq === undefined || value.aroundSeq === undefined, { message: "Choose beforeSeq or aroundSeq, not both." });
+
+/** Catch up in bounded ascending pages; a read never acknowledges messages. */
+export const buyerMessagePageQuerySchema = beforeSeqQuerySchema.extend({
+  afterSeq: z.coerce.number().int().nonnegative().optional(),
+}).refine((value) => value.beforeSeq === undefined || value.afterSeq === undefined, {
+  message: "Choose beforeSeq or afterSeq, not both.",
 });
 
 export const attachmentUploadResponseSchema = z.object({

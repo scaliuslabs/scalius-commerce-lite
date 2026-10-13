@@ -12,7 +12,7 @@ import { user } from "./auth";
 import { orders } from "./orders";
 import { conversations } from "./conversations";
 
-const NOTIFICATION_SUBJECT_TYPES = ["order", "conversation", "gift_card", "digital", "customer"] as const;
+const NOTIFICATION_SUBJECT_TYPES = ["order", "conversation", "gift_card", "digital", "customer", "marketing_run"] as const;
 
 export const notificationOutbox = sqliteTable("notification_outbox", {
     id: text("id").primaryKey(),
@@ -51,7 +51,7 @@ export const notificationOutbox = sqliteTable("notification_outbox", {
     index("notification_outbox_conversation_id_idx")
         .on(table.conversationId)
         .where(sql`${table.conversationId} IS NOT NULL`),
-    check("notification_outbox_subject_type_check", sql`${table.subjectType} IN ('order', 'conversation', 'gift_card', 'digital', 'customer')`),
+    check("notification_outbox_subject_type_check", sql`${table.subjectType} IN ('order', 'conversation', 'gift_card', 'digital', 'customer', 'marketing_run')`),
     check("notification_outbox_audience_check", sql`${table.audience} IN ('customer', 'staff')`),
     check("notification_outbox_subject_shape", sql`(${table.subjectType} <> 'order' OR ${table.orderId} IS ${table.subjectId}) AND (${table.subjectType} <> 'conversation' OR ${table.conversationId} IS ${table.subjectId})`),
     check("notification_outbox_payload_json", sql`json_valid(${table.payload})`),
@@ -111,7 +111,7 @@ export const notificationDeliveryReceipts = sqliteTable("notification_delivery_r
         table.status,
         table.updatedAt,
     ),
-    check("notification_delivery_receipts_subject_type_check", sql`${table.subjectType} IN ('order', 'conversation', 'gift_card', 'digital', 'customer')`),
+    check("notification_delivery_receipts_subject_type_check", sql`${table.subjectType} IN ('order', 'conversation', 'gift_card', 'digital', 'customer', 'marketing_run')`),
     check("notification_delivery_receipts_order_shape", sql`${table.subjectType} <> 'order' OR ${table.orderId} IS ${table.subjectId}`),
 ]);
 

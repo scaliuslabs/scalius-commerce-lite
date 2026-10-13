@@ -59,6 +59,28 @@ function summary(overrides: Partial<BuyerConversationSummary>): BuyerConversatio
 const attachmentUrl = (id: string) => conversationAttachmentUrl({ access: "account", conversationId: CNV }, id);
 
 describe("conversation rendering", () => {
+  it("groups nearby messages but keeps day boundaries, events and separate senders readable", () => {
+    const html = renderConversationMessages([
+      message({ seq: 1, createdAt: 1_790_000_000 }),
+      message({ seq: 2, createdAt: 1_790_000_060 }),
+      message({ seq: 3, from: "store", createdAt: 1_790_000_120 }),
+      message({ seq: 4, from: "store", createdAt: 1_790_100_000 }),
+    ], { attachmentUrl });
+    const doc = new DOMParser().parseFromString(`<ol>${html}</ol>`, "text/html");
+    expect(doc.querySelectorAll("[data-message-author]:not([hidden])")).toHaveLength(3);
+    expect(doc.querySelectorAll("[data-message-day]:not([hidden])")).toHaveLength(2);
+    expect(doc.querySelector("[data-message-body]")?.className).toContain("[overflow-wrap:anywhere]");
+  });
+
+  it("renders staff product replies as safe buyer cards and explains withdrawn products", () => {
+    const html = renderConversationMessages([message({
+      from: "store", kind: "event", eventKind: "product_reply", body: "Take a look",
+      products: [{ productId: "p_1", skuId: "sku_1", title: "<Cotton>", variantLabel: "XL", status: "unavailable", imageUrl: null, pdpUrl: null, price: null }],
+    })], { attachmentUrl });
+    expect(html).toContain("&lt;Cotton&gt;");
+    expect(html).toContain("No longer available");
+    expect(html).not.toContain("View product");
+  });
   it("escapes message text and keeps line breaks as text", () => {
     const html = renderConversationMessages([
       message({ body: `<img src=x onerror="alert(1)">\nline two` }),

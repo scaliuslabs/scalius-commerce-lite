@@ -1,7 +1,7 @@
 ---
 // One conversation of the account Inbox: the store's replies on the left, the
 // buyer's messages on the right, system lines centered, and a reply form.
-// Server-rendered from the session cookie and marked read when shown, so it
+// Server-rendered from the session cookie with explicit display acknowledgment, so it
 // works without JavaScript; the reply form is a plain POST that JavaScript
 // upgrades to an in-place send.
 import Layout from "@/layouts/Layout.astro";
@@ -19,7 +19,6 @@ import {
 } from "@/lib/account-inbox";
 import {
   attachmentUrlFor,
-  markConversationRead,
   readConversation,
   type ConversationTarget,
 } from "@/lib/account-inbox-server";
@@ -40,8 +39,6 @@ const thread = read?.ok ? read.data : null;
 const failure = thread ? null : read && !read.ok ? read.reason : "no_access";
 if (failure === "no_access") Astro.response.status = 404;
 if (failure === "unavailable") Astro.response.status = 503;
-// Viewing the latest page marks the thread read up to its last message.
-if (target && thread && !beforeSeq) await markConversationRead(Astro.request, target, thread);
 
 const threadHref = conversationId ? `/account/inbox/${encodeURIComponent(conversationId)}` : "/account/inbox";
 const earliestSeq = thread?.messages.reduce((min, message) => Math.min(min, message.seq), Number.MAX_SAFE_INTEGER) ?? 0;
@@ -60,6 +57,7 @@ const title = thread ? conversationTitle(thread) : copy.notFound;
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <AccountShell
     current="inbox"
+    layout={thread ? "workspace" : "page"}
     summary={summary}
     state={shellState}
     title={title}
@@ -67,6 +65,13 @@ const title = thread ? conversationTitle(thread) : copy.notFound;
     signedOut={{ title: copy.signInTitle, body: copy.signInBody, action: copy.signIn }}
     unavailable={{ text: copy.unavailable, retryHref: threadHref, retryText: copy.retry }}
   >
+    <Fragment slot="actions">
+      {thread && <p class="text-sm text-muted-foreground max-sm:w-full max-sm:ps-11 sm:ms-auto sm:shrink-0">
+        <span data-conversation-thread-status>{conversationStatusLabel(thread.status)}</span>
+        {orderHref && <> · <a href={orderHref} data-astro-prefetch="false" class="font-medium text-primary hover:underline">{copy.viewOrder}</a></>}
+      </p>}
+    </Fragment>
+
     {failure === "no_access" && (
       <div class={ui.empty} role="alert">
         <p class={ui.emptyBody}>This conversation isn't in your inbox.</p>
@@ -75,30 +80,31 @@ const title = thread ? conversationTitle(thread) : copy.notFound;
     )}
 
     {thread && conversationId && (
-      <div id="conversation">
-        <div class="-mt-4 mb-6">
-          <p class="text-sm text-muted-foreground">
-            {conversationStatusLabel(thread.status)}
-            {orderHref && <> · <a href={orderHref} data-astro-prefetch="false" class="font-medium text-primary hover:underline">{copy.viewOrder}</a></>}
-          </p>
-        </div>
-
-        <div class={`${ui.card} ${ui.cardBody}`}>
+      <div id="conversation" data-conversation-panel class={`${ui.card} flex min-h-0 flex-1 flex-col overflow-hidden [overflow-anchor:none]`}>
+        <div data-conversation-scroller role="region" aria-label="Conversation history" tabindex="0" class="min-h-0 flex-1 px-4 py-3 [overflow-anchor:none] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:px-5">
+          <p class="mb-3 break-words text-sm font-medium text-muted-foreground">{title}</p>
           {earlierHref && (
             <div class="mb-4 text-center">
-              <a href={earlierHref} data-astro-prefetch="false" class="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{copy.earlierMessages}</a>
+              <a href={earlierHref} data-conversation-earlier data-before={earliestSeq} data-before-param="before" data-astro-prefetch="false" class="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{copy.earlierMessages}</a>
             </div>
           )}
-          <ol id="conversationMessages" class="space-y-4" aria-label="Messages" hidden={thread.messages.length === 0} set:html={messagesHtml} />
+          <ol id="conversationMessages" class="mx-auto max-w-3xl [overflow-anchor:none]" aria-label="Messages" hidden={thread.messages.length === 0} set:html={messagesHtml} />
+        </div>
+        <div data-conversation-tray class="shrink-0 border-t border-border px-3 py-2 sm:px-4">
           {beforeSeq ? (
             <div class="mt-4 text-center">
               <a href={threadHref} data-astro-prefetch="false" class="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">{copy.latestMessages}</a>
             </div>
           ) : (
             <ConversationReplyForm
+              variant="dock"
               action={`/api/conversations/${encodeURIComponent(conversationId)}/messages`}
+              readAction={`/api/conversations/${encodeURIComponent(conversationId)}/read`}
               returnTo={threadHref}
               messagesTargetId="conversationMessages"
+              conversationId={thread.id}
+              readSeq={thread.readSeq}
+              lastShownSeq={Math.max(0, ...thread.messages.map((message) => message.seq))}
               idPrefix="conversationReply"
               status={readConversationStatusFlag(Astro.url)}
               label="Reply"
@@ -111,3 +117,10 @@ const title = thread ? conversationTitle(thread) : copy.notFound;
     )}
   </AccountShell>
 </Layout>
+
+<style>
+  @media (min-height: 34rem) {
+    :global([data-workspace-ready]) [data-conversation-scroller] { overflow-y: auto; overscroll-behavior: contain; }
+    :global([data-workspace-ready]) [data-conversation-tray] { max-height: 45%; overflow-y: auto; overscroll-behavior: contain; }
+  }
+</style>

@@ -61,6 +61,25 @@ describe("conversation messages (C3)", () => {
     expect(seqs()).toEqual([1]);
   });
 
+  it("catches up across more than one public page without skipping lines or marking them read", async () => {
+    let thread = await getOrCreateOrderThread(db, "order_1");
+    for (let index = 1; index <= 56; index++) {
+      await postConversationMessage(db, thread, { actor: staff, body: `Reply ${index}`, visibility: index === 20 ? "internal" : "public" });
+      thread = (await readThread(db, thread.id))!;
+    }
+    const first = await getBuyerThread(db, thread, { afterSeq: 0 });
+    expect(first.messages).toHaveLength(50);
+    expect(first.messages[0]?.seq).toBe(1);
+    expect(first.messages.at(-1)?.seq).toBe(51);
+    expect(first.messages.some((message) => message.seq === 20)).toBe(false);
+    expect(first).toMatchObject({ lastSeq: 56, readSeq: 0, hasMore: false, hasNewer: true, unread: 55 });
+    const next = await getBuyerThread(db, thread, { afterSeq: 51 });
+    expect(next.messages.map((message) => message.seq)).toEqual([52, 53, 54, 55, 56]);
+    expect(next).toMatchObject({ hasMore: true, hasNewer: false, readSeq: 0, unread: 55 });
+    expect((await getBuyerThread(db, thread, { afterSeq: 56 })).messages).toEqual([]);
+    await expect(getBuyerThread(db, thread, { afterSeq: 0, beforeSeq: 20 })).rejects.toThrow("one message page direction");
+  });
+
   it("is append-only: stored messages can't be edited or deleted, and threads can't be deleted", async () => {
     const thread = await getOrCreateOrderThread(db, "order_1");
     await postConversationMessage(db, thread, { actor: buyer, body: "Hello" });
@@ -150,7 +169,7 @@ describe("conversation messages (C3)", () => {
       .rejects.toThrow("missing or already attached");
 
     const swept = await sweepOrphanConversationAttachments(db, bucket, { now: Math.floor(Date.now() / 1000) + 3601 });
-    expect(swept).toEqual({ scanned: 3, deleted: 3 });
+    expect(swept).toMatchObject({ scanned: 3, deleted: 3, lastId: expect.any(String) });
     expect(sqlite.prepare("SELECT count(*) AS n FROM conversation_attachments").get()).toEqual({ n: 2 });
   });
 });

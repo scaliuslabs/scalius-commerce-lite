@@ -2,6 +2,7 @@
 // Origin-checked against cross-site hijacking, and forwarded to the hub with
 // only the proven identity and the topics the permissions allow.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { presenceEditMask } from "@scalius/shared/realtime";
 
 const session = vi.hoisted(() => ({
   value: null as null | { user: Record<string, unknown>; session: Record<string, unknown> },
@@ -52,6 +53,7 @@ describe("handleRealtimeConnect", () => {
       userId: "usr_1",
       name: "Rahim",
       topics: ["orders", "payments", "returns", "inbox", "settings"],
+      edit: presenceEditMask(session.permissions),
     });
   });
 

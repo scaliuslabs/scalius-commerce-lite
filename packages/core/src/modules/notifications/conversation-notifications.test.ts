@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import type { ConversationProductSnapshot } from "@scalius/shared/conversation";
 
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
@@ -54,11 +55,12 @@ describe("conversation notifications at send time", () => {
 
   afterEach(() => sqlite.close());
 
-  async function post(actor: "buyer" | "staff", body: string) {
+  async function post(actor: "buyer" | "staff", body: string | null, products?: ConversationProductSnapshot[]) {
     const thread = await getOrCreateOrderThread(db, "order_1");
     const result = await postConversationMessage(db, (await readThread(db, thread.id))!, {
       actor: actor === "buyer" ? { kind: "guest_receipt", orderId: "order_1" } : { kind: "staff", userId: "staff_1" },
       body,
+      products,
     });
     const outbox = sqlite.prepare("SELECT id, notification_type, payload FROM notification_outbox WHERE conversation_id = ? ORDER BY created_at DESC, rowid DESC")
       .get(result.conversationId) as { id: string; notification_type: string; payload: string };
@@ -84,6 +86,54 @@ describe("conversation notifications at send time", () => {
     expect(email.html).not.toContain("<b>ships</b>");
     expect(email.html).toContain("https://shop.example.test/track-order?order=1057");
     expect(mocks.sendSms).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { language: "en", body: null, count: 1, summary: "Shared 1 product" },
+    { language: "bn", body: "   ", count: 2, summary: "২টি পণ্য শেয়ার করা হয়েছে" },
+    { language: "en", body: "Try this <strong>instead</strong>", count: 2, summary: "Shared 2 products" },
+  ])("emails product replies in $language without fabricating stored message text ($count cards)", async ({ language, body, count, summary }) => {
+    sqlite.prepare("INSERT INTO store_languages (locale,published) VALUES (?,1) ON CONFLICT (locale) DO UPDATE SET published=1").run(language);
+    sqlite.prepare("UPDATE market_presences SET locale=? WHERE market_id='mkt_backup' AND value=''").run(language);
+    const products = [
+      { productId: "product_bag", skuId: "sku_bag", title: "Bag <script>alert(1)</script>", variantLabel: "Blue & green" },
+      { productId: "product_scarf", skuId: "sku_scarf", title: "Cotton scarf", variantLabel: null },
+    ].slice(0, count);
+    const reply = await post("staff", body, products);
+    expect(reply.outbox.notification_type).toBe("conversation_reply");
+    expect(JSON.parse(reply.outbox.payload)).toEqual({ notificationType: "conversation_reply", data: { seq: reply.seq } });
+    const claim = { outboxId: reply.outbox.id, conversationId: reply.conversationId, notificationType: "conversation_reply" as const, seq: reply.seq };
+    expect(await sendConversationNotification(db, claim, { env })).toMatchObject({ kind: "dispatched", result: { hasRetryableFailure: false } });
+    const email = mocks.sendEmail.mock.calls[0]![0] as { html: string; text: string };
+    expect(email.text).toContain(summary);
+    expect(email.text).toContain("Bag <script>alert(1)</script> (Blue & green)");
+    expect(email.html).toContain("Bag &lt;script&gt;alert(1)&lt;/script&gt; (Blue &amp; green)");
+    expect(email.html).not.toContain("<script>");
+    if (body?.trim()) {
+      expect(email.text).toContain(body);
+      expect(email.html).toContain("Try this &lt;strong&gt;instead&lt;/strong&gt;");
+    }
+    expect(sqlite.prepare("SELECT kind,event_kind,body FROM conversation_messages WHERE id=?").get(reply.messageId))
+      .toEqual({ kind: "event", event_kind: "product_reply", body: body?.trim() || null });
+    await sendConversationNotification(db, claim, { env });
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+    expect(await sendConversationNotification(db, { ...claim, notificationType: "conversation_message" }, { env }))
+      .toEqual({ kind: "nothing_to_send", reason: "not_a_buyer_message" });
+    expect(mocks.sendEachForMulticast).not.toHaveBeenCalled();
+  });
+
+  it("sends a card-only reply SMS without exposing product names and keeps reply coalescing", async () => {
+    setDocument("notifications", { orderChannels: { conversation_reply: ["sms"] } });
+    for (let i = 0; i < 2; i++) {
+      const reply = await post("staff", null, [{ productId: "product_private", skuId: "sku_private", title: "Private product title", variantLabel: null }]);
+      expect(await sendConversationNotification(db, {
+        outboxId: reply.outbox.id, conversationId: reply.conversationId, notificationType: "conversation_reply", seq: reply.seq,
+      }, { env })).toMatchObject({ kind: "dispatched" });
+    }
+    expect(mocks.sendSms).toHaveBeenCalledTimes(1);
+    expect(mocks.sendSms.mock.calls[0]![0].message).toContain("replied to your message");
+    expect(mocks.sendSms.mock.calls[0]![0].message).not.toContain("Private product title");
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
 
   it("coalesces reply SMS to one per thread per hour and never puts the message in it", async () => {

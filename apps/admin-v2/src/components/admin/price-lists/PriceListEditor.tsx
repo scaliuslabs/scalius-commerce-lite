@@ -3,7 +3,7 @@
 // priority and schedule on the right. The page's save bar saves the details
 // under the revision it loaded; the price grid opens in a sheet (loaded on
 // first use) and saves the prices under the same revision.
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
@@ -23,7 +23,9 @@ import { NumberInput } from "~/components/ui/number-input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Textarea } from "~/components/ui/textarea";
 import { usePermissions } from "~/contexts/PermissionContext";
-import { useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
+import { ReadOnlyValue } from "~/components/ui/field";
+import { announceSave, PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { priceListMessages } from "~/i18n/price-lists";
 import { saveBarMessages } from "~/i18n/save-bar";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
@@ -36,7 +38,7 @@ import {
   type PriceList,
 } from "~/lib/api-query-options/price-lists";
 import { PriceListPrices } from "./PriceListPrices";
-import { KIND_HELP, KIND_LABEL, scheduleText, priceListForm, priceListFormProblems, priceListUpdateBody, type PriceListForm } from "./price-list-form";
+import { KIND_HELP, KIND_LABEL, scheduleText, priceListForm, samePriceListForm, rebasePriceListForm, priceListFormProblems, priceListUpdateBody, type PriceListForm } from "./price-list-form";
 import { DateInput } from "~/components/ui/date-input";
 import { Page } from "~/components/admin/resource/Page";
 
@@ -54,25 +56,31 @@ export function PriceListEditor({ priceList }: { priceList: PriceList }) {
   );
 }
 
-const sameForm = (left: PriceListForm, right: PriceListForm) => JSON.stringify(left) === JSON.stringify(right);
-
 function PriceListEditorPage({ initial }: { initial: PriceList }) {
   const t = useMessages(priceListMessages);
   const bar = useMessages(saveBarMessages);
   const queryClient = useQueryClient();
+  const key = presenceKey("price-list", initial.id);
   const canEdit = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_EDIT);
   const scope = useSaveScope();
   const revealed = Boolean(scope?.revealed);
   // The saved list (its revision is what every save sends) and the draft of its details.
   const live = useQuery({ ...priceListQueryOptions(initial.id), initialData: initial });
   const [saved, setSaved] = useState<PriceList>(initial);
-  const [base, setBase] = useState(() => priceListForm(initial));
-  const [draft, setDraft] = useState<PriceListForm>(base);
+  const [{ base, draft }, setForm] = useState(() => {
+    const values = priceListForm(initial);
+    return { base: values, draft: values };
+  });
+  const formRef = useRef({ base, draft });
+  formRef.current = { base, draft };
+  const setDraft = (value: PriceListForm | ((current: PriceListForm) => PriceListForm)) => setForm((current) => ({
+    ...current, draft: typeof value === "function" ? value(current.draft) : value,
+  }));
   const [gridOpen, setGridOpen] = useState(false);
   const [gridLoaded, setGridLoaded] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const problems = priceListFormProblems(draft);
-  const dirty = canEdit && !sameForm(draft, base);
+  const dirty = canEdit && !samePriceListForm(draft, base);
 
   const update = (patch: Partial<PriceListForm>) => setDraft((current) => ({ ...current, ...patch }));
   // A save of the prices advances the list's revision; the details draft stays.
@@ -90,7 +98,9 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
       try {
         const next = await savePriceList(saved.id, priceListUpdateBody(sent, saved.revision));
         adopt(next);
-        setBase(priceListForm(next));
+        announceSave(key, next.revision);
+        const acknowledged = priceListForm(next);
+        setForm((current) => ({ base: acknowledged, draft: rebasePriceListForm(current.draft, sent, acknowledged) }));
         void queryClient.invalidateQueries({ queryKey: priceListKeys.list() });
       } catch (error) {
         if (isAdminApiConflictError(error)) throw new SaveConflict(t("listChanged"));
@@ -101,8 +111,16 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
     // After a conflict: the latest saved list becomes the base; these edits stay.
     reload: async () => {
       const current = await queryClient.fetchQuery({ ...priceListQueryOptions(saved.id), staleTime: 0 });
-      setSaved(current);
-      setBase(priceListForm(current));
+      const incoming = priceListForm(current);
+      const snapshot = formRef.current;
+      const { mergeSettingsDraft } = await import("~/lib/merge-document");
+      const merged = await mergeSettingsDraft(snapshot.base, incoming, snapshot.draft, {
+        coupled: { start: ["startDate", "startTime"], end: ["endDate", "endTime"] },
+        fields: { name: "price-list-name", description: "price-list-description", priority: "price-list-priority", startDate: "price-list-start", startTime: "price-list-start", endDate: "price-list-end", endTime: "price-list-end" },
+      });
+      if (!merged) throw new SaveConflict(t("listChanged"));
+      adopt(current);
+      setForm((state) => ({ base: incoming, draft: rebasePriceListForm(state.draft, snapshot.draft, merged) }));
     },
   });
 
@@ -115,10 +133,11 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
   };
 
   return (
-    <Page width="form" className="pb-6">
+    <Page width="form" className="pb-6" data-presence-root={key}>
       <PageHeader
+        presence={<PresenceSlot presenceKey={key} revision={canEdit ? saved.revision : shown.revision} dirty={dirty} readOnly={!canEdit} />}
         backTo="/admin/price-lists"
-        title={base.name || saved.name}
+        title={canEdit ? base.name || saved.name : shown.name}
         status={<StatusBadge status={shown.state}>{t(shown.state)}</StatusBadge>}
       />
       <div className="flex flex-col gap-4">
@@ -132,6 +151,7 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
                   <CardTitle>{t("detailsTitle")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {canEdit ? <>
                   <SettingsField id="price-list-name" label={t("name")} help={t("nameHelp")} error={field("name")}>
                     <Input
                       id="price-list-name"
@@ -150,6 +170,10 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
                       onChange={(event) => update({ description: event.target.value })}
                     />
                   </SettingsField>
+                  </> : <>
+                    <ReadOnlyValue label={t("name")} value={shown.name} />
+                    <ReadOnlyValue label={t("description")} value={shown.description} />
+                  </>}
                 </CardContent>
               </Card>
             </fieldset>
@@ -161,6 +185,7 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
                 <CardTitle>{t("status")}</CardTitle>
               </CardHeader>
               <CardContent>
+                {canEdit ? (
                 <RadioGroup aria-label={t("status")} value={draft.status} onValueChange={(status) => update({ status: status === "active" ? "active" : "draft" })}>
                   {(["active", "draft"] as const).map((status) => (
                     <label key={status} className="flex min-h-11 items-start gap-2 py-1 text-body">
@@ -172,6 +197,7 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
                     </label>
                   ))}
                 </RadioGroup>
+                ) : <ReadOnlyValue label={t("status")} value={t(shown.status)} />}
               </CardContent>
             </Card>
             <Card>
@@ -179,22 +205,23 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
                 <CardTitle>{t("type")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <p className="text-body font-medium">{t(KIND_LABEL[saved.kind])}</p>
-                <p className="text-body text-muted-foreground">{t(KIND_HELP[saved.kind])}</p>
+                <p className="text-body font-medium">{t(KIND_LABEL[shown.kind])}</p>
+                <p className="text-body text-muted-foreground">{t(KIND_HELP[shown.kind])}</p>
                 <p className="text-body">
                   {t("market")}:{" "}
-                  <Link to="/admin/settings/markets/$marketId" params={{ marketId: saved.marketId }} className="text-foreground underline">
-                    {saved.marketName}
+                  <Link to="/admin/settings/markets/$marketId" params={{ marketId: shown.marketId }} className="text-foreground underline">
+                    {shown.marketName}
                   </Link>
                 </p>
-                {saved.segmentId ? (
+                {shown.segmentId ? (
                   <p className="text-body">
                     {t("segment")}:{" "}
-                    <Link to="/admin/customers/segments/$segmentId" params={{ segmentId: saved.segmentId }} className="text-foreground underline">
-                      {saved.segmentName}
+                    <Link to="/admin/customers/segments/$segmentId" params={{ segmentId: shown.segmentId }} className="text-foreground underline">
+                      {shown.segmentName}
                     </Link>
                   </p>
                 ) : null}
+                {canEdit ? (
                 <SettingsField id="price-list-priority" label={t("priority")} help={t("priorityHelp")} error={field("priority")}>
                   <NumberInput
                     id="price-list-priority"
@@ -206,6 +233,7 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
                     onValueChange={(priority) => update({ priority: priority === null || Number.isNaN(priority) ? "" : String(priority) })}
                   />
                 </SettingsField>
+                ) : <ReadOnlyValue label={t("priority")} value={formatNumber(shown.priority)} numeric help={t("priorityHelp")} />}
               </CardContent>
             </Card>
             <Card>
@@ -213,7 +241,8 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
                 <CardTitle>{t("scheduleTitle")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-body text-muted-foreground">{scheduleText(saved, t)}</p>
+                <p className="text-body text-muted-foreground">{scheduleText(canEdit ? saved : shown, t)}</p>
+                {canEdit ? <>
                 <ScheduleField
                   id="price-list-start"
                   label={t("starts")}
@@ -232,6 +261,7 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
                   time={draft.endTime}
                   onChange={(endDate, endTime) => update({ endDate, endTime })}
                 />
+                </> : null}
               </CardContent>
             </Card>
           </fieldset>
@@ -247,7 +277,7 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
       </div>
       {canEdit && gridLoaded ? (
         <Suspense fallback={null}>
-          <PriceGridSheet open={gridOpen} onOpenChange={setGridOpen} list={saved} onSaved={adopt} />
+          <PriceGridSheet open={gridOpen} onOpenChange={setGridOpen} list={saved} onSaved={(list) => { adopt(list); announceSave(key, list.revision); }} />
         </Suspense>
       ) : null}
       {canEdit ? <DeletePriceList list={saved} open={deleting} onOpenChange={setDeleting} /> : null}

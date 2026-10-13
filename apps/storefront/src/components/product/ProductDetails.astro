@@ -45,10 +45,11 @@ const tabbed = tabs.length > 1;
             <button
               type="button"
               id="scroll-left"
-              class="absolute inset-s-0 top-0 bottom-0 z-10 w-10 bg-linear-to-r from-background via-background to-transparent flex items-center justify-center opacity-0 transition-opacity duration-200 hover:opacity-100"
-              aria-label="Scroll left"
+              disabled
+              class="absolute inset-s-0 top-0 bottom-0 z-10 w-10 bg-linear-to-r rtl:bg-linear-to-l from-background via-background to-transparent flex items-center justify-center opacity-0 transition-opacity duration-200 hover:opacity-100"
+              aria-label="Previous tabs"
             >
-              <Icon name="chevron-left" class="h-5 w-5 text-muted-foreground" />
+              <Icon name="chevron-left" class="h-5 w-5 text-muted-foreground rtl:rotate-180" />
             </button>
           )}
 
@@ -85,10 +86,11 @@ const tabbed = tabs.length > 1;
             <button
               type="button"
               id="scroll-right"
-              class="absolute inset-e-0 top-0 bottom-0 z-10 w-10 bg-linear-to-l from-background via-background to-transparent flex items-center justify-center opacity-0 transition-opacity duration-200 hover:opacity-100"
-              aria-label="Scroll right"
+              disabled
+              class="absolute inset-e-0 top-0 bottom-0 z-10 w-10 bg-linear-to-l rtl:bg-linear-to-r from-background via-background to-transparent flex items-center justify-center opacity-0 transition-opacity duration-200 hover:opacity-100"
+              aria-label="More tabs"
             >
-              <Icon name="chevron-right" class="h-5 w-5 text-muted-foreground" />
+              <Icon name="chevron-right" class="h-5 w-5 text-muted-foreground rtl:rotate-180" />
             </button>
           )}
 
@@ -96,11 +98,11 @@ const tabbed = tabs.length > 1;
             <>
               <div
                 id="fade-left"
-                class="pointer-events-none absolute inset-s-0 top-0 bottom-0 w-12 bg-linear-to-r from-background to-transparent opacity-0 transition-opacity duration-200"
+                class="pointer-events-none absolute inset-s-0 top-0 bottom-0 w-12 bg-linear-to-r rtl:bg-linear-to-l from-background to-transparent opacity-0 transition-opacity duration-200"
               />
               <div
                 id="fade-right"
-                class="pointer-events-none absolute inset-e-0 top-0 bottom-0 w-12 bg-linear-to-l from-background to-transparent opacity-0 transition-opacity duration-200"
+                class="pointer-events-none absolute inset-e-0 top-0 bottom-0 w-12 bg-linear-to-l rtl:bg-linear-to-r from-background to-transparent opacity-0 transition-opacity duration-200"
               />
             </>
           )}
@@ -211,9 +213,20 @@ const tabbed = tabs.length > 1;
     pointer-events: none;
   }
 
-  #scroll-left:not([style*="opacity: 0"]),
-  #scroll-right:not([style*="opacity: 0"]) {
+  #scroll-left:enabled,
+  #scroll-right:enabled {
+    opacity: 0.7;
     pointer-events: auto;
+  }
+
+  #scroll-left:enabled:hover,
+  #scroll-right:enabled:hover {
+    opacity: 1;
+  }
+
+  #scroll-left:disabled,
+  #scroll-right:disabled {
+    opacity: 0;
   }
 
   @media (prefers-reduced-motion: reduce) {

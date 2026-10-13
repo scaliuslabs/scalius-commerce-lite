@@ -6,7 +6,7 @@ import { giftCardProductMessages } from "~/i18n/gift-card-product";
 import { productMessages } from "~/i18n/products";
 import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
-import { ChoiceField } from "~/components/ui/field";
+import { ChoiceField, ReadOnlyValue } from "~/components/ui/field";
 
 const RULES = [
   "productRuleDenominations",
@@ -31,11 +31,13 @@ export function GiftCardProductCard({ form, readOnly }: {
 }) {
   const t = useMessages(giftCardProductMessages);
   const p = useMessages(productMessages);
-  const isGiftCard = useWatch({ control: form.control, name: "isGiftCard" }) ?? false;
+  const draftGiftCard = useWatch({ control: form.control, name: "isGiftCard" }) ?? false;
+  const isGiftCard = readOnly ? form.formState.defaultValues?.isGiftCard === true : draftGiftCard;
   // Say what else changed only right after this switch changed it.
   const [switchedOn, setSwitchedOn] = useState(false);
 
   const change = (next: boolean) => {
+    if (readOnly) return;
     form.setValue("isGiftCard", next, { shouldDirty: true });
     setSwitchedOn(false);
     if (!next) return;
@@ -61,7 +63,7 @@ export function GiftCardProductCard({ form, readOnly }: {
       defaultOpen={isGiftCard}
       summary={<p className="text-body text-muted-foreground">{t(isGiftCard ? "productSummaryOn" : "productSummaryOff")}</p>}
     >
-        <ChoiceField
+        {readOnly ? <ReadOnlyValue label={t("productSwitch")} value={t(isGiftCard ? "productSummaryOn" : "productSummaryOff")} /> : <ChoiceField
           id="product-gift-card"
           controlAt="end"
           label={t("productSwitch")}
@@ -70,18 +72,17 @@ export function GiftCardProductCard({ form, readOnly }: {
             <Switch
               id="product-gift-card"
               checked={isGiftCard}
-              disabled={readOnly}
               aria-describedby="product-gift-card-help"
               onCheckedChange={change}
             />
           )}
-        />
+        />}
         {isGiftCard ? (
           <div className="space-y-2 border-t pt-3">
             <ul className="list-disc space-y-1 ps-5 text-body text-muted-foreground">
               {RULES.map((rule) => <li key={rule}>{t(rule)}</li>)}
             </ul>
-            {switchedOn ? <p role="status" className="text-body">{t("productSwitchedOn")}</p> : null}
+            {!readOnly && switchedOn ? <p role="status" className="text-body">{t("productSwitchedOn")}</p> : null}
           </div>
         ) : null}
     </CollapsibleCard>

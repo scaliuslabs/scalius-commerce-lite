@@ -1,3 +1,4 @@
+import { useMediaPermissions } from "../hooks/useMediaPermissions";
 import { useState } from "react";
 import { FolderPlus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -29,6 +30,7 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState<MediaFolder | null>(null);
+  const canManage = useMediaPermissions().folders;
   const current = folders.find((folder) => folder.id === currentFolderId);
   const value = currentFolderId === "all" ? "all" : currentFolderId === null ? "unfiled" : currentFolderId;
 
@@ -38,7 +40,7 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
   };
   const save = async () => {
     const value = name.trim();
-    if (!dialog || !value || busy) return;
+    if (!canManage || !dialog || !value || busy) return;
     setBusy(true);
     try {
       if (dialog.mode === "create") await onFolderCreate(value);
@@ -64,7 +66,7 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
           ...folders.map((folder) => ({ value: folder.id, label: folder.name })),
         ]}
       />
-      <DropdownMenu>
+      {canManage ? <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="ghost" size="icon" aria-label={t("folderActions")}>
             <MoreHorizontal aria-hidden="true" />
@@ -88,7 +90,7 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
             </>
           ) : null}
         </DropdownMenuContent>
-      </DropdownMenu>
+      </DropdownMenu> : null}
 
       <Dialog open={dialog !== null} onOpenChange={(next) => !next && !busy && setDialog(null)}>
         <DialogContent className="sm:max-w-sm">

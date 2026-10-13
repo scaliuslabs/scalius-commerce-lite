@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => {
   return {
     db,
     sweepReviewRequests: vi.fn(),
+    backfillConversationSearch: vi.fn(),
     sweepDigitalUploads: vi.fn(),
     sweepAutoFulfilment: vi.fn(),
     getDb: vi.fn(() => db),
@@ -57,6 +58,7 @@ vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
   flushPendingNotificationOutbox: mocks.flushPendingNotificationOutbox,
 }));
 
+
 vi.mock("@scalius/core/modules/reviews", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/reviews")>()),
   sweepReviewRequests: mocks.sweepReviewRequests,
@@ -75,6 +77,7 @@ vi.mock("@scalius/core/modules/fulfilment", async (importOriginal) => ({
 
 vi.mock("@scalius/core/modules/conversations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/conversations")>()),
+  backfillConversationSearch: mocks.backfillConversationSearch,
   sweepOrphanConversationAttachments: vi.fn(async () => ({ scanned: 0, deleted: 0 })),
 }));
 
@@ -148,6 +151,7 @@ import {
   STALE_INCOMPLETE_ORDER_MAX_AGE_MINUTES,
   STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
   runScheduledMaintenance,
+  runQueuedMaintenance,
 } from "./scheduled-maintenance";
 import { PLAN_LIMITS } from "@scalius/shared/plan-limits";
 
@@ -611,7 +615,11 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.sweepReviewRequests.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.flushPendingNotificationOutbox.mock.invocationCallOrder[0]!);
     expect(ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT).toBe(200);
-    expect(mocks.sweepDigitalUploads).toHaveBeenCalledWith(mocks.db, env.BUCKET);
+    expect(mocks.sweepDigitalUploads).toHaveBeenCalledWith(mocks.db, env.BUCKET, {
+      limit: 25,
+      afterUploadingId: undefined,
+      afterReplacedId: undefined,
+    });
   });
 
   it("leaves public freshness to database dependency triggers without generation reads", async () => {
@@ -815,7 +823,7 @@ describe("the sweep rotation", () => {
   });
 
   it("runs only the due slice on Free, at a fraction of each sweep's limit, and still the every-tick sweeps", async () => {
-    const env = { BUCKET: {}, JOBS_QUEUE: { send: vi.fn() } } as unknown as Env;
+    const env = { BUCKET: {}, JOBS_QUEUE: { send: vi.fn(), sendBatch: vi.fn() } } as unknown as Env;
     const ctx = { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
     mocks.releaseExpiredReservations.mockResolvedValue({ found: 0, released: 0, limit: 10, hasMore: false, releasedVariantIds: [], availabilityTransitionVariantIds: [], errors: [] });
     mocks.flushPendingNotificationOutbox.mockResolvedValue({ scanned: 0, enqueued: 0, failed: 0, skipped: 0, staleQueued: 0 });
@@ -827,10 +835,15 @@ describe("the sweep rotation", () => {
 
     // Slice 0 (inventory, refunds, stale webhooks) on tick 0; nothing of slices 1-3.
     await runScheduledMaintenance(env, ctx, { cron: "*/15 * * * *", scheduledTime: tickAt(4_000) });
+    expect(mocks.releaseExpiredReservations).not.toHaveBeenCalled();
+    expect(mocks.reconcileDueRefundAttempts).not.toHaveBeenCalled();
+    expect(env.JOBS_QUEUE!.sendBatch).toHaveBeenCalledWith([
+      ...["inventory_expiry_sweep", "refund_attempt_reconciliation", "external_refund_reconciliation", "plugin_maintenance"].map((name) => ({ body: { type: "maintenance.sweep", name, scheduledAt: tickAt(4_000) } })),
+    ]);
+    await runQueuedMaintenance(env, ctx, { type: "maintenance.sweep", name: "inventory_expiry_sweep", scheduledAt: tickAt(4_000) });
     expect(mocks.releaseExpiredReservations).toHaveBeenCalledWith(mocks.db, 30, {
       limit: Math.floor(INVENTORY_EXPIRY_SWEEP_LIMIT * PLAN_LIMITS.free.maintenance.limitScale),
     });
-    expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalledTimes(1);
     expect(mocks.cleanupStaleAbandonedCheckouts).not.toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerSessions).not.toHaveBeenCalled();
     expect(mocks.flushPendingMetaPurchaseOutbox).not.toHaveBeenCalled();
@@ -841,7 +854,7 @@ describe("the sweep rotation", () => {
       limit: Math.floor(ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT * PLAN_LIMITS.free.maintenance.limitScale),
     });
     expect(mocks.runScheduledEventMaintenance).toHaveBeenCalledTimes(1);
-    expect(mocks.runScheduledPluginMaintenance).toHaveBeenCalledTimes(1);
+    expect(mocks.runScheduledPluginMaintenance).not.toHaveBeenCalled();
 
     // The next tick runs the next slice.
     vi.clearAllMocks();
@@ -854,7 +867,7 @@ describe("the sweep rotation", () => {
   it("leaves a queue that is full of bulk work alone, and renders inline only without a queue or when the queue refuses", async () => {
     const images = { info: vi.fn() };
     const send = vi.fn();
-    const full = { send, metrics: vi.fn(async () => ({ backlogCount: PLAN_LIMITS.free.queue.bulkBacklogLimit })) };
+    const full = { send, sendBatch: vi.fn(), metrics: vi.fn(async () => ({ backlogCount: PLAN_LIMITS.free.queue.bulkBacklogLimit })) };
     const ctx = { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
     // Slice 3 of the rotation: the rendition backlog.
     const sliceThree = tickAt(4_003);
@@ -863,7 +876,7 @@ describe("the sweep rotation", () => {
     expect(mocks.backfillMissingMediaVariants).not.toHaveBeenCalled();
 
     // Room for 4 more: one small page, behind the jobs already queued.
-    const roomy = { send, metrics: vi.fn(async () => ({ backlogCount: PLAN_LIMITS.free.queue.bulkBacklogLimit - 4 })) };
+    const roomy = { send, sendBatch: vi.fn(), metrics: vi.fn(async () => ({ backlogCount: PLAN_LIMITS.free.queue.bulkBacklogLimit - 4 })) };
     mocks.enqueueMediaVariantsBacklog.mockResolvedValueOnce({ queued: 4, hasMore: true });
     await runScheduledMaintenance({ BUCKET: {}, IMAGES: images, JOBS_QUEUE: roomy } as unknown as Env, ctx, { scheduledTime: sliceThree });
     expect(mocks.enqueueMediaVariantsBacklog).toHaveBeenCalledWith(mocks.db, roomy, {
@@ -886,7 +899,7 @@ describe("the sweep rotation", () => {
     // No queue binding at all: inline too.
     mocks.backfillMissingMediaVariants.mockClear();
     mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 0, generated: 0, failed: 0, hasMore: false });
-    await runScheduledMaintenance({ BUCKET: {}, IMAGES: images } as unknown as Env, ctx, { scheduledTime: sliceThree });
+    await expect(runScheduledMaintenance({ BUCKET: {}, IMAGES: images } as unknown as Env, ctx, { scheduledTime: sliceThree })).rejects.toThrow("requires the jobs queue");
     expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledTimes(1);
   });
 });

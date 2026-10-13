@@ -1,8 +1,14 @@
 import { defineMessages } from "./index";
+import { productContentSummaryMessages } from "./product-content-summary";
 
 /** The product page's own cards: template and EMI, quantity bundles, content blocks. */
 export const productMerchandisingMessages = defineMessages({
   en: {
+    ...productContentSummaryMessages.en,
+    yes: "Yes",
+    no: "No",
+    inactive: "Inactive",
+    viewBlock: "View {name}",
     productPage: "Product page",
     template: "Template",
     templateHelp: "Which product page this product uses. The theme default follows your theme.",
@@ -31,10 +37,6 @@ export const productMerchandisingMessages = defineMessages({
     bundlePercentInvalid: "Bundle {row}: enter a percentage from 0.01 to 99.99.",
     bundlePriceInvalid: "Bundle {row}: enter a set price above zero.",
 
-    content: "Product page content",
-    contentHelp: "Tabs and sections on the product page, such as a size guide, FAQ, video or comparison.",
-    blockCount: "Blocks: {count}",
-    noBlocks: "No tabs or sections yet.",
     addBlock: "Add block",
     editBlock: "Edit {name}",
     moveUp: "Move up",
@@ -119,6 +121,11 @@ export const productMerchandisingMessages = defineMessages({
     remove: "Remove",
   },
   bn: {
+    ...productContentSummaryMessages.bn,
+    yes: "হ্যাঁ",
+    no: "না",
+    inactive: "নিষ্ক্রিয়",
+    viewBlock: "{name} দেখুন",
     productPage: "প্রোডাক্ট পেজ",
     template: "টেমপ্লেট",
     templateHelp: "এই প্রোডাক্ট কোন প্রোডাক্ট পেজ ব্যবহার করবে। থিমের ডিফল্ট আপনার থিম অনুসরণ করে।",
@@ -147,10 +154,6 @@ export const productMerchandisingMessages = defineMessages({
     bundlePercentInvalid: "বান্ডেল {row}: ০.০১ থেকে ৯৯.৯৯-এর মধ্যে শতাংশ দিন।",
     bundlePriceInvalid: "বান্ডেল {row}: শূন্যের বেশি সেটের দাম দিন।",
 
-    content: "প্রোডাক্ট পেজের কনটেন্ট",
-    contentHelp: "প্রোডাক্ট পেজের ট্যাব ও সেকশন, যেমন সাইজ গাইড, প্রশ্নোত্তর, ভিডিও বা তুলনা।",
-    blockCount: "ব্লক: {count}",
-    noBlocks: "এখনও কোনো ট্যাব বা সেকশন নেই।",
     addBlock: "ব্লক যোগ করুন",
     editBlock: "{name} এডিট করুন",
     moveUp: "উপরে নিন",

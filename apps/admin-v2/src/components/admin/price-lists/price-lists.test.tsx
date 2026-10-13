@@ -30,6 +30,7 @@ vi.mock("@tanstack/react-router", () => ({
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { CreatePriceListDialog } from "./CreatePriceListDialog";
 import { PriceListEditor } from "./PriceListEditor";
+import { priceListKeys } from "~/lib/api-query-options/price-lists";
 import { PriceListsList } from "./PriceListsList";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -73,15 +74,15 @@ describe("price lists", () => {
     notifyManager.setNotifyFunction((callback) => callback());
   });
 
-  async function render(children: ReactNode) {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  async function render(children: ReactNode, canEdit = true, queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
     await act(async () => {
       root.render(
         <QueryClientProvider client={queryClient}>
-          <PermissionProvider isSuperAdmin>{children}</PermissionProvider>
+          <PermissionProvider isSuperAdmin={canEdit}>{children}</PermissionProvider>
         </QueryClientProvider>,
       );
     });
+    return queryClient;
   }
 
   it("lists each price list with its state, type, market and SKU count", async () => {
@@ -112,6 +113,48 @@ describe("price lists", () => {
     expect(document.body.querySelector("#price-list-create-segment")).not.toBeNull();
   });
 
+  it("shows current saved values after edit permission is revoked and closes mutation dialogs", async () => {
+    const client = await render(<PriceListEditor priceList={sale} />);
+    await act(async () => {
+      const input = container.querySelector<HTMLInputElement>("#price-list-name")!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Unsaved local name");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Delete price list")!.click());
+    expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+    act(() => client.setQueryData(priceListKeys.detail(sale.id), { ...sale, name: "Current server name", description: "Saved description", revision: 4 }));
+    await render(<PriceListEditor priceList={sale} />, false, client);
+    expect(container.textContent).toContain("Current server name");
+    expect(container.textContent).toContain("Saved description");
+    expect(container.textContent).not.toContain("Unsaved local name");
+    expect(container.querySelector("input, textarea, [role=radio]")).toBeNull();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Edit prices")).toBe(false);
+    expect(sdk.patchApiV1AdminPriceListsById).not.toHaveBeenCalled();
+  });
+
+  it("rebases acknowledged fields without losing edits made while saving", async () => {
+    let finish!: (response: unknown) => void;
+    sdk.patchApiV1AdminPriceListsById.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    await render(<PriceListEditor priceList={sale} />);
+    const type = (id: string, value: string) => act(() => {
+      const input = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(id)!;
+      const prototype = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const save = () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Save")!;
+    type("#price-list-name", "  Updated sale  ");
+    await act(async () => { save().click(); });
+    type("#price-list-description", "Typed while saving");
+    await act(async () => finish({ data: { success: true, data: { priceList: { ...sale, name: "Updated sale", revision: 3 } } } }));
+    expect(container.querySelector<HTMLInputElement>("#price-list-name")!.value).toBe("Updated sale");
+    expect(container.querySelector<HTMLTextAreaElement>("#price-list-description")!.value).toBe("Typed while saving");
+    expect(save().disabled).toBe(false);
+    type("#price-list-description", "");
+    expect(save().disabled).toBe(true);
+  });
+
   it("shows a list's SKU prices and saves its details under the revision it loaded", async () => {
     await render(<PriceListEditor priceList={sale} />);
     await vi.waitFor(() => expect(container.textContent).toContain("TEE-M"));
@@ -130,5 +173,6 @@ describe("price lists", () => {
       path: { id: "pl_sale" },
       body: { expectedRevision: 2, name: "Eid sale 2026", status: "active", priority: 0, startsAt: "2026-11-01T00:00:00.000Z", endsAt: null },
     });
+    expect(save.disabled).toBe(true);
   });
 });

@@ -1,3 +1,4 @@
+import { getBuyerConversationView } from "../../utils/conversation-view";
 // Guest warranty claims under /orders/receipt/{id} (Wave B design §5.2, §7.1).
 // The receipt proof travels only in the X-Receipt-Token header (the storefront
 // reads it from the order's httpOnly cookie); URLs carry ids only. A guest has
@@ -12,7 +13,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
-  getBuyerThread,
   markBuyerRead,
   postConversationMessage,
   resolveConversationAttachment,
@@ -30,7 +30,7 @@ import { conflictResponse, errorResponses, serviceUnavailableResponse, successEn
 import {
   attachmentUploadRequest,
   attachmentUploadResponseSchema,
-  beforeSeqQuerySchema,
+  buyerMessagePageQuerySchema,
   buyerConversationThreadSchema,
   buyerPostBodySchema,
   conversationAttachmentIdSchema,
@@ -156,7 +156,7 @@ app.openapi(createRoute({
   path: "/receipt/{id}/warranty-claims/{claimId}",
   tags: ["Orders"],
   summary: "A warranty claim of the order and its conversation (public lines only; receipt proof in a header)",
-  request: { params: claimParams, headers: receiptHeaders, query: beforeSeqQuerySchema },
+  request: { params: claimParams, headers: receiptHeaders, query: buyerMessagePageQuerySchema },
   responses: {
     200: { description: "The claim", content: { "application/json": { schema: claimThreadEnvelope } } },
     ...errorResponses,
@@ -169,7 +169,7 @@ app.openapi(createRoute({
   const { claim, thread } = await readBuyerClaimThread(db, actor, claimId);
   return ok(c, {
     claim: presentClaim(claim),
-    conversation: await getBuyerThread(db, thread, { beforeSeq: c.req.valid("query").beforeSeq }),
+    conversation: await getBuyerConversationView(db, thread, c.req.valid("query")),
   });
 });
 
@@ -202,7 +202,7 @@ app.openapi(createRoute({
     attachmentIds: body.attachmentIds,
   }, { queue: c.env.JOBS_QUEUE });
   const fresh = await readBuyerClaimThread(db, actor, claimId);
-  return created(c, { claim: presentClaim(fresh.claim), conversation: await getBuyerThread(db, fresh.thread) });
+  return created(c, { claim: presentClaim(fresh.claim), conversation: await getBuyerConversationView(db, fresh.thread) });
 });
 
 app.openapi(createRoute({

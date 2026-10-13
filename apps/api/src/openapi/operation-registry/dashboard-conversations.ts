@@ -12,6 +12,14 @@ const excluded = (overrides: Partial<OperationRegistryEntry> = {}): OperationReg
 });
 
 export const DASHBOARD_CONVERSATION_OPERATIONS = {
+  "dashboard.conversations.query": excluded(),
+  "dashboard.conversations.assignees": excluded(),
+  "dashboard.conversations.search": excluded(),
+  "dashboard.conversations.context": excluded(),
+  "dashboard.conversations.saved_replies.list": excluded(),
+  "dashboard.conversations.saved_replies.get": excluded(),
+  "dashboard.conversations.saved_replies.create": excluded({ idempotency: "required" }),
+  "dashboard.conversations.saved_replies.update": excluded({ revision: "required" }),
   "dashboard.conversations.attachment_get": excluded(),
   "dashboard.conversations.attachment_upload": excluded(),
   "dashboard.conversations.get": excluded(),

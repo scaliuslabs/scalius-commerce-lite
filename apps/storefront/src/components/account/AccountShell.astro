@@ -15,6 +15,8 @@ import { continueWithLabel, readSignInApps, signInAppHref, signInErrorMessage, s
 
 export interface Props {
   current: AccountSection;
+  /** A bounded account task, never applied to signed-out/error pages. */
+  layout?: "page" | "workspace";
   summary: AccountSummary | null;
   state?: "ok" | "signed_out" | "unavailable";
   /** The page heading; omit when the page renders its own. */
@@ -27,6 +29,7 @@ export interface Props {
 
 const {
   current,
+  layout = "page",
   summary,
   state = "ok",
   title = null,
@@ -36,6 +39,7 @@ const {
   unavailable = { text: "We couldn't reach the store. Check your connection and try again.", retryHref: "/account" },
 } = Astro.props;
 const tabs = accountNavTabs(current, summary);
+const workspace = layout === "workspace" && state === "ok";
 // Signed out: "Continue with <app>" for each sign-in app (plain links, no JavaScript needed),
 // and the fixed message a failed attempt came back with. The layout is read once per request.
 const signedOutLayout = state === "signed_out" ? await getLayoutData().catch(() => null) : null;
@@ -45,9 +49,9 @@ const signInError = state === "signed_out" ? signInErrorMessage(Astro.url.search
 const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full";
 ---
 
-<div class={ACCOUNT_CONTAINER} data-account-shell data-account-state={state}>
+<div class={workspace ? "mx-auto flex w-full max-w-5xl flex-col px-4 pb-4 pt-3 sm:px-6" : ACCOUNT_CONTAINER} data-account-shell data-account-state={state} data-account-workspace={workspace ? "true" : undefined}>
   {state !== "signed_out" && (
-    <nav aria-label="Account" class="mb-6 border-b border-border sm:mb-8">
+    <nav aria-label="Account" class={workspace ? "mb-3 shrink-0 border-b border-border" : "mb-6 border-b border-border sm:mb-8"}>
       <div class="-mx-4 flex items-center overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden" data-account-nav>
         {tabs.map((item) => (
           <a
@@ -104,24 +108,60 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
   {state === "ok" && (
     <>
       {(title || back) && (
-        <header class="mb-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
-          <div class="min-w-0">
+        <header class={workspace ? "mb-3 flex shrink-0 flex-wrap items-center gap-x-3" : "mb-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-3"}>
+          <div class={workspace ? "flex min-w-0 items-center gap-2" : "min-w-0"}>
             {back && (
-              <a href={back.href} data-astro-prefetch="false" class="-ms-1 mb-1 inline-flex min-h-11 items-center gap-1 px-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+              <a href={back.href} data-astro-prefetch="false" aria-label={workspace ? back.label : undefined} class={workspace ? "-ms-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" : "-ms-1 mb-1 inline-flex min-h-11 items-center gap-1 px-1 text-sm font-medium text-muted-foreground hover:text-foreground"}>
                 <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                {back.label}
+                {!workspace && back.label}
               </a>
             )}
-            {title && <h1 id="accountHeading" tabindex="-1" class="break-words text-2xl font-semibold text-foreground focus:outline-none sm:text-3xl">{title}</h1>}
+            {title && <h1 id="accountHeading" tabindex="-1" class={workspace ? "line-clamp-2 break-words text-xl font-semibold text-foreground focus:outline-none sm:text-2xl" : "break-words text-2xl font-semibold text-foreground focus:outline-none sm:text-3xl"}>{title}</h1>}
             {intro && <p class="mt-1 text-sm text-muted-foreground">{intro}</p>}
           </div>
           <slot name="actions" />
         </header>
       )}
-      <slot />
+      {workspace ? <div class="flex min-h-0 flex-1 flex-col"><slot /></div> : <slot />}
     </>
   )}
 </div>
+
+<style>
+  @media (min-height: 34rem) {
+    [data-account-workspace="true"][data-workspace-ready] {
+      height: calc(100vh - var(--account-workspace-top, 9rem) - var(--account-workspace-bottom, 0px) - 1rem);
+      height: calc(100dvh - var(--account-workspace-top, 9rem) - var(--account-workspace-bottom, 0px) - 1rem);
+      min-height: 32rem;
+    }
+  }
+  @media (max-width: 63.999rem) {
+    /* Consume MobileTabBar's existing reservation, including its safe area. */
+    :global(html[data-mobile-nav="tabs"]) [data-account-workspace="true"] {
+      --account-workspace-bottom: var(--mobile-tabs-reserve, 0px);
+    }
+  }
+</style>
+<script is:inline>
+  (() => {
+    const shell = document.querySelector('[data-account-workspace="true"]');
+    if (!shell) return;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const top = Math.max(0, shell.getBoundingClientRect().top + window.scrollY);
+      const value = `${top}px`;
+      if (shell.style.getPropertyValue('--account-workspace-top') !== value) shell.style.setProperty('--account-workspace-top', value);
+      shell.setAttribute('data-workspace-ready', '');
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
+    const observer = new ResizeObserver(schedule);
+    observer.observe(document.body);
+    window.addEventListener('resize', schedule, { passive: true });
+    document.addEventListener('astro:before-swap', () => { observer.disconnect(); cancelAnimationFrame(frame); window.removeEventListener('resize', schedule); }, { once: true });
+    measure();
+  })();
+</script>
 
 <script>
   import { signOutCustomer } from "@/lib/customer-sign-out";

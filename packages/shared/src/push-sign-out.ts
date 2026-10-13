@@ -1,6 +1,27 @@
 /** Best-effort device cleanup before auth logout. Queued payload display needs its own owner guard. */
 const RELEASE_DEADLINE_MS = 2_500;
 
+/** Enrollment can retry after a stalled activation; never remove a worker that may still start. */
+export function waitForActivePushWorker(registration: ServiceWorkerRegistration): Promise<ServiceWorkerRegistration> {
+  if (registration.active) return Promise.resolve(registration);
+  const worker = registration.installing ?? registration.waiting;
+  if (!worker) return Promise.reject(new Error("The notification worker did not start."));
+  return new Promise((resolve, reject) => {
+    const finish = (error?: Error) => {
+      clearTimeout(timer);
+      worker.removeEventListener("statechange", settle);
+      if (error) reject(error); else resolve(registration);
+    };
+    const settle = () => {
+      if (worker.state === "activated") finish();
+      else if (worker.state === "redundant") finish(new Error("The notification worker did not start."));
+    };
+    const timer = setTimeout(() => finish(new Error("The notification worker took too long to start.")), 15_000);
+    worker.addEventListener("statechange", settle);
+    settle();
+  });
+}
+
 export interface PushSignOutCleanup {
   /** Returns only this app's existing worker. Never register one during sign-out. */
   getRegistration(): Promise<ServiceWorkerRegistration | undefined>;

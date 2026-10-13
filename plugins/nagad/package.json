@@ -17,6 +17,7 @@
     "@scalius/plugin-sdk": "workspace:*"
   },
   "devDependencies": {
+    "@scalius/shared": "workspace:*",
     "@scalius/tsconfig": "workspace:*",
     "vitest": "^5.0.3"
   }

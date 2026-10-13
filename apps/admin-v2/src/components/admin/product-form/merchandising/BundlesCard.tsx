@@ -54,7 +54,8 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
   const { draft, setDraft, dirty, markSaved, prepareRebase } = useSectionDraft(loaded);
   // The tiers the last Save sent: saved once that write succeeds.
   const sent = useRef<typeof draft | null>(null);
-  const tiers = useMemo(() => draft ?? [], [draft]);
+  const shown = readOnly ? loaded : draft;
+  const tiers = useMemo(() => shown ?? [], [shown]);
 
   const problems = useMemo(() => {
     const lines: string[] = [];
@@ -82,12 +83,14 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
   useProductSection({
     label: t("bundles"),
     dirty: !readOnly && dirty,
-    problems,
+    navigationDirty: dirty,
+    problems: readOnly ? null : problems,
     prepareRebase: async () => {
       const latest = await queryClient.fetchQuery(productBundlesQueryOptions(productId));
       return () => prepareRebase(latest.items.map(fromItem));
     },
     changes: () => {
+      if (readOnly) return {};
       sent.current = tiers;
       return {
         bundles: tiers.map((tier) => {
@@ -132,17 +135,24 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
       title={t("bundles")}
       description={t("bundlesHelp")}
       defaultOpen={tiers.length > 0}
-      summary={draft === undefined ? <Skeleton className="h-5 w-40" /> : tiers.length > 0 ? (
+      summary={shown === undefined ? <Skeleton className="h-5 w-40" /> : tiers.length > 0 ? (
         <p className="text-body text-muted-foreground">{t("bundleCount", { count: tiers.length })}</p>
       ) : null}
     >
-      {draft === undefined ? <Skeleton className="h-24 w-full" /> : (
+      {shown === undefined ? <Skeleton className="h-24 w-full" /> : (
         <div className="space-y-3">
           {tiers.length > 0 ? (
             <ul className="divide-y">
               {tiers.map((tier, index) => {
                 const row = index + 1;
                 const idFor = (field: string) => `bundle-${tier.key}-${field}`;
+                if (readOnly) return (
+                  <li key={tier.key} className="space-y-1 py-3 first:pt-0">
+                    {tier.label ? <p className="text-body font-medium wrap-anywhere">{tier.label}</p> : null}
+                    <p className="text-body">{summary(tier)}</p>
+                    <p className="text-body text-muted-foreground">{t(tier.isActive ? "bundleActive" : "inactive")}</p>
+                  </li>
+                );
                 return (
                   <li key={tier.key} className="grid gap-3 py-3 first:pt-0 sm:grid-cols-12">
                     <Field id={idFor("quantity")} label={t("bundleQuantity")} className="sm:col-span-2">
@@ -150,7 +160,6 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
                         id={idFor("quantity")}
                         integer
                         value={tier.quantity}
-                        disabled={readOnly}
                         onValueChange={(quantity) => update(tier.key, { quantity })}
                       />
                     </Field>
@@ -158,7 +167,6 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
                       <SearchableSelect
                         id={idFor("type")}
                         value={tier.discountType}
-                        disabled={readOnly}
                         onValueChange={(value) => update(tier.key, { discountType: value as TierDraft["discountType"] })}
                         triggerClassName="w-full"
                         options={[{ value: "percentage", label: t("bundlePercentOff") }, { value: "fixed_price", label: t("bundleSetPrice") }]}
@@ -168,14 +176,12 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
                       {tier.discountType === "percentage" ? (
                         <PercentInput
                             value={tier.discountPercentage}
-                            disabled={readOnly}
                             onValueChange={(discountPercentage) => update(tier.key, { discountPercentage })}
                         />
                       ) : (
                         <MoneyInput
                             currencyCode={code}
                             value={tier.price}
-                            disabled={readOnly}
                             onValueChange={(price) => update(tier.key, { price })}
                         />
                       )}
@@ -186,7 +192,6 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
                         value={tier.label}
                         maxLength={60}
                         placeholder={t("bundleLabelPlaceholder")}
-                        disabled={readOnly}
                         onChange={(event) => update(tier.key, { label: event.target.value })}
                       />
                     </Field>
@@ -197,7 +202,6 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
                           <Switch
                             id={idFor("active")}
                             checked={tier.isActive}
-                            disabled={readOnly}
                             onCheckedChange={(isActive) => update(tier.key, { isActive })}
                           />
                           <Label htmlFor={idFor("active")}>{t("bundleActive")}</Label>

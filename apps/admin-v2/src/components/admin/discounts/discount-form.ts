@@ -3,6 +3,7 @@
  * types, conversion to and from the API rule, validation (message keys from
  * the discounts catalog) and the live summary. Pure, so it is unit tested.
  */
+import { sameFormValue } from "~/lib/form-values";
 import { timeZoneOffsetSeconds } from "@scalius/shared/commerce-time";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { defaultPriceIncrementMinor, isWholeUnitIncrement } from "@scalius/shared/currency-policy";
@@ -60,6 +61,16 @@ export interface DiscountDraft {
   endTime: string;
   /** Kept from the saved rule; the editor does not change it. */
   spendBudgetMinor: number | null;
+}
+
+/** Scope and eligibility IDs are membership sets; keep chip and payload ordering unchanged. */
+export function sameDiscountDraft(left: DiscountDraft, right: DiscountDraft): boolean {
+  const scope = (value: Scope): Scope => ({ ...value, ids: [...value.ids].sort() });
+  const comparable = (value: DiscountDraft) => ({
+    ...value, appliesTo: scope(value.appliesTo), buyScope: scope(value.buyScope),
+    getScope: scope(value.getScope), customerSegmentIds: [...value.customerSegmentIds].sort(),
+  });
+  return sameFormValue(comparable(left), comparable(right));
 }
 
 export type DraftErrors = Partial<Record<keyof DiscountDraft, DiscountMessageKey>>;

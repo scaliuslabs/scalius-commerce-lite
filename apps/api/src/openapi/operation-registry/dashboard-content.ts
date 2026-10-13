@@ -49,6 +49,7 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
     openWorld: true,
     batch: "forbidden",
   },
+  "dashboard.media.get": {},
   "dashboard.media.list": {},
   "dashboard.media.move": { revision: "required" },
   "dashboard.media.original": {

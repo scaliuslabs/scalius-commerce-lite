@@ -5,7 +5,7 @@
 // message with the new value in the same batch. Vocabulary and limits live in
 // `@scalius/shared/conversation`.
 
-import { sqliteTable, text, integer, uniqueIndex, index, check } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, uniqueIndex, index, check, primaryKey } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
@@ -30,6 +30,8 @@ export const conversations = sqliteTable("conversations", {
     assigneeUserId: text("assignee_user_id")
         .references(() => user.id, { onDelete: "set null" }),
     lastSeq: integer("last_seq").notNull().default(0),
+    /** Private historical-search cursor. Updated without editor revision or activity changes. */
+    searchIndexedSeq: integer("search_indexed_seq"),
     customerReadSeq: integer("customer_read_seq").notNull().default(0),
     staffReadSeq: integer("staff_read_seq").notNull().default(0),
     lastMessageAt: integer("last_message_at"),
@@ -107,6 +109,8 @@ export const conversationMessages = sqliteTable("conversation_messages", {
         .on(table.conversationId, table.clientMessageKey)
         .where(sql`${table.clientMessageKey} IS NOT NULL`),
     index("conversation_messages_conversation_created_idx").on(table.conversationId, table.createdAt),
+    index("conversation_messages_public_seq_idx").on(table.conversationId, table.seq)
+        .where(sql`${table.visibility} = 'public'`),
     check("conversation_messages_id_shape", sql`substr(${table.id}, 1, 4) = 'msg_' AND length(${table.id}) BETWEEN 12 AND 68`),
     check("conversation_messages_seq_positive", sql`${table.seq} >= 1`),
     check("conversation_messages_kind_check", sql`${table.kind} IN ('message', 'event')`),
@@ -165,3 +169,56 @@ export const conversationAttachments = sqliteTable("conversation_attachments", {
 export type Conversation = InferSelectModel<typeof conversations>;
 export type ConversationMessage = InferSelectModel<typeof conversationMessages>;
 export type ConversationAttachment = InferSelectModel<typeof conversationAttachments>;
+
+/** Merchant-owned composer templates; choosing one never sends it. */
+export const conversationSavedReplies = sqliteTable("conversation_saved_replies", {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    mode: text("mode", { enum: ["reply", "note"] }).notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+    archivedAt: integer("archived_at"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+    version: integer("version").notNull().default(1),
+}, (table) => [
+    index("conversation_saved_replies_all_idx").on(table.archivedAt, sql`${table.updatedAt} DESC`, sql`${table.id} DESC`),
+    index("conversation_saved_replies_list_idx").on(table.archivedAt, table.mode, sql`${table.updatedAt} DESC`, table.id),
+    check("conversation_saved_replies_title_length", sql`length(trim(${table.title})) BETWEEN 1 AND 80`),
+    check("conversation_saved_replies_body_length", sql`length(trim(${table.body})) BETWEEN 1 AND 5000`),
+    check("conversation_saved_replies_mode", sql`${table.mode} IN ('reply', 'note')`),
+    check("conversation_saved_replies_version", sql`${table.version} > 0`),
+]);
+
+/** Explicit buyer consent snapshot. Withdrawal leaves a versioned empty tombstone. */
+export const conversationCartShares = sqliteTable("conversation_cart_shares", {
+    conversationId: text("conversation_id").primaryKey().references(() => conversations.id, { onDelete: "restrict" }),
+    linesJson: text("lines_json").notNull(),
+    sharedAt: integer("shared_at").notNull(),
+    withdrawnAt: integer("withdrawn_at"),
+    version: integer("version").notNull().default(1),
+}, (table) => [
+    check("conversation_cart_shares_lines", sql`json_valid(${table.linesJson}) AND length(${table.linesJson}) <= 120000`),
+    check("conversation_cart_shares_version", sql`${table.version} > 0`),
+    check("conversation_cart_shares_withdrawn_empty", sql`${table.withdrawnAt} IS NULL OR ${table.linesJson} = '[]'`),
+]);
+
+/** Portable prefix index; immutable messages make indexed terms append-only. */
+export const conversationSearchTerms = sqliteTable("conversation_search_terms", {
+    conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "restrict" }),
+    messageId: text("message_id").notNull().references(() => conversationMessages.id, { onDelete: "restrict" }),
+    seq: integer("seq").notNull(),
+    term: text("term").notNull(),
+}, (table) => [
+    primaryKey({ columns: [table.conversationId, table.term, table.messageId] }),
+    index("conversation_search_terms_message_idx").on(table.conversationId, table.seq, table.term),
+    check("conversation_search_terms_length", sql`length(${table.term}) BETWEEN 2 AND 32`),
+]);
+
+/** Bounded automatic backfill cursor; absence means historical coverage is incomplete. */
+export const conversationSearchState = sqliteTable("conversation_search_state", {
+    id: text("id").primaryKey(),
+    lastMessageId: text("last_message_id"),
+    complete: integer("complete", { mode: "boolean" }).notNull().default(false),
+}, (table) => [check("conversation_search_state_id", sql`${table.id} = 'v1'`)]);

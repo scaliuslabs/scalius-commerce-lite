@@ -89,6 +89,7 @@ export function CustomerAddressesCard({ customerId, addresses, canEdit }: {
     queryClient.invalidateQueries({ queryKey: queryKeys.customers.list() }),
   ]);
   const run = async (action: () => Promise<unknown>, done: string) => {
+    if (!canEdit) return;
     setBusy(true);
     try {
       await action();
@@ -169,7 +170,7 @@ export function CustomerAddressesCard({ customerId, addresses, canEdit }: {
       </CardContent>
       <AddressDialog
         customerId={customerId}
-        editing={editing}
+        editing={canEdit ? editing : null}
         isOnlyAddress={addresses.length === 0}
         onOpenChange={(open) => { if (!open) setEditing(null); }}
         onSaved={async (message) => {
@@ -179,7 +180,7 @@ export function CustomerAddressesCard({ customerId, addresses, canEdit }: {
         }}
       />
       <ConfirmDialog
-        open={deleting !== null}
+        open={canEdit && deleting !== null}
         onOpenChange={(open) => { if (!open) setDeleting(null); }}
         title={t("deleteAddressTitle", { address: deleting ? `“${formatAddressLines(deleting, countryName)[0] ?? ""}”` : "" })}
         description={t("deleteAddressBody")}

@@ -15,10 +15,13 @@ import {
   ORDER_RECEIPT_TOKEN_TTL_SECONDS,
 } from "../orders";
 import { sha256Hex } from "@scalius/shared/hash";
+import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 
 export interface CheckoutAttemptIdentity {
   requestKey: string;
   requestHash: string;
+  legacyRequestHash: string;
+  customerWhatsapp: string | null;
   checkoutRequestId: string;
   statusToken: string;
 }
@@ -58,6 +61,7 @@ export type CheckoutAttemptRow = typeof checkoutAttempts.$inferSelect & {
   linkedOrderPaidAmountMinor: number | null;
   linkedOrderPaymentMethod: string | null;
   linkedOrderAccountOwnerCustomerId: string | null;
+  linkedOrderCustomerWhatsapp: string | null;
 };
 
 /** A missing order is not proof that another order can safely be placed. */
@@ -96,12 +100,21 @@ export async function buildCheckoutAttemptIdentity(
 ): Promise<CheckoutAttemptIdentity> {
   const checkoutRequestId = normalizeCheckoutRequestId(input.checkoutRequestId);
   const requestKeyHash = await sha256Hex(checkoutRequestId);
-  const requestHash = await sha256Hex(stableStringify(normalizeCheckoutRequest(input)));
+  const normalized = normalizeCheckoutRequest(input);
+  const legacyRequestHash = await sha256Hex(stableStringify(normalized));
+  const customerWhatsapp = normalizeCheckoutWhatsapp(input);
+  // Existing hashes without a separate number stay byte-identical. New
+  // separate numbers bind the submitted contact even if settings discard it.
+  const requestHash = customerWhatsapp
+    ? await sha256Hex(stableStringify({ ...normalized, customerWhatsapp }))
+    : legacyRequestHash;
   const requestKey = `${CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX}${requestKeyHash}`;
 
   return {
     requestKey,
     requestHash,
+    legacyRequestHash,
+    customerWhatsapp,
     checkoutRequestId,
     statusToken: buildCheckoutStatusTokenFromRequestKey(requestKey),
   };
@@ -318,6 +331,7 @@ export function selectCheckoutAttemptByKey(db: Database, requestKey: string) {
       linkedOrderPaidAmountMinor: sql<number | null>`${orders.paidAmountMinor}`.as("linked_order_paid_amount_minor"),
       linkedOrderPaymentMethod: sql<string | null>`${orders.paymentMethod}`.as("linked_order_payment_method"),
       linkedOrderAccountOwnerCustomerId: sql<string | null>`${orders.accountOwnerCustomerId}`.as("linked_order_account_owner_customer_id"),
+      linkedOrderCustomerWhatsapp: sql<string | null>`${orders.customerWhatsapp}`.as("linked_order_customer_whatsapp"),
     })
     .from(checkoutAttempts)
     .leftJoin(orders, eq(orders.id, checkoutAttempts.orderId))
@@ -381,7 +395,13 @@ function assertSameCheckoutRequest(
   identity: CheckoutAttemptIdentity,
 ): void {
   if (!row) return;
-  if (row.requestHash !== identity.requestHash) {
+  // Old hashes omitted WhatsApp. Preserve exact retries; only a committed
+  // order can prove a contact-bearing request matches a legacy hash.
+  const legacyCommitted = row.status === "committed" && row.linkedOrderId !== null
+    && row.requestHash === identity.legacyRequestHash;
+  const sameRequest = row.requestHash === identity.requestHash
+    || (legacyCommitted && (row.linkedOrderCustomerWhatsapp ?? null) === identity.customerWhatsapp);
+  if (!sameRequest) {
     throw new CheckoutAttemptError(
       "CHECKOUT_ATTEMPT_CONFLICT",
       "An earlier checkout already uses this request. Review that checkout before placing another order.",
@@ -400,6 +420,18 @@ function createCheckoutToken(): string {
 
 function normalizeCheckoutRequestId(value: string): string {
   return value.trim();
+}
+
+function normalizeCheckoutWhatsapp(input: CreateStorefrontOrderInput): string | null {
+  const raw = input.customerWhatsapp?.trim();
+  if (!raw) return null;
+  let number = raw;
+  try {
+    number = validateAndFormatPhone(raw);
+  } catch {
+    // Contact policy owns validation; hidden fields may be ignored there.
+  }
+  return number === input.customerPhone?.trim() ? null : number;
 }
 
 function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<string, unknown> {

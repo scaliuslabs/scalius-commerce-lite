@@ -1,7 +1,4 @@
-// The inbox URL state: which list (status), whose conversations, what the
-// conversation is about (subject) and the search term. Conversation ids are
-// opaque (`cnv_…`) and the subject is a fixed vocabulary; no customer data
-// ever enters the URL beyond what the merchant typed into the search box.
+// Only non-sensitive inbox filters belong in route URLs; query text stays in memory.
 import { CONVERSATION_SUBJECT_TYPES, type ConversationSubjectType } from "@scalius/shared/conversation";
 
 export type InboxSubject = ConversationSubjectType;
@@ -11,9 +8,10 @@ export const INBOX_SUBJECTS: readonly InboxSubject[] = ["order", "store", "revie
 
 export interface InboxSearch {
   status?: "pending" | "closed";
-  assignee?: "me" | "none";
+  assignee?: string;
+  unread?: true;
+  sort?: "waiting_longest";
   subject?: InboxSubject;
-  q?: string;
 }
 
 function isInboxSubject(value: unknown): value is InboxSubject {
@@ -23,8 +21,9 @@ function isInboxSubject(value: unknown): value is InboxSubject {
 export function validateInboxSearch(input: Record<string, unknown>): InboxSearch {
   const search: InboxSearch = {};
   if (input.status === "pending" || input.status === "closed") search.status = input.status;
-  if (input.assignee === "me" || input.assignee === "none") search.assignee = input.assignee;
+  if (typeof input.assignee === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(input.assignee)) search.assignee = input.assignee;
+  if (input.unread === true) search.unread = true;
+  if (input.sort === "waiting_longest") search.sort = input.sort;
   if (isInboxSubject(input.subject)) search.subject = input.subject;
-  if (typeof input.q === "string" && input.q.trim()) search.q = input.q.trim().slice(0, 100);
   return search;
 }

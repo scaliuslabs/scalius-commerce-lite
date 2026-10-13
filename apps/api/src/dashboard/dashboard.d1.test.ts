@@ -1,13 +1,15 @@
 import { createHmac } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth } from "@scalius/core/auth";
 import { createScannerTokenClaim } from "@scalius/core/auth/scanner-token-claims";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { session as sessionTable, user as userTable } from "@scalius/database/schema";
 import { createSqliteD1Database, type SqliteTestDatabase } from "@scalius/database/testing/sqlite-d1";
 import { EMPTY_PLATFORM_CONFIG, type PlatformConfig } from "@scalius/shared/platform-config";
+import { planLimits } from "@scalius/shared/plan-limits";
 
 import { adminAuthMiddleware } from "../middleware/admin-auth";
 import { dashboardOriginGuardMiddleware } from "../middleware/cookie-origin-guard";
@@ -361,6 +363,35 @@ describe("scanner cookie exchange", () => {
 
 
 describe("native push first-party session read", () => {
+  it("reads revoked permissions from the database even when a paid-profile KV snapshot still grants them", async () => {
+    const env = makeEnv();
+    const userId = await createSuperAdmin(env);
+    const cookie = sessionCookie(await signIn(env));
+    const elevated = (await (await readState(env, cookie)).json() as SessionState).session;
+    expect(elevated.user.isSuperAdmin).toBe(true);
+    expect(elevated.permissions).toEqual(expect.arrayContaining(Object.values(PERMISSIONS)));
+    await database.db.update(userTable).set({ isSuperAdmin: false }).where(eq(userTable.id, userId));
+    database.sqlite.exec("INSERT OR IGNORE INTO permissions (id,name,display_name,resource,action,category) VALUES ('push-orders-view','orders.view','Orders','orders','view','Orders')");
+    database.sqlite.prepare("INSERT INTO user_permissions (id,user_id,permission_id,granted) SELECT 'push-grant', ?, id, 1 FROM permissions WHERE name='orders.view'").run(userId);
+    const originalGet = env.CACHE.get;
+    const cached = vi.spyOn(env.CACHE, "get").mockImplementation(((key: string, ...args: unknown[]) =>
+      key.startsWith("rbac:perms:") ? Promise.resolve(["orders.view"]) : Reflect.apply(originalGet, env.CACHE, [key, ...args])) as typeof env.CACHE.get);
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
+    try {
+      expect(planLimits().kv.permissionCache).toBe(true);
+      const demoted = (await (await readState(env, cookie)).json() as SessionState).session;
+      expect(demoted.user.isSuperAdmin).toBe(false);
+      expect(demoted.permissions).toContain("orders.view");
+      database.sqlite.prepare("DELETE FROM user_permissions WHERE user_id = ?").run(userId);
+      expect((await (await readState(env, cookie)).json() as SessionState).session.permissions).not.toContain("orders.view");
+      // KV.get has a bulk overload; this spy records both the scalar and bulk key shapes.
+      expect(cached.mock.calls.some((call) => {
+        const key: unknown = call[0];
+        return typeof key === "string" && key.startsWith("rbac:perms:");
+      })).toBe(false);
+    } finally { vi.unstubAllGlobals(); cached.mockRestore(); }
+  });
+
   it.each(["", "/dashboard"])("serves JSON at the %s base with SW-style same-origin credentials", async (base) => {
     const origin = base ? STOREFRONT : DASHBOARD;
     const env = makeEnv({ dashboardUrl: `${origin}${base}` });

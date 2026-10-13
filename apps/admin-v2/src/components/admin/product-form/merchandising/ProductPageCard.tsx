@@ -9,7 +9,7 @@ import { productMerchandisingMessages } from "~/i18n/product-merchandising";
 import { productBaseSectionQueryOptions } from "./section-api";
 import { useProductSection } from "./product-sections";
 import { useSectionDraft } from "./use-section-draft";
-import { Field, ChoiceField } from "~/components/ui/field";
+import { Field, ChoiceField, ReadOnlyValue } from "~/components/ui/field";
 
 interface PageSettings {
   pageTemplate: string | null;
@@ -27,17 +27,19 @@ export default function ProductPageCard({ productId, readOnly }: { productId: st
   );
   const { draft, setDraft, saved, dirty, markSaved, prepareRebase } = useSectionDraft(loaded);
   const sent = useRef<PageSettings | null>(null);
+  const shown = readOnly ? loaded : draft;
 
   useProductSection({
     label: t("productPage"),
     dirty: !readOnly && dirty,
+    navigationDirty: dirty,
     problems: null,
     prepareRebase: async () => {
       const latest = await queryClient.fetchQuery(productBaseSectionQueryOptions(productId));
       return () => prepareRebase({ pageTemplate: latest.product.pageTemplate, emiEligible: latest.product.emiEligible });
     },
     changes: () => {
-      if (!draft || !saved) return {};
+      if (readOnly || !draft || !saved) return {};
       sent.current = draft;
       return {
         ...(draft.pageTemplate !== saved.pageTemplate ? { pageTemplate: draft.pageTemplate } : {}),
@@ -56,18 +58,18 @@ export default function ProductPageCard({ productId, readOnly }: { productId: st
         <CardTitle>{t("productPage")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {draft ? (
+        {shown ? (
           <>
+            {readOnly ? <TemplateSelect kind="product" value={shown.pageTemplate} readOnly onChange={() => {}} /> :
             <Field id="product-page-template" label={t("template")} help={t("templateHelp")}>
               <TemplateSelect
                 id="product-page-template"
                 kind="product"
-                value={draft.pageTemplate}
-                disabled={readOnly}
-                onChange={(pageTemplate) => setDraft({ ...draft, pageTemplate })}
+                value={shown.pageTemplate}
+                onChange={(pageTemplate) => setDraft({ ...shown, pageTemplate })}
               />
-            </Field>
-            <ChoiceField
+            </Field>}
+            {readOnly ? <ReadOnlyValue label={t("emiEligible")} value={t(shown.emiEligible ? "yes" : "no")} /> : <ChoiceField
               id="product-emi"
               controlAt="end"
               label={t("emiEligible")}
@@ -75,12 +77,11 @@ export default function ProductPageCard({ productId, readOnly }: { productId: st
               control={(
               <Switch
                 id="product-emi"
-                checked={draft.emiEligible}
-                disabled={readOnly}
-                onCheckedChange={(emiEligible) => setDraft({ ...draft, emiEligible })}
+                checked={shown.emiEligible}
+                onCheckedChange={(emiEligible) => setDraft({ ...shown, emiEligible })}
               />
               )}
-            />
+            />}
           </>
         ) : (
           <Skeleton className="h-28 w-full" />

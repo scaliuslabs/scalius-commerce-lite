@@ -21,6 +21,15 @@ const receipt = (overrides: Partial<OperationRegistryEntry> = {}): OperationRegi
 });
 
 export const STOREFRONT_CONVERSATION_OPERATIONS = {
+  "storefront.customer_auth_conversation_cart_share.get": customer(),
+  "storefront.customer_auth_conversation_cart_share.put": customer({ revision: "required" }),
+  "storefront.customer_auth_conversation_cart_share.delete": customer({ revision: "required" }),
+  "storefront.customer_auth_order_conversation_cart_share.get": customer(),
+  "storefront.customer_auth_order_conversation_cart_share.put": customer({ revision: "required" }),
+  "storefront.customer_auth_order_conversation_cart_share.delete": customer({ revision: "required" }),
+  "storefront.orders_receipt_conversation_cart_share.get": receipt(),
+  "storefront.orders_receipt_conversation_cart_share.put": receipt({ revision: "required" }),
+  "storefront.orders_receipt_conversation_cart_share.delete": receipt({ revision: "required" }),
   "storefront.customer_auth_conversation_attachments.conversation_attachments": customer(),
   "storefront.customer_auth_conversations.conversations": customer({ idempotency: "required" }),
   "storefront.customer_auth_conversations.get": customer(),
@@ -31,6 +40,7 @@ export const STOREFRONT_CONVERSATION_OPERATIONS = {
   "storefront.customer_auth_conversations_unread.get_unread": customer(),
   "storefront.customer_auth_orders_conversation.conversation": customer({ idempotency: "required" }),
   "storefront.customer_auth_orders_conversation.get_conversation": customer(),
+  "storefront.customer_auth_orders_conversation_read.read": customer(),
   "storefront.orders_receipt_conversation.conversation": receipt({ idempotency: "required" }),
   "storefront.orders_receipt_conversation.get_conversation": receipt(),
   "storefront.orders_receipt_conversation_attachments.conversation_attachments": receipt(),

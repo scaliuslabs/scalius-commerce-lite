@@ -4,6 +4,9 @@
 // and the route's own RBAC mapping must be satisfied by the plugin's grant.
 
 import type { Context } from "hono";
+import { staffPermissionSql, getFreshUserPermissionsFromD1 } from "@scalius/core/auth/rbac/helpers";
+import { user } from "@scalius/database/schema";
+import { and, eq } from "drizzle-orm";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import { resolveDirectAgentOperation } from "../agent-access/direct-operation";
 import { isAgentRiskAllowed, type PluginPrincipal } from "../agent-access/types";
@@ -39,9 +42,22 @@ export async function authorizePluginAdminRequest(c: Context, dispatched: Plugin
           : false;
   if (!allowed) throw new ForbiddenError("You do not have permission to perform this action");
 
+  // A grant permits the app to offer marketing, not to impersonate its approver.
+  // Scheduled jobs have no operator; their immutable approved runs use a separate consumer.
+  if (routePermission.permission === "marketing.send") {
+    const operator = dispatched.operator;
+    const active = operator && await c.get("db").select({ id: user.id }).from(user)
+      .where(and(eq(user.id, operator.userId), staffPermissionSql(user.id, "marketing.send"))).get();
+    if (!active) throw new ForbiddenError("A staff member with marketing.send must approve this action.");
+    principal.operator = { userId: active.id };
+    principal.permissions = new Set([...principal.permissions].filter((permission) => permission !== "marketing.send"));
+    const permissions = await getFreshUserPermissionsFromD1(c.get("db"), active.id);
+    if (!permissions.has("marketing.send")) throw new ForbiddenError("Your marketing permission changed.");
+    principal.permissions.add("marketing.send");
+  } else if (dispatched.operator) principal.operator = dispatched.operator;
   c.set("pluginPrincipal", principal);
   c.set("user", {
-    id: principal.actorUserId,
+    id: routePermission.permission === "marketing.send" ? principal.operator!.userId : principal.actorUserId,
     email: "",
     name: principal.pluginName,
     role: "plugin",
