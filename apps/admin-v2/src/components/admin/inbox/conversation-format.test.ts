@@ -18,7 +18,7 @@ describe("conversation presentation", () => {
 
   it("previews the last text, or who acted when the last line was an event", () => {
     expect(threadPreview(t, { preview: "Where is it?", lastAuthorType: "customer" })).toBe("Where is it?");
-    expect(threadPreview(t, { preview: null, lastAuthorType: "staff" })).toBe("You replied");
+    expect(threadPreview(t, { preview: null, lastAuthorType: "staff" })).toBe("Team reply");
     expect(threadPreview(t, { preview: null, lastAuthorType: "system" })).toBe("Update");
   });
 
