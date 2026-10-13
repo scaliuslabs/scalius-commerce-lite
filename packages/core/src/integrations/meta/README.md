@@ -42,12 +42,12 @@ The route runs these steps in order:
 
 1. Validate the payload with Zod.
 2. Require `eventSourceUrl` to share the origin of `STOREFRONT_URL`. A missing or different origin returns 400.
-3. Read the KV key `meta-capi:browser-events:circuit`. If it exists, return a success-shaped skip. No rate-limit work, D1 read, Meta call or log row happens.
+3. Read the circuit (`isMetaCapiBrowserCircuitOpen`, `apps/api/src/utils/meta-capi-circuit.ts`): a 60-second per-colo Cache API hint over the `system_kv` row `meta-capi:browser-events:circuit`. While it is open, return a success-shaped skip. No rate-limit work, Meta call or log row happens.
 4. Apply the `RL_STANDARD` rate limit (`meta-events`, per client IP). Excess returns 429.
 5. Add the client IP and user agent from the request headers.
 6. Call `sendCapiEvent()` inside `waitUntil`. Without an execution context it awaits the call.
 
-The route opens the circuit when `sendCapiEvent()` fails with `retryable: false` (bad credentials, disabled or unconfigured CAPI). The marker lives 15 minutes (`META_CAPI_BROWSER_CIRCUIT_KEY`, TTL 900 s). Saving Meta settings clears it. Do not add hot retries, success logs, raw provider payload logs or per-event failure logs for unconfigured credentials.
+The route opens the circuit when `sendCapiEvent()` fails with `retryable: false` (bad credentials, disabled or unconfigured CAPI). The row lives 15 minutes (`expires_at`). Saving Meta settings deletes it (other colos follow within the hint's 60 s). Do not add hot retries, success logs, raw provider payload logs or per-event failure logs for unconfigured credentials.
 
 ## Sending (`conversions-api.ts`)
 

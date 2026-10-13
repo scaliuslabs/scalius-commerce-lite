@@ -36,7 +36,6 @@ const env = () => new Proxy({
   DB: binding,
   JWT_SECRET,
   PUBLIC_API_BASE_URL: "https://api.example.test",
-  CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
 } as Record<string, unknown>, {
   get(target, key: string) {
     if (key === "RL_STRICT" || key === "RL_STANDARD") return rateLimiter;

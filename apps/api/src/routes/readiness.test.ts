@@ -8,18 +8,6 @@ import {
 import { readinessRoutes } from "./readiness";
 import { requestCorrelationMiddleware } from "../utils/http-correlation";
 
-function createKv(options: { delayMs?: number } = {}) {
-  return {
-    get: vi.fn(async () => {
-      if (options.delayMs) {
-        await new Promise((resolve) => setTimeout(resolve, options.delayMs));
-      }
-
-      return null;
-    }),
-  } as unknown as KVNamespace;
-}
-
 function createDb(options: {
   delayMs?: number;
   fail?: boolean;
@@ -111,7 +99,6 @@ function createApp() {
 function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     DB: createDb(),
-    CACHE: createKv(),
     BUCKET: createBucket(),
     JOBS_QUEUE: createQueue(),
     RL_STRICT: createRateLimiter(),
@@ -162,7 +149,6 @@ describe("API readiness route", () => {
     expect(json.status).toBe("ready");
     expect(json.checks).toMatchObject({
       d1: { status: "ok" },
-      api_cache_kv: { status: "ok" },
       r2: { status: "ok" },
       jobs_queue: { status: "ok" },
       rl_strict: { status: "ok" },
@@ -170,12 +156,8 @@ describe("API readiness route", () => {
       runtime_config: { status: "ok", detail: "required secrets installed" },
       platform_config: { status: "ok", detail: "platform origins configured" },
     });
-    expect(env.CACHE.get).toHaveBeenCalledWith(
-      "__scalius:readyz:probe",
-      { cacheTtl: 60 },
-    );
     expect(env.BUCKET.list).toHaveBeenCalledWith({ limit: 1 });
-    for (const retired of ["shared_auth_kv", "oauth_kv", "agent_artifacts_r2"]) {
+    for (const retired of ["api_cache_kv", "shared_auth_kv", "oauth_kv", "agent_artifacts_r2"]) {
       expect(json.checks).not.toHaveProperty(retired);
     }
     expect(env.RL_STANDARD.limit).not.toHaveBeenCalled();
@@ -491,10 +473,10 @@ describe("API readiness route", () => {
     });
   });
 
-  it("allows remote KV variance within the remote-storage readiness budget", async () => {
+  it("allows remote R2 variance within the remote-storage readiness budget", async () => {
     vi.useFakeTimers();
     const app = createApp();
-    const env = createEnv({ CACHE: createKv({ delayMs: 4000 }) });
+    const env = createEnv({ BUCKET: createBucket({ delayMs: 4000 }) });
 
     try {
       const responsePromise = app.request("/api/v1/readyz", {}, env);
@@ -509,9 +491,9 @@ describe("API readiness route", () => {
       expect(response.status).toBe(200);
       expect(json.success).toBe(true);
       expect(json.status).toBe("ready");
-      expect(json.checks?.api_cache_kv).toMatchObject({
+      expect(json.checks?.r2).toMatchObject({
         status: "ok",
-        detail: "read probe",
+        detail: "list limit 1",
       });
     } finally {
       vi.useRealTimers();

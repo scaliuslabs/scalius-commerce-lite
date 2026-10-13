@@ -173,34 +173,7 @@ app.route("/seo", seoRoutes);
 if (process.env.NODE_ENV === "development") {
   app.route("/media", serveMediaRoute);
 } // Add health check endpoint (relative path '/health')
-app.get("/health", async (c) => {
-  try {
-    const { getCacheStats, getCacheType } = await import("./utils/kv-cache");
-    const kv = c.env.CACHE;
-    const cacheStats = await getCacheStats(kv);
-
-    return c.json({
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      cache: {
-        type: getCacheType(kv),
-        size: cacheStats.size,
-        memory: cacheStats.memory,
-        uptime: cacheStats.uptime,
-      },
-    });
-  } catch (error: unknown) {
-    console.error("Error getting health stats:", error);
-    return c.json({
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      cache: {
-        type: "unknown",
-        error: "Failed to get cache stats",
-      },
-    });
-  }
-});
+app.get("/health", (c) => c.json({ status: "ok", timestamp: new Date().toISOString() }));
 app.route("/", readinessRoutes);
 
 // Adding Partytown proxy route (publicly accessible, no authMiddleware)

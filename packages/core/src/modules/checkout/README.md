@@ -18,7 +18,7 @@ Public entries: `index.ts` (the server API) and `browser.ts` (the quote fingerpr
 | `attempts.ts` | `buildCheckoutAttemptIdentity()`, `resolveExistingCheckoutAttempt()`, `createAtomicCheckoutAttempt()`, ... | Database-backed submit replay and the atomic idempotency commit |
 | `reads.ts` | `loadStorefrontCheckoutReads()` | The attempt, authority and commit reads in one batch |
 | `commit.ts` | `commitStorefrontOrderPayload()` | The single guarded write batch: attempt, order, lines, stock (ledger v2), discounts, receipt, outboxes |
-| `post-commit.ts` | `runStorefrontOrderPostCommitSideEffects()` | Queue relay, Meta dispatch, cache and KV hints after commit |
+| `post-commit.ts` | `runStorefrontOrderPostCommitSideEffects()` | Queue relay, Meta dispatch and cache work after commit |
 | `quote-fingerprint.ts` | `buildStorefrontCheckoutQuoteFingerprint()` | The fingerprint that fences a quote to its commit |
 | `created-notification-policy.ts` | `shouldCreateOrderCreatedNotification()` | Whether a committed order notifies the buyer |
 | `abandoned/{snapshot,cleanup}.ts` | abandoned-checkout snapshots and retention cleanup | Recovery data for unfinished checkouts |

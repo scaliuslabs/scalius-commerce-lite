@@ -52,7 +52,7 @@ The store time zone is an IANA name, such as `America/New_York`. It is the merch
 - the default schedule zone of a new discount;
 - every date in the dashboard, and buyer-facing dates on the storefront (orders, reviews, blog posts, messages).
 
-**Storage.** The zone, the unit system and the weight unit are fields of the `platform` settings document (`timeZone`, `unitSystem`, `weightUnit`). Worker entry resolves that document from its KV mirror for every request, cron run and queue batch (`env.PLATFORM_CONFIG`). Thus no request spends a database read on them. A missing or unknown value reads as `Asia/Dhaka`, metric, grams: every store from before this setting behaves as before.
+**Storage.** The zone, the unit system and the weight unit are fields of the `platform` settings document (`timeZone`, `unitSystem`, `weightUnit`). Worker entry resolves that document from its per-colo Cache API mirror for every request, cron run and queue batch (`env.PLATFORM_CONFIG`). Thus no request spends a database read on them. A missing or unknown value reads as `Asia/Dhaka`, metric, grams: every store from before this setting behaves as before.
 
 **Calendar math.** `@scalius/shared/commerce-time` computes every boundary with `Intl` for the zone. A day can be 23, 24 or 25 hours long. A day that skips midnight starts at the first instant after the gap. No code uses a fixed offset.
 
@@ -89,7 +89,7 @@ Weights are stored in grams (`product_variants.weight`). The unit system and the
 | Operation | Permission | Notes |
 | --- | --- | --- |
 | `dashboard.settings.store_defaults_get` | any staff | time zone, unit system, weight unit, store country, platform revision |
-| `dashboard.settings.store_defaults_update` | Edit store settings | revision required; writes the KV mirror |
+| `dashboard.settings.store_defaults_update` | Edit store settings | revision required; writes the settings mirror |
 | `dashboard.settings.store_setup_get` | View store settings | `needed`, `done`, current values, `currencyLocked` |
 | `dashboard.settings.store_setup_apply` | Edit store settings | 409 `STORE_SETUP_DONE` once the store is not new |
 

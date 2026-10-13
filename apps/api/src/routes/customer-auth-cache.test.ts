@@ -456,7 +456,7 @@ describe("customer auth private cache policy", () => {
     const response = await app.request(
       "/api/v1/customer-auth/me",
       { headers: { Cookie: "cs_tok=session_1" } },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(200);
@@ -473,7 +473,7 @@ describe("customer auth private cache policy", () => {
     const response = await app.request(
       "/api/v1/customer-auth/me",
       { headers: { Cookie: "cs_tok=session_1" } },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(200);
@@ -508,7 +508,7 @@ describe("customer auth private cache policy", () => {
           zoneName: "Forged Zone",
         }),
       },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
@@ -532,7 +532,6 @@ describe("customer auth private cache policy", () => {
   it("sends one code request shape for new and returning buyers and returns the resend wait", async () => {
     const app = createTestApp();
     const env = {
-      CACHE: {},
       JOBS_QUEUE: { send: vi.fn(async () => undefined) },
     } as never;
 
@@ -563,7 +562,7 @@ describe("customer auth private cache policy", () => {
     const request = (body: object) => app.request(
       "/api/v1/customer-auth/verify-otp",
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     const needsDetails = await request({ method: "email", identifier: "new@example.com", code: "123456" });
@@ -602,7 +601,6 @@ describe("customer auth private cache policy", () => {
         }),
       },
       {
-        CACHE: {},
         PUBLIC_API_BASE_URL: "https://api.scalius.com",
         JOBS_QUEUE: { send: vi.fn(async () => undefined) },
       } as never,
@@ -635,7 +633,6 @@ describe("customer auth private cache policy", () => {
         }),
       },
       {
-        CACHE: {},
         PUBLIC_API_BASE_URL: "https://api.scalius.com",
         JOBS_QUEUE: { send: vi.fn(async () => undefined) },
       } as never,
@@ -668,7 +665,6 @@ describe("customer auth private cache policy", () => {
         }),
       },
       {
-        CACHE: {},
         PUBLIC_API_BASE_URL: "http://localhost:8787",
         JOBS_QUEUE: { send: vi.fn(async () => undefined) },
       } as never,
@@ -700,7 +696,6 @@ describe("customer auth private cache policy", () => {
         }),
       },
       {
-        CACHE: {},
         STOREFRONT_URL: "https://shop.example.co.uk",
         CUSTOMER_AUTH_COOKIE_DOMAIN: "example.co.uk",
       } as never,
@@ -725,7 +720,7 @@ describe("customer auth private cache policy", () => {
     const response = await app.request(
       "/api/v1/customer-auth/orders",
       { headers: { Cookie: "cs_tok=session_1" } },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(200);
@@ -742,7 +737,7 @@ describe("customer auth private cache policy", () => {
     const response = await app.request(
       "/api/v1/customer-auth/orders",
       { headers: { Cookie: "cs_tok=session_1" } },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(200);
@@ -784,7 +779,7 @@ describe("customer auth private cache policy", () => {
     const response = await app.request(
       "/api/v1/customer-auth/orders?cursor=1780000000~order_1&limit=25",
       { headers: { Cookie: "cs_tok=session_1" } },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(200);
@@ -804,7 +799,7 @@ describe("customer auth private cache policy", () => {
     const response = await app.request(
       "/api/v1/customer-auth/orders/order_1",
       { headers: { Cookie: "cs_tok=session_1" } },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(200);
@@ -902,7 +897,7 @@ describe("customer auth private cache policy", () => {
     const response = await app.request(
       "/api/v1/customer-auth/orders/order_1",
       { headers: { Cookie: "cs_tok=session_1" } },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(401);
@@ -924,7 +919,7 @@ describe("customer auth private cache policy", () => {
         },
         body: JSON.stringify({}),
       },
-      { CACHE: {} } as never,
+      {} as never,
     );
     const body = await response.json();
 
@@ -958,7 +953,7 @@ describe("customer auth private cache policy", () => {
         headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
         body: JSON.stringify({}),
       },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
@@ -993,7 +988,7 @@ describe("customer auth private cache policy", () => {
           replaceExistingAttempt: true,
         }),
       },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
@@ -1027,7 +1022,7 @@ describe("customer auth private cache policy", () => {
         headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
         body: JSON.stringify({}),
       },
-      { CACHE: {} } as never,
+      {} as never,
     );
     const json = await response.json();
 
@@ -1064,7 +1059,7 @@ describe("customer auth private cache policy", () => {
         headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
         body: JSON.stringify({}),
       },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(401);
@@ -1087,7 +1082,7 @@ describe("customer auth private cache policy", () => {
           receiptToken: "chk_attacker",
         }),
       },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -1108,7 +1103,7 @@ describe("customer auth private cache policy", () => {
         headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
         body: JSON.stringify({}),
       },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(400);
@@ -1136,7 +1131,7 @@ describe("customer auth private cache policy", () => {
         headers: { Cookie: "cs_tok=session_1", "Content-Type": "application/json" },
         body: JSON.stringify({}),
       },
-      { CACHE: {} } as never,
+      {} as never,
     );
 
     expect(response.status).toBe(503);
@@ -1183,7 +1178,6 @@ describe("customer auth private cache policy", () => {
         }),
       },
       {
-        CACHE: {},
         JOBS_QUEUE: { send: queueSend },
       } as never,
     );

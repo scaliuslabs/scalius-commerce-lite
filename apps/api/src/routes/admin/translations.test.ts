@@ -19,7 +19,7 @@ function createApp() {
   const { sqlite, db } = createSqliteD1Database();
   sqlite.exec(`INSERT INTO products (id, name, description, price_minor, slug, is_active) VALUES
     ('p_tee', 'Tee', '<p>Cotton tee.</p>', 50000, 'tee', 1), ('p_cap', 'Cap', NULL, 20000, 'cap', 1)`);
-  const env = { CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined } } as unknown as Env;
+  const env = {} as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);

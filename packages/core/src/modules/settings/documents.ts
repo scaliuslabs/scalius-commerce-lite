@@ -650,7 +650,7 @@ export const paymentMethodsDocument = defineSettingsDocument<PaymentMethodsSetti
 });
 
 // ─────────────────────────────────────────
-// Meta Conversions API. The KV circuit marker is cleared on every save.
+// Meta Conversions API. The browser-event circuit row is cleared on every save.
 // ─────────────────────────────────────────
 
 export interface MetaConversionsSettings {

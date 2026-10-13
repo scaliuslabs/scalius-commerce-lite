@@ -65,7 +65,6 @@ function createTestApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   const db = createDb();
   const env = {
-    CACHE: { id: "api-cache-kv" },
   } as unknown as Env;
 
   mocks.getCategoryById.mockResolvedValue({ id: "cat_1", slug: "old-fish" });

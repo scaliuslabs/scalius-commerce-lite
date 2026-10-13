@@ -73,7 +73,7 @@ Send limits (`customer-auth-rate-limit.ts`) use the D1 table `customer_auth_otp_
 | `Domain` | Set only when the Platform setting `customerAuthCookieDomain` is a valid multi-label host. Otherwise host-only. |
 | Row `customer_sessions` | `token_hash` (primary key), `customer_id`, `expires_at`, `revoked_at`. Only the hash is stored, keyed by `CUSTOMER_SESSION_HASH_KEY` (derived from `SCALIUS_SECRET`). |
 
-- The selected relational provider is the authority for sessions. KV is not consulted. `getCustomerBySession` requires an unrevoked, unexpired row and a live (not soft-deleted) customer.
+- The selected relational provider is the authority for sessions. `getCustomerBySession` requires an unrevoked, unexpired row and a live (not soft-deleted) customer.
 - `POST /logout` clears the cookies and revokes the row. The storefront proxy `/api/auth/logout` also clears the order-receipt cookies.
 - Soft-deleting a customer revokes its sessions. `cleanupExpiredCustomerSessions` deletes expired rows and revoked rows older than 7 days.
 - `updateCustomerProfile` (`PUT /profile`) saves the name. The profile and the session carry `defaultAddress` (joined in the statement that reads them). `profileComplete` means the default address is complete (a line and, in Bangladesh, a city and thana) and was not saved with validation skipped. It is never required.

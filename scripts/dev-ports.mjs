@@ -246,9 +246,9 @@ function returnedRows(output) {
 }
 
 /**
- * Points the local Platform document at this stack's origins, then drops its
- * KV mirror (a hint the API rebuilds from D1), so the API reads these origins
- * on its next request even when the mirror was stale. Local state only
+ * Points the local Platform document at this stack's origins. Its mirror is a
+ * per-colo Cache API hint (60 s) that a restarted API starts without, so the
+ * API reads these origins on its next start. Local state only
  * (`wrangler --local`); run it while the API is stopped or before it starts.
  */
 export async function syncLocalPlatform({ env = process.env, state } = {}) {

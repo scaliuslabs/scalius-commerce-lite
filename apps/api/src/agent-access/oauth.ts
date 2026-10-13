@@ -247,21 +247,22 @@ type OAuthKvPutOptions = { expiration?: number; expirationTtl?: number };
  * each listed `key.name` back.
  */
 export function withOAuthKv(env: Env): Env {
-  const db = getDb(env);
+  let database: ReturnType<typeof getDb> | undefined;
+  const db = () => (database ??= getDb(env));
   const OAUTH_KV = {
     async get(key: string, options?: { type?: string } | string) {
-      const raw = await getSystemKv(db, OAUTH_KV_PREFIX + key);
+      const raw = await getSystemKv(db(), OAUTH_KV_PREFIX + key);
       const type = typeof options === "string" ? options : options?.type;
       return raw !== null && type === "json" ? JSON.parse(raw) as unknown : raw;
     },
     async put(key: string, value: string, options: OAuthKvPutOptions = {}) {
       const expiresAt = options.expiration
         ?? (options.expirationTtl ? Math.floor(Date.now() / 1000) + options.expirationTtl : null);
-      await putSystemKv(db, OAUTH_KV_PREFIX + key, value, expiresAt);
+      await putSystemKv(db(), OAUTH_KV_PREFIX + key, value, expiresAt);
     },
-    delete: (key: string) => deleteSystemKv(db, OAUTH_KV_PREFIX + key),
+    delete: (key: string) => deleteSystemKv(db(), OAUTH_KV_PREFIX + key),
     async list(options: { prefix?: string; limit?: number; cursor?: string } = {}) {
-      const page = await listSystemKv(db, OAUTH_KV_PREFIX + (options.prefix ?? ""), {
+      const page = await listSystemKv(db(), OAUTH_KV_PREFIX + (options.prefix ?? ""), {
         limit: options.limit,
         cursor: options.cursor ? OAUTH_KV_PREFIX + options.cursor : undefined,
       });

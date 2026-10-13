@@ -2,7 +2,7 @@
 // The `platform` settings document: the deployment's public origins, CORS,
 // identity handoff (Settings -> Platform) and the store defaults every
 // invocation may need (time zone, units; Settings -> Store details). Read at
-// Worker entry through its KV mirror, so it lives here, beside its services,
+// Worker entry through its per-colo mirror, so it lives here, beside its services,
 // rather than in the settings domain.
 
 import { z } from "zod";

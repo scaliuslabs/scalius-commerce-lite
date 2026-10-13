@@ -28,10 +28,6 @@ interface Env {
     }): Promise<{ messageId: string }>;
   };
 
-  // The only KV namespace (auth/rbac permission cache, identity handoff,
-  // middleware-helper/csp-handler).
-  CACHE: KVNamespace;
-
   // Order notification fan-out (modules/checkout/post-commit.ts).
   JOBS_QUEUE: Queue;
 

@@ -58,7 +58,6 @@ async function store() {
   const env = {
     DB: binding,
     CF_VERSION_METADATA: { id: "price-lists-version", tag: "", timestamp: "" },
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
     JWT_SECRET: "price-lists-dvc-secret-0123456789abcdef",
     CREDENTIAL_ENCRYPTION_KEY: "price-lists-dvc-credential-key-0123456789abcdef",
   } as unknown as Env;

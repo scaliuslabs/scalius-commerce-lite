@@ -35,7 +35,6 @@ function readyResponse() {
     status: "ready",
     checks: {
       d1: { status: "ok", latencyMs: 20 },
-      api_cache_kv: { status: "ok", latencyMs: 30 },
       r2: { status: "ok", latencyMs: 40 },
     },
   }), { status: 200 });
@@ -47,7 +46,6 @@ function degradedResponse(status = 503) {
     status: "degraded",
     checks: {
       d1: { status: "ok", latencyMs: 20 },
-      api_cache_kv: { status: "ok", latencyMs: 30 },
       r2: { status: "error", latencyMs: 1_500 },
     },
   }), { status });

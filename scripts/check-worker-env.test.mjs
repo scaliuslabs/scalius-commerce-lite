@@ -153,7 +153,7 @@ describe("worker env check: Worker version in public cache keys", () => {
 });
 
 describe("worker env check: per-store resource shape", () => {
-  it("keeps every committed config to one KV, one bucket, one jobs queue, and two limiters", () => {
+  it("keeps every committed config to no KV, one bucket, one jobs queue, and two limiters", () => {
     for (const app of apps) {
       for (const configPath of app.configs) {
         expect(collectResourceBindingViolations(configPath, readRepoJsonc(configPath)), configPath).toEqual([]);
@@ -162,12 +162,14 @@ describe("worker env check: per-store resource shape", () => {
     const api = readRepoJsonc("apps/api/wrangler.jsonc");
     expect(api.queues.consumers.map((consumer) => consumer.queue)).toEqual(["jobs", "jobs-dlq"]);
     expect(api.queues.consumers[0].max_batch_timeout).toBeLessThanOrEqual(2);
-    expect(readRepoJsonc("apps/storefront/wrangler.jsonc").kv_namespaces).toBeUndefined();
+    for (const app of apps) {
+      for (const configPath of app.configs) expect(readRepoJsonc(configPath).kv_namespaces, configPath).toBeUndefined();
+    }
   });
 
-  it("fails on a second namespace, bucket, queue, or limiter", () => {
+  it("fails on any KV namespace, or a second bucket, queue, or limiter", () => {
     expect(collectResourceBindingViolations("apps/api/wrangler.jsonc", {
-      kv_namespaces: [{ binding: "CACHE" }, { binding: "OAUTH_KV" }],
+      kv_namespaces: [{ binding: "OAUTH_KV" }],
       r2_buckets: [{ binding: "BUCKET" }, { binding: "AGENT_ARTIFACTS" }],
       ratelimits: [{ name: "RL_STANDARD" }, { name: "SEARCH_RATE_LIMITER" }],
       queues: { producers: [{ binding: "JOBS_QUEUE" }, { binding: "AUTH_OTP_QUEUE" }] },

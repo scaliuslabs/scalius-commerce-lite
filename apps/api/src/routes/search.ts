@@ -167,9 +167,8 @@ app.openapi(searchRoute, async (c) => {
     });
   }
 
-  // Predictive queries are high-cardinality and short-lived, making remote KV
-  // slower than the indexed D1 read on a cold location. Cloudflare's native
-  // limiter keeps abuse protection on-machine without adding a network round trip.
+  // Cloudflare's native limiter keeps abuse protection on-machine without
+  // adding a network round trip to high-cardinality predictive queries.
   if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "search", getClientIp(c.req.raw)))) {
     throw new RateLimitError("Too many requests. Please try again later.");
   }

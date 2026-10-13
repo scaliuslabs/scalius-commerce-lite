@@ -113,7 +113,6 @@ function createTestApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   const db = createDb();
   const env = {
-    CACHE: { id: "api-cache-kv" },
   } as unknown as Env;
 
   mocks.createProduct.mockResolvedValue({ id: "prod_new", aggregateRevision: 1 });

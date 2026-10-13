@@ -17,7 +17,6 @@ export const PLUGIN_TEST_CREDENTIAL_KEY = "plugin-bundled-test-credential-key-01
 export function pluginTestEnv(binding: D1Database, overrides: Record<string, unknown> = {}): Env {
   return {
     DB: binding,
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined, list: async () => ({ keys: [], list_complete: true }) },
     RL_STANDARD: { limit: vi.fn(async () => ({ success: true })) },
     JOBS_QUEUE: { send: vi.fn(async () => undefined), sendBatch: vi.fn(async () => undefined) },
     PUBLIC_API_BASE_URL: "https://api.shop.test",

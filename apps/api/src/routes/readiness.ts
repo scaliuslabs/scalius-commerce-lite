@@ -24,7 +24,6 @@ import {
 
 const READINESS_REMOTE_PROBE_TIMEOUT_MS = 5000;
 const READINESS_D1_RETRY_DELAYS_MS = [75, 200, 400] as const;
-const READINESS_KV_PROBE_KEY = "__scalius:readyz:probe";
 
 type CheckStatus = "ok" | "missing" | "error" | "timeout";
 
@@ -186,15 +185,6 @@ async function databaseCheck(env: Env): Promise<CheckResult> {
   }, READINESS_REMOTE_PROBE_TIMEOUT_MS);
 }
 
-async function kvCheck(name: string, kv: KVNamespace | undefined): Promise<CheckResult> {
-  if (!kv) return missing(name);
-
-  return runProbe(name, true, async () => {
-    await kv.get(READINESS_KV_PROBE_KEY, { cacheTtl: 60 });
-    return "read probe";
-  });
-}
-
 async function r2Check(
   name: string,
   bucket: R2Bucket | undefined,
@@ -289,7 +279,6 @@ app.get("/readyz", async (c) => {
 
   const asyncChecks = await Promise.all([
     databaseCheck(env),
-    kvCheck("api_cache_kv", env.CACHE),
     r2Check("r2", env.BUCKET),
   ]);
 

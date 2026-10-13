@@ -60,12 +60,6 @@
       "migrations_dir": "../../packages/database/migrations"
     }
   ],
-  "kv_namespaces": [
-    {
-      "binding": "CACHE",
-      "id": "d6e2d77d898e4b3f9c186802ce63f9b8"
-    }
-  ],
   // Two native limiter namespaces. Counters are account-wide per namespace_id,
   // so every key is scoped to this store (src/utils/rate-limit.ts).
   "ratelimits": [

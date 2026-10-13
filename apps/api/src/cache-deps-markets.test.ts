@@ -48,7 +48,6 @@ async function store() {
   const env = {
     DB: binding,
     CF_VERSION_METADATA: { id: "markets-version", tag: "", timestamp: "" },
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
     JWT_SECRET: "markets-dvc-secret-0123456789abcdef",
     CREDENTIAL_ENCRYPTION_KEY: "markets-dvc-credential-key-0123456789abcdef",
   } as unknown as Env;

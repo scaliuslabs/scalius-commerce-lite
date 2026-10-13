@@ -70,7 +70,6 @@ function createEnv(overrides: Record<string, unknown> = {}, stored: string | nul
   return {
     SCALIUS_SECRET: MASTER_SECRET,
     CREDENTIAL_ENCRYPTION_KEY: "credential-key",
-    CACHE: { id: "kv" },
     CF_VERSION_METADATA: { id: TEST_WORKER_VERSION },
     DB: { id: "d1" },
     ...overrides,
@@ -103,7 +102,6 @@ describe("composeApiRuntimeEnv", () => {
     expect(composed.API_TOKEN).not.toBe(composed.JWT_SECRET);
     expect(composed.CREDENTIAL_ENCRYPTION_KEY).toBe("credential-key");
     expect(composed.SCALIUS_SECRET).toBe(MASTER_SECRET);
-    expect(composed.CACHE).toBe(env.CACHE);
     expect(composed.DB).toBe(env.DB);
     // The input env is never mutated.
     expect(env.JWT_SECRET).toBeUndefined();

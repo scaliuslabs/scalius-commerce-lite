@@ -12,8 +12,18 @@ import { renderPublicRead } from "./public-read";
 
 function runtimeEnv() {
   const queue = { send: vi.fn(async () => undefined) };
-  const kv = { get: vi.fn(async () => null), put: vi.fn(async () => undefined) };
-  return { env: { JOBS_QUEUE: queue, CACHE: kv, IMAGES: {} } as unknown as Env, queue };
+  // The "already requested" marker is a per-colo Cache API entry keyed by the Worker version.
+  const marked = new Set<string>();
+  vi.stubGlobal("caches", {
+    open: async () => ({
+      match: async (url: string) => (marked.has(url) ? new Response("1") : undefined),
+      put: async (url: string) => { marked.add(url); },
+    }),
+  });
+  return {
+    env: { JOBS_QUEUE: queue, IMAGES: {}, CF_VERSION_METADATA: { id: "test-v1" } } as unknown as Env,
+    queue,
+  };
 }
 
 function executionContext() {

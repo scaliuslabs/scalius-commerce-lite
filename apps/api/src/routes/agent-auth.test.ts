@@ -10,7 +10,6 @@ function harness(options: { rateLimited?: boolean } = {}) {
     CREDENTIAL_ENCRYPTION_KEY: btoa("k".repeat(32)),
     BETTER_AUTH_URL: "https://admin.scalius.test/some/path",
     RL_STANDARD: { limit: async () => ({ success: !options.rateLimited }) },
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
   } as unknown as Env;
   const post = (path: string, body: unknown, headers: Record<string, string> = {}) => systemApp.request(
     `https://api.scalius.test/api/v1/agent-auth${path}`,

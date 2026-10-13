@@ -50,7 +50,7 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `price-utils.ts` | Display rounding for decimal prices already converted from minor units | `roundPriceToPrecision()`, `calculateDiscountedPrice()` |
 | `media-variants.ts` | Pre-generated WebP rendition ladder and URL helpers | `mediaVariantWidths()`, `mediaImageUrl()`, `mediaImageSrcSet()`, `mediaOriginalUrl()` |
 | `media-url.ts` | Resolve bare R2 keys to full CDN URLs | `resolveMediaUrl()` |
-| `cors-helper.ts` | Dynamic credentialed CORS origin validation from exact first-party runtime URLs plus the extra origins a merchant lists in Platform settings (composed into `CORS_ALLOWED_ORIGINS` at Worker entry, never a literal env var); merchant CSP/KV domains are intentionally excluded | `getCorsOriginContext()` |
+| `cors-helper.ts` | Dynamic credentialed CORS origin validation from exact first-party runtime URLs plus the extra origins a merchant lists in Platform settings (composed into `CORS_ALLOWED_ORIGINS` at Worker entry, never a literal env var); merchant CSP domains are intentionally excluded | `getCorsOriginContext()` |
 | `request-origin-guard.ts` | Same-origin guard for unsafe cookie-bearing browser requests used by admin/storefront proxy routes before forwarding or mutating session state | `shouldRejectCrossOriginCookieRequest()` |
 | `rate-limit.ts` | Client IP extraction for the native API rate limiters | `getClientIp()` |
 | `customer-utils.ts` | Phone validation (E.164), include/exclude country policy checks, customer stats | `validateAndFormatPhone()`, `assertPhoneCountryAllowed()`, `normalizePhoneCountryPolicy()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |

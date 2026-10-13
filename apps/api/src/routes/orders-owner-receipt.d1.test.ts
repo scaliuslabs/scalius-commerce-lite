@@ -40,7 +40,6 @@ const env = () => ({
   DB: binding,
   JWT_SECRET,
   CUSTOMER_SESSION_HASH_KEY: SESSION_KEY,
-  CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
 }) as unknown as Env;
 const service = () => `Bearer ${generateToken({ id: "storefront", role: "service" }, "5m", { JWT_SECRET })}`;
 

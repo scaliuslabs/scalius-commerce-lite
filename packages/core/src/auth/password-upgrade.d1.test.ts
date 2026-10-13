@@ -20,7 +20,6 @@ function env() {
   database = createSqliteD1Database();
   return {
     DB: database.binding,
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined, list: async () => ({ keys: [], list_complete: true }) },
     BETTER_AUTH_SECRET: "password-upgrade-test-secret-0123456789abcdef",
     BETTER_AUTH_URL: "https://admin.shop.test",
     STOREFRONT_URL: "https://shop.test",

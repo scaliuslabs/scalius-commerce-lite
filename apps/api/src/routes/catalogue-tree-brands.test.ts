@@ -29,7 +29,6 @@ async function request(path: string) {
   await rebuildCatalogProjections(db);
   return publicCatalogApp.request(`https://api.example.test/api/v1${path}`, {}, {
     DB: binding,
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
   } as unknown as Env);
 }
 

@@ -1,6 +1,6 @@
 # Running on Workers Free
 
-This page covers how Scalius runs on the Cloudflare Workers Free plan and scales up on Workers Paid. It is for operators who pick a plan and for contributors who add queries, KV writes or queue messages.
+This page covers how Scalius runs on the Cloudflare Workers Free plan and scales up on Workers Paid. It is for operators who pick a plan and for contributors who add queries or queue messages.
 
 Free is the default: the committed Wrangler configs deploy there unchanged. A Paid deploy adds one flag. Cloudflare limits last checked: 2026-10-03.
 
@@ -29,8 +29,6 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | Queue consumer `max_batch_size` (`jobs`; the dead-letter queue gets 10 on Paid) | 1 | 15 |
 | Bulk backlog limit (no bulk fan-out at or above it) | 20 messages | 1,000 |
 | Rendition queued from a public read | off | on |
-| Checkout recovery KV hints | off (polls read D1) | on |
-| Permission snapshot in KV | off (checks read D1) | on |
 | Cron slices (each sweep runs once per rotation) | 4 (hourly) | 1 (every 15 minutes) |
 | Cron: each sweep's row limit | 20% | 100% |
 | List total counted up to (`countCap`) | 1,000 | 10,000 |
@@ -48,7 +46,6 @@ The budget harness encodes the per-invocation limits (`apps/api/src/free-plan-bu
 | Subrequests per invocation | 50 external, 1,000 to Cloudflare services |
 | D1 queries per invocation (a `batch()` is one) | 50 |
 | D1 per day | 5M rows read, 100,000 rows written |
-| KV per day | 100,000 reads, 1,000 writes, 1,000 deletes |
 | Queues operations per day (a delivered message is 3) | 10,000 |
 | Requests per day | 100,000 |
 | Images transformations per month | 5,000 (unverified) |
@@ -67,7 +64,7 @@ pnpm free-plan:budget --orders 250    # orders per day in the quota model (defau
 pnpm free-plan:budget --json out.json # keep the raw report
 ```
 
-- **Node tier** (`apps/api/src/free-plan-budget.test.ts`) drives the real Worker entrypoints (`fetch`, `queue`, `scheduled`) over an in-memory D1 and meters every binding. It asserts D1 calls, KV operations, queue messages and external subrequests against `apps/api/src/testing/free-plan-budgets.ts` and the plan's per-invocation limits. A new query, KV write or fan-out fails here first. CPU in this tier is a relative figure.
+- **Node tier** (`apps/api/src/free-plan-budget.test.ts`) drives the real Worker entrypoints (`fetch`, `queue`, `scheduled`) over an in-memory D1 and meters every binding. It asserts D1 calls, queue messages and external subrequests against `apps/api/src/testing/free-plan-budgets.ts` and the plan's per-invocation limits. A new query or fan-out fails here first. CPU in this tier is a relative figure.
 - **workerd tier** (`apps/api/src/free-plan-workerd.test.ts`) runs the bundled Worker in workerd, where CPU is wall time minus time waiting on the D1 proxy. Only this tier shows cold route graphs and real hashing cost. The Free password hash and verify must each stay below 5 ms (best of 15 runs).
 
 The daily quota model charges each order with a 3-line checkout, its queued messages, tax quotes, sign-in codes and 20 page views, and adds 96 cron runs a day. D1 rows written count rows changed times 3, for index entries. In the 100-order run of 2026-10-03, D1 rows written ended a Free store first, at about 210 orders a day (unverified: rerun the command). The Images allowance also ends a Free store before any CPU limit does.
@@ -101,11 +98,9 @@ Rules:
 
 Free runs one message per consumer invocation, within 50 D1 queries. On Paid the harness runs one batch of each job type at batch size 15 and holds it under 1,000 D1 queries.
 
-### KV hints
+### No KV
 
-D1 is the authority for every KV hint. A hint write never fails the request that wanted it (`putKvHint` and `deleteKvHint` in `packages/shared/src/kv-hints.ts`). A refusal that looks like a quota or key-rate limit opens a breaker in the isolate: 30 s, doubling up to 10 min. An exhausted day costs a few failing calls per isolate, not one per hint.
-
-Free also skips the hints that only accelerate: the checkout status and receipt markers (a poll reads `checkout_attempts`), the permission snapshot (a check is one D1 batch) and the "rendition requested" marker (the scheduled backfill renders).
+A store has no KV namespace (an account allows 1,000, and KV was only ever a hint or, worse, a sole copy). The relational provider holds what must persist: OAuth grants and tokens and small markers in `system_kv`, scanner sessions on their `scanner_token_claims` row. Per-colo hints that only spare a database read use the Cache API, keyed by the Worker version (`workerCacheHint` in `packages/shared/src/worker-cache-hint.ts`): the settings mirror, the RBAC seed marker, the Meta CAPI circuit and the "rendition requested" marker. Permission checks always read the database (one batch). Free skips the rendition marker: the scheduled backfill renders.
 
 ### Maintenance cron
 
@@ -141,5 +136,5 @@ A cursor travels in a URL, so it never carries personal data. A sort on personal
 Check these live:
 
 - CPU time per request (p50 and p99) for `/api/auth/sign-in/email`, `/api/v1/storefront/batch`, `POST /api/v1/orders`, the cron and the queue consumer, and error 1102 ("Worker exceeded resource limits") by route.
-- KV writes and deletes per day (near zero on Free), Queues operations per day, the `jobs` backlog (`backlogCount`) during a cron run, and D1 rows written per day.
+- Queues operations per day, the `jobs` backlog (`backlogCount`) during a cron run, and D1 rows written per day.
 - `pnpm ops:check --queues` and `pnpm release:check`. Pass `--api-base-url`, and for the release check `--storefront-url` and `--dashboard-url`. The defaults are the Scalius demo hosts.

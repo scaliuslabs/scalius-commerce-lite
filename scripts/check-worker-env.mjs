@@ -14,14 +14,16 @@ export const ALLOWED_WRANGLER_VARS = Object.freeze({
   "apps/api/wrangler.local.jsonc": Object.freeze(["LOCAL_MAILPIT_URL"]),
 });
 
-// The per-store resource shape: one KV namespace, one R2 bucket, one jobs
-// queue (plus its DLQ), two rate limiters. Other users share these by key
-// prefix; a new binding of these kinds needs an explicit architecture decision.
+// The per-store resource shape: one R2 bucket, one jobs queue (plus its DLQ),
+// two rate limiters, and no KV namespace (an account allows 1,000; the
+// relational provider and the Cache API hold what KV once did). Other users
+// share these by key prefix; a new binding of these kinds needs an explicit
+// architecture decision.
 // Durable Objects: only the realtime hub (WebSockets on Workers need one;
 // docs/ARCHITECTURE.md, "Realtime hub"). It must be SQLite-backed, which is
 // what Workers Free allows.
 export const ALLOWED_RESOURCE_BINDINGS = Object.freeze({
-  kv_namespaces: Object.freeze(["CACHE"]),
+  kv_namespaces: Object.freeze([]),
   r2_buckets: Object.freeze(["BUCKET"]),
   ratelimits: Object.freeze(["RL_STRICT", "RL_STANDARD"]),
   queue_producers: Object.freeze(["JOBS_QUEUE"]),

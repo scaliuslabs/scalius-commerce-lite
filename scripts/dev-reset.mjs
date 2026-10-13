@@ -86,7 +86,7 @@ function run(cmd, label, options = {}) {
 console.log("\n🔄 Scalius Commerce — Database Reset\n");
 console.log("=".repeat(50));
 
-// 1. Delete ALL local D1/KV/R2 state (shared by the API and storefront Workers)
+// 1. Delete ALL local D1/R2 state (shared by the API and storefront Workers)
 const wranglerState = resolvedWranglerStateOverride
   ? resolvedWranglerStateOverride
   : resolve(root, ".wrangler", "state");

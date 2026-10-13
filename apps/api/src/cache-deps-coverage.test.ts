@@ -145,7 +145,6 @@ describe("cache dependency registry coverage of public reads", () => {
     });
     const env = {
       DB: binding,
-      CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
       JWT_SECRET: "cache-deps-coverage-secret-0123456789abcdef",
       CREDENTIAL_ENCRYPTION_KEY: "cache-deps-coverage-credential-key-0123456789",
       STOREFRONT_URL: "https://shop.test",

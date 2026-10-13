@@ -93,7 +93,6 @@ function meteredBinding(inner: D1Database): Meter {
 
 const LIMITER = { limit: async () => ({ success: true }) };
 const ENV = {
-  CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
   RL_STANDARD: LIMITER,
   RL_STRICT: LIMITER,
   JOBS_QUEUE: { send: async () => undefined, sendBatch: async () => undefined },

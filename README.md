@@ -41,7 +41,6 @@ flowchart LR
     Merchant["Merchant browser"] --> API
     SF -->|"service binding BACKEND_API"| API["API Worker<br/>Hono + dashboard SPA (ASSETS)"]
     API --> DB[("D1, TursoDB, or PostgreSQL")]
-    API --> KV[("KV: CACHE")]
     API --> R2[("R2: BUCKET")]
     API --> Q["Queue: jobs + jobs-dlq"]
     Q -->|"queue consumer"| API
@@ -106,7 +105,7 @@ Run every command from the repository root.
 |---------|---------|
 | `pnpm dev`, `dev:api`, `dev:admin`, `dev:storefront` | Start the full stack, or the API with one app |
 | `pnpm dev:setup [--env-only] [--force]` | Create or repair local secrets, migrate, create the admin |
-| `pnpm dev:reset [--state <dir>]` | Delete local D1, KV, and R2 state, migrate, recreate the admin |
+| `pnpm dev:reset [--state <dir>]` | Delete local D1 and R2 state, migrate, recreate the admin |
 | `pnpm dev:admin:create`, `dev:admin:reset`, `dev:admin:status` | Manage the local admin |
 | `pnpm db:generate` | Generate Drizzle migrations after a schema change |
 | `pnpm db:migrate:local`, `db:migrate:remote` | Apply pending migrations to local or remote D1 |
@@ -181,7 +180,6 @@ The committed `apps/api/wrangler.jsonc` and `apps/storefront/wrangler.jsonc` hol
 | Resource | Worker | Binding |
 |----------|--------|---------|
 | D1 database (`migrations_dir` is `packages/database/migrations`) | API | `DB` |
-| KV namespace (the only one; OAuth keys use the `oauth:` prefix) | API | `CACHE` |
 | R2 bucket (media under `media/`, sealed agent artifacts under `private/agent-artifacts/`) | API | `BUCKET` |
 | Queues `jobs` and `jobs-dlq` | API (producer, both consumers) | `JOBS_QUEUE` |
 | Rate limiters: strict 5 per 60 s, standard 60 per 60 s (counters are account-wide per `namespace_id`: use your own IDs) | API | `RL_STRICT`, `RL_STANDARD` |

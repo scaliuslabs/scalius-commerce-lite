@@ -1,4 +1,4 @@
-// The measured stack: the API under `wrangler dev` (local D1/KV/R2 on the
+// The measured stack: the API under `wrangler dev` (local D1/R2 on the
 // harness state) and the BUILT storefront (`astro build` output) under
 // `wrangler dev`. Wrangler's dev registry is machine-wide, so the API gets the
 // port-derived name from scripts/dev-ports.mjs (`scalius-api-local-9001`), the
