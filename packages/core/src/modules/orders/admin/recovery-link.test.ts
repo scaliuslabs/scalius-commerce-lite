@@ -15,6 +15,9 @@ import {
 import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { createOrderPaymentRecoveryLink } from "./recovery-link";
 import { hashOrderReceiptToken } from "../receipts";
+import { createSslcommerzPackProviders } from "../../payments/gateways/testing";
+
+const { providers: paymentProviders } = createSslcommerzPackProviders();
 
 type RecoveryOrderRow = {
   id: string;
@@ -46,7 +49,7 @@ function recoveryOrder(overrides: Partial<RecoveryOrderRow> = {}): RecoveryOrder
     id: "order_1",
     status: OrderStatus.INCOMPLETE,
     paymentStatus: PaymentStatus.FAILED,
-    paymentMethod: PaymentMethod.SSLCOMMERZ,
+    paymentMethod: "scalius.bangladesh:sslcommerz",
     currencyDecimalPlaces: 2,
     paidAmountMinor: 0,
     balanceDueMinor: 12_000,
@@ -105,7 +108,7 @@ describe("admin order payment recovery links", () => {
       order: recoveryOrder(),
       attempts: [{
         orderId: "order_1",
-        gateway: PaymentMethod.SSLCOMMERZ,
+        gateway: "scalius.bangladesh:sslcommerz",
         paymentType: "deposit",
         amount: 60,
         status: "failed",
@@ -118,17 +121,17 @@ describe("admin order payment recovery links", () => {
       plan: { status: PaymentPlanStatus.PENDING, depositAmountMinor: 6_000 },
     });
 
-    const result = await createOrderPaymentRecoveryLink(db, "order_1", { nowSeconds: 100 });
+    const result = await createOrderPaymentRecoveryLink(db, "order_1", { nowSeconds: 100, paymentProviders });
 
     expect(result).toMatchObject({
       orderId: "order_1",
-      gateway: PaymentMethod.SSLCOMMERZ,
+      gateway: "scalius.bangladesh:sslcommerz",
       expiresAt: 100 + 60 * 60 * 24 * 7,
       paymentType: "deposit",
       depositAmount: 60,
       paymentRecovery: {
         state: "needs_attention",
-        gateway: PaymentMethod.SSLCOMMERZ,
+        gateway: "scalius.bangladesh:sslcommerz",
       },
     });
     expect(result.receiptToken).toMatch(/^chk_/);
@@ -159,7 +162,7 @@ describe("admin order payment recovery links", () => {
       }],
     });
 
-    await expect(createOrderPaymentRecoveryLink(db, "order_1"))
+    await expect(createOrderPaymentRecoveryLink(db, "order_1", { paymentProviders }))
       .rejects.toBeInstanceOf(ValidationError);
     expect(insertedReceipts).toHaveLength(0);
   });
@@ -169,7 +172,7 @@ describe("admin order payment recovery links", () => {
       order: recoveryOrder({ paymentStatus: PaymentStatus.UNPAID }),
       attempts: [{
         orderId: "order_1",
-        gateway: PaymentMethod.SSLCOMMERZ,
+        gateway: "scalius.bangladesh:sslcommerz",
         paymentType: "full",
         amount: 120,
         status: "processing",
@@ -180,7 +183,7 @@ describe("admin order payment recovery links", () => {
       }],
     });
 
-    await expect(createOrderPaymentRecoveryLink(db, "order_1", { nowSeconds: 100 }))
+    await expect(createOrderPaymentRecoveryLink(db, "order_1", { nowSeconds: 100, paymentProviders }))
       .rejects.toBeInstanceOf(ConflictError);
     expect(insertedReceipts).toHaveLength(0);
   });
@@ -191,7 +194,7 @@ describe("admin order payment recovery links", () => {
       payments: [{ status: PaymentRecordStatus.SUCCEEDED }],
     });
 
-    await expect(createOrderPaymentRecoveryLink(db, "order_1"))
+    await expect(createOrderPaymentRecoveryLink(db, "order_1", { paymentProviders }))
       .rejects.toBeInstanceOf(ValidationError);
     expect(insertedReceipts).toHaveLength(0);
   });
@@ -201,7 +204,7 @@ describe("admin order payment recovery links", () => {
       order: recoveryOrder(),
     });
 
-    await expect(createOrderPaymentRecoveryLink(db, "order_1"))
+    await expect(createOrderPaymentRecoveryLink(db, "order_1", { paymentProviders }))
       .rejects.toBeInstanceOf(ValidationError);
     expect(insertedReceipts).toHaveLength(0);
   });
@@ -215,7 +218,7 @@ describe("admin order payment recovery links", () => {
       payments: [{ status: PaymentRecordStatus.FAILED }],
     });
 
-    await expect(createOrderPaymentRecoveryLink(db, "order_1", { nowSeconds: 100 }))
+    await expect(createOrderPaymentRecoveryLink(db, "order_1", { nowSeconds: 100, paymentProviders }))
       .rejects.toBeInstanceOf(ConflictError);
     expect(insertedReceipts).toHaveLength(0);
   });

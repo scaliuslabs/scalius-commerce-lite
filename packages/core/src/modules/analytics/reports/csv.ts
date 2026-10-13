@@ -137,7 +137,7 @@ const TOKEN_LABELS_EN: Record<string, string> = {
   __shipping: "Shipping",
 };
 
-/** A payment method the report has no words for (an app's, a retired built-in id): its provider's name. */
+/** A payment method the report has no words for (an app's): its provider's name. */
 type PaymentMethodName = ((id: string) => string) | undefined;
 
 function cellText(column: AnalyticsColumn, value: ReportCell, decimalPlaces: number, paymentMethodName?: PaymentMethodName): string | number {

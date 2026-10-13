@@ -14,7 +14,6 @@ import { isFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilm
 import { fromMinor } from "@scalius/shared/money";
 import { fulfilmentVoidBlockedReason } from "./line-presentation";
 import { staffUnreadMessageCondition } from "../../utils/conversation-unread";
-import { RETIRED_COURIER_PROVIDERS, retiredCourierTrackingUrl } from "../../integrations/retired-providers";
 import type {
     AdminOrderFulfilmentView,
     BuyerOrderFulfilmentView,
@@ -86,11 +85,9 @@ function trackingOf(row: {
     return {
         shipmentId: row.shipmentId,
         courierName: row.courierName
-            ?? (row.providerType && Object.hasOwn(RETIRED_COURIER_PROVIDERS, row.providerType) ? RETIRED_COURIER_PROVIDERS[row.providerType]!.label : null)
             ?? (row.providerType && row.providerType !== "manual" ? row.providerType : null),
         trackingId: row.trackingId,
-        // A parcel a retired courier booked before it moved into an app keeps its page.
-        trackingUrl: row.trackingUrl ?? retiredCourierTrackingUrl(row.providerType, row.trackingId),
+        trackingUrl: row.trackingUrl,
         status: row.shipmentStatus ?? "pending",
     };
 }

@@ -60,22 +60,18 @@ describe("payment method rows", () => {
     });
   });
 
-  it("shows a pack provider's own mark, and a saved SSLCommerz waiting for the Bangladesh pack", () => {
+  it("shows a pack provider's own mark", () => {
     const pack = provider("scalius.bangladesh:sslcommerz", {
       appName: "Bangladesh pack", name: "SSLCommerz", appIcon: "/icon/pack.svg", icon: "/icon/sslcommerz.png",
-      readiness: { configured: false, enabled: false, usable: false, missingFields: [], credentialErrors: [], blockedReason: "Activate Bangladesh pack in Apps to use it." },
     });
     const rows = paymentMethodRows({
-      enabledMethods: ["sslcommerz", "cod"],
+      enabledMethods: ["scalius.bangladesh:sslcommerz", "cod"],
       gateways: gateways.slice(0, 1),
-      gatewayStatus: { cod: ready, sslcommerz: { configured: false, enabled: false, usable: false, providerEnabled: false } },
+      gatewayStatus: { cod: ready },
       appProviders: [pack],
       appProvidersKnown: true,
     });
-    expect(rows.find((row) => row.id === "sslcommerz")).toMatchObject({
-      kind: "app", retired: true, installed: false, name: "SSLCommerz", pluginId: "scalius.bangladesh", appIcon: "/icon/sslcommerz.png",
-    });
-    expect(rows.find((row) => row.id === "scalius.bangladesh:sslcommerz")).toMatchObject({ retired: false, appIcon: "/icon/sslcommerz.png" });
+    expect(rows.find((row) => row.id === "scalius.bangladesh:sslcommerz")).toMatchObject({ kind: "app", name: "SSLCommerz", appIcon: "/icon/sslcommerz.png" });
   });
 
   it("keeps a saved app method whose app was removed, so it can be turned off", () => {

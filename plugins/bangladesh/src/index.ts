@@ -22,9 +22,7 @@
 //   "Refresh from Pathao" (pathao-places.ts) re-reads Pathao's live list.
 //
 // Each provider names the settings it needs (`providers.*[].settings`), so
-// the dashboard shows each one ready or not on its own. The stores that set
-// these up in core before the move keep them: activating the pack moves the
-// saved keys into its settings (apps/api/src/plugins/provider-handoff.ts).
+// the dashboard shows each one ready or not on its own.
 
 import {
   adminLocale,

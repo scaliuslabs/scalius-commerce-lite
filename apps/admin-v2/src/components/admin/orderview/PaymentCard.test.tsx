@@ -48,20 +48,20 @@ const order: Order = {
   customerEmail: null, shippingAddress: "Test address", city: "Dhaka", zone: "Central Road",
   area: null, notes: null, discountAmount: 0, shippingCharge: 0, status: "incomplete",
   createdAt: 1_783_000_000, updatedAt: 1_783_000_000, items: [], totalAmount: 1800,
-  customerId: null, paymentMethod: "sslcommerz", paymentStatus: "failed", paidAmount: 0,
+  customerId: null, paymentMethod: "scalius.bangladesh:sslcommerz", paymentStatus: "failed", paidAmount: 0,
   balanceDue: 1800, orderNumber: 1001, archivedAt: null, discounts: [], appRiskChecks: [], refundDue: 0, refundedAmount: 0,
   editReadiness: { items: { allowed: false, reason: "closed" }, details: { allowed: false, reason: "closed" } },
 };
 type SessionAttempt = OrderPaymentsPayload["paymentSessionAttempts"][number];
 const attempt: SessionAttempt = {
-  id: "attempt_history", orderId: order.id, gateway: "sslcommerz", paymentType: "full",
+  id: "attempt_history", orderId: order.id, gateway: "scalius.bangladesh:sslcommerz", paymentType: "full",
   amount: 1800, currency: "BDT", status: "failed", attempts: 1,
   providerSessionId: null, providerCorrelationId: null, lastError: null, claimExpiresAt: null,
   createdAt: 1_783_000_000, updatedAt: 1_783_000_060, activeProcessing: false, staleProcessing: false,
 };
 const recovery = {
   state: "needs_attention" as const,
-  gateway: "sslcommerz", paymentType: "full", status: "failed", attempts: 1,
+  gateway: "scalius.bangladesh:sslcommerz", paymentType: "full", status: "failed", attempts: 1,
   activeProcessing: false, staleProcessing: false, updatedAt: null,
 };
 const emptyPayments: OrderPaymentsPayload = {
@@ -112,7 +112,7 @@ describe("PaymentCard", () => {
   describe("payment attempts", () => {
     it.each([
       { gateway: "stripe", providerSessionId: null, lastError: "Gateway configuration is unavailable." },
-      { gateway: "sslcommerz", providerSessionId: "hosted_cancelled", lastError: "Hosted payment was cancelled before completion." },
+      { gateway: "scalius.bangladesh:sslcommerz", providerSessionId: "hosted_cancelled", lastError: "Hosted payment was cancelled before completion." },
     ])("shows a failed $gateway attempt with its recorded reason", async (session) => {
       await renderSession({ ...session, providerCorrelationId: "correlation_recorded" }, {
         status: "cancelled", paymentMethod: session.gateway,
@@ -126,7 +126,7 @@ describe("PaymentCard", () => {
       expect(button(en["recovery.copy"])).toBeUndefined();
     });
 
-    it.each(["stripe", "sslcommerz"])("does not tie the order's outcome to a created %s session", async (gateway) => {
+    it.each(["stripe", "scalius.bangladesh:sslcommerz"])("does not tie the order's outcome to a created %s session", async (gateway) => {
       await renderSession({ gateway, status: "created", providerSessionId: "session_recorded" }, {
         status: "delivered", paymentStatus: "paid", paidAmount: 1800, paymentMethod: gateway,
       });
@@ -196,7 +196,7 @@ describe("PaymentCard", () => {
   });
 
   it("says an SSLCommerz payment waits for the Bangladesh pack until the pack's provider is active", async () => {
-    const paid = { ...order, status: "delivered", paymentMethod: "sslcommerz", paymentStatus: "paid", paidAmount: 1300 };
+    const paid = { ...order, status: "delivered", paymentMethod: "scalius.bangladesh:sslcommerz", paymentStatus: "paid", paidAmount: 1300 };
     const show = async (providers: unknown[]) => {
       client.setQueryData(["settings", "app-providers", "payment"], providers);
       await act(async () => root.render(
@@ -209,7 +209,7 @@ describe("PaymentCard", () => {
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
     };
     await show([]);
-    expect(host.textContent).toContain("Activate Bangladesh pack in Apps to refund or check this SSLCommerz payment.");
+    expect(host.textContent).toContain("Activate Bangladesh pack in Apps to refund or check this Sslcommerz payment.");
     await show([{ id: "scalius.bangladesh:sslcommerz", name: "SSLCommerz", appName: "Bangladesh pack", readiness: { enabled: true } }]);
     expect(host.textContent).not.toContain("Activate Bangladesh pack in Apps");
   });

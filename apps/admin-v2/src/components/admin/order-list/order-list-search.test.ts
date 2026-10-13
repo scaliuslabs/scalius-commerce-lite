@@ -31,11 +31,9 @@ describe("order list search", () => {
       expect(orderListQuery(search, "").paymentMethod).toBe(paymentMethod);
       expect(countOrderFilters(search)).toBe(1);
     }
-    for (const paymentMethod of ["bkash", "scalius.bkash:", ":bkash", "scalius.bkash:BKASH", 7]) {
+    for (const paymentMethod of ["bkash", "sslcommerz", "scalius.bkash:", ":bkash", "scalius.bkash:BKASH", 7]) {
       expect(validateOrderSearch({ paymentMethod }).paymentMethod).toBeUndefined();
     }
-    // An old link's SSLCommerz filters by the Bangladesh pack's provider (the API matches both ids).
-    expect(validateOrderSearch({ paymentMethod: "sslcommerz" }).paymentMethod).toBe("scalius.bangladesh:sslcommerz");
   });
 
   it("filters by an app's column, counts it, and clears it with the other filters", () => {

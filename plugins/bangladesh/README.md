@@ -54,22 +54,7 @@ Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPT
 - The API URLs have the services' published addresses as defaults. A URL must be https on the service's own host (the app's allowed hosts). Pathao's test account is `https://courier-api-sandbox.pathao.com`.
 - A save refuses an obvious placeholder ("test", "your api key", "123456") in a provider's setting. A stored placeholder makes the provider not ready.
 
-## Keys saved before the pack
-
-Before this app, SSLCommerz, the two couriers, four SMS gateways and four checkers were built into core. A store keeps what it saved:
-
-- Until the pack is active, a saved choice that names an old built-in (`sslcommerz`, `pathao`, `bdbulksms`, `fraudbd`, …) means the pack's provider. It does not take a payment, refund, book, send or check. Checkout never offers SSLCommerz, the old IPN URL answers 503 (SSLCommerz sends it again), and Settings → Payments and the order page say "Activate Bangladesh pack in Apps". It says why: "Activate Bangladesh pack in Apps to use it." This shows in Settings → Shipping → Couriers, Settings → Notifications, on Home, in the fraud check card and on the order page. A buyer sees no phone sign-in while SMS cannot send. The old shipments stay readable, with their tracking pages. The old webhook URLs answer 503 (the courier sends again).
-- When the pack is activated, the host (`apps/api/src/plugins/provider-handoff.ts`) does this:
-  1. It reads the old keys with the strict reader.
-  2. It writes them into the pack's settings. It writes only keys the merchant did not set in the pack.
-  3. It repoints the SMS choice, the fraud check rows and the courier rows to the pack (a courier's active row gives the keys, else its newest). The couriers' shipments name the pack's couriers and keep their tracking pages. SSLCommerz: the old `sandbox` flag becomes the environment; a gateway that was on takes its old place (and default) in the checkout's payment methods, one that was off is dropped; unpaid, part-paid and failed orders with their attempts and payment rows name `scalius.bangladesh:sslcommerz`. Paid orders keep `sslcommerz`: the platform resolves it to the pack's provider for refunds, names and late IPNs, and rewriting them would report every old order as changed.
-  4. It removes the old fields (a courier row keeps no keys).
-- A key that cannot be opened (a rotated `CREDENTIAL_ENCRYPTION_KEY`) or that the settings refuse is not moved. The activation message names it, so the merchant enters it again.
-- A second activation moves nothing.
-
 ## Sending SMS
-
-The requests and answers are the same as the built-in gateways sent before the move. The only change is the transport: the app's `ctx.http`.
 
 - SMS.net.bd gets a multipart form. MIM SMS and GenNet get the number without `+`. BDBulkSMS gets it with `+`.
 - GenNet gets the message's receipt key as `csms_id` (20 characters). A duplicate (`4023`) counts as already sent.

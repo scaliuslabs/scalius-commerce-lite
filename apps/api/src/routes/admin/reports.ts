@@ -469,7 +469,7 @@ app.openapi(exportRoute, async (c) => {
   const { reportId } = c.req.valid("param");
   const query = c.req.valid("query");
   const ctx = await createAnalyticsContext(c.get("db"), storeTimeZoneOf(c.env));
-  // A report with payment methods names each by its provider (an app's, a retired built-in id's).
+  // A report with payment methods names each by its provider (an app's).
   if (analyticsReport(reportId).columns.some((column) => column.enum === "paymentMethod")) {
     const providers = await requestPaymentProviders(c);
     ctx.paymentMethodName = (id) => providers.label(id);

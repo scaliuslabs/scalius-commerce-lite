@@ -1,5 +1,4 @@
 export * from "./browser";
-export * from "./tracking-url";
 export * from "./delivery.service";
 export * from "./tracking";
 export * from "./places";
@@ -11,4 +10,3 @@ export * from "./location-validation";
 // pack's); core has none of its own.
 export * from "./couriers/port";
 export * from "./couriers/registry";
-export * from "./retired-couriers";

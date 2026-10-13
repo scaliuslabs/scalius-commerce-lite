@@ -1,10 +1,6 @@
 // Courier tracking pushes (the courier port's `verifyWebhook`):
 //
 //   POST /webhooks/couriers/{provider}   an app courier (`<plugin id>:<provider id>`)
-//   POST /webhooks/pathao                the retired built-in URLs, kept so the
-//   POST /webhooks/steadfast             couriers' dashboards need no change:
-//                                        each serves the app courier that
-//                                        replaced it (scalius.bangladesh:pathao, …)
 //
 // The app authenticates the push before anything changes (its secret, header
 // or signature, from its own settings). Exactly one active delivery provider
@@ -21,9 +17,8 @@ import type { Context } from "hono";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { deliveryProviders, deliveryShipments } from "@scalius/database/schema";
-import { courierFor, retiredCourierReason, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
+import { courierFor, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
 import { syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
-import { retiredProviderReplacement } from "@scalius/core/integrations/retired-providers";
 import {
   isQualifiedProviderId,
   providerErrorOf,
@@ -115,20 +110,10 @@ async function findPushShipment(
   return concurrentlyBound ? { shipment: concurrentlyBound } : { shipment: null, rejection: "identity_conflict" };
 }
 
-/**
- * Serves one courier's push. `legacy` is a retired built-in URL: until the
- * app that replaced the courier is active, it answers 503 (the courier
- * retries) with the app's reason, never 404.
- */
-export async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: string, legacy = false): Promise<Response> {
+/** Serves one courier's push. */
+async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: string): Promise<Response> {
   const courier = await courierFor(requestCourierProviders(c), courierId);
-  if (!courier?.verifyWebhook) {
-    if (legacy) {
-      console.warn(`[courier-webhook] ${courierId} is not active`);
-      return c.json({ error: retiredCourierReason() }, 503);
-    }
-    return c.json({ error: "Not found" }, 404);
-  }
+  if (!courier?.verifyWebhook) return c.json({ error: "Not found" }, 404);
   const db = c.get("db") as Database;
 
   // Exactly one active row uses this courier: shipments are scoped to it.
@@ -273,16 +258,3 @@ app.post("/:provider", async (c): Promise<Response> => {
   return handleCourierWebhook(c, courierId);
 });
 export const courierWebhookRoutes = app;
-
-/**
- * A retired built-in courier's old URL (`/webhooks/pathao`), served by the
- * app courier that replaced it: an internal forward, no redirect (a courier
- * does not follow one with its POST body).
- */
-export function legacyCourierWebhookRoutes(retiredId: string) {
-  const replacement = retiredProviderReplacement("courier", retiredId);
-  if (!replacement) throw new Error(`${retiredId} is not a retired courier`);
-  const legacy = new OpenAPIHono<{ Bindings: Env }>();
-  legacy.post("/", async (c): Promise<Response> => handleCourierWebhook(c, replacement, true));
-  return legacy;
-}

@@ -138,7 +138,7 @@ describe("Meta Purchase outbox event building", () => {
         })).toBe(true);
         expect(isOrderEligibleForMetaPurchase({
             ...baseOrder,
-            paymentMethod: PaymentMethod.SSLCOMMERZ,
+            paymentMethod: "scalius.bangladesh:sslcommerz",
             paymentStatus: PaymentStatus.PARTIAL,
             paidAmountMinor: 15_000,
         })).toBe(true);

@@ -19,15 +19,6 @@ The API passes the app lookup in (`apps/api/src/plugins/providers/app-providers.
 
 Saved checkers are rows of the `settings` table with `category = "fraud-checker"`. The `key` is a nanoid, `type` is `json`, and `value` is the whole JSON object encrypted with `CREDENTIAL_ENCRYPTION_KEY`. A row stores `name`, `isActive` and `providerType` (the app provider). The app's own settings hold the credentials. These rows are not settings documents and register no DVC dependency.
 
-### Rows saved before the move
-
-A row saved before the move names a retired built-in type (`fraudbd`, `fraudguard`, `ecourier`, or none for the custom API) and holds that checker's credentials.
-
-- It reads as the Bangladesh pack's provider, with `retired: true`.
-- Until the pack is active, a lookup does not call anything and answers `unavailable` with the app's reason ("Activate Bangladesh pack in Apps to use it.").
-- A save over it is refused, so its credentials are not lost.
-- When the pack is activated, `apps/api/src/plugins/provider-handoff.ts` moves the credentials into the pack's settings (`readRetiredFraudCheckers`) and rewrites the row as the pack's row (`replaceRetiredFraudChecker`). The rewrite changes the row only if it is still the row that was read.
-
 ## The lookup
 
 - `fraudLookupWithActiveProvider` uses the first active row and throws `NotFoundError` when none is active (the route answers `{ configured: false }`).

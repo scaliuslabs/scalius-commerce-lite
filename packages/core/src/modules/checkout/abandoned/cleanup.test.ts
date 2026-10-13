@@ -78,7 +78,7 @@ describe("abandoned checkout cleanup", () => {
         expect(isAbandonedCheckoutEmpty({
             checkoutData: JSON.stringify({
                 id: "order_1",
-                paymentMethod: "sslcommerz",
+                paymentMethod: "scalius.bangladesh:sslcommerz",
                 paymentStatus: "failed",
             }),
             customerPhone: null,

@@ -567,20 +567,14 @@ export const whatsappDocument = defineSettingsDocument<WhatsAppSettings>({
   secretFields: { accessToken: "WhatsApp Cloud API access token" },
 });
 
-/**
- * The merchant's SMS gateway: an app provider id (`<plugin id>:<provider id>`).
- * A store set up before the Bangladesh gateways moved into the Bangladesh
- * pack may still hold their old id and encrypted keys here; the schema keeps
- * those fields untouched (a loose object) until the pack's activation moves
- * them (apps/api/src/plugins/provider-handoff.ts) and replaces the document.
- */
+/** The merchant's SMS gateway: an app provider id (`<plugin id>:<provider id>`). */
 export interface SmsSettings {
   activeProvider: string;
 }
 
 export const smsDocument = defineSettingsDocument<SmsSettings>({
   key: "sms",
-  schema: z.looseObject({ activeProvider: z.string() }),
+  schema: z.object({ activeProvider: z.string() }),
   defaults: { activeProvider: "" },
 });
 
@@ -606,31 +600,6 @@ export const stripeDocument = defineSettingsDocument<StripeSettingsDocument>({
   }),
   defaults: { secretKey: "", publishableKey: "", webhookSecret: "", enabled: true },
   secretFields: { secretKey: "Stripe secret key", webhookSecret: "Stripe webhook secret" },
-});
-
-/**
- * Retired: SSLCommerz moved into the Bangladesh pack (`scalius.bangladesh:
- * sslcommerz`), whose own settings hold its keys. A store set up before the
- * move keeps this document until the pack's activation moves its fields and
- * clears it (payments/retired-gateways.ts); nothing else reads it.
- */
-export interface SSLCommerzSettingsDocument {
-  storeId: string;
-  storePassword: string;
-  sandbox: boolean;
-  enabled: boolean;
-}
-
-export const sslcommerzDocument = defineSettingsDocument<SSLCommerzSettingsDocument>({
-  key: "sslcommerz",
-  schema: z.object({
-    storeId: z.string(),
-    storePassword: z.string(),
-    sandbox: z.boolean(),
-    enabled: z.boolean(),
-  }),
-  defaults: { storeId: "", storePassword: "", sandbox: true, enabled: true },
-  secretFields: { storePassword: "SSLCommerz store password" },
 });
 
 export interface PaymentMethodsSettings {

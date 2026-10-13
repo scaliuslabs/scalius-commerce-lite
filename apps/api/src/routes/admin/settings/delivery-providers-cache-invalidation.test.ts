@@ -1,6 +1,5 @@
 // The couriers settings routes: every courier is an app's, so a row names
-// `<plugin id>:<provider id>` and never takes keys; a row that still names a
-// retired built-in reads as blocked with the Bangladesh pack's reason.
+// `<plugin id>:<provider id>` and never takes keys.
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -118,25 +117,6 @@ describe("couriers settings routes", () => {
     expect(serialized).toContain("<plugin id>:<provider id>");
     expect(serialized).not.toMatch(/clientSecret|apiKey|"pathao"|"steadfast"/);
     expect(document.paths?.["/api/v1/admin/settings/delivery-providers/create-test"]).toBeUndefined();
-  });
-
-  it("lists a retired courier's row as blocked with the Bangladesh pack's reason, never its keys", async () => {
-    const { app, env } = createTestApp();
-    mocks.getDeliveryProviders.mockResolvedValue([row({ id: "provider_pathao", name: "Pathao", type: "pathao", isActive: true, credentials: "enc:v1:sealed-old-keys" })]);
-    const response = await app.request("/api/v1/admin/settings/delivery-providers", {}, env);
-    expect(response.status).toBe(200);
-    const json = await response.json() as { data: { providers: Array<Record<string, unknown>> } };
-    expect(json.data.providers[0]).toMatchObject({
-      type: "pathao",
-      courierName: "Pathao",
-      countries: ["BD"],
-      readiness: {
-        active: false,
-        canCreateShipment: false,
-        issues: [{ code: "unconfigured", message: "Activate Bangladesh pack in Apps to use it." }],
-      },
-    });
-    expect(JSON.stringify(json)).not.toContain("sealed-old-keys");
   });
 
   it("tests a saved courier and answers only whether it passed", async () => {

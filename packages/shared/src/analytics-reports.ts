@@ -399,7 +399,7 @@ export const ANALYTICS_REPORT_MAX_ROWS = 10_000;
 /** Values of the enum vocabularies, for validation and wording completeness tests. */
 export const ANALYTICS_ENUM_VALUES: Record<AnalyticsEnumVocabulary, readonly string[]> = {
   channel: ["online_store", "admin", "pos", "agent", "app"],
-  // An app's method (`<plugin id>:<provider id>`) or a retired built-in id is named by its provider.
+  // An app's method (`<plugin id>:<provider id>`) is named by its provider.
   paymentMethod: ["cod", "stripe", "gift_card", "other"],
   paymentKind: ["payment", "refund"],
   paymentStatus: ["pending", "confirmed", "succeeded", "failed", "refunded", "cancelled", "other"],

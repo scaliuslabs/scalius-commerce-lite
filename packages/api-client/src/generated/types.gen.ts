@@ -35410,7 +35410,6 @@ export type GetApiV1AdminFraudCheckerResponses = {
                 name: string;
                 isActive: boolean;
                 providerType: string;
-                retired: boolean;
             }>;
             pagination: {
                 page: number;
@@ -35478,7 +35477,6 @@ export type PostApiV1AdminFraudCheckerResponses = {
             name: string;
             isActive: boolean;
             providerType: string;
-            retired: boolean;
         };
     };
 };
@@ -35541,7 +35539,6 @@ export type PutApiV1AdminFraudCheckerResponses = {
             name: string;
             isActive: boolean;
             providerType: string;
-            retired: boolean;
         };
     };
 };
@@ -41392,7 +41389,6 @@ export type GetApiV1AdminSettingsDeliveryProvidersResponses = {
                 name: string;
                 type: string;
                 courierName: string;
-                courierId: string;
                 requiredLocations: Array<'city' | 'zone' | 'area'>;
                 canFindShipment: boolean;
                 isActive: boolean;
@@ -41491,7 +41487,6 @@ export type PostApiV1AdminSettingsDeliveryProvidersResponses = {
             name: string;
             type: string;
             courierName: string;
-            courierId: string;
             requiredLocations: Array<'city' | 'zone' | 'area'>;
             canFindShipment: boolean;
             isActive: boolean;
@@ -41585,7 +41580,6 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
             name: string;
             type: string;
             courierName: string;
-            courierId: string;
             requiredLocations: Array<'city' | 'zone' | 'area'>;
             canFindShipment: boolean;
             isActive: boolean;
@@ -41626,7 +41620,6 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
             name: string;
             type: string;
             courierName: string;
-            courierId: string;
             requiredLocations: Array<'city' | 'zone' | 'area'>;
             canFindShipment: boolean;
             isActive: boolean;
@@ -41762,7 +41755,6 @@ export type GetApiV1AdminSettingsDeliveryProvidersByIdResponses = {
             name: string;
             type: string;
             courierName: string;
-            courierId: string;
             requiredLocations: Array<'city' | 'zone' | 'area'>;
             canFindShipment: boolean;
             isActive: boolean;

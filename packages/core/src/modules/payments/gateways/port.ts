@@ -81,7 +81,7 @@ export class PaymentProviderError extends Error {
 }
 
 export interface PaymentGateway<S extends GatewaySettings = GatewaySettings> extends ProviderPort<"payment", GatewayCall<S>> {
-  /** `stripe`, or an app provider's `<plugin id>:<provider id>` (a retired built-in id resolves to one). */
+  /** `stripe`, or an app provider's `<plugin id>:<provider id>` */
   readonly id: string;
   /** Merchant-facing provider name. */
   readonly label: string;

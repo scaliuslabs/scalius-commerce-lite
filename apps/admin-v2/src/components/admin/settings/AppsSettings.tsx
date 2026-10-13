@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { providerLabel } from "~/i18n/provider-copy";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { Code2, Loader2, ShieldCheck } from "lucide-react";
 import {
@@ -20,9 +19,7 @@ import {
   putApiV1AdminFraudChecker,
 } from "@scalius/api-client/sdk";
 import { readQuotedHtmlAttribute } from "@scalius/shared/html-attributes";
-import { parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
-import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -681,28 +678,6 @@ export function FacebookCard() {
 
 // ── Courier fraud check ─────────────────────────────────────────────────
 
-/** A saved checker whose app is gone or not active yet: why it cannot be used, and where to fix it. */
-function FraudCheckerMoved({ provider, appProvider }: { provider: FraudCheckerProvider; appProvider: AppProvider | null }) {
-  const t = useMessages(appsMessages);
-  const canSeeApps = usePermissions().hasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
-  const pluginId = parseQualifiedProviderId(provider.providerType)?.pluginId;
-  if (!provider.retired || appProvider?.readiness.usable) return null;
-  return (
-    <Alert variant="warning">
-      <AlertDescription>
-        <div className="flex flex-col items-start gap-1">
-          <span>{t("checkerMoved", { name: providerLabel(provider.name), app: providerLabel(appProvider?.appName ?? pluginId ?? "") })}</span>
-          {canSeeApps && pluginId ? (
-            <Button type="button" variant="link" asChild>
-              <Link to="/admin/apps/$pluginId" params={{ pluginId }}>{t("openAppToActivate")}</Link>
-            </Button>
-          ) : null}
-        </div>
-      </AlertDescription>
-    </Alert>
-  );
-}
-
 /**
  * An app's fraud provider: whether lookups on the order page use it, its
  * readiness and connection test. Saving keeps only the choice; the app's own
@@ -755,12 +730,10 @@ function AppFraudProviderForm({
 
   return (
     <>
-      {provider ? <FraudCheckerMoved provider={provider} appProvider={appProvider} /> : null}
       {appProvider ? <AppProviderStatus provider={appProvider} /> : null}
       <label className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
         {t("useOnOrders")}
-        {/* A moved checker keeps its old keys until its app's activation moves them: nothing to save here before. */}
-        <Switch checked={draft.isActive} disabled={provider?.retired === true} onCheckedChange={(on) => setDraft({ isActive: on })} />
+        <Switch checked={draft.isActive} onCheckedChange={(on) => setDraft({ isActive: on })} />
       </label>
       {provider && canEdit ? (
         <>
@@ -802,7 +775,6 @@ function FraudCardBody() {
       .filter((saved) => !apps.some((appProvider) => appProvider.id === saved.providerType))
       .map((provider) => ({ appProvider: null, provider })),
   ];
-  const moved = appRows.filter(({ appProvider, provider }) => provider?.retired && !appProvider?.readiness.usable);
   return (
     <SettingsCard id="fraudCheck"
       title={t("fraudTitle")}
@@ -833,7 +805,6 @@ function FraudCardBody() {
         );
       }) : undefined}
     >
-      {moved.length > 0 ? <FraudCheckerMoved provider={moved[0]!.provider!} appProvider={moved[0]!.appProvider} /> : null}
       {appRows.length === 0 ? <p className="text-body text-muted-foreground">{t("noFraudCheckers")}</p> : null}
     </SettingsCard>
   );

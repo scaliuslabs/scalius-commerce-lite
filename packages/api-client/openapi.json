@@ -121019,17 +121019,13 @@
                               "providerType": {
                                 "type": "string",
                                 "maxLength": 160
-                              },
-                              "retired": {
-                                "type": "boolean"
                               }
                             },
                             "required": [
                               "id",
                               "name",
                               "isActive",
-                              "providerType",
-                              "retired"
+                              "providerType"
                             ]
                           },
                           "maxItems": 20
@@ -121229,17 +121225,13 @@
                         "providerType": {
                           "type": "string",
                           "maxLength": 160
-                        },
-                        "retired": {
-                          "type": "boolean"
                         }
                       },
                       "required": [
                         "id",
                         "name",
                         "isActive",
-                        "providerType",
-                        "retired"
+                        "providerType"
                       ]
                     }
                   },
@@ -121424,17 +121416,13 @@
                         "providerType": {
                           "type": "string",
                           "maxLength": 160
-                        },
-                        "retired": {
-                          "type": "boolean"
                         }
                       },
                       "required": [
                         "id",
                         "name",
                         "isActive",
-                        "providerType",
-                        "retired"
+                        "providerType"
                       ]
                     }
                   },
@@ -140824,10 +140812,6 @@
                                 "type": "string",
                                 "maxLength": 100
                               },
-                              "courierId": {
-                                "type": "string",
-                                "maxLength": 160
-                              },
                               "requiredLocations": {
                                 "type": "array",
                                 "items": {
@@ -141016,7 +141000,6 @@
                               "name",
                               "type",
                               "courierName",
-                              "courierId",
                               "requiredLocations",
                               "canFindShipment",
                               "isActive",
@@ -141228,10 +141211,6 @@
                           "type": "string",
                           "maxLength": 100
                         },
-                        "courierId": {
-                          "type": "string",
-                          "maxLength": 160
-                        },
                         "requiredLocations": {
                           "type": "array",
                           "items": {
@@ -141420,7 +141399,6 @@
                         "name",
                         "type",
                         "courierName",
-                        "courierId",
                         "requiredLocations",
                         "canFindShipment",
                         "isActive",
@@ -141614,10 +141592,6 @@
                           "type": "string",
                           "maxLength": 100
                         },
-                        "courierId": {
-                          "type": "string",
-                          "maxLength": 160
-                        },
                         "requiredLocations": {
                           "type": "array",
                           "items": {
@@ -141806,7 +141780,6 @@
                         "name",
                         "type",
                         "courierName",
-                        "courierId",
                         "requiredLocations",
                         "canFindShipment",
                         "isActive",
@@ -141856,10 +141829,6 @@
                           "type": "string",
                           "maxLength": 100
                         },
-                        "courierId": {
-                          "type": "string",
-                          "maxLength": 160
-                        },
                         "requiredLocations": {
                           "type": "array",
                           "items": {
@@ -142048,7 +142017,6 @@
                         "name",
                         "type",
                         "courierName",
-                        "courierId",
                         "requiredLocations",
                         "canFindShipment",
                         "isActive",
@@ -142218,10 +142186,6 @@
                           "type": "string",
                           "maxLength": 100
                         },
-                        "courierId": {
-                          "type": "string",
-                          "maxLength": 160
-                        },
                         "requiredLocations": {
                           "type": "array",
                           "items": {
@@ -142410,7 +142374,6 @@
                         "name",
                         "type",
                         "courierName",
-                        "courierId",
                         "requiredLocations",
                         "canFindShipment",
                         "isActive",

@@ -183,7 +183,7 @@ describe("confirmed payments", () => {
   });
 
   it("accepts a late success from another online gateway only after the checkout failed", async () => {
-    await insertOrder({ paymentMethod: "sslcommerz" });
+    await insertOrder({ paymentMethod: "scalius.bangladesh:sslcommerz" });
     await expect(confirm()).resolves.toMatchObject({ success: false, retryable: false });
 
     sqlite.prepare("UPDATE orders SET payment_status = 'failed' WHERE id = 'order_1'").run();

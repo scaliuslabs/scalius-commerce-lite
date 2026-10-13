@@ -2382,8 +2382,8 @@ describe("create order commit ordering", () => {
 
   it("fails closed for SSLCommerz before attempt creation when only JWT fallback could read credentials", async () => {
     mocks.getActivePaymentMethods.mockImplementation(async (_db, _kv, encryptionKey?: string) => ({
-      enabledMethods: encryptionKey === "jwt-fallback" ? ["sslcommerz"] : [],
-      defaultMethod: encryptionKey === "jwt-fallback" ? "sslcommerz" : "cod",
+      enabledMethods: encryptionKey === "jwt-fallback" ? ["scalius.bangladesh:sslcommerz"] : [],
+      defaultMethod: encryptionKey === "jwt-fallback" ? "scalius.bangladesh:sslcommerz" : "cod",
     }));
     const { app, db, kv } = createTestApp();
 
@@ -2392,7 +2392,7 @@ describe("create order commit ordering", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...validOrderBody, paymentMethod: "sslcommerz" }),
+        body: JSON.stringify({ ...validOrderBody, paymentMethod: "scalius.bangladesh:sslcommerz" }),
       },
       { CACHE: kv, JWT_SECRET: "jwt-fallback" } as never,
     );
@@ -2420,8 +2420,8 @@ describe("create order commit ordering", () => {
       currencySymbol: "د.ك",
     });
     mocks.getActivePaymentMethods.mockResolvedValue({
-      enabledMethods: ["sslcommerz"],
-      defaultMethod: "sslcommerz",
+      enabledMethods: ["scalius.bangladesh:sslcommerz"],
+      defaultMethod: "scalius.bangladesh:sslcommerz",
     });
     const { app, kv } = createTestApp();
 
@@ -2430,7 +2430,7 @@ describe("create order commit ordering", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...validOrderBody, paymentMethod: "sslcommerz" }),
+        body: JSON.stringify({ ...validOrderBody, paymentMethod: "scalius.bangladesh:sslcommerz" }),
       },
       { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
     );
@@ -2454,8 +2454,8 @@ describe("create order commit ordering", () => {
     ["above", 500000.01],
   ])("rejects SSLCommerz full-payment amounts %s provider bounds before checkout writes", async (_label, subtotal) => {
     mocks.getActivePaymentMethods.mockResolvedValue({
-      enabledMethods: ["sslcommerz"],
-      defaultMethod: "sslcommerz",
+      enabledMethods: ["scalius.bangladesh:sslcommerz"],
+      defaultMethod: "scalius.bangladesh:sslcommerz",
     });
     mocks.validateStorefrontCartItems.mockResolvedValue({
       valid: true,
@@ -2482,7 +2482,7 @@ describe("create order commit ordering", () => {
     mocks.createStorefrontOrder.mockResolvedValue({
       checkoutToken: "chk_ssl_bounds",
       orderId: "order_ssl_bounds",
-      paymentMethod: "sslcommerz",
+      paymentMethod: "scalius.bangladesh:sslcommerz",
       totalAmount: subtotal,
       taxQuote: {
         ...DEFAULT_TAX_QUOTE,
@@ -2498,7 +2498,7 @@ describe("create order commit ordering", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...validOrderBody, paymentMethod: "sslcommerz" }),
+        body: JSON.stringify({ ...validOrderBody, paymentMethod: "scalius.bangladesh:sslcommerz" }),
       },
       { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
     );
@@ -2518,8 +2518,8 @@ describe("create order commit ordering", () => {
 
   it("rejects SSLCommerz deposit amounts outside provider bounds before checkout writes", async () => {
     mocks.getActivePaymentMethods.mockResolvedValue({
-      enabledMethods: ["sslcommerz"],
-      defaultMethod: "sslcommerz",
+      enabledMethods: ["scalius.bangladesh:sslcommerz"],
+      defaultMethod: "scalius.bangladesh:sslcommerz",
     });
     mocks.validateStorefrontCartItems.mockResolvedValue({
       valid: true,
@@ -2543,7 +2543,7 @@ describe("create order commit ordering", () => {
     mocks.createStorefrontOrder.mockResolvedValue({
       checkoutToken: "chk_order_1",
       orderId: "order_1",
-      paymentMethod: "sslcommerz",
+      paymentMethod: "scalius.bangladesh:sslcommerz",
       taxQuote: DEFAULT_TAX_QUOTE,
       commitPayload: { orderData: { id: "order_1" } },
     });
@@ -2557,7 +2557,7 @@ describe("create order commit ordering", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...validOrderBody, paymentMethod: "sslcommerz" }),
+        body: JSON.stringify({ ...validOrderBody, paymentMethod: "scalius.bangladesh:sslcommerz" }),
       },
       { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
     );
@@ -2577,8 +2577,8 @@ describe("create order commit ordering", () => {
 
   it("uses the recomputed committed quote after SSLCommerz precommit validation", async () => {
     mocks.getActivePaymentMethods.mockResolvedValue({
-      enabledMethods: ["sslcommerz"],
-      defaultMethod: "sslcommerz",
+      enabledMethods: ["scalius.bangladesh:sslcommerz"],
+      defaultMethod: "scalius.bangladesh:sslcommerz",
     });
     mocks.calculateStorefrontTaxQuote.mockResolvedValue(DEFAULT_TAX_QUOTE);
     const committedQuote = {
@@ -2589,7 +2589,7 @@ describe("create order commit ordering", () => {
     mocks.createStorefrontOrder.mockResolvedValue({
       checkoutToken: "chk_ssl_recomputed",
       orderId: "order_ssl_recomputed",
-      paymentMethod: "sslcommerz",
+      paymentMethod: "scalius.bangladesh:sslcommerz",
       totalAmount: 120,
       taxQuote: committedQuote,
       commitPayload: { orderData: { id: "order_ssl_recomputed", totalAmountMinor: 12_000 } },
@@ -2601,7 +2601,7 @@ describe("create order commit ordering", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...validOrderBody, paymentMethod: "sslcommerz" }),
+        body: JSON.stringify({ ...validOrderBody, paymentMethod: "scalius.bangladesh:sslcommerz" }),
       },
       { CACHE: kv, CREDENTIAL_ENCRYPTION_KEY: "credential-key" } as never,
     );

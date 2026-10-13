@@ -5,8 +5,6 @@ import {
   getFraudProviders,
   fraudLookup,
   fraudLookupWithActiveProvider,
-  readRetiredFraudCheckers,
-  replaceRetiredFraudChecker,
   saveFraudProvider,
   testFraudProvider,
 } from "./fraud-checker.service";
@@ -39,54 +37,13 @@ describe("fraud checker rows", () => {
   it("saves a row that names an app provider, encrypted, and refuses anything else", async () => {
     const { db, sqlite } = fraudDb();
     const saved = await saveFraudProvider(db, { name: "Acme Radar", isActive: true, providerType: APP_ID }, KEY);
-    expect(saved).toMatchObject({ name: "Acme Radar", isActive: true, providerType: APP_ID, retired: false });
+    expect(saved).toMatchObject({ name: "Acme Radar", isActive: true, providerType: APP_ID });
     const stored = sqlite.prepare("SELECT value FROM settings WHERE category = 'fraud-checker'").get() as { value: string };
     expect(stored.value).not.toContain("Acme Radar");
     await expect(getFraudProvider(db, saved.id, KEY)).resolves.toEqual(saved);
     await expect(getFraudProvider(db, saved.id)).resolves.toBeNull();
     await expect(saveFraudProvider(db, { name: "Old", isActive: true, providerType: "fraudbd" }, KEY)).rejects.toBeInstanceOf(ValidationError);
     await expect(saveFraudProvider(db, { name: "Old", isActive: true, providerType: "acme.radar" }, KEY)).rejects.toBeInstanceOf(ValidationError);
-  });
-
-  it("reads a checker saved before the move as the Bangladesh pack's, and keeps its keys until the pack takes them", async () => {
-    const { db, insert } = fraudDb();
-    await insert("row_bd", { name: "FraudBD", apiUrl: "https://fraudbd.com/api/check-courier-info", apiKey: "fraudbd-key", apiSecret: "pw", userId: "user", isActive: true, providerType: "fraudbd" }, { updatedAt: 1_700_000_100 });
-    await insert("row_custom", { name: "Legacy", apiUrl: "https://fraudchecker.link/api/v1/qc/", apiKey: "legacy-key", isActive: false }, { plaintext: true });
-    await insert("row_gone", { name: "Gone", apiUrl: "https://x.example", apiKey: "k", isActive: false, providerType: "unknown" });
-
-    await expect(getFraudProviders(db, KEY)).resolves.toEqual([
-      { id: "row_bd", name: "FraudBD", isActive: true, providerType: "scalius.bangladesh:fraudbd", retired: true },
-      { id: "row_custom", name: "Legacy", isActive: false, providerType: "scalius.bangladesh:fraudchecker", retired: true },
-    ]);
-    // Saving over it would lose its keys: activate the pack first.
-    await expect(saveFraudProvider(db, { id: "row_bd", name: "FraudBD", isActive: false, providerType: "scalius.bangladesh:fraudbd" }, KEY))
-      .rejects.toThrow("Activate it in Apps first");
-
-    const inactive = { resolve: vi.fn(async () => ({ provider: null, issue: "Activate Bangladesh pack in Apps to use it." })) };
-    await expect(fraudLookupWithActiveProvider(db, "+8801700000000", KEY, inactive as never)).resolves.toEqual({
-      status: "unavailable", provider: "FraudBD", reason: "Activate Bangladesh pack in Apps to use it.",
-    });
-    expect(inactive.resolve).toHaveBeenCalledWith("fraud", "scalius.bangladesh:fraudbd");
-    await expect(testFraudProvider(db, "row_bd", KEY, inactive as never)).resolves.toEqual({ success: false, message: "Activate Bangladesh pack in Apps to use it." });
-  });
-
-  it("hands a retired row's credentials over once, then rewrites it as the app's row", async () => {
-    const { db, insert } = fraudDb();
-    await insert("row_bd", { name: "FraudBD", apiUrl: "https://fraudbd.com/api/check-courier-info", apiKey: "fraudbd-key", apiSecret: "pw", userId: "user", isActive: true, providerType: "fraudbd" });
-    await saveFraudProvider(db, { id: "row_app", name: "Acme Radar", isActive: false, providerType: APP_ID }, KEY);
-
-    const [retired, ...others] = await readRetiredFraudCheckers(db, KEY);
-    expect(others).toEqual([]);
-    expect(retired).toMatchObject({
-      id: "row_bd", type: "fraudbd", replacement: "scalius.bangladesh:fraudbd", isActive: true,
-      values: { apiUrl: "https://fraudbd.com/api/check-courier-info", apiKey: "fraudbd-key", apiSecret: "pw", userId: "user" },
-    });
-    await expect(readRetiredFraudCheckers(db, Buffer.alloc(32, 12).toString("base64"))).resolves.toEqual([]);
-
-    await expect(replaceRetiredFraudChecker(db, retired!, KEY)).resolves.toBe(true);
-    await expect(replaceRetiredFraudChecker(db, retired!, KEY)).resolves.toBe(false);
-    await expect(readRetiredFraudCheckers(db, KEY)).resolves.toEqual([]);
-    await expect(getFraudProvider(db, "row_bd", KEY)).resolves.toEqual({ id: "row_bd", name: "FraudBD", isActive: true, providerType: "scalius.bangladesh:fraudbd", retired: false });
   });
 });
 

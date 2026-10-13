@@ -22,7 +22,7 @@ import {
 } from "~/components/ui/dialog";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { hasAppPaymentMethod, useAppPaymentMethodNames, useOrderPaymentProvider } from "~/hooks/use-app-payment-method-names";
-import { BANGLADESH_PACK_ID, retiredPaymentMethod } from "~/lib/bangladesh-pack";
+import { BANGLADESH_PACK_ID } from "~/lib/bangladesh-pack";
 import { useCurrency } from "~/hooks/use-currency";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
@@ -75,10 +75,9 @@ type SessionAttempt = OrderPaymentsPayload["paymentSessionAttempts"][number];
 
 const COD_FAILURE_REASONS: CodFailureReason[] = ["not_home", "refused", "no_cash", "wrong_address", "other"];
 const MANUAL_REFUND_CHECK_STATUSES = new Set(["processing", "provider_unknown", "reconcile_required", "pending"]);
-/** A hosted gateway the buyer can be sent back to: any app's (apps are hosted only), or a retired built-in id one replaced. */
+/** A hosted gateway the buyer can be sent back to: any app's (apps are hosted only). */
 function isRecoveryLinkGateway(value: string | null | undefined): boolean {
-  return typeof value === "string"
-    && (retiredPaymentMethod(value.trim().toLowerCase()) !== null || isQualifiedProviderId(value.trim()));
+  return typeof value === "string" && isQualifiedProviderId(value.trim());
 }
 
 /** Fallback when the server did not decide: only unpaid, failed hosted payments. */
@@ -178,7 +177,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const orderProvider = useOrderPaymentProvider(order.paymentMethod, isHydrated && hasAppPaymentMethod([order.paymentMethod]));
   const inactiveApp = orderProvider === undefined || (orderProvider !== null && orderProvider.readiness?.enabled !== false)
     ? null
-    : orderProvider?.appName ?? (retiredPaymentMethod(order.paymentMethod) || order.paymentMethod?.startsWith(`${BANGLADESH_PACK_ID}:`)
+    : orderProvider?.appName ?? (order.paymentMethod?.startsWith(`${BANGLADESH_PACK_ID}:`)
       ? t("payment.bangladeshPack")
       : methodLabel(order.paymentMethod ?? ""));
   const activeRefundCopy = activeRefund

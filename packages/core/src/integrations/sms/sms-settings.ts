@@ -2,13 +2,7 @@
 // The merchant's SMS gateway choice (the `sms` settings document) resolved to
 // one SMS port. Every gateway is an app provider (`<plugin id>:<provider id>`)
 // reached through the request's AppProviders; its keys live in the app's own
-// settings, encrypted. A choice saved before the Bangladesh gateways moved
-// into the Bangladesh pack (`bdbulksms`, …) means that pack's provider
-// (retired-providers.ts) and fails closed until the pack is active.
-//
-// The stored document may still carry those gateways' encrypted keys (the
-// schema keeps unknown fields untouched) until the pack's activation moves
-// them into the pack (apps/api/src/plugins/provider-handoff.ts).
+// settings, encrypted.
 //
 // SECURITY: nothing here decrypts or logs a credential. Dispatch reads the
 // authoritative document for every send, so a changed choice is never stale.
@@ -22,7 +16,6 @@ import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { smsDocument } from "../../modules/settings";
 import { isAppProviderId, resolveAppProvider, type AppProviders } from "../provider-port";
-import { retiredProviderReplacement } from "../retired-providers";
 import type { SmsProvider } from "./port";
 
 /** A choice the SMS settings can save: an app provider id. */
@@ -56,18 +49,11 @@ interface ResolvedSms {
   error: string | null;
 }
 
-/** The saved choice as an app provider id: a retired built-in id means the app that replaced it. */
-function savedChoice(stored: string | null | undefined): string | null {
-  const id = stored?.trim() || null;
-  if (!id) return null;
-  return retiredProviderReplacement("sms", id) ?? id;
-}
-
 /** The merchant's saved choice as one SMS port, or why it cannot send. */
 async function resolveSmsProvider(db: Database, apps: AppProviders | undefined): Promise<ResolvedSms & { revision: number }> {
   const stored = await smsDocument.readDetailed(db);
   const revision = stored.revision;
-  const activeProvider = savedChoice(stored.value.activeProvider);
+  const activeProvider = stored.value.activeProvider?.trim() || null;
   if (!activeProvider) {
     return { activeProvider: null, provider: null, error: "No active SMS provider selected", revision };
   }

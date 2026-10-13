@@ -39,7 +39,6 @@ import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch, phonePrefixF
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
 import { formatOrderCsvLineProperties } from "../csv-export";
 import {
-  paymentMethodAliases,
   type RefundAttemptVisibilityRow,
   resolveActiveRefundOperationsForOrders,
   selectActiveRefundAttemptRowsForOrders,
@@ -455,11 +454,7 @@ export function orderListConditions(db: Database, filter: OrderListFilter): { co
     }
 
     if (paymentMethod) {
-        // An app gateway and the retired built-in id it replaced are one method.
-        const aliases = paymentMethodAliases(paymentMethod);
-        whereConditions.push(aliases.length === 1
-            ? sql`${orders.paymentMethod} = ${paymentMethod}`
-            : sql`${orders.paymentMethod} IN (${sql.join(aliases.map((alias) => sql`${alias}`), sql`, `)})`);
+        whereConditions.push(sql`${orders.paymentMethod} = ${paymentMethod}`);
     }
 
     if (fulfillmentStatus) {

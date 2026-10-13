@@ -25,7 +25,6 @@ import type { Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
-import { retiredCourierTrackingUrl } from "../../integrations/retired-providers";
 import { publishedMediaObjectKey } from "../media-references";
 import { customerAddressFromRow, paidSpendAmount, paidSpendProjection } from "../customers";
 import { orderShippingAddressSelection } from "./shipping-address";
@@ -681,8 +680,7 @@ export async function getCustomerOrders(
                 statusLabel: customerShipmentStatusLabel(shipment.status),
                 rawStatus: shipment.rawStatus,
                 trackingId: shipment.trackingId,
-                // A parcel a retired courier booked before it moved into an app keeps its page.
-                trackingUrl: shipment.trackingUrl ?? retiredCourierTrackingUrl(shipment.providerType, shipment.trackingId),
+                trackingUrl: shipment.trackingUrl,
                 courierName: shipment.courierName,
                 lastChecked: timestampToIso(shipment.lastChecked),
                 updatedAt: timestampToIso(shipment.updatedAt),

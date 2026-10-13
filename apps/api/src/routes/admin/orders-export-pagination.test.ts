@@ -24,7 +24,7 @@ describe("order CSV export pagination", () => {
             paid_amount_minor, balance_due_minor, currency_code, currency_decimal_places,
             created_at, updated_at
         ) VALUES (?, 'Export buyer', ?, 'Test address', 'city', 'zone',
-            10000, 0, 'sslcommerz', 'incomplete', 'unpaid', 0, 10000, 'BDT', 2, ?, ?)`);
+            10000, 0, 'scalius.bangladesh:sslcommerz', 'incomplete', 'unpaid', 0, 10000, 'BDT', 2, ?, ?)`);
         ids.forEach((id, index) => {
             const timestamp = 1_700_000_000 + index;
             insert.run(id, index % 2 ? "+8801700000001" : "+8801700000000", timestamp, timestamp);
@@ -51,7 +51,7 @@ describe("order CSV export pagination", () => {
         const query = new URLSearchParams({
             status: "incomplete",
             paymentStatus: "unpaid",
-            paymentMethod: "sslcommerz",
+            paymentMethod: "scalius.bangladesh:sslcommerz",
             fulfillmentStatus: "pending",
             sort: "createdAt",
             order: "asc",

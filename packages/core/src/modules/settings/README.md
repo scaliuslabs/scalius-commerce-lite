@@ -51,7 +51,6 @@ A document is `settings(category = <document key>, key = 'document', type = 'jso
 | `whatsapp` | `phoneNumberId`, `authTemplateName` | `accessToken` |
 | `sms` | active provider + provider fields | provider tokens/API keys |
 | `stripe` | provider fields, `enabled` | secret key, webhook secret |
-| `sslcommerz` (retired) | read once by the Bangladesh pack's activation, then cleared | store password |
 | `payment_methods` | `enabledMethods` (`null` = COD implied), `defaultMethod` | -- |
 | `meta_conversions` | `pixelId`, `testEventCode`, `isEnabled`, `logRetentionDays` | `accessToken` |
 

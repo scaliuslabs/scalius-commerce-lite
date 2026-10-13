@@ -177,7 +177,7 @@ describe("Settings → Apps cards", () => {
     sdk.getApiV1AdminSettingsProviders.mockImplementation(() => ok({ providers: [radar] }));
     sdk.postApiV1AdminSettingsProvidersByIdTest.mockImplementation(() => ok({ ok: true, message: "Radar reachable." }));
     sdk.postApiV1AdminFraudChecker.mockImplementation(() =>
-      ok({ id: "row_radar", name: "Acme Radar", isActive: true, providerType: radar.id, retired: false }));
+      ok({ id: "row_radar", name: "Acme Radar", isActive: true, providerType: radar.id }));
     await render(["settings.fraud_checker.view", "settings.fraud_checker.edit"]);
     await vi.waitFor(() => expect(document.body.textContent).toContain("Acme Radar"));
     expect(sdk.getApiV1AdminSettingsProviders).toHaveBeenCalledWith({ query: { kind: "fraud" } });
@@ -195,29 +195,5 @@ describe("Settings → Apps cards", () => {
     expect(sdk.postApiV1AdminFraudChecker).toHaveBeenCalledWith({
       body: { name: "Acme Radar", providerType: radar.id, isActive: true },
     });
-  });
-
-  it("says a checker saved before the move needs its app activated, and does not save over its keys", async () => {
-    const fraudbd = {
-      id: "scalius.bangladesh:fraudbd",
-      kind: "fraud",
-      pluginId: "scalius.bangladesh",
-      appName: "Bangladesh pack",
-      name: "FraudBD",
-      operations: ["check", "testConnection"],
-      canTestConnection: true,
-      readiness: { configured: false, enabled: false, usable: false, missingFields: [], credentialErrors: [], blockedReason: "Activate Bangladesh pack in Apps to use it." },
-      environment: "unknown",
-    };
-    sdk.getApiV1AdminSettingsProviders.mockImplementation(() => ok({ providers: [fraudbd] }));
-    sdk.getApiV1AdminFraudChecker.mockImplementation(() =>
-      ok({ providers: [{ id: "row_bd", name: "FraudBD", isActive: true, providerType: fraudbd.id, retired: true }], pagination: { page: 1, limit: 20, hasMore: false } }));
-    await render(["settings.fraud_checker.view", "settings.fraud_checker.edit"]);
-    await vi.waitFor(() => expect(document.body.textContent).toContain(translate(appsMessages, "checkerMoved", { name: "FraudBD", app: "Bangladesh pack" })));
-
-    await click(button("FraudBD"));
-    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
-    expect(dialog.textContent).toContain("Activate Bangladesh pack in Apps to use it.");
-    expect(dialog.querySelector('[role="switch"]')!.hasAttribute("disabled")).toBe(true);
   });
 });

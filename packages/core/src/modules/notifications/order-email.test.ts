@@ -497,8 +497,8 @@ describe("customer order email composition and delivery", () => {
   });
 
   it("names the courier and links its tracking page in the shipped email and SMS", async () => {
-    sqlite.exec(`INSERT INTO delivery_shipments (id, order_id, provider_type, tracking_id, status)
-      VALUES ('ship_1', 'order_email', 'steadfast', 'SF987', 'in_transit')`);
+    sqlite.exec(`INSERT INTO delivery_shipments (id, order_id, provider_type, courier_name, tracking_id, tracking_url, status)
+      VALUES ('ship_1', 'order_email', 'acme.parcel:parcel', 'Steadfast', 'SF987', 'https://steadfast.com.bd/t/SF987', 'in_transit')`);
     await send("order_shipped", { data: { trackingId: "SF987" } });
     const email = message();
     expect(email.text).toContain("Courier: Steadfast\nTracking ID: SF987\nTrack your parcel: https://steadfast.com.bd/t/SF987");

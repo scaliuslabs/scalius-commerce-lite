@@ -23,7 +23,7 @@ import { buildPaymentCorrelationId, parsePaymentCorrelationId, PAYMENT_CORRELATI
 import { BUILT_IN_PAYMENT_GATEWAY_IDS } from "./identity";
 import type { GatewayRequest } from "./port";
 import { BUILT_IN_PAYMENT_PROVIDERS, paymentProvidersFor, type PaymentProviders } from "./registry";
-import { isOnlinePaymentMethod, paymentMethodAliases } from "./identity";
+import { isOnlinePaymentMethod } from "./identity";
 import { stripeGateway } from "./stripe";
 import { createFakeGateway, FAKE_GATEWAY_ID, type FakeGatewayState } from "./testing";
 
@@ -46,39 +46,19 @@ describe("built-in gateway registry", () => {
   });
 });
 
-describe("a retired built-in gateway (SSLCommerz, now the Bangladesh pack's)", () => {
+describe("an app gateway (SSLCommerz, the Bangladesh pack's)", () => {
   const PACK_SSLCOMMERZ = "scalius.bangladesh:sslcommerz";
 
-  it("stays an online method on stored rows and resolves to the app provider that replaced it", () => {
-    expect(isOnlinePaymentMethod("sslcommerz")).toBe(true);
+  it("is an online method that resolves by its qualified id only", () => {
+    expect(isOnlinePaymentMethod(PACK_SSLCOMMERZ)).toBe(true);
+    expect(isOnlinePaymentMethod("sslcommerz")).toBe(false);
     const { gateway, providers } = createFakeGateway(PACK_SSLCOMMERZ);
-    expect(providers.get("sslcommerz")).toBe(gateway);
-    expect(providers.label("sslcommerz")).toBe("FakePay");
-    // It is never offered under the old id: checkout lists only the app's.
-    expect(providers.methodIds()).not.toContain("sslcommerz");
-    expect(paymentMethodAliases(PACK_SSLCOMMERZ)).toEqual([PACK_SSLCOMMERZ, "sslcommerz"]);
-    expect(paymentMethodAliases("sslcommerz")).toEqual(["sslcommerz", PACK_SSLCOMMERZ]);
-    expect(paymentMethodAliases("stripe")).toEqual(["stripe"]);
+    expect(providers.get(PACK_SSLCOMMERZ)).toBe(gateway);
+    expect(providers.get("sslcommerz")).toBeUndefined();
+    expect(providers.methodIds()).toContain(PACK_SSLCOMMERZ);
   });
 
-  it("fails closed with the app's reason while the pack is not active", async () => {
-    const standIn = BUILT_IN_PAYMENT_PROVIDERS.require("sslcommerz");
-    expect(standIn.id).toBe("sslcommerz");
-    expect(standIn.label).toBe("SSLCommerz");
-    // The same stand-in every time: identity checks compare gateways.
-    expect(BUILT_IN_PAYMENT_PROVIDERS.get("sslcommerz")).toBe(standIn);
-    const settings = await standIn.loadSettings({} as Database, "key");
-    expect(standIn.readiness(settings)).toMatchObject({
-      usable: false,
-      blockedReason: "SSLCommerz: Activate Bangladesh pack in Apps to use it.",
-    });
-    expect(standIn.canVerify(settings!)).toBe(false);
-    await expect(standIn.createSession({} as never, call(settings!))).rejects.toThrow("Activate Bangladesh pack in Apps");
-    await expect(standIn.refund!({} as never, call(settings!))).rejects.toThrow("Activate Bangladesh pack in Apps");
-    await expect(standIn.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings!))).resolves.toMatchObject({ status: "retry" });
-  });
-
-  it("reads the app providers for a retired id, and only then", async () => {
+  it("reads the app providers for an app id, and only then", async () => {
     let loads = 0;
     const app = createFakeGateway(PACK_SSLCOMMERZ);
     const source = async () => {
@@ -87,7 +67,7 @@ describe("a retired built-in gateway (SSLCommerz, now the Bangladesh pack's)", (
     };
     expect(await paymentProvidersFor(source, "stripe")).toBe(BUILT_IN_PAYMENT_PROVIDERS);
     expect(loads).toBe(0);
-    expect((await paymentProvidersFor(source, "sslcommerz")).get("sslcommerz")).toBe(app.gateway);
+    expect((await paymentProvidersFor(source, PACK_SSLCOMMERZ)).get(PACK_SSLCOMMERZ)).toBe(app.gateway);
     expect(loads).toBe(1);
   });
 });
@@ -136,9 +116,9 @@ describe("registry currency and limit policy", () => {
     expect(getCheckoutGatewayPrecommitIssue({
       paymentMethod: "stripe", currencyCode: "KWD", totalAmountMinor: 12_345, partialPaymentEnabled: false, partialPaymentAmount: 0,
     })).toMatch(/^Stripe cannot charge 12\.345 KWD exactly/);
-    // A gateway without codecs takes ISO minor units as they are (SSLCommerz, through its retired id too).
+    // A gateway without codecs takes ISO minor units as they are (SSLCommerz).
     expect(providers.encodeAmount(FAKE_GATEWAY_ID, 12_550, "BDT")).toMatchObject({ chargedMinor: 12_550, roundingMinor: 0 });
-    expect(createFakeGateway("scalius.bangladesh:sslcommerz").providers.encodeAmount("sslcommerz", 12_550, "BDT"))
+    expect(createFakeGateway("scalius.bangladesh:sslcommerz").providers.encodeAmount("scalius.bangladesh:sslcommerz", 12_550, "BDT"))
       .toMatchObject({ chargedMinor: 12_550, roundingMinor: 0 });
   });
 });

@@ -21,16 +21,13 @@ describe("gateway presentation", () => {
       markKind: "wordmark",
       hosted: false,
     });
-    // SSLCommerz is the Bangladesh pack's now; buyers see it as before, by either id.
-    for (const id of ["sslcommerz", SSLCOMMERZ_GATEWAY_ID]) {
-      expect(getGatewayPresentation(id, "Online Payment")).toMatchObject({
-        buyerLabel: "Pay online",
-        providerLabel: "SSLCommerz",
-        markSrc: "/payment-marks/sslcommerz.png",
-        markKind: "wordmark",
-        hosted: true,
-      });
-    }
+    expect(getGatewayPresentation(SSLCOMMERZ_GATEWAY_ID, "Online Payment")).toMatchObject({
+      buyerLabel: "Pay online",
+      providerLabel: "SSLCommerz",
+      markSrc: "/payment-marks/sslcommerz.png",
+      markKind: "wordmark",
+      hosted: true,
+    });
     // Every method shows a mark in the same badge: a brandless one a plain icon.
     expect(getGatewayPresentation("cod", "Cash on Delivery")).toMatchObject({
       buyerLabel: "Cash on delivery",
@@ -90,11 +87,10 @@ describe("gateway presentation", () => {
     expect(appGatewayName("scalius.nagad:nagad", gateways)).toBe("Nagad");
     expect(appGatewayName(BKASH, [{ id: BKASH, name: "  " }])).toBe("Bkash");
     expect(appGatewayName("stripe", gateways)).toBeNull();
-    // A retired built-in id reads as the provider that replaced it.
-    expect(appGatewayName("sslcommerz", gateways)).toBe("SSLCommerz");
-    expect(appGatewayName("sslcommerz", [{ id: SSLCOMMERZ_GATEWAY_ID, name: "Online Payment" }])).toBe("Online Payment");
+    expect(appGatewayName(SSLCOMMERZ_GATEWAY_ID, gateways)).toBe("Sslcommerz");
+    expect(appGatewayName(SSLCOMMERZ_GATEWAY_ID, [{ id: SSLCOMMERZ_GATEWAY_ID, name: "Online Payment" }])).toBe("Online Payment");
     expect(isAppGatewayId(BKASH)).toBe(true);
-    expect(isAppGatewayId("sslcommerz")).toBe(true);
+    expect(isAppGatewayId("sslcommerz")).toBe(false);
     expect(isAppGatewayId("stripe")).toBe(false);
   });
 });

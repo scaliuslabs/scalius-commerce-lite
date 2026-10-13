@@ -5,13 +5,6 @@
 // id>"`), whose credentials live in the app's settings; the lookup goes
 // through the first active row, reaching the app through the request's
 // AppProviders. A manual tool on the order page: it advises, it never blocks.
-//
-// Rows saved before the Bangladesh checkers moved into the Bangladesh pack
-// still name a retired built-in type (`fraudbd`, …, empty for the custom API)
-// and hold its credentials. They read as the pack's provider
-// (integrations/retired-providers.ts) and fail closed until the pack is
-// active; the pack's activation moves their credentials and rewrites them
-// (`readRetiredFraudCheckers`, `replaceRetiredFraudChecker`).
 
 import { normalizeMarketCountry } from "@scalius/shared/markets";
 import { parsePhoneNumberFromString } from "@scalius/shared/customer-utils";
@@ -27,7 +20,6 @@ import {
   ServiceUnavailableError,
 } from "@scalius/core/errors";
 import { isAppProviderId, resolveAppProvider, type AppProviders } from "../../integrations/provider-port";
-import { retiredProviderReplacement } from "../../integrations/retired-providers";
 import type { FraudProvider } from "./provider";
 
 export interface FraudCheckerProvider {
@@ -36,19 +28,13 @@ export interface FraudCheckerProvider {
   isActive: boolean;
   /** The app provider (`<plugin id>:<provider id>`) the row looks up through. */
   providerType: string;
-  /** The row still holds a retired built-in checker's credentials, waiting for its app's activation. */
-  retired: boolean;
 }
 
-/** A row as stored (decrypted): an app row, or a retired built-in checker with its credentials. */
+/** A row as stored (decrypted). */
 interface StoredRow {
   name: string;
   isActive: boolean;
   providerType?: string;
-  apiUrl?: string;
-  apiKey?: string;
-  apiSecret?: string;
-  userId?: string;
 }
 
 const CATEGORY = "fraud-checker";
@@ -64,13 +50,11 @@ async function parseStoredRow(value: string, encryptionKey?: string): Promise<St
   }
 }
 
-/** A stored row as the dashboard and the lookup read it; null for a type nothing provides any more. */
+/** A stored row as the dashboard and the lookup read it; null for a type that names no app provider. */
 function toProvider(id: string, row: StoredRow): FraudCheckerProvider | null {
-  const stored = row.providerType ?? "";
-  const replacement = isAppProviderId(stored) ? null : retiredProviderReplacement("fraud", stored);
-  const providerType = isAppProviderId(stored) ? stored : replacement;
-  if (!providerType) return null;
-  return { id, name: row.name, isActive: row.isActive === true, providerType, retired: replacement !== null };
+  const providerType = row.providerType ?? "";
+  if (!isAppProviderId(providerType)) return null;
+  return { id, name: row.name, isActive: row.isActive === true, providerType };
 }
 
 /**
@@ -118,9 +102,7 @@ export async function getFraudProvider(
 
 /**
  * Save a fraud checker row (create or update). It names an app provider only;
- * the caller checks that an installed app declares it. A row that still holds
- * a retired checker's credentials is not overwritten: activating its app moves
- * them first.
+ * the caller checks that an installed app declares it.
  */
 export async function saveFraudProvider(
   db: Database,
@@ -136,9 +118,6 @@ export async function saveFraudProvider(
   }
   const providerId = provider.id || nanoid();
   const existing = await getFraudProvider(db, providerId, encryptionKey);
-  if (existing?.retired) {
-    throw new ValidationError("This checker's keys move to its app when the app is activated. Activate it in Apps first.");
-  }
   const stored: StoredRow = { name: provider.name, isActive: provider.isActive, providerType: provider.providerType };
   const storedValue = await encryptCredentials(JSON.stringify(stored), encryptionKey);
 
@@ -165,7 +144,7 @@ export async function saveFraudProvider(
     });
   }
 
-  return { id: providerId, ...stored, providerType: provider.providerType, retired: false };
+  return { id: providerId, ...stored, providerType: provider.providerType };
 }
 
 /**
@@ -288,66 +267,4 @@ export async function fraudLookupWithActiveProvider(
   }
 
   return fraudLookup(activeProvider, phone, apps, options);
-}
-
-// ── Retired built-in checkers (provider handoff) ─────────────────────────
-
-/** A row that still holds a retired built-in checker's credentials (decrypted). */
-export interface RetiredFraudChecker {
-  id: string;
-  name: string;
-  isActive: boolean;
-  /** The retired type (`default` for the custom API). */
-  type: string;
-  /** The app provider that replaced it. */
-  replacement: string;
-  /** The old fields by their stored names: apiUrl, apiKey, apiSecret, userId. */
-  values: Record<string, string>;
-  /** The row as stored, so the rewrite applies only to what was read. */
-  storedValue: string;
-  updatedAt: number;
-}
-
-/**
- * Every row that still names a retired checker, newest first, decrypted with
- * the strict reader (a row the key cannot open is left alone). Only for the
- * handoff that moves them into their app: never logged, never returned to a
- * client.
- */
-export async function readRetiredFraudCheckers(db: Database, encryptionKey: string): Promise<RetiredFraudChecker[]> {
-  const rows = await db
-    .select({ key: settings.key, value: settings.value, updatedAt: settings.updatedAt })
-    .from(settings)
-    .where(eq(settings.category, CATEGORY))
-    .orderBy(desc(settings.updatedAt), desc(settings.key));
-  const retired: RetiredFraudChecker[] = [];
-  for (const row of rows) {
-    const data = await parseStoredRow(row.value, encryptionKey);
-    if (!data || isAppProviderId(data.providerType ?? "")) continue;
-    const type = data.providerType || "default";
-    const replacement = retiredProviderReplacement("fraud", type);
-    if (!replacement) continue;
-    const values: Record<string, string> = {};
-    for (const field of ["apiUrl", "apiKey", "apiSecret", "userId"] as const) {
-      const value = data[field];
-      if (typeof value === "string" && value.trim()) values[field] = value.trim();
-    }
-    const updatedAt = row.updatedAt instanceof Date ? row.updatedAt.getTime() : Number(row.updatedAt ?? 0);
-    retired.push({ id: row.key, name: data.name, isActive: data.isActive === true, type, replacement, values, storedValue: row.value, updatedAt });
-  }
-  return retired;
-}
-
-/**
- * Rewrites one retired row as a row of its app provider (name and status
- * kept, credentials dropped), only while it is still the row that was read.
- */
-export async function replaceRetiredFraudChecker(db: Database, checker: RetiredFraudChecker, encryptionKey: string): Promise<boolean> {
-  const stored: StoredRow = { name: checker.name, isActive: checker.isActive, providerType: checker.replacement };
-  const updated = await db
-    .update(settings)
-    .set({ value: await encryptCredentials(JSON.stringify(stored), encryptionKey), updatedAt: sql`unixepoch()` })
-    .where(and(eq(settings.category, CATEGORY), eq(settings.key, checker.id), eq(settings.value, checker.storedValue)))
-    .returning({ key: settings.key });
-  return updated.length > 0;
 }

@@ -2,9 +2,6 @@
 // row names it as `<plugin id>:<provider id>` and keeps no keys, its
 // settings live in the app (GET/POST /admin/settings/providers lists and
 // tests them). Readiness, activation and tests go through the courier port.
-// A row that still names a retired built-in courier (`pathao`, `steadfast`)
-// reads as blocked ("Activate Bangladesh pack in Apps to use it.") until the
-// pack's activation repoints it.
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import {
     courierFor,
@@ -16,7 +13,6 @@ import {
     type CourierProvidersSource,
 } from "@scalius/core/modules/delivery";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
-import { retiredProviderReplacement } from "@scalius/core/integrations/retired-providers";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../../utils/api-error";
@@ -28,7 +24,6 @@ import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../
 import { readinessSchema } from "../../../schemas/readiness";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-/** An app courier's `<plugin id>:<provider id>` (or a retired built-in id on a row not yet repointed). */
 const PROVIDER_TYPE_MAX = 160;
 const DELIVERY_PROVIDER_PAGE_LIMIT = 10;
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
@@ -76,8 +71,6 @@ async function serializeProviderForClient(
         countries: courier?.countries ?? "any",
         /** The courier's name (`Pathao`), whether or not its app is active. */
         courierName: (courier?.label ?? provider.type).slice(0, 100),
-        /** The app courier the row uses: its own type, or the app courier that replaced a retired one. */
-        courierId: (retiredProviderReplacement("courier", provider.type) ?? provider.type).slice(0, PROVIDER_TYPE_MAX),
         /** The address levels a booking needs mapped to the courier's own place ids (the order page asks first). */
         requiredLocations: [...(courier?.requiredLocations ?? [])],
         /** Whether the courier can find a booking by the order number (recovering a lost answer). */
@@ -113,11 +106,9 @@ async function serializeProviderForClient(
 const deliveryProviderSchema = z.object({
     id: z.string().max(100),
     name: z.string().max(100),
-    /** An app courier's `<plugin id>:<provider id>` (a retired `pathao`/`steadfast` until its app repoints the row). */
+    /** An app courier's `<plugin id>:<provider id>`. */
     type: z.string().max(PROVIDER_TYPE_MAX),
     courierName: z.string().max(100),
-    /** The app courier (`<plugin id>:<provider id>`) the row uses; for a retired type, the one that replaced it. */
-    courierId: z.string().max(PROVIDER_TYPE_MAX),
     requiredLocations: z.array(z.enum(["city", "zone", "area"])).max(3),
     canFindShipment: z.boolean(),
     isActive: z.boolean(),
