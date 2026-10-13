@@ -4,6 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { ADMIN_SETUP_TOKEN_HEADER } from "@scalius/shared/setup-token";
+import { settingsMirror } from "@scalius/core/settings-store";
 import { and, desc, eq, gt, inArray, isNotNull, like, ne, or, sql } from "drizzle-orm";
 import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
 import {
@@ -937,11 +938,7 @@ const removeStaffRoute = createRoute({
 app.openapi(removeStaffRoute, async (c) => {
     const { id: userId } = c.req.valid("param");
     const { removeStaffMember } = await import("@scalius/core/auth/rbac/staff-removal");
-    await removeStaffMember(
-        c.get("db"),
-        { actorId: c.get("user").id, userId },
-        c.env.CACHE as KVNamespace | undefined,
-    );
+    await removeStaffMember(c.get("db"), { actorId: c.get("user").id, userId });
     return ok(c, { message: "Staff member removed" });
 });
 
@@ -2285,7 +2282,7 @@ async function applySetupStore(
 ): Promise<"applied" | "skipped" | "not_requested"> {
     if (!store) return "not_requested";
     try {
-        const result = await applyStoreSetup(c.get("db"), store, c.env.CACHE);
+        const result = await applyStoreSetup(c.get("db"), store, settingsMirror(c.env));
         if (result.priceIncrementChanged) {
             await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch(() => undefined);
         }
@@ -2345,10 +2342,8 @@ setupApp.openapi(setupRoute, async (c) => {
         throw new ForbiddenError("An admin user already exists. Please use the login page.");
     }
 
-    // D1 is the setup authority: KV is eventually consistent and cannot be a
-    // compare-and-set lock for first-admin bootstrap.
+    // The database is the setup authority and the first-admin bootstrap lock.
     const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
-    const kv = env.CACHE as KVNamespace | undefined;
     await enforceAdminSetupRateLimit(db, ip);
     await enforceSetupToken(c, ip);
 
@@ -2384,7 +2379,7 @@ setupApp.openapi(setupRoute, async (c) => {
             setupClaim = null;
 
             const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
-            await autoSeedRbacIfNeeded(db, kv);
+            await autoSeedRbacIfNeeded(db);
 
             const storeSetup = await applySetupStore(c, store);
             return created(c, { message: "Admin account created successfully", userId: credential.userId, storeSetup });
@@ -2431,7 +2426,7 @@ setupApp.openapi(setupRoute, async (c) => {
             setupClaim = null;
 
             const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
-            await autoSeedRbacIfNeeded(db, kv);
+            await autoSeedRbacIfNeeded(db);
 
             const storeSetup = await applySetupStore(c, store);
             return created(c, { message: "Admin account recovered successfully", userId: existingUser.id, storeSetup });

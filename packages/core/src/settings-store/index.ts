@@ -26,6 +26,7 @@
 // closed instead of guessing from defaults. Public HTTP caches are not per
 // document; route handlers bump the store cache generation after a save.
 
+import { workerCacheHint, type WorkerCacheHint } from "@scalius/shared/worker-cache-hint";
 import type { ZodType } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -60,42 +61,16 @@ export class SettingsRevisionConflictError extends AppError {
 }
 
 /** The per-colo mirror the store needs (a hint, never authority; the row is). */
-export interface SettingsStoreKv {
-  get(key: string): Promise<string | null>;
-  put(key: string, value: string): Promise<void>;
-  delete(key: string): Promise<void>;
-}
-
-const SETTINGS_MIRROR_CACHE_NAME = "scalius-settings";
-const SETTINGS_MIRROR_TTL_SECONDS = 60;
-const WORKER_VERSION_PATTERN = /^[0-9A-Za-z-]{1,64}$/;
+export type SettingsStoreKv = WorkerCacheHint;
 
 /**
- * A Cache API mirror keyed by the Worker version (a deploy starts empty).
- * Null without the Cache API or a version, so reads fall to the row.
+ * A 60-second Cache API mirror keyed by the Worker version (a deploy starts
+ * empty). Null without the Cache API or a version, so reads fall to the row.
  */
 export function settingsMirror(
   env: { CF_VERSION_METADATA?: { id?: unknown } | null } | null | undefined,
 ): SettingsStoreKv | null {
-  const version = env?.CF_VERSION_METADATA?.id;
-  if (typeof version !== "string" || !WORKER_VERSION_PATTERN.test(version)) return null;
-  if (typeof caches === "undefined") return null;
-  const url = (key: string) => `https://settings.internal/${version}/${encodeURIComponent(key)}`;
-  return {
-    async get(key) {
-      const hit = await (await caches.open(SETTINGS_MIRROR_CACHE_NAME)).match(url(key));
-      return hit ? await hit.text() : null;
-    },
-    async put(key, value) {
-      await (await caches.open(SETTINGS_MIRROR_CACHE_NAME)).put(
-        url(key),
-        new Response(value, { headers: { "Cache-Control": `max-age=${SETTINGS_MIRROR_TTL_SECONDS}` } }),
-      );
-    },
-    async delete(key) {
-      await (await caches.open(SETTINGS_MIRROR_CACHE_NAME)).delete(url(key));
-    },
-  };
+  return workerCacheHint(env, "settings", 60);
 }
 
 /** Per-request capabilities. Both are optional so reads degrade, never crash. */

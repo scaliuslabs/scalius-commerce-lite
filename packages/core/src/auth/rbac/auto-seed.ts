@@ -1,6 +1,6 @@
 // Reconciles code-owned permissions and system roles without changing user authority.
 
-import { putKvHint } from "@scalius/shared/kv-hints";
+import { workerCacheHint, type WorkerCacheHint } from "@scalius/shared/worker-cache-hint";
 import { eq, count, inArray } from "drizzle-orm";
 import { chunkForD1, type Database } from "@scalius/database/client";
 import {
@@ -11,12 +11,20 @@ import {
 import { PERMISSIONS } from "./permissions";
 import { getAllPermissions } from "./permission-metadata";
 
-// A versioned KV marker avoids database reads across isolates and must expire or
-// be purged after an intentional manual database reset. Do not retain an
-// in-flight reconciliation Promise or binding-derived state in module scope:
-// Workers may reuse this isolate for a later request or after bindings change.
+// A per-colo Cache API marker (keyed by the Worker version and the seed
+// signature) spares the reconciliation reads; it expires, so a manual database
+// reset heals within its lifetime. Do not retain an in-flight reconciliation
+// Promise or binding-derived state in module scope: Workers may reuse this
+// isolate for a later request or after bindings change.
 const RBAC_SEED_CACHE_PREFIX = "rbac:seed-current:v5";
 const RBAC_SEED_CACHE_TTL_SECONDS = 6 * 60 * 60;
+
+/** The marker store for `autoSeedRbacIfNeeded`; null without the Cache API or a Worker version. */
+export function rbacSeedMarker(
+  env: { CF_VERSION_METADATA?: { id?: unknown } | null } | null | undefined,
+): WorkerCacheHint | null {
+  return workerCacheHint(env, "rbac-seed", RBAC_SEED_CACHE_TTL_SECONDS);
+}
 
 type SystemRoleSeed = {
   name: string;
@@ -170,11 +178,11 @@ export function getRbacSeedCacheKey(): string {
 }
 
 export async function isRbacSeedCacheCurrent(
-  kv?: Pick<KVNamespace, "get">,
+  marker?: Pick<WorkerCacheHint, "get"> | null,
 ): Promise<boolean> {
-  if (!kv) return false;
+  if (!marker) return false;
   try {
-    return (await kv.get(getRbacSeedCacheKey())) === "1";
+    return (await marker.get(getRbacSeedCacheKey())) === "1";
   } catch (error) {
     console.warn(
       "RBAC: Failed to read seed cache marker:",
@@ -185,12 +193,11 @@ export async function isRbacSeedCacheCurrent(
 }
 
 export async function markRbacSeedCacheCurrent(
-  kv?: Pick<KVNamespace, "put">,
+  marker?: Pick<WorkerCacheHint, "put"> | null,
 ): Promise<void> {
-  if (!kv) return;
-  if (!(await putKvHint(kv, getRbacSeedCacheKey(), "1", { expirationTtl: RBAC_SEED_CACHE_TTL_SECONDS }))) {
-    console.warn("RBAC: seed cache marker not written; D1 stays the authority");
-  }
+  if (!marker) return;
+  // A marker that is not written costs one more reconciliation read later.
+  await marker.put(getRbacSeedCacheKey(), "1").catch(() => undefined);
 }
 
 /**
@@ -371,7 +378,7 @@ async function isRbacSeedCurrent(db: Database): Promise<boolean> {
  */
 async function runRbacSeedReconciliation(
   db: Database,
-  kv?: Pick<KVNamespace, "get" | "put">,
+  kv?: Pick<WorkerCacheHint, "get" | "put"> | null,
 ): Promise<void> {
   try {
     if (await isRbacSeedCacheCurrent(kv)) {
@@ -408,7 +415,7 @@ async function runRbacSeedReconciliation(
 
 export async function autoSeedRbacIfNeeded(
   db: Database,
-  kv?: Pick<KVNamespace, "get" | "put">,
+  kv?: Pick<WorkerCacheHint, "get" | "put"> | null,
 ): Promise<void> {
   await runRbacSeedReconciliation(db, kv);
 }

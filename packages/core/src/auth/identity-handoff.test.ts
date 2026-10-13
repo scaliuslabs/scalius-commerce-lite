@@ -141,12 +141,10 @@ describe("performIdentityHandoff", () => {
   }
 
   it("creates the administrator, credential-free account, and role in one batch", async () => {
-    const kv = { delete: vi.fn(async () => undefined) } as unknown as KVNamespace;
     const result = await performIdentityHandoff(db, {
       claims: await claims(),
       config: CONFIG,
       request: REQUEST,
-      permissionCache: kv,
       now: () => NOW,
     });
 
@@ -190,22 +188,17 @@ describe("performIdentityHandoff", () => {
 
   it("re-maps an existing administrator's authority from the role claim", async () => {
     const created = await performIdentityHandoff(db, { claims: await claims(), config: CONFIG, request: REQUEST, now: () => NOW });
-    const kv = { delete: vi.fn(async () => undefined) } as unknown as KVNamespace;
 
     const promoted = await performIdentityHandoff(db, {
       claims: await claims({ role: "owner", name: "Ops Owner" }),
       config: CONFIG,
       request: REQUEST,
-      permissionCache: kv,
       now: () => NOW,
     });
     expect(promoted).toMatchObject({ userId: created.userId, created: false, mapping: { isSuperAdmin: true, roleId: null } });
     expect(sqlite.prepare("SELECT name, is_super_admin FROM user").get()).toEqual({ name: "Ops Owner", is_super_admin: 1 });
     // The owner mapping leaves existing role rows alone.
     expect(sqlite.prepare("SELECT role_id FROM user_roles").all()).toEqual([{ role_id: "role_manager" }]);
-    const cacheDeletes = (kv.delete as ReturnType<typeof vi.fn>).mock.calls.map(([key]) => String(key));
-    expect(cacheDeletes).toHaveLength(1);
-    expect(cacheDeletes[0]).toMatch(new RegExp(`^rbac:perms:${created.userId}:`));
 
     const demoted = await performIdentityHandoff(db, {
       claims: await claims({ role: "sales_rep" }),
@@ -220,7 +213,7 @@ describe("performIdentityHandoff", () => {
     expect(auditRows().map((row) => row.outcome)).toEqual(["user_created", "signed_in", "signed_in"]);
   });
 
-  it("a demoting handoff evicts the cached permission set the admin guard reads", async () => {
+  it("a demoting handoff takes effect on the admin guard's next permission read", async () => {
     // Refunds need "View orders"; a permission without its prerequisite grants nothing.
     sqlite.exec(`
       INSERT INTO permissions (id, name, display_name, resource, action, category)
@@ -229,28 +222,16 @@ describe("performIdentityHandoff", () => {
       INSERT INTO role_permissions (id, role_id, permission_id)
         VALUES ('rp_0', 'role_manager', 'perm_view'), ('rp_1', 'role_manager', 'perm_refund');
     `);
-    // One KV namespace: the handoff plugin and admin-auth both receive env.CACHE.
-    const store = new Map<string, string>();
-    const cache = {
-      get: async (key: string, type?: string) => {
-        const value = store.get(key);
-        return value === undefined ? null : type === "json" ? JSON.parse(value) : value;
-      },
-      put: async (key: string, value: string) => void store.set(key, value),
-      delete: async (key: string) => void store.delete(key),
-    } as unknown as KVNamespace;
-
     const { userId } = await performIdentityHandoff(db, { claims: await claims(), config: CONFIG, request: REQUEST, now: () => NOW });
-    expect([...await getUserPermissions(db, userId, cache)].sort()).toEqual(["orders.refund", "orders.view"]);
+    expect([...await getUserPermissions(db, userId)].sort()).toEqual(["orders.refund", "orders.view"]);
 
     await performIdentityHandoff(db, {
       claims: await claims({ role: "sales_rep" }),
       config: CONFIG,
       request: REQUEST,
-      permissionCache: cache,
       now: () => NOW,
     });
-    expect([...await getUserPermissions(db, userId, cache)]).toEqual([]);
+    expect([...await getUserPermissions(db, userId)]).toEqual([]);
   });
 
   it("rejects unknown or missing roles and records the rejection", async () => {

@@ -171,7 +171,7 @@ const applyStoreSetupRoute = createRoute({
 
 app.openapi(applyStoreSetupRoute, async (c) => {
   const body = c.req.valid("json");
-  const result = await applyStoreSetup(c.get("db"), body, c.env.CACHE);
+  const result = await applyStoreSetup(c.get("db"), body, settingsMirror(c.env));
   // Card prices follow the price increment (cents instead of whole taka):
   // rebuild the catalogue projections off the request path.
   if (result.priceIncrementChanged) {

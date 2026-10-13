@@ -11,8 +11,8 @@
  *
  * Rules the values keep:
  * - Free values fit Workers Free (10 ms CPU, 50 D1 queries and 50 external
- *   subrequests per invocation, 1,000 KV writes and 10,000 Queues operations a
- *   day; docs/FREE-PLAN.md). They are lighter, never different in kind.
+ *   subrequests per invocation, 10,000 Queues operations a day;
+ *   docs/FREE-PLAN.md). They are lighter, never different in kind.
  * - Paid values are what the code did before the plan existed, or stronger.
  *   `scripts/plan.test.mjs` pins them: a Paid value that gets weaker fails.
  * - Code reads values; it never branches on the plan's name.
@@ -53,16 +53,11 @@ export interface PlanLimits {
     readonly catalogRebuildChunk: number;
     /**
      * A public read that shows an image still without renditions queues its
-     * rendering at once (and marks it in KV so the next read does not queue it
-     * again). Off, only the scheduled backfill renders: no queue message and no
-     * KV write on the buyer's path.
+     * rendering at once (and marks it in the Cache API so the next read does
+     * not queue it again). Off, only the scheduled backfill renders: no queue
+     * message on the buyer's path.
      */
     readonly renditionsFromPublicReads: boolean;
-  };
-  /** Optional KV hints: D1 stays the authority, so a hint that is off costs a D1 read, never correctness. */
-  readonly kv: {
-    /** The per-user permission snapshot cached for other isolates. */
-    readonly permissionCache: boolean;
   };
   readonly maintenance: {
     /** The cron rotates through this many groups of sweeps, one group a run (1: every sweep every run). */
@@ -128,7 +123,6 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       catalogRebuildChunk: 90,
       renditionsFromPublicReads: false,
     }),
-    kv: Object.freeze({ permissionCache: false }),
     maintenance: Object.freeze({ slices: 4, queueSweeps: true, staleOrdersPerRun: 1, digitalUploadsPerState: 10, orphanAttachmentsPerRun: 10, limitScale: 0.2, inlineRenditionsPerRun: 1 }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8 }),
     plugins: Object.freeze({
@@ -154,7 +148,6 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       catalogRebuildChunk: 900,
       renditionsFromPublicReads: true,
     }),
-    kv: Object.freeze({ permissionCache: true }),
     maintenance: Object.freeze({ slices: 1, queueSweeps: false, staleOrdersPerRun: 25, digitalUploadsPerState: 25, orphanAttachmentsPerRun: 50, limitScale: 1, inlineRenditionsPerRun: 240 }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90 }),
     plugins: Object.freeze({

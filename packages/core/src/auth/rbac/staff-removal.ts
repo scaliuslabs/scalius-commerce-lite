@@ -23,7 +23,6 @@ import {
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { deleteStaffPreferencesStatement } from "../../modules/settings";
-import { clearPermissionCache } from "./helpers";
 
 /** The removed person's email is released so the address can be invited again. */
 export function removedStaffEmail(userId: string): string {
@@ -33,7 +32,6 @@ export function removedStaffEmail(userId: string): string {
 export async function removeStaffMember(
   db: Database,
   input: { actorId: string; userId: string },
-  kv?: KVNamespace,
 ): Promise<{ name: string }> {
   const { actorId, userId } = input;
   if (userId === actorId) throw new ValidationError("You can't remove yourself");
@@ -92,6 +90,5 @@ export async function removeStaffMember(
     throw error;
   }
 
-  await clearPermissionCache(userId, kv);
   return { name: target.name };
 }

@@ -1,7 +1,7 @@
 // src/server/middleware/admin-auth.ts
 import type { MiddlewareHandler } from "hono";
 import { and, eq, sql } from "drizzle-orm";
-import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
+import { autoSeedRbacIfNeeded, rbacSeedMarker } from "@scalius/core/auth/rbac/auto-seed";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
@@ -22,11 +22,10 @@ import type { AgentOperationManifestEntry } from "../openapi/agent-operation-man
 import { enforceDirectAgentRequestBodyLimit } from "./direct-agent-request-body";
 import {
     SCANNER_COOKIE_NAME,
-    getScannerSessionKey,
     isAllowedScannerApiRequest,
     parseCookie,
-    type ScannerSessionPayload,
 } from "@scalius/shared/scanner-auth";
+import { readScannerSession } from "@scalius/core/auth/scanner-token-claims";
 
 interface User {
     id: string;
@@ -44,10 +43,6 @@ interface Session {
     id: string;
     twoFactorVerified?: boolean | null;
     [key: string]: unknown;
-}
-
-interface ScannerKv {
-    get(key: string): Promise<string | null>;
 }
 
 const BETTER_AUTH_SESSION_COOKIE_NAMES = [
@@ -430,22 +425,17 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     if (!user && hasScannerCookie) {
         try {
             const sessionId = parseCookie(cookieHeader, SCANNER_COOKIE_NAME);
-            const kv = (c.env as Record<string, unknown>).CACHE as
-                ScannerKv | undefined;
-            if (sessionId && kv) {
-                const raw = await kv.get(await getScannerSessionKey(sessionId));
-                if (raw) {
-                    const payload = JSON.parse(raw) as ScannerSessionPayload;
-                    // Scanner sessions are limited principals. Use a synthetic ID so they
-                    // never inherit the creating admin's role or super-admin status.
-                    user = {
-                        id: `scanner:${payload.adminId || "unknown"}`,
-                        email: "scanner@system",
-                        name: payload.adminName || "Scanner",
-                        role: "scanner",
-                        _isScannerSession: true,
-                    };
-                }
+            const scanner = sessionId ? await readScannerSession(c.get("db"), sessionId) : null;
+            if (scanner) {
+                // Scanner sessions are limited principals. Use a synthetic ID so they
+                // never inherit the creating admin's role or super-admin status.
+                user = {
+                    id: `scanner:${scanner.adminId || "unknown"}`,
+                    email: "scanner@system",
+                    name: scanner.adminName || "Scanner",
+                    role: "scanner",
+                    _isScannerSession: true,
+                };
             }
         } catch (error: unknown) {
             console.warn(
@@ -522,7 +512,6 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     const userPerms = await getUserPermissions(
         db,
         user.id,
-        c.env.CACHE,
         user.isSuperAdmin === true,
     );
 
@@ -538,9 +527,9 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     // Existing D1 grants remain the fail-closed source for ordinary admins,
     // while known super admins already resolve against the complete code-owned
     // permission list. Never make an authenticated read wait for hundreds of
-    // idempotent role-grant repairs after a deploy or KV-marker expiry.
+    // idempotent role-grant repairs after a deploy or seed-marker expiry.
     const reconciliation = retryTransientD1(() =>
-        autoSeedRbacIfNeeded(db, c.env.CACHE),
+        autoSeedRbacIfNeeded(db, rbacSeedMarker(c.env)),
     );
     try {
         c.executionCtx.waitUntil(reconciliation);

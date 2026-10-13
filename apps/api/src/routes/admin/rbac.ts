@@ -8,7 +8,6 @@ import { roles, rolePermissions, permissions, userRoles, user } from "@scalius/d
 import {
     hasPermission,
     getAllRolesWithPermissions,
-    clearPermissionCacheForRole,
     assignRoleToUser,
     removeRoleFromUser,
     setUserPermissionOverride,
@@ -34,9 +33,6 @@ const ACCOUNT_OVERRIDE_LIMIT = 100;
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 
-function getPermissionKv(c: { env: Env }): KVNamespace | undefined {
-    return c.env.CACHE as KVNamespace | undefined;
-}
 
 export function assertPermissionSubset(
     sessionUser: { isSuperAdmin?: boolean },
@@ -153,10 +149,9 @@ app.openapi(listRolesRoute, async (c) => {
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
-        const kv = getPermissionKv(c);
 
-        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES, kv);
-        const canViewTeam = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_VIEW, kv);
+        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
+        const canViewTeam = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_VIEW);
 
         if (!canManageRoles && !canViewTeam) {
             throw new ForbiddenError("Permission denied");
@@ -203,9 +198,8 @@ app.openapi(createRoleRoute, (async (c: AdminRouteContext<typeof createRoleRoute
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
-        const kv = getPermissionKv(c);
 
-        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES, kv);
+        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
             throw new ForbiddenError("Permission denied");
         }
@@ -293,11 +287,10 @@ app.openapi(getRoleRoute, (async (c: AdminRouteContext<typeof getRoleRoute>) => 
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
-        const kv = getPermissionKv(c);
         const { id: roleId } = c.req.valid("param");
 
-        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES, kv);
-        const canViewTeam = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_VIEW, kv);
+        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
+        const canViewTeam = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_VIEW);
 
         if (!canManageRoles && !canViewTeam) {
             throw new ForbiddenError("Permission denied");
@@ -357,10 +350,9 @@ app.openapi(updateRoleRoute, async (c) => {
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
-        const kv = getPermissionKv(c);
         const { id: roleId } = c.req.valid("param");
 
-        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES, kv);
+        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
             throw new ForbiddenError("Permission denied");
         }
@@ -420,8 +412,6 @@ app.openapi(updateRoleRoute, async (c) => {
             }
         }
 
-        await clearPermissionCacheForRole(db, roleId, kv);
-
         const updatedRole = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
         const updatedPerms = await getRolePermissions(db, roleId);
 
@@ -466,10 +456,9 @@ app.openapi(deleteRoleRoute, async (c) => {
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
-        const kv = getPermissionKv(c);
         const { id: roleId } = c.req.valid("param");
 
-        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES, kv);
+        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
             throw new ForbiddenError("Permission denied");
         }
@@ -531,9 +520,8 @@ app.openapi(assignRoleRoute, async (c) => {
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
-        const kv = getPermissionKv(c);
 
-        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES, kv);
+        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
             throw new ForbiddenError("Permission denied");
         }
@@ -576,7 +564,7 @@ app.openapi(assignRoleRoute, async (c) => {
             throw new ConflictError("User already has this role");
         }
 
-        await assignRoleToUser(db, data.userId, data.roleId, sessionUser.id, kv);
+        await assignRoleToUser(db, data.userId, data.roleId, sessionUser.id);
 
         return created(c, {});
     } catch (error: unknown) {
@@ -608,9 +596,8 @@ app.openapi(removeRoleRoute, async (c) => {
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
-        const kv = getPermissionKv(c);
 
-        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES, kv);
+        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
             throw new ForbiddenError("Permission denied");
         }
@@ -639,7 +626,7 @@ app.openapi(removeRoleRoute, async (c) => {
             throw new ValidationError("Staff need a role. Give them another role first");
         }
 
-        await removeRoleFromUser(db, data.userId, data.roleId, kv);
+        await removeRoleFromUser(db, data.userId, data.roleId);
 
         return ok(c, {});
     } catch (error: unknown) {
@@ -671,9 +658,8 @@ app.openapi(setOverrideRoute, async (c) => {
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
-        const kv = getPermissionKv(c);
 
-        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES, kv);
+        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
             throw new ForbiddenError("Permission denied");
         }
@@ -700,7 +686,7 @@ app.openapi(setOverrideRoute, async (c) => {
         );
 
         try {
-            await setUserPermissionOverride(db, data.userId, data.permission, data.granted, sessionUser.id, kv);
+            await setUserPermissionOverride(db, data.userId, data.permission, data.granted, sessionUser.id);
         } catch (error: unknown) {
             if (error instanceof Error && error.message?.includes("not found")) {
                 throw new NotFoundError("Permission not found");
@@ -738,9 +724,8 @@ app.openapi(removeOverrideRoute, async (c) => {
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
-        const kv = getPermissionKv(c);
 
-        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES, kv);
+        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
         if (!canManageRoles) {
             throw new ForbiddenError("Permission denied");
         }
@@ -766,7 +751,7 @@ app.openapi(removeOverrideRoute, async (c) => {
             [data.permission],
         );
 
-        await removeUserPermissionOverride(db, data.userId, data.permission, kv);
+        await removeUserPermissionOverride(db, data.userId, data.permission);
 
         return ok(c, {});
     } catch (error: unknown) {
@@ -811,10 +796,9 @@ app.openapi(listPermissionsRoute, async (c) => {
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
-        const kv = getPermissionKv(c);
 
-        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES, kv);
-        const canViewTeam = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_VIEW, kv);
+        const canManageRoles = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_MANAGE_ROLES);
+        const canViewTeam = await hasPermission(db, sessionUser.id, PERMISSIONS.TEAM_VIEW);
 
         if (!canManageRoles && !canViewTeam) {
             throw new ForbiddenError("Permission denied");
@@ -886,10 +870,9 @@ app.openapi(myPermissionsRoute, async (c) => {
         if (!sessionUser) throw new UnauthorizedError("Unauthorized");
 
         const db = c.get("db");
-        const kv = getPermissionKv(c);
 
         const [context, [owner]] = await Promise.all([
-            getUserPermissionContext(db, sessionUser.id, kv),
+            getUserPermissionContext(db, sessionUser.id),
             db.select({ name: user.name }).from(user)
                 .where(and(eq(user.isSuperAdmin, true), eq(user.banned, false)))
                 .orderBy(user.createdAt)

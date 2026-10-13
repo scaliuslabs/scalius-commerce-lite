@@ -1,15 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import {
-  SCANNER_COOKIE_NAME,
-  getScannerSessionKey,
-  type ScannerSessionPayload,
-} from "@scalius/shared/scanner-auth";
+import { SCANNER_COOKIE_NAME } from "@scalius/shared/scanner-auth";
 
 const mocks = vi.hoisted(() => ({
   autoSeedRbacIfNeeded: vi.fn(),
   getUserPermissions: vi.fn(),
+  readScannerSession: vi.fn(),
   resolveAgentPrincipalFromBearer: vi.fn(),
   resolveAgentPrincipalFromGrant: vi.fn(),
   resolveDirectAgentOperation: vi.fn(),
@@ -17,6 +14,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
   autoSeedRbacIfNeeded: mocks.autoSeedRbacIfNeeded,
+  rbacSeedMarker: () => null,
+}));
+
+vi.mock("@scalius/core/auth/scanner-token-claims", () => ({
+  readScannerSession: mocks.readScannerSession,
 }));
 
 vi.mock("@scalius/core/auth/rbac/helpers", () => ({
@@ -146,6 +148,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     mocks.resolveAgentPrincipalFromBearer.mockResolvedValue(null);
     mocks.resolveAgentPrincipalFromGrant.mockResolvedValue(null);
     mocks.resolveDirectAgentOperation.mockReturnValue(undefined);
+    mocks.readScannerSession.mockResolvedValue(null);
     mockBetterAuthSession();
   });
 
@@ -236,24 +239,20 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it("passes the runtime KV binding into permission resolution", async () => {
+  it("resolves permissions from the request database", async () => {
     mocks.getUserPermissions.mockResolvedValue(
       new Set([PERMISSIONS.PRODUCTS_VIEW]),
     );
     const next = vi.fn().mockResolvedValue(undefined);
-    const cache = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
 
     await adminAuthMiddleware(
-      createContext("/api/v1/admin/products", "GET", {
-        env: { CACHE: cache },
-      }) as never,
+      createContext("/api/v1/admin/products", "GET") as never,
       next,
     );
 
     expect(mocks.getUserPermissions).toHaveBeenCalledWith(
       expect.objectContaining({ id: "db" }),
       "admin_1",
-      cache,
       false,
     );
     expect(next).toHaveBeenCalledTimes(1);
@@ -262,7 +261,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
   it("keeps super-admin tax access independent of lagging seeded permission rows", async () => {
     mockBetterAuthSession({ user: { isSuperAdmin: true } });
     mocks.getUserPermissions.mockImplementation(
-      async (_db, _userId, _cache, knownIsSuperAdmin) =>
+      async (_db, _userId, knownIsSuperAdmin) =>
         knownIsSuperAdmin
           ? new Set(Object.values(PERMISSIONS))
           : new Set([PERMISSIONS.PRODUCTS_VIEW]),
@@ -277,7 +276,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(mocks.getUserPermissions).toHaveBeenCalledWith(
       expect.objectContaining({ id: "db" }),
       "admin_1",
-      undefined,
       true,
     );
     expect(next).toHaveBeenCalledTimes(1);
@@ -298,10 +296,8 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       return new Set([PERMISSIONS.PRODUCTS_VIEW]);
     });
     const next = vi.fn().mockResolvedValue(undefined);
-    const cache = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
     const waitUntil = vi.fn();
     const context = createContext("/api/v1/admin/products", "GET", {
-      env: { CACHE: cache },
       executionCtx: { waitUntil },
     });
 
@@ -309,7 +305,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
 
     expect(mocks.autoSeedRbacIfNeeded).toHaveBeenCalledWith(
       expect.objectContaining({ id: "db" }),
-      cache,
+      null,
     );
     expect(callOrder).toEqual(["permissions", "seed"]);
     expect(waitUntil).toHaveBeenCalledWith(reconciliation);
@@ -1335,19 +1331,8 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
 
   it("allows scanner sessions only on exact scanner workflow endpoints", async () => {
     const sessionId = "scanner-session";
-    const session: ScannerSessionPayload = {
-      adminId: "admin_1",
-      adminName: "Warehouse",
-      createdAt: Date.now(),
-    };
-    const sessionKey = await getScannerSessionKey(sessionId);
-    const kv = {
-      get: vi
-        .fn()
-        .mockImplementation((key: string) =>
-          Promise.resolve(key === sessionKey ? JSON.stringify(session) : null),
-        ),
-    };
+    mocks.readScannerSession.mockImplementation(async (_db: unknown, id: string) =>
+      id === sessionId ? { adminId: "admin_1", adminName: "Warehouse" } : null);
     const next = vi.fn().mockResolvedValue(undefined);
 
     await adminAuthMiddleware(
@@ -1355,7 +1340,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
         headers: {
           Cookie: `${SCANNER_COOKIE_NAME}=${encodeURIComponent(sessionId)}`,
         },
-        env: { CACHE: kv },
       }) as never,
       next,
     );
@@ -1366,16 +1350,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
 
   it("rejects scanner sessions on broader inventory endpoints", async () => {
     const sessionId = "scanner-session";
-    const sessionKey = await getScannerSessionKey(sessionId);
-    const kv = {
-      get: vi.fn().mockResolvedValue(
-        JSON.stringify({
-          adminId: "admin_1",
-          adminName: "Warehouse",
-          createdAt: Date.now(),
-        } satisfies ScannerSessionPayload),
-      ),
-    };
+    mocks.readScannerSession.mockResolvedValue({ adminId: "admin_1", adminName: "Warehouse" });
     const next = vi.fn().mockResolvedValue(undefined);
 
     await expect(
@@ -1384,7 +1359,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
           headers: {
             Cookie: `${SCANNER_COOKIE_NAME}=${encodeURIComponent(sessionId)}`,
           },
-          env: { CACHE: kv },
         }) as never,
         next,
       ),
@@ -1393,7 +1367,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       code: "FORBIDDEN",
       message: "Scanner sessions can only access scanner inventory endpoints",
     });
-    expect(kv.get).toHaveBeenCalledWith(sessionKey);
+    expect(mocks.readScannerSession).toHaveBeenCalledWith(expect.objectContaining({ id: "db" }), sessionId);
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -1407,7 +1381,6 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
           "GET",
           {
             headers: { "X-Scanner-Token": "raw-qr-token" },
-            env: { CACHE: { get: vi.fn().mockResolvedValue(null) } },
           },
         ) as never,
         next,

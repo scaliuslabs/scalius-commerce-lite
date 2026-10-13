@@ -39,7 +39,7 @@ export async function handleRealtimeConnect(request: Request, env: Env): Promise
   if (user.mustEnrollTwoFactor === true && user.twoFactorEnabled !== true) return refuse(403, "Forbidden");
   if (user.twoFactorEnabled === true && session.twoFactorVerified !== true) return refuse(403, "Forbidden");
 
-  const permissions = await getUserPermissions(db, user.id, env.CACHE, user.isSuperAdmin === true);
+  const permissions = await getUserPermissions(db, user.id, user.isSuperAdmin === true);
   const topics = realtimeTopicsFor(permissions);
   if (permissions.size === 0) return refuse(403, "Forbidden");
 

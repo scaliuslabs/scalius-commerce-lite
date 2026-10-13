@@ -5,6 +5,7 @@ import {
   getRbacSeedCacheKey,
   isRbacSeedCacheCurrent,
   markRbacSeedCacheCurrent,
+  rbacSeedMarker,
 } from "./auto-seed";
 import { PERMISSIONS } from "./permissions";
 
@@ -13,22 +14,25 @@ describe("RBAC seed cache marker", () => {
     expect(getRbacSeedCacheKey()).toMatch(/^rbac:seed-current:v5:[a-f0-9]{8}$/);
   });
 
-  it("reads and writes the current marker through KV", async () => {
+  it("reads and writes the current marker through the per-colo hint", async () => {
     const values = new Map<string, string>();
-    const kv = {
+    const marker = {
       get: vi.fn(async (key: string) => values.get(key) ?? null),
       put: vi.fn(async (key: string, value: string) => {
         values.set(key, value);
       }),
-    } as unknown as Pick<KVNamespace, "get" | "put">;
+    };
 
-    await expect(isRbacSeedCacheCurrent(kv)).resolves.toBe(false);
-    await markRbacSeedCacheCurrent(kv);
-    await expect(isRbacSeedCacheCurrent(kv)).resolves.toBe(true);
+    await expect(isRbacSeedCacheCurrent(marker)).resolves.toBe(false);
+    await markRbacSeedCacheCurrent(marker);
+    await expect(isRbacSeedCacheCurrent(marker)).resolves.toBe(true);
 
-    expect(kv.put).toHaveBeenCalledWith(getRbacSeedCacheKey(), "1", {
-      expirationTtl: 21600,
-    });
+    expect(marker.put).toHaveBeenCalledWith(getRbacSeedCacheKey(), "1");
+  });
+
+  it("has no marker without the Cache API or a Worker version", () => {
+    expect(rbacSeedMarker({})).toBeNull();
+    expect(rbacSeedMarker({ CF_VERSION_METADATA: { id: "v1" } })).toBeNull();
   });
 });
 
@@ -67,12 +71,12 @@ describe("system RBAC reconciliation on the real schema", () => {
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM user_roles").get()).toEqual({ count: 0 });
   });
 
-  it("skips database reads once the KV marker is current", async () => {
+  it("skips database reads once the marker is current", async () => {
     const queries: string[] = [];
     const { db } = createSqliteD1Database({ onQuery: (query) => queries.push(query) });
     const kv = { get: vi.fn(async () => "1"), put: vi.fn() };
 
-    await autoSeedRbacIfNeeded(db, kv as unknown as Pick<KVNamespace, "get" | "put">);
+    await autoSeedRbacIfNeeded(db, kv);
     expect(queries).toEqual([]);
     expect(kv.put).not.toHaveBeenCalled();
   });
