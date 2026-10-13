@@ -161,7 +161,7 @@ describe("store shape: reviews and digital lines", () => {
             const blockPlan = plan.slice(start + 1, end).map(({ detail }) => detail);
             expect(blockPlan[0]).toMatch(/^SCAN block(?: |$)/);
             expect(blockPlan).toEqual(expect.arrayContaining([
-                expect.stringMatching(/^SEARCH block_product(?: EXISTS)? USING INDEX \S+ \(product_id=\?/),
+                expect.stringMatching(/^SEARCH block_product(?: EXISTS)? USING (?:COVERING )?INDEX \S+ \((?:is_public=\? AND )?product_id=\?/),
             ]));
             expect(blockPlan.some((detail) => /product_buyer_state_category_newest_idx/.test(detail))).toBe(false);
         } finally {

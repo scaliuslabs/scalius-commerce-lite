@@ -739,14 +739,16 @@ function storefrontCollectionMembership(membership: StorefrontCollectionMembersh
     // per product (11-17 s for a 90-product collection on a 30k-product
     // catalogue) or an OR of two sets (which SQLite answers by walking every
     // public row): the picked ids, plus the public products of the
-    // collection's published categories through the category index.
+    // collection's published categories through the category index. The
+    // index is named: beside the id-ordered scope index, SQLite 3.5x picks that
+    // one to feed the UNION merge and walks every public row.
     const branches: SQL[] = [];
     if (productIds.length > 0) {
         branches.push(sql`SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIds)})`);
     }
     if (categoryIds.length > 0) {
         branches.push(sql`SELECT collection_member.product_id
-            FROM ${buyerState} AS collection_member
+            FROM ${buyerState} AS collection_member INDEXED BY product_buyer_state_category_newest_idx
             WHERE collection_member.is_public = 1
               AND collection_member.category_id IN ${publishedCategoryIdSet(sql`${categories.id} IN (
                   SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)})
