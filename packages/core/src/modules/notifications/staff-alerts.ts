@@ -228,7 +228,7 @@ export async function pruneStaffAlerts(db: Database, now: number, limit = 500): 
         AND NOT EXISTS (SELECT 1 FROM staff_alert_inbox i WHERE i.alert_id = a.id)
       ORDER BY a.recorded_at LIMIT ${limit})`).returning({ id: staffAlerts.id }),
   ]);
-  return { inbox: inbox.length, alerts: alerts.length };
+  return { inbox: inbox?.length ?? 0, alerts: alerts?.length ?? 0 };
 }
 
 export const clearStaffAlerts = (db: Database, userId: string, input: StaffAlertClearInput) => clearOrUndo(db, userId, input, false);

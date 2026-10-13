@@ -49713,7 +49713,6 @@ export type PostApiV1AdminConversationsQueryResponses = {
             nextCursor: string | null;
             scanExhausted: boolean;
             scanned: number;
-            bodyCoverage: 'complete' | 'since_index';
         };
     };
 };
@@ -49830,7 +49829,6 @@ export type PostApiV1AdminConversationsByIdSearchResponses = {
             nextCursor: number | null;
             scanned: number;
             scanExhausted: boolean;
-            bodyCoverage: 'complete' | 'since_index';
         };
     };
 };
@@ -56568,6 +56566,73 @@ export type PostApiV1AdminCatalogProjectionsRebuildResponses = {
 };
 
 export type PostApiV1AdminCatalogProjectionsRebuildResponse = PostApiV1AdminCatalogProjectionsRebuildResponses[keyof PostApiV1AdminCatalogProjectionsRebuildResponses];
+
+export type PostApiV1AdminCatalogProjectionsDerivedData = {
+    body: {
+        rebuild?: boolean;
+        afterOrderId?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/catalog/projections/derived';
+};
+
+export type PostApiV1AdminCatalogProjectionsDerivedErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCatalogProjectionsDerivedError = PostApiV1AdminCatalogProjectionsDerivedErrors[keyof PostApiV1AdminCatalogProjectionsDerivedErrors];
+
+export type PostApiV1AdminCatalogProjectionsDerivedResponses = {
+    /**
+     * Projections checked
+     */
+    200: {
+        success: true;
+        data: {
+            sealedDays: number;
+            analytics: {
+                drift: number;
+                repaired: boolean;
+            };
+            recommendations: {
+                drift: number;
+                repaired: boolean;
+            };
+            inbox: {
+                drift: number;
+                repaired: boolean;
+            };
+            nextAfterOrderId?: string | null;
+            done?: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminCatalogProjectionsDerivedResponse = PostApiV1AdminCatalogProjectionsDerivedResponses[keyof PostApiV1AdminCatalogProjectionsDerivedResponses];
 
 export type GetApiV1AdminTaxesData = {
     body?: never;
