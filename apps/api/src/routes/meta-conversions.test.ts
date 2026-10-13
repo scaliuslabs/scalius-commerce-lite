@@ -1,6 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { errorResponseFromError } from "../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
@@ -17,13 +18,11 @@ vi.mock("@scalius/shared/rate-limit", () => ({
   getClientIp: mocks.getClientIp,
 }));
 
-import {
-  META_CAPI_BROWSER_CIRCUIT_KEY,
-  metaConversionsRoutes,
-} from "./meta-conversions";
+import { metaConversionsRoutes } from "./meta-conversions";
+import { META_CAPI_BROWSER_CIRCUIT_KEY } from "../utils/meta-capi-circuit";
 
 function createTestApp() {
-  const db = { id: "db" };
+  const { db, sqlite } = createSqliteD1Database();
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -35,7 +34,11 @@ function createTestApp() {
     await next();
   });
   app.route("/meta", metaConversionsRoutes);
-  return { app, db };
+  const circuit = () => sqlite.prepare("SELECT value, expires_at FROM system_kv WHERE key = ?")
+    .get(META_CAPI_BROWSER_CIRCUIT_KEY) as { value: string; expires_at: number } | undefined;
+  const openCircuit = (openUntil: number) => sqlite.prepare("INSERT INTO system_kv (key, value, expires_at) VALUES (?, ?, ?)")
+    .run(META_CAPI_BROWSER_CIRCUIT_KEY, JSON.stringify({ reason: "Invalid OAuth access token.", eventName: "Purchase", openUntil }), Math.ceil(openUntil / 1000));
+  return { app, db, circuit, openCircuit };
 }
 
 function createRequest(body: Record<string, unknown>) {
@@ -69,12 +72,10 @@ describe("Meta conversions public event route", () => {
 
   it("honors a browser-provided event id for Pixel/CAPI deduplication", async () => {
     const { app, db } = createTestApp();
-    const cache = { get: vi.fn(), put: vi.fn() };
     const response = await app.request(
       "/api/v1/meta/events",
       createRequest({ eventId: "Purchase:order_1" }),
       {
-        CACHE: cache,
         STOREFRONT_URL: "https://store.example",
         CREDENTIAL_ENCRYPTION_KEY: "encryption-key",
       } as never,
@@ -107,7 +108,6 @@ describe("Meta conversions public event route", () => {
         eventSourceUrl: "https://attacker.example/order-success",
       }),
       {
-        CACHE: { get: vi.fn(), put: vi.fn() },
         STOREFRONT_URL: "https://store.example",
       } as never,
     );
@@ -122,7 +122,6 @@ describe("Meta conversions public event route", () => {
       "/api/v1/meta/events",
       createRequest({ eventId: "Purchase:order_1" }),
       {
-        CACHE: { get: vi.fn(), put: vi.fn() },
         STOREFRONT_URL: "https://store.example",
         JWT_SECRET: "legacy-jwt-key",
       } as never,
@@ -145,7 +144,6 @@ describe("Meta conversions public event route", () => {
         eventSourceUrl: "https://store.example/order-success",
       }),
       {
-        CACHE: { get: vi.fn(), put: vi.fn() },
       } as never,
     );
 
@@ -161,7 +159,6 @@ describe("Meta conversions public event route", () => {
       "/api/v1/meta/events",
       createRequest({ eventId: "Purchase:order_1" }),
       {
-        CACHE: { get: vi.fn(), put: vi.fn() },
         STOREFRONT_URL: "https://store.example",
       } as never,
     );
@@ -170,16 +167,14 @@ describe("Meta conversions public event route", () => {
     expect(mocks.sendCapiEvent).not.toHaveBeenCalled();
   });
 
-  it("uses the standard native limiter and spends no KV operations on the limit", async () => {
+  it("uses the standard native limiter and writes no circuit row on success", async () => {
     const limiter = { limit: vi.fn(async () => ({ success: true })) };
-    const cache = { get: vi.fn(async () => null), put: vi.fn() };
 
-    const { app } = createTestApp();
+    const { app, circuit } = createTestApp();
     const response = await app.request(
       "/api/v1/meta/events",
       createRequest({ eventId: "Purchase:order_1" }),
       {
-        CACHE: cache,
         RL_STANDARD: limiter,
         STOREFRONT_URL: "https://store.example",
       } as never,
@@ -187,60 +182,52 @@ describe("Meta conversions public event route", () => {
 
     expect(response.status).toBe(200);
     expect(limiter.limit).toHaveBeenCalledWith({ key: expect.stringMatching(/^[a-f0-9]{64}$/) });
-    expect(cache.put).not.toHaveBeenCalled();
-    expect(cache.get).toHaveBeenCalledWith(META_CAPI_BROWSER_CIRCUIT_KEY, { cacheTtl: 60 });
+    expect(circuit()).toBeUndefined();
   });
 
-  it("opens a short circuit after non-retryable provider failures", async () => {
+  it("opens a 15-minute circuit row after non-retryable provider failures", async () => {
     mocks.sendCapiEvent.mockResolvedValueOnce({
       success: false,
       error: "Invalid OAuth access token.",
       retryable: false,
     });
-    const cache = {
-      get: vi.fn(async () => null),
-      put: vi.fn(async () => undefined),
-    };
 
-    const { app } = createTestApp();
+    const { app, circuit } = createTestApp();
+    const before = Math.floor(Date.now() / 1000);
     const response = await app.request(
       "/api/v1/meta/events",
       createRequest({ eventId: "Purchase:order_1" }),
-      {
-        CACHE: cache,
-        STOREFRONT_URL: "https://store.example",
-      } as never,
+      { STOREFRONT_URL: "https://store.example" } as never,
     );
 
     expect(response.status).toBe(200);
     expect(mocks.sendCapiEvent).toHaveBeenCalledTimes(1);
-    expect(cache.put).toHaveBeenCalledWith(
-      META_CAPI_BROWSER_CIRCUIT_KEY,
-      expect.stringContaining("Invalid OAuth access token."),
-      { expirationTtl: 900 },
+    const row = circuit();
+    expect(row?.value).toContain("Invalid OAuth access token.");
+    expect(row?.expires_at).toBeGreaterThanOrEqual(before + 900);
+    expect(row?.expires_at).toBeLessThanOrEqual(before + 902);
+  });
+
+  it("keeps dispatching after a retryable provider failure", async () => {
+    mocks.sendCapiEvent.mockResolvedValueOnce({ success: false, error: "Timeout", retryable: true });
+
+    const { app, circuit } = createTestApp();
+    await app.request(
+      "/api/v1/meta/events",
+      createRequest({ eventId: "Purchase:order_1" }),
+      { STOREFRONT_URL: "https://store.example" } as never,
     );
+
+    expect(circuit()).toBeUndefined();
   });
 
   it("skips provider dispatch while the browser-event circuit is open", async () => {
-    const cache = {
-      get: vi.fn(async () =>
-        JSON.stringify({
-          reason: "Invalid OAuth access token.",
-          eventName: "Purchase",
-          openedAt: Date.now(),
-        }),
-      ),
-      put: vi.fn(async () => undefined),
-    };
-
-    const { app } = createTestApp();
+    const { app, openCircuit } = createTestApp();
+    openCircuit(Date.now() + 60_000);
     const response = await app.request(
       "/api/v1/meta/events",
       createRequest({ eventId: "Purchase:order_1" }),
-      {
-        CACHE: cache,
-        STOREFRONT_URL: "https://store.example",
-      } as never,
+      { STOREFRONT_URL: "https://store.example" } as never,
     );
     const body = await response.json() as { data?: { message?: string } };
 
@@ -248,6 +235,18 @@ describe("Meta conversions public event route", () => {
     expect(body.data?.message).toContain("recently failed");
     expect(mocks.limiter.limit).not.toHaveBeenCalled();
     expect(mocks.sendCapiEvent).not.toHaveBeenCalled();
-    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it("dispatches again once the circuit has expired", async () => {
+    const { app, openCircuit } = createTestApp();
+    openCircuit(Date.now() - 1_000);
+    const response = await app.request(
+      "/api/v1/meta/events",
+      createRequest({ eventId: "Purchase:order_1" }),
+      { STOREFRONT_URL: "https://store.example" } as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.sendCapiEvent).toHaveBeenCalledTimes(1);
   });
 });

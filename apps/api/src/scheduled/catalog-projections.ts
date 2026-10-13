@@ -8,8 +8,8 @@
 //    the cache generation once when it ends;
 // 3. recommendation refreshes for products sold in the last day and the
 //    longest-unrefreshed public products, 20 per queue message.
-import type { Database } from "@scalius/database/client";
-import { deleteKvHint, putKvHint } from "@scalius/shared/kv-hints";
+import { getDb, type Database } from "@scalius/database/client";
+import { claimSystemKv, deleteSystemKv } from "@scalius/core/utils/system-kv";
 import {
   nightlyRecommendationRefreshCandidates,
   refreshProductSalesStats,
@@ -28,28 +28,25 @@ const NIGHTLY_WINDOW_MINUTES = 15;
  */
 export const NIGHTLY_RECOMMENDATION_REFRESH_LIMIT = 3_000;
 
-/** KV hint: the Worker version whose post-deploy projection rebuild was queued. */
+/** `system_kv` row: the Worker version whose post-deploy projection rebuild was queued. */
 export const PROJECTIONS_REBUILT_FOR_VERSION_KEY = "catalog:projections:rebuilt-for-version";
 
 /**
  * The first cron tick of a new API version queues one full projection
  * rebuild. Migrations apply before the new Worker goes live, so a write the
  * previous version committed in between (it does not know the projections)
- * is healed within one tick instead of at night. The KV key is a hint: if it
- * is lost, one more rebuild runs.
+ * is healed within one tick instead of at night. The version is claimed in
+ * the database first (compare-and-set), so overlapping ticks queue it once.
  */
 export async function queuePostDeployProjectionRebuild(env: Env): Promise<boolean> {
   const version = env.CF_VERSION_METADATA?.id;
-  if (!version || !env.CACHE || !env.JOBS_QUEUE) return false;
-  if (await env.CACHE.get(PROJECTIONS_REBUILT_FOR_VERSION_KEY) === version) return false;
-  // Claim the version first. A claim that cannot be written (KV refusing
-  // writes) queues nothing: every 15-minute tick would otherwise start another
-  // chain of rebuild messages, and the nightly pass heals the same drift.
-  if (!(await putKvHint(env.CACHE, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version))) return false;
+  if (!version || !env.JOBS_QUEUE) return false;
+  const db = getDb(env);
+  if (!(await claimSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version))) return false;
   const queued = await enqueueCatalogProjectionRebuild(env.JOBS_QUEUE, null).catch(() => false);
   if (!queued) {
     // Not queued: release the claim so the next tick tries again.
-    await deleteKvHint(env.CACHE, PROJECTIONS_REBUILT_FOR_VERSION_KEY);
+    await deleteSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY);
     return false;
   }
   return true;
