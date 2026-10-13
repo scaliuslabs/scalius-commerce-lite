@@ -10,6 +10,7 @@ import { createCacheFrontierClient, type CacheFrontierClient } from "./lib/cache
 import { CACHE_FRONTIER_SECRET_PURPOSE } from "@scalius/shared/cache-frontier";
 import { INTERNAL_SERVICE_ORIGIN } from "@scalius/shared/platform-config";
 import { httpsRedirectResponse } from "./lib/storefront-origin";
+import { runWithWorkerEnv } from "./lib/api/runtime";
 import { serveExtensionFile } from "./lib/extensions/files";
 import { oneClickUnsubscribeRequest } from "./lib/newsletter-one-click";
 import { BUILD_ID } from "./config/build-id";
@@ -118,8 +119,8 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
   private async render(renderRequest: Request): Promise<Response> {
     const target = presenceRenderTarget(renderRequest);
     if (target === "not_found") return PRESENCE_NOT_FOUND();
-    if (!target) return handle(renderRequest, this.env, this.ctx);
-    const response = await handle(target.render, this.env, this.ctx);
+    if (!target) return runWithWorkerEnv(this.env, () => handle(renderRequest, this.env, this.ctx));
+    const response = await runWithWorkerEnv(this.env, () => handle(target.render, this.env, this.ctx));
     return localizePresenceResponse(response, target.presence, new URL(renderRequest.url).origin);
   }
 }

@@ -116,6 +116,24 @@ if (import.meta.env.SSR) {
   };
 }
 
+let _workerEnv: AsyncLocalStorageLike<unknown>;
+if (import.meta.env.SSR) {
+  const { AsyncLocalStorage } = await import("node:async_hooks");
+  _workerEnv = new AsyncLocalStorage<unknown>();
+} else {
+  _workerEnv = { getStore: () => undefined, run: <R>(_env: unknown, fn: () => R) => fn() };
+}
+
+/** Runs one request with the Worker `env` the gateway received, so no module binds to one store's env. */
+export function runWithWorkerEnv<R>(env: unknown, fn: () => R): R {
+  return _workerEnv.run(env, fn);
+}
+
+/** The current request's Worker `env`; undefined outside the gateway (local dev, tests). */
+export function getWorkerEnv<T = Env>(): T | undefined {
+  return _workerEnv.getStore() as T | undefined;
+}
+
 /** The request-scoped runtime store. Seeded by runWithRequestRuntime(). */
 export const requestRuntime: AsyncLocalStorageLike<StorefrontRuntime> = _als;
 

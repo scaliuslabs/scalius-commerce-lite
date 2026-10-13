@@ -59,6 +59,8 @@ export interface StorefrontWorkerLoader {
 
 export interface ExtensionRuntime {
   env: { LOADER?: StorefrontWorkerLoader; BACKEND_API?: Fetcher };
+  /** The store's own origin: part of every app-file cache key. */
+  store?: string;
 }
 
 export class ExtensionUnavailableError extends Error {
@@ -94,7 +96,7 @@ export async function runStorefrontModule(
   const loader = runtime.env.LOADER;
   if (!loader) throw new ExtensionUnavailableError(`${extension.pluginId} needs the storefront's Worker Loader (Workers Paid).`);
   const isolate = loader.get(storefrontIsolateId(extension.pluginId, extension.release), async () => {
-    const file = await readExtensionFile(runtime.env, extension.pluginId, extension.release, STOREFRONT_MODULE_FILE);
+    const file = await readExtensionFile(runtime.env, runtime.store ?? "", extension.pluginId, extension.release, STOREFRONT_MODULE_FILE);
     if (!file) throw new ExtensionUnavailableError(`${extension.pluginId}: its storefront module could not be read.`);
     return {
       compatibilityDate: STOREFRONT_ISOLATE_COMPATIBILITY_DATE,

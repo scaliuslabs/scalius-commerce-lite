@@ -1,5 +1,4 @@
 import { defineMiddleware, sequence } from "astro:middleware";
-import { env as cfEnv } from "cloudflare:workers";
 import { hasStorefrontProductVariantSelectionParams } from "@scalius/shared/storefront-cache-path";
 import { redirectPlaintextRequest } from "@scalius/shared/http-security";
 import { applyTransportSecurityHeaders, withPageCsp } from "@/lib/middleware-helper/private-download-security";
@@ -11,6 +10,7 @@ import {
   getRuntimeMediaUrl,
   getRuntimePresence,
   getRuntimeStorefrontUrl,
+  getWorkerEnv,
   runWithRequestRuntime,
 } from "@/lib/api/runtime";
 import { marketOfPresence } from "@scalius/shared/markets";
@@ -75,9 +75,9 @@ async function themePreviewFrameAncestors(
 
 function getEnv(): Env | null {
   try {
-    const env = cfEnv as Partial<Env> | null | undefined;
+    const env = getWorkerEnv<Partial<Env>>();
     if (env && (env.ASSETS || env.BACKEND_API || env.SCALIUS_SECRET)) {
-      return cfEnv as unknown as Env;
+      return env as Env;
     }
   } catch {
     // Local Astro development can run without Wrangler bindings.

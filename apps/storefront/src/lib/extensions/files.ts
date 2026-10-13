@@ -24,8 +24,9 @@ function decodeBase64(value: string): Uint8Array {
   return bytes;
 }
 
-function cacheKey(pluginId: string, release: string, path: string): string {
-  return `${INTERNAL_SERVICE_ORIGIN}/__storefront-extension/${pluginId}/${release}/${path}`;
+/** The data-center cache key of one app file; `store` (the store's own origin) keeps one store's cache from serving another's. */
+export function extensionFileCacheKey(store: string, pluginId: string, release: string, path: string): string {
+  return `${INTERNAL_SERVICE_ORIGIN}/__storefront-extension/${encodeURIComponent(store)}/${pluginId}/${release}/${path}`;
 }
 
 function defaultCache(): Cache | null {
@@ -35,6 +36,7 @@ function defaultCache(): Cache | null {
 /** One storefront file of an app release; null when it is not one. */
 export async function readExtensionFile(
   env: { BACKEND_API?: Fetcher },
+  store: string,
   pluginId: string,
   release: string,
   path: string,
@@ -48,7 +50,7 @@ export async function readExtensionFile(
     return { bytes: file.base64 !== undefined ? decodeBase64(file.base64) : new TextEncoder().encode(file.text ?? ""), contentType };
   }
   const cache = defaultCache();
-  const key = cacheKey(pluginId, release, path);
+  const key = extensionFileCacheKey(store, pluginId, release, path);
   const cached = await cache?.match(key).catch(() => undefined);
   if (cached?.ok) return { bytes: new Uint8Array(await cached.arrayBuffer()), contentType };
   if (!env.BACKEND_API) return null;
@@ -68,7 +70,7 @@ export async function serveExtensionFile(request: Request, env: { BACKEND_API?: 
   if (request.method !== "GET" && request.method !== "HEAD") return new Response(null, { status: 405, headers: { Allow: "GET, HEAD" } });
   const target = parseStorefrontExtensionPath(url.pathname);
   if (!target) return notFound();
-  const file = await readExtensionFile(env, target.pluginId, target.release, target.path).catch(() => null);
+  const file = await readExtensionFile(env, url.origin, target.pluginId, target.release, target.path).catch(() => null);
   if (!file) return notFound();
   return new Response(request.method === "HEAD" ? null : file.bytes as Uint8Array<ArrayBuffer>, {
     headers: {

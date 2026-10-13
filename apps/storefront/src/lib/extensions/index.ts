@@ -3,7 +3,6 @@
 // slots the theme gives to an app, and the request's render host. Everything
 // here is read from what the page already read: no extra API call.
 
-import { env as workerEnv } from "cloudflare:workers";
 import { STOREFRONT_APP_SLOT_KEYS } from "@scalius/shared/storefront-theme";
 import { parsePluginSurfaceKey } from "@scalius/shared/plugins/storefront";
 import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
@@ -16,7 +15,7 @@ import {
   type StorefrontResolvedSettings,
 } from "@scalius/shared/plugins/storefront-components";
 import { getLayoutData } from "@/lib/api/storefront";
-import { getRuntime } from "@/lib/api/runtime";
+import { getRuntime, getWorkerEnv } from "@/lib/api/runtime";
 import { appComponentsRenderOn, storefrontAppPage } from "@/lib/app-scripts";
 import { storeRegion, storeTimeZone } from "@/lib/store-time-zone";
 import { dateLocale } from "@scalius/shared/locale-format";
@@ -57,7 +56,7 @@ export function setExtensionPage(locals: object, page: ExtensionPage): void {
 const perRequest = new WeakMap<object, Promise<RequestExtensions>>();
 
 function runtimeEnv(): ExtensionRuntime["env"] {
-  return (workerEnv ?? {}) as unknown as ExtensionRuntime["env"];
+  return (getWorkerEnv() ?? {}) as unknown as ExtensionRuntime["env"];
 }
 
 function pageKind(path: string): StorefrontRenderContext["page"]["kind"] {
@@ -99,7 +98,7 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
       };
       const dependencies = getRuntime()?.pageDependencies;
       const host = new ExtensionHost({
-        runtime: { env: runtimeEnv() },
+        runtime: { env: runtimeEnv(), store: getRuntime()?.STOREFRONT_URL },
         context,
         jsonLd: () => pages.get(locals)?.noIndex !== true,
         // A page drawn with a fallback is never stored (it would stay until an unrelated write).
