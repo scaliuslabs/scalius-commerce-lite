@@ -2,16 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   FCMMessagingService,
   FCM_SEND_CONCURRENCY,
-  getFirebaseAccessTokenCacheKey,
   getFirebaseAdminMessaging,
 } from "./admin";
-import { decryptCredentials } from "../../utils/credential-encryption";
-
-const credentialKey = Buffer.alloc(32, 23).toString("base64");
 
 const serviceAccountJson = JSON.stringify({
   client_email: "firebase-adminsdk@example.iam.gserviceaccount.com",
-  private_key: "unused-when-access-token-is-cached",
+  private_key: "unused-by-validation-tests",
   project_id: "scalius-test",
 });
 
@@ -50,8 +46,8 @@ describe("FCMMessagingService", () => {
   });
 
   it("creates request-scoped messaging services instead of retaining Worker bindings", () => {
-    const firstEnvironment = { CACHE: { get: vi.fn(), put: vi.fn() } };
-    const secondEnvironment = { CACHE: { get: vi.fn(), put: vi.fn() } };
+    const firstEnvironment = {};
+    const secondEnvironment = {};
 
     const first = getFirebaseAdminMessaging(firstEnvironment, serviceAccountJson);
     const sameEnvironment = getFirebaseAdminMessaging(firstEnvironment, serviceAccountJson);
@@ -101,12 +97,15 @@ describe("FCMMessagingService", () => {
     let activeRequests = 0;
     let maxActiveRequests = 0;
     const sentTokens: string[] = [];
-    const cache = {
-      get: vi.fn(async () => "cached-token"),
-      put: vi.fn(),
-    };
+    const signableServiceAccountJson = await createSignableServiceAccountJson();
 
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "https://oauth2.googleapis.com/token") {
+        return new Response(JSON.stringify({ access_token: "oauth-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       activeRequests += 1;
       maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
 
@@ -151,10 +150,8 @@ describe("FCMMessagingService", () => {
       {
         // Removed tunable: must be ignored.
         FCM_SEND_CONCURRENCY: "2",
-        CACHE: cache,
-        CREDENTIAL_ENCRYPTION_KEY: credentialKey,
       },
-      serviceAccountJson,
+      signableServiceAccountJson,
     );
 
     const tokens = [
@@ -178,17 +175,14 @@ describe("FCMMessagingService", () => {
       },
     });
 
-    const expectedCacheKey = await getFirebaseAccessTokenCacheKey(
-      JSON.parse(serviceAccountJson),
-    );
     expect(FCM_SEND_CONCURRENCY).toBe(8);
-    expect(cache.get).toHaveBeenCalledWith(expectedCacheKey);
-    expect(fetchMock).toHaveBeenCalledTimes(tokens.length);
+    // One OAuth exchange, then one send per token.
+    expect(fetchMock).toHaveBeenCalledTimes(tokens.length + 1);
     expect(maxActiveRequests).toBe(FCM_SEND_CONCURRENCY);
     expect(sentTokens).toEqual(tokens);
-    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       headers: {
-        Authorization: "Bearer cached-token",
+        Authorization: "Bearer oauth-token",
         "Content-Type": "application/json",
       },
     });
@@ -204,86 +198,8 @@ describe("FCMMessagingService", () => {
     );
   });
 
-  it("encrypts fresh OAuth access tokens before writing the shared KV cache", async () => {
+  it("reuses one OAuth access token across sends of the same service", async () => {
     const signableServiceAccountJson = await createSignableServiceAccountJson();
-    const cache = {
-      get: vi.fn(async () => null),
-      put: vi.fn(async () => undefined),
-    };
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "https://oauth2.googleapis.com/token") {
-        return new Response(JSON.stringify({ access_token: "fresh-oauth-token" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      return new Response(
-        JSON.stringify({ name: "projects/scalius-test/messages/token-1" }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const messaging = new FCMMessagingService(
-      {
-        CACHE: cache,
-        CREDENTIAL_ENCRYPTION_KEY: credentialKey,
-      },
-      signableServiceAccountJson,
-    );
-
-    await messaging.sendEachForMulticast({ tokens: ["token-1"] });
-
-    expect(cache.put).toHaveBeenCalledTimes(1);
-    const putCalls = cache.put.mock.calls as unknown as Array<[
-      string,
-      string,
-      { expirationTtl: number },
-    ]>;
-    const [cacheKey, storedValue, options] = putCalls[0] ?? [];
-    expect(cacheKey).toBe(await getFirebaseAccessTokenCacheKey(
-      JSON.parse(signableServiceAccountJson),
-    ));
-    expect(storedValue).toMatch(/^enc:/);
-    expect(storedValue).not.toContain("fresh-oauth-token");
-    await expect(
-      decryptCredentials(String(storedValue).slice("enc:".length), credentialKey),
-    ).resolves.toBe("fresh-oauth-token");
-    expect(options).toEqual({ expirationTtl: 3300 });
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      "https://fcm.googleapis.com/v1/projects/scalius-test/messages:send",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bearer fresh-oauth-token",
-        }),
-      }),
-    );
-  });
-
-  it("uses a fixed deployment prefix and rotates the token cache key with service-account credentials", async () => {
-    const base = JSON.parse(serviceAccountJson);
-    const first = await getFirebaseAccessTokenCacheKey(base);
-    const rotated = await getFirebaseAccessTokenCacheKey({
-      ...base,
-      private_key: "rotated-private-key",
-    });
-
-    expect(first).toMatch(/^scalius:fcm_access_token:scalius-test:[0-9a-f]{24}$/);
-    expect(rotated).not.toBe(first);
-    await expect(getFirebaseAccessTokenCacheKey(base)).resolves.toBe(first);
-  });
-
-  it("does not persist OAuth access tokens to KV when credential encryption is unavailable", async () => {
-    const signableServiceAccountJson = await createSignableServiceAccountJson();
-    const cache = {
-      get: vi.fn(async () => null),
-      put: vi.fn(async () => undefined),
-    };
     const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       if (String(input) === "https://oauth2.googleapis.com/token") {
         return new Response(JSON.stringify({ access_token: "uncached-token" }), {
@@ -302,18 +218,11 @@ describe("FCMMessagingService", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const messaging = new FCMMessagingService(
-      {
-        CACHE: cache,
-      },
-      signableServiceAccountJson,
-    );
+    const messaging = new FCMMessagingService({}, signableServiceAccountJson);
 
     await messaging.sendEachForMulticast({ tokens: ["token-1"] });
     await messaging.sendEachForMulticast({ tokens: ["token-2"] });
 
-    expect(cache.get).not.toHaveBeenCalled();
-    expect(cache.put).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(3);
     const fetchCalls = fetchMock.mock.calls as Array<[
       RequestInfo | URL,

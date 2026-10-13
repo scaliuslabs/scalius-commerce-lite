@@ -3,6 +3,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { getPlatformSettingsDocument, savePlatformSettings } from "@scalius/core/modules/platform";
+import { settingsMirror } from "@scalius/core/settings-store";
 import {
   type PlatformConfig,
   IDENTITY_HANDOFF_CLAIM_MAX_LENGTH,
@@ -126,7 +127,7 @@ const updatePlatformRoute = createRoute({
 
 app.openapi(updatePlatformRoute, async (c) => {
   const { expectedRevision, ...patch } = c.req.valid("json");
-  const saved = await savePlatformSettings(c.get("db"), patch, c.env.CACHE, { expectedRevision });
+  const saved = await savePlatformSettings(c.get("db"), patch, settingsMirror(c.env), { expectedRevision });
 
   c.header("Cache-Control", "private, no-store");
   return respond(c, saved);

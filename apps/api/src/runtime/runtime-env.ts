@@ -4,13 +4,14 @@
 // Wrangler installs only resource bindings plus two secrets:
 //   SCALIUS_SECRET            master secret; every other secret is derived
 //   CREDENTIAL_ENCRYPTION_KEY encrypts merchant credentials at rest
-// Public origins come from the Platform settings (database, cached in KV).
+// Public origins come from the Platform settings (database, mirrored per colo in the Cache API).
 // Every consumer keeps reading `env.STOREFRONT_URL`, `env.JWT_SECRET`, etc.;
 // those fields are filled here, once per invocation, never by Wrangler vars.
 
 import { getDb, type Database } from "@scalius/database/client";
 import { deps } from "@scalius/core/cache-deps";
 import { getPlatformSettings, resolvePlatformConfig } from "@scalius/core/modules/platform";
+import { settingsMirror } from "@scalius/core/settings-store";
 import { preloadedPlatformSettings } from "./public-render-context";
 import {
   deriveRuntimeSecretsFromEnv,
@@ -43,7 +44,7 @@ export async function composeApiRuntimeEnv(
 ): Promise<Env> {
   const [secrets, stored] = await Promise.all([
     deriveRuntimeSecretsFromEnv(env),
-    resolvePlatformConfig({ getDb: () => getDb(env), kv: env.CACHE }).catch(
+    resolvePlatformConfig({ getDb: () => getDb(env), kv: settingsMirror(env) }).catch(
       (): PlatformConfig => emptyPlatformConfig(),
     ),
   ]);
@@ -76,7 +77,7 @@ function platformEnvFields(stored: PlatformConfig, requestUrl: string | undefine
 /**
  * The Platform-settings read of a public render (CACHE-DESIGN.md section 6.4).
  *
- * Worker entry resolves the platform origins KV-first, and KV may lag the
+ * Worker entry resolves the platform origins mirror-first, and the mirror may lag the
  * settings row. A render inside a dependency scope must not bake that hint
  * into an entry validated by `set:platform:document`, so it re-reads the row
  * through the tracked settings path (which declares that key) and replaces the

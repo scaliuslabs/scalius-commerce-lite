@@ -9,6 +9,7 @@ vi.mock("@scalius/database/client", () => ({
 }));
 
 import { partytownProxyRoutes } from "./partytown-proxy";
+import { TEST_WORKER_VERSION, stubSettingsMirror } from "../testing/settings-mirror";
 
 const CSP_ALLOWED_DOMAINS_CACHE_KEY = "settings:security";
 
@@ -34,14 +35,13 @@ function createDb(storedValue: string | null) {
 }
 
 function createEnv(options: { kv?: string | null; db?: string | null; extra?: Record<string, unknown> } = {}) {
-  const kv = {
-    get: vi.fn(async () => (options.kv == null ? null : securityDocument(options.kv))),
-    put: vi.fn(async () => undefined),
-  };
+  const kv = stubSettingsMirror(
+    options.kv == null ? {} : { [CSP_ALLOWED_DOMAINS_CACHE_KEY]: securityDocument(options.kv) },
+  );
   const { db, get } = createDb(options.db ?? null);
   mocks.getDb.mockReturnValue(db);
   const env = {
-    CACHE: kv,
+    CF_VERSION_METADATA: { id: TEST_WORKER_VERSION },
     DB: { id: "d1" },
     ...options.extra,
   } as unknown as Env;
@@ -67,7 +67,7 @@ describe("partytown proxy route", () => {
     mocks.getDb.mockReset();
   });
 
-  it("allows https analytics script URLs on the KV-mirrored merchant allow-list without touching the database", async () => {
+  it("allows https analytics script URLs on the mirrored merchant allow-list without touching the database", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response("console.log('pixel')", {
         headers: { "Content-Type": "application/javascript" },
@@ -83,16 +83,13 @@ describe("partytown proxy route", () => {
       TARGET,
       expect.objectContaining({ redirect: "follow" }),
     );
-    expect(kv.get).toHaveBeenCalledWith(
-      CSP_ALLOWED_DOMAINS_CACHE_KEY,
-      expect.objectContaining({ cacheTtl: expect.any(Number) }),
-    );
+    expect(kv.cache.match).toHaveBeenCalledTimes(1);
     expect(mocks.getDb).not.toHaveBeenCalled();
     expect(dbGet).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
+    expect(kv.cache.put).not.toHaveBeenCalled();
   });
 
-  it("falls back to the security settings row on a KV miss and mirrors it back to KV", async () => {
+  it("falls back to the security settings row on a mirror miss and mirrors it back", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("ok"));
     vi.stubGlobal("fetch", fetchMock);
     const { env, kv, dbGet } = createEnv({ kv: null, db: "https://analytics.tiktok.com, *.vendor.example" });
@@ -102,13 +99,12 @@ describe("partytown proxy route", () => {
     expect(response.status).toBe(200);
     expect(mocks.getDb).toHaveBeenCalledWith(env);
     expect(dbGet).toHaveBeenCalledTimes(1);
-    expect(kv.put).toHaveBeenCalledWith(
-      CSP_ALLOWED_DOMAINS_CACHE_KEY,
+    expect(kv.read(CSP_ALLOWED_DOMAINS_CACHE_KEY)).toBe(
       securityDocument("https://analytics.tiktok.com, *.vendor.example"),
     );
   });
 
-  it("treats an empty KV mirror as an intentionally empty allow-list and does not read the database", async () => {
+  it("treats an empty mirror as an intentionally empty allow-list and does not read the database", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const { env, dbGet } = createEnv({ kv: "", db: "analytics.tiktok.com" });

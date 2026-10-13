@@ -13,18 +13,19 @@
  *
  * Bounded: only reads that were rendered (cache misses), only the first
  * `MAX_BODY_BYTES` of a body, at most `MAX_IDS_PER_READ` ids (a listing
- * page's cards), and one queue message per id per `HINT_TTL_SECONDS` (a KV
- * marker). Never throws.
+ * page's cards), and one queue message per id per `HINT_TTL_SECONDS` (a
+ * per-colo Cache API marker keyed by Worker version; a hint, never authority).
+ * Never throws.
  */
 
-import { putKvHint } from "@scalius/shared/kv-hints";
+import { readWorkerVersion } from "@scalius/shared/cache-generation";
 import { planLimits } from "@scalius/shared/plan-limits";
 import type { MediaVariantsQueue } from "@scalius/core/modules/media";
 
-export const MEDIA_RENDITION_HINT_KV_PREFIX = "media:rendition-hint:";
+const MARKER_CACHE_NAME = "scalius-media-rendition-hints";
 /** One enqueue per media id per cron period: the backfill runs every 15 minutes. */
 export const MEDIA_RENDITION_HINT_TTL_SECONDS = 15 * 60;
-/** A listing page's first cards: 24 KV reads and at most 24 queue sends per rendered read. */
+/** A listing page's first cards: 24 marker reads and at most 24 queue sends per rendered read. */
 export const MEDIA_RENDITION_HINT_MAX_IDS_PER_READ = 24;
 const MAX_BODY_BYTES = 512 * 1024;
 
@@ -87,12 +88,24 @@ function maskMediaId(id: string): string {
 }
 
 export interface MediaRenditionHintEnv {
-  CACHE?: {
-    get(key: string): Promise<string | null>;
-    put(key: string, value: string, options: { expirationTtl: number }): Promise<void>;
-  };
+  CF_VERSION_METADATA?: { id?: unknown } | null;
   JOBS_QUEUE?: MediaVariantsQueue;
   IMAGES?: ImagesBinding;
+}
+
+/** The per-colo "already requested" marker; null without the Cache API or a Worker version. */
+async function openMarker(env: MediaRenditionHintEnv) {
+  const version = readWorkerVersion(env);
+  if (!version || typeof caches === "undefined") return null;
+  const cache = await caches.open(MARKER_CACHE_NAME);
+  const url = (id: string) => `https://media-rendition-hint.internal/${version}/${id}`;
+  return {
+    seen: async (id: string) => (await cache.match(url(id))) !== undefined,
+    mark: (id: string) => cache.put(
+      url(id),
+      new Response("1", { headers: { "Cache-Control": `max-age=${MEDIA_RENDITION_HINT_TTL_SECONDS}` } }),
+    ),
+  };
 }
 
 /**
@@ -105,12 +118,12 @@ export async function queueRenditionsForRenderedOriginals(
 ): Promise<string[]> {
   try {
     const queue = env.JOBS_QUEUE;
-    const kv = env.CACHE;
+    const marker = await openMarker(env);
     // Without Images nothing could render the job; the queue drops it. Where
     // the plan profile leaves renditions to the scheduled backfill (Workers
-    // Free: a message and a KV write per image on the buyer's path), a read
+    // Free: a queue message per image on the buyer's path), a read
     // queues nothing.
-    if (!queue || !kv || !env.IMAGES || !planLimits().queue.renditionsFromPublicReads) {
+    if (!queue || !marker || !env.IMAGES || !planLimits().queue.renditionsFromPublicReads) {
       await response.body?.cancel().catch(() => undefined);
       return [];
     }
@@ -120,8 +133,7 @@ export async function queueRenditionsForRenderedOriginals(
     const images = env.IMAGES;
     // All ids at once: a card waits on this render, so no id queues behind another.
     const outcomes = await Promise.all(refs.map(async (ref) => {
-      const key = `${MEDIA_RENDITION_HINT_KV_PREFIX}${ref.id}`;
-      if (await kv.get(key).catch(() => null)) return null;
+      if (await marker.seen(ref.id).catch(() => false)) return null;
       const sent = await enqueueMediaVariantsJob(queue, images, {
         id: ref.id,
         kind: "image",
@@ -129,7 +141,7 @@ export async function queueRenditionsForRenderedOriginals(
         variantWidth: null,
       }, { delaySeconds: 0 });
       if (!sent) return null;
-      await putKvHint(kv, key, "1", { expirationTtl: MEDIA_RENDITION_HINT_TTL_SECONDS });
+      await marker.mark(ref.id).catch(() => undefined);
       return ref.id;
     }));
     const queued = outcomes.filter((id): id is string => id !== null);

@@ -1,6 +1,6 @@
 // Store defaults (Settings → Store details → Store defaults): the store's time
 // zone, unit system and default weight unit. They live in the platform
-// document so Worker entry resolves them with the origins (KV first) and no
+// document so Worker entry resolves them with the origins (mirror first) and no
 // request spends a database read on them (docs/STORE-DEFAULTS.md).
 import type { Database } from "@scalius/database/client";
 import { isValidTimeZone } from "@scalius/shared/commerce-time";
@@ -68,7 +68,7 @@ export async function getStoreFormatting(db: Database): Promise<StoreDefaults & 
   return { ...defaults, countryCode };
 }
 
-/** Saves a patch against the platform revision the editor loaded; the KV mirror is written through. */
+/** Saves a patch against the platform revision the editor loaded; the mirror is written through. */
 export async function saveStoreDefaults(
   db: Database,
   patch: StoreDefaultsPatch,

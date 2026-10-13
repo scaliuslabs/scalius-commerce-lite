@@ -19,14 +19,13 @@
 //                  one is a 409 SETTINGS_REVISION_CONFLICT. Several documents
 //                  saved by one request commit all-or-nothing through
 //                  `writeSettingsDocuments()`.
-//   * cache      - an optional KV mirror (never for documents with secrets) for
+//   * cache      - an optional per-colo mirror (never for documents with secrets) for
 //                  Worker-entry readers that must not open the database.
 //
 // Relational read failures propagate: checkout and payment readiness must fail
 // closed instead of guessing from defaults. Public HTTP caches are not per
 // document; route handlers bump the store cache generation after a save.
 
-import { deleteKvHint, putKvHint } from "@scalius/shared/kv-hints";
 import type { ZodType } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -60,11 +59,43 @@ export class SettingsRevisionConflictError extends AppError {
   }
 }
 
-/** The KV surface the store needs. Cloudflare `KVNamespace` satisfies it. */
+/** The per-colo mirror the store needs (a hint, never authority; the row is). */
 export interface SettingsStoreKv {
-  get(key: string, options?: { cacheTtl?: number }): Promise<string | null>;
-  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string): Promise<void>;
   delete(key: string): Promise<void>;
+}
+
+const SETTINGS_MIRROR_CACHE_NAME = "scalius-settings";
+const SETTINGS_MIRROR_TTL_SECONDS = 60;
+const WORKER_VERSION_PATTERN = /^[0-9A-Za-z-]{1,64}$/;
+
+/**
+ * A Cache API mirror keyed by the Worker version (a deploy starts empty).
+ * Null without the Cache API or a version, so reads fall to the row.
+ */
+export function settingsMirror(
+  env: { CF_VERSION_METADATA?: { id?: unknown } | null } | null | undefined,
+): SettingsStoreKv | null {
+  const version = env?.CF_VERSION_METADATA?.id;
+  if (typeof version !== "string" || !WORKER_VERSION_PATTERN.test(version)) return null;
+  if (typeof caches === "undefined") return null;
+  const url = (key: string) => `https://settings.internal/${version}/${encodeURIComponent(key)}`;
+  return {
+    async get(key) {
+      const hit = await (await caches.open(SETTINGS_MIRROR_CACHE_NAME)).match(url(key));
+      return hit ? await hit.text() : null;
+    },
+    async put(key, value) {
+      await (await caches.open(SETTINGS_MIRROR_CACHE_NAME)).put(
+        url(key),
+        new Response(value, { headers: { "Cache-Control": `max-age=${SETTINGS_MIRROR_TTL_SECONDS}` } }),
+      );
+    },
+    async delete(key) {
+      await (await caches.open(SETTINGS_MIRROR_CACHE_NAME)).delete(url(key));
+    },
+  };
 }
 
 /** Per-request capabilities. Both are optional so reads degrade, never crash. */
@@ -83,7 +114,7 @@ export interface SettingsDocumentDefinition<T extends object> {
   secretFields?: Partial<Record<keyof T & string, string>>;
   /** Obvious dummy credentials read as not configured. */
   isPlaceholderSecret?: (value: string) => boolean;
-  /** KV mirror without expiration. Documents with secrets cannot declare one. */
+  /** Per-colo mirror key (60 s). Documents with secrets cannot declare one. */
   cacheKey?: string;
 }
 
@@ -146,7 +177,7 @@ export interface PreparedSettingsWrite<T extends object> {
   value: T;
   guard: SQLiteBatchItem;
   statement: SQLiteBatchItem;
-  /** Refreshes the KV mirror once the batch committed. */
+  /** Refreshes the mirror once the batch committed. */
   committed(): Promise<void>;
 }
 
@@ -353,9 +384,9 @@ export function defineSettingsDocument<T extends object>(
   const secretFields = Object.keys(definition.secretFields ?? {}) as Array<keyof T & string>;
 
   if (secretFields.length > 0 && definition.cacheKey) {
-    // AGENTS.md: decrypted provider credentials are never written to KV.
+    // AGENTS.md: decrypted provider credentials are never mirrored.
     throw new Error(
-      `Settings document ${label} declares secret fields and a KV cache. Secrets must not be cached.`,
+      `Settings document ${label} declares secret fields and a mirror. Secrets must not be cached.`,
     );
   }
 
@@ -436,15 +467,15 @@ export function defineSettingsDocument<T extends object>(
 
   async function readCache(ctx: SettingsDocumentContext): Promise<T | null> {
     if (!definition.cacheKey || !ctx.kv) return null;
-    // A public render never bakes the KV mirror in: KV may lag the row the
+    // A public render never bakes the mirror in: it may lag the row the
     // entry's dependency key validates (CACHE-DESIGN.md section 6.4), so it
     // reads the tracked row instead.
     if (deps.active()) return null;
     let cached: string | null;
     try {
-      cached = await ctx.kv.get(definition.cacheKey, { cacheTtl: 60 });
+      cached = await ctx.kv.get(definition.cacheKey);
     } catch (error: unknown) {
-      console.warn(`[Settings] KV read failed for ${label}:`, maskedMessage(error));
+      console.warn(`[Settings] mirror read failed for ${label}:`, maskedMessage(error));
       return null;
     }
     if (cached === null) return null;
@@ -456,8 +487,10 @@ export function defineSettingsDocument<T extends object>(
 
   async function writeCache(ctx: SettingsDocumentContext, value: T): Promise<void> {
     if (!definition.cacheKey || !ctx.kv) return;
-    if (!(await putKvHint(ctx.kv, definition.cacheKey, JSON.stringify(value)))) {
-      console.warn(`[Settings] KV mirror of ${label} not written; D1 stays the authority`);
+    try {
+      await ctx.kv.put(definition.cacheKey, JSON.stringify(value));
+    } catch (error: unknown) {
+      console.warn(`[Settings] mirror write failed for ${label}:`, maskedMessage(error));
     }
   }
 
@@ -613,8 +646,10 @@ export function defineSettingsDocument<T extends object>(
     },
     async invalidate(ctx = {}) {
       if (!definition.cacheKey || !ctx.kv) return;
-      if (!(await deleteKvHint(ctx.kv, definition.cacheKey))) {
-        console.warn(`[Settings] KV mirror of ${label} not cleared`);
+      try {
+        await ctx.kv.delete(definition.cacheKey);
+      } catch (error: unknown) {
+        console.warn(`[Settings] mirror delete failed for ${label}:`, maskedMessage(error));
       }
     },
   };

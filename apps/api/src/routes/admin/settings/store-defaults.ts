@@ -6,6 +6,7 @@ import { TIME_ZONE_MAX_LENGTH } from "@scalius/shared/commerce-time";
 import { SUPPORTED_CURRENCY_CODES } from "@scalius/shared/currency";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "@scalius/shared/store-defaults";
 import { getStoreFormatting, saveStoreDefaults } from "@scalius/core/modules/platform";
+import { settingsMirror } from "@scalius/core/settings-store";
 import {
   STORE_NAME_MAX_LENGTH,
   applyStoreSetup,
@@ -93,7 +94,7 @@ const saveStoreDefaultsRoute = createRoute({
 app.openapi(saveStoreDefaultsRoute, async (c) => {
   const { expectedRevision, ...patch } = c.req.valid("json");
   c.header("Cache-Control", "private, no-store");
-  return ok(c, await saveStoreDefaults(c.get("db"), patch, c.env.CACHE, { expectedRevision }));
+  return ok(c, await saveStoreDefaults(c.get("db"), patch, settingsMirror(c.env), { expectedRevision }));
 });
 
 // ─────────────────────────────────────────

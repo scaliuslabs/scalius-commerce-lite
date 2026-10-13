@@ -39,9 +39,7 @@ const EFFECTIVE = {
 
 function createTestApp(options: { platformConfig?: typeof EFFECTIVE | undefined } = { platformConfig: EFFECTIVE }) {
   const db = { id: "db" };
-  const cache = { id: "api-cache-kv" };
   const env = {
-    CACHE: cache,
     PLATFORM_CONFIG: options.platformConfig,
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
@@ -58,7 +56,7 @@ function createTestApp(options: { platformConfig?: typeof EFFECTIVE | undefined 
     await next();
   });
   app.route("/admin/settings", platformSettingsRoutes);
-  return { app, env, db, cache };
+  return { app, env, db };
 }
 
 function putJson(app: OpenAPIHono<{ Bindings: Env }>, env: Env, body: unknown) {
@@ -142,7 +140,7 @@ describe("admin platform settings", () => {
 
   describe("PUT /api/v1/admin/settings/platform", () => {
     it("saves a partial patch through the platform cache", async () => {
-      const { app, env, db, cache } = createTestApp();
+      const { app, env, db } = createTestApp();
       const saved = {
         ...STORED,
         apiUrl: "https://api.example.com",
@@ -160,7 +158,7 @@ describe("admin platform settings", () => {
       expect(mocks.savePlatformSettings).toHaveBeenCalledWith(db, {
         apiUrl: "https://api.example.com",
         mediaUrl: "https://cdn.example.com",
-      }, cache, { expectedRevision: 4 });
+      }, null, { expectedRevision: 4 });
 
       // The response reflects the persisted state, not the request-time env.
       await expect(response.json()).resolves.toEqual({
@@ -208,7 +206,7 @@ describe("admin platform settings", () => {
         dashboardUrl: "https://shop.example.com/ops/dashboard",
         setupTokenRequired: true,
         identityHandoff: { enabled: true, issuer: "https://idp.example.com", audience: "scalius:store-1" },
-      }, expect.anything(), { expectedRevision: 4 });
+      }, null, { expectedRevision: 4 });
       expect(body.data.dashboardBasePath).toBe("/ops/dashboard");
       expect(body.data.identityHandoff).toEqual(saved.identityHandoff);
     });
@@ -225,7 +223,7 @@ describe("admin platform settings", () => {
       expect(mocks.savePlatformSettings).toHaveBeenCalledWith(db, {
         customerAuthCookieDomain: "",
         corsAllowedOrigins: [],
-      }, expect.anything(), { expectedRevision: 4 });
+      }, null, { expectedRevision: 4 });
     });
 
     it.each([

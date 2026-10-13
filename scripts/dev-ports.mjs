@@ -136,9 +136,6 @@ export function platformSyncSql(origins) {
   ].join(" ");
 }
 
-/** KV mirror of the Platform document (packages/core settings store). */
-export const PLATFORM_KV_KEY = "settings:platform";
-
 /**
  * Worker name of the local API. Wrangler's dev registry is global to the
  * machine, so two local APIs with one name compete for it and a built
@@ -274,7 +271,6 @@ export async function syncLocalPlatform({ env = process.env, state } = {}) {
     ["d1", "execute", "DB", "--config", "wrangler.local.jsonc", "--json", "--command", platformSyncSql(origins)],
     ["ignore", "pipe", "pipe"],
   );
-  wrangler(["kv", "key", "delete", PLATFORM_KV_KEY, "--binding", "CACHE", "--config", "wrangler.local.jsonc"], ["ignore", "ignore", "pipe"]);
   return { origins, changed: returnedRows(output) !== 0, wranglerState };
 }
 

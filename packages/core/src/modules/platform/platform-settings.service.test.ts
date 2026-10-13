@@ -312,7 +312,7 @@ describe("platform config KV cache", () => {
       JSON.stringify(config),
     );
     await expect(readCachedPlatformConfig(kv)).resolves.toEqual(config);
-    expect(kv.get).toHaveBeenCalledWith(PLATFORM_CONFIG_CACHE_KEY, { cacheTtl: 60 });
+    expect(kv.get).toHaveBeenCalledWith(PLATFORM_CONFIG_CACHE_KEY);
   });
 
   it("returns null for a missing binding, a cache miss, or an unreadable entry", async () => {

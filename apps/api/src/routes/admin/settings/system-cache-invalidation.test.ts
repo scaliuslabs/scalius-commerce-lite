@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { TEST_WORKER_VERSION, stubSettingsMirror } from "../../../testing/settings-mirror";
 import { currencyDocument, customerAuthDocument, emailDocument } from "@scalius/core/modules/settings";
 
 import { ValidationError } from "../../../utils/api-error";
@@ -120,8 +121,10 @@ async function createTestApp(setup?: (database: TestDatabase) => Promise<void> |
     put: vi.fn(async () => undefined),
     get: vi.fn(async () => null),
   };
+  const mirror = stubSettingsMirror();
   const env = {
     CACHE: kv,
+    CF_VERSION_METADATA: { id: TEST_WORKER_VERSION },
     CREDENTIAL_ENCRYPTION_KEY: CREDENTIAL_KEY,
   } as unknown as Env;
   const executionCtx = {
@@ -250,7 +253,7 @@ async function createTestApp(setup?: (database: TestDatabase) => Promise<void> |
   });
   app.route("/admin/settings", systemSettingsRoutes);
 
-  return { app, database, env, executionCtx, kv };
+  return { app, database, env, executionCtx, kv, mirror };
 }
 
 function requestGet(
@@ -322,6 +325,7 @@ function checkoutFlowBody(overrides: Record<string, unknown> = {}) {
 
 describe("system settings write behavior", () => {
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
@@ -900,22 +904,21 @@ describe("system settings write behavior", () => {
   });
 
   it("does not fail CSP security settings save when ExecutionContext is unavailable", async () => {
-    const { app, env } = await createTestApp();
+    const { app, env, mirror } = await createTestApp();
 
     const response = await requestJson(app, env, undefined, "/security", {
       cspAllowedDomains: "https://payments.example.com",
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(env.CACHE.put).toHaveBeenCalledWith(
-      "settings:security",
+    expect(mirror.read("settings:security")).toBe(
       JSON.stringify({ cspAllowedDomains: "https://payments.example.com" }),
     );
 
   });
 
   it("keeps merchant CSP sources exact and removes inherited platform origins", async () => {
-    const { app, env, executionCtx } = await createTestApp();
+    const { app, env, executionCtx, mirror } = await createTestApp();
     Object.assign(env, {
       STOREFRONT_URL: "https://storefront.example.com",
       PUBLIC_API_BASE_URL: "https://api.example.com",
@@ -931,14 +934,13 @@ describe("system settings write behavior", () => {
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(env.CACHE.put).toHaveBeenCalledWith(
-      "settings:security",
+    expect(mirror.read("settings:security")).toBe(
       JSON.stringify({ cspAllowedDomains: "https://payments.example.com,https://*.widgets.example.com" }),
     );
   });
 
   it("returns normalized inherited runtime trust without caching mutable state", async () => {
-    const { app, env, executionCtx } = await createTestApp();
+    const { app, env, executionCtx, mirror } = await createTestApp();
     Object.assign(env, {
       STOREFRONT_URL: "https://storefront.example.com/path",
       PUBLIC_API_BASE_URL: "https://api.example.com",
@@ -966,7 +968,7 @@ describe("system settings write behavior", () => {
         expect.objectContaining({ key: "r2", source: null }),
       ],
     });
-    expect(env.CACHE.put).not.toHaveBeenCalled();
+    expect(mirror.cache.put).not.toHaveBeenCalled();
   });
 
   it("returns email provider status without exposing provider secrets", async () => {

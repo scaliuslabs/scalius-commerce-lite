@@ -49,6 +49,7 @@ import {
   seoDocument,
 } from "@scalius/core/modules/settings";
 import { listOwnMarketCurrencies, readStoreCurrency, resetBackupPriceIncrement } from "@scalius/core/modules/markets";
+import { settingsMirror } from "@scalius/core/settings-store";
 import { platformDocument } from "@scalius/core/modules/platform";
 import { getStorefrontUrlSetting, saveStorefrontUrl } from "@scalius/core/modules/platform";
 import {
@@ -1340,7 +1341,7 @@ const saveStorefrontUrlRoute = createRoute({
 
 app.openapi(saveStorefrontUrlRoute, async (c) => {
   const { storefrontUrl, expectedRevision } = c.req.valid("json");
-  const { revision } = await saveStorefrontUrl(c.get("db"), storefrontUrl, c.env.CACHE, { expectedRevision });
+  const { revision } = await saveStorefrontUrl(c.get("db"), storefrontUrl, settingsMirror(c.env), { expectedRevision });
 
   return ok(c, { message: "Storefront URL saved successfully", revision });
 });

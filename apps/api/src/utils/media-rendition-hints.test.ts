@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  MEDIA_RENDITION_HINT_KV_PREFIX,
   MEDIA_RENDITION_HINT_MAX_IDS_PER_READ,
-  MEDIA_RENDITION_HINT_TTL_SECONDS,
   findStillOriginalMedia,
   queueRenditionsForRenderedOriginals,
 } from "./media-rendition-hints";
@@ -15,15 +13,24 @@ function body(value: unknown): Response {
 }
 
 function fakeEnv(seen: string[] = []) {
-  const store = new Map(seen.map((id) => [`${MEDIA_RENDITION_HINT_KV_PREFIX}${id}`, "1"]));
-  const kv = {
-    get: vi.fn(async (key: string) => store.get(key) ?? null),
-    put: vi.fn(async (key: string, value: string) => {
-      store.set(key, value);
+  const store = new Map(seen.map((id) => [markerUrl(id), "1"]));
+  const cache = {
+    match: vi.fn(async (url: string) => (store.has(url) ? new Response("1") : undefined)),
+    put: vi.fn(async (url: string, response: Response) => {
+      store.set(url, response.headers.get("Cache-Control") ?? "");
     }),
   };
+  vi.stubGlobal("caches", { open: vi.fn(async () => cache) });
   const queue = { send: vi.fn(async () => undefined) };
-  return { env: { CACHE: kv, JOBS_QUEUE: queue, IMAGES: {} as ImagesBinding }, kv, queue };
+  return {
+    env: { CF_VERSION_METADATA: { id: "v1" }, JOBS_QUEUE: queue, IMAGES: {} as ImagesBinding },
+    cache,
+    queue,
+  };
+}
+
+function markerUrl(id: string): string {
+  return `https://media-rendition-hint.internal/v1/${id}`;
 }
 
 describe("findStillOriginalMedia", () => {
@@ -55,19 +62,19 @@ describe("findStillOriginalMedia", () => {
   });
 });
 
-// Queueing a rendition from a public read (and its KV dedupe marker) is the
+// Queueing a rendition from a public read (and its Cache API dedupe marker) is the
 // Paid profile's behaviour (queue.renditionsFromPublicReads); the Free
 // profile's is the describe after this one.
 describe("queueRenditionsForRenderedOriginals", () => {
   beforeEach(() => { vi.stubGlobal("__SCALIUS_PLAN__", "paid"); });
   afterEach(() => {
-    vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  it("queues the render job at once, once per original, and marks it in KV with a short TTL", async () => {
+  it("queues the render job at once, once per original, and marks it in the Cache API with a short TTL", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const { env, kv, queue } = fakeEnv();
+    const { env, cache, queue } = fakeEnv();
     const read = body({ imageUrl: `${CDN}/media/media_legacy01.jpg`, hover: `${CDN}/media/media_done0001.jpg/960.webp` });
 
     expect(await queueRenditionsForRenderedOriginals(read, env)).toEqual(["media_legacy01"]);
@@ -75,9 +82,9 @@ describe("queueRenditionsForRenderedOriginals", () => {
       { type: "media.render_variants", mediaId: "media_legacy01" },
       { delaySeconds: 0 },
     );
-    expect(kv.put).toHaveBeenCalledWith(`${MEDIA_RENDITION_HINT_KV_PREFIX}media_legacy01`, "1", {
-      expirationTtl: MEDIA_RENDITION_HINT_TTL_SECONDS,
-    });
+    expect(cache.put).toHaveBeenCalledWith(markerUrl("media_legacy01"), expect.any(Response));
+    const marker = cache.put.mock.calls[0]![1] as Response;
+    expect(marker.headers.get("Cache-Control")).toBe("max-age=900");
     // One masked line per enqueue; never the full id.
     expect(console.log).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(vi.mocked(console.log).mock.calls[0])).not.toContain("media_legacy01");
@@ -90,42 +97,43 @@ describe("queueRenditionsForRenderedOriginals", () => {
     expect(JSON.stringify(vi.mocked(console.log).mock.calls[0])).not.toContain("media_card0000");
     queue.send.mockClear();
 
-    // A second read inside the TTL is deduplicated by the KV marker.
+    // A second read inside the TTL is deduplicated by the marker.
     await queueRenditionsForRenderedOriginals(body({ imageUrl: `${CDN}/media/media_legacy01.jpg` }), env);
     expect(queue.send).not.toHaveBeenCalled();
   });
 
-  it("does nothing for reads without originals, or without the queue, KV or Images binding", async () => {
+  it("does nothing for reads without originals, or without the queue, Worker version or Images binding", async () => {
     const { env, queue } = fakeEnv();
     expect(await queueRenditionsForRenderedOriginals(body({ imageUrl: `${CDN}/media/media_done0001.jpg/960.webp` }), env)).toEqual([]);
-    for (const missing of ["IMAGES", "JOBS_QUEUE", "CACHE"] as const) {
+    for (const missing of ["IMAGES", "JOBS_QUEUE", "CF_VERSION_METADATA"] as const) {
       const partial = { ...env, [missing]: undefined };
       expect(await queueRenditionsForRenderedOriginals(body({ u: `${CDN}/media/media_legacy01.jpg` }), partial)).toEqual([]);
     }
     expect(queue.send).not.toHaveBeenCalled();
   });
 
-  it("leaves no KV marker when the queue rejects, so the next read retries, and never throws", async () => {
+  it("leaves no marker when the queue rejects, so the next read retries, and never throws", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const { env, kv, queue } = fakeEnv();
+    const { env, cache, queue } = fakeEnv();
     queue.send.mockRejectedValueOnce(new Error("queue down"));
 
     expect(await queueRenditionsForRenderedOriginals(body({ u: `${CDN}/media/media_legacy01.jpg` }), env)).toEqual([]);
-    expect(kv.put).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
 
-    kv.get.mockRejectedValueOnce(new Error("kv down"));
+    cache.match.mockRejectedValueOnce(new Error("cache down"));
     await expect(queueRenditionsForRenderedOriginals(body({ u: `${CDN}/media/media_legacy01.jpg` }), env)).resolves.toBeDefined();
   });
 });
 
 describe("queueRenditionsForRenderedOriginals on the Free profile", () => {
-  it("queues nothing and touches neither KV nor the queue: the scheduled backfill renders", async () => {
-    const { env, kv, queue } = fakeEnv();
+  afterEach(() => { vi.unstubAllGlobals(); });
+  it("queues nothing and touches neither the marker nor the queue: the scheduled backfill renders", async () => {
+    const { env, cache, queue } = fakeEnv();
     const read = body({ imageUrl: `${CDN}/media/media_legacy01.jpg` });
 
     expect(await queueRenditionsForRenderedOriginals(read, env)).toEqual([]);
     expect(queue.send).not.toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.put).not.toHaveBeenCalled();
+    expect(cache.match).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
   });
 });

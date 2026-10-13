@@ -5,7 +5,7 @@
  *
  * The one value today is the Platform settings document. A render inside a
  * dependency scope must take the platform origins from the tracked settings
- * row, not the KV hint (`withTrackedPlatformEnv`); the part reader reads that
+ * row, not the mirror hint (`withTrackedPlatformEnv`); the part reader reads that
  * row in the same statement as the change clock, so the render does not
  * spend a D1 wave re-reading it. The value is at least as new as the render's
  * s0, which is what an entry validated by `set:platform:document` needs.
