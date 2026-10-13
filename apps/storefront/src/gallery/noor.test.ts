@@ -63,7 +63,7 @@ describe("packed Noor gallery integration", () => {
       }));
       const products = new Map(component.lists.map((list) => [list.source, list.products.map((value) => {
         const card = value as ProductCardProduct;
-        return productCardData(card, productCardModel(card, { currencySymbol: currency.symbol, currencyCode: currency.code, hoverImage: true, ratings: true }), currency);
+        return productCardData(card, productCardModel(card, { currencySymbol: currency.symbol, currencyCode: currency.code, hoverImage: true, ratings: true }));
       })]));
       const host = new ExtensionHost({ runtime: { env: {} }, context: {
         store: { name: "Gallery store", currency: "BDT", locale: entry.scenario.locale === "ar" ? "ar-AE" : "en-BD", language: "en", timeZone: "Asia/Dhaka" },

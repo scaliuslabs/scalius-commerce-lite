@@ -56,7 +56,7 @@ if (component) {
         hoverImage: true,
         ratings: resolved.facts.hasReviews,
       });
-      return productCardData(card, model, currency);
+      return productCardData(card, model);
     })]));
     html = await host.render(extension, {
       kind: "section",

@@ -135,8 +135,7 @@ export function footerData(input: {
 }
 
 /** A product as an app card gets it, from the core card model (same prices, photo and quick-add rules). */
-export function productCardData(product: ProductCardProduct, model: ProductCardModel, currency: { symbol: string; code: string }): StorefrontProductCard {
-  void currency;
+export function productCardData(product: ProductCardProduct, model: ProductCardModel): StorefrontProductCard {
   const discounted = model.price.regular !== null;
   const percent = discounted && product.price > 0 ? Math.round((1 - product.discountedPrice / product.price) * 100) : 0;
   const image = model.image

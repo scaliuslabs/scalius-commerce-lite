@@ -36,7 +36,7 @@ if (app) {
     component: app.component,
     settings: app.settings,
     data: {
-      product: productCardData(props.product, model, currency),
+      product: productCardData(props.product, model),
       position: props.index ?? 0,
       aboveFold: props.aboveFold === true && (props.index ?? 0) < 4,
     },
