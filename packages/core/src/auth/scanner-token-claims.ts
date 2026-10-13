@@ -74,6 +74,7 @@ export async function consumeScannerTokenClaim(
     .set({
       consumedAt: nowSeconds,
       consumedSessionHash: sessionIdHash,
+      sessionExpiresAt: nowSeconds + SCANNER_SESSION_TTL_SECONDS,
       updatedAt: nowSeconds,
     })
     .where(
@@ -97,13 +98,42 @@ export async function consumeScannerTokenClaim(
   return row;
 }
 
+export interface ScannerSession {
+  adminId: string;
+  adminName: string;
+}
+
+/**
+ * The live scanner session behind a `scanner_sid` cookie: the claim row that
+ * session consumed, until `session_expires_at`. With `refresh`, the session
+ * slides another full lifetime from now. Deleting the admin deletes the row.
+ */
+export async function readScannerSession(
+  db: Database,
+  sessionId: string,
+  options: ScannerTokenClaimOptions & { refresh?: boolean } = {},
+): Promise<ScannerSession | null> {
+  const nowSeconds = toUnixSeconds(options.nowMs ?? Date.now());
+  const live = and(
+    eq(scannerTokenClaims.consumedSessionHash, await sha256Hex(sessionId)),
+    gt(scannerTokenClaims.sessionExpiresAt, nowSeconds),
+  );
+  const session = { adminId: scannerTokenClaims.adminId, adminName: scannerTokenClaims.adminName };
+  const rows = options.refresh
+    ? await db.update(scannerTokenClaims)
+      .set({ sessionExpiresAt: nowSeconds + SCANNER_SESSION_TTL_SECONDS, updatedAt: nowSeconds })
+      .where(live)
+      .returning(session)
+    : await db.select(session).from(scannerTokenClaims).where(live).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function cleanupExpiredScannerTokenClaims(
   db: Database,
   options: { nowSeconds?: number; limit?: number } = {},
 ): Promise<ScannerTokenCleanupResult> {
   const nowSeconds = options.nowSeconds ?? toUnixSeconds(Date.now());
   const limit = Math.max(1, Math.min(options.limit ?? 200, 500));
-  const consumedRetentionCutoff = nowSeconds - SCANNER_SESSION_TTL_SECONDS;
   const rows = await db
     .select({ tokenHash: scannerTokenClaims.tokenHash })
     .from(scannerTokenClaims)
@@ -115,7 +145,10 @@ export async function cleanupExpiredScannerTokenClaims(
         ),
         and(
           isNotNull(scannerTokenClaims.consumedAt),
-          lte(scannerTokenClaims.consumedAt, consumedRetentionCutoff),
+          or(
+            isNull(scannerTokenClaims.sessionExpiresAt),
+            lte(scannerTokenClaims.sessionExpiresAt, nowSeconds),
+          ),
         ),
       ),
     )

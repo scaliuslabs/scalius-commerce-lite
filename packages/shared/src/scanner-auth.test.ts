@@ -2,19 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   SCANNER_COOKIE_NAME,
   buildScannerSessionCookie,
-  getScannerSessionKey,
   isAllowedScannerApiRequest,
   parseCookie,
 } from "./scanner-auth";
 
 describe("scanner auth helpers", () => {
-  it("hashes session identifiers before deriving KV keys", async () => {
-    const sessionKey = await getScannerSessionKey("session-secret");
-
-    expect(sessionKey).toMatch(/^scanner:session:[a-f0-9]{64}$/);
-    expect(sessionKey).not.toContain("session-secret");
-  });
-
   it("builds a secure HttpOnly scanner session cookie", () => {
     const cookie = buildScannerSessionCookie("session 1", 300, { secure: true });
 
