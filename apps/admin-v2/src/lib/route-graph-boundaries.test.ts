@@ -689,9 +689,10 @@ describe("admin route graph boundaries", () => {
     expect(menuBarSource).toContain('"editLink"');
     expect(menuBarSource).toContain('aria-label={t("insertImageUrl")}');
     expect(menuBarSource).toContain('aria-label={t("embedVideo")}');
-    expect(menuBarSource).toContain('triggerLabel={t("mediaLibrary")}');
-    expect(menuBarSource).toContain("trigger={");
-    expect(menuBarSource).toContain('tooltip={t("mediaLibrary")}');
+    // The media library is a controlled dialog opened from the Insert menu item.
+    expect(menuBarSource).toContain("setMediaOpen(true)");
+    expect(menuBarSource).toContain('{t("mediaLibrary")}');
+    expect(menuBarSource).toContain("open={mediaOpen} onOpenChange={setMediaOpen}");
     expect(menuBarSource).not.toContain("document.getElementById");
     expect(menuBarSource).not.toContain("tiptap-media-manager-wrapper");
     expect(menuBarSource).not.toContain('querySelector("button")?.click()');
