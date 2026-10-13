@@ -5,7 +5,7 @@
 // into one batch per app, so a listing of 36 app cards is one call, not 36,
 // and runs each batch with the app's module (loaders.ts). Every answer:
 //
-// - is checked (`sanitizeStorefrontHtml`): markup and CSS pass, script runs
+// - is checked (`sanitizePluginHtml`, component profile): markup and safe CSS pass, script runs
 //   only as declared islands;
 // - is kept in this isolate's memory by its full input, so the header,
 //   footer and every card already drawn cost nothing on the next page
@@ -22,7 +22,7 @@ import {
   type StorefrontRenderJob,
   storefrontExtensionBase,
 } from "@scalius/shared/plugins/storefront-components";
-import { sanitizeStorefrontHtml } from "@scalius/shared/plugins/storefront-html";
+import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 import { runStorefrontModule, type ExtensionRuntime } from "./loaders";
 
 /** A job as a component asks for it (the host names it). */
@@ -160,14 +160,14 @@ export class ExtensionHost {
           entry.resolve(null);
           continue;
         }
-        if (result.html.length > STOREFRONT_COMPONENT_LIMITS.htmlBytes) {
-          warnOnce(`${extension.pluginId}:size:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)} drew more than ${STOREFRONT_COMPONENT_LIMITS.htmlBytes} bytes.`);
+        const checked = sanitizePluginHtml(result.html, { pluginId: extension.pluginId, profile: "component" });
+        if (!checked.ok) {
+          warnOnce(`${extension.pluginId}:size:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)} drew markup over its bounds (${checked.reason}).`);
           entry.resolve(null);
           continue;
         }
-        const html = sanitizeStorefrontHtml(result.html).html;
-        remember(entry.key, html);
-        entry.resolve(html);
+        remember(entry.key, checked.html);
+        entry.resolve(checked.html);
       }
     } catch (error) {
       warnOnce(`${extension.pluginId}:batch`, `${extension.pluginId}: ${error instanceof Error ? error.message : String(error)}; the page draws without it.`);

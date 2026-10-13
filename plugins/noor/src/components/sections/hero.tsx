@@ -111,7 +111,7 @@ export function Slideshow({ settings, context, instanceId }: SectionProps<Slides
               const link = text(slide.link);
               return (
                 <li class={cx("noor-slide", `at-${choice(slide.position, ["start", "center", "end"] as const, "start")}`)} data-slide
-                  aria-roledescription="slide" aria-label={`${index + 1} / ${slides.length}`} id={`${instanceId}-slide-${index}`}>
+                  aria-roledescription="slide" aria-label={`${index + 1} / ${slides.length}`} id={`noor-${instanceId}-slide-${index}`}>
                   <div class="noor-hero-media">
                     <Photo image={slide.image} phone={slide.phone_image} eager={index === 0} sizes="100vw" />
                   </div>

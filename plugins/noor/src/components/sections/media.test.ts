@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 import { parsePluginManifest } from "@scalius/plugin-sdk/manifest";
-import { renderSection } from "@scalius/plugin-sdk/storefront/testing";
+import { renderSection, storefrontShown } from "@scalius/plugin-sdk/storefront/testing";
 import { resolveStorefrontSettings } from "@scalius/shared/plugins";
-import { sanitizeStorefrontHtml } from "@scalius/shared/plugins/storefront-html";
 import { manifest } from "../../index";
 import storefront from "../../storefront";
 
@@ -15,7 +14,7 @@ function render(type: string, values: Record<string, unknown>) {
     image: (id) => ({ url: `https://media.example/${id}.webp`, srcset: `https://media.example/${id}-600.webp 600w, https://media.example/${id}.webp 1200w`, width: 1200, height: 800, alt: id }),
     products: () => [],
   });
-  const result = sanitizeStorefrontHtml(renderSection(storefront, type, settings));
+  const result = storefrontShown(renderSection(storefront, type, settings), "scalius.noor");
   expect(result.dropped).toBe(0);
   document.body.innerHTML = result.html;
   return document.body;

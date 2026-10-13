@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parsePluginManifest } from "@scalius/plugin-sdk/manifest";
 import { checkPluginHandlers, pluginHandlerInventory, resolveStorefrontSettings } from "@scalius/shared/plugins";
-import { sanitizeStorefrontHtml } from "@scalius/shared/plugins/storefront-html";
 import { validatePluginSettingValues, type PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
 import {
   DEFAULT_STOREFRONT_THEME,
@@ -17,6 +16,7 @@ import {
   renderHeader,
   renderProductCard,
   renderSection,
+  storefrontShown,
 } from "@scalius/plugin-sdk/storefront/testing";
 import type { StorefrontImage } from "@scalius/plugin-sdk/storefront";
 import plugin, { manifest } from "./index";
@@ -51,7 +51,7 @@ function slotSettings(id: string, values: Record<string, unknown> = {}) {
 
 /** What the storefront would put on the page: the checked markup. */
 function shown(html: string): string {
-  const result = sanitizeStorefrontHtml(html);
+  const result = storefrontShown(html, "scalius.noor");
   expect(result.dropped).toBe(0);
   return result.html;
 }
@@ -317,7 +317,7 @@ describe("Noor sections", () => {
   it("draws every section from its defaults (and nothing for one with nothing to show)", () => {
     for (const section of declared.storefront.sections) {
       const html = renderSection(storefront, section.type, settingsFor(section.type));
-      if (html) expect(sanitizeStorefrontHtml(html).dropped).toBe(0);
+      if (html) expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
     }
     expect(renderSection(storefront, "faq", settingsFor("faq"))).toBe("");
     expect(renderSection(storefront, "slideshow", settingsFor("slideshow"))).toBe("");
@@ -420,7 +420,7 @@ describe("Noor landing kit", () => {
 
   it("places the store's order form at its instance anchor, with the phone order bar", () => {
     const html = shown(render("landing-order", { assurances: [{ icon: "truck", text: "2-day delivery" }], max_quantity: 3 }));
-    expect(html).toContain('id="order-app-landing-order"');
+    expect(html).toContain('id="noor-order-app-landing-order"');
     expect(html).toContain('<scalius-checkout data-product="linen-shirt" data-max-quantity="3"></scalius-checkout>');
     expect(html).toContain('data-island="landing-bar"');
     expect(html).toContain("2-day delivery");
@@ -450,8 +450,8 @@ describe("Noor landing kit", () => {
     for (const [index, result] of reply.results.entries()) {
       if (!("html" in result)) throw new Error(result.error);
       const id = index === 0 ? "first" : "second";
-      expect(shown(result.html)).toContain(`id="order-${id}"`);
-      expect(result.html).toContain(`href="#order-${id}"`);
+      expect(shown(result.html)).toContain(`id="noor-order-${id}"`);
+      expect(result.html).toContain(`href="#noor-order-${id}"`);
     }
   });
 

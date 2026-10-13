@@ -82,7 +82,7 @@ export function LandingHero({ settings, context, instanceId }: SectionProps<Land
         <Island name="slideshow" hydrate="visible" props={{ autoplay: false }} class="noor-lhero-gallery">
           <ul class="noor-lhero-photos" data-track tabindex="0" aria-label={t(context, { en: "Photos", bn: "ছবি" })}>
             {photos.map((photo, index) => (
-              <li data-slide id={`${instanceId}-photo-${index}`}>
+              <li data-slide id={`noor-${instanceId}-photo-${index}`}>
                 <Image image={photo} sizes="(min-width: 900px) 46vw, 100vw" loading={index === 0 ? "eager" : "lazy"}
                   alt={index === 0 ? product.title : photo.alt} class="noor-cover" />
               </li>
@@ -221,7 +221,7 @@ export function LandingOrder({ settings, context, instanceId }: SectionProps<Lan
   const assurances = settings.assurances.filter((item) => text(item.text));
   const call = phoneHref(text(settings.phone));
   const barLabel = text(settings.bar_label) ?? t(context, { en: "Order now", bn: "অর্ডার করুন" });
-  const orderAnchor = `order-${instanceId}`;
+  const orderAnchor = `noor-order-${instanceId}`;
   return (
     <Section name="order" tone={settings.tone} space="m" id={orderAnchor}>
       <SectionHead eyebrow={text(settings.eyebrow)} heading={text(settings.heading) ?? t(context, { en: "Place your order", bn: "অর্ডার করতে নিচের ফর্মটি পূরণ করুন" })}

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { Parser } from "htmlparser2";
 import { PLUGIN_HTML_MAX_ELEMENTS, PLUGIN_HTML_MAX_INPUT_BYTES, sanitizePluginHtml, sanitizePluginUrl } from "./html";
 import { parsePluginPageOutput, sanitizePluginHead, serializeJsonLd } from "./storefront";
+import { STOREFRONT_COMPONENT_LIMITS } from "./storefront-protocol";
 
 const options = { pluginId: "acme.wishlist", forms: true };
 function clean(html: string, overrides: Partial<typeof options> = {}): string {
@@ -65,8 +67,8 @@ describe("plugin storefront HTML", () => {
   });
 
   it("escapes attribute values and text it keeps", () => {
-    // A quote can never leave the attribute; markup inside a quoted value is inert.
-    expect(clean('<p title="&quot;><script>x</script>">a &lt;b&gt;</p>')).toBe('<p title="&quot;><script>x</script>">a &lt;b&gt;</p>');
+    // Nothing can leave a quoted value, and no raw-text parent (noscript) can end inside one.
+    expect(clean('<p title="&quot;><script>x</script>">a &lt;b&gt;</p>')).toBe('<p title="&quot;&gt;&lt;script&gt;x&lt;/script&gt;">a &lt;b&gt;</p>');
   });
 
   it("renders nothing over its bounds", () => {
@@ -81,6 +83,128 @@ describe("plugin storefront HTML", () => {
     expect(sanitizePluginUrl("#top", "link")).toBe("#top");
     expect(sanitizePluginUrl("mailto:x@y.z", "image")).toBeNull();
     expect(sanitizePluginUrl("https://a.com/\u0000", "link")).toBeNull();
+  });
+});
+
+describe("app component HTML (component profile)", () => {
+  const component = (html: string, jsonLd = true) => {
+    const result = sanitizePluginHtml(html, { pluginId: "acme.theme", profile: "component", jsonLd });
+    if (!result.ok) throw new Error(`refused: ${result.reason}`);
+    return result;
+  };
+  const shown = (html: string, jsonLd = true) => component(html, jsonLd).html;
+
+  it("keeps what a theme draws with, as written", () => {
+    const html = '<section class="theme-s" style="--theme-cols:4;grid-template-columns:repeat(var(--theme-cols), minmax(0, 1fr))">'
+      + '<h1 data-theme-field="heading">Hi</h1>'
+      + '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16"></path><circle cx="11" cy="11" r="7"></circle><rect x="3" y="5" width="18" height="14" rx="2"></rect></svg>'
+      + '<button type="button" popovertarget="theme-menu" aria-label="Menu">=</button><div id="theme-menu" popover="auto" tabindex="-1">m</div>'
+      + '<form action="/search" method="get" role="search"><input type="search" name="q" autofocus></form>'
+      + '<scalius-island data-island="rail" data-hydrate="visible" data-props="{&quot;a&quot;:1}"><ul data-track></ul></scalius-island>'
+      + '<scalius-checkout data-product="prod_1" data-max-quantity="5"></scalius-checkout>'
+      + '<video class="cover" src="https://media.example.com/film.mp4" poster="/media/poster.webp" preload="none" muted loop playsinline></video>'
+      + '<img src="https://media.example.com/a.webp" srcset="https://media.example.com/a-600.webp 600w" sizes="100vw" alt="A" width="1200" height="800" loading="eager" fetchpriority="high" decoding="sync">'
+      + '</section>';
+    const result = component(html);
+    expect(result.html).toBe(html);
+    expect(result.dropped).toBe(0);
+  });
+
+  it("keeps the camel case SVG needs, and self-closed SVG elements stay siblings", () => {
+    expect(shown('<svg viewBox="0 0 2 2"><linearGradient id="theme-g"><stop offset="0" stop-color="#fff"/></linearGradient><path d="M0 0"/><rect fill="url(#theme-g)"/></svg>'))
+      .toBe('<svg viewBox="0 0 2 2"><linearGradient id="theme-g"><stop offset="0" stop-color="#fff"></stop></linearGradient><path d="M0 0"></path><rect fill="url(#theme-g)"></rect></svg>');
+  });
+
+  it("keeps ids only under the app's own prefix, and never host attributes", () => {
+    expect(shown('<div id="checkout-config" data-sx-base="/_x/other.app/0/" data-sx-app="other.app" data-tone="ink">x</div>')).toBe('<div data-tone="ink">x</div>');
+    expect(shown('<p id="theme-a">x</p><p name="x">y</p>')).toBe('<p id="theme-a">x</p><p>y</p>');
+  });
+
+  it("keeps style that loads and hides nothing", () => {
+    expect(shown('<p style="left: 50%; top: calc(100% - 4px)">a</p>')).toBe('<p style="left:50%;top:calc(100% - 4px)">a</p>');
+    for (const style of [
+      "background:url(https://evil.test/x)", "background:u\\72l(https://evil.test/x)", "x:expression(alert(1))",
+      "background-image:image-set('x.png' 1x)", "color:red/**/", "--x:attr(data-x)", "@import 'x'", "color:red}body{color:blue",
+    ]) expect(shown(`<p style="${style}">a</p>`), style).toBe("<p>a</p>");
+  });
+
+  it("keeps schema.org JSON-LD re-serialized, and none on a noindex page", () => {
+    const script = '<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","text":"<b>"}</script>';
+    expect(shown(script)).toBe('<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","text":"\\u003cb\\u003e"}</script>');
+    expect(shown(script, false)).toBe("");
+    expect(shown('<script type="application/ld+json">{"@context":"https://evil.test","@type":"Thing"}</script>')).toBe("");
+    expect(shown('<script type="application/ld+json">not json</script>')).toBe("");
+  });
+
+  it("lets forms post to store paths only", () => {
+    expect(shown('<form action="/newsletter" method="post"><input type="email" name="email"></form>')).toBe('<form action="/newsletter" method="post"><input type="email" name="email"></form>');
+    expect(shown('<form action="https://evil.test/"><input name="q"></form>')).toBe('<input name="q">');
+    expect(shown('<form action="//evil.test/"><b>x</b></form>')).toBe("<b>x</b>");
+  });
+
+  // Parser-differential (mXSS) vectors: each must come out with no script,
+  // handler, script URL, raw-text element or markup in a value, and sanitize
+  // to itself again.
+  const RAW_TEXT = new Set(["script", "style", "noscript", "template", "title", "xmp", "iframe", "noembed", "noframes", "plaintext", "math", "foreignobject", "animate", "set", "use", "object", "embed", "base", "meta", "link"]);
+  function issuesOf(html: string): string[] {
+    const issues: string[] = [];
+    const parser = new Parser({
+      onopentag(name, attributes) {
+        if (RAW_TEXT.has(name) && !(name === "script" && attributes.type === "application/ld+json")) issues.push(`<${name}>`);
+        for (const [key, value] of Object.entries(attributes)) {
+          if (key.startsWith("on") || key === "srcdoc" || key === "formaction" || (key.includes("href") && key !== "href")) issues.push(key);
+          if (/^(?:javascript|vbscript|data):/i.test(value.replace(/[\s\u0000-\u001f]/g, ""))) issues.push(`${key}=${value}`);
+        }
+      },
+      ontext(text) {
+        if (text.includes("<")) issues.push(`text ${text}`);
+      },
+    }, { decodeEntities: false });
+    parser.write(html);
+    parser.end();
+    if (/="[^"]*[<>]/.test(html)) issues.push("markup in an attribute value");
+    return issues;
+  }
+
+  it.each([
+    // The two bypasses of the former blocklist sanitizer (each made a real <img onerror> in Chrome).
+    ["noscript/style", "<noscript><style></noscript><img src=x onerror=alert(1)></style></noscript>"],
+    ["svg/style entity", "<svg><style>&lt;img src=x onerror=alert(1)&gt;</style></svg>"],
+    ["svg animate href", '<svg><a><animate attributeName="href" values="javascript:alert(1)"/><text>x</text></a></svg>'],
+    ["math mglyph style", "<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>"],
+    ["form math namespace", "<form><math><mtext></form><form><mglyph><style></math><img src onerror=alert(1)>"],
+    ["svg p style breakout", '<svg></p><style><a id="</style><img src=1 onerror=alert(1)>">'],
+    ["template style", "<template><style></template><img src=x onerror=alert(1)></style></template>"],
+    ["textarea", "<textarea><img src=x onerror=alert(1)></textarea>"],
+    ["title", "<title><img src=x onerror=alert(1)></title>"],
+    ["xmp", "<xmp><img src=x onerror=alert(1)></xmp>"],
+    ["noscript attribute", '<noscript><p title="</noscript><img src=x onerror=alert(1)>"></p></noscript>'],
+    ["attribute that closes noscript", '<p title="</noscript><img src=x onerror=alert(1)>">x</p>'],
+    ["svg CDATA", "<svg><![CDATA[</svg><img src=x onerror=alert(1)>]]></svg>"],
+    ["comments", "<!--<img src=x onerror=alert(1)>--><!--><img src=x onerror=alert(2)>-->"],
+    ["foreignObject", "<svg><foreignObject><img src=x onerror=alert(1)></foreignObject></svg>"],
+    ["svg use", '<svg><use href="data:image/svg+xml;base64,PHN2Zz4="></use></svg>'],
+    ["svg xlink", '<svg><a xlink:href="javascript:alert(1)"><rect width="1"/></a></svg>'],
+    ["svg paint url", '<svg><rect fill="url(https://evil.test/x)"/></svg>'],
+    ["iframe srcdoc", '<iframe srcdoc="<script>alert(1)</script>"></iframe>'],
+    ["entity schemes", '<a href="jav&#x09;ascript:alert(1)">a</a><a href="&#106;avascript:alert(1)">b</a>'],
+    ["image schemes", '<img src="javascript:alert(1)"><img srcset="javascript:alert(1) 1x" src="/a.png"><video poster="javascript:alert(1)" src="http://evil.test/v.mp4"></video>'],
+    ["formaction", '<form action="/search"><button formaction="javascript:alert(1)">go</button></form>'],
+    ["head tags", '<meta http-equiv="refresh" content="0;url=javascript:alert(1)"><base href="https://evil.test/"><link rel="stylesheet" href="https://evil.test/x.css">'],
+    ["object embed", '<object data="javascript:alert(1)"></object><embed src="javascript:alert(1)">'],
+    ["island handler", '<scalius-island data-island="x" onload="alert(1)">x</scalius-island>'],
+    ["JSON-LD that closes its script", '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Thing","name":"</script><script>alert(1)</script>"}</script>'],
+    ["math href", '<math href="javascript:alert(1)">x</math>'],
+  ])("is inert after a parser-differential vector: %s", (_name, input) => {
+    const once = shown(input);
+    expect(issuesOf(once)).toEqual([]);
+    expect(shown(once)).toBe(once);
+  });
+
+  it("refuses markup over its bounds", () => {
+    const options = { pluginId: "acme.theme", profile: "component" as const };
+    expect(sanitizePluginHtml("x".repeat(STOREFRONT_COMPONENT_LIMITS.htmlBytes + 1), options)).toEqual({ ok: false, reason: "too_large" });
+    expect(sanitizePluginHtml("<div>".repeat(STOREFRONT_COMPONENT_LIMITS.htmlDepth + 1), options)).toEqual({ ok: false, reason: "too_complex" });
   });
 });
 

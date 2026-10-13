@@ -35,6 +35,9 @@ export const STOREFRONT_COMPONENT_LIMITS = {
   publicFiles: 40,
   /** Markup one render answers. */
   htmlBytes: 256 * 1024,
+  /** Element nesting and element count of one render's markup. */
+  htmlDepth: 48,
+  htmlElements: 6_000,
   /** A batch's wall time before the storefront falls back to its own blocks. */
   renderWallMs: 250,
   /** CPU one batch may use in its isolate. */

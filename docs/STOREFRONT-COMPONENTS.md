@@ -9,7 +9,7 @@ Source of truth:
 | Part | Where |
 | --- | --- |
 | Contract (manifest, data shapes, render protocol, limits) | `packages/shared/src/plugins/storefront-components.ts`, `storefront-protocol.ts` (zod-free) |
-| Output check | `packages/shared/src/plugins/storefront-html.ts` (`sanitizeStorefrontHtml`) |
+| Output check | `packages/shared/src/plugins/html.ts` (`sanitizePluginHtml`, `component` profile) |
 | SDK | `@scalius/plugin-sdk/storefront`, `/storefront/testing`, `/island` (`packages/plugin-sdk/src/storefront/`) |
 | Packer | `scripts/plugin-build.mjs` (`packStorefront`, `writeStorefrontGenerated`) |
 | Host (storefront) | `apps/storefront/src/lib/extensions/` and `components/apps/AppComponent.astro` |
@@ -266,7 +266,7 @@ The merchant owns their apps (private or uploaded). The platform makes what an a
   Activation approval, CSP and server authorization are boundaries; HTML
   sanitization does not sandbox an approved island. HttpOnly cookies prevent
   reading cookie values, not making otherwise-authorized same-origin requests.
-- Output passes `sanitizeStorefrontHtml`. Any element, class, inline style, `<style>`, SVG and form stays. Dropped: `<script>` (islands are the only code), `<object>`, `<embed>`, `<base>`, `<meta>`, `<link>`, event handler attributes, `srcdoc`, and any URL that is not relative, `http(s)`, `mailto`, `tel` or `sms` (an `<img>` may use a base64 raster `data:` URL). An `<iframe>` needs an `https://` source and loads lazily.
+- Output passes `sanitizePluginHtml` (`component` profile), an allowlist. It keeps content, list, table and form elements, `h1`, `video`, an SVG drawing subset, islands and core embeds; classes; `id`s that start with the app name (`noor-…` for `scalius.noor`); inline style without loading functions (`url()`, `image-set()`, …), escapes or comments; forms that post to a store path; and schema.org JSON-LD (dropped on `noindex` pages). It drops everything else: `<script>`, `<style>` (CSS belongs in the stylesheet), `<iframe>`, `<noscript>`, `<template>`, `<math>`, SVG animation and `foreignObject`, event handlers, `data-sx-*` (host attributes), and every URL that is not a store path, `https`, `mailto`, `tel` or a fragment. Test with `storefrontShown(html, pluginId)` (`/storefront/testing`): `dropped` counts what it left out.
 - Island code is served from the store's origin under its release; CSP `script-src` gains nothing. Connect hosts join `connect-src` and `img-src` only, on pages whose theme uses the app.
 - SVG files are served with a sandboxing CSP and `nosniff`.
 
