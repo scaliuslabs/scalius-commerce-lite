@@ -68,7 +68,7 @@ Component sections and slots use the app settings types (`text`, `textarea`, `nu
 
 The editor shows a media picker, a product source or product picker, a link field and a repeatable item list. Values are resolved against the schema as it is now (`resolveStorefrontSettings`): a removed setting drops, a new one takes its default, a deleted image or product resolves to `null`. Slot settings cannot use `image`, `products` or `product`: the chrome renders on every page and must not add reads.
 
-The page reads every image and product list its component sections name in one batch beside the page's own second batch (`readAppComponentData`), with the homepage limits (40 images, 8 product lists). A page with component sections adds no round trip to its critical path.
+The page reads every image, product list and picked product its component sections name in one batch (`readAppComponentData`), with the homepage limits (40 images, 8 product lists). That batch follows the apps' read, which names the settings schemas, so component sections add one wave to the page, and a `collection:` source one more (its rules are read first). `apps/api/src/storefront-render-budget.test.ts` measures both.
 
 ## A storefront module
 

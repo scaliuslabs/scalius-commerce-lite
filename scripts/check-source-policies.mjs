@@ -14,12 +14,12 @@ const root = resolve(import.meta.dirname, "..");
 const ts = createRequire(import.meta.url)("typescript");
 const codeExtensions = new Set([".ts", ".tsx", ".astro", ".mjs", ".js"]);
 
-/** Files under `path` (a file or directory), skipping tests, declarations, generated code. */
+/** Files under `path` (a file or directory), skipping tests, declarations, build output and generated code. */
 export function codeFiles(path, extensions = codeExtensions) {
   const absolute = resolve(root, path);
   if (extensions.has(extname(absolute))) return [absolute];
   return readdirSync(absolute, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.name === "node_modules" || entry.name === "generated" || entry.name === "testing") return [];
+    if (entry.name === "node_modules" || entry.name === "dist" || entry.name === "generated" || entry.name === "testing") return [];
     const child = resolve(absolute, entry.name);
     if (entry.isDirectory()) return codeFiles(child, extensions);
     // `.gen.js` is an app's compiled storefront module (scripts/plugin-build.mjs): the app's code, not the repository's.

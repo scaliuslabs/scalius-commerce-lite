@@ -1,9 +1,10 @@
 // The data of app component sections (docs/STOREFRONT-COMPONENTS.md): a
 // section an app's storefront module draws at the edge gets its settings
-// resolved there, from the images and product lists read here. One batch
-// reads every image and product list the page's component sections name
-// (plus one more for collection sources), beside the page's own second
-// batch, so a page with component sections adds no wave to its main path.
+// resolved there, from the images, product lists and picked products read
+// here in one batch. It runs after the apps' read (beside the page's second
+// batch), which names the settings schemas: one more wave for a page with
+// component sections, and one more again for a collection source, whose
+// rules are read first (storefront-render-budget.test.ts measures both).
 // The cards are the homepage lists' cards (same projection, prices in the
 // page's market, translations), so the storefront maps them as it maps its own.
 
@@ -95,39 +96,41 @@ export async function readAppComponentData(
     ? [db.select({ id: collections.id, config: collections.config }).from(collections)
       .where(and(eq(collections.isActive, true), isNull(collections.deletedAt), inArray(collections.id, collectionIds)))]
     : [];
-  const statements = [...mediaPlan.statements, ...listPlan.statements, ...collectionRead];
+  // Picked products need nothing read first: they join the first batch.
+  const manual = (id: string) => normalizeCollectionConfig({ source: "manual", productIds: [id], categoryIds: [], maxProducts: 1, title: "", subtitle: "" });
+  const pickedPlan = planCollectionProducts(db, picked.map(({ key, id }) => ({ key, config: manual(id), maxProducts: 1 })), translation);
+  const statements = [...mediaPlan.statements, ...listPlan.statements, ...pickedPlan.statements, ...collectionRead];
   const results: unknown[] = statements.length > 0 ? [...await safeBatch(db, statements as Parameters<typeof safeBatch>[1])] : [];
   const market = await marketPriceContextOf(pricing);
   const listOffset = mediaPlan.statements.length;
-  await priceCardRowsInResults(db, market, results, listPlan.productRowSlots.map((slot) => listOffset + slot));
+  const pickedOffset = listOffset + listPlan.statements.length;
+  await priceCardRowsInResults(db, market, results, [
+    ...listPlan.productRowSlots.map((slot) => listOffset + slot),
+    ...pickedPlan.productRowSlots.map((slot) => pickedOffset + slot),
+  ]);
   const media = new Map(mediaPlan.resolve(results, 0).map((asset) => [asset.id, asset]));
   const products = new Map<string, unknown[]>(
     listPlan.resolve(results, listOffset, marketShopAmounts(market)).map((list) => [list.key, list.products]),
   );
+  const pickedResults = results.slice(pickedOffset, pickedOffset + pickedPlan.statements.length);
+  for (const [key, result] of pickedPlan.resolve(pickedResults, marketShopAmounts(market))) products.set(key, result.products);
 
-  // Collection sources (their products by each collection's own rules) and
-  // picked products, in a second batch.
-  if (collectionRead.length > 0 || picked.length > 0) {
-    const rows = collectionRead.length > 0 ? results[results.length - 1] as Array<{ id: string; config: unknown }> : [];
+  // Collection sources (their products by each collection's own rules) need
+  // the collection's rules first: a second batch, only when a section names one.
+  if (collectionRead.length > 0) {
+    const rows = results[results.length - 1] as Array<{ id: string; config: unknown }>;
     const configs = new Map(rows.map((row) => [row.id, normalizeCollectionConfig(row.config)]));
-    const requests = [
-      ...collectionLists.flatMap((list) => {
-        const config = configs.get((list.source as { collectionId: string }).collectionId);
-        return config ? [{ key: list.key, config, maxProducts: list.limit }] : [];
-      }),
-      ...picked.map(({ key, id }) => ({
-        key,
-        config: normalizeCollectionConfig({ source: "manual", productIds: [id], categoryIds: [], maxProducts: 1, title: "", subtitle: "" }),
-        maxProducts: 1,
-      })),
-    ];
-    const plan = planCollectionProducts(db, requests, translation);
+    const plan = planCollectionProducts(db, collectionLists.flatMap((list) => {
+      const config = configs.get((list.source as { collectionId: string }).collectionId);
+      return config ? [{ key: list.key, config, maxProducts: list.limit }] : [];
+    }), translation);
     if (plan.statements.length > 0) {
       const collectionResults = [...await safeBatch(db, plan.statements as Parameters<typeof safeBatch>[1])];
       await priceCardRowsInResults(db, market, collectionResults, plan.productRowSlots);
       for (const [key, result] of plan.resolve(collectionResults, marketShopAmounts(market))) products.set(key, result.products);
     }
   }
+
 
   return resolved.map(({ placement, values, needs }) => ({
     sectionId: placement.sectionId,
