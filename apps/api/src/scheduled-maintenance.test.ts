@@ -55,7 +55,15 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
 vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/notifications")>()),
   flushPendingNotificationOutbox: mocks.flushPendingNotificationOutbox,
+  pruneStaffAlerts: vi.fn(async () => ({ inbox: 0, alerts: 0 })),
 }));
+
+// The projection sweeps have their own D1 tests (derived-projections.test.ts).
+vi.mock("@scalius/core/modules/analytics", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/analytics")>()),
+  sealAnalyticsDays: vi.fn(async () => 0),
+}));
+vi.mock("./scheduled/derived-projections", () => ({ maintainDerivedProjections: vi.fn(async () => null) }));
 
 
 vi.mock("@scalius/core/modules/reviews", async (importOriginal) => ({
