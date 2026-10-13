@@ -664,7 +664,9 @@ describe("admin route graph boundaries", () => {
       ),
       "utf8",
     );
-    expect(skeletonSource).toContain("TOOLBAR_GROUPS");
+    // The loading toolbar and the mounted one share the measured row layout.
+    expect(skeletonSource).toContain('from "./tiptap-toolbar-layout"');
+    expect(skeletonSource).toContain("TOOLBAR_ROW");
     expect(skeletonSource).toContain("lucide-react");
     expect(skeletonSource).toContain("Maximize");
     expect(skeletonSource).not.toContain("primaryWidth");
@@ -679,6 +681,7 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapMenuBar.tsx"),
       "utf8",
     );
+    expect(menuBarSource).toContain('from "./tiptap-toolbar-layout"');
     expect(toolbarButtonSource).toContain("aria-label={tooltip}");
     expect(menuBarSource).toContain('aria-label={');
     // Labels come from the dashboard's catalog, in its language (A11Y-03).

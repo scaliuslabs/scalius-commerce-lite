@@ -167,7 +167,8 @@ describe("publishing card", () => {
     expect(container.textContent).toContain(t("channelOff"));
 
     act(() => boxes()[2]!.click());
-    expect(values.at(-1)).toEqual(["sc_online_store", "sc_google", "acme.tiktok:shop"]);
+    // Saved sorted, so the same set of channels is never a different value (form dirty state).
+    expect(values.at(-1)).toEqual(["acme.tiktok:shop", "sc_google", "sc_online_store"]);
   });
 
   it("shows a saved product's channels and says when it is on none", async () => {
