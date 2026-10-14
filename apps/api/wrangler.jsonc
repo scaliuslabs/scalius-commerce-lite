@@ -39,6 +39,9 @@
   "version_metadata": {
     "binding": "CF_VERSION_METADATA"
   },
+  // Large data ships as Text modules, which workerd does not compile at isolate
+  // start: generated *.txt (Wrangler's default rule) and the places dataset.
+  "rules": [{ "type": "Text", "globs": ["**/places/places.json"], "fallthrough": true }],
   // workers_dev: false — Workers only accessible via custom domains, not *.workers.dev
   "workers_dev": false,
   // The dashboard SPA (built by apps/admin-v2 before this Worker; turbo.json).

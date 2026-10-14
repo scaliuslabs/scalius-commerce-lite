@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { enableCompileCache } from "node:module";
 import { fileURLToPath } from "node:url";
 
@@ -31,6 +32,16 @@ export default defineConfig({
         if (!id.startsWith("@/")) return undefined;
         const appSrc = importer?.includes("/apps/admin-v2/") ? adminSrc : storefrontSrc;
         return this.resolve(appSrc + id.slice(2), importer, { skipSelf: true });
+      },
+    },
+    {
+      // A `*.txt` import is its text, as Wrangler bundles it (a Text module);
+      // Vite would hand over an asset URL.
+      name: "scalius-text-modules",
+      enforce: "pre",
+      load(id) {
+        if (!id.endsWith(".txt")) return undefined;
+        return `export default ${JSON.stringify(readFileSync(id, "utf8"))};`;
       },
     },
     {

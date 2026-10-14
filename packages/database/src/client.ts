@@ -1,5 +1,5 @@
-import { drizzle } from "drizzle-orm/d1";
 import * as schema from "./schema";
+import { drizzleD1 } from "./drizzle-clients";
 import {
   resolveDatabaseConfiguration,
   type DatabaseEnvironment,
@@ -90,9 +90,9 @@ export function getDb(env?: DatabaseEnvironment): Database {
     return database;
   }
 
-  // Drizzle construction is local and cheap. Avoiding mutable isolate-global
-  // state prevents one binding/provider from leaking into another request.
-  const database = drizzle(createD1RequestClient(config.binding), { schema });
+  // A client per call, so no binding or provider outlives its request; only
+  // the code-derived relational schema is shared (drizzle-clients.ts).
+  const database = drizzleD1(createD1RequestClient(config.binding));
   providerByDatabase.set(database as object, "d1");
   return database;
 }

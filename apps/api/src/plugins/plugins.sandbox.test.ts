@@ -33,6 +33,7 @@ import { eq } from "drizzle-orm";
 import { PLUGIN_API_VERSION } from "@scalius/shared/plugins";
 import { packPlugin } from "../../../../scripts/plugin-build.mjs";
 import { pluginBundleKey } from "./loaders/sandbox";
+import { workerdModules } from "../testing/workerd-modules";
 import { PLUGIN_TEST_CREDENTIAL_KEY, testCart } from "./testing/fixtures";
 import {
   WALLET_FIXTURE_CODE,
@@ -113,8 +114,7 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
       batch(statements: unknown[]): Promise<unknown>;
     };
     mf = new Miniflare(convertV4MiniflareOptions({
-      modules: true,
-      scriptPath: join(workdir, "dist", "sandbox-harness.worker.js"),
+      modules: workerdModules(join(workdir, "dist"), "sandbox-harness.worker.js"),
       // Module names must not climb out of the root (workerd refuses `../` names).
       modulesRoot: join(workdir, "dist"),
       compatibilityDate: COMPATIBILITY_DATE,

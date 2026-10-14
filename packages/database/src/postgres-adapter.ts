@@ -1,14 +1,10 @@
-import {
-  drizzle as drizzleRemote,
-  type AsyncBatchRemoteCallback,
-  type AsyncRemoteCallback,
-} from "drizzle-orm/sqlite-proxy";
+import type { AsyncBatchRemoteCallback, AsyncRemoteCallback } from "drizzle-orm/sqlite-proxy";
+import { drizzleRemote } from "./drizzle-clients";
 import { neon } from "@neondatabase/serverless";
 import { Client as PgClient } from "pg";
 
 import { observeStatement } from "./read-observer";
 import { withNamedRawRows } from "./remote-raw-rows";
-import * as schema from "./schema";
 import {
   compileSqliteStatementForPostgres,
   normalizePostgresParameters,
@@ -485,5 +481,5 @@ export function createPostgresDatabase(
 
   // The application intentionally retains one SQLite-shaped query surface.
   // This is the only PostgreSQL transport cast in application code.
-  return withNamedRawRows(drizzleRemote(executeOne, executeBatch, { schema }), executeOne) as unknown as Database;
+  return withNamedRawRows(drizzleRemote(executeOne, executeBatch), executeOne) as unknown as Database;
 }

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { eq } from "drizzle-orm";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
+import { workerdModules } from "./testing/workerd-modules";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getDb } from "@scalius/database/client";
 import { createSqliteD1Database, type SqliteTestDatabase } from "@scalius/database/testing/sqlite-d1";
@@ -53,6 +54,8 @@ const passwords: Array<{ spec: string; hash: { min: number; median: number; max:
 describe.skipIf(!enabled)("the API Worker in workerd", () => {
   let created: SqliteTestDatabase;
   let mf: Miniflare;
+  /** A fresh workerd runtime over the same bundle and database. */
+  let launch: () => Miniflare;
   let workdir: string;
   let cookie = "";
 
@@ -97,6 +100,8 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
       minify: true,
       compatibility_date: COMPATIBILITY_DATE,
       compatibility_flags: COMPATIBILITY_FLAGS,
+      // As apps/api/wrangler.jsonc: the places dataset is a Text module.
+      rules: [{ type: "Text", globs: ["**/places/places.json"], fallthrough: true }],
       ...(PLAN === "paid" ? { define: { __SCALIUS_PLAN__: JSON.stringify(PLAN) } } : {}),
     }));
     execFileSync(join(apiDir, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "--outdir", join(workdir, "dist"), "--config", join(workdir, "wrangler.json")], {
@@ -109,10 +114,11 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
       prepare(sql: string): { bind(...values: unknown[]): { all(): Promise<unknown>; run(): Promise<unknown>; raw(): Promise<unknown> } };
       batch(statements: unknown[]): Promise<unknown>;
     };
-    mf = new Miniflare(convertV4MiniflareOptions({
-      modules: true,
-      scriptPath: join(workdir, "dist", "workerd-harness.worker.js"),
-      modulesRoot: join(workdir, "dist"),
+    const dist = join(workdir, "dist");
+    const modules = workerdModules(dist, "workerd-harness.worker.js");
+    launch = () => new Miniflare(convertV4MiniflareOptions({
+      modules,
+      modulesRoot: dist,
       compatibilityDate: COMPATIBILITY_DATE,
       compatibilityFlags: COMPATIBILITY_FLAGS,
       r2Buckets: ["BUCKET"],
@@ -133,6 +139,7 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
         },
       },
     }) as never);
+    mf = launch();
 
     // The store: Platform settings, the owner.
     const db = getDb({ DB: created.binding } as unknown as Env);
@@ -221,6 +228,18 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
     await record("workerd-page-product-miss", "Storefront product page, all parts render (first call cold, then cached parts)", 6, page(product));
     const home = ["/api/v1/storefront/layout", "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"];
     await record("workerd-page-home", "Storefront home page", 6, page(home));
+  });
+
+  it("a storefront page as the first request of a fresh isolate (the cold miss after a deploy)", async () => {
+    const page = (parts: string[]) => (): Call => [`https://api.internal${storefrontBatchPath(parts)}`, { headers: { "X-Scalius-Cache-Generation": "gen1" } }];
+    const fresh = async (id: string, label: string, parts: string[]) => {
+      await mf.dispose();
+      mf = launch();
+      await mf.ready;
+      return record(id, label, 2, page(parts));
+    };
+    await fresh("workerd-page-product-fresh", "Storefront product page, first request of a fresh isolate", ["/api/v1/storefront/layout", "/api/v1/products/cotton-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/cotton-panjabi"]);
+    await fresh("workerd-page-home-fresh", "Storefront home page, first request of a fresh isolate", ["/api/v1/storefront/layout", "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"]);
   });
 
   it("checkout: tax quote and a 20-line commit", async () => {

@@ -12,8 +12,8 @@
     "./factory": "./src/client-factory.ts"
   },
   "scripts": {
-    "generate": "node --import tsx scripts/generate-spec.ts && openapi-ts",
-    "generate:spec": "node --import tsx scripts/generate-spec.ts",
+    "generate": "node --import tsx --import ../../scripts/text-module-hooks.mjs scripts/generate-spec.ts && openapi-ts",
+    "generate:spec": "node --import tsx --import ../../scripts/text-module-hooks.mjs scripts/generate-spec.ts",
     "lint": "oxlint -c ../../.oxlintrc.json src/ scripts/",
     "typecheck": "../../node_modules/typescript7/bin/tsc --build"
   },
