@@ -24,6 +24,7 @@ import {
   type StorefrontSectionSkinData,
   type StorefrontSkinJob,
   type StorefrontSkinTarget,
+  type StorefrontSkinUnit,
 } from "@scalius/shared/plugins/storefront-protocol";
 import { splitStorefrontEmbeds } from "@scalius/shared/plugins/storefront-embeds";
 import { checkStorefrontHeaderHtml, type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
@@ -156,6 +157,11 @@ export function fixtureSectionSkinData(type: string, settings: Record<string, un
   return { type, version: 1, settings, tiles: [], cards: [] };
 }
 
+/** The projection a skin target gets (a `section:<type>` target: the section's). */
+export type SkinData<Target extends StorefrontSkinTarget> = Target extends StorefrontSkinUnit
+  ? Extract<StorefrontSkinJob, { target: Target }>["data"]
+  : StorefrontSectionSkinData;
+
 /** The fixture projection a skin target gets. */
 export function fixtureSkinData(target: StorefrontSkinTarget): StorefrontSkinJob["data"] {
   switch (target) {
@@ -214,7 +220,7 @@ export function renderSkin<Target extends StorefrontSkinTarget>(
   component: string,
   target: Target,
   settings: StorefrontResolvedSettings = {},
-  data?: Extract<StorefrontSkinJob, { target: Target }>["data"],
+  data?: SkinData<Target>,
   options: RenderOptions = {},
 ): string {
   const job = {

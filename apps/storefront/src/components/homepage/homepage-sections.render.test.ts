@@ -1018,7 +1018,7 @@ describe("section skins", () => {
     try {
       const page = await renderSkinned([rail], store("large"));
       expect(draw).toHaveBeenCalledOnce();
-      const job = draw.mock.calls[0]![1] as { kind: string; target: string; instanceId: string; data: { type: string; settings: { source: { title: string; url: string | null; cards: unknown[] } } } };
+      const job = draw.mock.calls[0]![1] as unknown as { kind: string; target: string; instanceId: string; data: { type: string; settings: { source: { title: string; url: string | null; cards: unknown[] } } } };
       expect(job).toMatchObject({ kind: "skin", target: "section:product-rail", instanceId: "rail" });
       // The product source as the core rail shows it: its title, its listing and as many cards as the rail's limit.
       expect(job.data.type).toBe("product-rail");

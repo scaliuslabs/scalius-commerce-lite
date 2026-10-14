@@ -72,7 +72,8 @@ export type ProductCardComponent = (props: ProductCardProps<any>) => Renderable;
 export type ProductMainComponent = (props: ProductMainProps<any>) => Renderable;
 export type ListingMainComponent = (props: ListingMainProps<any>) => Renderable;
 export type SectionSkinComponent = (props: SectionSkinProps<any, any>) => Renderable;
-export type SkinComponent = HeaderComponent | FooterComponent | ProductCardComponent | ProductMainComponent | ListingMainComponent | SectionSkinComponent;
+/** Any skin component (the manifest pairs each with its target at pack time). */
+export type SkinComponent = (props: any) => Renderable;
 export type BlockComponent = (props: BlockProps<any>) => Renderable;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
