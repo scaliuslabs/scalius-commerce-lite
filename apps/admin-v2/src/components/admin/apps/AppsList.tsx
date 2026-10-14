@@ -67,7 +67,7 @@ function InstalledRow({ app }: { app: AppSummary }) {
         <RowText
           app={app}
           extra={stopped ? (
-            <span className="text-body text-destructive wrap-anywhere">{t("stoppedReason", { reason: app.failureReason ?? "" })}</span>
+            <span className="text-body text-destructive wrap-anywhere">{app.failureReason}</span>
           ) : app.featureCount.total > 0 ? (
             <span className="text-body text-muted-foreground">{t("featuresOn", { on: app.featureCount.on, total: app.featureCount.total })}</span>
           ) : null}

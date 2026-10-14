@@ -14,7 +14,6 @@ export const installedAppsMessages = defineMessages({
     tab_installed: "Installed",
     tab_add: "Add apps",
     featuresOn: "{on} of {total, plural, one {# feature} other {# features}} on",
-    stoppedReason: "Stopped: {reason}",
     browseApps: "Browse apps",
     searchApps: "Search apps",
     clearSearch: "Clear search",
@@ -22,7 +21,6 @@ export const installedAppsMessages = defineMessages({
     noMatchBody: "Try another word.",
     clearFilters: "Clear filters",
     servesCountries: "Available in {countries}",
-    status_available: "Not installed",
 
     category_payments: "Payments",
     category_shipping: "Shipping and delivery",
@@ -78,7 +76,6 @@ export const installedAppsMessages = defineMessages({
     unavailable_bundled: "Its code isn't part of this store's latest update. Ask your developer to add it and update the store.",
     unavailable_sandbox: "It runs in a separate sandbox, which isn't turned on for this store.",
     superAdminActivates: "Only a Super Admin can activate apps.",
-    readOnly: "You can view this app. Ask the store owner for access to change it.",
 
     aboutTitle: "About",
     developer: "Developer",
@@ -90,7 +87,6 @@ export const installedAppsMessages = defineMessages({
     approvedBy: "Access approved by",
     notApproved: "Not approved yet",
     activeSince: "Active since",
-    pages: "Pages",
 
     accessTitle: "Access",
     accessDescription: "What this app can see and do in your store.",
@@ -285,7 +281,6 @@ export const installedAppsMessages = defineMessages({
     tab_installed: "ইনস্টল করা",
     tab_add: "অ্যাপ যোগ করুন",
     featuresOn: "{total}টি ফিচারের মধ্যে {on}টি চালু",
-    stoppedReason: "বন্ধ করা হয়েছে: {reason}",
     browseApps: "অ্যাপ দেখুন",
     searchApps: "অ্যাপ খুঁজুন",
     clearSearch: "খোঁজা মুছুন",
@@ -293,7 +288,6 @@ export const installedAppsMessages = defineMessages({
     noMatchBody: "অন্য কোনো শব্দ দিয়ে চেষ্টা করুন।",
     clearFilters: "ফিল্টার মুছুন",
     servesCountries: "যেসব দেশে চলে: {countries}",
-    status_available: "ইনস্টল করা নেই",
 
     category_payments: "পেমেন্ট",
     category_shipping: "শিপিং ও ডেলিভারি",
@@ -349,7 +343,6 @@ export const installedAppsMessages = defineMessages({
     unavailable_bundled: "এর কোড এই স্টোরের সর্বশেষ আপডেটে নেই। আপনার ডেভেলপারকে এটি যোগ করে স্টোর আপডেট করতে বলুন।",
     unavailable_sandbox: "এটি আলাদা একটি স্যান্ডবক্সে চলে, যা এই স্টোরে চালু করা নেই।",
     superAdminActivates: "শুধু একজন সুপার অ্যাডমিন অ্যাপ চালু করতে পারেন।",
-    readOnly: "আপনি এই অ্যাপটি দেখতে পারবেন। বদলানোর অনুমতির জন্য স্টোরের মালিককে বলুন।",
 
     aboutTitle: "পরিচিতি",
     developer: "ডেভেলপার",
@@ -361,7 +354,6 @@ export const installedAppsMessages = defineMessages({
     approvedBy: "অ্যাক্সেস অনুমোদন করেছেন",
     notApproved: "এখনো অনুমোদন হয়নি",
     activeSince: "চালু হয়েছে",
-    pages: "পেজ",
 
     accessTitle: "অ্যাক্সেস",
     accessDescription: "এই অ্যাপ আপনার স্টোরে কী দেখতে ও করতে পারে।",

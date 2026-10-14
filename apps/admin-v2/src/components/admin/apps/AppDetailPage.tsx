@@ -191,7 +191,7 @@ function TurnOffCard({ app, onDialog }: { app: AppDetail; onDialog: (name: Dialo
           <span className="text-body font-medium">{t("uninstall")}</span>
           <span className="text-body text-muted-foreground">{t(app.runtime === "bundled" ? "uninstallHelpBundled" : "uninstallHelp")}</span>
         </div>
-        <Button type="button" variant="destructive" onClick={() => onDialog("uninstall")}>{t("uninstall")}</Button>
+        <Button type="button" variant="outline" onClick={() => onDialog("uninstall")}>{t("uninstall")}</Button>
       </div>
     </Card>
   );

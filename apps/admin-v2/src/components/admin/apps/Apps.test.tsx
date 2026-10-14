@@ -399,7 +399,7 @@ describe("Apps list", () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok({ ...STORE, apps: [summary({ id: "acme.feed", name: "Product feed", status: "disabled", failureReason: "Stopped with the emergency switch." })] }));
     await render(<AppsList />, VIEWER);
     await vi.waitFor(() => expect(text()).toContain("Product feed"));
-    expect(rows()[0]).toContain("Stopped: Stopped with the emergency switch.");
+    expect(rows()[0]).toContain("Stopped with the emergency switch.");
   });
 
   it("searches names, taglines and category names, and clears the search when nothing matches", async () => {
@@ -827,7 +827,7 @@ describe("App page: features", () => {
 
     // One card per kind of service; the group with the recommended feature first.
     expect([...document.querySelectorAll('[data-slot="card"] > div:first-child')].map((element) => element.textContent).slice(0, 2)).toEqual([
-      expect.stringContaining("Other features"),
+      expect.stringContaining("General"),
       "Payments",
     ]);
     expect(text()).toContain("Recommended");
