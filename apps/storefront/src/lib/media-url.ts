@@ -15,6 +15,8 @@ import {
   getRuntimeCdnDomain,
   getRuntimeImageCdnBaseUrl,
   getRuntimeImageCdnCanonicalHostAliases,
+  getRuntimeMediaUrl,
+  getRuntimeStorefrontUrl,
 } from "./api/runtime";
 
 function normalizeCdnDomain(value: string | null | undefined): string {
@@ -101,13 +103,69 @@ export function getCdnCanonicalHostAliases(): string[] {
   return [...hosts];
 }
 
+function trimTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
 /**
- * Resolve a media URL using the storefront's runtime CDN base.
+ * The platform media address whose files the storefront serves on its own
+ * origin (`/media/<key>`, lib/media-proxy.ts), so a page's images reuse the
+ * connection that carried the page: the LCP image costs no second DNS lookup
+ * or TLS handshake. Empty when they are not served that way: no platform
+ * media address, a merchant-chosen canonical CDN (that choice stays), or a
+ * media address already on the store's origin.
+ *
+ * SSR reads the request context; the browser reads `window.__MEDIA_SOURCE_URL__`
+ * (written by Layout.astro only when this is active) and its own origin.
+ */
+export function getSameOriginMediaSource(): string {
+  if (import.meta.env.SSR) {
+    if (getRuntimeImageCdnBaseUrl()?.trim()) return "";
+    const source = trimTrailingSlashes(getRuntimeMediaUrl()?.trim() ?? "");
+    const storefront = getRuntimeStorefrontUrl();
+    if (!source || !storefront) return "";
+    try {
+      return new URL(source).origin === new URL(storefront).origin ? "" : source;
+    } catch {
+      return "";
+    }
+  }
+  if (typeof window === "undefined") return "";
+  return trimTrailingSlashes(
+    (window as typeof window & { __MEDIA_SOURCE_URL__?: string }).__MEDIA_SOURCE_URL__ ?? "",
+  );
+}
+
+/** The origin the storefront serves its own media from. */
+function sameOriginMediaTarget(): string {
+  if (import.meta.env.SSR) return getRuntimeStorefrontUrl();
+  return typeof window === "undefined" ? "" : window.location.origin;
+}
+
+/**
+ * `url` on the store's own origin when it is a file of the platform media
+ * address (`<media address>/media/<key>` becomes `<store origin>/media/<key>`;
+ * query and fragment kept); any other URL is returned unchanged. The result
+ * is absolute, so social tags, JSON-LD and feeds stay valid.
+ */
+function mediaUrlOnStoreOrigin(url: string): string {
+  if (!url) return url;
+  const source = getSameOriginMediaSource();
+  if (!source || !url.startsWith(`${source}/media/`)) return url;
+  const target = trimTrailingSlashes(sameOriginMediaTarget());
+  return target ? `${target}/${url.slice(source.length + 1)}` : url;
+}
+
+/**
+ * Resolve a media URL using the storefront's runtime CDN base, then serve it
+ * from the store's own origin (see `getSameOriginMediaSource`).
  */
 export function resolveMediaUrl(url: string | null | undefined): string {
-  return sharedResolveMediaUrl(url, getCdnBase(), {
-    cdnHostAliases: getCdnCanonicalHostAliases(),
-  });
+  return mediaUrlOnStoreOrigin(
+    sharedResolveMediaUrl(url, getCdnBase(), {
+      cdnHostAliases: getCdnCanonicalHostAliases(),
+    }),
+  );
 }
 
 /**

@@ -16,6 +16,6 @@ app.route("/products", productRoutes);
 app.route("/products", productReviewRoutes);
 app.route("/categories", categoryRoutes);
 app.route("/brands", brandRoutes);
-if (process.env.NODE_ENV === "development") app.route("/media", serveMediaRoute);
+app.route("/media", serveMediaRoute);
 
 export default app;

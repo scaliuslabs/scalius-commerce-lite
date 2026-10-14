@@ -15,7 +15,7 @@ import {
 } from "@/lib/api/runtime";
 import { marketOfPresence } from "@scalius/shared/markets";
 import { getLayoutData } from "@/lib/api/storefront";
-import { getCdnBase } from "@/lib/media-url";
+import { getCdnBase, getSameOriginMediaSource } from "@/lib/media-url";
 import {
   PRIVATE_NO_STORE_CACHE_CONTROL,
   isUncachedPrivateStorefrontPathname,
@@ -150,7 +150,8 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
       if (
         response.headers.get("Content-Type")?.toLowerCase().includes("text/html")
       ) {
-        applyPublicStorefrontPreconnectHint(response, getCdnBase());
+        // Media on the store's own origin needs no hint for a second host.
+        applyPublicStorefrontPreconnectHint(response, getSameOriginMediaSource() ? null : getCdnBase());
       }
       response.headers.set("X-Cache-Status", "MISS");
     } else if (!response.headers.has("Cache-Control")) {

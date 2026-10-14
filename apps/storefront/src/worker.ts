@@ -12,6 +12,7 @@ import { INTERNAL_SERVICE_ORIGIN } from "@scalius/shared/platform-config";
 import { httpsRedirectResponse } from "./lib/storefront-origin";
 import { runWithWorkerEnv } from "./lib/api/runtime";
 import { serveExtensionFile } from "./lib/extensions/files";
+import { serveStorefrontMedia } from "./lib/media-proxy";
 import { oneClickUnsubscribeRequest } from "./lib/newsletter-one-click";
 import { BUILD_ID } from "./config/build-id";
 import {
@@ -94,6 +95,14 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
     // An app's storefront files (immutable, by release): no page render.
     const extensionFile = await serveExtensionFile(request, this.env);
     if (extensionFile) return extensionFile;
+    // The store's media on its own origin (immutable, from R2 via the API):
+    // no page render, no layout read.
+    const media = await serveStorefrontMedia(request, {
+      env: this.env,
+      workerVersion: readWorkerVersion(this.env),
+      waitUntil: (promise) => this.ctx.waitUntil(promise),
+    });
+    if (media) return media;
     // A presence serves its pages and its own sitemaps and feeds, nothing else.
     if (presenceRenderTarget(request) === "not_found") return PRESENCE_NOT_FOUND();
     // A buyer's explicit market choice; never geo, never a crawler.

@@ -41,7 +41,7 @@ describe("local media passthrough", () => {
     );
 
     const response = await serveMediaRoute.request(
-      "/media/media_abcdefghijklmnop.mp4",
+      "https://api.internal/media/media_abcdefghijklmnop.mp4",
       undefined,
       env(get),
     );
@@ -66,7 +66,7 @@ describe("local media passthrough", () => {
     );
 
     const response = await serveMediaRoute.request(
-      "/media/media_abcdefghijklmnop.mp4",
+      "https://api.internal/media/media_abcdefghijklmnop.mp4",
       { headers: { Range: "bytes=5-8" } },
       env(get),
     );
@@ -83,12 +83,40 @@ describe("local media passthrough", () => {
   it("rejects unsupported object keys before reading R2", async () => {
     const get = vi.fn();
     const response = await serveMediaRoute.request(
-      "/media/media_abcdefghijklmnop.exe",
+      "https://api.internal/media/media_abcdefghijklmnop.exe",
       undefined,
       env(get),
     );
 
     expect(response.status).toBe(404);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("answers a public address with 404 outside local development", async () => {
+    const get = vi.fn().mockResolvedValue(
+      object("media/media_abcdefghijklmnop.mp4", "video"),
+    );
+
+    const response = await serveMediaRoute.request(
+      "https://api.example.test/media/media_abcdefghijklmnop.mp4",
+      undefined,
+      env(get),
+    );
+
+    expect(response.status).toBe(404);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("serves only media/ objects, never another prefix", async () => {
+    const get = vi.fn();
+    for (const key of ["private/agent-artifacts/a.png", "other/a.png"]) {
+      const response = await serveMediaRoute.request(
+        `https://api.internal/${key}`,
+        undefined,
+        env(get),
+      );
+      expect(response.status).toBe(404);
+    }
     expect(get).not.toHaveBeenCalled();
   });
 });

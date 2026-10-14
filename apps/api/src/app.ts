@@ -165,10 +165,10 @@ app.route("/address-rules", addressRuleRoutes);
 app.route("/shipping-methods", shippingMethodRoutes);
 // SEO settings — used by storefront product/page routes for meta tags
 app.route("/seo", seoRoutes);
-// Local development media server route
-if (process.env.NODE_ENV === "development") {
-  app.route("/media", serveMediaRoute);
-} // Add health check endpoint (relative path '/health')
+// Public media bytes: local development's media address and the storefront's
+// same-origin media (service binding only; a public address answers 404).
+app.route("/media", serveMediaRoute);
+// Add health check endpoint (relative path '/health')
 app.get("/health", (c) => c.json({ status: "ok", timestamp: new Date().toISOString() }));
 app.route("/", readinessRoutes);
 

@@ -2,6 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import {
   validateMediaObjectKey,
 } from "@scalius/core/integrations/storage";
+import { isInternalServiceUrl } from "@scalius/shared/platform-config";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -13,16 +14,29 @@ type RangedR2ObjectBody = R2ObjectBody & {
 };
 
 /**
- * Local-only R2 passthrough. Media keys intentionally contain a `media/`
- * prefix, so this route must capture the complete tail rather than one path
- * segment. Production media is served by the configured R2 custom domain.
+ * R2 passthrough for public media. Media keys intentionally contain a
+ * `media/` prefix, so this route must capture the complete tail rather than
+ * one path segment. Two callers may read it: local development (the media
+ * address is this route), and the storefront Worker over its service binding
+ * (`https://api.internal`), which serves `/media/<key>` on the store's own
+ * origin so a page's images reuse its connection. A request that reached the
+ * API on a public address gets a 404: production media is also served by the
+ * configured R2 custom domain.
  */
+app.use("*", async (c, next) => {
+  if (process.env.NODE_ENV !== "development" && !isInternalServiceUrl(c.req.url)) {
+    return c.notFound();
+  }
+  await next();
+});
+
 app.get("/:key{.+}", async (c) => {
   let key: string;
   try {
     key = validateMediaObjectKey(c.req.param("key"));
-    // `private/` holds sealed agent artifacts in the same bucket; never serve it.
-    if (key.startsWith("private/")) return c.notFound();
+    // `private/` holds sealed agent artifacts in the same bucket; only
+    // `media/` objects are public.
+    if (!key.startsWith("media/")) return c.notFound();
   } catch {
     // This public development route should not expose storage-policy details
     // or turn an unsupported path into an operational 5xx signal.

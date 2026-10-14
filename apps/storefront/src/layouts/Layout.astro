@@ -14,7 +14,7 @@ import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
 import { themePaint } from "@/lib/theme-paint";
 import type { AnalyticsConfig } from "@/lib/api";
-import { mediaImageUrl } from "@/lib/media-url";
+import { getSameOriginMediaSource, mediaImageUrl } from "@/lib/media-url";
 import {
   getRuntimeApiUrl,
   getRuntimeDashboardUrl,
@@ -365,7 +365,10 @@ const imageCdnAliases = (mediaSettings?.canonicalHostAliases ?? [])
   .filter(Boolean);
 
 const apiOrigin = publicApiUrl ? new URL(publicApiUrl).origin : null;
-const cdnDomain = cdnDomainUrl || null;
+// Media served from the store's own origin (lib/media-url.ts): the page needs
+// no hint for a second host, and client code rewrites media URLs the same way.
+const sameOriginMediaSource = getSameOriginMediaSource();
+const cdnDomain = sameOriginMediaSource ? null : cdnDomainUrl || null;
 // Runtime API URL, CDN domain, and currency for client-side JS (the
 // per-request platform context is not available to Vite client bundles).
 const runtimeGlobalsScript = [
@@ -373,6 +376,7 @@ const runtimeGlobalsScript = [
   `window.__CDN_DOMAIN__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
   `window.__IMAGE_CDN_BASE_URL__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
   `window.__IMAGE_CDN_CANONICAL_HOST_ALIASES__=${serializeJsonForInlineScript(imageCdnAliases)};`,
+  sameOriginMediaSource ? `window.__MEDIA_SOURCE_URL__=${serializeJsonForInlineScript(sameOriginMediaSource)};` : "",
   `window.__CURRENCY_SYMBOL__=${serializeJsonForInlineScript(currencySymbol)};`,
   `window.__CURRENCY_CODE__=${serializeJsonForInlineScript(currencyCode)};`,
   `window.__CURRENCY_DECIMAL_PLACES__=${serializeJsonForInlineScript(currencyDecimalPlaces)};`,

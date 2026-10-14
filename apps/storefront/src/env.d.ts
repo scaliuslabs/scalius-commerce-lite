@@ -111,6 +111,8 @@ interface Window {
   __CDN_DOMAIN__?: string;
   __IMAGE_CDN_BASE_URL__?: string;
   __IMAGE_CDN_CANONICAL_HOST_ALIASES__?: string[];
+  /** The platform media address served on the store's own origin; set only when it is (lib/media-url.ts). */
+  __MEDIA_SOURCE_URL__?: string;
   __CURRENCY_SYMBOL__?: string;
   __CURRENCY_CODE__?: string;
   __CURRENCY_DECIMAL_PLACES__?: number;
