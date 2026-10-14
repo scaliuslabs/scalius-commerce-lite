@@ -56,7 +56,7 @@ flowchart LR
 
 ### Prerequisites
 
-- Node.js 24 (pinned in `.nvmrc`; run `nvm use`).
+- Node.js 24.21 or later in 24 (pinned in `.nvmrc`; run `nvm use`).
 - pnpm 11.20 (pinned in `package.json` `packageManager`; run `corepack enable`).
 - Mailpit, the local inbox for email and OTP (`brew install mailpit`). `pnpm dev` starts it and fails when it is missing.
 - A Cloudflare account, only to deploy.

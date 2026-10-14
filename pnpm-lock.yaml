@@ -541,12 +541,6 @@ importers:
       happy-dom:
         specifier: ^20.14.5
         version: 20.14.5
-      prettier:
-        specifier: ^3.9.9
-        version: 3.9.9
-      prettier-plugin-astro:
-        specifier: ^0.14.1
-        version: 0.14.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -13364,6 +13358,7 @@ snapshots:
       '@astrojs/compiler': 2.13.1
       prettier: 3.9.9
       sass-formatter: 0.7.9
+    optional: true
 
   prettier@3.9.9: {}
 
@@ -13679,7 +13674,8 @@ snapshots:
 
   run-applescript@7.1.0: {}
 
-  s.color@0.0.15: {}
+  s.color@0.0.15:
+    optional: true
 
   safe-array-concat@1.1.4:
     dependencies:
@@ -13710,6 +13706,7 @@ snapshots:
   sass-formatter@0.7.9:
     dependencies:
       suf-log: 2.5.3
+    optional: true
 
   satteri@0.10.5:
     dependencies:
@@ -13992,6 +13989,7 @@ snapshots:
   suf-log@2.5.3:
     dependencies:
       s.color: 0.0.15
+    optional: true
 
   supports-color@10.2.2: {}
 

@@ -55,8 +55,6 @@
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "happy-dom": "^20.14.5",
-    "prettier": "^3.9.9",
-    "prettier-plugin-astro": "^0.14.1",
     "typescript": "^6.0.3",
     "vite": "^8.3.4",
     "wrangler": "4.150.0"
