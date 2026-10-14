@@ -10,7 +10,7 @@ import {
   median,
   type FreePlanCounters,
 } from "./testing/free-plan-meter";
-import { refreshProductRecommendations } from "@scalius/core/modules/catalog";
+import { rotateRecommendations } from "./background/catalog";
 import { DVC_AUDIT_RATE } from "./public-read";
 import { STORE, createFreePlanStore, type FreePlanStore } from "./testing/free-plan-store";
 import { cartItems, seedCatalog, seedMediaBacklog, seedOrders } from "./testing/free-plan-seed";
@@ -197,7 +197,7 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
   const NIGHTLY_TIME = Date.parse("2026-10-03T20:00:00Z");
   const cron = (scheduledTime: number) =>
     store.worker.scheduled({ cron: "* * * * *", scheduledTime, noRetry: () => undefined } as unknown as ScheduledController);
-  /** An hour of cron ticks, one a minute: Free runs every job of the rotation in it at least twice, Paid every job four times. */
+  /** Cron ticks one a minute: an hour holds every Free job at least twice and four Paid sweep ticks. */
   const hour = Math.floor(CRON_TIME / 3_600_000) * 3_600_000;
   const minuteOfHour = (index: number) => cron(hour + index * 60_000);
 
@@ -355,23 +355,30 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
 
   // ── Background work: the cron's ticks ─────────────────────────────────────────
 
-  it("cron ticks: an idle hour, an hour with a 1,200-image rendition backlog, and the nightly tick", async () => {
-    // A store in its steady state already has every product's recommendations: the
-    // rotation then rewrites only lists that changed (the first lap is a one-off fill).
-    const productIds = (store.sqlite.prepare("SELECT id FROM products").all() as Array<{ id: string }>).map((row) => row.id);
-    await refreshProductRecommendations(store.db, productIds);
-    // The first hour warms the rotation's cursors and first-run writes; the second is the steady state.
-    const idle = await run("cron-idle", "Cron tick (idle store, worst minute of an hour)", 120, (index) => minuteOfHour(index), undefined, 60);
+  it("cron ticks: an idle hour", async () => {
+    // Steady state: today's recommendation lap is done (the first lap is a
+    // one-off fill), so the rotation rests until tomorrow's lap.
+    while (await rotateRecommendations(store.db) > 0);
+    // The first half hour (a whole Free rotation, two Paid sweep ticks) warms the
+    // cursors and first-run writes; the next hour is the steady state.
+    const idle = await run("cron-idle", "Cron tick (idle store, worst minute of an hour)", 90, (index) => minuteOfHour(index), undefined, 30);
     expectWithin(idle);
+  });
+
+  it("cron ticks: a rotation with a 1,200-image rendition backlog", async () => {
     seedMediaBacklog(store.sqlite, 1200);
-    const busy = await run("cron-busy", "Cron tick (1,200 images missing renditions, worst minute of an hour)", 60, (index) => withImages(() => minuteOfHour(120 + index)));
+    // One Free rotation (one job a minute) holds the backfill job; Paid's 90th minute is a sweep tick.
+    const busy = await run("cron-busy", "Cron tick (1,200 images missing renditions, worst minute of a rotation)", 24, (index) => withImages(() => minuteOfHour(90 + index)));
     expectWithin(busy);
-    const nightly = await run("cron-nightly", "Cron tick (the nightly pass)", 2, () => cron(NIGHTLY_TIME));
+  });
+
+  it("cron ticks: the nightly pass", async () => {
+    const nightly = await run("cron-nightly", "Cron tick (the nightly pass)", 1, () => cron(NIGHTLY_TIME));
     expectWithin(nightly);
   });
 
   it("drain ticks with due notifications and a requested projection rebuild", async () => {
-    const busy = await run("drain-busy", "Cron tick (due notifications, a projection rebuild chunk)", 2, (index) => minuteOfHour(181 + index), async () => {
+    const busy = await run("drain-busy", "Cron tick (due notifications, a projection rebuild chunk)", 2, (index) => minuteOfHour(116 + index), async () => {
       store.sqlite.exec("UPDATE notification_outbox SET status = 'pending', next_attempt_at = 0, claim_id = NULL WHERE status <> 'sent'");
       store.sqlite.exec("INSERT INTO system_kv (key, value) VALUES ('catalog:projections:rebuild-cursor', '') ON CONFLICT(key) DO UPDATE SET value = ''");
     });

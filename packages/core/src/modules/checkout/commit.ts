@@ -44,6 +44,7 @@ import {
 } from "../tax";
 import {
   buildOrderCreatedNotificationDedupeKey,
+  orderCreatedNotificationOutboxId,
   createOrderNotificationOutboxInsertValues,
   type NotificationSender,
 } from "../notifications";
@@ -545,12 +546,15 @@ function buildOrderWriteBatch(
 
     if (wantsOrderCreatedNotification(payload)) {
         writes.push(
-            db.insert(notificationOutbox).values(createOrderNotificationOutboxInsertValues({
-                dedupeKey: buildOrderCreatedNotificationDedupeKey(od.id),
-                orderId: od.id,
-                notificationType: "order_created",
-                source: "storefront-order",
-            })),
+            db.insert(notificationOutbox).values({
+                ...createOrderNotificationOutboxInsertValues({
+                    dedupeKey: buildOrderCreatedNotificationDedupeKey(od.id),
+                    orderId: od.id,
+                    notificationType: "order_created",
+                    source: "storefront-order",
+                }),
+                id: orderCreatedNotificationOutboxId(od.id),
+            }),
         );
     }
 

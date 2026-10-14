@@ -69,6 +69,14 @@ export function buildOrderCreatedNotificationDedupeKey(orderId: string): string 
     return `order_created:${orderId}`;
 }
 
+/**
+ * The id of the order_created row the checkout commit writes in its batch:
+ * fixed by the order, so the commit's caller sends it without reading it back.
+ */
+export function orderCreatedNotificationOutboxId(orderId: string): string {
+    return `ono_created_${orderId}`;
+}
+
 export function buildOrderBalancePaidNotificationDedupeKey(orderId: string): string {
     return `payment_balance_paid:${orderId}`;
 }

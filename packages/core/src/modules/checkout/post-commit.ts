@@ -1,7 +1,7 @@
 // Side effects that run after a storefront order commits.
 import type { Database } from "@scalius/database/client";
 import { processExistingMetaPurchaseOutboxForOrder } from "../../integrations/meta/purchase-outbox";
-import { buildOrderCreatedNotificationDedupeKey, recordAndSendOrderNotification } from "../notifications";
+import { orderCreatedNotificationOutboxId } from "../notifications";
 import type { StorefrontOrderCommitPayload } from "../orders";
 import { type StorefrontOrderCommitRuntime, wantsOrderCreatedNotification } from "./commit";
 
@@ -26,23 +26,11 @@ export async function runStorefrontOrderPostCommitSideEffects(
         return;
     }
 
+    // The commit batch wrote the row under a fixed id: send it without a read.
+    // Without a sender the scheduled drain sends it.
     try {
-        const notificationResult = await recordAndSendOrderNotification({
-            db,
-            send: env?.sendNotifications,
-            notification: {
-                dedupeKey: buildOrderCreatedNotificationDedupeKey(payload.orderData.id),
-                orderId: payload.orderData.id,
-                notificationType: "order_created",
-                source: "storefront-order",
-            },
-        });
-        if (!notificationResult.enqueued) {
-            console.warn(
-                `[orders/commit] order_created notification for ${payload.orderData.id} recorded, left to the scheduled drain: ${notificationResult.skippedReason}`,
-            );
-        }
+        await env?.sendNotifications?.([orderCreatedNotificationOutboxId(payload.orderData.id)]);
     } catch (error) {
-        console.error(`[orders/commit] Failed order_created notification side effect for ${payload.orderData.id}:`, error);
+        console.error(`[orders/commit] order_created notification for ${payload.orderData.id} left to the scheduled drain:`, error);
     }
 }

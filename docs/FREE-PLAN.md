@@ -67,7 +67,7 @@ pnpm free-plan:budget --json out.json # keep the raw report
 - **Node tier** (`apps/api/src/free-plan-budget.test.ts`) drives the real Worker entrypoints (`fetch`, `scheduled`) over an in-memory D1 and meters every binding. It asserts D1 calls and external subrequests against `apps/api/src/testing/free-plan-budgets.ts` and the plan's per-invocation limits. A new query or fan-out fails here first. CPU in this tier is a relative figure.
 - **workerd tier** (`apps/api/src/free-plan-workerd.test.ts`) runs the bundled Worker in workerd, where CPU is wall time minus time waiting on the D1 proxy. Only this tier shows cold route graphs and real hashing cost. The Free password hash and verify must each stay below 5 ms (best of 15 runs).
 
-The daily quota model charges each order with a 3-line checkout, its notifications, tax quotes, sign-in codes and 20 page views, and adds 1,440 cron ticks a day (the steady-state mean of an hour of ticks). D1 rows written count rows changed times 3, for index entries. In the 100-order run of 2026-10-14, D1 rows written ended a Free store first, at about 267 orders a day (unverified: rerun the command). The Images allowance also ends a Free store before any CPU limit does.
+The daily quota model charges each order with a 3-line checkout, its notifications, tax quotes, sign-in codes and 20 page views, and adds 1,440 cron ticks a day (the steady-state mean of an hour of ticks). D1 rows written count rows changed times 3, for index entries. In the 100-order run of 2026-10-14, D1 rows written ended a Free store first, at about 270 orders a day (unverified: rerun the command). The Images allowance also ends a Free store before any CPU limit does.
 
 ## Rules by area
 
@@ -95,7 +95,7 @@ A store has no queue: a queue is one more resource per store, and Free allows 10
 | Sign-in codes | `auth_otp_delivery_receipts` | up to 3 attempts, 2 s and 6 s apart | none after that: a code lives 5 minutes, so the buyer asks for a new one |
 | Automatic fulfilment | the settled order | `runOrderAutoFulfil` | `auto_fulfil_sweep` |
 | Projection rebuild | `system_kv` `catalog:projections:rebuild-cursor` | the first chunks | each drain continues from the cursor |
-| Recommendations | `system_kv` `catalog:recommendations:rotation-cursor` | the written products and their peers | the rotation visits every public product; the nightly tick refreshes products sold that day |
+| Recommendations | `system_kv` `catalog:recommendations:rotation-cursor` | the written products and their peers | a daily lap visits every public product once (up to the per-run size times the runs in a day); the nightly tick refreshes products sold that day |
 | Image renditions | media rows without renditions | Paid: a rendered public read renders up to 4 | the `media_rendition_backfill` job |
 
 Rules:

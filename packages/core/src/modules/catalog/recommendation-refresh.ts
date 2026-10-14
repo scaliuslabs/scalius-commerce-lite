@@ -10,9 +10,9 @@
 //   write: the products, the products currently recommending them, and a
 //   bounded set of newest public peers in their categories.
 // - `recommendationRotationBatch`: the next public products after a
-//   persisted cursor, wrapping at the end, so every public product is visited
-//   in turn (an unchanged list leaves `computed_at` alone, so a staleness
-//   order would pick the same products every time).
+//   persisted cursor, in id order, so a lap visits every public product once
+//   (an unchanged list leaves `computed_at` alone, so a staleness order would
+//   pick the same products every time).
 // - `recentlySoldPublicProducts`: products with new co-purchases.
 // - `refreshProductSalesStats`: units sold in the last 30 days from real
 //   order lines, reconciled in one batch without churning unchanged rows.
@@ -175,30 +175,24 @@ export async function recentlySoldPublicProducts(
  * start, and the cursor to save: every public product is visited once per
  * lap whatever its lists' age. Two indexed reads at most.
  */
+/** Up to `limit` public products after `after` (null: from the start), in id order; fewer means the lap is done. */
 export async function recommendationRotationBatch(
     db: Database,
     input: { after: string | null; limit: number },
-): Promise<{ ids: string[]; next: string | null }> {
+): Promise<string[]> {
     const limit = Math.max(0, Math.trunc(input.limit));
-    if (limit === 0) return { ids: [], next: input.after };
-    const page = (after: string | null, size: number) => db
+    if (limit === 0) return [];
+    const rows = await db
         .select({ id: productBuyerState.productId })
         .from(productBuyerState)
         .where(and(
             sql`${productBuyerState.isPublic} = 1`,
-            after === null ? undefined : gt(productBuyerState.productId, after),
+            input.after === null ? undefined : gt(productBuyerState.productId, input.after),
         ))
         .orderBy(asc(productBuyerState.productId))
-        .limit(size)
+        .limit(limit)
         .all();
-    const head = (await page(input.after, limit)).map((row) => row.id);
-    let ids = head;
-    if (head.length < limit && input.after !== null) {
-        // The lap ended: continue from the start, up to where this batch began.
-        const wrapped = (await page(null, limit - head.length)).map((row) => row.id).filter((id) => id <= input.after!);
-        ids = uniqueIds([...head, ...wrapped]);
-    }
-    return { ids, next: ids.at(-1) ?? null };
+    return rows.map((row) => row.id);
 }
 
 /**

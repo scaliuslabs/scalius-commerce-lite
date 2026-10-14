@@ -12,6 +12,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { PLAN_LIMITS, type WorkersPlan } from "@scalius/shared/plan-limits";
 import {
   PROJECTION_REBUILD_CURSOR_KEY,
+  RECOMMENDATION_LAP_SECONDS,
   RECOMMENDATION_ROTATION_CURSOR_KEY,
   drainCatalogProjectionRebuild,
   rebuildCatalogProjectionsAfterWrite,
@@ -97,32 +98,28 @@ describe.each(["free", "paid"] as const satisfies readonly WorkersPlan[])("catal
     expect(kv(PROJECTION_REBUILD_CURSOR_KEY)).toBe("");
   });
 
-  it("rotates through every public product in id order, wrapping, without repeating a product in one lap", async () => {
-    const products = limits.recommendationRotationPerRun * 3 + 1;
+  it("visits every public product once a lap in id order, then rests until the day's lap is due again", async () => {
+    const perRun = limits.recommendationRotationPerRun;
+    const products = perRun * 2 + 3;
     const { db, kv, sqlite } = seeded(products);
     await project(db);
     // A product that is not public is never visited.
     sqlite.exec("UPDATE product_buyer_state SET is_public = 0 WHERE product_id = 'prod_00001'");
-    const visited: string[] = [];
-    const laps = Math.ceil((products - 1) / limits.recommendationRotationPerRun);
-    for (let run = 0; run < laps; run += 1) {
-      const before = kv(RECOMMENDATION_ROTATION_CURSOR_KEY) ?? "";
-      const refreshed = await rotateRecommendations(db);
-      expect(refreshed).toBe(limits.recommendationRotationPerRun);
-      const after = kv(RECOMMENDATION_ROTATION_CURSOR_KEY)!;
-      const ids = (sqlite.prepare("SELECT product_id AS id FROM product_buyer_state WHERE is_public = 1 ORDER BY product_id").all() as Array<{ id: string }>).map((row) => row.id);
-      const start = before ? ids.indexOf(before) + 1 : 0;
-      for (let step = 0; step < refreshed; step += 1) visited.push(ids[(start + step) % ids.length]!);
-      expect(visited.at(-1)).toBe(after);
-    }
-    // One lap: every public product once (the last run wraps to the start).
-    const publicIds = (sqlite.prepare("SELECT product_id AS id FROM product_buyer_state WHERE is_public = 1").all() as Array<{ id: string }>).map((row) => row.id);
-    expect(new Set(visited.slice(0, publicIds.length))).toEqual(new Set(publicIds));
-    expect(visited).not.toContain("prod_00001");
-    // Their lists exist: unchanged lists on the next lap write nothing new.
+    const publicIds = (sqlite.prepare("SELECT product_id AS id FROM product_buyer_state WHERE is_public = 1 ORDER BY product_id").all() as Array<{ id: string }>).map((row) => row.id);
+    const now = 1_900_000_000;
+    const counts: number[] = [];
+    for (let run = 0; run < 4; run += 1) counts.push(await rotateRecommendations(db, now + run * 900));
+    // Two full runs, then the rest; the lap is done and the next run rests.
+    expect(counts).toEqual([perRun, perRun, publicIds.length - 2 * perRun, 0]);
+    expect(JSON.parse(kv(RECOMMENDATION_ROTATION_CURSOR_KEY)!)).toEqual({ lapStartedAt: now, after: publicIds.at(-1), done: true });
     const stored = (sqlite.prepare("SELECT count(DISTINCT product_id) AS n FROM product_recommendations").get() as { n: number }).n;
     expect(stored).toBe(publicIds.length);
-  }, 60_000); // A Paid lap ranks about a hundred products.
+    expect(sqlite.prepare("SELECT count(*) AS n FROM product_recommendations WHERE product_id = 'prod_00001'").get()).toEqual({ n: 0 });
+    // A day after the lap started, the next lap starts from the beginning.
+    expect(await rotateRecommendations(db, now + RECOMMENDATION_LAP_SECONDS - 1)).toBe(0);
+    expect(await rotateRecommendations(db, now + RECOMMENDATION_LAP_SECONDS)).toBe(perRun);
+    expect(JSON.parse(kv(RECOMMENDATION_ROTATION_CURSOR_KEY)!)).toEqual({ lapStartedAt: now + RECOMMENDATION_LAP_SECONDS, after: publicIds[perRun - 1], done: false });
+  }, 60_000); // A Paid lap ranks about seventy products.
 
   it("refreshes a write's recommendation targets after the response, as many as the plan allows, and never fails the write", async () => {
     const { db, sqlite } = seeded(3);
