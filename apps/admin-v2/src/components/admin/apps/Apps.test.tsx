@@ -1297,6 +1297,19 @@ describe("Upload, emergency stop and notices on the Apps list", () => {
     expect(notice.textContent).not.toContain("Product feed");
     expect(notice.querySelector('a[href="/admin/apps/acme.sms"]')).not.toBeNull();
   });
+
+  it("lists an app whose new release could not be installed in the same notice, with the reason", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST({
+      apps: [
+        summary({ id: "scalius.noor", name: "Noor theme", status: "failed", failureReason: "Version 2.0.0 in this deployment could not be installed: The manifest is not valid." }),
+      ],
+    })));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("1 app is stopped"));
+    const notice = document.querySelector<HTMLElement>('[role="alert"]')!;
+    expect(notice.textContent).toContain("Version 2.0.0 in this deployment could not be installed");
+    expect(notice.querySelector('a[href="/admin/apps/scalius.noor"]')).not.toBeNull();
+  });
 });
 
 describe("Registries and trusted developers", () => {

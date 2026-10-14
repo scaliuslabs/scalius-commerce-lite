@@ -9,6 +9,11 @@
 //   - new version or SHA-256   → updated in place: an active (or failed) plugin
 //     stays active when its approved grant covers the new manifest, else it
 //     waits for approval (`pluginNeedsApproval`); others keep their status.
+//   - stored manifest unreadable → updated in place the same way: the deployed
+//     code is the authority for a bundled app, its approved grant still decides.
+//   - update refused            → a running app is marked failed with the
+//     reason (the Apps page shows it); this deployment cannot run its old
+//     release, so it never looks active while it draws nothing.
 //
 // A plugin id installed from another source (registry, upload) is left alone.
 // Uninstalling a bundled plugin resets it: it appears again as installed.
@@ -21,11 +26,14 @@ import type { Database } from "@scalius/database/client";
 import {
   PluginError,
   installPlugin,
-  listPluginInstallations,
+  markPluginFailed,
+  readPluginInstallation,
+  readPluginInstallations,
   requirePluginInstallation,
   uninstallPlugin,
   updatePluginInstallation,
   type PluginInstallation,
+  type UnreadablePluginInstallation,
 } from "@scalius/core/modules/plugins";
 import { pluginDefinitionOf } from "@scalius/shared/plugins/handlers";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
@@ -50,19 +58,26 @@ async function bundledManifest(entry: BundledPluginEntry): Promise<unknown> {
   return definition?.manifest;
 }
 
-function needsSync(entry: BundledPluginEntry, installation: PluginInstallation | undefined): boolean {
-  if (!installation) return true;
-  if (installation.source !== "bundled") return false;
-  return installation.version !== entry.version || installation.bundleSha256 !== entry.sha256;
+/** An installation row as the sync sees it: readable, or one whose stored manifest no longer reads. */
+type StoredInstallation =
+  | { readable: true; installation: PluginInstallation }
+  | { readable: false; installation: UnreadablePluginInstallation };
+
+function needsSync(entry: BundledPluginEntry, stored: StoredInstallation | undefined): boolean {
+  if (!stored) return true;
+  if (stored.installation.source !== "bundled") return false;
+  if (!stored.readable) return true;
+  return stored.installation.version !== entry.version || stored.installation.bundleSha256 !== entry.sha256;
 }
 
 async function syncOne(
   db: Database,
   pluginId: string,
   entry: BundledPluginEntry,
-  installation: PluginInstallation | undefined,
+  stored: StoredInstallation | undefined,
   result: BundledSyncResult,
 ): Promise<void> {
+  const installation = stored?.installation;
   try {
     const manifest = await bundledManifest(entry);
     if (!installation) {
@@ -89,6 +104,14 @@ async function syncOne(
     const reason = error instanceof Error ? error.message.slice(0, 300) : "unknown error";
     console.warn(`[plugins] Bundled plugin ${pluginId} could not be synced: ${reason}`);
     result.failed.push({ pluginId, reason });
+    // A running app whose release this deployment cannot install: it cannot
+    // run the old one either (its code is gone), so say so where the merchant
+    // looks instead of leaving it active and drawing nothing. The next sync
+    // that succeeds resumes it (`updatePluginInstallation`).
+    if (installation?.status === "active") {
+      await markPluginFailed(db, pluginId, `Version ${entry.version} in this deployment could not be installed: ${reason}`)
+        .catch(() => undefined);
+    }
   }
 }
 
@@ -99,12 +122,17 @@ export async function syncBundledPlugins(
 ): Promise<BundledSyncResult> {
   const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [], fxApps: false };
   const ids = Object.keys(registry);
-  const installations = new Map((await listPluginInstallations(db)).map((installation) => [installation.pluginId, installation]));
+  const read = await readPluginInstallations(db);
+  const installations = new Map(read.installations.map((installation) => [installation.pluginId, installation]));
+  const stored = new Map<string, StoredInstallation>([
+    ...read.unreadable.map((installation) => [installation.pluginId, { readable: false, installation }] as const),
+    ...read.installations.map((installation) => [installation.pluginId, { readable: true, installation }] as const),
+  ]);
   // Read here, once, so a store without an exchange rate app reads nothing more for rates.
   result.fxApps = [...installations.values()].some((installation) => installation.status === "active"
     && (installation.grant?.providers ?? []).includes("fx")
     && installation.manifest.providers.some((provider) => provider.kind === "fx"));
-  for (const installation of installations.values()) {
+  for (const { installation } of stored.values()) {
     if (installation.source !== "bundled" || Object.prototype.hasOwnProperty.call(registry, installation.pluginId)) continue;
     try {
       await uninstallPlugin(db, installation.pluginId, { keepData: true, expectedRevision: installation.revision });
@@ -116,7 +144,7 @@ export async function syncBundledPlugins(
   }
   for (const pluginId of ids.sort()) {
     const entry = registry[pluginId]!;
-    const installation = installations.get(pluginId);
+    const installation = stored.get(pluginId);
     if (!needsSync(entry, installation)) continue;
     await syncOne(db, pluginId, entry, installation, result);
   }
@@ -135,7 +163,7 @@ export async function syncBundledPlugin(
 ): Promise<PluginInstallation | null> {
   const entry = Object.prototype.hasOwnProperty.call(registry, pluginId) ? registry[pluginId] : undefined;
   if (!entry) return null;
-  const current = await requirePluginInstallation(db, pluginId).catch(() => undefined);
+  const current = (await readPluginInstallation(db, pluginId)) ?? undefined;
   const result: BundledSyncResult = { installed: [], updated: [], removed: [], failed: [], fxApps: false };
   if (needsSync(entry, current)) await syncOne(db, pluginId, entry, current, result);
   if (result.failed.length > 0) return null;

@@ -97,6 +97,20 @@ describe("admin app routes", () => {
     expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_installations").get()).toEqual({ n: ids.length });
   });
 
+  it("lists an installed app whose saved manifest this release cannot read as failed, never hides it", async () => {
+    sqlite.prepare(`INSERT INTO plugin_installations (plugin_id, version, source, bundle_sha256, manifest_json, status)
+      VALUES ('acme.legacy', '1.0.0', 'upload', ?, '{"id":"acme.legacy","name":"Legacy sections","retiredField":true}', 'installed')`)
+      .run("ab".repeat(32));
+    const listed = await call("GET", "/apps");
+    expect(listed.status).toBe(200);
+    expect(listed.json.data.apps.find((entry: Json) => entry.id === "acme.legacy")).toMatchObject({
+      name: "Legacy sections",
+      source: "upload",
+      status: "failed",
+      failureReason: expect.stringContaining("cannot read the saved version 1.0.0"),
+    });
+  });
+
   it("describes what an app asks for, and activates only for a Super Admin approving the request shown", async () => {
     const detail = (await call("GET", "/apps/acme.order-tagger")).json.data.app;
     expect(detail.request).toMatchObject({ scopes: ["write_orders"], events: ["order.paid"], customFieldOwners: ["order"], publicRoutes: false });

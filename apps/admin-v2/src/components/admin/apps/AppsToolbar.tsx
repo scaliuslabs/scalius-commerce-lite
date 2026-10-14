@@ -113,11 +113,11 @@ export function AppsToolbar({ apps, sandboxAvailable }: { apps: AppSummary[]; sa
   );
 }
 
-/** Apps that are off with a reason (stopped by the emergency switch, or automatically for going over their limits). */
+/** Apps that are off with a reason: stopped (the emergency switch, or over their limits) or failed (a release this deployment could not install or load). */
 export function AppsNotices({ apps }: { apps: AppSummary[] }) {
   const t = useMessages(appsLifecycleMessages);
   const locale = useLocale();
-  const stopped = apps.filter((app) => app.status === "disabled" && app.failureReason).map((app) => localizedApp(app, locale));
+  const stopped = apps.filter((app) => (app.status === "disabled" || app.status === "failed") && app.failureReason).map((app) => localizedApp(app, locale));
   if (stopped.length === 0) return null;
   return (
     <Alert variant="warning" className="mb-4">

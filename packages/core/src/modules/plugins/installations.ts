@@ -272,8 +272,101 @@ export async function requirePluginInstallation(db: Database, pluginId: string):
 }
 
 export async function listPluginInstallations(db: Database): Promise<PluginInstallation[]> {
+  return (await readPluginInstallations(db)).installations;
+}
+
+/**
+ * An installation row whose stored manifest this release cannot read: the
+ * app cannot run, so the runtime skips it, but it is never invisible. The
+ * Apps page lists it as failed, and a bundled one is rewritten from the
+ * deployed code on the next sync (`updatePluginInstallation` accepts it).
+ */
+export interface UnreadablePluginInstallation {
+  pluginId: string;
+  version: string;
+  source: PluginInstallationSource;
+  status: PluginInstallationStatus;
+  failureReason: string | null;
+  revision: number;
+  /** The stored manifest's name when it has one (the dashboard's label). */
+  name: string | null;
+  installedAt: number;
+  activatedAt: number | null;
+  updatedAt: number;
+}
+
+function unreadableInstallation(row: PluginInstallationRow): UnreadablePluginInstallation {
+  const stored = parseJsonObject(row.manifestJson);
+  return {
+    pluginId: row.pluginId,
+    version: row.version,
+    source: row.source,
+    status: row.status,
+    failureReason: row.failureReason,
+    revision: row.revision,
+    name: typeof stored?.name === "string" && stored.name.trim() ? stored.name.trim().slice(0, 80) : null,
+    installedAt: row.installedAt,
+    activatedAt: row.activatedAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/** One installation row: readable, unreadable (its stored manifest no longer reads), or null when none. */
+export async function readPluginInstallation(db: Database, pluginId: string): Promise<
+  { readable: true; installation: PluginInstallation } | { readable: false; installation: UnreadablePluginInstallation } | null
+> {
+  const row = await db.select().from(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)).get();
+  if (!row) return null;
+  const installation = toPluginInstallation(row);
+  return installation ? { readable: true, installation } : { readable: false, installation: unreadableInstallation(row) };
+}
+
+/** Every installation, in id order: those the runtime reads, and those whose stored manifest it cannot. */
+export async function readPluginInstallations(db: Database): Promise<{
+  installations: PluginInstallation[];
+  unreadable: UnreadablePluginInstallation[];
+}> {
   const rows = await db.select().from(pluginInstallations).orderBy(asc(pluginInstallations.pluginId)).all();
-  return rows.map(toPluginInstallation).filter((installation): installation is PluginInstallation => installation !== null);
+  const installations: PluginInstallation[] = [];
+  const unreadable: UnreadablePluginInstallation[] = [];
+  for (const row of rows) {
+    const installation = toPluginInstallation(row);
+    if (installation) installations.push(installation);
+    else unreadable.push(unreadableInstallation(row));
+  }
+  return { installations, unreadable };
+}
+
+/**
+ * What an update replaces. A row whose stored manifest no longer reads is
+ * replaced too (its grant and settings still read on their own): the old
+ * declarations are then unknown, so every storage collection is re-indexed
+ * and the app's sales channels are reconciled.
+ */
+interface InstallationBeforeUpdate {
+  status: PluginInstallationStatus;
+  grant: PluginGrantRequest | null;
+  activatedBy: string | null;
+  features: string[];
+  storedSettings: Record<string, unknown>;
+  /** The stored manifest as it runs; null when it no longer reads. */
+  manifest: PluginManifest | null;
+}
+
+async function installationBeforeUpdate(db: Database, pluginId: string): Promise<InstallationBeforeUpdate> {
+  const row = await db.select().from(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)).get();
+  if (!row) throw new PluginError("installation.not_found", `Plugin ${pluginId} is not installed.`);
+  const installation = toPluginInstallation(row);
+  if (installation) return installation;
+  const grant = parseStoredPluginGrant(row.grantJson);
+  return {
+    status: row.status,
+    grant,
+    activatedBy: row.activatedBy,
+    features: grant?.features ?? [],
+    storedSettings: parseJsonObject(row.settingsJson) ?? {},
+    manifest: null,
+  };
 }
 
 // ── Manifest checks beyond the schema ────────────────────────────────────
@@ -694,14 +787,16 @@ export interface UpdatePluginInput {
  * narrower one stays active. A `failed` plugin was running when it failed
  * (only active plugins run), so an update resumes it the same way: active
  * when its grant still covers the new request, else waiting for approval.
- * Storage collections whose index declaration changed are re-indexed.
+ * Storage collections whose index declaration changed are re-indexed. A
+ * row whose stored manifest no longer reads is replaced the same way
+ * (`installationBeforeUpdate`): its approved grant still decides.
  */
 export async function updatePluginInstallation(
   db: Database,
   pluginId: string,
   input: UpdatePluginInput,
 ): Promise<PluginInstallation> {
-  const current = await requirePluginInstallation(db, pluginId);
+  const current = await installationBeforeUpdate(db, pluginId);
   const manifest = requireInstallableManifest(input.manifest, input.source);
   if (manifest.id !== pluginId) throw new PluginError("manifest.invalid", `The manifest is for ${manifest.id}, not ${pluginId}.`);
   const sha256 = requireSha256(input.bundleSha256);
@@ -735,7 +830,7 @@ export async function updatePluginInstallation(
       }).where(eq(pluginInstallations.pluginId, pluginId)),
       db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
       ...registrationInserts(db, pluginId, manifest, registered),
-      ...salesChannelStatements(db, pluginId, manifest.salesChannels, status === "active", current.manifest.salesChannels.length > 0),
+      ...salesChannelStatements(db, pluginId, manifest.salesChannels, status === "active", (current.manifest?.salesChannels.length ?? 1) > 0),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, input.expectedRevision, []);
@@ -743,7 +838,7 @@ export async function updatePluginInstallation(
   }
 
   for (const [collection, declaration] of Object.entries(manifest.storage)) {
-    const before = current.manifest.storage[collection];
+    const before = current.manifest?.storage[collection];
     if (before && JSON.stringify(before) === JSON.stringify(declaration)) continue;
     await reindexPluginCollection(db, pluginId, collection, declaration);
   }
