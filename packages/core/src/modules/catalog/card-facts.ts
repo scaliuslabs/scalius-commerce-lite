@@ -101,7 +101,10 @@ export interface ProductCardFactRow {
 function cardIdsCte(productIds: readonly string[] | SQLWrapper): SQL {
     if (Array.isArray(productIds)) {
         const ids = [...new Set(productIds.map((id) => id.trim()).filter(Boolean))];
-        return sql`card_ids(id) AS MATERIALIZED (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
+        // The LIMIT is the list's own size: PostgreSQL then plans for that many ids.
+        return sql`card_ids(id) AS MATERIALIZED (
+            SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}) LIMIT ${sql.raw(String(ids.length))}
+        )`;
     }
     // An embedded query renders parenthesized, which a CTE body cannot be.
     return sql`card_ids(id) AS MATERIALIZED (SELECT * FROM ${productIds as SQLWrapper})`;

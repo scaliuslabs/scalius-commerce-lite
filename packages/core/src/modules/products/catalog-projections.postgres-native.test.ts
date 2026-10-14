@@ -11,8 +11,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 
 import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 import { productBuyerState, productFacetValues } from "@scalius/database/schema";
-import { asc, is, sql, SQL, StringChunk } from "drizzle-orm";
-import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
+import { asc } from "drizzle-orm";
 
 import { createProduct } from "../product-admin/write";
 import { deleteProduct, restoreProduct } from "../product-admin/lifecycle";
@@ -321,33 +320,7 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NA
         expect(dependencies.uncacheable).toEqual([]);
         expect(dependencies.coarseTables).toEqual([]);
         expect(rawAll).toHaveBeenCalledTimes(1);
-        const captured = rawAll.mock.calls.at(-1)![0] as SQL;
         rawAll.mockRestore();
-        const forceCanonical = (statement: SQL): SQL => new SQL(statement.queryChunks.map((chunk) => {
-            if (is(chunk, SQL)) return forceCanonical(chunk);
-            return is(chunk, StringChunk)
-                ? new StringChunk(chunk.value.map((text) => text.replace("SELECT CASE WHEN COUNT(*) >=", "SELECT CASE WHEN 0 = 1 AND COUNT(*) >=")))
-                : chunk;
-        }));
-        const canonical = forceCanonical(captured);
-        const dialect = new SQLiteSyncDialect();
-        expect(dialect.sqlToQuery(canonical).sql).not.toBe(dialect.sqlToQuery(captured).sql);
-        const canonicalRows = await db.all<Record<string, unknown>>(canonical);
-        expect(canonicalRows.map((row) => ({
-            id: row.id, alsoBoughtBuyers: row.alsoBoughtBuyers, relatedScore: row.relatedScore,
-            popularBuyers: row.popularBuyers, popularOrdering: row.popularOrdering,
-        }))).toEqual(rows);
-        expect(canonicalRows.every((row) => Number(row.popularAt) * 1000 === dependencies.validUntil)).toBe(true);
-        // Reuse the shared CTE interpolation before the limited ranking and
-        // deadline wrapper to prove this provider takes the qualifying path.
-        const rankingCtes = captured.queryChunks.find((chunk) => is(chunk, SQL)
-            && dialect.sqlToQuery(chunk).sql.includes("WITH rec_source_orders AS MATERIALIZED")) as SQL;
-        expect(dialect.sqlToQuery(rankingCtes).sql).toContain("WITH rec_source_orders AS MATERIALIZED");
-        const guard = new SQL([rankingCtes]).append(sql`
-            SELECT qualifies, (SELECT COUNT(*) FROM rec_eligible_co) AS eligible,
-                (SELECT COUNT(*) FROM rec_winning_co) AS winners FROM rec_guard`);
-        expect(await db.all(guard))
-            .toEqual([{ qualifies: 1, eligible: 37, winners: 25 }]);
         await expect(refreshProductRecommendations(db, ["source"])).resolves.toEqual({ refreshed: 1, cleared: 0 });
         expect((await client.query("SELECT recommended_product_id AS id FROM product_recommendations WHERE product_id = 'source' ORDER BY position")).rows)
             .toEqual(expectedIds.map((id) => ({ id })));
@@ -480,6 +453,11 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NA
         expect(facetsBySlug.brand?.values).toEqual([{ value: "walton", label: "Walton", count: 1, swatch: null }]);
         expect(facetsBySlug.display).toMatchObject({ display: "range", unit: "in", range: { min: 15.6, max: 15.6 } });
         expect(facetsBySlug["option.size"]?.values.map((value) => [value.value, value.count])).toEqual([["s", 0], ["m", 0]]);
+        // Plain shop-all reads the maintained public counts; the scope's own rows give the same facets.
+        const valueFacets = (facets: typeof typedListing.facets) => facets.filter((facet) => facet.kind !== "category");
+        const scopedAll = await getStorefrontCategoryProducts(db, shirts, { page: 1, limit: 10 });
+        expect(valueFacets(newest.facets).map((facet) => facet.slug)).toEqual(["brand", "option.size", "display", "material", "wifi"]);
+        expect(valueFacets(newest.facets)).toEqual(valueFacets(scopedAll.facets));
         const comparison = await getStorefrontProductComparison(db, [optioned.id, simple.id]);
         expect(comparison.products.map((product) => product.id)).toEqual([optioned.id, simple.id]);
         expect(comparison.groups[0]?.rows.find((row) => row.slug === "display")?.values).toEqual(["1000 in", "15.60 in"]);

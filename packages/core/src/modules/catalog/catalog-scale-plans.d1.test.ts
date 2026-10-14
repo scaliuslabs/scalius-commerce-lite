@@ -3,7 +3,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 import { planLimits } from "@scalius/shared/plan-limits";
 
-import { resolvePublicAttributeFilters } from "./facets";
+import { FACET_SCOPE_PRODUCT_LIMIT, resolvePublicAttributeFilters } from "./facets";
 import { resolveCollectionProductsBatch } from "./collections";
 import { search } from "./site-search";
 import { getHomepageData } from "../storefront/storefront.service";
@@ -91,14 +91,7 @@ async function project(db: Parameters<typeof rebuildCatalogProjections>[0], quer
 /** A listing statement over the buyer state never ranks SKUs or evaluates eligibility per request. */
 function expectBuyerStateListing(plan: string) {
     expect(plan).not.toContain("buyer_ranked_skus");
-    // The complement strategy counts all buyer-state identities once to
-    // choose its branch. Only that exact covering COUNT(*) subtree is exempt;
-    // scope membership and hydration must still use their bounded indexes.
-    const listingPlan = plan.replace(
-        "MATERIALIZE catalog_size\nSCAN product_buyer_state USING COVERING INDEX sqlite_autoindex_product_buyer_state_1\n",
-        "",
-    );
-    expect(listingPlan).not.toMatch(/SCAN (products|product_variants|product_buyer_state)\b/);
+    expect(plan).not.toMatch(/SCAN (products|product_variants|product_buyer_state)\b/);
     expect(plan).not.toContain("buyer_active_sku");
 }
 
@@ -200,7 +193,7 @@ describe("catalogue-scale query plans", () => {
         for (const plan of [newestPage!, newestCount!, pricePage!]) expectBuyerStateListing(plan);
     });
 
-    it("counts facets live on shop-all only while the public catalogue is small", async () => {
+    it("reads plain shop-all facets from the public counts and bounds every other facet scope", async () => {
         const { db, queries } = setup();
         sqlite!.exec(`
             INSERT INTO product_attributes (id, name, slug, filterable) VALUES ('attr_maker', 'Maker', 'maker', 1);
@@ -210,25 +203,37 @@ describe("catalogue-scale query plans", () => {
         const small = await getStorefrontProducts(db, { page: 1, limit: 2 });
         // The shop-all categories the products sit in come first (the category-tree facet).
         expect(small.facets.map((facet) => facet.slug)).toEqual(["category", "maker"]);
-        expect(queries.filter((query) => query.sql.includes("product_facet_values")).length).toBe(1);
+        expect(small.facets[1]!.values).toEqual([{ value: "asus", label: "Asus", count: 1, swatch: null }]);
+        expect(queries.filter((query) => query.sql.includes("product_facet_public_counts")).length).toBe(1);
+        // A selection on shop-all counts the scope's own facet rows.
+        queries.length = 0;
+        const filters = await resolvePublicAttributeFilters(db, { maker: "asus" }, []);
+        const selected = await getStorefrontProducts(db, { page: 1, limit: 2, attributeFilters: filters });
+        expect(selected.facets.find((facet) => facet.slug === "maker")!.values[0]).toMatchObject({ value: "asus", count: 1 });
+        expect(queries.filter((query) => query.sql.includes("product_facet_public_counts"))).toEqual([]);
 
-        // 2,001 public products: the unscoped count stops at the limit and the
-        // facet statement never runs; a category still counts its own.
+        // Past FACET_SCOPE_PRODUCT_LIMIT products a scope keeps its brand, category
+        // and rating facets; attribute and option values are not counted.
         const insertProduct = sqlite!.prepare("INSERT INTO products (id, name, price_minor, slug, category_id, is_active, created_at) VALUES (?, ?, 10000, ?, 'cat_phone', 1, 1600000000)");
         const insertSku = sqlite!.prepare("INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory) VALUES (?, ?, ?, 10000, 1, 1, 0)");
-        for (let index = 0; index < 1_998; index += 1) {
+        const insertValue = sqlite!.prepare("INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES (?, ?, 'attr_maker', 'Xiaomi')");
+        for (let index = 0; index < FACET_SCOPE_PRODUCT_LIMIT; index += 1) {
             insertProduct.run(`prod_bulk_${index}`, `Bulk ${index}`, `bulk-${index}`);
             insertSku.run(`var_bulk_${index}`, `prod_bulk_${index}`, `BULK-${index}`);
+            insertValue.run(`val_bulk_${index}`, `prod_bulk_${index}`);
         }
         await project(db, queries);
         const large = await getStorefrontProducts(db, { page: 1, limit: 2 });
         // The total is a lower bound beyond the plan's count cap (and reads that many rows at most).
         expect(large.pagination).toMatchObject({ total: planLimits().lists.countCap, totalIsCapped: true });
-        expect(large.facets).toEqual([]);
-        expect(queries.filter((query) => query.sql.includes("product_facet_values"))).toEqual([]);
-        const scoped = await getStorefrontProducts(db, { page: 1, limit: 2, category: "laptop" });
-        expect(scoped.facets.map((facet) => facet.slug)).toEqual(["maker"]);
-    });
+        expect(large.facets.find((facet) => facet.slug === "maker")!.values.map((value) => [value.value, value.count]))
+            .toEqual([["asus", 1], ["xiaomi", FACET_SCOPE_PRODUCT_LIMIT]]);
+        const phones = await getStorefrontProducts(db, { page: 1, limit: 2, category: "gaming-phone" });
+        expect(phones.pagination.total).toBe(Math.min(FACET_SCOPE_PRODUCT_LIMIT + 1, planLimits().lists.countCap));
+        expect(phones.facets.map((facet) => facet.slug)).not.toContain("maker");
+        const laptops = await getStorefrontProducts(db, { page: 1, limit: 2, category: "laptop" });
+        expect(laptops.facets.map((facet) => facet.slug)).toEqual(["maker"]);
+    }, 60_000);
 
     it("pages and counts the product sitemap from the buyer state's newest index", async () => {
         const { db, queries, plans } = setup();
@@ -448,7 +453,7 @@ describe("catalogue-scale query plans", () => {
         const joined = plans(readsBuyerState).join("\n");
         // Either facet index answers (product, axis, value) with three equalities.
         expect(joined).toMatch(/SEARCH option_sku (EXISTS )?USING INDEX product_facet_values_(product_idx \(product_id=\? AND facet_key=\? AND value_key=\?|value_idx \(facet_key=\? AND value_key=\? AND product_id=\?)\)/);
-        expect(joined).toContain("SEARCH option_row USING INDEX product_facet_values_product_idx (product_id=? AND facet_key>? AND facet_key<?)");
+        expect(joined).toMatch(/SEARCH option_row USING COVERING INDEX product_facet_values_product_idx \(product_id=\?\)/);
         expect(joined).not.toMatch(/SCAN (product_facet_values|option_row|option_sku|option_selected_row|product_variant_option_values)\b/);
     });
 
@@ -741,7 +746,8 @@ describe("catalogue-scale query plans", () => {
         expect(sorted.products.map((product) => product.id)).toEqual(expected);
         expect(sorted.ratingFacet.map((value) => value.min)).toEqual([4, 3, 2]);
         expect(shopAll.products).toHaveLength(20);
-        expect(shopAll.facets).toEqual([]); // above the shop-all live-facet cap
+        // Plain shop-all: maintained value counts, brands and categories; no rating facet.
+        expect(shopAll.facets.map((facet) => facet.slug)).not.toContain("maker");
         expect(shopAll.ratingFacet).toEqual([]);
         for (const plan of categoryPlans) {
             expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");

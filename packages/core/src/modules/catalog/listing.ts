@@ -7,7 +7,7 @@
 import { products, categories } from "@scalius/database/schema";
 import { and, sql, desc, eq, type SQL, type SQLWrapper } from "drizzle-orm";
 import { suggestSearchCorrection } from "./search-correction";
-import { boundedProductSearchPage, productSearchRankJoin, productSearchRelevanceOrder } from "./search-relevance";
+import { productSearchRankJoin, productSearchRelevanceOrder } from "./search-relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
 import { planLimits } from "@scalius/shared/plan-limits";
@@ -39,6 +39,7 @@ import {
     declareFacetReadWithoutProducts,
     groupCatalogFacets,
     groupCatalogRatingFacet,
+    FACET_SCOPE_PRODUCT_LIMIT,
     type CatalogFacetCountInput,
 } from "./facets";
 import {
@@ -71,17 +72,6 @@ import {
 } from "./declare-deps";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
-
-/**
- * Facet counts over the unscoped "shop all" set (no category, collection,
- * search or id lookup) are computed live only while the whole public
- * catalogue holds at most this many products. Above it a live count reads
- * every attribute and option row in the store (397k rows at 30k products),
- * so large stores filter inside a category, where counts stay bounded by
- * the category's own products. Decided in Scale-A (CATALOG-SCALE Design D):
- * a cap, not a per-category count cache.
- */
-export const SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT = 2_000;
 
 type StorefrontProductListRow = {
     id: string;
@@ -213,12 +203,12 @@ async function readStorefrontCatalogPage(
         : { ...result, correctedQuery: null };
 }
 
-/** At most `limit + 1` public products: enough to tell "more than limit" apart. */
 /** The category's closure ancestors (itself included), comma-joined; ids never contain commas. */
 function categoryAncestorIdsSql(categoryId: string): SQL<string | null> {
     return sql<string | null>`(SELECT group_concat("category_closure"."ancestor_id", ',') FROM "category_closure" WHERE "category_closure"."descendant_id" = ${categoryId})`;
 }
 
+/** At most `limit + 1` public products: enough to tell "more than limit" apart. */
 function boundedPublicCatalogueSizeSql(limit: number): SQL<number> {
     return sql<number>`(
         SELECT count(*) FROM (
@@ -344,8 +334,8 @@ async function readStorefrontCatalogResults(
         ? productSearchRankJoin(db, search)
         : undefined;
     // Rank the matching IDs before reading card-only SKU, rating and translation
-    // fields. A broad prefix otherwise performs those probes for every match.
-    const baselineRelevancePage = !scope.orderBy && sort === "relevance" && search ? sql`
+    // fields, which are then read for the page's rows alone.
+    const relevancePageIds = !scope.orderBy && sort === "relevance" && search ? sql`
             SELECT ${buyerState.productId} AS page_product_id,
                 ${orderBy[0]!} AS relevance_tier,
                 ${rankJoin ? sql.raw("COALESCE(search_rank.rank_score, 0)") : sql`0`} AS relevance_score
@@ -357,19 +347,8 @@ async function readStorefrontCatalogResults(
                 ${buyerState.productCreatedAt} DESC, ${buyerState.productId}
             LIMIT ${limit + 1} OFFSET ${offset}
     ` : null;
-    // The rank prefix already matches the search text. Reuse every other
-    // scope/filter predicate without rerunning the full text/category union.
-    const prefixEligibility = baselineRelevancePage && rankJoin
-        ? buildStorefrontBuyerStateConditions(db, { ...params, search: undefined, ...priceBounds }, { drivenByIdSet: true }).conditions
-        : [];
-    if (scope.condition) prefixEligibility.push(scope.condition);
-    const boundedPage = baselineRelevancePage && rankJoin && search
-        ? boundedProductSearchPage(db, search, {
-            limit, offset, eligibility: [...prefixEligibility, ...facetConditions], fallback: baselineRelevancePage,
-        })
-        : undefined;
-    const relevancePage = baselineRelevancePage ? sql`(
-        WITH listing_page AS MATERIALIZED (${boundedPage ?? baselineRelevancePage})
+    const relevancePage = relevancePageIds ? sql`(
+        WITH listing_page AS MATERIALIZED (${relevancePageIds})
         SELECT * FROM listing_page
     ) AS listing_page` : null;
     const cardOrderBy = relevancePage
@@ -443,7 +422,6 @@ async function readStorefrontCatalogResults(
             storeCurrencyCode: storeCurrencyCodeSql(),
             min: sql<number | null>`(SELECT MIN(${buyerState.fromMinor}) FROM ${buyerState} WHERE ${publicRows})`,
             max: sql<number | null>`(SELECT MAX(${buyerState.toMinor}) FROM ${buyerState} WHERE ${publicRows})`,
-            publicCatalogueSize: boundedPublicCatalogueSizeSql(SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT),
         })
         .from(sql`(SELECT 1) AS shop_all_probe`);
     let countQuery = db
@@ -452,7 +430,7 @@ async function readStorefrontCatalogResults(
             storeCurrencyCode: storeCurrencyCodeSql(),
             min: sql<number | null>`MIN(${buyerState.fromMinor})`,
             max: sql<number | null>`MAX(${buyerState.toMinor})`,
-            publicCatalogueSize: boundedPublicCatalogueSizeSql(SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT),
+            publicCatalogueSize: boundedPublicCatalogueSizeSql(FACET_SCOPE_PRODUCT_LIMIT),
         })
         .from(buyerState)
         .$dynamic();
@@ -475,14 +453,7 @@ async function readStorefrontCatalogResults(
     const facetInput: CatalogFacetCountInput = {
         baseConditions: facetBaseConditions,
         needsProducts: countNeedsProducts,
-        identitySearch: search && !scope.condition && !scope.needsProducts && !params.category && !params.ids
-            && params.minPrice === undefined && params.maxPrice === undefined && params.freeDelivery === undefined
-            ? {
-                query: search,
-                baseConditions: buildStorefrontBuyerStateConditions(db, { ...params, ...priceBounds }, {
-                    drivenByIdSet: true, searchCategoryFromBuyerState: true,
-                }).conditions,
-            } : undefined,
+        allPublic: plainShopAll,
         filters: params.attributeFilters,
         categoryId: scope.fixedCategory?.id,
         categoryAncestorsDeclared: ancestorsCategoryId !== null,
@@ -513,8 +484,10 @@ async function readStorefrontCatalogResults(
     const decimalPlaces = marketDecimalPlaces(market, storeDecimalPlacesFromCode(totalCount?.storeCurrencyCode));
     const { total, totalIsCapped } = capTotal(totalCount?.count ?? 0, lists.countCap);
     const rawPriceRange = hasPriceFilter ? filteredPriceRange : totalCount;
-    const shopAllFacetsLive = unscoped
-        && Number(separateCount?.publicCatalogueSize ?? 0) <= SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT;
+    // Shop-all with a selection counts live only while the catalogue is small.
+    const shopAllFacetsLive = unscoped && (plainShopAll || Number(
+        (separateCount as { publicCatalogueSize?: number } | null)?.publicCatalogueSize ?? 0,
+    ) <= FACET_SCOPE_PRODUCT_LIMIT);
 
     // A fixed category names every row in it; a subtree listing still reads
     // the sub-categories its other rows sit in (none on a flat store).
@@ -739,23 +712,23 @@ function storefrontCollectionMembership(membership: StorefrontCollectionMembersh
     // per product (11-17 s for a 90-product collection on a 30k-product
     // catalogue) or an OR of two sets (which SQLite answers by walking every
     // public row): the picked ids, plus the public products of the
-    // collection's published categories through the category index. The
-    // index is named: beside the id-ordered scope index, SQLite 3.5x picks that
-    // one to feed the UNION merge and walks every public row.
+    // collection's published categories through the category index. UNION
+    // ALL: `IN` removes duplicates itself, and a UNION would favour an
+    // id-ordered index that walks every public row.
     const branches: SQL[] = [];
     if (productIds.length > 0) {
         branches.push(sql`SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIds)})`);
     }
     if (categoryIds.length > 0) {
         branches.push(sql`SELECT collection_member.product_id
-            FROM ${buyerState} AS collection_member INDEXED BY product_buyer_state_category_newest_idx
+            FROM ${buyerState} AS collection_member
             WHERE collection_member.is_public = 1
               AND collection_member.category_id IN ${publishedCategoryIdSet(sql`${categories.id} IN (
                   SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)})
               )`)}`);
     }
     const condition = branches.length > 0
-        ? sql`${buyerState.productId} IN (${sql.join(branches, sql` UNION `)})`
+        ? sql`${buyerState.productId} IN (${sql.join(branches, sql` UNION ALL `)})`
         : sql`0 = 1`;
     return { productIds, categoryIds, membershipJson, condition };
 }

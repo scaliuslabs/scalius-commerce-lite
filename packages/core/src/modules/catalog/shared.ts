@@ -196,7 +196,7 @@ export function buildStorefrontBuyerStateConditions(
         minPriceMinor?: SQL<number>;
         maxPriceMinor?: SQL<number>;
     },
-    options: { drivenByIdSet?: boolean; searchCategoryFromBuyerState?: boolean } = {},
+    options: { drivenByIdSet?: boolean } = {},
 ): { conditions: SQL[]; needsProducts: boolean } {
     // Search hits and id lookups are small sets that drive the read through
     // `products` (the FTS rowids, the lookup ids), never the public walk.
@@ -209,9 +209,7 @@ export function buildStorefrontBuyerStateConditions(
     if (params.search) {
         needsProducts = true;
         conditions.push(
-            or(ftsMatch(db, "products_fts", "products", params.search), productCategoryNameMatch(
-                db, params.search, options.searchCategoryFromBuyerState ? buyerState.categoryId : products.categoryId,
-            ))
+            or(ftsMatch(db, "products_fts", "products", params.search), productCategoryNameMatch(db, params.search))
                 ?? sql`0 = 1`,
         );
     }

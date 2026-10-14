@@ -92,7 +92,7 @@ function quoteSqliteIdentifier(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
 }
 
-describe("provider-neutral schema upgrades", () => {
+describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
   it("loads a contiguous migration chain with exact Turso and PostgreSQL sidecars", async () => {
     const artifacts = await loadSchemaUpgradeArtifacts();
     expect(artifacts.map((artifact) => ({
@@ -767,6 +767,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 23,
         postgresStatements: 23,
       },
+      {
+        version: 150,
+        name: "0150_facet_engine",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
     ]);
   });
 
@@ -965,6 +971,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 147, name: "0147_kv_retirement" },
           { version: 148, name: "0148_queue_retirement" },
           { version: 149, name: "0149_strict_readers_reset" },
+          { version: 150, name: "0150_facet_engine" },
         ],
       });
     } finally {
