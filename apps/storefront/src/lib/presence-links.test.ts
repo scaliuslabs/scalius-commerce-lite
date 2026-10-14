@@ -21,8 +21,10 @@ const WRAPPED = /\b(?:pagePath|serverPagePath|logicalPathname)\(/;
 const REVIEWED: ReadonlyArray<readonly [file: string, fragment: string, reason: string]> = [
   ["components/cards/scripts/quick-add-card.ts", 'pathname.split("/").pop()', "reads the slug, the last segment, under any presence"],
   ["components/conversation/conversation-form.ts", 'answer.data.redirect.startsWith("/")', "checks the shape; the redirect is followed through pagePath"],
-  ["components/header/HeaderLayout.astro", 'scope.startsWith("/categories/")', "a select value; the navigation goes through pagePath"],
-  ["components/homepage/EndlessGrid.astro", "a[href*=\"/products/\"]", "matches a card link under any presence"],
+  ["scripts/storefront-actions.ts", 'scope.startsWith("/categories/")', "a select value; the navigation goes through pagePath"],
+  ["components/homepage/endless-grid.ts", "a[href*=\"/products/\"]", "matches a card link under any presence"],
+  ["gallery/noor.ts", "link:", "dev-gallery fixture links, never served under a presence"],
+  ["lib/theme-preview-library.ts", "", "reads a preview path after stripping its presence; the merchant's preview, never a buyer link"],
   ["components/order/review-form-client.ts", 'value.startsWith("/")', "validates a same-origin path"],
   ["lib/api/transport.ts", "", "API paths, not storefront pages"],
   ["lib/browser-continuation-relay.ts", "", "private relays agents open by exact root URL"],

@@ -114,6 +114,7 @@ describe("customer marketing admin routes", () => {
             { channel: "email", status: "subscribed", updatedAt: expect.any(String) },
             { channel: "sms", status: "not_subscribed", updatedAt: null },
             { channel: "whatsapp", status: "not_subscribed", updatedAt: null },
+            { channel: "push", status: "not_subscribed", updatedAt: null },
         ]);
         expect(detail.body.data.tags).toEqual([]);
         expect((await json("/cust_b/marketing", { method: "PUT", body: JSON.stringify({ channel: "email", state: "subscribed", note: "x" }) })).status).toBe(400);

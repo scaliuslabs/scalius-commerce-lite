@@ -664,7 +664,9 @@ describe("admin route graph boundaries", () => {
       ),
       "utf8",
     );
-    expect(skeletonSource).toContain("TOOLBAR_GROUPS");
+    // The loading toolbar and the mounted one share the measured row layout.
+    expect(skeletonSource).toContain('from "./tiptap-toolbar-layout"');
+    expect(skeletonSource).toContain("TOOLBAR_ROW");
     expect(skeletonSource).toContain("lucide-react");
     expect(skeletonSource).toContain("Maximize");
     expect(skeletonSource).not.toContain("primaryWidth");
@@ -679,6 +681,7 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapMenuBar.tsx"),
       "utf8",
     );
+    expect(menuBarSource).toContain('from "./tiptap-toolbar-layout"');
     expect(toolbarButtonSource).toContain("aria-label={tooltip}");
     expect(menuBarSource).toContain('aria-label={');
     // Labels come from the dashboard's catalog, in its language (A11Y-03).
@@ -686,9 +689,10 @@ describe("admin route graph boundaries", () => {
     expect(menuBarSource).toContain('"editLink"');
     expect(menuBarSource).toContain('aria-label={t("insertImageUrl")}');
     expect(menuBarSource).toContain('aria-label={t("embedVideo")}');
-    expect(menuBarSource).toContain('triggerLabel={t("mediaLibrary")}');
-    expect(menuBarSource).toContain("trigger={");
-    expect(menuBarSource).toContain('tooltip={t("mediaLibrary")}');
+    // The media library is a controlled dialog opened from the Insert menu item.
+    expect(menuBarSource).toContain("setMediaOpen(true)");
+    expect(menuBarSource).toContain('{t("mediaLibrary")}');
+    expect(menuBarSource).toContain("open={mediaOpen} onOpenChange={setMediaOpen}");
     expect(menuBarSource).not.toContain("document.getElementById");
     expect(menuBarSource).not.toContain("tiptap-media-manager-wrapper");
     expect(menuBarSource).not.toContain('querySelector("button")?.click()');

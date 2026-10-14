@@ -23,7 +23,9 @@ vi.mock("~/lib/merge-document", async (importOriginal) => ({
   ...(await importOriginal<typeof import("~/lib/merge-document")>()),
   requestMergeChoice: async () => fixture.choices,
 }));
-vi.mock("@tanstack/react-router", () => ({
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+  // The route plugin splits a route's page and loader into lazy chunks (lazyRouteComponent, lazyFn).
+  ...await importOriginal<typeof import("@tanstack/react-router")>(),
   createFileRoute: () => (options: object) => ({ options, useParams: () => ({ productId: "p1" }) }),
   redirect: vi.fn(), useNavigate: () => vi.fn(),
 }));
@@ -66,6 +68,13 @@ import { Route } from "./edit";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// The route plugin splits the page into a lazy chunk; load it before rendering.
+async function loadPage(): Promise<ComponentType> {
+  const Page = Route.options.component as ComponentType & { preload?: () => Promise<void> };
+  await Page.preload?.();
+  return Page;
+}
+
 describe("Apply product conflict while editing SKUs", () => {
   it.each([false, true])("keeps a new SKU draft made while loading (remote SKU change: %s)", async (remoteSkuChanged) => {
     fixture.mounts = 0;
@@ -74,7 +83,7 @@ describe("Apply product conflict while editing SKUs", () => {
     fixture.fetchQuery.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     const host = document.createElement("div");
     const root = createRoot(host);
-    const Page = Route.options.component as ComponentType;
+    const Page = await loadPage();
     await act(async () => { root.render(<Page />); });
     expect(fixture.dialog).toBeNull();
     await act(async () => (host.querySelector("button") as HTMLButtonElement).click());
@@ -107,7 +116,7 @@ describe("Merge on save: the pricing group is never mixed", () => {
     fixture.product = base;
     fixture.fetchQuery.mockResolvedValue({ ...base, discountPercentage: 20, aggregateRevision: 2 });
     const root = createRoot(document.createElement("div"));
-    const Page = Route.options.component as ComponentType;
+    const Page = await loadPage();
     try {
       await act(async () => { root.render(<Page />); });
       let next: number | null = null;
@@ -133,7 +142,7 @@ describe("Merge on save: the pricing group is never mixed", () => {
     fixture.fetchQuery.mockResolvedValue({ ...base, discountPercentage: 20, aggregateRevision: 2 });
     const host = document.createElement("div");
     const root = createRoot(host);
-    const Page = Route.options.component as ComponentType;
+    const Page = await loadPage();
     await act(async () => { root.render(<Page />); });
     let next: number | null = null;
     await act(async () => { next = await fixture.form!.resolveRevisionConflict!({ expectedRevision: 1, currentRevision: 2 }); });

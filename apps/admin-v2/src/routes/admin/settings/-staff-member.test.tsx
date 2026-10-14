@@ -13,7 +13,9 @@ const fixture = vi.hoisted(() => ({
   post: vi.fn(), staff: vi.fn(), navigate: vi.fn(),
   viewer: { id: "manager", isOwner: false, permissions: new Set<string>(), canManageStaff: true, canManageRoles: false },
 }));
-vi.mock("@tanstack/react-router", () => ({
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+  // The route plugin splits a route's page and loader into lazy chunks (lazyRouteComponent, lazyFn).
+  ...await importOriginal<typeof import("@tanstack/react-router")>(),
   createFileRoute: () => (options: object) => ({ options, useParams: () => ({ userId: "staff_1" }) }),
   useNavigate: () => fixture.navigate,
   useLocation: () => "",
@@ -79,7 +81,8 @@ async function render(overrides: Partial<AdminUser> = {}) {
   fixture.staff.mockResolvedValue([saved]);
   client.setQueryData(["staff-detail-test"], [saved]);
   client.setQueryData(["staff-roles-test"], []);
-  const Page = Route.options.component as ComponentType;
+  const Page = Route.options.component as ComponentType & { preload?: () => Promise<void> };
+  await Page.preload?.();
   await act(async () => root.render(<QueryClientProvider client={client}><Page /></QueryClientProvider>));
 }
 const t = (key: keyof typeof usersMessages.en) => translate(usersMessages, key);

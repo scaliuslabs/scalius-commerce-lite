@@ -74,7 +74,7 @@ describe("saved product attributes", () => {
     expect([...host.querySelectorAll('[data-slot="field-label"]')].map((node) => node.textContent))
       .toEqual(["Material", "Former care label", "attr_unknown"]);
     const value = host.querySelector('[data-slot="field-control"]')!;
-    expect(value.classList.contains("break-words")).toBe(true);
+    expect(value.classList.contains("wrap-anywhere")).toBe(true);
     expect(value.firstElementChild?.classList.contains("whitespace-pre-wrap")).toBe(true);
     expect(host.querySelector(".truncate")).toBeNull();
     // A missing live definition is not evidence that this saved fact was removed.

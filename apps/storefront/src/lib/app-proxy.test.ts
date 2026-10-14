@@ -1,3 +1,5 @@
+// @vitest-environment node
+// Workers Request/Response semantics: happy-dom hides Cookie, Sec-* request headers and Set-Cookie.
 import { describe, expect, it, vi } from "vitest";
 import {
   APP_PROXY_MAX_BODY_BYTES,

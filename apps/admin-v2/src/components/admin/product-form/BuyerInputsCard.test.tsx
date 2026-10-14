@@ -65,8 +65,9 @@ describe("BuyerInputsCard", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   const openAdd = async () => {
-    // A product without inputs lists the card closed, by its title.
-    const card = host.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
+    // A product without inputs lists the card closed, by its title. The
+    // card's own toggle controls its content; the preview toggle does not.
+    const card = host.querySelector<HTMLButtonElement>('button[aria-expanded="false"][aria-controls]');
     if (card) await act(async () => card.click());
     await act(async () => button(en.addBuyerInput)!.click());
     await settle();
