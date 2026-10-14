@@ -32,6 +32,9 @@ const OfflineShell = lazy(() => import("@/components/admin/states/OfflineShell")
 // The live connection to the store's realtime hub (orders, inbox, presence),
 // loaded when the browser is idle after the first page.
 import { RealtimeLoader } from "@/components/admin/realtime/RealtimeLoader";
+// Renders the WebP renditions of images uploaded without them (agent and
+// URL-import uploads) in idle time while the dashboard is open.
+import { PendingRenditionsLoader } from "@/components/admin/media-manager/PendingRenditionsLoader";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
 
@@ -114,6 +117,7 @@ function AdminLayout() {
     <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
       <AdminSessionSync />
       <RealtimeLoader userId={user.id} permissions={permissions} />
+      <PendingRenditionsLoader />
       <ShellProvider>
         <a
           href="#admin-main-scroll"
