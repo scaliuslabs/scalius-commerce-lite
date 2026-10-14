@@ -5,15 +5,15 @@ import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
 import { MediaApiClient } from "../api";
-import { encodeMediaVariants } from "../utils/media-variants";
+import { renderPendingRenditions } from "../utils/render-pending-renditions";
 
 const COUNT_LIMIT = 100;
-const PAGE_SIZE = 20;
 
 /**
- * Generates the WebP renditions for images uploaded before they existed, with
- * the same browser pipeline as new uploads. Images without renditions keep
- * serving their original until this runs.
+ * Renders the pending WebP renditions now, with the same browser pipeline as
+ * new uploads, instead of waiting for the background pass
+ * (PendingRenditionsLoader). Images without renditions keep serving their
+ * original until they are done.
  */
 export function OptimizeImagesButton({ onOptimized }: { onOptimized: () => void }) {
   const t = useMessages(mediaMessages);
@@ -36,24 +36,17 @@ export function OptimizeImagesButton({ onOptimized }: { onOptimized: () => void 
   const optimize = async () => {
     let optimized = 0;
     let failed = 0;
-    let cursor: string | undefined;
     setDone(0);
     try {
-      do {
-        const page = await MediaApiClient.fetchFilesMissingVariants(cursor, PAGE_SIZE);
-        for (const file of page.files) {
-          try {
-            const variants = await encodeMediaVariants(await MediaApiClient.fetchOriginal(file.id));
-            if (!variants) throw new Error("WebP encoding unavailable");
-            await MediaApiClient.saveVariants(file.id, variants);
-            optimized += 1;
-          } catch {
-            failed += 1;
-          }
+      await renderPendingRenditions({
+        limit: Number.POSITIVE_INFINITY,
+        skip: new Set(),
+        onImage: (outcome) => {
+          if (outcome === "rendered") optimized += 1;
+          else failed += 1;
           setDone(optimized + failed);
-        }
-        cursor = page.pagination.hasMore ? page.pagination.nextCursor ?? undefined : undefined;
-      } while (cursor);
+        },
+      });
     } catch {
       failed += 1;
     }

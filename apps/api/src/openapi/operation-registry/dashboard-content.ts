@@ -85,9 +85,13 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
     exposure: "excluded",
     reason: "Internal expired-upload maintenance is not a merchant capability.",
   },
+  // The CLI encodes the ladder locally (sharp) and sends it here after the
+  // upload completes. Agents without a local encoder (MCP, URL import) skip
+  // this: their images stay pending until a dashboard tab renders them.
   "dashboard.media.variants_save": {
-    exposure: "excluded",
-    reason: "Browser-generated renditions from the dashboard; agent uploads get server-generated renditions at completion.",
+    batch: "forbidden",
+    transport: "multipart",
+    limits: { request: 16_777_216, response: 16_384 },
   },
   "dashboard.navigation.items_create": { revision: "required" },
   "dashboard.navigation.items_delete": {

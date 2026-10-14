@@ -1,6 +1,6 @@
 // Test-only harness for the conversation routes: the real public buyer app on
 // the migrated SQLite schema, a customer session, a receipt proof, in-memory
-// R2, a fake IMAGES binding and switchable rate limiters. Never imported by
+// R2 and switchable rate limiters. Never imported by
 // Worker code.
 import type { DatabaseSync } from "node:sqlite";
 import { vi } from "vitest";
@@ -18,23 +18,17 @@ export const WEBP_OUTPUT = new Uint8Array([
   0x0d, 0x00, 0x00, 0x00, 0x2f, 0x00, 0x00, 0x00, 0x10, 0x07, 0x10, 0x11, 0x11, 0x88, 0x88, 0xfe, 0x07, 0x00,
 ]);
 
-/** A JPEG whose APP1 segment carries EXIF with a GPS tag (bytes only; never decoded by the fake). */
-export function exifJpeg(): Uint8Array {
-  const exif = new TextEncoder().encode("Exif\0\0MM\0*GPSLatitude=23.8103;GPSLongitude=90.4125");
-  return new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0x00, exif.length + 2, ...exif, 0xff, 0xd9]);
+/** A still WebP the way the browser pipeline sends it (1 x 1 by its header). */
+export function webpUpload(): Uint8Array {
+  return WEBP_OUTPUT.slice();
 }
 
 export interface Harness {
   sqlite: DatabaseSync;
   env: Env;
   r2: Map<string, Uint8Array>;
-  imagesInputs: Uint8Array[];
   limiter: { allow: boolean; missing: boolean };
   request: (path: string, init?: RequestInit & { session?: string; receipt?: boolean }) => Promise<Response>;
-}
-
-async function streamBytes(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
-  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 export async function createConversationHarness(): Promise<Harness> {
@@ -58,23 +52,8 @@ export async function createConversationHarness(): Promise<Harness> {
     .run(await hashOrderReceiptToken(RECEIPT_TOKEN), expires);
 
   const r2 = new Map<string, Uint8Array>();
-  const imagesInputs: Uint8Array[] = [];
   const limiter = { allow: true, missing: false };
   const rateLimiter = { limit: vi.fn(async () => ({ success: limiter.allow })) };
-  const pipeline = {
-    transform: () => pipeline,
-    output: async () => ({ response: () => new Response(WEBP_OUTPUT.slice()) }),
-  };
-  const images = {
-    info: async (stream: ReadableStream<Uint8Array>) => {
-      imagesInputs.push(await streamBytes(stream));
-      return { format: "image/jpeg", fileSize: 10, width: 4000, height: 3000 };
-    },
-    input: (stream: ReadableStream<Uint8Array>) => {
-      void streamBytes(stream);
-      return pipeline;
-    },
-  };
   const bucket = {
     put: async (key: string, value: ArrayBuffer | Uint8Array) => {
       r2.set(key, new Uint8Array(value instanceof Uint8Array ? value : value));
@@ -94,7 +73,6 @@ export async function createConversationHarness(): Promise<Harness> {
     CUSTOMER_SESSION_HASH_KEY: SESSION_KEY,
     PUBLIC_API_BASE_URL: "https://api.example.test",
     BUCKET: bucket,
-    IMAGES: images,
   } as Record<string, unknown>, {
     get(target, key: string) {
       if (key === "RL_STRICT" || key === "RL_STANDARD") return limiter.missing ? undefined : rateLimiter;
@@ -106,7 +84,6 @@ export async function createConversationHarness(): Promise<Harness> {
     sqlite,
     env,
     r2,
-    imagesInputs,
     limiter,
     request: (path, init = {}) => {
       const headers = new Headers(init.headers);

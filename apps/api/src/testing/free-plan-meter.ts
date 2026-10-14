@@ -43,7 +43,7 @@ export interface FreePlanCounters {
   r2Ops: number;
   /** Cache API `match`/`put`/`delete` calls (each is a subrequest). */
   cacheOps: number;
-  /** Calls on other service bindings (EMAIL, IMAGES). */
+  /** Calls on other service bindings (EMAIL). */
   serviceCalls: number;
   /** `fetch()` calls to a non-Cloudflare origin (Free: 50 per invocation). */
   externalFetches: number;
@@ -292,7 +292,7 @@ export interface FreePlanMeter {
    * measurement. Install it around setup that should warm the same caches.
    */
   readonly caches: { default: MeteredCache; open(name: string): Promise<MeteredCache> };
-  /** Wrap a service binding (EMAIL, IMAGES) so each call counts as a subrequest. */
+  /** Wrap a service binding (EMAIL) so each call counts as a subrequest. */
   service<T extends object>(binding: T): T;
   /** An `ExecutionContext` whose `waitUntil` tasks the measurement awaits. */
   readonly ctx: ExecutionContext;

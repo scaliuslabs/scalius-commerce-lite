@@ -140,11 +140,6 @@
       "name": "EMAIL"
     }
   ],
-  // One-time WebP renditions for uploads that skip the dashboard browser
-  // pipeline (agents, CLI, URL import). Never used on the delivery path.
-  "images": {
-    "binding": "IMAGES"
-  },
   // Background work has no queue: it drains durable rows right after the
   // write that created them (`waitUntil`) and on this every-minute tick, which
   // also runs the maintenance sweeps every 15 minutes

@@ -1,6 +1,7 @@
 import app from "../app";
 import { finalizeOpenApiContract } from "../openapi-contract";
 import {
+  writeCliMediaVariants,
   writeCliWorkflowResolverCore,
   writeAgentOperationManifest,
   writeOpenApiContractModule,
@@ -25,6 +26,7 @@ const spec = finalizeOpenApiContract(
 const source = writeAgentOperationManifest(spec);
 writeOpenApiContractModule(spec);
 writeCliWorkflowResolverCore();
+writeCliMediaVariants();
 console.log(
   `Generated ${source.match(/"operationId":/g)?.length ?? 0} agent operation records.`,
 );

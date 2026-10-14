@@ -1,12 +1,13 @@
 // HTTP helpers shared by the buyer and staff conversation routes (Wave A §4.3):
-// buyer write limits (C8), image upload re-encoding and private attachment
+// buyer write limits (C8), image upload checks and private attachment
 // serving (C7). Logs carry ids only; bodies, contacts and receipt proof never
 // reach a log line, a URL or a limiter key in clear.
 
 import type { Context } from "hono";
 import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
 import { detectMediaMimeType, MEDIA_SIGNATURE_READ_BYTES } from "@scalius/shared/media-policy";
-import { RateLimitError, ServiceUnavailableError, ValidationError } from "./api-error";
+import { readStillWebp } from "@scalius/shared/webp-info";
+import { RateLimitError, ValidationError } from "./api-error";
 import { getTrustedClientIp } from "./client-ip";
 import { isWithinRateLimit } from "./rate-limit";
 
@@ -31,17 +32,15 @@ export async function enforceBuyerWriteLimits(
   }
 }
 
+/** The types a browser may send; only the WebP its pipeline produced is stored. */
 const UPLOAD_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 /** Multipart framing on top of the 5 MiB file. */
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
-/** Longest edge kept after re-encoding; larger photos are scaled down. */
-const MAX_EDGE_PX = 2560;
-const WEBP_QUALITY = 82;
 
-export interface ReencodedAttachment {
+export interface AttachmentImage {
   webp: ArrayBuffer;
-  width: number | null;
-  height: number | null;
+  width: number;
+  height: number;
 }
 
 /** The upload form (read once; Hono caches it for the validator). Rejects oversized bodies before parsing. */
@@ -64,55 +63,28 @@ export function formText(form: FormData, name: string): string | null {
 }
 
 /**
- * Reads one multipart `file`, checks its signature (JPEG, PNG or WebP only, by
- * content, never by the declared type) and re-encodes it to WebP through the
- * IMAGES binding. Re-encoding drops EXIF/GPS and any polyglot payload.
+ * Reads one multipart `file`: a still WebP the browser pipeline already scaled
+ * and re-encoded (the dashboard composer and the storefront form do this
+ * before upload; no Worker re-encodes images). The container is checked end to
+ * end and sized from its own header, never trusted by declared type, so what is
+ * stored is a well-formed still image with nothing trailing it.
  */
-export async function readAndReencodeAttachment(env: Env, form: FormData): Promise<ReencodedAttachment> {
-  const images = env.IMAGES;
-  if (!images) throw new ServiceUnavailableError("Image attachments are unavailable right now.");
+export async function readAttachmentImage(form: FormData): Promise<AttachmentImage> {
   const file = form.get("file");
   if (!file || typeof file === "string") throw new ValidationError("Choose an image to upload.");
   if (file.size < 1 || file.size > CONVERSATION_LIMITS.attachmentBytes) {
     throw new ValidationError("Images must be 5 MB or smaller.");
   }
-  const bytes = await file.arrayBuffer();
-  const detected = detectMediaMimeType(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, MEDIA_SIGNATURE_READ_BYTES)));
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const detected = detectMediaMimeType(bytes.subarray(0, MEDIA_SIGNATURE_READ_BYTES));
   if (!detected || !UPLOAD_TYPES.has(detected)) {
     throw new ValidationError("Only JPEG, PNG or WebP images can be attached.");
   }
-
-  let webp: ArrayBuffer;
-  let width: number | null = null;
-  let height: number | null = null;
-  try {
-    const info = await images.info(new Blob([bytes]).stream());
-    if ("width" in info && "height" in info) {
-      width = info.width;
-      height = info.height;
-    }
-    const longest = Math.max(width ?? 0, height ?? 0);
-    const scale = longest > MAX_EDGE_PX ? MAX_EDGE_PX / longest : 1;
-    let pipeline = images.input(new Blob([bytes]).stream());
-    if (scale < 1 && width && height) {
-      pipeline = pipeline.transform({ width: Math.round(width * scale), height: Math.round(height * scale) });
-      width = Math.round(width * scale);
-      height = Math.round(height * scale);
-    }
-    const output = await pipeline.output({ format: "image/webp", quality: WEBP_QUALITY });
-    webp = await output.response().arrayBuffer();
-  } catch (error) {
-    console.warn("[conversations] Image re-encode failed:", error instanceof Error ? error.message.slice(0, 120) : "unknown error");
-    throw new ValidationError("That image couldn't be read. Try a different photo or a screenshot.");
+  const info = detected === "image/webp" ? readStillWebp(bytes) : null;
+  if (!info) {
+    throw new ValidationError("This image needs to be prepared in your browser first. Turn on JavaScript and choose the photo again.");
   }
-  if (webp.byteLength < 1 || webp.byteLength > CONVERSATION_LIMITS.attachmentBytes) {
-    throw new ValidationError("Images must be 5 MB or smaller.");
-  }
-  // The stored object must be what we produced: WebP by signature.
-  if (detectMediaMimeType(new Uint8Array(webp, 0, Math.min(webp.byteLength, MEDIA_SIGNATURE_READ_BYTES))) !== "image/webp") {
-    throw new ValidationError("That image couldn't be converted.");
-  }
-  return { webp, width, height };
+  return { webp: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, width: info.width, height: info.height };
 }
 
 /** Streams a private attachment after the caller's access check. Never cached, never sniffed. */

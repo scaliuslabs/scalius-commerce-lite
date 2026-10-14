@@ -10,6 +10,7 @@ import {
 } from "./agent-operation-manifest";
 import {
   AGENT_OPERATION_MANIFEST_PATH,
+  assertCliMediaVariantsFresh,
   assertCliWorkflowResolverCoreFresh,
   assertAgentOperationManifestLoaderFresh,
   assertOpenApiContractModuleFresh,
@@ -636,6 +637,7 @@ describe("agent operation contract", () => {
 
   it("keeps the dependency-free CLI workflow resolver byte-for-byte generated", () => {
     expect(() => assertCliWorkflowResolverCoreFresh()).not.toThrow();
+    expect(() => assertCliMediaVariantsFresh()).not.toThrow();
   });
 
   it("registers every documented route in the single operation registry", () => {

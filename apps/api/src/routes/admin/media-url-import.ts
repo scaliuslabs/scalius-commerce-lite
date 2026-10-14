@@ -141,7 +141,6 @@ async function readRemoteParts(
 export async function importMediaFromUrl(input: {
     db: Database;
     bucket: R2Bucket;
-    images?: ImagesBinding;
     sourceUrl: string;
     filename?: string;
     folderId?: string | null;
@@ -172,7 +171,7 @@ export async function importMediaFromUrl(input: {
                     : undefined,
             }, input.bucket);
         });
-        return await completeMediaUpload(input.db, session.id, input.bucket, input.images);
+        return await completeMediaUpload(input.db, session.id, input.bucket);
     } catch (error) {
         try { await abortMediaUpload(input.db, session.id, input.bucket); } catch { /* scheduled expiry is the fallback */ }
         throw error;

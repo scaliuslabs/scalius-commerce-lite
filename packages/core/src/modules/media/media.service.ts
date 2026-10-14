@@ -21,10 +21,7 @@ import {
     putMediaVariant,
     uploadMediaMultipartPart,
 } from "../../integrations/storage";
-import {
-    mediaVariantQuality,
-    mediaVariantWidths,
-} from "@scalius/shared/media-variants";
+import { mediaVariantWidths } from "@scalius/shared/media-variants";
 import {
     MEDIA_MULTIPART_PART_SIZE_BYTES,
     MEDIA_SIGNATURE_READ_BYTES,
@@ -503,30 +500,12 @@ async function commitCompletedUpload(db: Database, session: typeof mediaUploadSe
 }
 
 /**
- * Completes an upload. When `images` is given (non-browser uploads: agents,
- * CLI, URL import), the renditions are generated once right away; a failure
- * there never fails the upload and leaves the image original-only.
+ * Completes an upload. The original is committed alone: the WebP renditions
+ * come from the dashboard browser pipeline (or the CLI's local encoder), and an
+ * image that has none yet stays "pending" (`needsMediaVariants`) and serves its
+ * original until a dashboard tab renders them.
  */
 export async function completeMediaUpload(
-    db: Database,
-    sessionId: string,
-    bucket: R2Bucket,
-    images?: ImagesBinding,
-) {
-    const file = await completeMediaUploadObject(db, sessionId, bucket);
-    if (!images || file.variantWidth || !canHaveVariants(file)) return file;
-    try {
-        return await generateMediaVariants(db, file.id, bucket, images);
-    } catch (error) {
-        console.warn("[media] rendition generation skipped", {
-            mediaId: file.id,
-            error: error instanceof Error ? error.name : "unknown",
-        });
-        return file;
-    }
-}
-
-async function completeMediaUploadObject(
     db: Database,
     sessionId: string,
     bucket: R2Bucket,
@@ -873,7 +852,7 @@ export async function saveMediaVariants(
     return presented;
 }
 
-/** Streams a stored original for the dashboard rendition backfill. */
+/** Streams a stored original so a dashboard tab can render the pending renditions. */
 export async function readMediaOriginal(db: Database, id: string, bucket: R2Bucket) {
     const row = await db.select({ objectKey: media.objectKey, mimeType: media.mimeType })
         .from(media)
@@ -885,161 +864,9 @@ export async function readMediaOriginal(db: Database, id: string, bucket: R2Buck
     return { body: object.body, mimeType: row.mimeType };
 }
 
-/**
- * Server-side rendition pipeline for uploads that did not come from the
- * dashboard browser pipeline. Uses the Cloudflare Images binding once per
- * rendition; renditions are then plain R2 objects. The original is held once
- * (as a Blob every transform streams from) so a 20 MB upload is not copied
- * per rendition.
- */
-export async function generateMediaVariants(
-    db: Database,
-    id: string,
-    bucket: R2Bucket,
-    images: ImagesBinding,
-) {
-    const row = await db.select().from(media).where(eq(media.id, id)).get();
-    if (!row || !canHaveVariants(row)) throw new ValidationError("This media cannot get optimized renditions.");
-    const object = await bucket.get(row.objectKey);
-    if (!object || !("arrayBuffer" in object)) throw new NotFoundError("Media object not found");
-    const original = new Blob([await object.arrayBuffer()]);
-    const info = await images.info(original.stream());
-    if (!("width" in info)) throw new ValidationError("This media has no raster dimensions.");
-    const files = new Map<number, ArrayBuffer>();
-    for (const width of mediaVariantWidths(info.width)) {
-        const output = await images.input(original.stream())
-            .transform({ width })
-            .output({ format: "image/webp", quality: Math.round(mediaVariantQuality(width) * 100) });
-        files.set(width, await output.response().arrayBuffer());
-    }
-    return saveMediaVariants(db, id, { width: info.width, height: info.height, files }, bucket);
-}
-
 /** Whether a presented or stored media row still publishes only its original. */
 export function needsMediaVariants(row: { kind: string; mimeType: string; variantWidth?: number | null }): boolean {
     return canHaveVariants(row) && row.variantWidth == null;
-}
-
-export type MediaVariantsRenderOutcome = "generated" | "skipped" | "failed";
-
-/**
- * Renders the renditions of one media item unless it already has them, it
- * cannot have them, or it is gone. Idempotent: rendition keys are
- * deterministic, so a duplicate run only rewrites the same objects. A failure
- * never throws; it touches `updated_at` (never `version`) so the scheduled
- * backfill tries this image again only after the quiet window, behind every
- * other candidate. Only the initial row read can throw (database outage).
- */
-export async function renderMissingMediaVariants(
-    db: Database,
-    id: string,
-    bucket: R2Bucket,
-    images: ImagesBinding,
-): Promise<MediaVariantsRenderOutcome> {
-    const row = await db.select({
-        kind: media.kind,
-        mimeType: media.mimeType,
-        variantWidth: media.variantWidth,
-        status: media.status,
-    }).from(media).where(eq(media.id, id)).get();
-    if (!row || (row.status !== "ready" && row.status !== "trashed") || !needsMediaVariants(row)) {
-        return "skipped";
-    }
-    try {
-        await generateMediaVariants(db, id, bucket, images);
-        return "generated";
-    } catch (error) {
-        console.warn("[media] rendition generation failed", {
-            mediaId: id,
-            error: error instanceof Error ? error.name : "unknown",
-        });
-        // Best effort: if even this write fails the image is simply first again next run.
-        await db.update(media).set({ updatedAt: sql`(unixepoch())` })
-            .where(and(eq(media.id, id), isNull(media.variantWidth)))
-            .catch(() => undefined);
-        return "failed";
-    }
-}
-
-/**
- * Media touched within this window is left to the upload's own pipeline: the
- * dashboard browser saves renditions seconds after an upload. A failed
- * attempt also waits at least this long (it touches `updated_at`) before a
- * retry.
- */
-export const VARIANT_BACKFILL_QUIET_MS = 10 * 60 * 1_000;
-/** Candidate rows read per page; far under D1's bound-parameter ceiling. */
-const VARIANT_BACKFILL_PAGE_SIZE = 20;
-
-export interface MediaVariantsBackfillOptions {
-    /** Epoch ms after which no new image is started; in-flight ones finish. */
-    deadline: number;
-    /** Images rendered at once; each holds its original in memory. */
-    concurrency: number;
-    /** Hard cap on images attempted in one run (CPU guard). */
-    maxImages: number;
-    now?: () => number;
-}
-
-/**
- * Scheduled rendition backfill for still images that publish only their
- * original (uploaded before renditions existed, or whose upload-time render
- * failed). Least recently touched first, in pages, with at most `concurrency`
- * images in flight, until the candidate set is empty, the deadline passes, or
- * `maxImages` were attempted. A failure touches `updated_at`, so it leaves the
- * candidate set for this run and goes behind every other candidate next time:
- * a broken image cannot stall the loop. Idempotent: done rows leave the set.
- */
-export async function backfillMissingMediaVariants(
-    db: Database,
-    bucket: R2Bucket,
-    images: ImagesBinding,
-    { deadline, concurrency, maxImages, now = Date.now }: MediaVariantsBackfillOptions,
-) {
-    const attempted = new Set<string>();
-    let generated = 0;
-    let failed = 0;
-    let hasMore = false;
-    const workers = Math.max(1, Math.floor(concurrency));
-    for (;;) {
-        const remaining = maxImages - attempted.size;
-        if (remaining <= 0 || now() >= deadline) {
-            hasMore = true;
-            break;
-        }
-        const page = await db.select({ id: media.id }).from(media).where(and(
-            eq(media.kind, "image"),
-            inArray(media.status, ["ready", "trashed"]),
-            isNull(media.variantWidth),
-            inArray(media.mimeType, [...VARIANT_SOURCE_MIME_TYPES]),
-            lt(media.updatedAt, new Date(now() - VARIANT_BACKFILL_QUIET_MS)),
-        )).orderBy(asc(media.updatedAt), asc(media.id)).limit(VARIANT_BACKFILL_PAGE_SIZE);
-        // A row whose failure touch also failed comes back; never retry it in
-        // the same run, and stop once a page holds nothing new.
-        const ids = page.map(({ id }) => id).filter((id) => !attempted.has(id)).slice(0, remaining);
-        if (ids.length === 0) break;
-        let next = 0;
-        let stoppedEarly = false;
-        const worker = async () => {
-            while (next < ids.length) {
-                if (now() >= deadline) {
-                    stoppedEarly = true;
-                    return;
-                }
-                const id = ids[next++]!;
-                attempted.add(id);
-                const outcome = await renderMissingMediaVariants(db, id, bucket, images);
-                if (outcome === "generated") generated += 1;
-                else if (outcome === "failed") failed += 1;
-            }
-        };
-        await Promise.all(Array.from({ length: Math.min(workers, ids.length) }, worker));
-        if (stoppedEarly) {
-            hasMore = true;
-            break;
-        }
-    }
-    return { scanned: attempted.size, generated, failed, hasMore };
 }
 
 export async function moveMediaFiles(

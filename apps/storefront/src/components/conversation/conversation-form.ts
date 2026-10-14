@@ -9,6 +9,7 @@ import {
   newClientMessageKey,
 } from "@/lib/account-inbox";
 import { pagePath } from "@/lib/presence-url";
+import { encodeImageAsWebp } from "@scalius/shared/browser-image";
 import { appendConversationItems, conversationRequest, notifyConversationSent, type ConversationItem } from "./conversation-live";
 
 type Tone = "success" | "error";
@@ -24,6 +25,21 @@ function setStatus(element: HTMLElement | null, text: string, tone: Tone): void 
   element.textContent = text;
   element.classList.toggle("text-destructive", tone === "error");
   element.classList.toggle("text-primary", tone === "success");
+}
+
+/** The photos chosen in a form's data (an empty file part means none was chosen). */
+function chosenPhotos(data: FormData): File[] {
+  return data.getAll("images").filter((entry): entry is File => typeof entry !== "string" && entry.size > 0);
+}
+
+/**
+ * Replaces every chosen photo with a copy scaled and encoded as WebP in this
+ * browser (no Worker re-encodes images). A photo the browser cannot encode is
+ * sent as chosen and the API says why it cannot take it.
+ */
+export async function encodePhotos(data: FormData, photos: File[]): Promise<void> {
+  data.delete("images");
+  for (const photo of photos) data.append("images", (await encodeImageAsWebp(photo)) ?? photo);
 }
 
 function bindForm(form: HTMLFormElement): void {
@@ -104,9 +120,12 @@ function bindForm(form: HTMLFormElement): void {
     let ok = false;
     const pending = conversationRequest(90_000);
     try {
+      const data = new FormData(form);
+      const photos = chosenPhotos(data);
+      if (photos.length > 0) await encodePhotos(data, photos);
       const response = await fetch(form.action, {
         method: "POST",
-        body: new FormData(form),
+        body: data,
         headers: { Accept: "application/json" },
         credentials: "same-origin",
         cache: "no-store",

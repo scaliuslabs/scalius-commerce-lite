@@ -20,6 +20,9 @@ export const ALLOWED_WRANGLER_VARS = Object.freeze({
 // rows drained after each write and by the every-minute cron replace them).
 // Other users share these by key prefix; a new binding of these kinds needs
 // an explicit architecture decision.
+// Images: no Cloudflare Images binding. Transformations are billed per unique
+// image and add a per-store Cloudflare product; renditions are encoded by the
+// dashboard browser pipeline (or the CLI), never by a Worker.
 // Durable Objects: only the realtime hub (WebSockets on Workers need one;
 // docs/ARCHITECTURE.md, "Realtime hub"). It must be SQLite-backed, which is
 // what Workers Free allows.
@@ -30,6 +33,7 @@ export const ALLOWED_RESOURCE_BINDINGS = Object.freeze({
   queue_producers: Object.freeze([]),
   queue_consumers: Object.freeze([]),
   durable_objects: Object.freeze(["REALTIME_HUB"]),
+  images: Object.freeze([]),
 });
 
 /** Durable Object classes a config may create; each must be a SQLite class (Workers Free has no KV-backed objects). */
@@ -69,12 +73,15 @@ export function collectResourceBindingViolations(configPath, config) {
     queue_producers: (config?.queues?.producers ?? []).map((entry) => entry.binding),
     queue_consumers: (config?.queues?.consumers ?? []).map((entry) => entry.queue),
     durable_objects: (config?.durable_objects?.bindings ?? []).map((entry) => entry.name),
+    images: config?.images?.binding ? [config.images.binding] : [],
   };
   return Object.entries(declared).flatMap(([kind, names]) => {
     const extra = sorted(names.filter((name) => !ALLOWED_RESOURCE_BINDINGS[kind].includes(name)));
     return extra.length === 0 ? [] : [
       `${configPath} declares ${kind} ${extra.join(", ")}. `
-      + (ALLOWED_RESOURCE_BINDINGS[kind].length === 0
+      + (kind === "images"
+        ? `A Worker has no Images binding (billed per unique transformation); the dashboard browser and the CLI encode renditions.`
+        : ALLOWED_RESOURCE_BINDINGS[kind].length === 0
         ? `A store has none of these; keep the work in durable rows instead.`
         : `Only ${ALLOWED_RESOURCE_BINDINGS[kind].join(", ")} may exist; share them by key prefix instead.`),
     ];

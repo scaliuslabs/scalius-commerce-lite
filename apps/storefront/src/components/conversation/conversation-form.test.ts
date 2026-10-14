@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { bindConversationForms } from "./conversation-form";
+import { bindConversationForms, encodePhotos } from "./conversation-form";
+const encode = vi.hoisted(() => ({ encodeImageAsWebp: vi.fn() }));
+vi.mock("@scalius/shared/browser-image", () => encode);
 vi.mock("@/lib/presence-url", () => ({ pagePath: (path: string) => path }));
 vi.mock("./conversation-live", async (original) => ({ ...await original<typeof import("./conversation-live")>(), notifyConversationSent: vi.fn(() => false), appendConversationItems: vi.fn() }));
 let form: HTMLFormElement;
@@ -49,6 +51,25 @@ describe("conversation draft lifecycle", () => {
     await settle(success());
     expect(form.querySelector("button")!.disabled).toBe(true);
     expect(form.querySelector("[data-conversation-status]")!.textContent).toContain("account changed");
+  });
+});
+
+describe("photos are encoded in the browser", () => {
+  it("replaces each chosen photo with its WebP copy and keeps one the browser cannot encode", async () => {
+    const jpeg = new File(["jpeg"], "lamp.jpg", { type: "image/jpeg" });
+    const png = new File(["png"], "box.png", { type: "image/png" });
+    encode.encodeImageAsWebp.mockImplementation(async (file: File) =>
+      file === jpeg ? new File(["webp"], "lamp.webp", { type: "image/webp" }) : null);
+    const data = new FormData();
+    data.append("body", "Hello");
+    data.append("images", jpeg);
+    data.append("images", png);
+
+    await encodePhotos(data, [jpeg, png]);
+
+    const sent = data.getAll("images") as File[];
+    expect(sent.map((file) => [file.name, file.type])).toEqual([["lamp.webp", "image/webp"], ["box.png", "image/png"]]);
+    expect(data.get("body")).toBe("Hello");
   });
 });
 

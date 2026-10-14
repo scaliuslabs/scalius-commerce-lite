@@ -231,11 +231,10 @@ export class MediaApiClient {
     await parseDirectResponse(response);
   }
 
-  /** `client`: this browser uploads the renditions itself; `server`: the API generates them. */
-  static async completeUpload(sessionId: string, variants: "client" | "server"): Promise<LibraryMediaFile> {
+  /** Commits the original; this browser then uploads the renditions (`saveVariants`). */
+  static async completeUpload(sessionId: string): Promise<LibraryMediaFile> {
     const data = await apiData(postApiV1AdminMediaUploadsByIdComplete({
       path: { id: sessionId },
-      query: { variants },
     }));
     return toMediaFile(data.file);
   }

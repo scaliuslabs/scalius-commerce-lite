@@ -8,8 +8,10 @@ import { loadAgentAccessBackend } from "../backend";
 import type { AgentResource, AgentPrincipal } from "../types";
 
 export function isMcpOperationExposure(operation: AgentOperationManifestEntry): boolean {
-  return operation.exposure === "execute" ||
-    operation.exposure === "continuation";
+  // A multipart operation is the CLI's (it sends local files); an MCP tool
+  // call cannot carry the form, so it is not offered there.
+  return (operation.exposure === "execute" ||
+    operation.exposure === "continuation") && operation.transport !== "multipart";
 }
 
 function authorizationInput(operation: AgentOperationManifestEntry) {

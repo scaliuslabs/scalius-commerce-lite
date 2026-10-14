@@ -23,7 +23,6 @@ import {
   pruneExpiredIdentityHandoffEvents,
 } from "@scalius/core/auth";
 import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
-import { backfillMissingMediaVariants } from "@scalius/core/modules/media";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { appPaymentProvidersLoader } from "./plugins/providers/payment";
@@ -54,19 +53,6 @@ export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
 export const EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
-/**
- * Rendition backfill budget. Each image costs one R2 read, one Images info
- * call, up to thirteen Images transforms and R2 writes, and a few D1 queries: a
- * few seconds of wall time but little Worker CPU (the transforms run in the
- * Images service). The backfill starts no new image once the run is this
- * old, so the run ends well inside the 15-minute cron wall limit and before
- * the job's next turn. How many images a run renders itself is
- * `planLimits().maintenance.inlineRenditionsPerRun` (a CPU guard).
- */
-export const MEDIA_RENDITION_BACKFILL_DEADLINE_MS = 10 * 60 * 1_000;
-/** Two originals (up to 20 MB each) in memory at once, two D1 connections. */
-export const MEDIA_RENDITION_BACKFILL_CONCURRENCY = 2;
-
 export { DRAIN_TICK_MS, dueSweepIndexes, firstSweepRunOfHour, sweepPeriodMinutes } from "./scheduled/slices";
 
 type ScheduledMaintenanceMetadata = {
@@ -609,29 +595,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     async run({ env, timed }) {
       const requested = await timed("post_deploy_projection_rebuild", () => requestPostDeployProjectionRebuild(env));
       if (requested) console.log("[scheduled] Requested the post-deploy catalogue projection rebuild");
-    },
-  },
-  {
-    // Images that still publish only their original get WebP renditions until
-    // none are left, the run's time budget is spent or the plan's per-run
-    // limit is reached. Without the IMAGES binding nothing can render.
-    name: "media_rendition_backfill",
-    async run({ db, env, runContext, timed }) {
-      const images = env.IMAGES;
-      if (!images) return;
-      const renditions = await timed("media_rendition_backfill", () =>
-        backfillMissingMediaVariants(db, env.BUCKET, images, {
-          deadline: runContext.startedAt + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
-          concurrency: MEDIA_RENDITION_BACKFILL_CONCURRENCY,
-          maxImages: planLimits().maintenance.inlineRenditionsPerRun,
-        }),
-      );
-      if (renditions.scanned > 0) {
-        console.log(
-          `[scheduled] Media rendition backfill: scanned=${renditions.scanned}, ` +
-            `generated=${renditions.generated}, failed=${renditions.failed}, hasMore=${renditions.hasMore}`,
-        );
-      }
     },
   },
   {

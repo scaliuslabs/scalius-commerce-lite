@@ -43,7 +43,7 @@ import {
 } from "../../schemas/conversations";
 import {
   formText,
-  readAndReencodeAttachment,
+  readAttachmentImage,
   readAttachmentForm,
   serveConversationAttachment,
 } from "../../utils/conversation-http";
@@ -206,7 +206,7 @@ app.openapi(createRoute({
     : orderId ? await getOrCreateOrderThread(db, orderId) : undefined;
   if (!conversationId && !orderId) throw new ValidationError("Say which conversation the image is for.");
   if (!thread) throw new NotFoundError("Conversation not found");
-  const image = await readAndReencodeAttachment(c.env, form);
+  const image = await readAttachmentImage(form);
   const staged = await stageConversationAttachment(db, c.env.BUCKET, { conversationId: thread.id, actor, ...image });
   return created(c, { attachmentId: staged.id, ...staged });
 });

@@ -44,7 +44,7 @@ describe("media upload paths", () => {
     ]);
   });
 
-  it("completes uploads only on these routes; the scheduled backfill renders what lacks renditions", () => {
+  it("completes uploads only on these routes; renditions come from the dashboard or CLI, never the server", () => {
     expect(callers(serverFiles, /\b(?:completeMediaUpload|importMediaFromUrl)\(/)).toEqual([
       "apps/api/src/routes/admin/media-url-import.ts",
       "apps/api/src/routes/admin/media.ts",

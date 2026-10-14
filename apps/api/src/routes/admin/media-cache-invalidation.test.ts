@@ -170,17 +170,13 @@ describe("admin media write behavior", () => {
         expect({ width: input.width, height: input.height, widths: [...input.files.keys()] })
             .toEqual({ width: 800, height: 600, widths: [160, 800] });
         expect(input.files.get(800).byteLength).toBe(2);
-
     });
 
-    it("renders renditions on the server unless the dashboard uploads its own", async () => {
+    it("completes an upload with the original alone and ignores the retired variants query", async () => {
         const { app, env } = createTestApp();
-        const images = { id: "images" };
-        const withImages = { ...env, IMAGES: images } as unknown as Env;
 
-        await app.request("/api/v1/admin/media/uploads/mup_12345678/complete", { method: "POST" }, withImages);
-        await app.request("/api/v1/admin/media/uploads/mup_12345678/complete?variants=client", { method: "POST" }, withImages);
+        await app.request("/api/v1/admin/media/uploads/mup_12345678/complete", { method: "POST" }, env);
 
-        expect(mocks.completeMediaUpload.mock.calls.map((call) => call[3])).toEqual([images, undefined]);
+        expect(mocks.completeMediaUpload.mock.calls[0]!).toHaveLength(3);
     });
 });

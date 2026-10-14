@@ -49,7 +49,7 @@ import { validateReceiptToken } from "../../utils/order-receipt-token";
 import {
   enforceBuyerWriteLimits,
   formText,
-  readAndReencodeAttachment,
+  readAttachmentImage,
   readAttachmentForm,
   serveConversationAttachment,
 } from "../../utils/conversation-http";
@@ -104,7 +104,7 @@ app.openapi(createRoute({
   const actor = await receiptActor(c, id);
   const form = await readAttachmentForm(c);
   await enforceBuyerWriteLimits(c, "upload", { orderId: id });
-  const image = await readAndReencodeAttachment(c.env, form);
+  const image = await readAttachmentImage(form);
   const staged = await stageWarrantyClaimAttachment(c.get("db"), c.env.BUCKET, {
     warrantyId,
     clientKey: formText(form, "clientKey") ?? "",
@@ -247,7 +247,7 @@ app.openapi(createRoute({
   const { thread } = await readBuyerClaimThread(db, actor, claimId);
   const form = await readAttachmentForm(c);
   await enforceBuyerWriteLimits(c, "upload", { orderId: id });
-  const image = await readAndReencodeAttachment(c.env, form);
+  const image = await readAttachmentImage(form);
   const staged = await stageConversationAttachment(db, c.env.BUCKET, { conversationId: thread.id, actor, ...image });
   return created(c, { attachmentId: staged.id, ...staged });
 });

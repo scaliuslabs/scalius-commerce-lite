@@ -26,7 +26,6 @@ const mocks = vi.hoisted(() => {
     reconcileDueRefundAttempts: vi.fn(),
     reconcileExternalRefundWebhooks: vi.fn(),
     sendOrderRefundNotification: vi.fn(),
-    backfillMissingMediaVariants: vi.fn(),
     runScheduledEventMaintenance: vi.fn(),
     runScheduledEventRetention: vi.fn(async () => ({ events: 0, deliveries: 0, pluginDeliveries: 0 })),
     runScheduledPluginMaintenance: vi.fn(),
@@ -124,11 +123,6 @@ vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
   reconcileExternalRefundWebhooks: mocks.reconcileExternalRefundWebhooks,
 }));
 
-vi.mock("@scalius/core/modules/media", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/modules/media")>()),
-  backfillMissingMediaVariants: mocks.backfillMissingMediaVariants,
-}));
-
 vi.mock("./utils/order-notifications", () => ({
   sendOrderRefundNotification: mocks.sendOrderRefundNotification,
 }));
@@ -156,8 +150,6 @@ import {
   ABANDONED_CHECKOUT_RETENTION_DAYS,
   ABANDONED_CHECKOUT_SWEEP_LIMIT,
   EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
-  MEDIA_RENDITION_BACKFILL_CONCURRENCY,
-  MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
   MAINTENANCE_SWEEPS,
   DRAIN_TICK_MS,
   dueSweepIndexes,
@@ -179,7 +171,6 @@ import {
 import { PLAN_LIMITS } from "@scalius/shared/plan-limits";
 
 /** What the Paid profile runs per tick: every sweep at its full limit (the behaviour before the profile). */
-const MEDIA_RENDITION_BACKFILL_MAX_PER_RUN = PLAN_LIMITS.paid.maintenance.inlineRenditionsPerRun;
 const INVENTORY_EXPIRY_SWEEP_LIMIT = PLAN_LIMITS.paid.maintenance.inventoryExpiryPerRun;
 
 function createEnv() {
@@ -312,7 +303,6 @@ describe("runScheduledMaintenance", () => {
       enqueued: false,
       skippedReason: "no_sender",
     });
-    mocks.backfillMissingMediaVariants.mockResolvedValue({ scanned: 0, generated: 0, failed: 0, hasMore: false });
     mocks.sweepReviewRequests.mockResolvedValue({ queued: 0, skipped: 0 });
     mocks.sweepDigitalUploads.mockResolvedValue({ aborted: 0 });
     mocks.sweepAutoFulfilment.mockResolvedValue({ scanned: 0, fulfilled: 0, failed: 0, lastOrderId: null });
@@ -622,34 +612,6 @@ describe("runScheduledMaintenance", () => {
 
   });
 
-  it("backfills media renditions only with the Images binding", async () => {
-    const images = { info: vi.fn() };
-    const env = { ...createEnv(), IMAGES: images } as unknown as Env;
-
-    await runScheduledMaintenance(createEnv(), createExecutionContext());
-    expect(mocks.backfillMissingMediaVariants).not.toHaveBeenCalled();
-
-    const startedAt = new Date("2026-06-20T12:00:00.000Z");
-    vi.setSystemTime(startedAt);
-    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 2, generated: 0, failed: 2, hasMore: false });
-    await runScheduledMaintenance(env, createExecutionContext());
-    expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledWith(
-      mocks.db,
-      env.BUCKET,
-      images,
-      {
-        deadline: startedAt.getTime() + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
-        concurrency: MEDIA_RENDITION_BACKFILL_CONCURRENCY,
-        maxImages: MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
-      },
-    );
-
-    const executionCtx = createExecutionContext();
-    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 158, generated: 157, failed: 1, hasMore: false });
-    await runScheduledMaintenance(env, executionCtx);
-
-  });
-
   it("runs the background drains on every tick and the sweeps only on the 15-minute tick", async () => {
     const env = createEnv();
     const ctx = createExecutionContext();
@@ -729,49 +691,17 @@ describe("runScheduledMaintenance", () => {
       .toBeLessThan(mocks.runScheduledPluginMaintenance.mock.invocationCallOrder[0]!);
   });
 
-  it("runs the time-budgeted rendition backfill after the commerce sweeps", async () => {
-    const env = { ...createEnv(), IMAGES: { info: vi.fn() } } as unknown as Env;
-
-    await runScheduledMaintenance(env, createExecutionContext());
-
-    const backfillOrder = mocks.backfillMissingMediaVariants.mock.invocationCallOrder[0]!;
-    for (const sweep of [
-      mocks.releaseExpiredReservations,
-      mocks.drainNotificationOutbox,
-      mocks.reconcileDueRefundAttempts,
-      mocks.cleanupExpiredCustomerSessions,
-      mocks.pruneExpiredIdentityHandoffEvents,
-      mocks.runScheduledEventMaintenance,
-    ]) {
-      expect(sweep.mock.invocationCallOrder[0]).toBeLessThan(backfillOrder);
-    }
-    // The deadline leaves the rest of the 15-minute cron wall window as slack.
-    expect(MEDIA_RENDITION_BACKFILL_DEADLINE_MS).toBeLessThanOrEqual(10 * 60 * 1_000);
-    expect(MEDIA_RENDITION_BACKFILL_CONCURRENCY).toBeLessThanOrEqual(3);
-  });
-
-  it("still runs the later sweeps and the rendition backfill when a sweep keeps failing, then fails the run", async () => {
-    const env = { ...createEnv(), IMAGES: { info: vi.fn() } } as unknown as Env;
+  it("still runs the later sweeps when a sweep keeps failing, then fails the run", async () => {
+    const env = createEnv();
     const first = new Error("abandoned checkout sweep broken");
     mocks.cleanupStaleAbandonedCheckouts.mockRejectedValueOnce(first);
     mocks.reconcileDueRefundAttempts.mockRejectedValueOnce(new Error("refund provider down"));
-    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 3, generated: 3, failed: 0, hasMore: false });
 
     await expect(runScheduledMaintenance(env, createExecutionContext())).rejects.toBe(first);
 
     expect(mocks.drainNotificationOutbox).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();
     expect(mocks.pruneExpiredIdentityHandoffEvents).toHaveBeenCalled();
-    expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledTimes(1);
-
-  });
-
-  it("fails the run when only the rendition backfill fails", async () => {
-    const env = { ...createEnv(), IMAGES: { info: vi.fn() } } as unknown as Env;
-    mocks.backfillMissingMediaVariants.mockRejectedValueOnce(new Error("D1 read failed"));
-
-    await expect(runScheduledMaintenance(env, createExecutionContext())).rejects.toThrow("D1 read failed");
-    expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();
   });
 
   it("logs operation and run failure timings before rethrowing scheduled errors", async () => {
@@ -811,8 +741,8 @@ describe("the sweep rotation", () => {
     const names = MAINTENANCE_SWEEPS.map((sweep) => sweep.name);
     expect(new Set(names).size).toBe(count);
     expect(PLAN_LIMITS.paid.maintenance.sweepsPerTick).toBeGreaterThanOrEqual(count);
-    // docs/FREE-PLAN.md, the plugin SDK and the domain READMEs say a Free job runs every 24 minutes.
-    expect(sweepPeriodMinutes(count, PLAN_LIMITS.free.maintenance)).toBe(24);
+    // docs/FREE-PLAN.md, the plugin SDK and the domain READMEs say a Free job runs every 23 minutes.
+    expect(sweepPeriodMinutes(count, PLAN_LIMITS.free.maintenance)).toBe(23);
   });
 
   it("on Paid runs every job on every fifteenth minute and none between; a manual run runs every job", () => {
@@ -879,18 +809,4 @@ describe("the sweep rotation", () => {
     expect(mocks.drainNotificationOutbox).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the rendition backlog in its turn, at the Free per-run limit", async () => {
-    vi.stubGlobal("__SCALIUS_PLAN__", "free");
-    const images = { info: vi.fn() };
-    const ctx = { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
-    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 1, generated: 1, failed: 0, hasMore: true });
-    const minute = count * 1_000 + indexOf("media_rendition_backfill");
-    await runScheduledMaintenance({ BUCKET: {}, IMAGES: images } as unknown as Env, ctx, { scheduledTime: minuteAt(minute) });
-    expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledWith(
-      mocks.db,
-      expect.anything(),
-      images,
-      expect.objectContaining({ maxImages: PLAN_LIMITS.free.maintenance.inlineRenditionsPerRun }),
-    );
-  });
 });

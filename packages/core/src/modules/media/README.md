@@ -50,10 +50,10 @@ Product photos are `product_media` rows that point at `media` with `restrict`. O
 
 - The ladder is `MEDIA_VARIANT_WIDTHS` in `@scalius/shared/media-variants` (1.2x steps from 144 to 1600 px). The master rendition is the source width, capped at 2,400 px. All are WebP. Only JPEG, PNG, WebP and AVIF get renditions. A GIF keeps its original.
 - The published URL is the largest rendition. Consumers derive the smaller ones from that URL alone. Changing the ladder needs a migration that sends every image back to its original.
-- Who renders:
-  - The dashboard browser encodes the ladder and sends it to `POST /{id}/variants` (`components/admin/media-manager/utils/media-variants.ts`).
-  - The cron's `media_rendition_backfill` job renders the backlog inline (`backfillMissingMediaVariants`, at most `planLimits().maintenance.inlineRenditionsPerRun` images within a time budget). It skips files touched in the last 10 minutes, so an upload the browser is still finishing is left alone. It needs the `IMAGES` binding.
-  - On the Paid plan profile, a public read that renders a still original renders up to 4 such images right after the response (`renderMissingMediaVariants`, which renders only if `variant_width` is still NULL; `apps/api/src/utils/media-rendition-hints.ts`, per-colo Cache API marker keyed by the Worker version).
+- No server renders images (no Cloudflare Images binding). Who renders:
+  - The dashboard browser encodes the ladder on upload and sends it to `POST /{id}/variants` (`components/admin/media-manager/utils/media-variants.ts`).
+  - The CLI (`scalius media upload`) encodes the ladder locally with `sharp` and sends it to the same route.
+  - Agent/MCP uploads and URL imports store the original only. The image is "pending" while `variant_width` is NULL (`needsMediaVariants`; the Files list filter `variants=missing`). It serves its original, which is correct but larger. Any open dashboard tab renders pending images in the background (`components/admin/media-manager/hooks/usePendingRenditions.ts`: idle time, bounded, resumable) with the browser pipeline.
 - Plan limits: [`docs/FREE-PLAN.md`](../../../../../docs/FREE-PLAN.md).
 
 ## Usage index

@@ -181,7 +181,6 @@ The committed `apps/api/wrangler.jsonc` and `apps/storefront/wrangler.jsonc` hol
 | R2 bucket (media under `media/`, sealed agent artifacts under `private/agent-artifacts/`) | API | `BUCKET` |
 | Rate limiters: strict 5 per 60 s, standard 60 per 60 s (counters are account-wide per `namespace_id`: use your own IDs) | API | `RL_STRICT`, `RL_STANDARD` |
 | Email sending | API | `EMAIL` |
-| Images | API | `IMAGES` |
 | Service binding to `scalius-api` | Storefront | `BACKEND_API` |
 | Static assets (`apps/admin-v2/dist`) | API | `ASSETS` |
 

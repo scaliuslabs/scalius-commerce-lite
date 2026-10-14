@@ -28287,12 +28287,7 @@ export type PostApiV1AdminMediaUploadsByIdCompleteData = {
     path: {
         id: string;
     };
-    query?: {
-        /**
-         * `server` (default) generates the WebP renditions once during completion. The dashboard sends `client` and uploads browser-generated renditions to dashboard.media.variants_save.
-         */
-        variants?: 'server' | 'client';
-    };
+    query?: never;
     url: '/api/v1/admin/media/uploads/{id}/complete';
 };
 

@@ -1,0 +1,123 @@
+// Generated from packages/shared/src/media-variants.ts.
+// Do not edit by hand.
+
+/**
+ * Pre-generated WebP renditions of uploaded images.
+ *
+ * Renditions live beside the untouched original object:
+ *   media/<id>.<ext>             original upload (downloads, saved references)
+ *   media/<id>.<ext>/<w>.webp    one rendition per width in mediaVariantWidths()
+ *
+ * The API publishes the largest rendition as the media URL. Because the width
+ * ladder is fixed, that URL alone tells every consumer (storefront, admin,
+ * feeds, rich content) which smaller renditions exist, so no transform service
+ * and no extra metadata round-trip are needed. Any other URL is served as-is.
+ *
+ * No Worker encodes images (there is no Cloudflare Images binding). The dashboard
+ * browser and the CLI (a generated copy of this file in
+ * packages/cli/src/generated, written by `pnpm generate:agent-contract`) encode
+ * the ladder; an image without one is "pending" and serves its original.
+ */
+
+/**
+ * A 1.2x geometric ladder: every step is at most 1.2x the one below it, so
+ * any slot from 120 to 960 device pixels (a card 120-480 CSS px wide at DPR
+ * 1 and 2, and at DPR 3 with the phone cap of about 2x) fetches at most 1.2x
+ * the pixels it draws (the storefront's responsive-image test holds every
+ * width). 1600 is the product page's zoom photo. Changing the ladder needs a
+ * migration that re-renders stored images (0094 set this one): the ladder is
+ * read from the published URL alone.
+ */
+export const MEDIA_VARIANT_WIDTHS = [144, 172, 206, 247, 296, 355, 426, 511, 613, 735, 882, 960, 1600] as const;
+/** The largest (master) rendition; wider sources are scaled down to it. */
+export const MEDIA_VARIANT_MAX_WIDTH = 2400;
+/** Social, JSON-LD and catalog feed images: Google/Meta want ≥ 1200 px. */
+export const MEDIA_DISCOVERY_IMAGE_WIDTH = 1200;
+
+/** Widths to generate for a source image: ladder steps below the master, then the master. */
+export function mediaVariantWidths(sourceWidth: number): number[] {
+  const master = Math.min(Math.floor(sourceWidth), MEDIA_VARIANT_MAX_WIDTH);
+  if (!Number.isSafeInteger(master) || master < 1) return [];
+  return [...MEDIA_VARIANT_WIDTHS.filter((width) => width < master), master];
+}
+
+/** WebP quality per rendition: smaller steps are usually shown at DPR 2–3. */
+export function mediaVariantQuality(width: number): number {
+  return width <= 960 ? 0.75 : 0.82;
+}
+
+export function mediaVariantObjectKey(objectKey: string, width: number): string {
+  return `${objectKey}/${width}.webp`;
+}
+
+const VARIANT_PATH = /^(.*\.[A-Za-z0-9]{1,10})\/([1-9]\d{0,3})\.webp$/;
+
+interface ParsedVariantUrl {
+  base: string;
+  suffix: string;
+  widths: number[];
+}
+
+function parseVariantUrl(url: string): ParsedVariantUrl | null {
+  const suffixIndex = url.search(/[?#]/);
+  const path = suffixIndex < 0 ? url : url.slice(0, suffixIndex);
+  const match = VARIANT_PATH.exec(path);
+  if (!match || !/(?:^|\/)media\//.test(match[1]!)) return null;
+  const master = Number(match[2]);
+  if (master > MEDIA_VARIANT_MAX_WIDTH) return null;
+  return {
+    base: match[1]!,
+    suffix: suffixIndex < 0 ? "" : url.slice(suffixIndex),
+    widths: mediaVariantWidths(master),
+  };
+}
+
+function variantAt(parsed: ParsedVariantUrl, width: number): string {
+  return `${parsed.base}/${width}.webp${parsed.suffix}`;
+}
+
+/**
+ * The smallest rendition at least `width` pixels wide (or the master when
+ * none is). URLs without renditions are returned unchanged.
+ */
+export function mediaImageUrl(url: string | null | undefined, width: number): string {
+  if (!url) return "";
+  const parsed = parseVariantUrl(url);
+  if (!parsed) return url;
+  const chosen = parsed.widths.find((candidate) => candidate >= width)
+    ?? parsed.widths.at(-1)!;
+  return variantAt(parsed, chosen);
+}
+
+/** `srcset` for every rendition, or "" when the URL has none. */
+export function mediaImageSrcSet(url: string | null | undefined): string {
+  const parsed = url ? parseVariantUrl(url) : null;
+  if (!parsed) return "";
+  return parsed.widths
+    .map((width) => `${variantAt(parsed, width)} ${width}w`)
+    .join(", ");
+}
+
+/** The untouched upload behind a rendition URL (downloads, editing). */
+export function mediaOriginalUrl(url: string | null | undefined): string {
+  const parsed = url ? parseVariantUrl(url) : null;
+  return parsed ? `${parsed.base}${parsed.suffix}` : url ?? "";
+}
+
+/** A raster file anywhere under a `media/` path segment (`media/<id>.<ext>`, older nested keys too). */
+const MEDIA_RASTER_ORIGINAL = /(?:^|\/)media\/(?:[^?#]*\/)?[^/?#]+\.(?:avif|bmp|gif|jpe?g|png|tiff?|webp)$/i;
+
+/**
+ * A raster upload of our own media store served as uploaded (a legacy or
+ * failed-rendition image, up to 2400px and ~1MB): a `media/` object with no
+ * rendition suffix. Small slots (cards) show their placeholder instead while
+ * the public read queues its render job. External URLs and vector files
+ * (SVG) are not ours to resize and return false.
+ */
+export function isUnrenderedMediaOriginal(url: string | null | undefined): boolean {
+  if (!url || parseVariantUrl(url)) return false;
+  const suffixIndex = url.search(/[?#]/);
+  const path = suffixIndex < 0 ? url : url.slice(0, suffixIndex);
+  // A rendition-shaped path outside the ladder is not an original either.
+  return MEDIA_RASTER_ORIGINAL.test(path) && !/\.[A-Za-z0-9]{1,10}\/\d+\.webp$/.test(path);
+}

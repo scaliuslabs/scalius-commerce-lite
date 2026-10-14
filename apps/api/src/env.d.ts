@@ -175,8 +175,6 @@ interface Env {
   RL_STRICT: RateLimit;
   RL_STANDARD: RateLimit;
   EMAIL?: CloudflareSendEmailBinding;
-  /** One-time WebP renditions for non-dashboard uploads (agents, CLI, URL import). */
-  IMAGES?: ImagesBinding;
   // Dynamic Worker loader for sandboxed plugins (Workers Paid). Operator-enabled
   // and never in the committed Wrangler configs, so Workers Free deploys
   // unchanged: `pnpm run deploy --plugin-sandbox` (or `pnpm plugin sandbox on`)

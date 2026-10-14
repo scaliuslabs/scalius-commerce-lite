@@ -2930,7 +2930,7 @@ export const putApiV1AdminMediaUploadsByIdPartsByPartNumber = <ThrowOnError exte
 /**
  * Complete and reconcile a media upload
  *
- * Commit an upload only after every expected part is present. The returned file.id is the media asset ID used by product media associations. If completion fails, inspect dashboard.media.upload_get and resume missing parts instead of initiating a duplicate session.
+ * Commit an upload only after every expected part is present. The returned file.id is the media asset ID used by product media associations. The original is committed alone: an image without renditions keeps serving its original until renditions are saved with dashboard.media.variants_save (the dashboard does this in the background). If completion fails, inspect dashboard.media.upload_get and resume missing parts instead of initiating a duplicate session.
  */
 export const postApiV1AdminMediaUploadsByIdComplete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaUploadsByIdCompleteData, ThrowOnError>): RequestResult<PostApiV1AdminMediaUploadsByIdCompleteResponses, PostApiV1AdminMediaUploadsByIdCompleteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaUploadsByIdCompleteResponses, PostApiV1AdminMediaUploadsByIdCompleteErrors, ThrowOnError>({ url: '/api/v1/admin/media/uploads/{id}/complete', ...options });
 
