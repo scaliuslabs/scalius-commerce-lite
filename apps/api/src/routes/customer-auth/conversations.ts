@@ -45,7 +45,7 @@ import {
 import {
   enforceBuyerWriteLimits,
   formText,
-  readAndReencodeAttachment,
+  readAttachmentImage,
   readAttachmentForm,
   serveConversationAttachment,
 } from "../../utils/conversation-http";
@@ -310,7 +310,7 @@ app.openapi(createRoute({
       return getOrCreateOrderThread(db, orderId!);
     })();
   await enforceBuyerWriteLimits(c, "upload", { customerId });
-  const image = await readAndReencodeAttachment(c.env, form);
+  const image = await readAttachmentImage(form);
   const staged = await stageConversationAttachment(db, c.env.BUCKET, { conversationId: thread.id, actor, ...image });
   return created(c, { attachmentId: staged.id, ...staged });
 });

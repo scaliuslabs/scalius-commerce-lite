@@ -93,7 +93,7 @@ export type PluginRouteHandler = (request: PluginRouteRequest, ctx: PluginContex
 /**
  * A cron job run. Schedules are five-field cron in the store's time zone,
  * checked by the platform's maintenance (every 15 minutes on Workers Paid,
- * every 24 minutes on Free): a slot runs
+ * every 23 minutes on Free): a slot runs
  * once (never twice, never overlapping the job's previous run), a finer
  * schedule runs once per tick, and after downtime only the latest missed
  * slot runs (within 24 hours). `scheduledAt` is the slot, so use it, not the

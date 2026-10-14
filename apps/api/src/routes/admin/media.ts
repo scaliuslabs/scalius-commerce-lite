@@ -147,7 +147,6 @@ app.openapi(importUrlRoute, async (c) => {
     const file = await importMediaFromUrl({
         db: c.get("db"),
         bucket: c.env.BUCKET,
-        images: c.env.IMAGES,
         sourceUrl: input.sourceUrl,
         filename: input.filename,
         folderId: input.folderId,
@@ -231,13 +230,9 @@ const completeRoute = createRoute({
     path: "/uploads/{id}/complete",
     tags: ["Admin - Media"],
     summary: "Complete and reconcile a media upload",
-    description: "Commit an upload only after every expected part is present. The returned file.id is the media asset ID used by product media associations. If completion fails, inspect dashboard.media.upload_get and resume missing parts instead of initiating a duplicate session.",
+    description: "Commit an upload only after every expected part is present. The returned file.id is the media asset ID used by product media associations. The original is committed alone: an image without renditions keeps serving its original until renditions are saved with dashboard.media.variants_save (the dashboard does this in the background). If completion fails, inspect dashboard.media.upload_get and resume missing parts instead of initiating a duplicate session.",
     operationId: "dashboard.media.upload_complete",
-    request: { params: idParam, query: z.object({
-        variants: z.enum(["server", "client"]).default("server").openapi({
-            description: "`server` (default) generates the WebP renditions once during completion. The dashboard sends `client` and uploads browser-generated renditions to dashboard.media.variants_save.",
-        }),
-    }) },
+    request: { params: idParam },
     responses: {
         200: { description: "Media committed", content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } },
         ...mediaErrorResponses,
@@ -245,14 +240,7 @@ const completeRoute = createRoute({
     },
 });
 app.openapi(completeRoute, async (c) => {
-    const file = await completeMediaUpload(
-        c.get("db"),
-        c.req.valid("param").id,
-        c.env.BUCKET,
-        c.req.valid("query").variants === "server" ? c.env.IMAGES : undefined,
-    );
-    // Whatever the browser pipeline does next, the scheduled backfill renders
-    // this upload's renditions if they are still missing.
+    const file = await completeMediaUpload(c.get("db"), c.req.valid("param").id, c.env.BUCKET);
     return ok(c, { file });
 });
 

@@ -1,6 +1,7 @@
-// Conversation image attachments (Wave A §4.3, C7). The API Worker sniffs the
-// upload, re-encodes it to WebP through the IMAGES binding (stripping EXIF/GPS
-// and neutralising polyglots) and stores it under the private R2 prefix; this
+// Conversation image attachments (Wave A §4.3, C7). The browser pipeline scales
+// and re-encodes the photo to WebP (dropping EXIF/GPS); the API Worker sniffs
+// the upload, checks the WebP container end to end and stores it under the
+// private R2 prefix. No Worker re-encodes images. This
 // module records, authorises, serves and sweeps those objects. Attachments are
 // never public: every read goes through a thread access check.
 
@@ -37,7 +38,7 @@ export interface StagedAttachment {
 }
 
 /**
- * Stores already re-encoded WebP bytes for a thread and records the unattached
+ * Stores already encoded WebP bytes for a thread and records the unattached
  * row. The object is written first; a failed row insert deletes it again.
  */
 export async function stageConversationAttachment(

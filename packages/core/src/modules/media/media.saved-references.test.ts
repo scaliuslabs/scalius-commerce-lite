@@ -6,7 +6,6 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   MediaDependencyConflictError,
-  generateMediaVariants,
   listMediaFiles,
   permanentlyDeleteMediaFile,
   saveMediaVariants,
@@ -269,33 +268,5 @@ describe("pre-generated media renditions", () => {
     await permanentlyDeleteMediaFile(db, file.id, trashed.version, storage.bucket);
     expect(storage.objects.size).toBe(0);
     expect(storage.deleteCalls).toContain(`${file.objectKey}/500.webp`);
-  });
-
-  it("renders the ladder once through the Images binding for non-dashboard uploads", async () => {
-    const file = await seedImage();
-    const storage = createBucket();
-    const transforms: number[] = [];
-    const bucket = {
-      ...storage.bucket,
-      put: storage.bucket.put,
-      get: async () => ({ arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff]).buffer }),
-    } as unknown as R2Bucket;
-    const images = {
-      info: async () => ({ format: "image/jpeg", fileSize: 3, width: 700, height: 350 }),
-      input: () => ({
-        transform: ({ width }: { width: number }) => {
-          transforms.push(width);
-          return {
-            output: async () => ({ response: () => new Response(WEBP_BYTES) }),
-          };
-        },
-      }),
-    } as unknown as ImagesBinding;
-
-    const saved = await generateMediaVariants(db, file.id, bucket, images);
-
-    expect(transforms).toEqual([144, 172, 206, 247, 296, 355, 426, 511, 613, 700]);
-    expect(saved).toMatchObject({ variantWidth: 700, width: 700, height: 350 });
-    expect(storage.objects.has(`${file.objectKey}/700.webp`)).toBe(true);
   });
 });

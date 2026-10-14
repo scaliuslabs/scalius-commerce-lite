@@ -181,6 +181,15 @@ describe("worker env check: per-store resource shape", () => {
     ]);
   });
 
+  it("rejects a Cloudflare Images binding; renditions are encoded in the browser or the CLI", () => {
+    expect(collectResourceBindingViolations("apps/api/wrangler.jsonc", { images: { binding: "IMAGES" } }))
+      .toEqual([expect.stringContaining("images IMAGES")]);
+    expect(collectResourceBindingViolations("apps/api/wrangler.jsonc", {})).toEqual([]);
+    for (const configPath of apps.flatMap((app) => app.configs)) {
+      expect(readRepoJsonc(configPath).images, configPath).toBeUndefined();
+    }
+  });
+
   it("allows only the realtime hub as a Durable Object, SQLite-backed and live", () => {
     for (const configPath of apps[0].configs) {
       const config = readRepoJsonc(configPath);

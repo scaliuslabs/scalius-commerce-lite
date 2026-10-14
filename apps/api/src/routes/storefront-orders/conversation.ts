@@ -36,7 +36,7 @@ import { validateReceiptToken } from "../../utils/order-receipt-token";
 import {
   enforceBuyerWriteLimits,
   formText,
-  readAndReencodeAttachment,
+  readAttachmentImage,
   readAttachmentForm,
   serveConversationAttachment,
 } from "../../utils/conversation-http";
@@ -167,7 +167,7 @@ app.openapi(createRoute({
   const form = await readAttachmentForm(c);
   const actor = await receiptActor(c, orderId, formText(form, "token") ?? undefined);
   await enforceBuyerWriteLimits(c, "upload", { orderId });
-  const image = await readAndReencodeAttachment(c.env, form);
+  const image = await readAttachmentImage(form);
   const thread = await getOrCreateOrderThread(db, orderId);
   const staged = await stageConversationAttachment(db, c.env.BUCKET, { conversationId: thread.id, actor, ...image });
   return created(c, { attachmentId: staged.id, ...staged });

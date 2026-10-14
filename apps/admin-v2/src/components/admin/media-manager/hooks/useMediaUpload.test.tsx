@@ -238,7 +238,7 @@ describe("useMediaUpload", () => {
     await act(async () => { await latest.uploadFiles([fileOf(MP4, "walkthrough.mp4", "video/mp4")]); });
     await flush();
 
-    expect(api.completeUpload).toHaveBeenCalledWith("s4", "server");
+    expect(api.completeUpload).toHaveBeenCalledWith("s4");
     expect(encoder.encodeMediaVariants).not.toHaveBeenCalled();
     expect(api.updateFile).toHaveBeenCalledWith(completed, { width: 1920, height: 1080, durationMs: 23_567 });
     expect(latest.queue[0]).toMatchObject({ status: "done", warning: null, result: { width: 1920, version: 2 } });
@@ -255,7 +255,7 @@ describe("useMediaUpload", () => {
     await act(async () => { await latest.uploadFiles([fileOf(JPEG, "photo.jpg", "image/jpeg")]); });
     await flush();
 
-    expect(api.completeUpload).toHaveBeenCalledWith("s5", "client");
+    expect(api.completeUpload).toHaveBeenCalledWith("s5");
     expect(api.saveVariants).toHaveBeenCalledWith("media_s5", variants);
     expect(latest.queue[0]).toMatchObject({ status: "done", warning: "variantsNotSaved" });
   });

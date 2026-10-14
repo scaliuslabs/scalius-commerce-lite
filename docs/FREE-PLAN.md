@@ -29,7 +29,7 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | Rows per drain: events, deliveries, notifications, payment events | 2, 2, 1, 1 | 50, 25, 20, 10 |
 | Renditions rendered from one public read | 0 | 4 |
 | Recommendation rotation per run | 4 products | 32 products |
-| Maintenance jobs (the sweep rotation) | one a minute: each job every 24 minutes | every job every 15 minutes |
+| Maintenance jobs (the sweep rotation) | one a minute: each job every 23 minutes | every job every 15 minutes |
 | Expired reservations released per run | 4 | 50 |
 | Each sweep's row limit | 20% | 100% |
 | List total counted up to (`countCap`) | 1,000 | 10,000 |
@@ -112,7 +112,7 @@ A store has no KV namespace (an account allows 1,000, and KV was only ever a hin
 
 The cron runs every minute (`* * * * *` in `apps/api/wrangler.jsonc`). Every tick runs the background drains. `MAINTENANCE_SWEEPS` in `apps/api/src/scheduled-maintenance.ts` lists the maintenance jobs as data, in rotation order (24 jobs, including the media rendition backfill and agent-access housekeeping). `apps/api/src/scheduled/slices.ts` picks the jobs of a tick from two plan values, `sweepEveryMinutes` and `sweepsPerTick`:
 
-- Free runs the next job of the rotation on every tick, beside the drains. Each job runs every 24 minutes, and every tick of a whole rotation stays within 50 D1 queries with work due (`apps/api/src/maintenance-budget.test.ts`).
+- Free runs the next job of the rotation on every tick, beside the drains. Each job runs every 23 minutes, and every tick of a whole rotation stays within 50 D1 queries with work due (`apps/api/src/maintenance-budget.test.ts`).
 - Paid runs every job on every fifteenth minute.
 - The 02:00 store-time minute runs only the nightly pass: sales stats, a projection rebuild request, the recommendations of products sold that day, app storage sizes and a sampled drift check.
 - Hourly work inside a job (app exchange rates) runs on the job's first run of each hour (`firstSweepRunOfHour`).

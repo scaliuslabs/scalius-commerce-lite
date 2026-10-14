@@ -188,7 +188,7 @@ importApp.openapi(productImagesRoute, async (c) => {
   const response = await importProductImages(db, batch, {
     importMedia: async ({ sourceUrl, mediaId, filename }) => {
       const file = await importMediaFromUrl({ db, bucket: c.env.BUCKET, sourceUrl, mediaId, ...(filename ? { filename } : {}) });
-      // The scheduled backfill renders its renditions, never this import request.
+      // Renditions stay pending; an open dashboard tab renders them in the background.
       return { id: file.id, kind: file.kind };
     },
   });

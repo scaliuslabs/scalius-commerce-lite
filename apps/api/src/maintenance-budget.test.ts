@@ -14,7 +14,6 @@ import {
 import {
   seedCatalog,
   seedOrders,
-  seedMediaBacklog,
 } from "./testing/free-plan-seed";
 import { readMaintenanceCursor } from "./scheduled/cursor";
 import { DRAIN_TICK_MS, MAINTENANCE_SWEEPS, type SweepContext } from "./scheduled-maintenance";
@@ -65,11 +64,6 @@ beforeAll(async () => {
   store.sqlite.function("unixepoch", () => clock);
   seedCatalog(store.sqlite);
   seedOrders(store.sqlite, 100);
-  seedMediaBacklog(store.sqlite, 100);
-  store.worker.env.IMAGES = store.meter.service({
-    info: async () => ({}),
-    input: () => ({}),
-  }) as unknown as ImagesBinding;
   store.sqlite.exec(
     "INSERT INTO user(id,name,email,email_verified,role,is_super_admin) VALUES ('budget_owner','Owner','budget@shop.test',1,'admin',1)",
   );

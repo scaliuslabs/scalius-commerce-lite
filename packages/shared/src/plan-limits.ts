@@ -61,12 +61,6 @@ export interface PlanLimits {
     readonly catalogRebuildChunk: number;
     /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
     readonly catalogRebuildChunksPerDrain: number;
-    /**
-     * Images a public read that still shows an original renders right after
-     * the response (marked in the Cache API so the next read does not render
-     * it again). 0: only the scheduled backfill renders.
-     */
-    readonly renditionsPerPublicRead: number;
   };
   readonly maintenance: {
     /** A sweep tick comes every this many minutes (the cron fires every minute; apps/api/src/scheduled/slices.ts). */
@@ -83,8 +77,6 @@ export interface PlanLimits {
     readonly orphanAttachmentsPerRun: number;
     /** Each sweep's row limit is this fraction of its full limit (1: the full limit). */
     readonly limitScale: number;
-    /** Images one sweep tick renders (a CPU guard). */
-    readonly inlineRenditionsPerRun: number;
   };
   readonly lists: {
     /** Most rows a list counts for its total: `total` is exact up to it and reads "N+" beyond. */
@@ -136,7 +128,6 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 5,
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
-      renditionsPerPublicRead: 0,
     }),
     maintenance: Object.freeze({
       sweepEveryMinutes: 1,
@@ -146,7 +137,6 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       digitalUploadsPerState: 6,
       orphanAttachmentsPerRun: 10,
       limitScale: 0.2,
-      inlineRenditionsPerRun: 1,
     }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8 }),
     plugins: Object.freeze({
@@ -174,7 +164,6 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 200,
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
-      renditionsPerPublicRead: 4,
     }),
     maintenance: Object.freeze({
       sweepEveryMinutes: 15,
@@ -184,7 +173,6 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       digitalUploadsPerState: 25,
       orphanAttachmentsPerRun: 50,
       limitScale: 1,
-      inlineRenditionsPerRun: 240,
     }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90 }),
     plugins: Object.freeze({

@@ -13,7 +13,7 @@ import {
 import { rotateRecommendations } from "./background/catalog";
 import { DVC_AUDIT_RATE } from "./public-read";
 import { STORE, createFreePlanStore, type FreePlanStore } from "./testing/free-plan-store";
-import { seedCatalog, seedMediaBacklog, seedOrders } from "./testing/free-plan-seed";
+import { seedCatalog, seedOrders } from "./testing/free-plan-seed";
 import { jsonRequest, placeOrder as checkoutOrder, taxQuote as checkoutQuote } from "./testing/free-plan-checkout";
 import { BUDGETS, type Budget } from "./testing/free-plan-budgets";
 
@@ -168,12 +168,6 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
   /** Cron ticks one a minute: an hour holds every Free job at least twice and four Paid sweep ticks. */
   const hour = Math.floor(CRON_TIME / 3_600_000) * 3_600_000;
   const minuteOfHour = (index: number) => cron(hour + index * 60_000);
-
-  function withImages<T>(work: () => Promise<T>): Promise<T> {
-    const previous = store.worker.env;
-    store.worker.env = { ...previous, IMAGES: store.meter.service({ info: async () => ({}), input: () => ({}) }) } as unknown as Env;
-    return work().finally(() => { store.worker.env = previous; });
-  }
 
   let randomSpy: ReturnType<typeof vi.spyOn> | undefined;
 
@@ -380,13 +374,6 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     // cursors and first-run writes; the next hour is the steady state.
     const idle = await run("cron-idle", "Cron tick (idle store, worst minute of an hour)", 90, (index) => minuteOfHour(index), undefined, 30);
     expectWithin(idle);
-  });
-
-  it("cron ticks: a rotation with a 1,200-image rendition backlog", async () => {
-    seedMediaBacklog(store.sqlite, 1200);
-    // One Free rotation (one job a minute) holds the backfill job; Paid's 90th minute is a sweep tick.
-    const busy = await run("cron-busy", "Cron tick (1,200 images missing renditions, worst minute of a rotation)", 24, (index) => withImages(() => minuteOfHour(90 + index)));
-    expectWithin(busy);
   });
 
   it("cron ticks: the nightly pass", async () => {

@@ -49,7 +49,7 @@ export interface FreePlanStore {
 }
 
 export interface CreateFreePlanStoreOptions {
-  /** Extra bindings merged over the defaults (EMAIL, IMAGES, ...). */
+  /** Extra bindings merged over the defaults (EMAIL, ...). */
   bindings?: Record<string, unknown>;
 }
 

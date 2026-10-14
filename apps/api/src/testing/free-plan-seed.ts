@@ -62,16 +62,6 @@ export function seedOrders(sqlite: DatabaseSync, count: number): void {
   sqlite.exec(`UPDATE event_outbox SET status = 'dispatched', dispatched_at = unixepoch() WHERE status = 'pending'`);
 }
 
-/** Images that still publish only their original: the rendition backlog the cron fans out. */
-export function seedMediaBacklog(sqlite: DatabaseSync, count: number): void {
-  sqlite.exec(`
-    WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${count})
-    INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, width, height, created_at, updated_at)
-    SELECT 'media_backlog_' || i, 'b' || i || '.jpg', 'image', 'media/b' || i || '.jpg', 1000, 'image/jpeg', 'ready', 1600, 1600, 1700000000, 1700000000
-    FROM n;
-  `);
-}
-
 /** `lines` distinct single-SKU cart lines at the catalogue's prices. */
 export function cartItems(lines: number) {
   return Array.from({ length: lines }, (_, index) => ({

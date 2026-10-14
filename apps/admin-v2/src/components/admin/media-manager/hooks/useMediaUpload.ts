@@ -121,7 +121,8 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
     if (!item?.kind) return;
     const file = item.file;
     const intrinsicMetadata = readIntrinsicMediaMetadata(file, item.kind);
-    // Renditions encode while the parts upload; null falls back to the server.
+    // Renditions encode while the parts upload; null leaves the image pending
+    // (original only) until the background pass in this or another tab.
     const encodedVariants = canEncodeMediaVariants(file.type) ? encodeMediaVariants(file) : Promise.resolve(null);
     const stillWanted = () => aliveRef.current && byId(queueRef.current, id) !== undefined;
     let rejectsContent = true;
@@ -168,7 +169,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
       if (!stillWanted()) return;
       // Completion has crossed the commit boundary; closing must not abort it.
       mutate(id, { status: "processing", progress: 100 });
-      let result = await MediaApiClient.completeUpload(session.id, variants ? "client" : "server");
+      let result = await MediaApiClient.completeUpload(session.id);
       let warning: UploadQueueItem["warning"] = null;
       if (variants) {
         try {

@@ -25,7 +25,7 @@ import {
 import {
   enforceBuyerWriteLimits,
   formText,
-  readAndReencodeAttachment,
+  readAttachmentImage,
   readAttachmentForm,
 } from "../../utils/conversation-http";
 import { UnauthorizedError } from "../../utils/api-error";
@@ -74,7 +74,7 @@ app.openapi(createRoute({
   const customer = await customerId(c);
   const form = await readAttachmentForm(c);
   await enforceBuyerWriteLimits(c, "upload", { customerId: customer });
-  const image = await readAndReencodeAttachment(c.env, form);
+  const image = await readAttachmentImage(form);
   const staged = await stageWarrantyClaimAttachment(c.get("db"), c.env.BUCKET, {
     warrantyId: c.req.valid("param").id,
     clientKey: formText(form, "clientKey") ?? "",

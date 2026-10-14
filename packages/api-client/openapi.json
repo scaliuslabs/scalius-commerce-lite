@@ -97130,7 +97130,7 @@
           "Admin - Media"
         ],
         "summary": "Complete and reconcile a media upload",
-        "description": "Commit an upload only after every expected part is present. The returned file.id is the media asset ID used by product media associations. If completion fails, inspect dashboard.media.upload_get and resume missing parts instead of initiating a duplicate session.",
+        "description": "Commit an upload only after every expected part is present. The returned file.id is the media asset ID used by product media associations. The original is committed alone: an image without renditions keeps serving its original until renditions are saved with dashboard.media.variants_save (the dashboard does this in the background). If completion fails, inspect dashboard.media.upload_get and resume missing parts instead of initiating a duplicate session.",
         "operationId": "dashboard.media.upload_complete",
         "parameters": [
           {
@@ -97142,21 +97142,6 @@
             "required": true,
             "name": "id",
             "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "server",
-                "client"
-              ],
-              "default": "server",
-              "description": "`server` (default) generates the WebP renditions once during completion. The dashboard sends `client` and uploads browser-generated renditions to dashboard.media.variants_save."
-            },
-            "required": false,
-            "description": "`server` (default) generates the WebP renditions once during completion. The dashboard sends `client` and uploads browser-generated renditions to dashboard.media.variants_save.",
-            "name": "variants",
-            "in": "query"
           }
         ],
         "responses": {

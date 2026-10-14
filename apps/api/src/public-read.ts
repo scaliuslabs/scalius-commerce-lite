@@ -20,8 +20,6 @@ import {
 import { readValidationSnapshot, type ValidationSnapshot } from "./cache-frontier";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 import { runWithPublicRenderContext } from "./runtime/public-render-context";
-import { renderRenditionsForRenderedOriginals } from "./utils/media-rendition-hints";
-import { planLimits } from "@scalius/shared/plan-limits";
 
 /**
  * One anonymous public read, rendered the same way wherever it is served:
@@ -39,11 +37,6 @@ export async function renderPublicRead(
   const decorated = decoratePublicApiResponse(
     applyBaselineSecurityHeaders(request, response, { frameProtection: "deny" }),
   );
-  // A rendered read that still publishes an image original renders that
-  // image's renditions after the response (utils/media-rendition-hints.ts).
-  if (planLimits().background.renditionsPerPublicRead > 0 && isStorablePublicRead(decorated) && decorated.body) {
-    ctx.waitUntil(renderRenditionsForRenderedOriginals(decorated.clone(), runtimeEnv));
-  }
   return decorated;
 }
 

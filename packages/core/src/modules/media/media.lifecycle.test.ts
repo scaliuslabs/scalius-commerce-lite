@@ -6,6 +6,8 @@ import {
     completeMediaUpload,
     deleteMediaFolder,
     initiateMediaUpload,
+    listMediaFiles,
+    needsMediaVariants,
     MediaDependencyConflictError,
     permanentlyDeleteMediaFile,
     uploadMediaPart,
@@ -102,6 +104,19 @@ describe("media upload lifecycle", () => {
         storage.objects.set(objectKey, PNG.byteLength);
         await expect(completeMediaUpload(db, second.id, storage.bucket)).resolves.toMatchObject({ status: "ready" });
         expect(storage.calls.filter((call) => call === "complete")).toHaveLength(1);
+    });
+
+    it("commits a still image original alone and leaves its renditions pending for the dashboard", async () => {
+        const { db, storage } = setup();
+        const session = await initiateMediaUpload(db, fileInput, storage.bucket);
+        await uploadMediaPart(db, { sessionId: session.id, partNumber: 1, size: PNG.byteLength, value: PNG, signatureBytes: PNG }, storage.bucket);
+
+        const media = await completeMediaUpload(db, session.id, storage.bucket);
+
+        expect(needsMediaVariants(media)).toBe(true);
+        expect(media.variantWidth ?? null).toBeNull();
+        const missing = await listMediaFiles(db, { variants: "missing" });
+        expect(missing.files.map((file) => file.id)).toEqual([media.id]);
     });
 });
 

@@ -16,11 +16,10 @@ const BEFORE_THE_PROFILE = {
   /** RECOMMENDATION_REFRESH_PRODUCTS_PER_MESSAGE and CATALOG_PROJECTION_REBUILD_CHUNK. */
   recommendationProductsPerMessage: 20,
   catalogRebuildChunk: 900,
-  /** Every sweep ran its full limit, and the cron rendered up to MEDIA_RENDITION_BACKFILL_MAX_PER_RUN images itself. */
+  /** Every sweep ran its full limit. */
   sweepLimitScale: 1,
   /** INVENTORY_EXPIRY_SWEEP_LIMIT at that scale. */
   inventoryExpiryPerRun: 50,
-  inlineRenditionsPerRun: 240,
   /** Apps: the manifest's own ceilings (cpuMs 200, wallMs 30 s) and PLUGIN_SANDBOX_SUBREQUESTS. */
   pluginCpuMs: 200,
   pluginWallMs: 30_000,
@@ -84,19 +83,12 @@ describe("plan profile", () => {
       expect(paid.background.catalogRebuildChunk).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.catalogRebuildChunk);
     });
 
-    it("on-demand renditions stay on", () => {
-      // Bounded per read (each image holds its original in memory); the marker
-      // lets the next read continue with the others.
-      expect(paid.background.renditionsPerPublicRead).toBeGreaterThan(0);
-    });
-
     it("every sweep runs every 15 minutes at its full limit", () => {
       expect(paid.maintenance.sweepEveryMinutes).toBeLessThanOrEqual(15);
       // At least every job of the rotation (apps/api/src/scheduled-maintenance.test.ts checks the length).
       expect(paid.maintenance.sweepsPerTick).toBeGreaterThanOrEqual(32);
       expect(paid.maintenance.inventoryExpiryPerRun).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.inventoryExpiryPerRun);
       expect(paid.maintenance.limitScale).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.sweepLimitScale);
-      expect(paid.maintenance.inlineRenditionsPerRun).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.inlineRenditionsPerRun);
     });
   });
 
@@ -107,7 +99,7 @@ describe("plan profile", () => {
       expect(free.background[key], key).toBeLessThanOrEqual(paid.background[key]);
       expect(free.background[key] >= 0, key).toBe(true);
     }
-    // Every drain makes progress on Free (renditions on reads are the one exception: Free leaves them to the backfill).
+    // Every drain makes progress on Free.
     for (const key of ["eventsPerDrain", "deliveriesPerDrain", "notificationsPerDrain", "paymentEventsPerDrain", "autoFulfilPerRun", "pluginCronPerRun", "recommendationRotationPerRun", "catalogRebuildChunksPerDrain"] as const) {
       expect(free.background[key], key).toBeGreaterThanOrEqual(1);
     }
@@ -115,7 +107,7 @@ describe("plan profile", () => {
     expect(free.lists.maxOffset).toBeLessThanOrEqual(paid.lists.maxOffset);
     expect(free.lists.bulkPerRowSlice).toBeLessThanOrEqual(paid.lists.bulkPerRowSlice);
     expect(paid.lists.bulkPerRowSlice).toBe(90);
-    for (const key of ["sweepsPerTick", "inventoryExpiryPerRun", "staleOrdersPerRun", "digitalUploadsPerState", "orphanAttachmentsPerRun", "limitScale", "inlineRenditionsPerRun"] as const) {
+    for (const key of ["sweepsPerTick", "inventoryExpiryPerRun", "staleOrdersPerRun", "digitalUploadsPerState", "orphanAttachmentsPerRun", "limitScale"] as const) {
       expect(free.maintenance[key], key).toBeLessThanOrEqual(paid.maintenance[key]);
       expect(free.maintenance[key], key).toBeGreaterThan(0);
     }
