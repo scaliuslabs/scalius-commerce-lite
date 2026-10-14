@@ -9,7 +9,7 @@ import storefront from "../storefront";
 
 const parsed = parsePluginManifest(manifest);
 if (!parsed.ok) throw new Error("Invalid Noor manifest");
-const schema = parsed.manifest.storefront.slots.find((slot) => slot.id === "noor-header")!.settings;
+const schema = parsed.manifest.storefront.skins.find((skin) => skin.id === "noor-header")!.settings;
 const menu = (count: number): StorefrontMenuItem[] => Array.from({ length: count }, (_, index) => ({
   title: `Category ${index}`, url: `/categories/root-${index}`,
   children: [{ title: `Group ${index}`, url: `/categories/group-${index}`, children: [{ title: `Leaf ${index}`, url: `/categories/leaf-${index}`, children: [] }] }],

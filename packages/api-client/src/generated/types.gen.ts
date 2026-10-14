@@ -659,28 +659,46 @@ export type StorefrontThemeDocument = {
         };
     };
     apps?: {
-        header?: {
-            app: string;
-            values: {
-                [key: string]: string | number | boolean | Array<string> | Array<{
-                    [key: string]: string | number | boolean | unknown;
-                }> | unknown;
+        skins?: {
+            header?: {
+                app: string;
+                values: {
+                    [key: string]: string | number | boolean | Array<string> | Array<{
+                        [key: string]: string | number | boolean | unknown;
+                    }> | unknown;
+                };
             };
-        };
-        footer?: {
-            app: string;
-            values: {
-                [key: string]: string | number | boolean | Array<string> | Array<{
-                    [key: string]: string | number | boolean | unknown;
-                }> | unknown;
+            footer?: {
+                app: string;
+                values: {
+                    [key: string]: string | number | boolean | Array<string> | Array<{
+                        [key: string]: string | number | boolean | unknown;
+                    }> | unknown;
+                };
             };
-        };
-        productCard?: {
-            app: string;
-            values: {
-                [key: string]: string | number | boolean | Array<string> | Array<{
-                    [key: string]: string | number | boolean | unknown;
-                }> | unknown;
+            'product-card'?: {
+                app: string;
+                values: {
+                    [key: string]: string | number | boolean | Array<string> | Array<{
+                        [key: string]: string | number | boolean | unknown;
+                    }> | unknown;
+                };
+            };
+            'product-main'?: {
+                app: string;
+                values: {
+                    [key: string]: string | number | boolean | Array<string> | Array<{
+                        [key: string]: string | number | boolean | unknown;
+                    }> | unknown;
+                };
+            };
+            'listing-main'?: {
+                app: string;
+                values: {
+                    [key: string]: string | number | boolean | Array<string> | Array<{
+                        [key: string]: string | number | boolean | unknown;
+                    }> | unknown;
+                };
             };
         };
         template?: string;
@@ -740,6 +758,14 @@ export type StorefrontSectionList = Array<{
         }>;
         phoneHeight?: 'screen' | 'compact';
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'usp-strip';
@@ -759,6 +785,14 @@ export type StorefrontSectionList = Array<{
             }>;
         };
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'category-tiles';
@@ -770,6 +804,14 @@ export type StorefrontSectionList = Array<{
         title: string;
         categoryIds: Array<string>;
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'collections';
@@ -780,6 +822,14 @@ export type StorefrontSectionList = Array<{
         carousel: 'large' | 'compact';
         collectionIds: Array<string>;
         title?: string;
+    };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
     };
 } | {
     id: string;
@@ -803,6 +853,14 @@ export type StorefrontSectionList = Array<{
             categoryId: string;
         };
         limit: number;
+    };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
     };
 } | {
     id: string;
@@ -828,6 +886,14 @@ export type StorefrontSectionList = Array<{
         columns: number;
         rows: number;
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'deal-block';
@@ -850,6 +916,14 @@ export type StorefrontSectionList = Array<{
             categoryId: string;
         };
         promotionId?: string | null;
+    };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
     };
 } | {
     id: string;
@@ -878,6 +952,14 @@ export type StorefrontSectionList = Array<{
         }>;
         limit: number;
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'shop-by';
@@ -893,6 +975,14 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'banner-mosaic';
@@ -906,6 +996,14 @@ export type StorefrontSectionList = Array<{
             href: string | null;
             hidden?: boolean;
         }>;
+    };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
     };
 } | {
     id: string;
@@ -931,6 +1029,14 @@ export type StorefrontSectionList = Array<{
         };
         photo: 'tall' | 'square';
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'banner';
@@ -947,6 +1053,14 @@ export type StorefrontSectionList = Array<{
             href: string;
         } | null;
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'brand-wall';
@@ -956,6 +1070,14 @@ export type StorefrontSectionList = Array<{
     settings: {
         title: string;
         style: 'grid' | 'rail';
+    };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
     };
 } | {
     id: string;
@@ -989,6 +1111,14 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'faq';
@@ -1002,6 +1132,14 @@ export type StorefrontSectionList = Array<{
             answer: string;
             hidden?: boolean;
         }>;
+    };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
     };
 } | {
     id: string;
@@ -1017,6 +1155,14 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'endless-grid';
@@ -1026,6 +1172,14 @@ export type StorefrontSectionList = Array<{
     settings: {
         title: string;
         pageSize: 12 | 24 | 36;
+    };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
     };
 } | {
     id: string;
@@ -1037,6 +1191,14 @@ export type StorefrontSectionList = Array<{
         heading: string;
         body: string;
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'recently-viewed';
@@ -1045,6 +1207,14 @@ export type StorefrontSectionList = Array<{
     aiDraft?: true;
     settings: {
         title: string;
+    };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
     };
 } | {
     id: string;
@@ -1058,6 +1228,14 @@ export type StorefrontSectionList = Array<{
         layout: 'list' | 'grid' | 'accordion';
         limit: number;
     };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
+    };
 } | {
     id: string;
     type: 'newsletter';
@@ -1070,6 +1248,14 @@ export type StorefrontSectionList = Array<{
         email?: 'optional' | 'required' | 'hidden';
         whatsapp?: boolean;
         buttonLabel?: string;
+    };
+    skin?: {
+        app: string;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | Array<{
+                [key: string]: string | number | boolean | unknown;
+            }> | unknown;
+        };
     };
 } | {
     id: string;
@@ -2210,10 +2396,10 @@ export type ThemeAppSurfaces = {
         settings: Array<AppSettingField>;
         component: boolean;
     }>;
-    slots: Array<{
+    skins: Array<{
         key: string;
         id: string;
-        slot: 'header' | 'footer' | 'product-card';
+        target: string;
         name: string;
         description: string | null;
         settings: Array<AppSettingField>;
@@ -6344,7 +6530,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 pages: Array<'all' | 'home' | 'product' | 'listing' | 'cart'>;
             }>;
             /**
-             * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections and slots their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
+             * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections, component product blocks and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
              */
             appExtensions: Array<{
                 pluginId: string;
@@ -6360,9 +6546,19 @@ export type GetApiV1StorefrontLayoutResponses = {
                         [key: string]: unknown;
                     }>;
                 };
-                slots: Array<{
+                skins: Array<{
                     id: string;
-                    slot: 'header' | 'footer' | 'product-card';
+                    /**
+                     * The unit the skin draws: header, footer, product-card, product-main, listing-main or section:<core section type>.
+                     */
+                    target: string;
+                    settings: Array<{
+                        [key: string]: unknown;
+                    }>;
+                }>;
+                blocks: Array<{
+                    type: string;
+                    target: 'product.buy-box' | 'product.below';
                     settings: Array<{
                         [key: string]: unknown;
                     }>;

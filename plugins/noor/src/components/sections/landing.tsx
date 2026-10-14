@@ -3,13 +3,13 @@
 // section, so the merchant arranges them with any other section on a
 // landing page (`/pages/<slug>`): a product hero with the price, the offer
 // and "Order now"; features or steps; and the order section with the
-// store's own order form (`<Checkout>`: name, phone, address, thana; the
+// store's own order form (`<OrderForm>`: name, phone, address, thana; the
 // store checks it, prices delivery and places the cash-on-delivery order).
 // "Order now" jumps to an available order form for the product. On phones a bar with the price and
 // "Order now" stays at the bottom until the form is on screen.
 
 import {
-  Checkout,
+  OrderForm,
   Image,
   Island,
   Price,
@@ -253,7 +253,7 @@ export function LandingOrder({ settings, context, instanceId }: SectionProps<Lan
             ) : null}
           </aside>
           <div class="noor-order-form">
-            <Checkout product={product} maxQuantity={settings.max_quantity} submitLabel={text(settings.submit_label) ?? undefined} />
+            <OrderForm product={product} maxQuantity={settings.max_quantity} submitLabel={text(settings.submit_label) ?? undefined} />
           </div>
         </div>
       )}

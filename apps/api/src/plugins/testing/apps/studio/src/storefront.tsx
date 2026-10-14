@@ -113,7 +113,7 @@ function Card({ product, context, ratio = "portrait", showRating = true, eager =
   );
 }
 
-function ProductCardSlot({ data, settings, context }: ProductCardProps<{ ratio: string; show_rating: boolean }>) {
+function ProductCardSkin({ data, settings, context }: ProductCardProps<{ ratio: string; show_rating: boolean }>) {
   return <Card product={data.product} context={context} ratio={settings.ratio} showRating={settings.show_rating} eager={data.aboveFold} />;
 }
 
@@ -188,5 +188,5 @@ function Faq({ settings, context }: SectionProps<{ heading: string | null; quest
 
 export default defineStorefront({
   sections: { hero: Hero, featured: Featured, features: Features, faq: Faq },
-  slots: { "studio-header": Header, "studio-footer": Footer, "studio-card": ProductCardSlot },
+  skins: { "studio-header": Header, "studio-footer": Footer, "studio-card": ProductCardSkin },
 });

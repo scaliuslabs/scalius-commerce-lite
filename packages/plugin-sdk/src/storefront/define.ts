@@ -1,22 +1,27 @@
 // `defineStorefront`: an app's storefront module. It maps the manifest's
-// component sections and slots to components and answers the storefront's
-// render batches (the protocol in @scalius/shared/plugins/storefront-protocol).
-// Each job renders alone: a component that throws fails only its own job,
-// and the storefront then draws nothing there (a section) or its own block
-// (a slot).
+// component sections, component product blocks and skins to components and
+// answers the storefront's render batches (the protocol in
+// @scalius/shared/plugins/storefront-protocol). Each job renders alone: a
+// component that throws fails only its own job, and the storefront then draws
+// nothing there (a section or block) or the core unit (a skin).
 
 import {
   STOREFRONT_COMPONENT_ABI,
+  type StorefrontBlockTarget,
   type StorefrontFooterData,
   type StorefrontHeaderData,
+  type StorefrontListingPage,
   type StorefrontModule,
-  type StorefrontProductCard,
+  type StorefrontProductCardData,
+  type StorefrontProductPage,
   type StorefrontRenderBatch,
   type StorefrontRenderContext,
   type StorefrontRenderJob,
   type StorefrontRenderReply,
   type StorefrontResolvedSettings,
+  type StorefrontSectionSkinData,
 } from "@scalius/shared/plugins/storefront-protocol";
+import type { CoreSectionSettings, StorefrontSkinnableSectionType } from "@scalius/shared/storefront-theme/skins";
 import { toHtml, type Renderable } from "./html";
 
 export interface SectionProps<Settings = StorefrontResolvedSettings> {
@@ -26,18 +31,36 @@ export interface SectionProps<Settings = StorefrontResolvedSettings> {
   context: StorefrontRenderContext;
 }
 
-export interface SlotProps<Data, Settings = StorefrontResolvedSettings> {
+/** What a skin gets: the merchant's values for its settings and its unit's projection. */
+export interface SkinProps<Data, Settings = StorefrontResolvedSettings> {
   settings: Settings;
   data: Data;
   context: StorefrontRenderContext;
 }
 
-export type HeaderProps<Settings = StorefrontResolvedSettings> = SlotProps<StorefrontHeaderData, Settings>;
-export type FooterProps<Settings = StorefrontResolvedSettings> = SlotProps<StorefrontFooterData, Settings>;
-export type ProductCardProps<Settings = StorefrontResolvedSettings> = SlotProps<
-  { product: StorefrontProductCard; position: number; aboveFold: boolean },
-  Settings
->;
+export type HeaderProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontHeaderData, Settings>;
+export type FooterProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontFooterData, Settings>;
+export type ProductCardProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontProductCardData, Settings>;
+/** A product-main skin: place the store's buy form with `<BuyForm />` (exactly one; without it core draws the page). */
+export type ProductMainProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontProductPage, Settings>;
+/** A listing-main skin: `<Filters />`, `<Toolbar />` and `<Pagination />` place the store's own (pagination is appended when left out). */
+export type ListingMainProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontListingPage, Settings>;
+/** A core section's skin (`section:<type>`): its settings with references resolved (`CoreSectionSettings<type>`). */
+export type SectionSkinProps<Type extends StorefrontSkinnableSectionType = StorefrontSkinnableSectionType, Settings = StorefrontResolvedSettings> =
+  SkinProps<StorefrontSectionSkinData<CoreSectionSettings<Type>>, Settings> & {
+    /** The theme's id of the section placement. */
+    instanceId: string;
+  };
+
+/** A component product block: the product page's projection and where it draws. */
+export interface BlockProps<Settings = StorefrontResolvedSettings> {
+  settings: Settings;
+  data: StorefrontProductPage;
+  target: StorefrontBlockTarget;
+  /** The theme's id of this placement. */
+  instanceId: string;
+  context: StorefrontRenderContext;
+}
 
 // Components take their own settings shapes; the module map is checked by
 // the manifest at pack time, so the map itself is loosely typed.
@@ -46,13 +69,20 @@ export type SectionComponent = (props: SectionProps<any>) => Renderable;
 export type HeaderComponent = (props: HeaderProps<any>) => Renderable;
 export type FooterComponent = (props: FooterProps<any>) => Renderable;
 export type ProductCardComponent = (props: ProductCardProps<any>) => Renderable;
+export type ProductMainComponent = (props: ProductMainProps<any>) => Renderable;
+export type ListingMainComponent = (props: ListingMainProps<any>) => Renderable;
+export type SectionSkinComponent = (props: SectionSkinProps<any, any>) => Renderable;
+export type SkinComponent = HeaderComponent | FooterComponent | ProductCardComponent | ProductMainComponent | ListingMainComponent | SectionSkinComponent;
+export type BlockComponent = (props: BlockProps<any>) => Renderable;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export interface StorefrontDefinition {
   /** Component sections by manifest section type. */
   sections?: Record<string, SectionComponent>;
-  /** Slot components by manifest slot id. */
-  slots?: Record<string, HeaderComponent | FooterComponent | ProductCardComponent>;
+  /** Skins by manifest skin id. */
+  skins?: Record<string, SkinComponent>;
+  /** Component product blocks by manifest block type. */
+  blocks?: Record<string, BlockComponent>;
 }
 
 /** What `defineStorefront` returns: the module the storefront loads, plus the definition (for the packer and tests). */
@@ -66,14 +96,24 @@ function errorText(error: unknown): string {
 }
 
 function renderJob(definition: StorefrontDefinition, job: StorefrontRenderJob, context: StorefrontRenderContext): string {
-  if (job.kind === "section") {
-    const component = definition.sections?.[job.type];
-    if (!component) throw new Error(`No component for section ${job.type}.`);
-    return toHtml(component({ settings: job.settings, instanceId: job.instanceId, context })).value;
+  switch (job.kind) {
+    case "section": {
+      const component = definition.sections?.[job.type];
+      if (!component) throw new Error(`No component for section ${job.type}.`);
+      return toHtml(component({ settings: job.settings, instanceId: job.instanceId, context })).value;
+    }
+    case "block": {
+      const component = definition.blocks?.[job.type];
+      if (!component) throw new Error(`No component for block ${job.type}.`);
+      return toHtml(component({ settings: job.settings, data: job.data, target: job.target, instanceId: job.instanceId, context })).value;
+    }
+    case "skin": {
+      const component = definition.skins?.[job.component] as ((props: SkinProps<unknown> & { instanceId?: string }) => Renderable) | undefined;
+      if (!component) throw new Error(`No component for skin ${job.component}.`);
+      const instanceId = "instanceId" in job ? job.instanceId : undefined;
+      return toHtml(component({ settings: job.settings, data: job.data, context, ...(instanceId !== undefined ? { instanceId } : {}) })).value;
+    }
   }
-  const component = definition.slots?.[job.component] as ((props: SlotProps<unknown>) => Renderable) | undefined;
-  if (!component) throw new Error(`No component for slot ${job.component}.`);
-  return toHtml(component({ settings: job.settings, data: job.data, context })).value;
 }
 
 export function defineStorefront(definition: StorefrontDefinition): StorefrontModuleDefinition {

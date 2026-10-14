@@ -4,6 +4,7 @@
 // runtime gives the data attributes their behaviour.
 
 import type {
+  StorefrontEmbedKind,
   StorefrontImage,
   StorefrontIslandHydration,
   StorefrontMoney,
@@ -173,8 +174,58 @@ export function editable(context: Pick<StorefrontRenderContext, "preview">, sett
 }
 
 // ── Core embeds ───────────────────────────────────────────────────────────
+//
+// `<scalius-embed kind="…">`: a spot where the store renders its own
+// interactive piece with its own data, rules, words and scripts. Each target
+// allows its own kinds (storefrontEmbedRule); any other renders nothing.
 
-export interface CheckoutProps {
+function embed(kind: StorefrontEmbedKind, data: Attributes = {}): Html {
+  const prefixed: Attributes = {};
+  for (const [name, value] of Object.entries(data)) prefixed[`data-${name}`] = value;
+  return raw(`<scalius-embed${attributes({ kind, ...prefixed })}></scalius-embed>`);
+}
+
+export interface BuyFormProps {
+  /** False leaves out the form's product title (draw your own `<h1>`). */
+  title?: boolean;
+}
+
+/**
+ * The store's buy form (product-main skins, required, exactly one): price,
+ * options, buyer inputs, quantity and the buy buttons, kept current as the
+ * buyer chooses. A real form, so it works before hydration. Without it the
+ * store draws its own product page instead of the skin.
+ */
+export function BuyForm(props: BuyFormProps = {}): Html {
+  return embed("buy-form", { title: props.title === false ? "false" : undefined });
+}
+
+/** The product's reviews and review form (product-main skins); the store's own module below then stays out. */
+export function Reviews(): Html {
+  return embed("reviews");
+}
+
+/** Related products (product-main skins); the store's own module below then stays out. */
+export function Recommendations(): Html {
+  return embed("recommendations");
+}
+
+/** The listing's filters, a GET form that works without JavaScript (listing-main skins). */
+export function Filters(): Html {
+  return embed("filters");
+}
+
+/** The listing's sort and page-size controls (listing-main skins). */
+export function Toolbar(): Html {
+  return embed("toolbar");
+}
+
+/** The listing's page links (listing-main skins); the store appends them when a skin leaves them out. */
+export function Pagination(): Html {
+  return embed("pagination");
+}
+
+export interface OrderFormProps {
   /** The product to order: a card from a `product` or `products` setting. Nothing renders without one. */
   product: Pick<StorefrontProductCard, "id"> | null | undefined;
   /** The most the quantity picker offers (1 hides it; at most 10). */
@@ -184,20 +235,16 @@ export interface CheckoutProps {
 }
 
 /**
- * The store's own order form, in place: the single-page order of a landing
- * page. The buyer picks an option and a quantity and fills in name, phone
- * and address here; the store checks it, prices delivery and places the
- * cash-on-delivery order after one confirmation. Style it through
- * `.scalius-order-form` and its parts.
+ * The store's own order form, in place (component sections): the
+ * single-page order of a landing page. The buyer picks an option and a
+ * quantity and fills in name, phone and address here; the store checks it,
+ * prices delivery and places the cash-on-delivery order after one
+ * confirmation. Style it through `.scalius-order-form` and its parts.
  *
- *   <section id="order"><Checkout product={settings.product} maxQuantity={5} /></section>
+ *   <section id="order"><OrderForm product={settings.product} maxQuantity={5} /></section>
  */
-export function Checkout(props: CheckoutProps): Html {
+export function OrderForm(props: OrderFormProps): Html {
   const id = props.product?.id ?? "";
   if (!id) return EMPTY_HTML;
-  return raw(`<scalius-checkout${attributes({
-    "data-product": id,
-    "data-max-quantity": props.maxQuantity,
-    "data-submit-label": props.submitLabel,
-  })}></scalius-checkout>`);
+  return embed("order-form", { product: id, "max-quantity": props.maxQuantity, "submit-label": props.submitLabel });
 }

@@ -1,5 +1,7 @@
-// Tests for storefront modules: render a section or slot through the same
-// batch protocol the storefront uses, with realistic fixture data.
+// Tests for storefront modules: render a section, block or skin through the
+// same batch protocol the storefront uses, with realistic fixture data. A
+// skin's markup is held to its target's embed rule (a product-main skin must
+// place exactly one buy form), as the storefront holds it.
 //
 //   import storefront from "./storefront";
 //   import { renderSection, fixtureProductCard } from "@scalius/plugin-sdk/storefront/testing";
@@ -8,14 +10,22 @@
 
 import {
   STOREFRONT_COMPONENT_ABI,
+  storefrontEmbedRule,
+  type StorefrontBlockTarget,
   type StorefrontFooterData,
   type StorefrontHeaderData,
+  type StorefrontListingPage,
   type StorefrontModule,
   type StorefrontProductCard,
+  type StorefrontProductPage,
   type StorefrontRenderContext,
   type StorefrontRenderJob,
   type StorefrontResolvedSettings,
+  type StorefrontSectionSkinData,
+  type StorefrontSkinJob,
+  type StorefrontSkinTarget,
 } from "@scalius/shared/plugins/storefront-protocol";
+import { splitStorefrontEmbeds } from "@scalius/shared/plugins/storefront-embeds";
 import { checkStorefrontHeaderHtml, type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
 import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
 
@@ -97,6 +107,75 @@ export function fixtureFooterData(overrides: Partial<StorefrontFooterData> = {})
   };
 }
 
+export function fixtureProductPage(overrides: Partial<StorefrontProductPage["product"]> = {}): StorefrontProductPage {
+  const card = fixtureProductCard();
+  return {
+    product: {
+      id: card.id,
+      title: card.title,
+      url: card.url,
+      brand: { title: "Acme", url: "/brands/acme" },
+      descriptionHtml: "<p>Breathable linen, cut for the heat.</p>",
+      media: card.image ? [card.image] : [],
+      price: card.price,
+      compareAt: card.compareAt,
+      priceVaries: false,
+      availability: "in_stock",
+      rating: card.rating,
+      options: [{ name: "Size", values: [{ label: "M", swatch: null }, { label: "L", swatch: null }] }],
+      variants: [
+        { id: "sku_m", title: "M", options: ["M"], price: card.price, compareAt: card.compareAt, available: true, image: null },
+        { id: "sku_l", title: "L", options: ["L"], price: card.price, compareAt: card.compareAt, available: false, image: null },
+      ],
+      fields: {},
+      breadcrumbs: [{ title: "Home", url: "/" }, { title: "Shirts", url: "/categories/shirts" }, { title: card.title, url: card.url }],
+      ...overrides,
+    },
+  };
+}
+
+export function fixtureListingPage(overrides: Partial<StorefrontListingPage> = {}): StorefrontListingPage {
+  return {
+    kind: "category",
+    title: "Shirts",
+    descriptionHtml: "<p>Shirts for every day.</p>",
+    image: null,
+    cards: [fixtureProductCard(), fixtureProductCard({ id: "prod_2", title: "Oxford shirt", quickAdd: false, compareAt: null, percentOff: null })],
+    total: 2,
+    totalIsCapped: false,
+    page: 1,
+    pageCount: 1,
+    breadcrumbs: [{ title: "Home", url: "/" }],
+    fields: {},
+    ...overrides,
+  };
+}
+
+/** A core section's projection with empty settings (pass the settings your skin reads). */
+export function fixtureSectionSkinData(type: string, settings: Record<string, unknown> = {}): StorefrontSectionSkinData {
+  return { type, version: 1, settings, tiles: [], cards: [] };
+}
+
+/** The fixture projection a skin target gets. */
+export function fixtureSkinData(target: StorefrontSkinTarget): StorefrontSkinJob["data"] {
+  switch (target) {
+    case "header": return fixtureHeaderData();
+    case "footer": return fixtureFooterData();
+    case "product-card": return { product: fixtureProductCard(), position: 0, aboveFold: true };
+    case "product-main": return fixtureProductPage();
+    case "listing-main": return fixtureListingPage();
+    default: return fixtureSectionSkinData(target.slice("section:".length));
+  }
+}
+
+/** What the storefront would do with a skin's markup: the problems that make it draw the core unit instead. */
+export function checkSkinHtml(target: StorefrontSkinTarget, html: string): string[] {
+  const split = splitStorefrontEmbeds(html, storefrontEmbedRule(target));
+  const issues = split.missing.map((kind) => `A ${target} skin must place <scalius-embed kind="${kind}"> (the SDK's ${kind === "buy-form" ? "<BuyForm />" : kind}); without it the store draws its own.`);
+  if (split.dropped > 0) issues.push(`${split.dropped} embed(s) render nothing here: ${target} allows ${Object.keys(storefrontEmbedRule(target).allowed).join(", ") || "none"}.`);
+  return issues;
+}
+
 export interface RenderOptions extends StorefrontHeaderCheckOptions {
   context?: Partial<StorefrontRenderContext>;
 }
@@ -114,23 +193,56 @@ export function renderSection(module: StorefrontModule, type: string, settings: 
   return renderOne(module, { id: "job_1", kind: "section", type, instanceId: `app-${type}`, settings }, options);
 }
 
-export function renderHeader(module: StorefrontModule, component: string, settings: StorefrontResolvedSettings = {}, data: Partial<StorefrontHeaderData> = {}, options: RenderOptions = {}): string {
-  const html = renderOne(module, { id: "job_1", kind: "slot", slot: "header", component, settings, data: fixtureHeaderData(data) }, options);
-  try {
-    assertHeaderContract(html, options);
-  } catch (error) {
-    throw new Error(`Header ${JSON.stringify(component)}: ${(error as Error).message}`);
+/** A component product block's HTML over the fixture product page (or yours). */
+export function renderBlock(
+  module: StorefrontModule,
+  type: string,
+  settings: StorefrontResolvedSettings = {},
+  data: StorefrontProductPage = fixtureProductPage(),
+  options: RenderOptions & { target?: StorefrontBlockTarget } = {},
+): string {
+  return renderOne(module, { id: "job_1", kind: "block", target: options.target ?? "product.below", type, instanceId: `app-${type}`, settings, data }, options);
+}
+
+/**
+ * A skin's HTML over its target's fixture projection (or yours). Throws
+ * when the storefront would draw the core unit instead: a missing required
+ * embed, an embed the target does not allow, or (headers) invalid markup.
+ */
+export function renderSkin<Target extends StorefrontSkinTarget>(
+  module: StorefrontModule,
+  component: string,
+  target: Target,
+  settings: StorefrontResolvedSettings = {},
+  data?: Extract<StorefrontSkinJob, { target: Target }>["data"],
+  options: RenderOptions = {},
+): string {
+  const job = {
+    id: "job_1", kind: "skin", target, component, settings,
+    data: data ?? fixtureSkinData(target),
+    ...(target.startsWith("section:") ? { instanceId: target.slice("section:".length) } : {}),
+  } as StorefrontSkinJob;
+  const html = renderOne(module, job, options);
+  const issues = checkSkinHtml(target, html);
+  if (target === "header") {
+    try {
+      assertHeaderContract(html, options);
+    } catch (error) {
+      issues.push((error as Error).message);
+    }
   }
+  if (issues.length > 0) throw new Error(`Skin ${JSON.stringify(component)} (${target}): ${issues.join(" ")}`);
   return html;
 }
 
+export function renderHeader(module: StorefrontModule, component: string, settings: StorefrontResolvedSettings = {}, data: Partial<StorefrontHeaderData> = {}, options: RenderOptions = {}): string {
+  return renderSkin(module, component, "header", settings, fixtureHeaderData(data), options);
+}
+
 export function renderFooter(module: StorefrontModule, component: string, settings: StorefrontResolvedSettings = {}, data: Partial<StorefrontFooterData> = {}, options: RenderOptions = {}): string {
-  return renderOne(module, { id: "job_1", kind: "slot", slot: "footer", component, settings, data: fixtureFooterData(data) }, options);
+  return renderSkin(module, component, "footer", settings, fixtureFooterData(data), options);
 }
 
 export function renderProductCard(module: StorefrontModule, component: string, settings: StorefrontResolvedSettings = {}, product: Partial<StorefrontProductCard> = {}, options: RenderOptions = {}): string {
-  return renderOne(module, {
-    id: "job_1", kind: "slot", slot: "product-card", component, settings,
-    data: { product: fixtureProductCard(product), position: 0, aboveFold: false },
-  }, options);
+  return renderSkin(module, component, "product-card", settings, { product: fixtureProductCard(product), position: 0, aboveFold: false }, options);
 }

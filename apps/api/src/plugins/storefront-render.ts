@@ -118,7 +118,7 @@ export async function renderAppSurfaces(requests: readonly AppSurfaceRequest[], 
     const installation = installations.get(request.pluginId);
     if (!installation?.grant?.storefrontSurfaces) return [];
     const found = surfaceOf(installation, request);
-    // A component section (no route) is drawn by the storefront, not here.
+    // A component section or product block (no route) is drawn by the storefront, not here.
     if (!found || found.route === undefined) return [];
     const surface = { ...found, route: found.route };
     deps.pluginCollections(request.pluginId, surface.reads);

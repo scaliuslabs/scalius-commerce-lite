@@ -25,13 +25,13 @@ describe("pnpm plugin pack: storefront components", () => {
   it("checks a declared header at pack time and accepts a campaign with no host actions", async () => {
     const plugin = makeTempPlugin();
     try {
-      editSource(plugin.dir, (source) => source.replace("  storefront: {", '  storefront: {\n    slots: [{ id: "masthead", slot: "header", name: "Masthead", settings: [] }],'));
+      editSource(plugin.dir, (source) => source.replace("  storefront: {", '  storefront: {\n    skins: [{ id: "masthead", target: "header", name: "Masthead", settings: [] }],'));
       const writeHeader = (html) => writeFileSync(join(plugin.dir, "src/storefront.ts"), `
         import { defineStorefront, raw } from "@scalius/plugin-sdk/storefront";
-        export default defineStorefront({ slots: { masthead: () => raw(${JSON.stringify(html)}) } });
+        export default defineStorefront({ skins: { masthead: () => raw(${JSON.stringify(html)}) } });
       `);
       writeHeader('<header id="menu"><nav id="menu"></nav></header>');
-      await expect(packPlugin(plugin.dir)).rejects.toThrow('slot:masthead has invalid header markup: Duplicate id "menu"');
+      await expect(packPlugin(plugin.dir)).rejects.toThrow('skin:masthead (header): Duplicate id "menu"');
       writeHeader('<header><scalius-island data-island="missing"></scalius-island></header>');
       await expect(packPlugin(plugin.dir)).rejects.toThrow('Island "missing" is not declared in storefront.islands');
       writeHeader('<header><a href="/">Campaign</a></header>');

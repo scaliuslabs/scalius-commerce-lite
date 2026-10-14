@@ -1015,14 +1015,14 @@ describe("site settings write behavior", () => {
         settings: [expect.objectContaining({ key: "heading", type: "text", default: "Loved" })],
         component: false,
       }],
-      slots: [],
+      skins: [],
       templates: [],
       pagePresets: [],
       productBlocks: [{ key: "acme.reviews/stars", type: "stars", name: "Stars", placement: "buy-box", settings: [] }],
     }]);
   });
 
-  it("previews the images the draft's app sections and slots name, by each active app's schema", async () => {
+  it("previews the images the draft's app sections name, by each active app's schema", async () => {
     const { app, env } = createTestApp();
     const { pluginSettingsSchemaSchema } = await import("@scalius/shared/plugins");
     const draft = {
@@ -1031,7 +1031,7 @@ describe("site settings write behavior", () => {
         { id: "app", type: "app", version: 1, settings: { app: "acme.studio/hero", values: { photo: "media_hero", caption: "media_not_an_image", slides: [{ image: "media_slide" }] } } },
         { id: "app-2", type: "app", version: 1, settings: { app: "acme.gone/hero", values: { photo: "media_gone" } } },
       ] },
-      apps: { header: { app: "acme.studio/header", values: { logo: "media_logo" } } },
+      apps: { skins: { header: { app: "acme.studio/header", values: { tagline: "Hi" } } } },
     };
     mocks.getThemeWorkspace.mockResolvedValueOnce({
       published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
@@ -1051,7 +1051,7 @@ describe("site settings write behavior", () => {
           { key: "caption", label: "Caption", type: "text" },
           { key: "slides", label: "Slides", type: "list", fields: [{ key: "image", label: "Image", type: "image" }] },
         ]) }],
-        slots: [{ id: "header", slot: "header", name: "Header", settings: settings([{ key: "logo", label: "Logo", type: "image" }]) }],
+        skins: [{ id: "header", target: "header", name: "Header", settings: settings([{ key: "tagline", label: "Tagline", type: "text" }]) }],
         templates: [],
         productBlocks: [],
       } },
@@ -1059,7 +1059,7 @@ describe("site settings write behavior", () => {
 
     const response = await app.request("/api/v1/admin/settings/theme/editor", { method: "GET" }, env);
     expect(response.status).toBe(200);
-    expect(mocks.readThemeMedia).toHaveBeenCalledWith({ id: "db" }, draft, ["media_hero", "media_slide", "media_logo"]);
+    expect(mocks.readThemeMedia).toHaveBeenCalledWith({ id: "db" }, draft, ["media_hero", "media_slide"]);
   });
 
   it("passes notes and the exact draft revision through publication", async () => {
