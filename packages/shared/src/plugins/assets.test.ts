@@ -43,8 +43,8 @@ describe("plugin listing images", () => {
   });
 
   it("passes the first-party payment logos", async () => {
-    for (const plugin of ["bkash", "nagad"]) {
-      expect(checkPluginAsset("assets/icon.svg", await readRepoFile(`plugins/${plugin}/assets/icon.svg`), "icon"), plugin).toBeNull();
+    for (const mark of ["bkash", "nagad"]) {
+      expect(checkPluginAsset(`assets/${mark}.svg`, await readRepoFile(`plugins/bangladesh/assets/${mark}.svg`), "icon"), mark).toBeNull();
     }
   });
 });

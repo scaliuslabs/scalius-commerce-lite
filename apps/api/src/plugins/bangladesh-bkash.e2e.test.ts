@@ -1,4 +1,4 @@
-// scalius.bkash end to end through the platform (bundled loader, migrated
+// The Bangladesh pack's bKash feature end to end through the platform (bundled loader, migrated
 // schema, a simulated bKash API): the merchant enables the app's method, the
 // buyer sees it in checkout config, places an order with it, gets a bKash
 // session, returns from bKash, and the queue credits the order exactly once,
@@ -18,9 +18,10 @@ import { paymentRoutes } from "../routes/payment/payment-routes";
 import { paymentWebhookRoutes } from "../routes/webhooks/payments";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { PLUGIN_TEST_CREDENTIAL_KEY } from "./testing/fixtures";
-import { manifest as bkashManifest } from "../../../../plugins/bkash/src/index";
+import { manifest as packManifest } from "../../../../plugins/bangladesh/src/index";
 
-const METHOD = "scalius.bkash:bkash";
+const PACK = "scalius.bangladesh";
+const METHOD = "scalius.bangladesh:bkash";
 const SANDBOX = "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/";
 const LIMITER = { limit: async () => ({ success: true }) };
 
@@ -104,15 +105,16 @@ describe("bKash app through checkout, session, return and the queue", () => {
       VALUES ('v_tea', 'p_tea', 'TEA-250', 50000, 500, 0, 0, 1, 1, 'physical');
     `);
     const installed = await installPlugin(db, {
-      manifest: bkashManifest,
+      manifest: packManifest,
       source: "bundled",
-      bundleSha256: BUNDLED_PLUGINS["scalius.bkash"]!.sha256,
+      bundleSha256: BUNDLED_PLUGINS[PACK]!.sha256,
       actorUserId: "owner",
     });
-    const configured = await writePluginSettings(db, "scalius.bkash", {
-      environment: "sandbox", app_key: "app-key-e2e", app_secret: "app-secret-e2e-0123", username: "merchant-e2e", password: "pw-e2e-0123",
-    }, { expectedRevision: installed.revision, credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY });
-    await activatePlugin(db, "scalius.bkash", { actorUserId: "owner", expectedRevision: configured.revision });
+    // The pack's bKash feature on with the activation (every other one stays off), then its keys.
+    const active = await activatePlugin(db, PACK, { actorUserId: "owner", expectedRevision: installed.revision, features: ["bkash"] });
+    await writePluginSettings(db, PACK, {
+      bkash_environment: "sandbox", bkash_app_key: "app-key-e2e", bkash_app_secret: "app-secret-e2e-0123", bkash_username: "merchant-e2e", bkash_password: "pw-e2e-0123",
+    }, { expectedRevision: active.revision, credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY });
     await currencyDocument.write(db, { currencyCode: "BDT" });
     await checkoutDocument.write(db, { checkoutMode: "all", partialPaymentEnabled: false, partialPaymentAmount: 0 });
     await paymentMethodsDocument.write(db, { enabledMethods: ["cod", METHOD], defaultMethod: "cod" });
@@ -184,7 +186,7 @@ describe("bKash app through checkout, session, return and the queue", () => {
     bank.payments.get(paymentID)!.authorized = true;
     const createCall = bank.fetch.mock.calls.find(([url]) => String(url).endsWith("/create"))!;
     const callbackURL = String((JSON.parse(String(createCall[1]?.body)) as { callbackURL: string }).callbackURL);
-    expect(callbackURL).toMatch(/^https:\/\/api\.shop\.test\/api\/v1\/payment\/scalius\.bkash(?::|%3A)bkash\/success\?/);
+    expect(callbackURL).toMatch(/^https:\/\/api\.shop\.test\/api\/v1\/payment\/scalius\.bangladesh(?::|%3A)bkash\/success\?/);
     const back = new URL(callbackURL);
     back.searchParams.set("paymentID", paymentID);
     back.searchParams.set("status", "success");
@@ -203,7 +205,7 @@ describe("bKash app through checkout, session, return and the queue", () => {
   });
 
   it("does not offer or charge through the app once it is deactivated", async () => {
-    sqlite.prepare("UPDATE plugin_installations SET status = 'disabled' WHERE plugin_id = 'scalius.bkash'").run();
+    sqlite.prepare("UPDATE plugin_installations SET status = 'disabled' WHERE plugin_id = 'scalius.bangladesh'").run();
     const config = await (await request("GET", "/checkout/config")).json() as { data: { gateways: Array<{ id: string }> } };
     expect(config.data.gateways.map((gateway) => gateway.id)).not.toContain(METHOD);
     expect(bank.calls).toEqual([]);

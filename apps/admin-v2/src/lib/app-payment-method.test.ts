@@ -4,7 +4,7 @@ import { orderMessages, paymentMethodLabel } from "~/i18n/orders";
 import { appPaymentMethodFallbackName, appPaymentMethodName } from "./app-payment-method";
 
 const t = (key: keyof typeof orderMessages.en) => translate(orderMessages, key);
-const BKASH = "scalius.bkash:bkash";
+const BKASH = "scalius.bangladesh:bkash";
 
 describe("app payment method names", () => {
   it("reads an app method by its provider id in words until its name is known", () => {
@@ -18,7 +18,7 @@ describe("app payment method names", () => {
   it("prefers the installed provider's name", () => {
     const names = new Map([[BKASH, "bKash"]]);
     expect(appPaymentMethodName(BKASH, names)).toBe("bKash");
-    expect(appPaymentMethodName("scalius.nagad:nagad", names)).toBe("Nagad");
+    expect(appPaymentMethodName("scalius.bangladesh:nagad", names)).toBe("Nagad");
     expect(appPaymentMethodName("stripe", names)).toBeNull();
     expect(appPaymentMethodName("scalius.bangladesh:sslcommerz", new Map([["scalius.bangladesh:sslcommerz", "SSLCommerz"]]))).toBe("SSLCommerz");
     expect(appPaymentMethodName("scalius.bangladesh:sslcommerz")).toBe("Sslcommerz");

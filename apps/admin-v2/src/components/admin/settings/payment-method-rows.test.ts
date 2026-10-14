@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { chargeCurrencyIssue } from "./payment-method-outcome";
 import { paymentMethodRows, type AppPaymentProvider, type PaymentGatewayInfo } from "./payment-method-rows";
 
-const BKASH = "scalius.bkash:bkash";
-const NAGAD = "scalius.nagad:nagad";
+const BKASH = "scalius.bangladesh:bkash";
+const NAGAD = "scalius.bangladesh:nagad";
 
 const gateways: PaymentGatewayInfo[] = [
   { id: "stripe", label: "Stripe", pluginId: null, chargeCurrencies: "any" },

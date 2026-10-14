@@ -65,7 +65,7 @@ const EVENT_TYPE = "bkash.payment";
 const RETURN_BUDGET_MS = 25_000;
 
 function payments(ctx: PluginContext): PluginStorageCollection<PaymentRecord> {
-  return ctx.storage.payments as PluginStorageCollection<PaymentRecord>;
+  return ctx.storage["bkash-payments"] as PluginStorageCollection<PaymentRecord>;
 }
 
 /** bKash pre-fills the wallet number from payerReference: the buyer's mobile number as 01XXXXXXXXX, else a blank. */

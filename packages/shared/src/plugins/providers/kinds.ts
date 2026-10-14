@@ -74,7 +74,7 @@ export function isProviderOperation(kind: ProviderKind, operation: string): bool
 
 /**
  * An app provider's id as merchants select it and as orders, shipments and
- * settings store it: `<plugin id>:<provider id>` (`scalius.bkash:bkash`).
+ * settings store it: `<plugin id>:<provider id>` (`scalius.bangladesh:bkash`).
  * Built-in ids (`stripe`, `pathao`, `cod`) never contain a colon, so the two
  * can never collide, and a persisted id keeps its meaning after the app is
  * removed. A colon is a valid URL path character, so the id is one path

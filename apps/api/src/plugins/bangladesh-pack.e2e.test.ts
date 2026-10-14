@@ -1,8 +1,8 @@
 // scalius.bangladesh end to end through the platform (bundled loader,
 // migrated schema, the Worker's own provider runtime): a store that chose
 // BDBulkSMS and FraudBD from the pack. Until the pack is active the choices
-// fail closed and say why; activation loads the 11,550 places through the
-// place import, so a sign-in code goes out through the pack from the OTP
+// fail closed and say why; activating it with its places, BDBulkSMS and
+// FraudBD features on loads the 11,550 places through the place import, so a sign-in code goes out through the pack from the OTP
 // sender's path and the order page's lookup reaches FraudBD. Activating
 // again loads nothing, and removing the pack keeps every place.
 import type { DatabaseSync } from "node:sqlite";
@@ -41,11 +41,7 @@ describe("the Bangladesh pack's providers", () => {
     env = pluginTestEnv(binding, { CREDENTIAL_ENCRYPTION_KEY: KEY });
     sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1)").run();
     // The pack's own settings hold the keys; the store chose its BDBulkSMS gateway and FraudBD checker.
-    const installed = await installPlugin(db, { manifest: packManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS[PACK]!.sha256, actorUserId: "owner" });
-    await writePluginSettings(db, PACK, {
-      bdbulksms_token: TOKEN,
-      fraudbd_api_url: "https://fraudbd.com/api/check-courier-info", fraudbd_api_key: FRAUD_KEY, fraudbd_username: "shop-user", fraudbd_password: "fraudbd-password-1",
-    }, { expectedRevision: installed.revision, credentialEncryptionKey: KEY });
+    await installPlugin(db, { manifest: packManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS[PACK]!.sha256, actorUserId: "owner" });
     sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('sms', 'document', ?, 'json', 'sms')")
       .run(JSON.stringify({ activeProvider: `${PACK}:bdbulksms` }));
     sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('fraud_row', 'row_fraudbd', ?, 'json', 'fraud-checker')")
@@ -75,14 +71,24 @@ describe("the Bangladesh pack's providers", () => {
 
   const apps = () => createAppProviders(createAppProviderRuntime({ env, db, ctx: pluginTestCtx() }), KEY);
   const context = () => ({ db, env, ctx: pluginTestCtx() });
+  const FEATURES = ["places", "bdbulksms", "fraudbd"];
   const activate = async () => {
     const current = await requirePluginInstallation(db, PACK);
     const { pluginGrantKey, pluginGrantRequest } = await import("@scalius/shared/plugins/manifest");
-    return activatePluginWithHooks(context(), PACK, {
+    const result = await activatePluginWithHooks(context(), PACK, {
       actorUserId: "owner",
       expectedRevision: current.revision,
-      expectedGrantKey: pluginGrantKey(pluginGrantRequest(current.manifest)),
+      expectedGrantKey: pluginGrantKey(pluginGrantRequest(current.declaredManifest, FEATURES)),
+      features: FEATURES,
     });
+    // The keys of the features now on (an off feature has no settings to write).
+    if (!result.installation.storedSettings.bdbulksms_token) {
+      await writePluginSettings(db, PACK, {
+        bdbulksms_token: TOKEN,
+        fraudbd_api_url: "https://fraudbd.com/api/check-courier-info", fraudbd_api_key: FRAUD_KEY, fraudbd_username: "shop-user", fraudbd_password: "fraudbd-password-1",
+      }, { expectedRevision: result.installation.revision, credentialEncryptionKey: KEY });
+    }
+    return result;
   };
   const placeCount = () => (sqlite.prepare("SELECT count(*) AS count FROM places WHERE country_code = 'BD'").get() as { count: number }).count;
 
@@ -101,6 +107,20 @@ describe("the Bangladesh pack's providers", () => {
 
     const { hookError } = await activate();
     expect(hookError).toBeNull();
+
+    // Only the features turned on run: their ports and jobs are registered, nothing else is.
+    expect(sqlite.prepare("SELECT kind, name FROM plugin_registrations WHERE plugin_id = ? ORDER BY kind, name").all(PACK)).toEqual([
+      { kind: "cron", name: "places-sync" },
+      { kind: "provider", name: "fraud" },
+      { kind: "provider", name: "sms" },
+    ]);
+    const granted = (await requirePluginInstallation(db, PACK)).grant!;
+    expect(granted).toMatchObject({ features: ["bdbulksms", "fraudbd", "places"], scopes: ["write_places"], providers: ["fraud", "sms"] });
+    expect(granted.allowedHosts).toEqual(["*.fraudbd.com", "api.bdbulksms.net", "fraudbd.com"]);
+    // A provider of an off feature is unavailable and says which switch turns it on.
+    await expect(apps().resolve("sms", `${PACK}:gennet`)).resolves.toEqual({
+      provider: null, issue: "Turn on GenNet iSMS in Bangladesh pack's features to use it.",
+    });
 
     // The places: every one of the dataset, through the import port.
     expect(placeCount()).toBe(11_550);

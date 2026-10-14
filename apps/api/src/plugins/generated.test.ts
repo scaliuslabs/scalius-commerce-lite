@@ -60,14 +60,16 @@ describe("generated plugin modules", () => {
         translations: { bn: { tagline: expect.any(String) } },
       });
     }
-    // The payment apps carry their brand's logo (the listing icon and the
-    // cropped checkout mark their provider declares) and serve Bangladesh only.
-    for (const source of ["plugins/bkash", "plugins/nagad"]) {
-      const { manifest, assets } = await packPlugin(source);
-      expect(manifest, source).toMatchObject({ icon: "assets/icon.svg", countries: ["BD"] });
-      expect((manifest.providers as Array<{ icon?: string }>).map((provider) => provider.icon), source).toEqual(["assets/mark.svg"]);
-      expect(assets.map((asset) => asset.path).sort()).toEqual(["assets/icon.svg", "assets/mark.svg"]);
-    }
+    // The Bangladesh pack's wallets carry their brand's cropped checkout mark,
+    // each its own feature, every one off until the merchant turns it on.
+    const { manifest, assets } = await packPlugin("plugins/bangladesh");
+    const providers = manifest.providers as Array<{ id: string; icon?: string }>;
+    expect(providers.filter((provider) => provider.id === "bkash" || provider.id === "nagad").map((provider) => provider.icon))
+      .toEqual(["assets/bkash.svg", "assets/nagad.svg"]);
+    expect(assets.map((asset) => asset.path)).toEqual(expect.arrayContaining(["assets/bkash.svg", "assets/nagad.svg"]));
+    const features = manifest.features as Array<{ id: string; recommended?: boolean }>;
+    expect(features.map((feature) => feature.id)).toEqual(expect.arrayContaining(["places", "bkash", "nagad", "sslcommerz", "pathao", "steadfast"]));
+    expect(features.filter((feature) => feature.recommended).map((feature) => feature.id)).toEqual(["places"]);
   });
 
   it("ships every first-party app in Bangla too", async () => {

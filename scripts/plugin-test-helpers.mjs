@@ -20,7 +20,7 @@ export function makeTempPlugin({ id = "acme.tally", withIcon = false, version = 
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, contents);
   }
-  symlinkSync(join(root, "plugins/bkash/node_modules"), join(dir, "node_modules"));
+  symlinkSync(join(root, "plugins/bangladesh/node_modules"), join(dir, "node_modules"));
   if (withIcon) {
     mkdirSync(join(dir, "assets"), { recursive: true });
     writeFileSync(join(dir, "assets/icon.svg"), ICON);

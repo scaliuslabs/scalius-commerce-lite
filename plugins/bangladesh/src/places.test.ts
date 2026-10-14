@@ -45,9 +45,9 @@ describe("Bangladesh places", () => {
     expect(dataset.counts).toEqual({ 1: 66, 2: 1258, 3: 10226 });
   });
 
-  it("loads every place on activation, in chunks of 500, parents first, finishing on the last", async () => {
+  it("loads every place when the places feature is turned on, in chunks of 500, parents first, finishing on the last", async () => {
     const store = fakeStore();
-    const activated = await store.instance.lifecycle("activate");
+    const activated = await store.instance.feature("enable", "places");
     expect(activated.ok).toBe(true);
     expect(store.keys.size).toBe(PLACES_TOTAL);
     expect(store.calls).toHaveLength(Math.ceil(PLACES_TOTAL / PLACES_CHUNK));
@@ -65,18 +65,18 @@ describe("Bangladesh places", () => {
     expect(store.instance.kv.get("places")).toMatchObject({ version: PLACES_VERSION, done: true, next: PLACES_TOTAL, created: PLACES_TOTAL });
   });
 
-  it("does nothing once the store has this version (activation, the hourly job and the button alike)", async () => {
+  it("does nothing once the store has this version (turning it on, the hourly job and the button alike)", async () => {
     const store = fakeStore();
-    await store.instance.lifecycle("activate");
+    await store.instance.feature("enable", "places");
     const sent = store.calls.length;
-    await store.instance.lifecycle("activate");
+    await store.instance.feature("enable", "places");
     await store.instance.cron("places-sync");
     expect(store.calls).toHaveLength(sent);
   });
 
   it("stops at a failed chunk, says why on the places page, and resumes there", async () => {
     const store = fakeStore({ failAt: 3 });
-    const activated = await store.instance.lifecycle("activate");
+    const activated = await store.instance.feature("enable", "places");
     expect(activated.ok).toBe(false);
     expect(store.instance.kv.get("places")).toMatchObject({ done: false, next: 2 * PLACES_CHUNK, error: expect.stringContaining("within the hour") });
     const page = await store.instance.route("admin", "places");
@@ -88,7 +88,7 @@ describe("Bangladesh places", () => {
 
   it("asks for approval again when the grant no longer covers the import", async () => {
     const store = fakeStore({ failAt: 1, status: 403 });
-    await store.instance.lifecycle("activate");
+    await store.instance.feature("enable", "places");
     expect(store.instance.kv.get("places")).toMatchObject({ error: expect.stringContaining("Approve its access again") });
   });
 
@@ -98,7 +98,7 @@ describe("Bangladesh places", () => {
     const run = async (ctx: Parameters<typeof seedPlaces>[0]) => {
       await seedPlaces(ctx, { budgetMs: options.budgetMs, places: async () => options.places ?? tiny, version: (await ctx.kv.get<string>("test-version")) ?? "v1", ...(options.now ? { now: options.now } : {}) });
     };
-    const instance = createPluginTestHarness({ default: { ...pack, lifecycle: { activate: run }, cron: { ...pack.cron, "places-sync": run } } }, {
+    const instance = createPluginTestHarness({ default: { ...pack, lifecycle: { enable: run }, cron: { ...pack.cron, "places-sync": run } } }, {
       api: (_id, input) => {
         calls.push(input as ImportCall);
         return { ok: true, status: 200, data: { created: 1, updated: 0, unchanged: 0, skipped: 0, deactivated: 0, conflicts: [], conflictCount: 0 }, error: null };
@@ -111,7 +111,7 @@ describe("Bangladesh places", () => {
     let clock = 0;
     const cities = Array.from({ length: PLACES_CHUNK + 1 }, (_, index): PlaceEntry => ({ key: `t:city:${index}`, level: 1, parent: null, name: `City ${index}`, externalIds: {}, active: true }));
     const { instance, calls } = tinyPack({ budgetMs: 1, now: () => (clock += 1), places: cities });
-    await instance.lifecycle("activate");
+    await instance.feature("enable", "places");
     expect(calls).toHaveLength(1);
     expect(instance.kv.get("places")).toMatchObject({ version: "v1", next: PLACES_CHUNK, done: false });
     await instance.cron("places-sync");
@@ -130,12 +130,13 @@ describe("Bangladesh places", () => {
   it("never deletes places when the pack is removed, with or without its data", async () => {
     for (const keepData of [true, false]) {
       const store = fakeStore();
-      await store.instance.lifecycle("activate");
+      await store.instance.feature("enable", "places");
       const sent = store.calls.length;
       expect((await store.instance.lifecycle("uninstall", keepData)).ok).toBe(true);
       expect(store.calls).toHaveLength(sent);
     }
-    expect(manifest.scopes).toEqual(["write_places"]);
+    expect(manifest.scopes).toEqual([]);
+    expect(manifest.features.find((entry) => entry.id === "places")?.scopes).toEqual(["write_places"]);
   });
 });
 

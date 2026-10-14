@@ -9,7 +9,7 @@ import {
   SSLCOMMERZ_GATEWAY_ID,
 } from "./gateway-presentation";
 
-const BKASH = "scalius.bkash:bkash";
+const BKASH = "scalius.bangladesh:bkash";
 
 // A computed path: Vite rewrites a template-literal `new URL(..., import.meta.url)`
 // into a dev-server `/@fs/` URL, which `readFileSync` cannot open.
@@ -58,21 +58,21 @@ describe("gateway presentation", () => {
       markKind: "wordmark",
       hosted: true,
     });
-    expect(getGatewayPresentation("scalius.nagad:nagad", "Nagad")).toMatchObject({ markSrc: "/payment-marks/nagad.svg", markKind: "wordmark" });
+    expect(getGatewayPresentation("scalius.bangladesh:nagad", "Nagad")).toMatchObject({ markSrc: "/payment-marks/nagad.svg", markKind: "wordmark" });
     expect(getGatewayPresentation("acme.pay:wallet", "Acme wallet")).toMatchObject({ markSrc: APP_GATEWAY_MARK_SRC, markKind: "icon" });
   });
 
   it("serves each app provider's declared mark, byte for byte", () => {
     // The provider id, the plugin package and the mark its manifest declares.
-    const declared: Record<string, { plugin: string; icon: string }> = {
-      [SSLCOMMERZ_GATEWAY_ID]: { plugin: "bangladesh", icon: "assets/sslcommerz.png" },
-      "scalius.bkash:bkash": { plugin: "bkash", icon: "assets/mark.svg" },
-      "scalius.nagad:nagad": { plugin: "nagad", icon: "assets/mark.svg" },
+    const declared: Record<string, { plugin: string; source: string; icon: string }> = {
+      [SSLCOMMERZ_GATEWAY_ID]: { plugin: "bangladesh", source: "src/index.ts", icon: "assets/sslcommerz.png" },
+      "scalius.bangladesh:bkash": { plugin: "bangladesh", source: "src/bkash/index.ts", icon: "assets/bkash.svg" },
+      "scalius.bangladesh:nagad": { plugin: "bangladesh", source: "src/nagad/index.ts", icon: "assets/nagad.svg" },
     };
     expect(Object.keys(APP_PROVIDER_MARKS).sort()).toEqual(Object.keys(declared).sort());
     for (const [id, src] of Object.entries(APP_PROVIDER_MARKS)) {
-      const { plugin, icon } = declared[id]!;
-      const manifest = readFileSync(fromHere(`../../../../../plugins/${plugin}/src/index.ts`), "utf8");
+      const { plugin, source, icon } = declared[id]!;
+      const manifest = readFileSync(fromHere(`../../../../../plugins/${plugin}/${source}`), "utf8");
       expect(manifest, id).toContain(`icon: "${icon}"`);
       const served = readFileSync(fromHere(`../../../public${src}`));
       const mark = readFileSync(fromHere(`../../../../../plugins/${plugin}/${icon}`));
@@ -88,7 +88,7 @@ describe("gateway presentation", () => {
   it("names an app gateway from the store's checkout config, else its provider id", () => {
     const gateways = [{ id: "cod", name: "Cash on Delivery" }, { id: BKASH, name: "bKash" }];
     expect(appGatewayName(BKASH, gateways)).toBe("bKash");
-    expect(appGatewayName("scalius.nagad:nagad", gateways)).toBe("Nagad");
+    expect(appGatewayName("scalius.bangladesh:nagad", gateways)).toBe("Nagad");
     expect(appGatewayName(BKASH, [{ id: BKASH, name: "  " }])).toBe("Bkash");
     expect(appGatewayName("stripe", gateways)).toBeNull();
     expect(appGatewayName(SSLCOMMERZ_GATEWAY_ID, gateways)).toBe("Sslcommerz");

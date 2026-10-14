@@ -1,6 +1,7 @@
-// Scalius Nagad (`scalius.nagad`): Nagad online checkout as a hosted payment
-// provider. UNVERIFIED: built from Nagad's documented Online Payment API
-// without sandbox access; see README.md before taking real payments.
+// Nagad (the Bangladesh pack's `nagad` feature): Nagad online checkout as a
+// hosted payment provider. UNVERIFIED: built from Nagad's documented Online
+// Payment API without sandbox access; see the pack's README.md before taking
+// real payments.
 //
 // - createSession: initialize + complete with Nagad, then send the buyer to
 //   Nagad's page. Idempotent by the platform's attempt key: a retry gets the
@@ -13,19 +14,16 @@
 // - Refunds are not declared: Nagad documents no refund API for this flow,
 //   so merchants refund in the Nagad merchant portal and record it in Scalius.
 //
-// Storage: `payments`, one record per Nagad order (its id), found by the
+// Storage: `nagad-payments`, one record per Nagad order (its id), found by the
 // attempt (latest generation first) or by Nagad's payment reference.
 
 import {
   definePaymentProvider,
-  definePlugin,
-  PLUGIN_API_VERSION,
   ProviderError,
   type PaymentEvent,
   type PaymentSession,
   type PaymentSessionInput,
   type PluginContext,
-  type PluginManifestInput,
   type PluginStorageCollection,
 } from "@scalius/plugin-sdk";
 import {
@@ -44,102 +42,87 @@ import {
 } from "./nagad";
 import { bytesToHex } from "./rsa";
 
-export const manifest = {
-  id: "scalius.nagad",
+/** Storage collections (the pack's `storage`). */
+export const NAGAD_STORAGE = {
+  "nagad-payments": {
+    indexes: [["attempt", "generation"], "paymentReferenceId"],
+    unique: [["attempt", "generation"], "paymentReferenceId"],
+  },
+};
+
+/** The fields of the Nagad setup sheet (`group: "nagad"`). */
+export const NAGAD_SETTINGS = [
+  {
+    key: "nagad_environment",
+    label: "Environment",
+    type: "select" as const,
+    default: "sandbox",
+    options: [
+      { value: "sandbox", label: "Sandbox (test)" },
+      { value: "live", label: "Live" },
+    ],
+    group: "nagad" as const,
+  },
+  { key: "nagad_merchant_id", label: "Merchant ID", type: "text" as const, maxLength: 40, group: "nagad" as const, help: "The merchant ID Nagad assigned to your account." },
+  {
+    key: "nagad_merchant_number",
+    label: "Merchant number",
+    type: "text" as const,
+    maxLength: 14,
+    group: "nagad" as const,
+    help: "Optional: your Nagad merchant wallet number (01XXXXXXXXX), sent as accountNumber.",
+  },
+  {
+    key: "nagad_merchant_private_key",
+    label: "Merchant private key",
+    type: "secret" as const,
+    group: "nagad" as const,
+    help: "Your RSA private key, PKCS#8 PEM (-----BEGIN PRIVATE KEY-----). Nagad has the matching public key.",
+  },
+  {
+    key: "nagad_public_key",
+    label: "Nagad public key",
+    type: "textarea" as const,
+    maxLength: 5000,
+    group: "nagad" as const,
+    help: "The public key Nagad gave you (-----BEGIN PUBLIC KEY-----, or the bare base64 text).",
+  },
+  {
+    key: "nagad_server_ip",
+    label: "Server IP sent to Nagad",
+    type: "text" as const,
+    default: DEFAULT_SERVER_IP,
+    maxLength: 15,
+    group: "nagad" as const,
+    help: "Sent as X-KM-IP-V4. Use the IP Nagad whitelisted for you, if it asked for one.",
+  },
+];
+
+/** The Bangla setting text (labels, help and option labels). */
+export const NAGAD_SETTINGS_BN = {
+  nagad_environment: { label: "পরিবেশ", options: { sandbox: "স্যান্ডবক্স (পরীক্ষা)", live: "লাইভ" } },
+  nagad_merchant_id: { label: "মার্চেন্ট ID", help: "নগদ আপনার অ্যাকাউন্টের জন্য যে মার্চেন্ট ID দিয়েছে।" },
+  nagad_merchant_number: { label: "মার্চেন্ট নম্বর", help: "ঐচ্ছিক: আপনার নগদ মার্চেন্ট ওয়ালেট নম্বর (01XXXXXXXXX), যা accountNumber হিসেবে পাঠানো হয়।" },
+  nagad_merchant_private_key: { label: "মার্চেন্টের প্রাইভেট কী", help: "আপনার RSA প্রাইভেট কী, PKCS#8 PEM (-----BEGIN PRIVATE KEY-----)। এর সঙ্গে মিলে এমন পাবলিক কী নগদের কাছে আছে।" },
+  nagad_public_key: { label: "নগদের পাবলিক কী", help: "নগদ আপনাকে যে পাবলিক কী দিয়েছে (-----BEGIN PUBLIC KEY-----, অথবা শুধু base64 লেখা)।" },
+  nagad_server_ip: { label: "নগদে পাঠানো সার্ভারের IP", help: "X-KM-IP-V4 হিসেবে পাঠানো হয়। নগদ আপনার জন্য কোনো IP অনুমোদন করে দিয়ে থাকলে সেটি ব্যবহার করুন।" },
+};
+
+/** The payment provider declaration (`providers.payment[]`). */
+export const NAGAD_PROVIDER = {
+  id: "nagad",
   name: "Nagad (unverified)",
-  version: "0.1.2",
-  apiVersion: PLUGIN_API_VERSION,
-  description: "Unverified: Nagad online checkout, built from Nagad's published Online Payment API without sandbox access. Confirm it with a live Nagad merchant account before taking real payments.",
-  author: { name: "Scalius" },
-  icon: "assets/icon.svg",
-  tagline: "Nagad online checkout, not yet verified",
-  categories: ["payments"],
-  countries: ["BD"],
-  support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
-  documentationUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/blob/mono-repo/plugins/nagad/README.md",
-  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/nagad",
-  minPlatformVersion: "1.0.0",
-  allowedHosts: NAGAD_HOSTS,
-  storage: {
-    payments: {
-      indexes: [["attempt", "generation"], "paymentReferenceId"],
-      unique: [["attempt", "generation"], "paymentReferenceId"],
-    },
-  },
-  settings: [
-    {
-      key: "environment",
-      label: "Environment",
-      type: "select",
-      required: true,
-      default: "sandbox",
-      options: [
-        { value: "sandbox", label: "Sandbox (test)" },
-        { value: "live", label: "Live" },
-      ],
-    },
-    { key: "merchant_id", label: "Merchant ID", type: "text", required: true, maxLength: 40, help: "The merchant ID Nagad assigned to your account." },
-    {
-      key: "merchant_number",
-      label: "Merchant number",
-      type: "text",
-      maxLength: 14,
-      help: "Optional: your Nagad merchant wallet number (01XXXXXXXXX), sent as accountNumber.",
-    },
-    {
-      key: "merchant_private_key",
-      label: "Merchant private key",
-      type: "secret",
-      required: true,
-      help: "Your RSA private key, PKCS#8 PEM (-----BEGIN PRIVATE KEY-----). Nagad has the matching public key.",
-    },
-    {
-      key: "nagad_public_key",
-      label: "Nagad public key",
-      type: "textarea",
-      required: true,
-      maxLength: 5000,
-      help: "The public key Nagad gave you (-----BEGIN PUBLIC KEY-----, or the bare base64 text).",
-    },
-    {
-      key: "server_ip",
-      label: "Server IP sent to Nagad",
-      type: "text",
-      default: DEFAULT_SERVER_IP,
-      maxLength: 15,
-      help: "Sent as X-KM-IP-V4. Use the IP Nagad whitelisted for you, if it asked for one.",
-    },
-  ],
-  providers: {
-    payment: [{
-      id: "nagad",
-      name: "Nagad",
-      // The checkout mark: the logo cropped to its art (the listing icon keeps the padded canvas).
-      icon: "assets/mark.svg",
-      checkoutName: "Nagad",
-      flow: "hosted",
-      chargeCurrencies: ["BDT"],
-      operations: ["verifyReturn", "queryPayment", "testConnection"],
-    }],
-  },
-  // A session makes two sequential Nagad calls within the platform's request budget.
-  limits: { wallMs: 15_000 },
-  translations: {
-    bn: {
-      name: "নগদ (যাচাই করা হয়নি)",
-      tagline: "নগদ অনলাইন চেকআউট, এখনও যাচাই করা হয়নি",
-      description: "যাচাই করা হয়নি: স্যান্ডবক্স ছাড়া নগদের প্রকাশিত অনলাইন পেমেন্ট API দেখে তৈরি নগদ অনলাইন চেকআউট। আসল পেমেন্ট নেওয়ার আগে একটি লাইভ নগদ মার্চেন্ট অ্যাকাউন্টে এটি যাচাই করে নিন।",
-      settings: {
-        environment: { label: "পরিবেশ", options: { sandbox: "স্যান্ডবক্স (পরীক্ষা)", live: "লাইভ" } },
-        merchant_id: { label: "মার্চেন্ট ID", help: "নগদ আপনার অ্যাকাউন্টের জন্য যে মার্চেন্ট ID দিয়েছে।" },
-        merchant_number: { label: "মার্চেন্ট নম্বর", help: "ঐচ্ছিক: আপনার নগদ মার্চেন্ট ওয়ালেট নম্বর (01XXXXXXXXX), যা accountNumber হিসেবে পাঠানো হয়।" },
-        merchant_private_key: { label: "মার্চেন্টের প্রাইভেট কী", help: "আপনার RSA প্রাইভেট কী, PKCS#8 PEM (-----BEGIN PRIVATE KEY-----)। এর সঙ্গে মিলে এমন পাবলিক কী নগদের কাছে আছে।" },
-        nagad_public_key: { label: "নগদের পাবলিক কী", help: "নগদ আপনাকে যে পাবলিক কী দিয়েছে (-----BEGIN PUBLIC KEY-----, অথবা শুধু base64 লেখা)।" },
-        server_ip: { label: "নগদে পাঠানো সার্ভারের IP", help: "X-KM-IP-V4 হিসেবে পাঠানো হয়। নগদ আপনার জন্য কোনো IP অনুমোদন করে দিয়ে থাকলে সেটি ব্যবহার করুন।" },
-      },
-    },
-  },
-} satisfies PluginManifestInput;
+  // The checkout mark: the logo cropped to its art.
+  icon: "assets/nagad.svg",
+  checkoutName: "Nagad",
+  flow: "hosted" as const,
+  chargeCurrencies: ["BDT"],
+  operations: ["verifyReturn" as const, "queryPayment" as const, "testConnection" as const],
+  settings: ["nagad_environment", "nagad_merchant_id", "nagad_merchant_private_key", "nagad_public_key"],
+  environmentSetting: "nagad_environment",
+};
+
+export { NAGAD_HOSTS };
 
 /** Nagad's merchant order id: alphanumeric, at most 20 characters. */
 const NAGAD_ORDER_ID_LENGTH = 20;
@@ -177,7 +160,7 @@ type NagadPayment = PaymentFacts & (
 );
 type InitializedPayment = Extract<NagadPayment, { status: "initialized" }>;
 
-const payments = (ctx: PluginContext) => ctx.storage.payments as PluginStorageCollection<NagadPayment>;
+const payments = (ctx: PluginContext) => ctx.storage["nagad-payments"] as PluginStorageCollection<NagadPayment>;
 
 async function sha256Hex(text: string): Promise<string> {
   return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))));
@@ -433,4 +416,4 @@ const nagad = definePaymentProvider({
   },
 });
 
-export default definePlugin({ manifest, providers: { nagad } });
+export const nagadProviders = { nagad };

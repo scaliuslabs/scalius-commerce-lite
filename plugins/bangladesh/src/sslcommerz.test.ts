@@ -66,7 +66,7 @@ const session = (overrides: Partial<PaymentSessionInput> = {}): PaymentSessionIn
 
 describe("the Bangladesh pack's SSLCommerz declaration", () => {
   it("declares a hosted BDT gateway with SSLCommerz's limits, its own mark and settings, and the unsigned return field", () => {
-    expect(manifest.providers.payment).toEqual([expect.objectContaining({
+    expect(manifest.providers.payment.filter((provider) => provider.id === "sslcommerz")).toEqual([expect.objectContaining({
       id: "sslcommerz",
       name: "SSLCommerz",
       checkoutName: "Online Payment",
@@ -79,7 +79,7 @@ describe("the Bangladesh pack's SSLCommerz declaration", () => {
       environmentSetting: "sslcommerz_environment",
       returnCorrelationField: "tran_id",
     })]);
-    expect(manifest.allowedHosts).toEqual(expect.arrayContaining(["sandbox.sslcommerz.com", "securepay.sslcommerz.com"]));
+    expect(manifest.features.find((entry) => entry.id === "sslcommerz")).toMatchObject({ providers: ["sslcommerz"], allowedHosts: ["sandbox.sslcommerz.com", "securepay.sslcommerz.com"] });
     // No default: activation moves a store's old sandbox/live choice into an unset setting.
     expect(manifest.settings.find((field) => field.key === "sslcommerz_environment")).not.toHaveProperty("default");
   });

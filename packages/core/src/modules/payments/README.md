@@ -18,7 +18,7 @@ Every gateway implements the shared payment port
 in `gateways/port.ts`: each operation takes its port input and a call context
 (`{ settings, signal }`). The built-in gateway (Stripe) is an adapter file
 listed in `BUILT_IN_GATEWAYS`; app payment providers
-(`<plugin id>:<provider id>`: `scalius.bkash:bkash`, the Bangladesh pack's
+(`<plugin id>:<provider id>`: `scalius.bangladesh:bkash`, the Bangladesh pack's
 `scalius.bangladesh:sslcommerz`) are built per request by the API
 (`apps/api/src/plugins/providers/payment.ts`) and run through the plugin host
 in either loader. Cash on delivery is not a gateway.

@@ -1,11 +1,11 @@
-// scalius.nagad end to end through the SDK's harness (the platform's runtime
+// The pack's Nagad feature end to end through the SDK's harness (the platform's runtime
 // over an in-memory bridge) against MockNagad, which really decrypts and
 // signature-checks every request and seals its answers.
 
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PaymentEvent, PaymentSessionInput } from "@scalius/plugin-sdk";
 import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
-import nagadPlugin from "./index";
+import nagadPlugin from "../index";
 import {
   BUYER_MOBILE,
   generateKeyPair,
@@ -24,20 +24,21 @@ beforeAll(async () => {
   [merchant, nagad] = await Promise.all([generateKeyPair(), generateKeyPair()]);
 });
 
-const SUCCESS_URL = "https://api.shop.test/api/v1/payment/scalius.nagad:nagad/success?order_id=ORD1&payment_type=full";
+const SUCCESS_URL = "https://api.shop.test/api/v1/payment/scalius.bangladesh:nagad/success?order_id=ORD1&payment_type=full";
 const CORRELATION_ID = "ORD1_full_ABC12345";
 
 async function setup(settings: Record<string, string> = {}) {
   const server = await MockNagad.create(nagad, merchant);
   const harness = createPluginTestHarness(nagadPlugin, {
     settings: {
-      merchant_id: MERCHANT_ID,
-      merchant_number: MERCHANT_NUMBER,
-      merchant_private_key: merchant.privatePem,
+      nagad_merchant_id: MERCHANT_ID,
+      nagad_merchant_number: MERCHANT_NUMBER,
+      nagad_merchant_private_key: merchant.privatePem,
       nagad_public_key: nagad.publicPem,
       ...settings,
     },
     fetch: server.fetch,
+    features: ["nagad"],
   });
   return { server, harness };
 }
@@ -46,7 +47,7 @@ type Harness = Awaited<ReturnType<typeof setup>>["harness"];
 
 function sessionInput(overrides: Partial<PaymentSessionInput> = {}): PaymentSessionInput {
   return {
-    attemptKey: "payment_session:scalius.nagad:nagad:4f2a9c",
+    attemptKey: "payment_session:scalius.bangladesh:nagad:4f2a9c",
     correlationId: CORRELATION_ID,
     orderId: "ORD1",
     paymentType: "full",
@@ -56,9 +57,9 @@ function sessionInput(overrides: Partial<PaymentSessionInput> = {}): PaymentSess
     buyer: { name: "Buyer", phone: `+88${BUYER_MOBILE}` },
     urls: {
       success: SUCCESS_URL,
-      fail: "https://api.shop.test/api/v1/payment/scalius.nagad:nagad/fail?order_id=ORD1",
-      cancel: "https://api.shop.test/api/v1/payment/scalius.nagad:nagad/cancel?order_id=ORD1",
-      webhook: "https://api.shop.test/api/v1/webhooks/scalius.nagad:nagad",
+      fail: "https://api.shop.test/api/v1/payment/scalius.bangladesh:nagad/fail?order_id=ORD1",
+      cancel: "https://api.shop.test/api/v1/payment/scalius.bangladesh:nagad/cancel?order_id=ORD1",
+      webhook: "https://api.shop.test/api/v1/webhooks/scalius.bangladesh:nagad",
     },
     requestTimeoutMs: 11_000,
     ...overrides,
@@ -93,15 +94,15 @@ function query(reference: string, orderId = "ORD1") {
   return { providerRef: reference, orderId, requestTimeoutMs: 5_000 };
 }
 
-describe("scalius.nagad manifest", () => {
-  it("is labelled unverified and declares a hosted BDT provider without refunds", async () => {
+describe("the Nagad feature", () => {
+  it("is labelled unverified and declares a hosted BDT provider without refunds, reaching only Nagad", async () => {
     const { harness } = await setup();
-    expect(harness.manifest.name).toBe("Nagad (unverified)");
-    expect(harness.manifest.description).toMatch(/^Unverified: .*without sandbox access/);
+    expect(harness.manifest.features.find((entry) => entry.id === "nagad")?.name).toBe("Nagad (unverified)");
     expect(harness.manifest.allowedHosts).toEqual(["api.mynagad.com", "sandbox-ssl.mynagad.com:10061"]);
     expect(harness.manifest.providers).toEqual([expect.objectContaining({
       kind: "payment",
       id: "nagad",
+      name: "Nagad (unverified)",
       flow: "hosted",
       chargeCurrencies: ["BDT"],
       operations: ["verifyReturn", "queryPayment", "testConnection"],
@@ -159,14 +160,14 @@ describe("createSession", () => {
     expect(await startSession(harness)).toEqual(first);
     expect(server.calls).toHaveLength(2);
 
-    const other = await startSession(harness, sessionInput({ attemptKey: "payment_session:scalius.nagad:nagad:77aa01" }));
+    const other = await startSession(harness, sessionInput({ attemptKey: "payment_session:scalius.bangladesh:nagad:77aa01" }));
     expect(other.providerRef).not.toBe(first.providerRef);
     const orderIds = server.callsOf("initialize").map((call) => call.sensitive?.orderId);
     expect(new Set(orderIds).size).toBe(2);
   });
 
   it("uses the live API and the configured server IP", async () => {
-    const { server, harness } = await setup({ environment: "live", server_ip: "203.0.113.10" });
+    const { server, harness } = await setup({ nagad_environment: "live", nagad_server_ip: "203.0.113.10" });
     await startSession(harness);
     expect(server.calls[0]?.url.startsWith(`${LIVE_BASE}/check-out/initialize/${MERCHANT_ID}/`)).toBe(true);
     expect(server.calls[0]?.headers["X-KM-IP-V4"]).toBe("203.0.113.10");
@@ -227,7 +228,7 @@ describe("createSession", () => {
     expect(server.payments.has(session.providerRef)).toBe(true);
 
     server.faults.initialize = "reject_signature";
-    const rejected = await harness.provider("nagad", "createSession", sessionInput({ attemptKey: "payment_session:scalius.nagad:nagad:99" }));
+    const rejected = await harness.provider("nagad", "createSession", sessionInput({ attemptKey: "payment_session:scalius.bangladesh:nagad:99" }));
     expect(rejected.error).toMatchObject({ category: "misconfigured", code: "nagad.invalid_signature" });
   });
 
@@ -381,15 +382,15 @@ describe("testConnection and webhooks", () => {
   it("names the wrong setting without echoing any key", async () => {
     const keyLine = merchant.privatePem.split("\n")[1] ?? "";
     const cases: Array<[Record<string, string>, RegExp]> = [
-      [{ merchant_id: "" }, /merchant ID/],
-      [{ merchant_private_key: "" }, /Paste your merchant private key/],
-      [{ merchant_private_key: merchant.privatePem.replace(/PRIVATE KEY/g, "RSA PRIVATE KEY") }, /PKCS#1 key\. Convert it with: openssl pkcs8/],
-      [{ merchant_private_key: merchant.publicPem }, /merchant private key is not a readable RSA private key/],
+      [{ nagad_merchant_id: "" }, /merchant ID/],
+      [{ nagad_merchant_private_key: "" }, /Paste your merchant private key/],
+      [{ nagad_merchant_private_key: merchant.privatePem.replace(/PRIVATE KEY/g, "RSA PRIVATE KEY") }, /PKCS#1 key\. Convert it with: openssl pkcs8/],
+      [{ nagad_merchant_private_key: merchant.publicPem }, /merchant private key is not a readable RSA private key/],
       [{ nagad_public_key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A" }, /Nagad public key is not a readable RSA public key/],
       [{ nagad_public_key: merchant.publicPem }, /holds your own public key/],
-      [{ server_ip: "localhost" }, /IPv4/],
-      [{ merchant_number: "12345" }, /merchant number/],
-      [{ environment: "staging" }, /sandbox or live/],
+      [{ nagad_server_ip: "localhost" }, /IPv4/],
+      [{ nagad_merchant_number: "12345" }, /merchant number/],
+      [{ nagad_environment: "staging" }, /sandbox or live/],
     ];
     for (const [settings, message] of cases) {
       const { harness } = await setup(settings);

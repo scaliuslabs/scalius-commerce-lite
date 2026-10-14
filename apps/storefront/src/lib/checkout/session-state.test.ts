@@ -434,10 +434,10 @@ describe("checkout session state", () => {
   });
 
   it("recovers an app wallet's payment from its URL-encoded qualified id", () => {
-    const href = `/order-success?${new URLSearchParams({ orderId: "order_1", payment: "scalius.bkash:bkash" })}`;
-    expect(href).toBe("/order-success?orderId=order_1&payment=scalius.bkash%3Abkash");
+    const href = `/order-success?${new URLSearchParams({ orderId: "order_1", payment: "scalius.bangladesh:bkash" })}`;
+    expect(href).toBe("/order-success?orderId=order_1&payment=scalius.bangladesh%3Abkash");
     expect(writeHostedPaymentRecoverySession(href, { cartItems: "{}" })).toBe(true);
-    expect(readHostedPaymentRecoverySession()).toMatchObject({ href, gateway: "scalius.bkash:bkash", orderId: "order_1" });
+    expect(readHostedPaymentRecoverySession()).toMatchObject({ href, gateway: "scalius.bangladesh:bkash", orderId: "order_1" });
     clearHostedPaymentRecoverySession();
   });
 

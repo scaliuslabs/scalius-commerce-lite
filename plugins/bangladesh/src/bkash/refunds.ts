@@ -56,7 +56,7 @@ const REFUND_BUDGET_MS = 25_000;
 const REFUND_FAILED = new Set(["Failed", "Declined", "Cancelled"]);
 
 function refunds(ctx: PluginContext): PluginStorageCollection<RefundRecord> {
-  return ctx.storage.refunds as PluginStorageCollection<RefundRecord>;
+  return ctx.storage["bkash-refunds"] as PluginStorageCollection<RefundRecord>;
 }
 
 /** Idempotency keys may be 256 characters; record ids at most 128. */

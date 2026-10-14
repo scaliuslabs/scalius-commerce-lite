@@ -144,7 +144,7 @@ describe("order success payment retry", () => {
   });
 
   it("retries an app's wallet by its checkout name at its own session endpoint", () => {
-    const bkash = "scalius.bkash:bkash";
+    const bkash = "scalius.bangladesh:bkash";
     expect(isRetryableHostedPaymentMethod(bkash)).toBe(true);
     expect(getOrderSuccessRetryEndpoint(bkash)).toBe(`/api/checkout/payment-session/${bkash}`);
     expect(
@@ -155,15 +155,15 @@ describe("order success payment retry", () => {
         [
           { id: "cod", name: "Cash on Delivery" },
           { id: bkash, name: "bKash" },
-          { id: "scalius.nagad:nagad", name: "Nagad" },
+          { id: "scalius.bangladesh:nagad", name: "Nagad" },
           { id: "scalius.bangladesh:sslcommerz", name: "SSLCommerz" },
         ],
       ),
     ).toEqual([
       { gateway: bkash, endpoint: `/api/checkout/payment-session/${bkash}`, current: true, label: "bKash", requiresCardForm: false },
       {
-        gateway: "scalius.nagad:nagad",
-        endpoint: "/api/checkout/payment-session/scalius.nagad:nagad",
+        gateway: "scalius.bangladesh:nagad",
+        endpoint: "/api/checkout/payment-session/scalius.bangladesh:nagad",
         current: false,
         label: "Nagad",
         requiresCardForm: false,

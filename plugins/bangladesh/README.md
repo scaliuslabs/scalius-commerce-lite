@@ -2,15 +2,17 @@
 
 A first-party app with what a store in Bangladesh needs and a store elsewhere does not. It is for merchants who set it up and for contributors who change it. The app uses only the public plugin contract (`packages/plugin-sdk/README.md`). Core has no Bangladesh payment gateway, courier, SMS gateway, fraud checker or place list of its own.
 
-| Part | What it gives | Code |
-|------|---------------|------|
-| Payments | SSLCommerz as a hosted payment provider: sessions, IPN and return validation, transaction query, refunds | `src/sslcommerz.ts` |
-| Couriers | Pathao and Steadfast as courier providers: booking, tracking, Steadfast's lookup by order number, tracking pushes | `src/couriers.ts` |
-| SMS | SMS.net.bd, BDBulkSMS (GreenWeb), MIM SMS and GenNet iSMS as SMS providers | `src/sms.ts` |
-| Fraud checks | FraudBD, FraudGuard, eCourier Fraud Alert and the custom fraudchecker.link API as fraud providers, for Bangladesh buyers only | `src/fraud.ts` |
-| Places | The City, Thana and Area list: 66 cities, 1,258 thanas, 10,226 areas from Pathao's delivery places, and a refresh from Pathao's live list | `src/places.ts`, `src/pathao-places.ts`, `places/` |
+Every service is a **feature** (`manifest.features`, `docs/platform/PLUGINS.md`). Each starts off. A merchant turns on only the services the store uses, and each one asks for its own access when it is turned on.
 
-RedX joins when RedX publishes API documentation that can be read (its developer page renders no documentation). bKash and Nagad stay separate apps.
+| Part | What it gives | Features | Code |
+|------|---------------|----------|------|
+| Payments | bKash (Tokenized Checkout: execute on return, status query, refunds), Nagad (unverified: no refunds) and SSLCommerz (sessions, IPN and return validation, transaction query, refunds) as hosted payment providers | `bkash`, `nagad`, `sslcommerz` | `src/bkash/`, `src/nagad/`, `src/sslcommerz.ts` |
+| Couriers | Pathao and Steadfast as courier providers: booking, tracking, Steadfast's lookup by order number, tracking pushes | `pathao`, `steadfast` | `src/couriers.ts` |
+| SMS | SMS.net.bd, BDBulkSMS (GreenWeb), MIM SMS and GenNet iSMS as SMS providers | `smsnetbd`, `bdbulksms`, `mimsms`, `gennet` | `src/sms.ts` |
+| Fraud checks | FraudBD, FraudGuard, eCourier Fraud Alert and the custom fraudchecker.link API as fraud providers, for Bangladesh buyers only | `fraudbd`, `fraudguard`, `ecourier`, `fraudchecker` | `src/fraud.ts` |
+| Places | The City, Thana and Area list: 66 cities, 1,258 thanas, 10,226 areas from Pathao's delivery places (recommended during setup); Refresh from Pathao is part of the `pathao` feature | `places` | `src/places.ts`, `src/pathao-places.ts`, `places/` |
+
+RedX joins when RedX publishes API documentation that can be read (its developer page renders no documentation).
 
 ## Install
 
@@ -19,18 +21,20 @@ RedX joins when RedX publishes API documentation that can be read (its developer
 
 A store that picks Bangladesh in the new-store setup (`/admin/welcome`) sees the pack next. It offers **Activate** when the pack is in this deployment, and the `pnpm plugin add` command when it is not.
 
-## Activate
+## Activate and turn on features
 
-A Super Admin selects **Review and activate** in Apps. The pack asks for:
+1. A Super Admin selects **Review and activate** in Apps. The pack asks for nothing at this step: no scope, no host, no provider port. Nothing runs yet.
+2. On the app's page, **Features** lists every service with a switch, all off. **Places** is marked recommended.
+3. Turning a feature on opens a consent dialog with that feature's access only, for example:
+   - `places`: the `write_places` scope (add and update places through the place import; it cannot delete one);
+   - `bkash`: payments, and the bKash hosts `tokenized.pay.bka.sh` and `tokenized.sandbox.bka.sh`;
+   - `pathao`: deliveries, the Pathao hosts, and `write_places` for Refresh from Pathao.
 
-- the `write_places` scope: to load the places through the place import. It reads and adds and updates places only; it cannot delete one;
-- network access to the payment gateway's, couriers', SMS gateways' and checkers' hosts only;
-- the payment, courier, SMS and fraud check provider ports.
+   A Super Admin approves it. The feature's provider, settings, routes and jobs start with the same write. Turning a feature off needs no approval: its access is revoked and its provider, routes and jobs stop at once. Its saved keys stay for when it is turned on again.
+4. Turning **Places** on loads the places. It sends them in calls of 500, parents first, for at most 20 seconds. The hourly `places-sync` job finishes a load that did not complete. The **Bangladesh places** page (Settings) shows the progress and has **Load places now**.
+5. Each service's keys are entered where it is set up: payments in Settings → Payments, couriers in Settings → Shipping → Couriers, SMS in Settings → Notifications, fraud checkers in Settings → Apps and integrations.
 
-Activation then does two things:
-
-1. It loads the places. It sends them in calls of 500, parents first, for at most 20 seconds. The hourly `places-sync` job finishes a load that did not complete. The **Bangladesh places** page (Settings) shows the progress and has **Load places now**.
-2. The next steps show in the setup step and on the places page: set up SSLCommerz in Settings → Payments, add Pathao or Steadfast in Settings → Shipping → Couriers, choose the SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations. Each one's keys are entered there, in its setup sheet.
+An off feature's provider is not offered anywhere; a saved choice of it reads "Turn on <feature> in Bangladesh pack's features to use it."
 
 ## Settings
 
@@ -47,6 +51,8 @@ Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPT
 | eCourier Fraud Alert | API URL, API key, API secret, user ID |
 | FraudChecker (custom API) | API URL, bearer token |
 | SSLCommerz | Environment (sandbox or live; no default: the store chooses), store ID, store password |
+| bKash | Environment (sandbox by default), app key, app secret, username, password |
+| Nagad (unverified) | Environment (sandbox by default), merchant ID, merchant private key (PKCS#8 PEM), Nagad public key; merchant number and server IP (`X-KM-IP-V4`, default `127.0.0.1`) are optional |
 | Pathao | API address, client ID, client secret, username, password, store ID (and, for updates, a webhook secret; booking defaults: delivery type, item type, weight in kg) |
 | Steadfast | API address, API key, secret key (and, for updates, a webhook token; empty: the secret key) |
 
@@ -73,6 +79,26 @@ Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPT
 - New sessions use the platform's routes: IPN `/api/v1/webhooks/scalius.bangladesh:sslcommerz`, returns `/api/v1/payment/scalius.bangladesh:sslcommerz/{success,fail,cancel}`.
 - **Test connection** runs one transaction query for a reference no payment has; SSLCommerz answers it only with working credentials.
 - The SSLCommerz mark in Settings → Payments is the pack's (`assets/sslcommerz.png`); the storefront shows a copy.
+
+## bKash
+
+- Tokenized Checkout v1.2.0-beta (`src/bkash/`). `createSession` creates one bKash payment per checkout attempt and sends the buyer to bKash's page. A retried session gets the same payment.
+- On the return, the pack completes the payment with its own server-to-server Execute call; bKash charges nothing before it. A cancelled, failed or repeated return is settled with Query Payment. The return's parameters only name the payment to ask about.
+- No webhooks: bKash's merchant notifications travel through AWS SNS and add nothing, since a payment completes only when the pack executes it.
+- Refunds go to bKash's refund API at most once per idempotency key, and a lost answer is probed, never sent again.
+- The grant token is cached in the pack's KV (`bkash:token:<environment>:<account hash>`), keyed by environment, app key and username, never a secret.
+- Storage: `bkash-payments` (by attempt) and `bkash-refunds` (unique bKash refund id).
+
+## Nagad (unverified)
+
+> [!WARNING]
+> **UNVERIFIED.** Built from Nagad's published Online Payment API documentation without access to a Nagad sandbox. The tests use only a mock Nagad server (`src/nagad/mock-nagad.ts`). Before real payments, verify it with a live merchant account: a small real payment, a cancelled one and a failed one.
+
+- Initialize and complete (RSA PKCS#1 v1.5 sealed, SHA256withRSA signed, challenge checked), then the buyer pays on Nagad's page. The return and status checks call Verify Payment and match the reference, order, merchant ID and amount; a forged return costs no Nagad call.
+- Nagad's order id is derived from the checkout attempt and a generation number, so a retry never makes a second payment.
+- No refunds (refund in the Nagad merchant portal, then record it in Scalius) and no webhooks. BDT only.
+- Create the merchant key pair with `openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out merchant-private.pem`. **Test connection** checks the settings and both keys locally; only a real payment proves Nagad accepts them.
+- Storage: `nagad-payments` (by attempt and generation, and by Nagad's payment reference).
 
 ## Couriers
 
@@ -113,10 +139,11 @@ Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPT
 ## Testing
 
 ```sh
-pnpm exec vitest run plugins/bangladesh apps/api/src/plugins/bangladesh-pack.e2e.test.ts apps/api/src/plugins/bangladesh-couriers.e2e.test.ts apps/api/src/plugins/bangladesh-couriers.outcome.d1.test.ts apps/api/src/plugins/bangladesh-sslcommerz.e2e.test.ts
+pnpm exec vitest run plugins/bangladesh apps/api/src/plugins/bangladesh-pack.e2e.test.ts apps/api/src/plugins/bangladesh-couriers.e2e.test.ts apps/api/src/plugins/bangladesh-couriers.outcome.d1.test.ts apps/api/src/plugins/bangladesh-sslcommerz.e2e.test.ts apps/api/src/plugins/bangladesh-bkash.e2e.test.ts
 ```
 
 - `src/*.test.ts` run the app over the SDK harness with scripted gateway and service answers. The cases script the gateway and service answers.
-- `bangladesh-pack.e2e.test.ts` runs the bundled pack on the migrated schema. It covers the 11,550-place seed, a sign-in code sent from its references, a fraud check, a second activation and an uninstall.
+- `bangladesh-pack.e2e.test.ts` runs the bundled pack on the migrated schema. It covers activation with only the places, BDBulkSMS and FraudBD features on (only their ports and jobs are registered; an off feature's provider says which switch turns it on), the 11,550-place seed, a sign-in code sent from its references, a fraud check, a second activation and an uninstall.
 - `bangladesh-couriers.e2e.test.ts` covers the couriers' fail-closed state before activation, the webhook URLs, Pathao's place ids and once-only bulk booking. `bangladesh-couriers.outcome.d1.test.ts` runs core's booking-outcome cases (lost answers, refusals, Steadfast's lookup) through the pack.
+- `bangladesh-bkash.e2e.test.ts` takes an order through checkout, a bKash session, the return and the queue with only the bKash feature on.
 - `bangladesh-sslcommerz.e2e.test.ts` covers SSLCommerz's fail-closed state before activation, a validated IPN credited once, a tampered IPN, a cancel return, and a refund.
