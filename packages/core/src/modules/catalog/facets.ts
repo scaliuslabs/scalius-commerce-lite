@@ -812,29 +812,33 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
     // Only values that can be shown (every count tie within the value cap, a
     // selected value, every value of a number attribute for its range) read
     // their label, order, number and sample SKU, from the value's first public row.
+    // Point lookups by primary key only: no planner can turn them into a walk
+    // over every facet row.
+    const sampleColumn = (column: string) => sql.raw(`(SELECT sample_row.${column} FROM product_facet_values AS sample_row
+                WHERE sample_row.owner_id = shown.sample_owner AND sample_row.facet_key = shown.facet_id)`);
     const shownValues = sql`
-            SELECT counted.facet_kind, counted.facet_id, counted.value_key, counted.value_count,
-                sample_row.value_label, sample_row.sort_order AS value_sort,
-                sample_row.value_number, sample_row.variant_id AS sample_sku
+            SELECT shown.facet_kind, shown.facet_id, shown.value_key, shown.value_count,
+                ${sampleColumn("value_label")} AS value_label, ${sampleColumn("sort_order")} AS value_sort,
+                ${sampleColumn("value_number")} AS value_number, ${sampleColumn("variant_id")} AS sample_sku
             FROM (
-                SELECT value_counts.*, RANK() OVER (
-                    PARTITION BY value_counts.facet_kind, value_counts.facet_id ORDER BY value_counts.value_count DESC
-                ) AS count_rank
-                FROM value_counts
-            ) AS counted
-            LEFT JOIN ${productAttributes} AS counted_attribute
-                ON counted.facet_kind = 'attribute' AND counted_attribute.id = counted.facet_id
-            INNER JOIN product_facet_values AS sample_row
-                ON sample_row.facet_key = counted.facet_id
-               AND sample_row.owner_id = (
-                   SELECT first_row.owner_id FROM product_facet_values AS first_row
-                   INNER JOIN product_buyer_state AS first_buyer
-                       ON first_buyer.product_id = first_row.product_id AND first_buyer.is_public = 1
-                   WHERE first_row.facet_key = counted.facet_id AND first_row.value_key = counted.value_key
-                   ORDER BY first_row.product_id, first_row.owner_id LIMIT 1
-               )
-            WHERE counted.count_rank <= ${sql.raw(String(valueLimit))} OR counted_attribute.value_type = 'number'
-               OR ${isSelectedValue(sql.raw("counted.facet_id"), sql.raw("counted.value_key"))}
+                SELECT counted.facet_kind, counted.facet_id, counted.value_key, counted.value_count, (
+                    SELECT first_row.owner_id FROM product_facet_values AS first_row
+                    INNER JOIN product_buyer_state AS first_buyer
+                        ON first_buyer.product_id = first_row.product_id AND first_buyer.is_public = 1
+                    WHERE first_row.facet_key = counted.facet_id AND first_row.value_key = counted.value_key
+                    ORDER BY first_row.product_id, first_row.owner_id LIMIT 1
+                ) AS sample_owner
+                FROM (
+                    SELECT value_counts.*, RANK() OVER (
+                        PARTITION BY value_counts.facet_kind, value_counts.facet_id ORDER BY value_counts.value_count DESC
+                    ) AS count_rank
+                    FROM value_counts
+                ) AS counted
+                LEFT JOIN ${productAttributes} AS counted_attribute
+                    ON counted.facet_kind = 'attribute' AND counted_attribute.id = counted.facet_id
+                WHERE counted.count_rank <= ${sql.raw(String(valueLimit))} OR counted_attribute.value_type = 'number'
+                   OR ${isSelectedValue(sql.raw("counted.facet_id"), sql.raw("counted.value_key"))}
+            ) AS shown
     `;
     const scopeSummary = sql`
         SELECT COUNT(*) AS listing_count, MIN(listing_from_minor) AS listing_min, MAX(listing_to_minor) AS listing_max
