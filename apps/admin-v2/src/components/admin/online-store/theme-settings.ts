@@ -1,5 +1,6 @@
 import {
   STOREFRONT_BANGLA_FONTS,
+  STOREFRONT_BENGALI_SYSTEM_FONT,
   STOREFRONT_FONTS,
   STOREFRONT_PRODUCT_MODULES,
   STOREFRONT_TEMPLATES,
@@ -352,7 +353,7 @@ export function typePairingPreview(pairing: StorefrontTypePairing): TypePairingP
   const spec = STOREFRONT_TYPE_PAIRING_SPECS[pairing];
   const bangla = STOREFRONT_BANGLA_FONTS[spec.bangla];
   const stack = (font: keyof typeof STOREFRONT_FONTS) =>
-    `"${previewFamily(STOREFRONT_FONTS[font].family)}", "${previewFamily(bangla.family)}", ${STOREFRONT_FONTS[font].fallback}, ${bangla.fallback}`;
+    `"${previewFamily(STOREFRONT_FONTS[font].family)}", "${previewFamily(bangla.family)}", "${STOREFRONT_BENGALI_SYSTEM_FONT}", ${STOREFRONT_FONTS[font].fallback}, ${bangla.fallback}`;
   return {
     heading: { family: STOREFRONT_FONTS[spec.heading].family, stack: stack(spec.heading), weight: spec.headingWeight },
     body: { family: STOREFRONT_FONTS[spec.body].family, stack: stack(spec.body) },
