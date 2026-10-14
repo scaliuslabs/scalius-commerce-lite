@@ -107,7 +107,7 @@ describe("admin app routes", () => {
       name: "Legacy sections",
       source: "upload",
       status: "failed",
-      failureReason: expect.stringContaining("cannot read the saved version 1.0.0"),
+      failureReason: expect.stringMatching(/^Reinstall needed: .*saved version 1\.0\.0/),
     });
   });
 

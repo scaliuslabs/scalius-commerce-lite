@@ -63,11 +63,13 @@ describe("bundled plugin sync", () => {
     expect(await getPluginKv(db, "acme.hello", "paid_count")).toBe(3);
   });
 
-  it("updates the demo's stored Noor 1.1.0 to the bundled Noor in place, still active (presentation needs no new approval)", async () => {
+  it("rewrites the demo's stored Noor 1.1.0 from the bundled Noor in place, still active (presentation needs no new approval)", async () => {
     // The live row as the deploy found it: stored before route-drawn sections
-    // were retired, so every section carries `reads: []`.
+    // were retired, so every section carries `reads: []` and the row no
+    // longer parses. No read mapping: the deployed code replaces it.
     storeRow({ pluginId: "scalius.noor", version: "1.1.0", sha256: "ab".repeat(32), manifest: noorStored.manifest, grant: noorStored.grant, status: "active" });
-    expect(await getPluginInstallation(db, "scalius.noor")).toMatchObject({ version: "1.1.0", status: "active" });
+    expect(await getPluginInstallation(db, "scalius.noor")).toBeNull();
+    expect((await readPluginInstallations(db)).unreadable).toMatchObject([{ pluginId: "scalius.noor", version: "1.1.0", status: "active" }]);
     const noor = BUNDLED_PLUGINS["scalius.noor"]!;
     const result = await syncBundledPlugins(db, { "scalius.noor": noor });
     expect(result).toMatchObject({ updated: ["scalius.noor"], failed: [] });

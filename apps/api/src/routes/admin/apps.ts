@@ -675,7 +675,7 @@ function unreadableSummary(installation: UnreadablePluginInstallation): ReturnTy
     thirdParty: isThirdPartyPlugin(installation.pluginId),
     signed: false,
     failureReason: installation.failureReason
-      ?? `This release cannot read the saved version ${installation.version} of this app, so it is not running. Update or reinstall it.`,
+      ?? `Reinstall needed: this release cannot read the saved version ${installation.version} of this app, so it is not running.`,
     revision: installation.revision,
     installedAt: iso(installation.installedAt),
     activatedAt: isoOrNull(installation.activatedAt),

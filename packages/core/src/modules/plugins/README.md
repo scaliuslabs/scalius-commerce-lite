@@ -20,7 +20,7 @@ Records, KV, logs, deliveries and cron runs belong to the plugin id, not to the 
 
 Status is `installed`, `active`, `disabled` or `failed`.
 
-Stored manifests always read. When the manifest schema retires a shape, add its read mapping to `upgradeStoredPluginManifest` with a test (`scopes.test.ts`); a row that still does not read is skipped by the runtime but listed on the Apps page as failed (`readPluginInstallations`), and a bundled one is rewritten from the deployed code by the next sync. Activate, deactivate, update, uninstall and settings writes compare-and-set on `plugin_installations.revision` (`installation.revision_conflict`).
+No read mappings for retired manifest shapes before v2 is stable. A row whose stored manifest no longer parses is skipped by the runtime but never hidden (`readPluginInstallations`): a bundled one is rewritten from the deployed code by the next sync (its approved grant decides active or waiting for approval); any other is listed on the Apps page as failed, reinstall needed. Activate, deactivate, update, uninstall and settings writes compare-and-set on `plugin_installations.revision` (`installation.revision_conflict`).
 
 1. `installPlugin` adds an `installed` row with the setting defaults. Nothing runs. Bundled apps install from `apps/api/src/plugins/bundled-sync.ts`.
 2. `activatePlugin` needs the required settings filled, stores the grant the manifest asks for and sets `active`. Only a Super Admin may activate.
