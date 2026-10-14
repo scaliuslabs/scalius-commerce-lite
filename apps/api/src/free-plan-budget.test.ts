@@ -13,7 +13,8 @@ import {
 import { rotateRecommendations } from "./background/catalog";
 import { DVC_AUDIT_RATE } from "./public-read";
 import { STORE, createFreePlanStore, type FreePlanStore } from "./testing/free-plan-store";
-import { cartItems, seedCatalog, seedMediaBacklog, seedOrders } from "./testing/free-plan-seed";
+import { seedCatalog, seedMediaBacklog, seedOrders } from "./testing/free-plan-seed";
+import { jsonRequest, placeOrder as checkoutOrder, taxQuote as checkoutQuote } from "./testing/free-plan-checkout";
 import { BUDGETS, type Budget } from "./testing/free-plan-budgets";
 
 /**
@@ -74,14 +75,6 @@ function mean(results: FreePlanCounters[]): FreePlanCounters {
   return out;
 }
 
-function jsonRequest(url: string, body: unknown, headers: Record<string, string> = {}): Request {
-  return new Request(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify(body),
-  });
-}
-
 const PAGES = {
   home: ["/api/v1/storefront/layout", "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
   product: ["/api/v1/storefront/layout", "/api/v1/products/linen-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/linen-panjabi"],
@@ -93,7 +86,6 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
   const limits = PLAN_LIMITS[plan];
   const measurements = report[plan]!;
   let store: FreePlanStore;
-  let orderCounter = 0;
   const pendingChallenge = new Map<string, { challengeKey: string; deliveryKey: string }>();
 
   async function run(
@@ -166,38 +158,8 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     expect(failed).toEqual([]);
   }
 
-  async function taxQuote(lines: number): Promise<{ quoteFingerprint: string }> {
-    const response = await store.worker.fetch(jsonRequest(`${STORE.api}/api/v1/orders/tax-quote`, {
-      items: cartItems(lines).map(({ productId, variantId, quantity }) => ({ productId, variantId, quantity })),
-      city: "city_1", zone: "zone_1", shippingMethodId: "m_std", discountCodes: [],
-    }));
-    const body = await response.json() as { data: { quoteFingerprint: string } };
-    expect(response.status, JSON.stringify(body)).toBe(200);
-    return body.data;
-  }
-
-  async function placeOrder(lines: number, quote: string): Promise<string> {
-    orderCounter += 1;
-    const response = await store.worker.fetch(jsonRequest(`${STORE.api}/api/v1/orders`, {
-      checkoutRequestId: `budget_${crypto.randomUUID()}`,
-      expectedQuoteFingerprint: quote,
-      customerName: "Budget Buyer",
-      customerPhone: `+88017${String(10000000 + orderCounter)}`,
-      customerEmail: "buyer@shop.test",
-      shippingAddress: "House 1, Road 2, Gulshan",
-      city: "city_1",
-      zone: "zone_1",
-      notes: null,
-      items: cartItems(lines),
-      discountCodes: [],
-      shippingCharge: 60,
-      shippingMethodId: "m_std",
-      paymentMethod: "cod",
-    }));
-    const body = await response.json() as { data: { orderId: string } };
-    expect(response.status, JSON.stringify(body)).toBe(201);
-    return body.data.orderId;
-  }
+  const taxQuote = (lines: number) => checkoutQuote(store, lines);
+  const placeOrder = (lines: number, quote: string) => checkoutOrder(store, lines, quote);
 
   const CRON_TIME = Date.parse("2026-10-03T10:15:00Z");
   const NIGHTLY_TIME = Date.parse("2026-10-03T20:00:00Z");

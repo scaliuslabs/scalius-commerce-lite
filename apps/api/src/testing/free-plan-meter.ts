@@ -32,9 +32,12 @@ export interface FreePlanCounters {
   d1RowsChanged: number;
   /**
    * Rows read, an estimate (SQLite reports none): the rows each statement returns plus, for every full scan
-   * its query plan shows (triggers included), the scanned table's row count. An upper bound of D1's `rows_read`.
+   * its query plan shows (triggers included), the scanned table's row count. It ignores LIMIT, so it can
+   * overstate a capped scan; the scale proof (scripts/scale-proof.mjs) measures D1's own `rows_read`.
    */
   d1RowsRead: number;
+  /** Rows the statements returned (exact). */
+  d1RowsReturned: number;
   /** Full-table-scan steps in the plans of the executed statements: rows read that grow with the table. */
   d1FullScans: number;
   r2Ops: number;
@@ -50,7 +53,7 @@ export interface FreePlanCounters {
 
 export function emptyCounters(): FreePlanCounters {
   return {
-    cpuMs: 0, wallMs: 0, d1Calls: 0, d1Statements: 0, d1RowsChanged: 0, d1RowsRead: 0, d1FullScans: 0,
+    cpuMs: 0, wallMs: 0, d1Calls: 0, d1Statements: 0, d1RowsChanged: 0, d1RowsRead: 0, d1RowsReturned: 0, d1FullScans: 0,
     r2Ops: 0, cacheOps: 0, serviceCalls: 0, externalFetches: 0, waitUntilTasks: 0,
   };
 }
@@ -150,7 +153,9 @@ export function meterD1(
 ): D1Database {
   const read = (query: string | undefined, result: unknown): void => {
     const c = counters();
-    c.d1RowsRead += rowsReturned(result);
+    const returned = rowsReturned(result);
+    c.d1RowsReturned += returned;
+    c.d1RowsRead += returned;
     if (!scan || !query) return;
     const { scans, rows } = timedEngine(clock, () => scan.estimate(query));
     c.d1FullScans += scans;
