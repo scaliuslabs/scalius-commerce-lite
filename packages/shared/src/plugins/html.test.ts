@@ -146,6 +146,8 @@ describe("app component HTML (component profile)", () => {
   // handler, script URL, raw-text element or markup in a value, and sanitize
   // to itself again.
   const RAW_TEXT = new Set(["script", "style", "noscript", "template", "title", "xmp", "iframe", "noembed", "noframes", "plaintext", "math", "foreignobject", "animate", "set", "use", "object", "embed", "base", "meta", "link"]);
+  // Whitespace and C0 controls are dropped before the scheme check, the way a URL parser ignores them.
+  const withoutBlanksAndControls = (value: string) => [...value].filter((char) => char.charCodeAt(0) > 0x1f && !/\s/.test(char)).join("");
   function issuesOf(html: string): string[] {
     const issues: string[] = [];
     const parser = new Parser({
@@ -153,7 +155,7 @@ describe("app component HTML (component profile)", () => {
         if (RAW_TEXT.has(name) && !(name === "script" && attributes.type === "application/ld+json")) issues.push(`<${name}>`);
         for (const [key, value] of Object.entries(attributes)) {
           if (key.startsWith("on") || key === "srcdoc" || key === "formaction" || (key.includes("href") && key !== "href")) issues.push(key);
-          if (/^(?:javascript|vbscript|data):/i.test(value.replace(/[\s\u0000-\u001f]/g, ""))) issues.push(`${key}=${value}`);
+          if (/^(?:javascript|vbscript|data):/i.test(withoutBlanksAndControls(value))) issues.push(`${key}=${value}`);
         }
       },
       ontext(text) {
