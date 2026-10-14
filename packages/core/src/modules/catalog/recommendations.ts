@@ -76,6 +76,8 @@ const POPULAR_WINDOW_SECONDS = 30 * 86_400;
 export const POPULAR_SAMPLE_PAIRS = 5_000;
 /** Candidates from co-purchases, and per category, collection rule category and source attribute value. */
 export const RELATED_CANDIDATES_PER_SIGNAL = 100;
+/** Related candidates scored in all (cart sources and large manual collections can add more). */
+export const RELATED_CANDIDATE_LIMIT = 1_000;
 
 export type ProductRecommendationReason = "also_bought" | "similar" | "popular" | "new_arrivals";
 
@@ -379,9 +381,24 @@ export async function rankRecommendationRows(
                 ORDER BY newest.product_created_at DESC, newest.product_id LIMIT ${n(limit)}
             ) AS newest_tail
         ),
+        -- Each pooled product with its co-buy and popularity counts: one grouped
+        -- pass over the bounded sets, never a lookup into them per candidate.
+        rec_signals AS (
+            SELECT product_id, MAX(pooled) AS pooled, MAX(co_buyers) AS co_buyers, MAX(popular_buyers) AS popular_buyers
+            FROM (
+                -- The related pool is capped as a whole too.
+                SELECT product_id, 1 AS pooled, 0 AS co_buyers, 0 AS popular_buyers FROM (
+                    SELECT product_id FROM rec_pool ORDER BY product_id LIMIT ${n(RELATED_CANDIDATE_LIMIT)}
+                ) AS related
+                UNION ALL SELECT product_id, 1, 0, 0 FROM rec_tail
+                UNION ALL SELECT product_id, 0, buyers, 0 FROM rec_co
+                UNION ALL SELECT product_id, 0, 0, buyers FROM rec_popular
+            ) AS signal
+            GROUP BY product_id
+        ),
         rec_scored AS (
             SELECT candidate.product_id AS id, candidate.product_created_at AS created_at,
-                COALESCE(co.buyers, 0) AS also_bought,
+                pool.co_buyers AS also_bought,
                 40 * CASE WHEN candidate.category_id IN (SELECT id FROM rec_categories) THEN 1 ELSE 0 END
                 + 25 * MIN((SELECT COUNT(DISTINCT shared.collection_id) FROM (
                     SELECT collection_id FROM rec_collection_links WHERE product_id = candidate.product_id
@@ -390,20 +407,18 @@ export async function rankRecommendationRows(
                 + 10 * MIN((SELECT COUNT(DISTINCT shared.attribute_id) FROM product_attribute_values AS shared
                     INNER JOIN rec_values ON rec_values.attribute_id = shared.attribute_id AND rec_values.value = shared.value
                     WHERE shared.product_id = candidate.product_id), 5)
-                + CASE WHEN co.buyers = 1 THEN 20 ELSE 0 END AS related,
+                + CASE WHEN pool.co_buyers = 1 THEN 20 ELSE 0 END AS related,
                 CASE WHEN rec_band.min_price IS NOT NULL
                     AND candidate.from_minor * 100 >= rec_band.min_price * 60
                     AND candidate.from_minor * 100 <= rec_band.max_price * 140 THEN 1 ELSE 0 END AS in_band,
-                COALESCE(popular.buyers, 0) AS popular_buyers,
-                CASE WHEN rec_switch.popular = 1 AND popular.buyers >= ${n(MIN_POPULAR_BUYERS)}
-                    THEN popular.buyers ELSE 0 END AS popular_ordering
-            FROM (SELECT product_id FROM rec_pool UNION SELECT product_id FROM rec_tail) AS pool
+                pool.popular_buyers,
+                CASE WHEN rec_switch.popular = 1 AND pool.popular_buyers >= ${n(MIN_POPULAR_BUYERS)}
+                    THEN pool.popular_buyers ELSE 0 END AS popular_ordering
+            FROM rec_signals AS pool
             INNER JOIN product_buyer_state AS candidate ON candidate.product_id = pool.product_id
             CROSS JOIN rec_band
             CROSS JOIN rec_switch
-            LEFT JOIN rec_co AS co ON co.product_id = candidate.product_id
-            LEFT JOIN rec_popular AS popular ON popular.product_id = candidate.product_id
-            WHERE ${eligible("candidate", true)}
+            WHERE pool.pooled = 1 AND ${eligible("candidate", true)}
         ),
         rec_ranked AS (
             SELECT * FROM rec_scored ORDER BY ${ranking("rec_scored")} LIMIT ${n(limit)}
