@@ -80,6 +80,13 @@ describe("media on the store's own origin", () => {
     });
   });
 
+  it("treats a canonical CDN on the media origin itself as no CDN", () => {
+    requestRuntime.run({ ...runtime, IMAGE_CDN_BASE_URL: "https://cloud.example.test/" }, () => {
+      expect(getSameOriginMediaSource()).toBe("https://cloud.example.test");
+      expect(resolveMediaUrl("https://cloud.example.test/media/a.jpg")).toBe("https://shop.example.test/media/a.jpg");
+    });
+  });
+
   it("keeps the direct media address on the Free profile, and on a layout that does not say", () => {
     const free = { ...runtime, SAME_ORIGIN_MEDIA: false };
     requestRuntime.run(free, () => {

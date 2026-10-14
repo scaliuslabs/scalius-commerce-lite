@@ -123,11 +123,15 @@ function trimTrailingSlashes(value: string): string {
  */
 export function getSameOriginMediaSource(): string {
   if (import.meta.env.SSR) {
-    if (!getRuntimeSameOriginMedia() || getRuntimeImageCdnBaseUrl()?.trim()) return "";
+    if (!getRuntimeSameOriginMedia()) return "";
     const source = trimTrailingSlashes(getRuntimeMediaUrl()?.trim() ?? "");
     const storefront = getRuntimeStorefrontUrl();
     if (!source || !storefront) return "";
     try {
+      // A merchant CDN on another origin keeps its own address; a "CDN" that
+      // is just the platform media origin is served from the store origin.
+      const cdn = getRuntimeImageCdnBaseUrl()?.trim();
+      if (cdn && new URL(cdn).origin !== new URL(source).origin) return "";
       return new URL(source).origin === new URL(storefront).origin ? "" : source;
     } catch {
       return "";
