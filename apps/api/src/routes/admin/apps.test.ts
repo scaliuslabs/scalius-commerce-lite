@@ -99,14 +99,12 @@ describe("admin app routes", () => {
 
   it("describes what an app asks for, and activates only for a Super Admin approving the request shown", async () => {
     const detail = (await call("GET", "/apps/acme.order-tagger")).json.data.app;
-    expect(detail.request).toMatchObject({ permissions: ["orders.edit", "orders.view"], events: ["order.paid"], customFieldOwners: ["order"], publicRoutes: false });
+    expect(detail.request).toMatchObject({ scopes: ["write_orders"], events: ["order.paid"], customFieldOwners: ["order"], publicRoutes: false });
     expect(detail.granted).toBeNull();
     expect(detail.added).toEqual(detail.request);
-    expect(detail.permissions).toEqual([
-      // orders.edit unlocks a money-moving operation (the COD amount), so it reads as financial.
-      { name: "orders.edit", risk: "financial", sensitive: false },
-      { name: "orders.view", risk: "read", sensitive: false },
-    ]);
+    // The risk is what the scope lets this (third-party) app call: stable operations only,
+    // so the COD amount edit (beta, financial) does not count.
+    expect(detail.scopes).toEqual([{ name: "write_orders", risk: "write", sensitive: false }]);
     expect(detail.settings.fields.map((field: Json) => [field.key, field.type, field.required])).toEqual([["tag", "text", true], ["note", "textarea", false], ["min_total", "number", false]]);
     expect(detail.settings.missing).toEqual([]);
     expect(detail).toMatchObject({ runtime: "bundled", runtimeAvailable: true, cron: [], admin: { pages: [{ id: "overview", route: "summary" }] } });
@@ -187,12 +185,12 @@ describe("admin app routes", () => {
     expect((await call("POST", "/apps/acme.order-tagger/activate", { expectedRevision: tagger.revision, grantKey: tagger.grantKey })).status).toBe(200);
     // Pretend the approved grant was narrower and the deployed build is newer.
     sqlite.prepare(`UPDATE plugin_installations SET bundle_sha256 = ?, version = '0.0.9',
-      grant_json = json_set(grant_json, '$.permissions', json('["orders.view"]')),
+      grant_json = json_set(grant_json, '$.scopes', json('["read_orders"]')),
       grant_key = 'old' WHERE plugin_id = 'acme.order-tagger'`).run("1".repeat(64));
     const updated = (await call("GET", "/apps/acme.order-tagger")).json.data.app;
     expect(updated).toMatchObject({ status: "installed", needsApproval: true, version: BUNDLED_PLUGINS["acme.order-tagger"]!.version });
-    expect(updated.added.permissions).toEqual(["orders.edit"]);
-    expect(updated.granted.permissions).toEqual(["orders.view"]);
+    expect(updated.added.scopes).toEqual(["write_orders"]);
+    expect(updated.granted.scopes).toEqual(["read_orders"]);
     const approved = await call("POST", "/apps/acme.order-tagger/activate", { expectedRevision: updated.revision, grantKey: updated.grantKey });
     expect(approved.json.data.app).toMatchObject({ status: "active", needsApproval: false });
   });
@@ -264,7 +262,7 @@ describe("admin app routes", () => {
   it("asks for the Bangladesh pack's place import without anything that deletes", async () => {
     await call("GET", "/apps");
     const detail = (await call("GET", "/apps/scalius.bangladesh")).json.data.app;
-    expect(detail.permissions).toEqual([{ name: "settings.delivery_locations.import", risk: "write", sensitive: false }]);
+    expect(detail.scopes).toEqual([{ name: "write_places", risk: "write", sensitive: false }]);
     expect(detail.request.providers).toEqual(expect.arrayContaining(["courier", "sms", "fraud"]));
   });
 

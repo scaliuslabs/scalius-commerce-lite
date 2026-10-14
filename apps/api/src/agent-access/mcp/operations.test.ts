@@ -18,6 +18,7 @@ const operation = {
   tags: ["Products"],
   surface: "dashboard",
   exposure: "execute",
+  stability: "beta",
   principals: ["admin"],
   risk: "write",
   openWorld: false,

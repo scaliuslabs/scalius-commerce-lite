@@ -135,7 +135,7 @@ describe("Bangladesh places", () => {
       expect((await store.instance.lifecycle("uninstall", keepData)).ok).toBe(true);
       expect(store.calls).toHaveLength(sent);
     }
-    expect(manifest.permissions).toEqual(["settings.delivery_locations.import"]);
+    expect(manifest.scopes).toEqual(["write_places"]);
   });
 });
 

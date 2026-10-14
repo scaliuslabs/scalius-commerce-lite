@@ -47,7 +47,7 @@ function manifest(overrides: Partial<PluginManifestInput> = {}): PluginManifestI
     apiVersion: PLUGIN_API_VERSION,
     description: "Points for orders.",
     author: { name: "Acme" },
-    permissions: ["orders.view"],
+    scopes: ["read_orders"],
     events: ["order.*"],
     functions: [{ point: "checkout.discounts", priority: 50 }],
     storage: { ledger: { indexes: ["customerId", ["kind", "at"]], unique: ["ref"] } },
@@ -71,7 +71,7 @@ describe("plugin installations", () => {
   });
   afterEach(() => sqlite.close());
 
-  it("installs with defaults and registrations, and refuses duplicates and reserved permissions", async () => {
+  it("installs with defaults and registrations, and refuses duplicates and anything but scopes", async () => {
     const installed = await installPlugin(db, { manifest: manifest(), source: "upload", bundleSha256: SHA, actorUserId: "owner" });
     expect(installed).toMatchObject({ pluginId: "acme.loyalty", status: "installed", revision: 1, grant: null });
     expect(installed.storedSettings).toEqual({ rate: 1 });
@@ -81,12 +81,11 @@ describe("plugin installations", () => {
     ]);
     await expect(installPlugin(db, { manifest: manifest(), source: "upload", bundleSha256: SHA }))
       .rejects.toMatchObject({ pluginCode: "installation.exists" });
-    await expect(installPlugin(db, { manifest: manifest({ id: "acme.team", permissions: ["team.manage"] }), source: "upload", bundleSha256: SHA }))
-      .rejects.toMatchObject({ pluginCode: "manifest.permission_reserved" });
-    await expect(installPlugin(db, { manifest: manifest({ id: "acme.hooks", permissions: ["webhooks.view"] }), source: "upload", bundleSha256: SHA }))
-      .rejects.toMatchObject({ pluginCode: "manifest.permission_reserved" });
-    await expect(installPlugin(db, { manifest: manifest({ id: "acme.nope", permissions: ["orders.teleport"] }), source: "upload", bundleSha256: SHA }))
-      .rejects.toMatchObject({ pluginCode: "manifest.permission_unknown" });
+    // Raw RBAC names (reserved or not) are not scopes: no scope reaches team, webhooks, agent access or apps.
+    for (const scopes of [["team.manage"], ["webhooks.view"], ["orders.view"], ["manage_staff"]]) {
+      await expect(installPlugin(db, { manifest: manifest({ id: "acme.raw", scopes: scopes as never }), source: "upload", bundleSha256: SHA }))
+        .rejects.toMatchObject({ pluginCode: "manifest.invalid" });
+    }
     await expect(installPlugin(db, { manifest: manifest({ id: "scalius.fake" }), source: "upload", bundleSha256: SHA }))
       .rejects.toMatchObject({ pluginCode: "manifest.reserved_vendor" });
   });
@@ -127,7 +126,7 @@ describe("plugin installations", () => {
     const set = await writePluginSettings(db, "acme.loyalty", { rate: 1, api_key: "secret-1234" }, { expectedRevision: 1, credentialEncryptionKey: KEY });
     const active = await activatePlugin(db, "acme.loyalty", { actorUserId: "owner", expectedRevision: set.revision });
     expect(active).toMatchObject({ status: "active", activatedBy: "owner" });
-    expect(active.grant?.permissions).toEqual(["orders.view"]);
+    expect(active.grant?.scopes).toEqual(["read_orders"]);
     expect((await listActiveFunctionPlugins(db, "checkout.discounts")).map((row) => row.installation.pluginId)).toEqual(["acme.loyalty"]);
 
     const narrower = await updatePluginInstallation(db, "acme.loyalty", {
@@ -142,13 +141,13 @@ describe("plugin installations", () => {
     expect(sqlite.prepare("SELECT name FROM plugin_registrations WHERE kind = 'event'").all()).toEqual([{ name: "order.paid" }]);
 
     const wider = await updatePluginInstallation(db, "acme.loyalty", {
-      manifest: manifest({ version: "1.1.0", permissions: ["orders.view", "customers.view"] }),
+      manifest: manifest({ version: "1.1.0", scopes: ["read_orders", "read_customers"] }),
       source: "upload",
       bundleSha256: "c".repeat(64),
       expectedRevision: narrower.revision,
     });
     expect(wider.status).toBe("installed");
-    expect(wider.grant?.permissions).toEqual(["orders.view"]);
+    expect(wider.grant?.scopes).toEqual(["read_orders"]);
     expect(await listActiveFunctionPlugins(db, "checkout.discounts")).toEqual([]);
 
     await expect(updatePluginInstallation(db, "acme.loyalty", {
@@ -159,7 +158,7 @@ describe("plugin installations", () => {
     })).rejects.toMatchObject({ pluginCode: "installation.revision_conflict" });
 
     const reactivated = await activatePlugin(db, "acme.loyalty", { actorUserId: "owner", expectedRevision: wider.revision });
-    expect(reactivated.grant?.permissions).toEqual(["customers.view", "orders.view"]);
+    expect(reactivated.grant?.scopes).toEqual(["read_customers", "read_orders"]);
     const disabled = await deactivatePlugin(db, "acme.loyalty", { expectedRevision: reactivated.revision });
     expect(disabled.status).toBe("disabled");
     expect(await listActiveEventPlugins(db, "order.created")).toEqual([]);

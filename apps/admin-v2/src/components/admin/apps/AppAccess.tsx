@@ -2,12 +2,11 @@
 // the activation dialog share. Built only from the API's grant request; when
 // an update asks for more than was approved, the additions are marked "New".
 import type { ReactNode } from "react";
-import type { PermissionName } from "@scalius/core/auth/rbac/types";
 import { Badge } from "~/components/ui/badge";
 import { useMessages } from "~/i18n";
+import { appScopeMessages } from "~/i18n/app-scopes";
 import { installedAppsMessages } from "~/i18n/apps";
 import { customFieldMessages, type CustomFieldMessageKey } from "~/i18n/custom-fields";
-import { permissionMessages } from "~/i18n/settings-users";
 import { APP_FUNCTION_POINTS, type AppDetail, type AppGrant } from "~/lib/api-query-options/apps";
 import { topicLabel } from "../settings/webhooks/webhook-format";
 import { RISK_VARIANT } from "./app-status";
@@ -34,12 +33,12 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 export function AppAccess({ app }: { app: AppDetail }) {
   const t = useMessages(installedAppsMessages);
-  const permissionLabel = useMessages(permissionMessages);
+  const scopeText = useMessages(appScopeMessages);
   const fieldOwner = useMessages(customFieldMessages);
   const { request } = app;
   // Before the first approval everything is new, so nothing is marked.
   const added = (app.granted as AppGrant | null) ? app.added : null;
-  const isNew = (list: ListKey, value: string) => added !== null && added[list].includes(value);
+  const isNew = (list: ListKey, value: string) => added !== null && (added[list] as readonly string[]).includes(value);
   const newBadge = (on: boolean) => (on ? <Badge variant="info">{t("new")}</Badge> : null);
   const row = (key: string, content: ReactNode, fresh: boolean) => (
     <li key={key} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body">
@@ -49,18 +48,21 @@ export function AppAccess({ app }: { app: AppDetail }) {
   );
 
   const sections: ReactNode[] = [];
-  if (app.permissions.length > 0) {
+  if (app.scopes.length > 0) {
     sections.push(
       <Section key="data" title={t("access_data")}>
-        {app.permissions.map((permission) => (
-          <li key={permission.name} className="flex items-start justify-between gap-3 text-body">
-            <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <span>{permission.name in permissionMessages.en ? permissionLabel(permission.name as PermissionName) : permission.name}</span>
-              {newBadge(isNew("permissions", permission.name))}
+        {app.scopes.map((scope) => (
+          <li key={scope.name} className="flex items-start justify-between gap-3 text-body">
+            <span className="min-w-0 space-y-0.5">
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span>{scopeText(`scope_${scope.name}`)}</span>
+                {newBadge(isNew("scopes", scope.name))}
+              </span>
+              <span className="block text-caption text-muted-foreground">{scopeText(`scope_${scope.name}_help`)}</span>
             </span>
             <span className="flex shrink-0 flex-wrap justify-end gap-1">
-              {permission.sensitive ? <Badge variant="attention">{t("sensitive")}</Badge> : null}
-              <Badge variant={RISK_VARIANT[permission.risk]}>{t(`risk_${permission.risk}`)}</Badge>
+              {scope.sensitive ? <Badge variant="attention">{t("sensitive")}</Badge> : null}
+              <Badge variant={RISK_VARIANT[scope.risk]}>{t(`risk_${scope.risk}`)}</Badge>
             </span>
           </li>
         ))}

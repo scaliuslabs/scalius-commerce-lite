@@ -104,7 +104,7 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 `parsePluginManifest` (`@scalius/plugin-sdk/manifest`) validates it. Unknown keys fail. Limits are in parentheses.
 
 - `id`, `name`, `version` (semver), `apiVersion` (`PLUGIN_API_VERSION`, `2026-10`), `description`, `author`: identity. Uploaded apps cannot use `scalius.*` ids.
-- `permissions` (80): RBAC names. Every `ctx.api` call is checked against them. `team`, `agent_access`, `webhooks` and `apps` are never grantable.
+- `scopes`: access scopes from `PLUGIN_SCOPES` (`read_products`, `write_orders`, ...). The merchant approves them on the consent screen; every `ctx.api` call, timeline write and customer message is checked against the approved ones. A `write_*` scope includes its `read_*`. No scope reaches staff, agent access, webhooks or app management.
 - `allowedHosts` (20): hosts `ctx.http` may reach, exact or `*.example.com`. `host:port` names one non-default port. No IP literals or localhost. Empty means no network.
 - `events` (40): topics, `<resource>.*` or `*`.
 - `functions` (5): `{ point, priority, onError, snapshot }`.
@@ -169,11 +169,11 @@ Definition keys match the manifest. The host rejects an undeclared handler, and 
 ## `ctx`
 
 - `plugin`, `store`, `settings`: app id and version; store `name`, `url` (null until the merchant sets Settings > Store details > Web addresses), `currency`, `decimalPlaces`, `timezone`, `locale`; the installation's settings with secrets decrypted.
-- `api.call(operationId, input)`: calls a `/api/v1` dashboard operation by id (`dashboard.orders.get`) with the dashboard's validation, RBAC and audit. Returns `{ ok, status, data, error }`. A mutating call needs `idempotencyKey` (8-200 characters). 60 calls a minute.
+- `api.call(operationId, input)`: calls a stable app-API operation by id (`dashboard.orders.get`) with the dashboard's validation, the scopes' RBAC and audit. Stable operations carry `x-scalius-agent.stability: "stable"` in the OpenAPI contract; their schemas change only additively. Any other operation refuses with `api.operation_not_stable` (bundled first-party apps may also call `beta` ones). Returns `{ ok, status, data, error }`. A mutating call needs `idempotencyKey` (8-200 characters). 60 calls a minute.
 - `http.fetch(url, init)`: https only, to `allowedHosts`. Each redirect hop (at most 5) is checked again. Request and response are at most 1 MiB. `timeoutMs` is 1-30,000 (default 10,000). 60 requests a minute. `Set-Cookie` is dropped.
 - `customFields` (`get`, `set`): values of the app's declared fields on one resource. The approved grant must cover the owner type.
-- `messaging`: `email`, `sms` and `pushCustomer` through the store's providers (need `customers.view`), and `notifyStaff` (Firebase devices and Web Push browsers). `pushCustomer({ customerId, title, body?, url?, tag? })` reaches the browsers the buyer subscribed on the account page (or the store's push app); `url` is a store path. With `marketing: true` and a `customerId`, only a subscribed customer gets an email or SMS, with the unsubscribe footer. 60 messages a minute.
-- `timeline.add({ orderId, kind, message, fields?, idempotencyKey? })`: a line on the order timeline with your app's name (needs `orders.edit` and a declared kind). `message` is plain text (500 characters), `fields` at most 10. The same `idempotencyKey` adds it once.
+- `messaging`: `email`, `sms` and `pushCustomer` through the store's providers (need `read_customers`), and `notifyStaff` (Firebase devices and Web Push browsers). `pushCustomer({ customerId, title, body?, url?, tag? })` reaches the browsers the buyer subscribed on the account page (or the store's push app); `url` is a store path. With `marketing: true` (needs `write_marketing`) and a `customerId`, only a subscribed customer gets an email or SMS, with the unsubscribe footer. 60 messages a minute.
+- `timeline.add({ orderId, kind, message, fields?, idempotencyKey? })`: a line on the order timeline with your app's name (needs `write_orders` and a declared kind). `message` is plain text (500 characters), `fields` at most 10. The same `idempotencyKey` adds it once.
 - `log`: `debug`, `info`, `warn`, `error`. The platform keeps the newest 500 lines per app and masks secrets, e-mail addresses and phone numbers.
 - `storage`, `kv`: see Storage.
 

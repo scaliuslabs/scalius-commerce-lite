@@ -9,14 +9,14 @@ const STAFF_CLAIM_DECISION =
   "Warranty claim decisions and staff-opened claims post a public message to the buyer on the store's behalf; they stay a staff browser surface until a reviewed agent intent exists.";
 
 export const DASHBOARD_WARRANTY_OPERATIONS = {
-  "dashboard.warranty_policies.list": { internal: true },
-  "dashboard.warranty_policies.get": { internal: true },
-  "dashboard.warranty_policies.create": { internal: true },
-  "dashboard.warranty_policies.update": { internal: true, revision: "required" },
-  "dashboard.warranty_policies.archive": { internal: true, risk: "destructive" },
-  "dashboard.warranty_policies.restore": { internal: true },
-  "dashboard.warranty_claims.list": { internal: true },
-  "dashboard.warranty_claims.get": { internal: true },
+  "dashboard.warranty_policies.list": { uncurated: true },
+  "dashboard.warranty_policies.get": { uncurated: true },
+  "dashboard.warranty_policies.create": { uncurated: true },
+  "dashboard.warranty_policies.update": { uncurated: true, revision: "required" },
+  "dashboard.warranty_policies.archive": { uncurated: true, risk: "destructive" },
+  "dashboard.warranty_policies.restore": { uncurated: true },
+  "dashboard.warranty_claims.list": { uncurated: true },
+  "dashboard.warranty_claims.get": { uncurated: true },
   "dashboard.warranty_claims.update": { exposure: "excluded", revision: "required", reason: STAFF_CLAIM_DECISION },
   "dashboard.orders.warranty_claim_open": { exposure: "excluded", idempotency: "required", reason: STAFF_CLAIM_DECISION },
 } satisfies Record<string, OperationRegistryEntry>;

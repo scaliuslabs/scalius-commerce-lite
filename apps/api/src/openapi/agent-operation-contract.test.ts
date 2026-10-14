@@ -741,7 +741,7 @@ describe("agent operation contract", () => {
     expect(broken).toEqual([]);
   });
 
-  it("reaches every dashboard operation through an intent, catalog coverage, or an internal marker", () => {
+  it("reaches every dashboard operation through an intent, catalog coverage, or an uncurated marker", () => {
     const catalog = buildAgentWorkflowCatalog(manifest);
     const intentOperationIds = new Set(
       DASHBOARD_AGENT_WORKFLOW_ROUTES.flatMap((route) => route.operationIds),
@@ -758,7 +758,7 @@ describe("agent operation contract", () => {
         (operation) =>
           !intentOperationIds.has(operation.operationId) &&
           !coveredOperationIds.has(operation.operationId) &&
-          registryEntry(operation.operationId)?.internal !== true,
+          registryEntry(operation.operationId)?.uncurated !== true,
       )
       .map((operation) => operation.operationId);
     expect(unreachable).toEqual([]);

@@ -94,7 +94,7 @@ describe("app releases", () => {
 
     await expect(verifyRelease({ ...base, code: new TextEncoder().encode(`${good.code}//x`) })).rejects.toMatchObject({ pluginCode: "package.hash_mismatch" });
     await expect(verifyRelease({ ...base, trustedKeys: [] })).rejects.toMatchObject({ pluginCode: "signature.untrusted" });
-    await expect(verifyRelease({ ...base, manifest: { ...good.manifest, permissions: ["orders.view"] } })).rejects.toMatchObject({ pluginCode: "signature.invalid" });
+    await expect(verifyRelease({ ...base, manifest: { ...good.manifest, scopes: ["read_orders"] } })).rejects.toMatchObject({ pluginCode: "signature.invalid" });
     await expect(verifyRelease({ ...base, signature: null })).rejects.toMatchObject({ pluginCode: "signature.missing" });
     await expect(verifyRelease({ ...base, asset: async () => new TextEncoder().encode("<svg/>") })).rejects.toMatchObject({ pluginCode: "package.invalid" });
     await expect(verifyRelease({ ...base, manifest: { ...good.manifest, apiVersion: "2099-01" } }))
@@ -222,10 +222,10 @@ describe("app releases", () => {
       const v1 = await installV1();
       const migrations = [{ version: 1, description: "Break" }];
       modules["2.0.0"] = definePlugin({
-        manifest: manifest("2.0.0", { migrations, permissions: ["orders.view"] }) as never,
+        manifest: manifest("2.0.0", { migrations, scopes: ["read_orders"] }) as never,
         migrations: { 1: async () => { throw new Error("no"); } },
       });
-      const waiting = await update(v1, "2.0.0", { migrations, permissions: ["orders.view"] });
+      const waiting = await update(v1, "2.0.0", { migrations, scopes: ["read_orders"] });
       expect(waiting.installation).toMatchObject({ version: "2.0.0", status: "installed" });
       const { activatePluginWithHooks } = await import("./lifecycle");
       const { pluginGrantKey, pluginGrantRequest } = await import("@scalius/shared/plugins");
@@ -242,7 +242,7 @@ describe("app releases", () => {
       const v1 = await installV1();
       const load = vi.fn();
       modules["2.0.0"] = new Proxy({}, { get: () => load() });
-      const result = await update(v1, "2.0.0", { permissions: ["orders.view"] });
+      const result = await update(v1, "2.0.0", { scopes: ["read_orders"] });
       expect(result).toMatchObject({ rolledBack: false, installation: { version: "2.0.0", status: "installed" } });
       expect(load).not.toHaveBeenCalled();
     });

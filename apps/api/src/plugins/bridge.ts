@@ -27,7 +27,7 @@ import { pluginWithinRateLimit } from "./authority";
 
 /** What the host lets one installation do, derived from its manifest and approved grant. */
 export interface PluginBridgeAuthority {
-  /** Effective permissions (grant ∩ live, grantable catalog). */
+  /** Effective RBAC permissions: the granted scopes' (`PLUGIN_SCOPES`) ∩ the live, grantable catalog. */
   permissions: string[];
   allowedHosts: string[];
   collections: Record<string, PluginCollectionDeclaration>;
@@ -467,7 +467,7 @@ export class PluginBridgeHost implements PluginBridgeApi {
   async timelineAdd(input: { orderId: string; kind: string; message: string; fields?: Record<string, string | number | boolean>; idempotencyKey?: string }): Promise<{ id: string }> {
     return this.guard("timelineAdd", async () => {
       if (!this.props.authority.permissions.includes("orders.edit")) {
-        fail("timeline.not_allowed", "Writing to order timelines needs the orders.edit permission.");
+        fail("timeline.not_allowed", "Writing to order timelines needs the write_orders scope.");
       }
       if (!isRecord(input) || typeof input.orderId !== "string" || input.orderId.length < 1 || input.orderId.length > 128) {
         fail("timeline.invalid", "orderId is an order id.");

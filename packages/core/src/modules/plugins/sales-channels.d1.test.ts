@@ -27,7 +27,7 @@ function manifest(salesChannels: PluginManifestInput["salesChannels"], version =
     apiVersion: PLUGIN_API_VERSION,
     description: "Sell on TikTok Shop.",
     author: { name: "Acme" },
-    permissions: ["products.view"],
+    scopes: ["read_products"],
     ...(salesChannels ? { salesChannels } : {}),
   };
 }

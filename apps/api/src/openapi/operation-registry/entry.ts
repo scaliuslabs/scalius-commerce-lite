@@ -8,6 +8,7 @@ import type {
   AgentOperationPrincipal,
   AgentOperationRevision,
   AgentOperationRisk,
+  AgentOperationStability,
   AgentOperationTransport,
 } from "../agent-operation-manifest";
 
@@ -58,8 +59,22 @@ export type OperationRegistryEntry = {
   /** Required when `exposure` is `"excluded"`, forbidden otherwise. */
   reason?: string;
   /**
+   * The app-API tier (`x-scalius-agent.stability`, docs/platform/PLUGINS.md
+   * "Stable operations"). Default: `"beta"` for executable dashboard and
+   * storefront operations, `"internal"` for everything else.
+   *
+   * - `"stable"`: part of the frozen app API. Third-party apps call only
+   *   these. Its request and response schemas are snapshotted
+   *   (`stable-operations.snapshot.json`): only additive changes pass.
+   * - `"beta"`: bundled first-party apps may call it; it can change.
+   * - `"internal"`: no app ever calls it (staff, app and maintenance areas).
+   *
+   * Agents (MCP, CLI) ignore the tier: their own grant decides.
+   */
+  stability?: Exclude<AgentOperationStability, "beta">;
+  /**
    * Marks an executable dashboard operation that is deliberately outside the
    * curated agent intents in `agent-access/workflows/routes-dashboard.ts`.
    */
-  internal?: true;
+  uncurated?: true;
 };

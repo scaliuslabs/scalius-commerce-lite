@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { bundlePlugin, loadPluginContract, pluginPackageDir, resolvePluginEntry, root, sealBundle } from "./plugin-build.mjs";
-import { BUNDLE_MAX_BYTES, loadPermissionCheck } from "./plugin-registry.mjs";
+import { BUNDLE_MAX_BYTES } from "./plugin-registry.mjs";
 
 export const BUNDLE_WARN_BYTES = 1024 * 1024;
 
@@ -86,24 +86,8 @@ export async function validatePlugin(directory) {
     for (const issue of mismatches) add("fail", "Handlers", issue);
   }
 
-  const permissions = await loadPermissionCheck();
-  if (!permissions) {
-    add("note", "Permissions", "Skipped: the permission catalog cannot be loaded from a script. The store checks them when the app is installed.");
-  } else if (manifest.permissions.length === 0) {
-    add("pass", "Permissions", "none requested");
-  } else {
-    let bad = 0;
-    for (const permission of manifest.permissions) {
-      if (!permissions.isKnownPermission(permission)) {
-        bad += 1;
-        add("fail", "Permissions", `${permission} is not a Scalius permission.`);
-      } else if (!permissions.isPluginGrantablePermission(permission)) {
-        bad += 1;
-        add("fail", "Permissions", `${permission} cannot be granted to an app (staff, agent access, webhooks and app management stay with people).`);
-      }
-    }
-    if (bad === 0) add("pass", "Permissions", manifest.permissions.join(", "));
-  }
+  // The manifest schema already accepts only `PLUGIN_SCOPES` names.
+  add("pass", "Scopes", manifest.scopes.length === 0 ? "none requested" : manifest.scopes.join(", "));
 
   const packageDirectory = pluginPackageDir(directory);
   const declared = [

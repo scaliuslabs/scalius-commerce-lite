@@ -49,7 +49,7 @@ export const manifest = {
   author: { name: ${JSON.stringify(vendor)} },
   tagline: "One line that sells ${title}",
   categories: ["marketing"],
-  permissions: ["orders.view"],
+  scopes: ["read_orders"],
   events: ["order.created"],
   functions: [{ point: "checkout.discounts", priority: 100 }],
   routes: {

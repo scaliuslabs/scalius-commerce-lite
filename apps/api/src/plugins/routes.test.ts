@@ -32,9 +32,9 @@ const echoManifest = {
   apiVersion: PLUGIN_API_VERSION,
   description: "Returns the request it saw.",
   author: { name: "Acme" },
-  permissions: ["marketing.send"],
+  scopes: ["write_marketing"],
   routes: {
-    admin: [{ name: "look", methods: ["GET", "POST"] }, { name: "send", methods: ["POST"], permission: "marketing.send" }],
+    admin: [{ name: "look", methods: ["GET", "POST"] }, { name: "send", methods: ["POST"], scope: "write_marketing" }],
     public: [{ name: "inspect", methods: ["GET", "POST"] }, { name: "boom", methods: ["GET"] }],
     webhooks: ["hook"],
   },

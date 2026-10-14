@@ -27,7 +27,7 @@ const E164 = /^\+[1-9]\d{6,14}$/;
 
 function requireContactAccess(context: PluginMessagingContext): void {
   if (!context.permissions.includes("customers.view")) {
-    throw new PluginError("messaging.not_allowed", "Sending to customers needs the customers.view permission.");
+    throw new PluginError("messaging.not_allowed", "Sending to customers needs the read_customers scope.");
   }
 }
 
@@ -67,7 +67,7 @@ function escapeHtml(value: string): string {
 
 /** Marketing sends: the subscribed address and what the message must carry, or null (not subscribed). */
 async function marketingPermission(context: PluginMessagingContext, customerId: string | undefined, channel: "email" | "sms") {
-  if (!context.permissions.includes("marketing.send")) throw new PluginError("messaging.not_allowed", "Marketing messages require marketing.send.");
+  if (!context.permissions.includes("marketing.send")) throw new PluginError("messaging.not_allowed", "Marketing messages need the write_marketing scope.");
   if (customerId === undefined) {
     throw new PluginError("messaging.invalid", "Marketing messages go to a customerId (consent is per customer).");
   }

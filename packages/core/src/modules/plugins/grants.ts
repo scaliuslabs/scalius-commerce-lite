@@ -1,11 +1,13 @@
-// Which RBAC permissions a plugin may ever hold. Plugins act on store data with
-// the same permission catalog staff roles use, minus the areas that confer
-// authority over people, credentials, data egress or plugins themselves: a
-// plugin can neither request nor be granted them, and operations guarded by
-// them are refused at dispatch whatever the grant says.
+// What an app's approved scopes confer. A manifest asks for access scopes
+// (`PLUGIN_SCOPES`, @scalius/shared/plugins/scopes); the platform maps them to
+// the same RBAC permissions staff roles use, minus the areas that confer
+// authority over people, credentials, data egress or apps themselves: no
+// scope maps to them (scopes test), and operations guarded by them are
+// refused at dispatch whatever the grant says.
 
 import { PERMISSION_METADATA } from "../../auth/rbac/permission-metadata";
-import type { PluginGrantRequest } from "@scalius/shared/plugins";
+import { FIRST_PARTY_PLUGIN_VENDOR, pluginScopePermissions, type PluginGrantRequest } from "@scalius/shared/plugins";
+import type { PluginInstallationSource } from "@scalius/database/schema";
 
 /**
  * RBAC resources a plugin can never hold: staff and roles (`team`), agent
@@ -38,8 +40,17 @@ export function isKnownPermission(permission: string): boolean {
   return permissionMetadata(permission) !== undefined;
 }
 
-/** The permissions a grant actually confers today: its list ∩ the live, grantable catalog. */
-export function effectivePluginPermissions(grant: Pick<PluginGrantRequest, "permissions"> | null): Set<string> {
+/** The RBAC permissions a grant actually confers today: its scopes' permissions ∩ the live, grantable catalog. */
+export function effectivePluginPermissions(grant: Pick<PluginGrantRequest, "scopes"> | null): Set<string> {
   if (!grant) return new Set();
-  return new Set(grant.permissions.filter(isPluginGrantablePermission));
+  return new Set([...pluginScopePermissions(grant.scopes)].filter(isPluginGrantablePermission));
+}
+
+/**
+ * A bundled first-party app (`scalius.*` compiled into this deployment): it
+ * may also call `beta` operations. Everything else is third-party and reaches
+ * the stable app API only.
+ */
+export function isFirstPartyBundledPlugin(installation: { pluginId: string; source: PluginInstallationSource }): boolean {
+  return installation.source === "bundled" && installation.pluginId.startsWith(`${FIRST_PARTY_PLUGIN_VENDOR}.`);
 }

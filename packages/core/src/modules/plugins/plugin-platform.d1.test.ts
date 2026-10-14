@@ -50,7 +50,7 @@ function manifest(id: string, overrides: Partial<PluginManifestInput> = {}): Plu
     apiVersion: PLUGIN_API_VERSION,
     description: "Test app.",
     author: { name: "Acme" },
-    permissions: ["orders.view"],
+    scopes: ["read_orders"],
     events: ["order.paid"],
     cron: [{ name: "nightly", schedule: "0 3 * * *" }],
     ...overrides,
@@ -238,13 +238,13 @@ describe("plugin updates, approval and uninstall", () => {
     expect(pluginNeedsApproval(active)).toBe(false);
 
     const wider = await updatePluginInstallation(db, "acme.loyalty", {
-      manifest: manifest("acme.loyalty", { version: "1.1.0", permissions: ["orders.view", "customers.view"] }),
+      manifest: manifest("acme.loyalty", { version: "1.1.0", scopes: ["read_orders", "read_customers"] }),
       source: "bundled",
       bundleSha256: OTHER_SHA,
       expectedRevision: active.revision,
     });
     expect(wider).toMatchObject({ status: "installed", version: "1.1.0" });
-    expect(wider.grant?.permissions).toEqual(["orders.view"]);
+    expect(wider.grant?.scopes).toEqual(["read_orders"]);
     expect(pluginNeedsApproval(wider)).toBe(true);
 
     await expect(activatePlugin(db, "acme.loyalty", { actorUserId: "owner", expectedRevision: wider.revision, expectedGrantKey: oldKey }))
@@ -255,7 +255,7 @@ describe("plugin updates, approval and uninstall", () => {
       expectedGrantKey: pluginGrantKey(pluginGrantRequest(wider.manifest)),
     });
     expect(approved).toMatchObject({ status: "active" });
-    expect(approved.grant?.permissions).toEqual(["customers.view", "orders.view"]);
+    expect(approved.grant?.scopes).toEqual(["read_customers", "read_orders"]);
   });
 
   it("resumes a failed plugin on an update its grant covers", async () => {

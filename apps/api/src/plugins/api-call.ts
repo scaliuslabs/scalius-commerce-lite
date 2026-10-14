@@ -2,6 +2,8 @@
 // dispatched in-process exactly as an agent's (agent-access/dispatch.ts) but
 // as the plugin principal. The result is the route's own response, unwrapped
 // from the `{ success, data }` envelope; refusals are results, not throws.
+// A third-party app reaches the stable app API only (`x-scalius-agent.stability`);
+// anything else refuses with `api.operation_not_stable`.
 
 import type { Database } from "@scalius/database/client";
 import type { PluginApiCallInput, PluginApiResult } from "@scalius/plugin-sdk";
@@ -15,7 +17,7 @@ import {
 import { writeAgentAuditEvent } from "../agent-access/audit";
 import { resolveAgentOperationById } from "../agent-access/direct-operation";
 import type { PluginPrincipal } from "../agent-access/types";
-import { authorizePluginOperation, pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
+import { authorizePluginOperation, pluginTierAllows, pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
 
 const OPERATION_ID = /^dashboard(\.[a-z][a-z0-9_]*){2,}$/;
 
@@ -139,6 +141,9 @@ export async function callPluginOperation(options: {
     return unwrap(result.status, result.ok, result.data);
   } catch (error) {
     if (error instanceof AgentDispatchError) {
+      if (error.code === "operation_forbidden" && !pluginTierAllows(principal.firstParty, operation.stability)) {
+        return refusal(403, "api.operation_not_stable", `${operation.operationId} is not part of the stable app API.`);
+      }
       const code = error.code === "operation_forbidden" ? "api.operation_forbidden" : error.code;
       return refusal(error.status, code, error.message);
     }

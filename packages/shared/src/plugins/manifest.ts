@@ -10,7 +10,8 @@ import { isEventTopicFilter, topicMatchesAnyFilter, type EventTopic, type EventT
 import { SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
 import { parsePluginCronSchedule } from "./cron";
 import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
-import { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN, PLUGIN_PERMISSION_PATTERN } from "./manifest-patterns";
+import { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN } from "./manifest-patterns";
+import { PLUGIN_SCOPE_NAMES, type PluginScope } from "./scopes";
 import { storefrontComponentsManifestSchema } from "./storefront-components";
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginSettingsSchemaSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
@@ -24,7 +25,17 @@ export { PLUGIN_API_VERSION, SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERS
 /** `vendor.name` (in ./ids.ts, so id checks don't need this schema module). */
 export { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN };
 /** Name and host patterns (in ./manifest-patterns.ts, shared with the storefront components contract). */
-export { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN, PLUGIN_PERMISSION_PATTERN, isPluginHostAllowed } from "./manifest-patterns";
+export { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN, isPluginHostAllowed } from "./manifest-patterns";
+/** Access scopes (in ./scopes.ts: the one scope → RBAC table). */
+export {
+  PLUGIN_SCOPES,
+  PLUGIN_SCOPE_NAMES,
+  isPluginScope,
+  legacyPermissionScope,
+  pluginScopePermissions,
+  type PluginScope,
+  type PluginScopeDefinition,
+} from "./scopes";
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]{1,40})?$/;
 const name = z.string().regex(PLUGIN_NAME_PATTERN);
 const title = z.string().trim().min(1).max(80);
@@ -79,9 +90,15 @@ const routeSchema = z.object({
   description: description.optional(),
 }).strict();
 
+const scopeName = z.enum(PLUGIN_SCOPE_NAMES);
+
 const adminRouteSchema = routeSchema.extend({
-  /** Additional real-staff permission, beyond apps.view/apps.use. Must be in the app's grant. */
-  permission: z.string().regex(PLUGIN_PERMISSION_PATTERN).optional(),
+  /**
+   * A scope of the app that also gates the staff opening this route: beyond
+   * apps.view/apps.use they need the scope's dashboard permission
+   * (`PLUGIN_SCOPES[scope].staff`). Must be among the app's `scopes`.
+   */
+  scope: scopeName.optional(),
 });
 
 /**
@@ -181,7 +198,7 @@ const adminSchema = z.object({
 
 /**
  * Entry kinds the app writes on order timelines (`ctx.timeline.add`), each
- * with the title staff see. Writing needs the `orders.edit` permission.
+ * with the title staff see. Writing needs the `write_orders` scope.
  */
 const timelineSchema = z.array(z.object({ kind: name, title }).strict()).max(20).default([])
   .refine((kinds) => new Set(kinds.map((entry) => entry.kind)).size === kinds.length, "Timeline kinds must be unique.");
@@ -425,8 +442,13 @@ export const pluginManifestSchema = z.object({
   /** The oldest Scalius release the app runs on. */
   minPlatformVersion: platformVersion.optional(),
 
-  /** Store data and actions, as RBAC permission names; every `ctx.api` call is checked against them. */
-  permissions: z.array(z.string().regex(PLUGIN_PERMISSION_PATTERN)).max(80).default([]),
+  /**
+   * Store data and actions the app asks for (`PLUGIN_SCOPES`): every
+   * `ctx.api` call, timeline write and customer message is checked against
+   * the approved ones.
+   */
+  scopes: z.array(scopeName).max(PLUGIN_SCOPE_NAMES.length).default([])
+    .refine((scopes) => new Set(scopes).size === scopes.length, "Scopes must be unique."),
   /** Outbound hosts for `ctx.http.fetch` (none means no network). */
   allowedHosts: z.array(z.string().toLowerCase().regex(PLUGIN_HOST_PATTERN)).max(20).default([]),
 
@@ -476,8 +498,8 @@ export const pluginManifestSchema = z.object({
    * Content types the app defines (Shopify metaobjects), in its own
    * namespace (`<app id>.<type>`): created or updated when the app is
    * activated or updated; only the app changes them. Their entries are store
-   * content the merchant edits too (and the app through `ctx.api` with
-   * `metaobjects.edit`). Uninstalling with "delete data" removes them.
+   * content the merchant edits too (and the app through `ctx.api` with the
+   * `write_objects` scope). Uninstalling with "delete data" removes them.
    */
   metaobjects: z.array(metaobjectDefinitionInputSchema).max(10).default([])
     .refine((types) => new Set(types.map((type) => type.type)).size === types.length, "Metaobject types must be unique."),
@@ -519,8 +541,8 @@ export const pluginManifestSchema = z.object({
   }).strict().default({ cpuMs: 50, wallMs: 10_000 }),
 }).strict().superRefine((manifest, context) => {
   manifest.routes.admin.forEach((route, index) => {
-    if (route.permission && !manifest.permissions.includes(route.permission)) {
-      context.addIssue({ code: "custom", path: ["routes", "admin", index, "permission"], message: "An admin route permission must be declared in the app's permissions." });
+    if (route.scope && !manifest.scopes.includes(route.scope)) {
+      context.addIssue({ code: "custom", path: ["routes", "admin", index, "scope"], message: "An admin route scope must be among the app's scopes." });
     }
   });
   const routes = new Set([...manifest.routes.admin, ...manifest.routes.public].map((route) => route.name));
@@ -792,7 +814,8 @@ export function pluginCompatibility(value: unknown):
  * again.
  */
 export interface PluginGrantRequest {
-  permissions: string[];
+  /** Access scopes (`PLUGIN_SCOPES`). */
+  scopes: PluginScope[];
   allowedHosts: string[];
   events: EventTopicFilter[];
   functions: PluginFunctionPoint[];
@@ -816,7 +839,7 @@ export interface PluginGrantRequest {
 export function pluginGrantRequest(manifest: PluginManifest): PluginGrantRequest {
   const sorted = <T extends string>(values: Iterable<T>) => [...new Set(values)].sort();
   return {
-    permissions: sorted(manifest.permissions),
+    scopes: sorted(manifest.scopes),
     allowedHosts: sorted(manifest.allowedHosts),
     events: sorted(manifest.events),
     functions: sorted(manifest.functions.map((fn) => fn.point)),
@@ -842,7 +865,7 @@ export function pluginGrantKey(request: PluginGrantRequest): string {
 /** Whether `next` asks for anything `granted` did not (a narrower update needs no approval). */
 export function pluginGrantExpands(granted: PluginGrantRequest, next: PluginGrantRequest): boolean {
   const grows = (before: readonly string[], after: readonly string[]) => after.some((value) => !before.includes(value));
-  return grows(granted.permissions, next.permissions)
+  return grows(granted.scopes, next.scopes)
     || grows(granted.allowedHosts, next.allowedHosts)
     || next.events.some((filter) => !eventFilterCovered(filter, granted.events))
     || grows(granted.functions, next.functions)
@@ -865,7 +888,7 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
   if (!granted) return next;
   const added = <T extends string>(before: readonly T[], after: readonly T[]) => after.filter((value) => !before.includes(value));
   return {
-    permissions: added(granted.permissions, next.permissions),
+    scopes: added(granted.scopes, next.scopes),
     allowedHosts: added(granted.allowedHosts, next.allowedHosts),
     events: next.events.filter((filter) => !eventFilterCovered(filter, granted.events)),
     functions: added(granted.functions, next.functions),

@@ -6,8 +6,6 @@ import { AppError } from "../../errors";
  */
 export type PluginErrorCode =
   | "manifest.invalid"
-  | "manifest.permission_unknown"
-  | "manifest.permission_reserved"
   | "manifest.custom_field_type"
   | "manifest.reserved_vendor"
   | "installation.exists"

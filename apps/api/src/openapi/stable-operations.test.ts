@@ -1,0 +1,207 @@
+// The stable app API (`x-scalius-agent.stability: "stable"`): the operations a
+// third-party app may call through `ctx.api.call`. This gate keeps them a
+// contract:
+//
+//   1. every stable operation is callable by a third-party app under some
+//      scope, and every scope reaches a stable operation (or a bridge
+//      capability);
+//   2. against the committed snapshot (`stable-operations.snapshot.json`)
+//      no stable operation disappears, moves, loses a scope that covered it
+//      or tightens its idempotency/revision rules, and no request or response
+//      schema changes in a breaking way (`schema-compat.ts`);
+//   3. the snapshot equals the current contract exactly, so an additive
+//      change is reviewed: accept it with `vitest run -u` on this file.
+//
+// A breaking change needs a new operation (or a new plugin API version), not
+// an edited snapshot.
+
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { effectivePluginPermissions } from "@scalius/core/modules/plugins";
+import { PLUGIN_SCOPE_NAMES, type PluginScope } from "@scalius/shared/plugins";
+import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS } from "../generated/agent-operations.gen";
+import { isOperationAvailableToPlugin, pluginRbacSatisfied } from "../plugins/authority";
+import type { AgentOperationManifestEntry } from "./agent-operation-manifest";
+import { referencedComponentSchemas } from "./component-schema-refs";
+import { inputBreakingChanges, schemaBreakingChanges } from "./schema-compat";
+
+const SNAPSHOT_FILE = new URL("./stable-operations.snapshot.json", import.meta.url);
+
+/** Scopes used by bridge capabilities rather than operations (`ctx.messaging` marketing sends). */
+const BRIDGE_ONLY_SCOPES: ReadonlySet<PluginScope> = new Set(["write_marketing"]);
+
+interface StableOperationSnapshot {
+  method: string;
+  path: string;
+  risk: string;
+  idempotency: string;
+  revision: string;
+  /** Every scope that alone lets a third-party app call it. */
+  scopes: PluginScope[];
+  input: unknown;
+  output: unknown;
+}
+
+interface StableSnapshot {
+  operations: Record<string, StableOperationSnapshot>;
+  components: Record<string, unknown>;
+}
+
+function coveringScopes(operation: AgentOperationManifestEntry): PluginScope[] {
+  return PLUGIN_SCOPE_NAMES.filter((scope) => pluginRbacSatisfied(operation.rbac, effectivePluginPermissions({ scopes: [scope] })));
+}
+
+const stable = AGENT_OPERATIONS.filter((operation) => operation.stability === "stable");
+
+function currentSnapshot(): StableSnapshot {
+  const operations = Object.fromEntries(stable.map((operation) => [operation.operationId, {
+    method: operation.method,
+    path: operation.pathTemplate,
+    risk: operation.risk,
+    idempotency: operation.idempotency,
+    revision: operation.revision,
+    scopes: coveringScopes(operation),
+    input: operation.inputSchema,
+    output: operation.outputSchema,
+  } satisfies StableOperationSnapshot]));
+  return {
+    operations,
+    components: referencedComponentSchemas(stable.map((operation) => [operation.inputSchema, operation.outputSchema]), AGENT_COMPONENT_SCHEMAS),
+  };
+}
+
+function committedSnapshot(): StableSnapshot | null {
+  try {
+    return JSON.parse(readFileSync(SNAPSHOT_FILE, "utf8")) as StableSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+const TIGHTER: Record<string, readonly string[]> = {
+  idempotency: ["none", "supported", "required"],
+  revision: ["none", "optional", "required"],
+};
+
+/** Every breaking difference from `before` to `after`, one line each. */
+function stableBreakingChanges(before: StableSnapshot, after: StableSnapshot): string[] {
+  const problems: string[] = [];
+  const components = { before: before.components, after: after.components };
+  for (const [operationId, was] of Object.entries(before.operations)) {
+    const now = after.operations[operationId];
+    if (!now) {
+      problems.push(`${operationId}: removed from the stable app API.`);
+      continue;
+    }
+    if (was.method !== now.method || was.path !== now.path) problems.push(`${operationId}: moved from ${was.method} ${was.path} to ${now.method} ${now.path}.`);
+    for (const scope of was.scopes) {
+      if (!now.scopes.includes(scope)) problems.push(`${operationId}: the ${scope} scope no longer covers it.`);
+    }
+    for (const field of ["idempotency", "revision"] as const) {
+      const order = TIGHTER[field]!;
+      if (order.indexOf(now[field]) > order.indexOf(was[field]) && now[field] === "required") {
+        problems.push(`${operationId}: ${field} is now required.`);
+      }
+    }
+    problems.push(...inputBreakingChanges(was.input, now.input, components).map((line) => `${operationId} input ${line}`));
+    problems.push(...schemaBreakingChanges(was.output, now.output, "response", components).map((line) => `${operationId} output ${line}`));
+  }
+  return problems;
+}
+
+describe("the stable app API", () => {
+  it("is a deliberate, coherent set every third-party app can reach through a scope", () => {
+    expect(stable.length).toBeGreaterThanOrEqual(100);
+    const unreachable = stable
+      .filter((operation) => !isOperationAvailableToPlugin(operation, false) || coveringScopes(operation).length === 0)
+      .map((operation) => operation.operationId);
+    expect(unreachable).toEqual([]);
+    const idle = PLUGIN_SCOPE_NAMES.filter((scope) => !BRIDGE_ONLY_SCOPES.has(scope)
+      && !stable.some((operation) => coveringScopes(operation).includes(scope)));
+    expect(idle).toEqual([]);
+  });
+
+  it("never reaches people, credentials, webhooks or apps", () => {
+    for (const operation of stable) {
+      expect(operation.operationId).not.toMatch(/^dashboard\.(account|team|agent_access|apps|webhooks|security)\./);
+    }
+  });
+
+  it("changes only additively against the committed snapshot", () => {
+    const committed = committedSnapshot();
+    expect(committed, "stable-operations.snapshot.json is missing: create it with vitest run -u").not.toBeNull();
+    expect(stableBreakingChanges(committed!, currentSnapshot())).toEqual([]);
+  });
+
+  it("matches the committed snapshot (accept an additive change with -u)", async () => {
+    await expect(`${JSON.stringify(currentSnapshot(), null, 1)}\n`).toMatchFileSnapshot("./stable-operations.snapshot.json");
+  });
+});
+
+describe("the breaking-change check", () => {
+  const object = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required });
+  const snapshot = (operation: Partial<StableOperationSnapshot>): StableSnapshot => ({
+    operations: {
+      "dashboard.things.get": {
+        method: "GET", path: "/api/v1/admin/things/{id}", risk: "read", idempotency: "none", revision: "none", scopes: ["read_products"],
+        input: { parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }] },
+        output: object({ id: { type: "string" }, status: { type: "string", enum: ["a", "b"] } }, ["id", "status"]),
+        ...operation,
+      },
+    },
+    components: {},
+  });
+
+  it("accepts additive changes", () => {
+    const before = snapshot({});
+    const after = snapshot({
+      input: { parameters: [
+        { name: "id", in: "path", required: true, schema: { type: "string" } },
+        { name: "expand", in: "query", required: false, schema: { type: "string" } },
+      ] },
+      output: object({ id: { type: "string" }, status: { type: "string", enum: ["a", "b", "c"] }, note: { type: "string" } }, ["id", "status"]),
+      scopes: ["read_products", "write_products"],
+    });
+    expect(stableBreakingChanges(before, after)).toEqual([]);
+  });
+
+  it("refuses removals, new requirements and narrower inputs", () => {
+    const body = (schema: unknown) => ({ requestBody: { required: true, content: { "application/json": { schema } } } });
+    const before = snapshot({ input: body(object({ tags: { type: "array", items: { type: "string", maxLength: 200 } }, kind: { type: "string", enum: ["x", "y"] } })) });
+    const after = snapshot({
+      input: body(object({ tags: { type: "array", items: { type: "string", maxLength: 100 } }, kind: { type: "string", enum: ["x"] }, owner: { type: "string" } }, ["owner"])),
+      output: object({ id: { type: "string" } }, []),
+      scopes: [],
+      revision: "required",
+    });
+    const problems = stableBreakingChanges(before, after);
+    expect(problems).toEqual(expect.arrayContaining([
+      "dashboard.things.get: the read_products scope no longer covers it.",
+      "dashboard.things.get: revision is now required.",
+      "dashboard.things.get input body.tags[]: maxLength tightened to 100.",
+      'dashboard.things.get input body.kind: no longer accepts "y".',
+      "dashboard.things.get input body.owner: a new required field.",
+      "dashboard.things.get output id: the field is no longer always present.",
+      "dashboard.things.get output status: the field was removed.",
+    ]));
+    expect(stableBreakingChanges(before, { operations: {}, components: {} }))
+      .toEqual(["dashboard.things.get: removed from the stable app API."]);
+  });
+
+  it("follows component references and matches union variants by their discriminator", () => {
+    const section = (name: string, fields: Record<string, unknown>) => object({ section: { type: "string", enum: [name] }, ...fields }, ["section", ...Object.keys(fields)]);
+    const before: StableSnapshot = {
+      ...snapshot({ output: { oneOf: [section("base", { name: { type: "string" } }), section("media", { count: { $ref: "#/components/schemas/Count" } })] } }),
+      components: { Count: { type: "integer" } },
+    };
+    const reordered: StableSnapshot = {
+      ...snapshot({ output: { oneOf: [section("media", { count: { $ref: "#/components/schemas/Count" } }), section("base", { name: { type: "string" } }), section("seo", {})] } }),
+      components: { Count: { type: "integer" } },
+    };
+    expect(stableBreakingChanges(before, reordered)).toEqual([]);
+    const retyped: StableSnapshot = { ...reordered, components: { Count: { type: "string" } } };
+    expect(stableBreakingChanges(before, retyped)).toEqual([
+      "dashboard.things.get output [variant 1].count: type changed from integer to string.",
+    ]);
+  });
+});

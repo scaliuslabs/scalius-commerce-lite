@@ -98,7 +98,7 @@ describe("Noor manifest", () => {
   });
 
   it("asks for nothing but storefront code", () => {
-    expect(declared.permissions).toEqual([]);
+    expect(declared.scopes).toEqual([]);
     expect(declared.allowedHosts).toEqual([]);
     expect(declared.storefront.connect).toEqual([]);
   });
