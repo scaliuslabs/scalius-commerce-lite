@@ -19292,9 +19292,6 @@
                           "type": "string",
                           "nullable": true,
                           "description": "Set when `q` matched nothing and these results are for the closest catalog words instead (typo or Bangla correction)."
-                        },
-                        "timestamp": {
-                          "type": "string"
                         }
                       },
                       "required": [

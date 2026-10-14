@@ -8,6 +8,7 @@ import {
   type AsyncBatchRemoteCallback,
   type AsyncRemoteCallback,
 } from "drizzle-orm/sqlite-proxy";
+import { registerDatabaseProvider } from "./provider";
 import { observeStatement } from "./read-observer";
 import { withNamedRawRows } from "./remote-raw-rows";
 import * as schema from "./schema";
@@ -309,5 +310,8 @@ export function createTursoDatabase(
 
   // Database intentionally exposes the common SQLite query surface currently
   // shaped by the D1 type. This is the only transport cast in the application.
-  return withNamedRawRows(drizzleRemote(executeOne, executeBatch, { schema }), executeOne) as unknown as Database;
+  return registerDatabaseProvider(
+    withNamedRawRows(drizzleRemote(executeOne, executeBatch, { schema }), executeOne),
+    "turso",
+  ) as unknown as Database;
 }

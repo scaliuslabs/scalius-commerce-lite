@@ -59,6 +59,7 @@ const URLS = [
   "/api/v1/products?page=1&limit=20&sort=name-asc",
   "/api/v1/products?search=linen",
   "/api/v1/products/search?q=linen",
+  "/api/v1/search?q=linen",
   "/api/v1/products/feed?limit=10",
   "/api/v1/products/sitemap",
   "/api/v1/products/recommendations?productId=p_linen",
@@ -148,6 +149,7 @@ describe("cache dependency registry coverage of public reads", () => {
       JWT_SECRET: "cache-deps-coverage-secret-0123456789abcdef",
       CREDENTIAL_ENCRYPTION_KEY: "cache-deps-coverage-credential-key-0123456789",
       STOREFRONT_URL: "https://shop.test",
+      RL_STANDARD: { limit: async () => ({ success: true }) },
     } as unknown as Env;
     const ctx = { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;
 

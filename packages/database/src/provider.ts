@@ -41,6 +41,23 @@ export function getDatabaseProviderCapabilities(
   return DATABASE_PROVIDER_CAPABILITIES[provider];
 }
 
+const providerByDatabase = new WeakMap<object, DatabaseProvider>();
+
+/**
+ * Record which provider a composed client talks to. Each adapter registers the
+ * client it builds, so every caller (getDb, scripts, tests) sees the same
+ * provider capabilities; an unregistered client is D1.
+ */
+export function registerDatabaseProvider<T extends object>(database: T, provider: DatabaseProvider): T {
+  providerByDatabase.set(database, provider);
+  return database;
+}
+
+/** The provider a composed client was registered with (D1 when none). */
+export function registeredDatabaseProvider(database: object): DatabaseProvider {
+  return providerByDatabase.get(database) ?? "d1";
+}
+
 export interface DatabaseEnvironment extends Record<string, unknown> {
   DB?: D1Database;
   HYPERDRIVE?: { connectionString: string };

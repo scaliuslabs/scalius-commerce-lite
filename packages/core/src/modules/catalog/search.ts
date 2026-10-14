@@ -2,7 +2,6 @@
 import { translationScopeOf, PRODUCT_CARD_FIELDS, translateRows, translationColumns } from "../translations";
 import {
   effectiveLowStockThresholdSql,
-  loadProductMediaProjections,
   loadVariantSelectedOptions,
   normalizeDefaultSkuOptions,
   presentCatalogPrice,
@@ -25,17 +24,8 @@ import {
     type CatalogDiscountColumns,
     type MarketPricing,
 } from "../price-lists";
-import { productImageMapFromMedia, STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE } from "./shared";
-import { declareProductCards, deps } from "./declare-deps";
-
-async function readPrimaryProductImageMap(
-    db: Database,
-    productIds: string[],
-): Promise<Map<string, { mediaId: string; url: string; alt: string | null }>> {
-    const mediaMap = await loadProductMediaProjections(db, productIds);
-    declareProductCards(productIds, mediaMap);
-    return productImageMapFromMedia(mediaMap);
-}
+import { loadProductCardImages, STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE } from "./shared";
+import { deps } from "./declare-deps";
 
 // ─────────────────────────────────────────
 // Storefront search (variant-aware)
@@ -186,7 +176,7 @@ export async function searchStorefrontProducts(
     // In a priced market each product's own price is its card's (its SKUs carry their own).
     const productPrices = new Map<string, CatalogDiscountColumns>();
     const [imageMap, variantMap] = await Promise.all([
-        readPrimaryProductImageMap(db, productIds),
+        loadProductCardImages(db, productIds),
         readStorefrontSearchVariantMap(db, productIds, decimalPlaces, pricing
             ? {
                 pricing,

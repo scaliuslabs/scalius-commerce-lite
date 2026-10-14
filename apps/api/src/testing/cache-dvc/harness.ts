@@ -274,6 +274,7 @@ export class DvcHarness {
       DB: binding,
       JWT_SECRET: "dvc-harness-secret-0123456789abcdef0123",
       CREDENTIAL_ENCRYPTION_KEY: "dvc-harness-credential-key-0123456789abcdef",
+      RL_STANDARD: { limit: async () => ({ success: true }) },
       ...(config.provider === "turso" ? { __DVC_DB: db } : {}),
     } as unknown as Env;
     const recorder = (config.recorder ?? ((context) => coarseTableRecorder(context.sqlite, context.model, context.now)))({

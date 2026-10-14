@@ -11,7 +11,7 @@ import {
     type TranslationScope,
     type TranslatedRowColumns,
 } from "../translations";
-import { deps } from "../../cache-deps";
+import { declareNoProductRow, declareRequestedProducts, deps } from "./declare-deps";
 import type { Database } from "@scalius/database/client";
 import { products, categories, pages } from "@scalius/database/schema";
 import { eq, sql, and, or, type SQL } from "drizzle-orm";
@@ -29,9 +29,8 @@ import {
 import { publicCategoryConditions } from "../categories";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { marketPriceContextOf, priceProductCards, type MarketPricing } from "../price-lists";
-import { priceFilterBoundsMinor } from "./shared";
+import { loadProductCardImages, priceFilterBoundsMinor } from "./shared";
 import { fromMinor } from "@scalius/shared/money";
-import { getCurrentMediaUrl } from "../../integrations/storage";
 import { suggestSearchCorrection } from "./search-correction";
 import { productCategoryNameMatch, productSearchRankJoin, productSearchRelevanceOrder } from "./search-relevance";
 
@@ -67,82 +66,6 @@ export type CategorySearchResult = {
   slug: string;
   type: "category";
 };
-
-type SearchImageProjection = {
-  mediaId: string;
-  objectKey: string;
-  variantWidth: number | null;
-  altText: string;
-};
-
-function buildSearchImageProjection(): SQL<string | null> {
-  return sql<string | null>`(
-    SELECT json_object(
-      'mediaId', CASE
-        WHEN search_media.kind = 'image' THEN search_media.id
-        ELSE search_poster.id
-      END,
-      'objectKey', CASE
-        WHEN search_media.kind = 'image' THEN search_media.object_key
-        ELSE search_poster.object_key
-      END,
-      'variantWidth', CASE
-        WHEN search_media.kind = 'image' THEN search_media.variant_width
-        ELSE search_poster.variant_width
-      END,
-      'altText', COALESCE(
-        search_product_media.alt_text,
-        search_media.alt_text,
-        ${products.name}
-      )
-    )
-    FROM product_media AS search_product_media
-    INNER JOIN media AS search_media
-      ON search_media.id = search_product_media.media_id
-    LEFT JOIN media AS search_poster
-      ON search_poster.id = search_media.poster_media_id
-    WHERE search_product_media.product_id = ${products.id}
-      AND search_media.status IN ('ready', 'trashed')
-      AND (
-        (search_media.kind = 'image' AND search_media.object_key <> '')
-        OR (
-          search_media.kind = 'video'
-          AND search_poster.kind = 'image'
-          AND search_poster.status IN ('ready', 'trashed')
-          AND search_poster.object_key <> ''
-        )
-      )
-    ORDER BY
-      search_product_media.is_primary DESC,
-      search_product_media.sort_order ASC,
-      search_product_media.id ASC
-    LIMIT 1
-  )`;
-}
-
-function parseSearchImageProjection(
-  value: string | null,
-): SearchImageProjection | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value) as Partial<SearchImageProjection>;
-    if (
-      typeof parsed.mediaId !== "string" ||
-      typeof parsed.objectKey !== "string" ||
-      typeof parsed.altText !== "string" ||
-      !parsed.mediaId ||
-      !parsed.objectKey
-    ) {
-      return null;
-    }
-    return {
-      ...parsed,
-      variantWidth: typeof parsed.variantWidth === "number" ? parsed.variantWidth : null,
-    } as SearchImageProjection;
-  } catch {
-    return null;
-  }
-}
 
 type SearchOptions = {
   /** A presence page's market pricing (MARKETS-DESIGN D5); null at the root. */
@@ -203,12 +126,20 @@ async function runSearch(
 
   // A presence's hits in its language (MARKETS-DESIGN D9); matching reads the source text.
   const translation = translationScopeOf(options?.pricing);
+  // Which products, categories and pages match: their search text, the
+  // public product set and the published categories (names, slugs, the
+  // category filter). Each hit's own facts are declared with its card.
+  deps.search();
+  deps.listMembership("all");
+  deps.anyCategory();
+  if (searchPages) deps.anyPage();
   try {
     // Build Product Query
     // Set conditions (search hits, category) also scope the pricing projection.
     const setConditions: SQL[] = [];
     const ranked = options?.productIds ? JSON.stringify(options.productIds.slice(0, 50)) : null;
     if (ranked) {
+      declareRequestedProducts(options!.productIds!.slice(0, 50));
       setConditions.push(sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ranked}))`);
     } else if (hasValidQuery) {
       const cond = or(ftsMatch(db, "products_fts", "products", query), productCategoryNameMatch(db, query));
@@ -229,6 +160,8 @@ async function runSearch(
       typeof options?.minPrice === "number" ||
       typeof options?.maxPrice === "number"
     ) {
+      // Any live SKU's price can move a product across the bounds.
+      deps.table("product_variants");
       // A market prices its bounds in the market first (FX).
       const bounds = priceFilterBoundsMinor(
         { minPrice: options?.minPrice, maxPrice: options?.maxPrice },
@@ -266,7 +199,6 @@ async function runSearch(
           trSlug: localizedSlugSql(translation, "product", products.id),
           categoryTrRows: translationRowsSql(translation, "category", categories.id),
         } : {}),
-        imageProjection: buildSearchImageProjection(),
         storeCurrencyCode: storeCurrencyCodeSql().as("search_store_currency_code"),
       })
       .from(products)
@@ -340,6 +272,8 @@ async function runSearch(
       categoryQuery,
     ]);
     const decimalPlaces = storeDecimalPlacesFromCode(productsResult[0]?.storeCurrencyCode);
+    const images = await loadProductCardImages(db, productsResult.map((row) => row.id));
+    if (productsResult.length === 0) declareNoProductRow();
     // The hits in the page's market (as read at the root or in a neutral market).
     const pricedHits = await priceProductCards(db, await marketPriceContextOf(options?.pricing), translateSearchProducts(translation, productsResult).map((row) => ({
       ...row,
@@ -348,8 +282,6 @@ async function runSearch(
       discountAmountMinor: 0,
     })));
 
-    // The image/poster projection is part of the indexed product query, so
-    // predictive search does not wait on a second D1 round trip.
     const formattedProducts: ProductSearchResult[] = pricedHits.map(({
       discountType: _discountType,
       discountBps: _discountBps,
@@ -360,11 +292,10 @@ async function runSearch(
       availableForSale,
       quickAddEligible,
       hasVariants,
-      imageProjection,
       storeCurrencyCode: _storeCurrencyCode,
       ...product
     }) => {
-      const image = parseSearchImageProjection(imageProjection);
+      const image = images.get(product.id);
       return {
         ...product,
         price: fromMinor(basePriceMinor, decimalPlaces),
@@ -373,9 +304,9 @@ async function runSearch(
         quickAddEligible: Boolean(quickAddEligible),
         hasVariants: Boolean(hasVariants),
         priceVaries: maxBuyerPriceMinor > effectivePriceMinor,
-        imageUrl: image ? getCurrentMediaUrl(image.objectKey, image.variantWidth) : null,
+        imageUrl: image?.url ?? null,
         imageMediaId: image?.mediaId ?? null,
-        imageAlt: image?.altText ?? null,
+        imageAlt: image?.alt ?? null,
         type: "product" as const,
       };
     });

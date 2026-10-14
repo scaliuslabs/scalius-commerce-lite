@@ -1,6 +1,8 @@
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "./schema";
 import {
+  registerDatabaseProvider,
+  registeredDatabaseProvider,
   resolveDatabaseConfiguration,
   type DatabaseEnvironment,
   type DatabaseProvider,
@@ -13,8 +15,6 @@ import {
 } from "./postgres-adapter";
 import { observeD1Prepare, observeD1Statement } from "./read-observer";
 import type { Database } from "./types";
-
-const providerByDatabase = new WeakMap<object, DatabaseProvider>();
 
 type D1SessionFactory = (
   constraintOrBookmark?: string,
@@ -70,31 +70,25 @@ export function getDb(env?: DatabaseEnvironment): Database {
   const config = resolveDatabaseConfiguration(env);
 
   if (config.provider === "turso") {
-    const database = createTursoDatabase({
+    return createTursoDatabase({
       url: config.url,
       authToken: config.authToken,
     }, {
       writeBatchMode: config.writeBatchMode,
     });
-    providerByDatabase.set(database as object, "turso");
-    return database;
   }
 
   if (config.provider === "postgres") {
-    const database = createPostgresDatabase(config.connectionString, {
+    return createPostgresDatabase(config.connectionString, {
       connect: config.transport === "neon-http"
         ? connectNeonPostgres
         : connectNativePostgres,
     });
-    providerByDatabase.set(database as object, "postgres");
-    return database;
   }
 
   // Drizzle construction is local and cheap. Avoiding mutable isolate-global
   // state prevents one binding/provider from leaking into another request.
-  const database = drizzle(createD1RequestClient(config.binding), { schema });
-  providerByDatabase.set(database as object, "d1");
-  return database;
+  return registerDatabaseProvider(drizzle(createD1RequestClient(config.binding), { schema }), "d1");
 }
 
 /**
@@ -104,7 +98,7 @@ export function getDb(env?: DatabaseEnvironment): Database {
 export function getDatabaseProviderForClient(
   database: Database,
 ): DatabaseProvider {
-  return providerByDatabase.get(database as object) ?? "d1";
+  return registeredDatabaseProvider(database as object);
 }
 
 export { schema };

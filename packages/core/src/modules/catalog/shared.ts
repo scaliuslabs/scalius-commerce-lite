@@ -3,8 +3,10 @@ import { products, categories, productReviewStats } from "@scalius/database/sche
 import { and, sql, eq, or, type AnyColumn, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { productCategoryNameMatch } from "./search-relevance";
+import { declareProductCards } from "./declare-deps";
 import {
   buyerCatalogHasSkuInPriceRange,
+  loadProductMediaProjections,
   type BuyerCatalogPricingProjection,
   type ProductMediaProjection,
   publicProductBaseConditions,
@@ -269,6 +271,16 @@ export function getPagination(page: number, limit: number, total: number) {
         total,
         totalPages: Math.ceil(total / limit),
     };
+}
+
+/** The primary card image of each product, its card's keys declared (`p:` and the media rows it reads). */
+export async function loadProductCardImages(
+    db: Database,
+    productIds: readonly string[],
+): Promise<Map<string, { mediaId: string; url: string; alt: string | null }>> {
+    const mediaMap = await loadProductMediaProjections(db, productIds);
+    declareProductCards(productIds, mediaMap);
+    return productImageMapFromMedia(mediaMap);
 }
 
 export function productImageMapFromMedia(

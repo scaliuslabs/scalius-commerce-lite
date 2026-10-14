@@ -52,17 +52,6 @@ export function publicTranslation(c: Context): TranslationScope | null {
   return translationScope(publicMarketPresence(c));
 }
 
-/**
- * The pricing of an uncached public read that prices products (site
- * search): its `presence` when it is a well-formed subfolder, else the root.
- * It is never stored, so no cache key carries it.
- */
-export function uncachedMarketPricing(c: Context): MarketPricing | null {
-  const value = new URL(c.req.url).searchParams.get(MARKET_PRESENCE_QUERY_PARAM) ?? "";
-  if (value !== "" && !isMarketSubfolder(value)) throw new NotFoundError("Market not found");
-  return startMarketPricing(c.get("db") as Database, value);
-}
-
 /** Refuses any query parameter but the page's presence (reads with one entry per presence). */
 export function assertOnlyPresenceQuery(url: string, message: string): void {
   const params = new URL(url).searchParams;

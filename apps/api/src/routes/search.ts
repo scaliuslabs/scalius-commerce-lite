@@ -10,7 +10,8 @@ import {
   normalizePublicFtsSearchQuery,
 } from "../utils/public-search-query";
 import { marketPresenceQueryField } from "../schemas/markets";
-import { uncachedMarketPricing } from "../utils/public-market";
+import { publicMarketPricing } from "../utils/public-market";
+import { deps } from "@scalius/core/cache-deps";
 import { resolveAppProvider } from "@scalius/core/integrations/provider-port";
 import { marketPriceContextOf } from "@scalius/core/modules/price-lists";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
@@ -132,7 +133,6 @@ const searchRoute = createRoute({
         correctedQuery: z.string().nullable().openapi({
           description: "Set when `q` matched nothing and these results are for the closest catalog words instead (typo or Bangla correction).",
         }),
-        timestamp: z.string().optional(),
       })) } },
     },
     400: errorResponses[400],
@@ -175,8 +175,11 @@ app.openapi(searchRoute, async (c) => {
 
   // Set up timeout for search (5 seconds)
   const db = c.get("db");
-  const pricing = uncachedMarketPricing(c);
-  // A search app ranks the products; any failure keeps built-in search.
+  // The page's market prices the hits (its presence is part of the cache key).
+  const pricing = publicMarketPricing(c);
+  // A search app ranks the products (a live call no key validates); any
+  // failure keeps built-in search.
+  if (provider) deps.uncacheable("search-app");
   const productIds = provider ? await appRankedProductIds(c, provider, { query, locale: locale ?? "en", pricing, limit }) : null;
   const searchPromise = search(db, query, {
     categoryId,
@@ -187,7 +190,6 @@ app.openapi(searchRoute, async (c) => {
     searchCategories,
     correctTypos: productIds === null,
     ...(productIds ? { productIds } : {}),
-    // The page's market prices the hits (an uncached read: no cache key carries it).
     pricing,
   });
 
@@ -214,7 +216,6 @@ app.openapi(searchRoute, async (c) => {
     categories: limitedResults.categories,
     query,
     correctedQuery: results.correctedQuery,
-    timestamp: new Date().toISOString()
   });
 });
 
@@ -229,7 +230,7 @@ const SEARCH_APP_WAIT_MS = 1_500;
 async function appRankedProductIds(
   c: Parameters<typeof requestAppProviders>[0],
   providerId: string,
-  input: { query: string; locale: string; pricing: ReturnType<typeof uncachedMarketPricing>; limit: number },
+  input: { query: string; locale: string; pricing: ReturnType<typeof publicMarketPricing>; limit: number },
 ): Promise<string[] | null> {
   if (!isQualifiedProviderId(providerId)) return null;
   const choice = await resolveAppProvider(requestAppProviders(c), "search", providerId).catch(() => null);

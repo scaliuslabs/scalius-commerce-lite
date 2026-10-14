@@ -1,5 +1,8 @@
-import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { describe, expect, it } from "vitest";
+import { createSqliteD1Database, createSqliteTursoDatabase } from "@scalius/database/testing/sqlite-d1";
+import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
+import type { Database } from "@scalius/database/client";
+import { afterAll, describe, expect, it } from "vitest";
+import { withDependencyScope } from "../../cache-deps";
 import { search } from "./site-search";
 
 const RELEVANCE_FIXTURE = `
@@ -22,9 +25,7 @@ function relevanceDb() {
   return db;
 }
 
-function setup(onQuery?: () => void) {
-  const harness = createSqliteD1Database({ onQuery });
-  harness.sqlite.exec(`
+const SEARCH_FIXTURE = `
     INSERT INTO categories (id, name, slug, status) VALUES ('cat_1', 'Runner Shoes', 'runner-shoes', 'published');
     INSERT INTO products (id, name, price_minor, slug, category_id, is_active) VALUES
       ('p_runner', 'Trail Runner', 10000, 'trail-runner', 'cat_1', 1),
@@ -38,7 +39,11 @@ function setup(onQuery?: () => void) {
     INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order)
       VALUES ('pmed_runner', 'p_runner', 'media_runner', 'Runner side view', 1, 0);
     INSERT INTO pages (id, title, slug, content, is_published) VALUES ('page_1', 'Runner guide', 'runner-guide', '<p>Long body</p>', 1);
-  `);
+`;
+
+function setup(onQuery?: () => void) {
+  const harness = createSqliteD1Database({ onQuery });
+  harness.sqlite.exec(SEARCH_FIXTURE);
   return harness;
 }
 
@@ -134,5 +139,36 @@ describe("search ranked by a search app", () => {
     expect((await search(db, "bag", { productIds: [] })).products).toEqual([]);
     const { db: hidden } = setup();
     expect((await search(hidden, "runner", { productIds: ["p_hidden", "p_runner"] })).products.map((product) => product.id)).toEqual(["p_runner"]);
+  });
+});
+
+// A strict scope fails on any table no declared key covers. Each provider
+// reads through its own path (FTS5 on D1, the text fallback on Turso and
+// PostgreSQL), and the reader's own keys must cover every one.
+describe("site search dependency coverage", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
+  afterAll(closeNativePostgres);
+  const providers: Array<[string, () => Promise<Database>]> = [
+    ["d1", async () => setup().db],
+    ["turso", async () => createSqliteTursoDatabase(setup().sqlite)],
+  ];
+  if (nativePostgresUrl()) {
+    providers.push(["postgres", async () => {
+      const { db, client } = await createNativePostgres({ label: "site_search_deps" });
+      await client.query(SEARCH_FIXTURE);
+      return db;
+    }]);
+  }
+  it.each(providers)("covers every table it reads on %s", async (_provider, open) => {
+    const db = await open();
+    for (const options of [{}, { categoryId: "cat_1", minPrice: 10, maxPrice: 30, searchPages: false }]) {
+      const { value, dependencies } = await withDependencyScope(() => search(db, "runner", options), { strict: true, log: () => undefined });
+      expect(value.products.map((product) => product.id)).toEqual(["p_runner"]);
+      expect(dependencies.uncacheable).toEqual([]);
+      expect(dependencies.keys).toEqual(expect.arrayContaining(["srch", "lm:all", "c:*", "p:p_runner", "m:media_runner"]));
+    }
+    // Only a page matches: no product row, and no table falls back to its coarse key.
+    const { value, dependencies } = await withDependencyScope(() => search(db, "guide"), { strict: true, log: () => undefined });
+    expect([value.products.length, value.pages.map((page) => page.id)]).toEqual([0, ["page_1"]]);
+    expect(dependencies.keys.filter((key) => key.startsWith("t:"))).toEqual([]);
   });
 });

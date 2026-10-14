@@ -23,6 +23,20 @@ export { brandScope, categoryScope, deps };
  */
 const NO_MEDIA_ROW = "m:~";
 
+/**
+ * A product statement that matched no row still names the SKU, stock and
+ * option tables its pricing join reads. A product joins its answer only by
+ * becoming public (`lm:all`) or by its text (`srch`), which the caller
+ * declares, so it declares this `p:` key, which no row can advance, instead
+ * of each table's coarse key.
+ */
+const NO_PRODUCT_ROW = "p:~";
+
+/** No product row matched; the caller declares what can make one match. */
+export function declareNoProductRow(): void {
+    deps.key(NO_PRODUCT_ROW);
+}
+
 /** One card: its product and the media rows its images come from. */
 export function declareProductCard(productId: string, gallery: readonly ProductMediaProjection[] | undefined): void {
     if (!deps.active()) return;

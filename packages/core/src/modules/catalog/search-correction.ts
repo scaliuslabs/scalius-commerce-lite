@@ -4,6 +4,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { publicCategoryConditions } from "../categories";
 import { sanitizeSearchTokens } from "../../search/fts5";
+import { deps } from "../../cache-deps";
 
 // The vocabulary is read only after a search returned nothing, and is bounded
 // so a zero-result query costs at most this many short name rows.
@@ -240,6 +241,9 @@ export function correctSearchQuery(query: string, catalogNames: readonly string[
  */
 export async function suggestSearchCorrection(db: Database, query: string): Promise<string | null> {
   if (sanitizeSearchTokens(query).length === 0) return null;
+  // The vocabulary is the most recently updated products, by a column no key
+  // tracks: a corrected answer cannot be proved current.
+  deps.uncacheable("order-by-untracked-column");
   const [productNames, categoryNames] = await Promise.all([
     db
       .select({ name: products.name })

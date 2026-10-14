@@ -51,6 +51,8 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   { path: "/api/v1/categories", market: { keyed: true } },
   { path: "/api/v1/brands", market: { keyed: true } },
   { path: "/api/v1/collections", market: { keyed: true } },
+  // Predictive search: products, categories and pages per query, priced in the page's market.
+  { path: "/api/v1/search", exact: true, market: { keyed: true } },
   // One fixed read: a query string other than the presence is rejected by the route, and never cached or batched.
   { path: "/api/v1/storefront/homepage", exact: true, isEligible: presenceOnly, market: { keyed: true } },
   // The checkout settings of the page's market, and its payment method names in its language (step 4b).

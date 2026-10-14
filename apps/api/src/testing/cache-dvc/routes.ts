@@ -23,6 +23,10 @@ function productParts(): string[] {
     `/api/v1/products?${LIST}&minPrice=1000&maxPrice=3000`,
     `/api/v1/products?ids=p_linen,p_silk,p_bag`,
     "/api/v1/products/search?search=linen",
+    // Predictive search: products, categories and pages; a category filter and a price range.
+    "/api/v1/search?q=panjabi",
+    "/api/v1/search?q=about&limit=5",
+    "/api/v1/search?q=panjabi&categoryId=cat_panjabi&minPrice=1000&maxPrice=3000&searchPages=false",
     "/api/v1/products/feed",
     // Each catalogue channel's feed (MARKETS-DESIGN D6): its publications and locations.
     "/api/v1/products/feed?channel=sc_meta",
@@ -125,6 +129,7 @@ function presenceParts(): string[] {
     `/api/v1/products?${LIST}&sort=price-asc&${presence}`,
     `/api/v1/products?${LIST}&minPrice=1000&maxPrice=3000&${presence}`,
     `/api/v1/products/search?search=linen&${presence}`,
+    `/api/v1/search?q=panjabi&${presence}`,
     `/api/v1/products/feed?${presence}`,
     `/api/v1/products/recommendations?productIds=p_linen&limit=8&${presence}`,
     `/api/v1/products/compare?ids=p_linen,p_cotton,p_silk&${presence}`,
@@ -147,6 +152,7 @@ function languageParts(): string[] {
   return [
     `/api/v1/products?${LIST}&sort=newest&${presence}`,
     `/api/v1/products/search?search=linen&${presence}`,
+    `/api/v1/search?q=panjabi&${presence}`,
     `/api/v1/products/feed?${presence}`,
     `/api/v1/products/sitemap?${presence}`,
     // The localized handle of a product.

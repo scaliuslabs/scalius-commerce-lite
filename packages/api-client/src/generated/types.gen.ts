@@ -4745,7 +4745,6 @@ export type GetApiV1SearchResponses = {
              * Set when `q` matched nothing and these results are for the closest catalog words instead (typo or Bangla correction).
              */
             correctedQuery: string | null;
-            timestamp?: string;
         };
     };
 };
