@@ -53,7 +53,8 @@ describe.runIf(server)("remaining polish native PostgreSQL migrations", () => {
     expect((await upgraded.query("SELECT count(*)::integer AS n FROM customer_marketing_consent_events")).rows).toEqual([{ n: 2 }]);
     await upgraded.query("INSERT INTO customer_marketing_consents(customer_id,channel,state,contact,source,actor,subscribed_at) VALUES ('cust_migration','push','subscribed','cust_migration','account','buyer',3)");
     expect((await upgraded.query("SELECT count(*)::integer AS n FROM event_outbox WHERE topic='customer.consent_changed'")).rows).toEqual([{ n: 3 }]);
-    const fresh = await database((await compileCanonicalPostgresSchema()).sql);
+    // The fresh schema as of the migration under test: later migrations change it again.
+    const fresh = await database((await compileCanonicalPostgresSchema({ beforeMigration: "0146_" })).sql);
     expect(await catalog(upgraded)).toEqual(await catalog(fresh));
   }, 180_000);
 });

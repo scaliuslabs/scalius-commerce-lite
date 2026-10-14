@@ -792,6 +792,13 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
     const valueLimit = boundedLimit(input.valueLimit, FACET_VALUE_LIMIT);
     const brandValueLimit = input.valueLimit === undefined ? BRAND_FACET_VALUE_LIMIT : valueLimit;
 
+    // The key range seeks the (product_id, facet_key) index under SQLite's binary
+    // order. PostgreSQL orders text by the database collation ("option.size" is
+    // not below "option/" under en_US), so it tests the prefix itself.
+    const optionKeyPrefix = (column: SQL) => getDatabaseProviderForClient(db) === "postgres"
+        ? sql`substr(${column}, 1, ${sql.raw(String(OPTION_FACET_PREFIX.length))}) = ${OPTION_FACET_PREFIX}`
+        : sql`${column} > ${OPTION_FACET_PREFIX} AND ${column} < ${`${OPTION_FACET_PREFIX.slice(0, -1)}/`}`;
+
     const sourceFacetCounts = sql`
             SELECT 'attribute' AS facet_kind, attribute_row.facet_key AS facet_id, attribute_row.value_key AS value_key,
                 SUM(CASE WHEN ${attributeMatch(sql.raw("attribute_row.facet_key"))} AND ${optionMatch} AND ${brandMatch}${ratingMatch} THEN 1 ELSE 0 END) AS value_count,
@@ -815,8 +822,7 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
             FROM facet_scope
             CROSS JOIN product_facet_values AS option_row
             WHERE option_row.product_id = facet_scope.product_id
-              AND option_row.facet_key > ${OPTION_FACET_PREFIX}
-              AND option_row.facet_key < ${`${OPTION_FACET_PREFIX.slice(0, -1)}/`}
+              AND ${optionKeyPrefix(sql`option_row.facet_key`)}
               AND option_row.facet_kind = 'option'
             GROUP BY option_row.facet_key, option_row.value_key
     `;
