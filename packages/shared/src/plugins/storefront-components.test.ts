@@ -80,19 +80,18 @@ describe("storefront manifest", () => {
     expect(parsed.ok).toBe(true);
   });
 
-  it("keeps storefront types out of route sections, skins, blocks and the app's settings", () => {
+  it("keeps storefront types out of skins, blocks and the app's settings", () => {
     const issues = (input: Partial<PluginManifestInput>) => {
       const parsed = parsePluginManifest({ ...base, ...input });
       return parsed.ok ? [] : parsed.issues.map((issue) => issue.message);
     };
-    expect(issues({ routes: { public: [{ name: "draw", methods: ["GET"] }] }, storefront: { sections: [{ type: "a", name: "A", route: "draw", settings: [{ key: "i", label: "I", type: "image" }] }] } }).join()).toMatch(/for components/);
     expect(issues({ storefront: { skins: [{ id: "card", target: "product-card", name: "Card", settings: [{ key: "p", label: "P", type: "products" }] }] } }).join()).toMatch(/skin's settings cannot name images or products/);
     expect(issues({ storefront: { productBlocks: [{ type: "b", name: "B", placement: "below", settings: [{ key: "i", label: "I", type: "image" }] }] } }).join()).toMatch(/product block's settings cannot name images/);
     expect(issues({ storefront: { skins: [{ id: "x", target: "section:recently-viewed", name: "X" }] } }).join()).toMatch(/section:<core section type>/);
     expect(issues({ storefront: { skins: [{ id: "x", target: "sidebar", name: "X" }] } }).join()).toMatch(/section:<core section type>/);
     expect(issues({ storefront: { skins: [{ id: "x", target: "header", name: "X" }, { id: "x", target: "footer", name: "Y" }] } }).join()).toMatch(/Skin ids must be unique/);
     expect(issues({ settings: [{ key: "i", label: "I", type: "image" }] }).join()).toMatch(/storefront components/);
-    expect(issues({ storefront: { sections: [{ type: "a", name: "A", reads: ["x"] }] }, storage: { x: {} } }).join()).toMatch(/reads no storage/);
+    expect(issues({ storefront: { sections: [{ type: "a", name: "A", route: "draw" } as never] } }).join()).toMatch(/Unrecognized key/);
   });
 
   it("asks a Super Admin again when an update starts running storefront code or reaching new hosts", () => {

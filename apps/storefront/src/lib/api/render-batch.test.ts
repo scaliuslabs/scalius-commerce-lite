@@ -9,7 +9,7 @@ import {
 import { requestRuntime, type StorefrontRuntime } from "./runtime";
 import { apiFetch } from "./transport";
 import { getLayoutData, getHomepageData } from "./storefront";
-import { getAllProducts, getProductAppBlocks, getProductBySlugResult, getProductsByCategory } from "./products";
+import { getAllProducts, getProductBySlugResult, getProductsByCategory } from "./products";
 import { getCities, getShippingMethods } from "./shipping";
 import { getActiveCheckoutLanguage } from "./settings";
 import { getCheckoutConfig } from "./checkout";
@@ -44,10 +44,7 @@ function bodyFor(path: string): { status: number; body: string } {
       }),
     };
   }
-  if (path === "/api/v1/storefront/product-apps/linen") {
-    return { status: 200, body: envelope({ blocks: [{ id: "heart", app: "acme.wishlist/button", placement: "buy-box", html: "<p>Save</p>", head: { meta: [], jsonLd: [] } }] }) };
-  }
-  if (path === "/api/v1/storefront/product-apps/broken") return { status: 500, body: JSON.stringify({ success: false }) };
+  if (path === "/api/v1/products/broken") return { status: 500, body: JSON.stringify({ success: false }) };
   if (path.startsWith("/api/v1/products/missing")) return { status: 404, body: JSON.stringify({ success: false }) };
   if (path.startsWith("/api/v1/products/")) {
     return { status: 200, body: envelope({ product: { id: "p1", slug: "linen" }, variants: [], media: [], recommendations: { reason: "popular", products: [] } }) };
@@ -123,35 +120,33 @@ afterEach(() => {
 });
 
 describe("page render API budget", () => {
-  it("renders a product page, with its app blocks, from one API call", async () => {
+  it("renders a product page from one API call", async () => {
     const api = backend();
-    const [layout, product, shipping, config, apps] = await render(api, () => Promise.all([
+    const [layout, product, shipping, config] = await render(api, () => Promise.all([
       getLayoutData(),
       getProductBySlugResult("linen"),
       getShippingMethods(),
       getCheckoutConfig(),
-      getProductAppBlocks("linen"),
     ]));
 
     expect(api.calls).toHaveLength(PAGE_API_CALL_BUDGET);
     expect(api.calls[0]).toContain(STOREFRONT_BATCH_PATH);
     expect(parseStorefrontBatchParts(new URL(api.calls[0]!, "https://api.example.test"))?.map((part) => part.pathname))
-      .toContain("/api/v1/storefront/product-apps/linen");
+      .toContain("/api/v1/products/linen");
     expect(layout?.platform?.apiUrl).toBe("https://api.example.test");
     expect(product.state).toBe("found");
     expect(shipping).toEqual([{ id: "s1" }]);
     expect(config.gateways).toEqual([{ id: "cod" }]);
-    expect(apps).toEqual({ failed: false, blocks: [{ id: "heart", app: "acme.wishlist/button", placement: "buy-box", html: "<p>Save</p>", head: { meta: [], jsonLd: [] } }] });
   });
 
-  it("proves a product page whose app blocks part answered, and none whose part failed", async () => {
+  it("proves a product page whose parts answered, and none whose part failed", async () => {
     const proven = createPageDependencies();
-    await render(backend({ proof: true }), () => Promise.all([getLayoutData(), getProductAppBlocks("linen")]), proven);
+    await render(backend({ proof: true }), () => Promise.all([getLayoutData(), getProductBySlugResult("linen")]), proven);
     expect(pageEntryFromDependencies(proven)).not.toBeNull();
 
     const failed = createPageDependencies();
-    const [, apps] = await render(backend({ proof: true }), () => Promise.all([getLayoutData(), getProductAppBlocks("broken")]), failed);
-    expect(apps).toEqual({ failed: true, blocks: [] });
+    const [, product] = await render(backend({ proof: true }), () => Promise.all([getLayoutData(), getProductBySlugResult("broken")]), failed);
+    expect(product.state).toBe("unavailable");
     expect(pageEntryFromDependencies(failed)).toBeNull();
   });
 

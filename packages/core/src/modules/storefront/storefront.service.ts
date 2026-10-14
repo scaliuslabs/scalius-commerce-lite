@@ -202,16 +202,10 @@ function planHomeProduct(db: Database, productId: string | null, translation: Tr
  * `requests` (a preview's draft, `homeSectionRequests(draft.pages.home,
  * draft.pages.homeMode)`) replaces the published theme's.
  */
-/**
- * One app section: drawn by its app's public route (apps/api
- * plugins/storefront-render.ts: sanitized `html`), or a component section
- * the storefront draws at the edge from `component` (app-components.ts).
- */
+/** One app section: a component section the storefront draws at the edge from `component` (app-components.ts). */
 export interface HomepageAppSection {
   sectionId: string;
-  html: string;
-  head: { meta: Array<{ attribute: "name" | "property"; key: string; content: string }>; jsonLd: string[] };
-  component?: HomepageAppComponent;
+  component: HomepageAppComponent;
 }
 
 export async function getHomepageData(
@@ -432,7 +426,7 @@ export async function getHomepageData(
       // Only while the product is public; the storefront then answers `/`
       // with a redirect to the product's own page.
       homeProduct: productPlan.resolve(results, productOffset),
-      // App sections that drew something, by section id (sanitized HTML).
+      // App sections that drew something, by section id (component data).
       apps: renderedApps,
       // The Metaobjects sections' content types with their published entries.
       // Only a page with a Metaobjects section carries the key (other pages answer as before).

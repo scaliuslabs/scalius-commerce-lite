@@ -902,10 +902,18 @@ describe("homepage sections from the theme's own data", () => {
 describe("app sections", () => {
   const app = (id: string, key = "acme.hello/greeting") =>
     ({ id, type: "app", version: 1, settings: { app: key, values: {} } }) as StorefrontSection;
-  const drawn = (content: HomepageContent, surfaces: Record<string, string>): HomepageContent => ({
+  /** The component data the API gave these sections (acme.hello's greeting). */
+  const given = (content: HomepageContent, ids: string[]): HomepageContent => ({
     ...content,
-    apps: new Map(Object.entries(surfaces).map(([sectionId, html]) => [sectionId, { sectionId, html, head: { meta: [], jsonLd: [] } }])),
+    apps: new Map(ids.map((sectionId) => [sectionId, {
+      sectionId,
+      component: { pluginId: "acme.hello", type: "greeting", values: {}, media: [], lists: [] },
+    }])),
   });
+  const GREETING_LAYOUT = { currency: { code: "BDT", symbol: "৳" }, appExtensions: [{
+    pluginId: "acme.hello", version: "1.0.0", source: "bundled", release: "a".repeat(64),
+    sections: ["greeting"], sectionSettings: { greeting: [] }, skins: [], blocks: [], islands: [], stylesheet: false, connect: [],
+  }] } as unknown as import("@/lib/api/storefront").LayoutData;
 
   async function renderWith(sections: StorefrontSection[], content: HomepageContent, extra: Record<string, unknown>): Promise<Document> {
     const html = await container.renderToString(HomepageSections, {
@@ -921,7 +929,7 @@ describe("app sections", () => {
     const content: HomepageContent = {
       ...store("tiny"),
       apps: new Map(sections.map(({ id }) => [id, {
-        sectionId: id, html: "", head: { meta: [], jsonLd: [] },
+        sectionId: id,
         component: { pluginId: "acme.hello", type: "greeting", values: {}, media: [], lists: [] },
       }])),
     };
@@ -941,7 +949,7 @@ describe("app sections", () => {
     const sections = [app("lead")];
     const content: HomepageContent = {
       ...store("tiny"), apps: new Map([["lead", {
-        sectionId: "lead", html: "", head: { meta: [], jsonLd: [] },
+        sectionId: "lead",
         component: { pluginId: "acme.hello", type: "greeting", values: {}, media: [], lists: [] },
       }]]),
     };
@@ -959,28 +967,37 @@ describe("app sections", () => {
     }
   });
 
-  it("renders what the app drew in page order, and nothing (no box) for a section the app did not draw", async () => {
+  /** Renders with the greeting app active and its module answering `html`. */
+  async function renderGreeting(sections: StorefrontSection[], content: HomepageContent, extra: Record<string, unknown> = {}): Promise<Document> {
+    const draw = vi.spyOn(ExtensionHost.prototype, "render").mockResolvedValue('<p class="hello">Hello <a href="/sale">sale</a></p>');
+    try {
+      return await requestRuntime.run({ layout: Promise.resolve(GREETING_LAYOUT) }, () => renderWith(sections, content, extra));
+    } finally {
+      draw.mockRestore();
+    }
+  }
+
+  it("renders what the app's module drew in page order, and nothing (no box) for a section it was not given", async () => {
     const sections = [app("greeting"), section("product-rail", "rail", { source: { kind: "newest" } }), app("gone", "acme.gone/banner")];
-    const content = drawn(store("large"), { greeting: '<p class="hello">Hello <a href="/sale">sale</a></p>' });
-    const page = await render(sections, content);
+    const content = given(store("large"), ["greeting"]);
+    const page = await renderGreeting(sections, content);
     expect(Array.from(page.querySelectorAll("[data-home-section]")).map((node) => node.getAttribute("data-home-section")))
       .toEqual(["app", "product-rail"]);
-    const surface = page.querySelector('[data-home-section="app"] [data-app-section="acme.hello/greeting"] [data-app-surface]')!;
-    expect(surface.innerHTML).toBe('<p class="hello">Hello <a href="/sale">sale</a></p>');
+    const drawn = page.querySelector('[data-home-section="app"] [data-sx-app="acme.hello"]')!;
+    expect(drawn.innerHTML).toBe('<p class="hello">Hello <a href="/sale">sale</a></p>');
     expect(page.querySelector('[data-section-id="gone"]')).toBeNull();
     // An app section never leads: the rail's photos keep the page's priority.
     expect(homepageLeadSection(sections, content)?.id).toBe("rail");
     expect(homepageRenderUnits(sections, content)).toHaveLength(2);
-    // Nothing drawn at all: no app section, no enhancer script.
+    // Nothing given at all: no app section.
     const none = await render([app("greeting")], store("large"));
     expect(none.querySelector("[data-home-section]")).toBeNull();
-    expect(none.querySelector("script")).toBeNull();
   });
 
   it("marks app sections and their region for the theme editor and renders one alone for the render route", async () => {
     const sections = [section("faq", "faq", { heading: "", items: [{ question: "Q?", answer: "A." }] }), app("greeting")];
-    const content = drawn(store("large"), { greeting: "<p>Hello</p>" });
-    const marked = await renderWith(sections, content, { previewMarks: true, region: "after" });
+    const content = given(store("large"), ["greeting"]);
+    const marked = await renderGreeting(sections, content, { previewMarks: true, region: "after" });
     expect(marked.querySelector('[data-theme-section-id="greeting"][data-home-section="app"]')).not.toBeNull();
     // The list's root names its region; the old layout statement is gone.
     expect(marked.querySelector('[data-theme-region="after"]')).not.toBeNull();
@@ -988,11 +1005,11 @@ describe("app sections", () => {
     const units = Array.from(marked.querySelectorAll('[data-theme-region] > [data-home-render-unit]'));
     expect(units.map((unit) => unit.getAttribute("data-theme-section-id"))).toEqual(["faq", "greeting"]);
     // A buyer's page carries no region.
-    expect((await renderWith(sections, content, {})).querySelector("[data-theme-region]")).toBeNull();
+    expect((await renderGreeting(sections, content)).querySelector("[data-theme-region]")).toBeNull();
 
-    const only = await renderWith(sections, content, { only: "greeting" });
+    const only = await renderGreeting(sections, content, { only: "greeting" });
     expect(Array.from(only.querySelectorAll("[data-theme-section-id]")).map((node) => node.getAttribute("data-theme-section-id"))).toEqual(["greeting"]);
-    expect(only.querySelector("[data-app-surface]")?.textContent).toBe("Hello");
+    expect(only.querySelector(".hello")?.textContent).toBe("Hello sale");
   });
 });
 

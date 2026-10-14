@@ -128,7 +128,7 @@ export interface HomepageSectionData {
   collections: CollectionWithProducts[];
   homeProduct: HomepageProduct | null;
   /**
-   * The app sections that drew something (sanitized HTML and head tags), by
+   * The app sections that drew something (component data), by
    * section id; read through `readHomepageAppSurfaces` (lib/app-surfaces).
    * An app section missing here renders nothing. Absent from an older API.
    */

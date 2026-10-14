@@ -249,7 +249,6 @@ describe("app sections", () => {
       name: "Reviews carousel",
       description: null,
       settings: [field("heading", { default: "What buyers say" }), field("count", { type: "number", min: 1, max: 12, integer: true, default: 4, maxLength: null })],
-      component: true,
     }],
     skins: [],
     templates: [], pagePresets: [],

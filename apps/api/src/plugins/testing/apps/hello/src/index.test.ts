@@ -93,17 +93,6 @@ describe("acme.hello", () => {
     expect((await harness.route("admin", "wave", { method: "POST", body: { resource: "product", ids: [] } })).value).toMatchObject({ status: 422 });
   });
 
-  it("draws its section and product block from settings alone, escaped", async () => {
-    const harness = createPluginTestHarness(hello);
-    const section = (await harness.render("section", "greeting", { settings: { heading: "Eid <sale>", text: "" } })).value as { body: { html: string; head: unknown } };
-    expect(section.body.html).toContain("Eid &#60;sale&#62;");
-    expect(section.body.head).toEqual({ meta: [{ name: "hello-greeting", content: "Eid <sale>" }] });
-    const block = (await harness.render("product-block", "note", { product: { id: "p1", slug: "linen", categoryId: null, brandId: null } })).value as { body: { html: string } };
-    expect(block.body.html).toContain("Packed with care.");
-    expect((await harness.render("product-block", "note", { settings: { note: "" }, product: { id: "p1", slug: "linen", categoryId: null, brandId: null } })).value)
-      .toEqual({ body: { html: "" } });
-  });
-
   it("accepts a ping only with a valid HMAC of the raw body", async () => {
     const secret = "ping-secret-123";
     const rawBody = JSON.stringify({ hello: "world" });

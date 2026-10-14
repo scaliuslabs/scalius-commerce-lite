@@ -39,7 +39,6 @@ import {
   getFeedProducts,
   getProductsByCategory,
   getProductBySlugResult,
-  getThemePreviewProductAppBlocks,
   normalizeProductFacets,
   searchProductsForForm,
 } from "./products";
@@ -136,26 +135,6 @@ describe("storefront product API helpers", () => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
     mocks.edgeCacheKeys.length = 0;
-  });
-
-  it("reads preview app output privately, preserves its token and drops malformed blocks", async () => {
-    const token = `tpv_${"p".repeat(48)}`;
-    const block = { id: "draft-guide", app: "scalius.size-guide/guide", placement: "below", html: "<p>Draft guide</p>", head: { meta: [], jsonLd: [] } };
-    mocks.apiFetch.mockResolvedValue(new Response(JSON.stringify({ success: true, data: { blocks: [block, { ...block, id: "bad", app: "unsafe" }] } })));
-    await expect(getThemePreviewProductAppBlocks(` ${token} `, "cotton-shirt")).resolves.toEqual({ blocks: [block], failed: false });
-    expect(mocks.apiFetch).toHaveBeenCalledWith("/storefront/theme-preview/product-apps/cotton-shirt", expect.objectContaining({
-      method: "POST", body: JSON.stringify({ token }), cache: "no-store",
-    }), { retries: 0, timeout: 4_000, auth: false });
-    expect(mocks.edgeCacheKeys).toEqual([]);
-  });
-
-  it("rejects invalid preview tokens without a request and fails closed on an unavailable preview", async () => {
-    await expect(getThemePreviewProductAppBlocks("invalid", "shirt")).resolves.toEqual({ blocks: [], failed: true });
-    expect(mocks.apiFetch).not.toHaveBeenCalled();
-    const token = `tpv_${"p".repeat(48)}`;
-    mocks.apiFetch.mockResolvedValueOnce(new Response("{}", { status: 503 })).mockRejectedValueOnce(new Error("timeout"));
-    await expect(getThemePreviewProductAppBlocks(token, "shirt")).resolves.toEqual({ blocks: [], failed: true });
-    await expect(getThemePreviewProductAppBlocks(token, "shirt")).resolves.toEqual({ blocks: [], failed: true });
   });
 
   it("does not convert API product-list errors into an empty catalog", async () => {

@@ -13,7 +13,6 @@ import {
   pluginManifestWithFeatures,
   pluginScopePermissions,
   pluginSettingDefaults,
-  resolvePluginSettingValues,
   type PluginManifest,
   type PluginRenderContext,
   type PluginSettingValue,
@@ -377,42 +376,28 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       request: { method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null, ...request },
     }),
     /**
-     * Draws a theme section, product block or checkout/account block the way
-     * the platform does: `request.render` with the merchant's settings
-     * resolved against the manifest (blocks have none: they read the app's
-     * settings), and a bridge that refuses everything but reads of the
-     * collections the surface declares in `reads`.
+     * Draws a checkout or customer-account block the way the platform does:
+     * `request.render`, and a bridge that refuses everything but reads of
+     * the collections the block declares in `reads`. Sections, product blocks
+     * and skins are components: test them with
+     * `@scalius/plugin-sdk/storefront/testing`.
      */
-    render: (
-      kind: "section" | "product-block" | "block",
-      type: string,
-      input: { settings?: Record<string, unknown>; product?: PluginRenderContext["product"]; instanceId?: string } = {},
-    ) => {
-      const block = kind === "block" ? manifest.storefront.blocks.find((entry) => entry.type === type) : undefined;
-      const surface = kind === "section"
-        ? manifest.storefront.sections.find((entry) => entry.type === type)
-        : kind === "product-block"
-          ? manifest.storefront.productBlocks.find((entry) => entry.type === type)
-          : block ? { ...block, settings: [] } : undefined;
-      if (!surface) throw new Error(`The manifest declares no ${kind} of type ${type}.`);
-      const route = surface.route;
-      if (route === undefined) {
-        throw new Error(`${type} is a component section (drawn by the storefront module): render it with @scalius/plugin-sdk/storefront/testing.`);
-      }
+    render: (type: string, input: { instanceId?: string } = {}) => {
+      const block = manifest.storefront.blocks.find((entry) => entry.type === type);
+      if (!block) throw new Error(`The manifest declares no block of type ${type}.`);
       const render: PluginRenderContext = {
-        kind,
-        ...(block ? { target: block.target } : {}),
+        kind: "block",
+        target: block.target,
         type,
-        instanceId: input.instanceId ?? `${type}-1`,
-        settings: resolvePluginSettingValues(surface.settings, input.settings ?? {}),
-        product: input.product ?? null,
+        instanceId: input.instanceId ?? `${manifest.id}/${type}`,
+        settings: {},
       };
       return run({
         kind: "route",
         surface: "public",
-        name: route,
+        name: block.route,
         request: { method: "GET", subpath: "", query: {}, headers: { accept: "text/html" }, body: null, rawBody: null, staffId: null, render, customer: null },
-      }, renderBridge(surface.reads));
+      }, renderBridge(block.reads));
     },
     cron: (name: string, scheduledAt = new Date().toISOString()) => run({ kind: "cron", name, scheduledAt }),
     lifecycle: (hook: "install" | "activate" | "deactivate" | "uninstall", keepData = true) => run({ kind: "lifecycle", hook, keepData }),

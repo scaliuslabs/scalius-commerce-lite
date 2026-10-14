@@ -377,8 +377,10 @@ describe("admin app routes", () => {
       widgets: [{ id: "summary", title: "Hello" }],
     });
     expect(hello.storefront).toMatchObject({
-      sections: [{ type: "greeting", name: "Greeting" }],
-      productBlocks: [{ type: "note", name: "Hello note", placement: "below" }],
+      proxy: true,
+      head: true,
+      sections: [],
+      productBlocks: [],
     });
   });
 });

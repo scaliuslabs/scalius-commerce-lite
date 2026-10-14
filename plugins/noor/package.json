@@ -1,7 +1,7 @@
 {
   "name": "@scalius/plugin-noor",
   "version": "1.0.0",
-  "description": "Noor: an editorial theme as an app (header, footer, card, sixteen sections, a single-page order landing)",
+  "description": "Noor: an editorial theme as an app (header, footer, card, product page, skins of the store sections, nine sections, a single-page order landing)",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",

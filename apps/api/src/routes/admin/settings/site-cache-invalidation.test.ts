@@ -984,21 +984,20 @@ describe("site settings write behavior", () => {
     const manifest = (id: string, extra: Record<string, unknown>) => {
       const parsed = parsePluginManifest({
         id, name: id === "acme.reviews" ? "Reviews" : "Hidden", version: "1.0.0", apiVersion: "2026-10", description: "An app.", author: { name: "Acme" },
-        routes: { public: [{ name: "draw", methods: ["GET"] }] },
         storefront: {
-          sections: [{ type: "latest", name: "Latest reviews", route: "draw", settings: [{ key: "heading", label: "Heading", type: "text", default: "Loved" }] }],
-          productBlocks: [{ type: "stars", name: "Stars", placement: "buy-box", route: "draw" }],
+          sections: [{ type: "latest", name: "Latest reviews", settings: [{ key: "heading", label: "Heading", type: "text", default: "Loved" }] }],
+          productBlocks: [{ type: "stars", name: "Stars", placement: "buy-box" }],
         },
         ...extra,
       });
       if (!parsed.ok) throw new Error(JSON.stringify(parsed.issues));
       return parsed.manifest;
     };
-    const surfaces = { storefrontSurfaces: true };
+    const surfaces = { storefrontSurfaces: true, storefrontCode: true };
     mocks.listPluginInstallations.mockResolvedValueOnce([
       { pluginId: "acme.reviews", status: "active", grant: surfaces, manifest: manifest("acme.reviews", {}) },
       { pluginId: "acme.hidden", status: "disabled", grant: surfaces, manifest: manifest("acme.hidden", {}) },
-      { pluginId: "acme.ungranted", status: "active", grant: { storefrontSurfaces: false }, manifest: manifest("acme.ungranted", {}) },
+      { pluginId: "acme.ungranted", status: "active", grant: { storefrontSurfaces: false, storefrontCode: true }, manifest: manifest("acme.ungranted", {}) },
     ]);
 
     const response = await app.request("/api/v1/admin/settings/theme/editor", { method: "GET" }, env);
@@ -1013,7 +1012,6 @@ describe("site settings write behavior", () => {
         name: "Latest reviews",
         description: null,
         settings: [expect.objectContaining({ key: "heading", type: "text", default: "Loved" })],
-        component: false,
       }],
       skins: [],
       templates: [],

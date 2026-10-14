@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 import { parsePluginManifest } from "@scalius/plugin-sdk/manifest";
-import { renderSection, storefrontShown } from "@scalius/plugin-sdk/storefront/testing";
+import { fixtureSectionSkinData, renderSection, renderSkin, storefrontShown } from "@scalius/plugin-sdk/storefront/testing";
 import { resolveStorefrontSettings } from "@scalius/shared/plugins";
 import { manifest } from "../../index";
 import storefront from "../../storefront";
@@ -20,11 +20,26 @@ function render(type: string, values: Record<string, unknown>) {
   return document.body;
 }
 
+/** The store's hero with one slide, drawn by Noor's hero skin. */
+function renderHero(slide: { image?: string; phoneImage?: string }) {
+  const photo = (id: string | undefined) => (id
+    ? { url: `https://media.example/${id}.webp`, srcset: `https://media.example/${id}-600.webp 600w, https://media.example/${id}.webp 1200w`, width: 1200, height: 800, alt: id }
+    : null);
+  const skin = parsePluginManifest(manifest);
+  if (!skin.ok) throw new Error("Invalid Noor manifest");
+  const settings = resolveStorefrontSettings(skin.manifest.storefront.skins.find((entry) => entry.id === "noor-hero")!.settings, {}, { image: () => null, products: () => [] });
+  const data = fixtureSectionSkinData("hero", { layout: "full-bleed", slides: [{ image: photo(slide.image), phoneImage: photo(slide.phoneImage), alt: "", focalPoint: { x: 50, y: 50 }, link: null }] });
+  const result = storefrontShown(renderSkin(storefront, "noor-hero", "section:hero", settings, data), "scalius.noor");
+  expect(result.dropped).toBe(0);
+  document.body.innerHTML = result.html;
+  return document.body;
+}
+
 afterEach(() => document.body.replaceChildren());
 
 describe("Noor responsive media", () => {
   it("lets the browser select one crop instead of rendering two eager images", () => {
-    const root = render("hero", { image: "wide", phone_image: "phone" });
+    const root = renderHero({ image: "wide", phoneImage: "phone" });
     expect(root.querySelectorAll("img")).toHaveLength(1);
     const source = root.querySelector("picture > source")!;
     expect(source.getAttribute("media")).toBe("(max-width: 47.99rem)");
@@ -33,8 +48,8 @@ describe("Noor responsive media", () => {
     expect(root.querySelector("img")!.getAttribute("loading")).toBe("eager");
   });
 
-  it.each(["image", "phone_image"])("keeps a sole %s visible at every screen width", (key) => {
-    const root = render("hero", { [key]: "only" });
+  it.each(["image", "phoneImage"])("keeps a sole %s visible at every screen width", (key) => {
+    const root = renderHero({ [key]: "only" });
     expect(root.querySelector("source")).toBeNull();
     expect(root.querySelector("img")!.getAttribute("src")).toBe("https://media.example/only.webp");
     expect(root.querySelector("img")!.className).toBe("noor-hero-img");

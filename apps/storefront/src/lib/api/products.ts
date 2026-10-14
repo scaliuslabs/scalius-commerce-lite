@@ -16,7 +16,7 @@ import type {
   ProductRecommendations,
   RatingFacetValue,
 } from "./types";
-import { apiFetch, withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
+import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
 import {
   getApiV1ProductsBySlug,
@@ -25,9 +25,7 @@ import {
   getApiV1ProductsSearch,
   getApiV1ProductsSitemap,
   getApiV1ProductsRecommendations,
-  getApiV1StorefrontProductAppsBySlug,
 } from "@scalius/api-client/sdk";
-import { readProductAppBlocks, type ProductAppBlock } from "@/lib/app-surfaces";
 import { buildCanonicalQueryString } from "@/lib/canonical-query";
 import { normalizeSearchQuery } from "@/lib/search-query";
 import { isProductRecommendations, recommendationSourceIds } from "@/lib/recommendations";
@@ -154,62 +152,6 @@ export async function getProductBySlugResult(
   );
 
   return result ?? { state: "unavailable" };
-}
-
-/**
- * A product page's app blocks. `failed` only when the read genuinely failed
- * (a server error or no answer): the page then renders without them and
- * stays out of shared caches. A product that is not public (404) or a theme
- * without app blocks is simply none.
- */
-export interface ProductAppBlocksResult {
-  blocks: ProductAppBlock[];
-  failed: boolean;
-}
-
-/**
- * The product page's app blocks (`/storefront/product-apps/<slug>`), drawn
- * by their apps and sanitized by the API. A public batch part with its own
- * dependency proof, read together with the product so the page stays one
- * batch; cheap when the theme has no app blocks.
- */
-export async function getProductAppBlocks(slug: string): Promise<ProductAppBlocksResult> {
-  if (!slug) return { blocks: [], failed: false };
-  const result = await withEdgeCache<ProductAppBlocksResult>(
-    `product_apps_${slug}`,
-    async () => {
-      const { data, response } = await getApiV1StorefrontProductAppsBySlug({
-        client: getConfiguredSdkClient(),
-        path: { slug },
-      });
-      if (!response || response.status >= 500) return { blocks: [], failed: true };
-      if (!response.ok) return { blocks: [], failed: false };
-      return { blocks: readProductAppBlocks(unwrapData<{ blocks?: unknown }>(data)?.blocks), failed: false };
-    },
-  );
-  return result ?? { blocks: [], failed: true };
-}
-
-/** Draw the draft or historical version's app blocks behind its private preview token. */
-export async function getThemePreviewProductAppBlocks(token: string, slug: string): Promise<ProductAppBlocksResult> {
-  const normalizedToken = token.trim();
-  if (!slug || !/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return { blocks: [], failed: true };
-  try {
-    const response = await apiFetch(`/storefront/theme-preview/product-apps/${encodeURIComponent(slug)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: normalizedToken }),
-      cache: "no-store",
-    }, { retries: 0, timeout: 4_000, auth: false });
-    if (!response.ok) {
-      await response.body?.cancel();
-      return { blocks: [], failed: response.status >= 500 };
-    }
-    const payload = unwrapEnvelope<{ blocks?: unknown }>(await response.json() as unknown);
-    return { blocks: readProductAppBlocks(payload?.blocks), failed: !payload };
-  } catch {
-    return { blocks: [], failed: true };
-  }
 }
 
 /**

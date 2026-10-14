@@ -79,8 +79,6 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   // The layout: the whole presence matrix (the same everywhere), and the
   // page's menus, category tree, policies and storefront copy in its language (step 4b).
   { path: "/api/v1/storefront/layout", exact: true, isEligible: presenceOnly, market: { keyed: true } },
-  // A product page's app blocks (`/product-apps/<slug>`); a query string is rejected by the route.
-  { path: "/api/v1/storefront/product-apps", isEligible: (url) => url.searchParams.size === 0, market: { invariant: "An app's product blocks are drawn store-wide (a localized handle names its product too); apps read no market until step 6." } },
   // The checkout, order and account pages' app blocks (`/app-blocks/<page>`): the same for every buyer; a query string is rejected.
   { path: "/api/v1/storefront/app-blocks", isEligible: (url) => url.searchParams.size === 0, market: { invariant: "An app's checkout and account blocks are drawn store-wide, the same for every buyer and market." } },
   // The active presence matrix, for the storefront gateway's buyer-choice redirect.

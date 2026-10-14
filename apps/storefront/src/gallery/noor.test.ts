@@ -42,7 +42,7 @@ describe("packed Noor gallery integration", () => {
         if (section.type === "app") expect(section.settings.values[field]).toHaveLength(count);
       }
     }
-    for (const type of ["shop-the-look", "testimonials", "faq"]) expect(galleryEntry(`noor-section-${type}-rtl`)?.scenario.locale).toBe("ar");
+    for (const type of ["testimonials"]) expect(galleryEntry(`noor-section-${type}-rtl`)?.scenario.locale).toBe("ar");
   });
 
   it("resolves valid authored section data and renders it through the actual packed host", async () => {
@@ -75,8 +75,6 @@ describe("packed Noor gallery integration", () => {
       });
       const fixture = NOOR_SECTION_FIXTURES[component.type as keyof typeof NOOR_SECTION_FIXTURES];
       expect(html, entry.id).toContain(fixture.subject.slice(1));
-      if (component.type === "shop-the-look") expect(html, entry.id).toContain("/products/jamdani-saree");
-      if (component.type === "sale-countdown") expect(html, entry.id).toContain('data-island="countdown"');
       if (component.type === "video") {
         expect(html, entry.id).toContain("<img");
         expect(html, "Poster-only fixture must not claim playback coverage").not.toContain("<video");
@@ -88,7 +86,11 @@ describe("packed Noor gallery integration", () => {
     const layout = await read("noor-product", "storefront/layout");
     expect(readStorefrontExtensions(layout.appExtensions)).toEqual([NOOR_EXTENSION]);
     expect(NOOR_EXTENSION.release).toBe(BUNDLED_STOREFRONT_EXTENSIONS[NOOR_EXTENSION.pluginId]!.release);
-    expect(NOOR_EXTENSION.skins.map((skin) => skin.target)).toEqual(["header", "footer", "product-card"]);
+    expect(NOOR_EXTENSION.skins.map((skin) => skin.target)).toEqual([
+      "header", "footer", "product-card", "product-main", "section:hero", "section:product-tabs", "section:product-grid", "section:product-rail",
+      "section:category-tiles", "section:shop-by", "section:banner-mosaic", "section:lookbook", "section:deal-block", "section:usp-strip",
+      "section:editorial", "section:seo-text", "section:faq", "section:newsletter",
+    ]);
     expect((await read("noor-product-missing", "storefront/layout")).appExtensions).toEqual([]);
     expect(galleryEntry("noor-product-missing")!.theme.apps!.skins!.header).toEqual(galleryEntry("noor-product")!.theme.apps!.skins!.header);
     expect(galleryEntry("noor-product-core")!.theme.apps).toEqual({});
@@ -122,7 +124,7 @@ describe("packed Noor gallery integration", () => {
     const surfaces = [...readHomepageAppSurfaces(sections.apps).values()];
     const order = surfaces.find((surface) => surface.component?.type === "landing-order")!;
     expect(surfaces.length).toBeGreaterThan(1);
-    expect(surfaces.every((surface) => surface.html === "" && surface.component?.pluginId === NOOR_EXTENSION.pluginId)).toBe(true);
+    expect(surfaces.every((surface) => surface.component?.pluginId === NOOR_EXTENSION.pluginId)).toBe(true);
     expect(order.component!.lists[0]!.source).toBe("product:prod_0");
     const product = order.component!.lists[0]!.products[0] as { id: string; slug: string };
     const detail = await read("noor-landing", `products/${product.slug}`);
@@ -135,13 +137,20 @@ describe("packed Noor gallery integration", () => {
       expect(galleryEntry(id)!.theme.apps!.skins!.header!.values.transparent_home).toBe(true);
     }
     expect(galleryEntry("noor-home-text")!.theme.pages.home[0]!.type).toBe("editorial");
-    for (const [id, type, mediaCount] of [["noor-home", "hero", 1], ["noor-home-no-image", "hero", 0], ["noor-home-slideshow", "slideshow", 2]] as const) {
-      const result = await read(id, "storefront/homepage");
-      const surfaces = readHomepageAppSurfaces((result.sections as { apps: unknown }).apps);
-      const lead = surfaces.get(galleryEntry(id)!.theme.pages.home[0]!.id)!.component!;
-      expect(lead.type).toBe(type);
-      expect(lead.media).toHaveLength(mediaCount);
+    // The store's hero drawn by Noor's hero skin: with a photo, then without one.
+    for (const [id, slides] of [["noor-home", 1], ["noor-home-no-image", 0]] as const) {
+      const hero = galleryEntry(id)!.theme.pages.home[0]!;
+      expect(hero.type).toBe("hero");
+      if (hero.type === "hero") {
+        expect(hero.skin?.app).toBe("scalius.noor/noor-hero");
+        expect(hero.settings.slides.length >= slides).toBe(true);
+        expect(hero.settings.slides.length === 0).toBe(slides === 0);
+      }
     }
+    const result = await read("noor-home-slideshow", "storefront/homepage");
+    const lead = readHomepageAppSurfaces((result.sections as { apps: unknown }).apps).get(galleryEntry("noor-home-slideshow")!.theme.pages.home[0]!.id)!.component;
+    expect(lead.type).toBe("slideshow");
+    expect(lead.media).toHaveLength(2);
     const menuRow = galleryEntry("core-product-menu-row")!;
     expect(menuRow.theme.apps?.skins?.header).toBeUndefined();
     expect(menuRow.theme.blocks.desktopNav.variant).toBe("sticky-category-bar");

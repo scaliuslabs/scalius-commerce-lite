@@ -1039,99 +1039,93 @@
           "apps": {
             "type": "array",
             "items": {
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/StorefrontAppSurface"
+              "type": "object",
+              "properties": {
+                "sectionId": {
+                  "type": "string"
                 },
-                {
+                "component": {
                   "type": "object",
                   "properties": {
-                    "sectionId": {
+                    "pluginId": {
                       "type": "string"
                     },
-                    "component": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "values": {
                       "type": "object",
-                      "properties": {
-                        "pluginId": {
-                          "type": "string"
-                        },
-                        "type": {
-                          "type": "string"
-                        },
-                        "values": {
-                          "type": "object",
-                          "additionalProperties": {}
-                        },
-                        "media": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "url": {
-                                "type": "string"
-                              },
-                              "alt": {
-                                "type": "string"
-                              },
-                              "width": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "height": {
-                                "type": "number",
-                                "nullable": true
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "url",
-                              "alt",
-                              "width",
-                              "height"
-                            ]
+                      "additionalProperties": {}
+                    },
+                    "media": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "alt": {
+                            "type": "string"
+                          },
+                          "width": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "height": {
+                            "type": "number",
+                            "nullable": true
                           }
                         },
-                        "lists": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "source": {
-                                "type": "string"
-                              },
-                              "products": {
-                                "type": "array",
-                                "items": {}
-                              }
-                            },
-                            "required": [
-                              "source",
-                              "products"
-                            ]
+                        "required": [
+                          "id",
+                          "url",
+                          "alt",
+                          "width",
+                          "height"
+                        ]
+                      }
+                    },
+                    "lists": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string"
+                          },
+                          "products": {
+                            "type": "array",
+                            "items": {}
                           }
-                        }
-                      },
-                      "required": [
-                        "pluginId",
-                        "type",
-                        "values",
-                        "media",
-                        "lists"
-                      ],
-                      "description": "A component section (no `html`): the storefront draws it at the edge with the app's storefront module, from these resolved values, images and product cards."
+                        },
+                        "required": [
+                          "source",
+                          "products"
+                        ]
+                      }
                     }
                   },
                   "required": [
-                    "sectionId"
-                  ]
+                    "pluginId",
+                    "type",
+                    "values",
+                    "media",
+                    "lists"
+                  ],
+                  "description": "A component section: the storefront draws it at the edge with the app's storefront module, from these resolved values, images and product cards."
                 }
+              },
+              "required": [
+                "sectionId",
+                "component"
               ]
             },
             "maxItems": 24,
-            "description": "The app sections to show, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add, or a component section's data. An app section missing here renders nothing."
+            "description": "The app sections to show, by section id, each a component section's data. An app section missing here renders nothing."
           },
           "metaobjects": {
             "type": "array",
@@ -1208,61 +1202,6 @@
           "collections",
           "homeProduct",
           "apps"
-        ]
-      },
-      "StorefrontAppSurface": {
-        "type": "object",
-        "properties": {
-          "html": {
-            "type": "string",
-            "description": "Sanitized HTML: content, tables, lists, images (https or store paths), links and forms posting to the app's own /apps/<id>/ proxy only."
-          },
-          "head": {
-            "type": "object",
-            "properties": {
-              "meta": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "attribute": {
-                      "type": "string",
-                      "enum": [
-                        "name",
-                        "property"
-                      ]
-                    },
-                    "key": {
-                      "type": "string"
-                    },
-                    "content": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "attribute",
-                    "key",
-                    "content"
-                  ]
-                }
-              },
-              "jsonLd": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "schema.org JSON-LD, already serialized for a <script type=\"application/ld+json\">."
-              }
-            },
-            "required": [
-              "meta",
-              "jsonLd"
-            ]
-          }
-        },
-        "required": [
-          "html",
-          "head"
         ]
       },
       "MarketMatrix": {
@@ -10449,9 +10388,6 @@
                   "items": {
                     "$ref": "#/components/schemas/AppSettingField"
                   }
-                },
-                "component": {
-                  "type": "boolean"
                 }
               },
               "required": [
@@ -10459,8 +10395,7 @@
                 "type",
                 "name",
                 "description",
-                "settings",
-                "component"
+                "settings"
               ]
             }
           },
@@ -23243,148 +23178,6 @@
         "security": []
       }
     },
-    "/api/v1/storefront/product-apps/{slug}": {
-      "get": {
-        "operationId": "storefront.product_apps.get",
-        "tags": [
-          "Storefront"
-        ],
-        "summary": "Get the app blocks a product page shows",
-        "description": "The published theme's product app blocks drawn by their active apps for this public product: sanitized HTML and head tags, each in the buy box or below the modules as its app declares. Takes no query; cached under dependency validation (the theme, the product and each app's installation and declared storage), so a cached answer runs no app code.",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 255
-            },
-            "required": true,
-            "name": "slug",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The drawn app blocks",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "blocks": {
-                          "type": "array",
-                          "items": {
-                            "allOf": [
-                              {
-                                "$ref": "#/components/schemas/StorefrontAppSurface"
-                              },
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "app": {
-                                    "type": "string"
-                                  },
-                                  "placement": {
-                                    "type": "string",
-                                    "enum": [
-                                      "buy-box",
-                                      "below"
-                                    ]
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "app",
-                                  "placement"
-                                ]
-                              }
-                            ]
-                          },
-                          "maxItems": 10
-                        }
-                      },
-                      "required": [
-                        "blocks"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "x-scalius-agent": {
-          "surface": "storefront",
-          "exposure": "excluded",
-          "stability": "internal",
-          "principals": [
-            "visitor",
-            "customer"
-          ],
-          "risk": "read",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 16384,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "exclusionReason": "Rendering infrastructure: apps' sanitized HTML for one product page, not structured agent data."
-        },
-        "x-scalius-rbac": {
-          "type": "public"
-        },
-        "security": []
-      }
-    },
     "/api/v1/storefront/extensions/{pluginId}/{release}": {
       "get": {
         "operationId": "storefront.extension_file.get",
@@ -25644,168 +25437,6 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "exclusionReason": "Private storefront preview read keyed by the preview cookie bearer; the token must never enter agent input or execution."
-        },
-        "x-scalius-rbac": {
-          "type": "public"
-        },
-        "security": []
-      }
-    },
-    "/api/v1/storefront/theme-preview/product-apps/{slug}": {
-      "post": {
-        "tags": [
-          "Storefront"
-        ],
-        "summary": "Render a preview theme's app blocks for a public product",
-        "operationId": "system.storefront_theme_preview.product_apps",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 255
-            },
-            "required": true,
-            "name": "slug",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "token": {
-                    "type": "string",
-                    "minLength": 52,
-                    "maxLength": 52,
-                    "pattern": "^tpv_[A-Za-z0-9_-]{48}$"
-                  }
-                },
-                "required": [
-                  "token"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The drawn app blocks",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "blocks": {
-                          "type": "array",
-                          "items": {
-                            "allOf": [
-                              {
-                                "$ref": "#/components/schemas/StorefrontAppSurface"
-                              },
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "app": {
-                                    "type": "string"
-                                  },
-                                  "placement": {
-                                    "type": "string",
-                                    "enum": [
-                                      "buy-box",
-                                      "below"
-                                    ]
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "app",
-                                  "placement"
-                                ]
-                              }
-                            ]
-                          },
-                          "maxItems": 10
-                        }
-                      },
-                      "required": [
-                        "blocks"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "x-scalius-agent": {
-          "surface": "system",
-          "exposure": "excluded",
-          "stability": "internal",
-          "principals": [
-            "internal"
-          ],
-          "risk": "security",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 16384,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "exclusionReason": "Private preview-cookie bearer read; preview tokens never enter agent input or execution."
         },
         "x-scalius-rbac": {
           "type": "public"

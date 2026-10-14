@@ -1,6 +1,8 @@
 // Noor: a complete storefront theme as an app. It gives the theme its own
-// header, footer and product card (skins), twenty sections and one template;
-// its landing kit (a product hero, features or steps, and the order section
+// header, footer, product card and product page (skins), skins of the store's
+// own sections (hero, products, tiles, story, questions, sign-up, ...: the
+// merchant fills the store's section and Noor only draws it), nine sections
+// the store has no equivalent for and one template; its landing kit (a product hero, features or steps, and the order section
 // with the store's own order form) builds single-product campaign pages on
 // any landing page, and its page preset makes one in a step. Everything is
 // drawn at the edge by its storefront module (storefront.tsx) from the
@@ -44,6 +46,52 @@ const spacing = (fallback = "m"): Field => ({
   key: "spacing", label: "Space above and below", type: "select", default: fallback,
   options: [{ value: "none", label: "None" }, { value: "s", label: "Small" }, { value: "m", label: "Medium" }, { value: "l", label: "Large" }],
 });
+const EYEBROW: Field = { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 };
+/** The settings of a products skin: tabs and rows take columns, tabs also a layout, a grid its section's columns. */
+function productsSkinSettings(kind: "tabs" | "grid" | "rail"): Field[] {
+  return [
+    EYEBROW,
+    { key: "text", label: "Text", type: "textarea", maxLength: 240 },
+    { key: "link", label: "Link", type: "link", help: "Empty: the products' own listing, when a link text is set." },
+    { key: "link_label", label: "Link text", type: "text", maxLength: 40 },
+    ...(kind === "tabs" ? [{ key: "layout", label: "Layout", type: "select", default: "grid", options: [{ value: "grid", label: "Grid" }, { value: "row", label: "Scrolling row" }] } satisfies Field] : []),
+    ...(kind === "grid" ? [] : [{ key: "columns", label: "Columns on computers", type: "number", default: 4, min: 2, max: 6, integer: true } satisfies Field]),
+    tone(),
+    spacing(),
+  ];
+}
+function tilesSkinSettings(): Field[] {
+  return [
+    EYEBROW,
+    { key: "link", label: "Link", type: "link" },
+    { key: "link_label", label: "Link text", type: "text", maxLength: 40 },
+    { key: "layout", label: "Layout", type: "select", default: "mosaic", options: [{ value: "mosaic", label: "Mosaic" }, { value: "row", label: "Row of tall tiles" }, { value: "circles", label: "Circles" }] },
+    tone(),
+    spacing(),
+  ];
+}
+/** The settings of the text skins; the editorial one adds the points and numbers of its photo layout. */
+function storySkinSettings(editorial: boolean): Field[] {
+  return [
+    EYEBROW,
+    ...(editorial ? [
+      { key: "points", label: "Points", type: "list", itemLabel: "Point", max: 6, fields: [{ key: "text", label: "Point", type: "text", required: true, maxLength: 120 }] } satisfies Field,
+      {
+        key: "stats", label: "Numbers", type: "list", itemLabel: "Number", max: 4,
+        fields: [
+          { key: "value", label: "Number", type: "text", required: true, maxLength: 12 },
+          { key: "label", label: "Label", type: "text", required: true, maxLength: 40 },
+        ],
+      } satisfies Field,
+    ] : []),
+    { key: "cta_label", label: "Button text", type: "text", maxLength: 40 },
+    { key: "cta_link", label: "Button link", type: "link" },
+    { key: "align", label: "Alignment", type: "select", default: "center", options: [{ value: "start", label: "Left" }, { value: "center", label: "Centre" }] },
+    { key: "size", label: "Heading size", type: "select", default: "m", options: [{ value: "m", label: "Medium" }, { value: "l", label: "Large" }] },
+    tone(),
+    spacing(),
+  ];
+}
 const HEIGHTS = [{ value: "s", label: "Small" }, { value: "m", label: "Medium" }, { value: "l", label: "Large" }, { value: "screen", label: "Full screen" }];
 const SCRIMS = [{ value: "none", label: "No" }, { value: "soft", label: "A little" }, { value: "strong", label: "More" }];
 const ENDS_HELP = "The store's local time: 2026-12-31 or 2026-12-31 18:00. Leave empty for no countdown.";
@@ -51,31 +99,6 @@ const ENDS_HELP = "The store's local time: 2026-12-31 or 2026-12-31 18:00. Leave
 // Neutral defaults also apply when legacy documents omit a value; saved explicit copy wins.
 const sections = [
   // ── Heroes ────────────────────────────────────────────────────────────
-  {
-    type: "hero",
-    name: "Hero",
-    description: "A large photo with a heading and buttons: the words over the photo, or beside it.",
-    settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", default: "Explore our products", maxLength: 120 },
-      { key: "text", label: "Text", type: "textarea", maxLength: 300 },
-      { key: "image", label: "Image", type: "image" },
-      { key: "phone_image", label: "Image on phones", type: "image", help: "A taller crop for phones. Leave empty to use the image." },
-      { key: "primary_label", label: "Button text", type: "text", default: "Shop all", maxLength: 40 },
-      { key: "primary_link", label: "Button link", type: "link", default: "/search" },
-      { key: "secondary_label", label: "Second button text", type: "text", maxLength: 40 },
-      { key: "secondary_link", label: "Second button link", type: "link" },
-      { key: "layout", label: "Layout", type: "select", default: "overlay", options: [{ value: "overlay", label: "Words over the photo" }, { value: "split", label: "Words beside the photo" }] },
-      {
-        key: "position", label: "Words position", type: "select", default: "start",
-        options: [{ value: "start", label: "Left" }, { value: "center", label: "Centre" }, { value: "end", label: "Right" }],
-        help: "Beside the photo, Right puts the words on the left.",
-      },
-      { key: "height", label: "Height", type: "select", default: "l", options: HEIGHTS },
-      { key: "scrim", label: "Darken the photo", type: "select", default: "soft", options: SCRIMS },
-      tone("soft"),
-    ],
-  },
   {
     type: "slideshow",
     name: "Slideshow",
@@ -116,27 +139,6 @@ const sections = [
   },
   // ── Selling ───────────────────────────────────────────────────────────
   {
-    type: "products",
-    name: "Products",
-    description: "Products in a grid or a scrolling row, with up to three tabs.",
-    settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", default: "New arrivals", maxLength: 120 },
-      { key: "text", label: "Text", type: "textarea", maxLength: 240 },
-      { key: "link", label: "Link", type: "link", default: "/search" },
-      { key: "link_label", label: "Link text", type: "text", default: "View all", maxLength: 40 },
-      { key: "tab1_label", label: "First tab", type: "text", maxLength: 30, help: "Tabs show when two or more have products." },
-      { key: "tab1_products", label: "First tab products", type: "products", default: "newest", limit: 8 },
-      { key: "tab2_label", label: "Second tab", type: "text", maxLength: 30 },
-      { key: "tab2_products", label: "Second tab products", type: "products", limit: 8 },
-      { key: "tab3_label", label: "Third tab", type: "text", maxLength: 30 },
-      { key: "tab3_products", label: "Third tab products", type: "products", limit: 8 },
-      { key: "layout", label: "Layout", type: "select", default: "grid", options: [{ value: "grid", label: "Grid" }, { value: "row", label: "Scrolling row" }] },
-      { key: "columns", label: "Columns on computers", type: "number", default: 4, min: 2, max: 6, integer: true },
-      tone(), spacing(),
-    ],
-  },
-  {
     type: "featured-product",
     name: "Featured product",
     description: "One product in the spotlight: a large photo, the price, a few points and add to cart.",
@@ -152,148 +154,7 @@ const sections = [
       tone("soft"), spacing(),
     ],
   },
-  {
-    type: "collection-tiles",
-    name: "Collection tiles",
-    description: "Photo tiles that link to collections or categories: a mosaic, a row or circles.",
-    settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", default: "Shop by category", maxLength: 120 },
-      { key: "link", label: "Link", type: "link" },
-      { key: "link_label", label: "Link text", type: "text", maxLength: 40 },
-      {
-        key: "tiles", label: "Tiles", type: "list", itemLabel: "Tile", max: 8,
-        fields: [
-          { key: "image", label: "Image", type: "image", required: true },
-          { key: "title", label: "Title", type: "text", required: true, maxLength: 40 },
-          { key: "subtitle", label: "Subtitle", type: "text", maxLength: 60 },
-          { key: "link", label: "Link", type: "link" },
-        ],
-      },
-      { key: "layout", label: "Layout", type: "select", default: "mosaic", options: [{ value: "mosaic", label: "Mosaic" }, { value: "row", label: "Row of tall tiles" }, { value: "circles", label: "Circles" }] },
-      tone(), spacing(),
-    ],
-  },
-  {
-    type: "promo-tiles",
-    name: "Promo tiles",
-    description: "One to three large photo links side by side, for offers and collections.",
-    settings: [
-      {
-        key: "items", label: "Tiles", type: "list", itemLabel: "Tile", min: 1, max: 3,
-        fields: [
-          { key: "image", label: "Image", type: "image", required: true },
-          { key: "eyebrow", label: "Small heading", type: "text", maxLength: 40 },
-          { key: "heading", label: "Heading", type: "text", maxLength: 80 },
-          { key: "label", label: "Link text", type: "text", maxLength: 30 },
-          { key: "link", label: "Link", type: "link" },
-        ],
-      },
-      { key: "height", label: "Height", type: "select", default: "m", options: HEIGHTS.slice(0, 3) },
-      tone(), spacing(),
-    ],
-  },
-  {
-    type: "shop-the-look",
-    name: "Shop the look",
-    description: "A photo with numbered points beside the products in it.",
-    settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", default: "Shop the look", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", maxLength: 120 },
-      { key: "text", label: "Text", type: "textarea", maxLength: 240 },
-      { key: "image", label: "Image", type: "image" },
-      {
-        key: "hotspots", label: "Points", type: "list", itemLabel: "Point", max: 6,
-        fields: [
-          { key: "x", label: "Across (%)", type: "number", default: 50, min: 0, max: 100 },
-          { key: "y", label: "Down (%)", type: "number", default: 50, min: 0, max: 100 },
-          { key: "title", label: "Title", type: "text", required: true, maxLength: 60 },
-          { key: "text", label: "Text", type: "text", maxLength: 120 },
-          { key: "link", label: "Link", type: "link" },
-        ],
-      },
-      { key: "products", label: "Products", type: "products", limit: 4 },
-      { key: "image_side", label: "Photo side", type: "select", default: "start", options: SIDES },
-      tone(), spacing(),
-    ],
-  },
-  {
-    type: "sale-countdown",
-    name: "Sale banner",
-    description: "A sale banner with a live countdown to its end.",
-    settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", maxLength: 120 },
-      { key: "text", label: "Text", type: "textarea", maxLength: 240 },
-      { key: "ends_at", label: "Ends at", type: "text", maxLength: 16, help: ENDS_HELP },
-      { key: "label", label: "Button text", type: "text", default: "View products", maxLength: 40 },
-      { key: "link", label: "Button link", type: "link", default: "/search" },
-      { key: "image", label: "Background image", type: "image" },
-      {
-        key: "tone", label: "Colours", type: "select", default: "ink",
-        options: [{ value: "ink", label: "Dark" }, { value: "accent", label: "Brand colour" }, { value: "soft", label: "Soft" }],
-      },
-      spacing(),
-    ],
-  },
   // ── Story ─────────────────────────────────────────────────────────────
-  {
-    type: "promises",
-    name: "Promises",
-    description: "Short promises with icons: delivery, payment, exchanges, help.",
-    settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", maxLength: 120 },
-      {
-        key: "items", label: "Promises", type: "list", itemLabel: "Promise", max: 6,
-        fields: [
-          { key: "icon", label: "Icon", type: "select", default: "truck", options: ICONS },
-          { key: "title", label: "Title", type: "text", required: true, maxLength: 60 },
-          { key: "text", label: "Text", type: "text", maxLength: 100 },
-        ],
-      },
-      { key: "style", label: "Style", type: "select", default: "strip", options: [{ value: "strip", label: "A row" }, { value: "cards", label: "Cards" }, { value: "centered", label: "Centred" }] },
-      tone(), spacing("s"),
-    ],
-  },
-  {
-    type: "image-text",
-    name: "Image with text",
-    description: "A photo beside your words: your story, a collection, a promise, with numbers or points.",
-    settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", default: "Our story", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", maxLength: 120 },
-      { key: "text", label: "Text", type: "textarea", maxLength: 2000, help: "An empty line starts a new paragraph." },
-      { key: "image", label: "Image", type: "image" },
-      { key: "image_side", label: "Photo side", type: "select", default: "start", options: SIDES },
-      { key: "points", label: "Points", type: "list", itemLabel: "Point", max: 6, fields: [{ key: "text", label: "Point", type: "text", required: true, maxLength: 120 }] },
-      {
-        key: "stats", label: "Numbers", type: "list", itemLabel: "Number", max: 4,
-        fields: [
-          { key: "value", label: "Number", type: "text", required: true, maxLength: 12 },
-          { key: "label", label: "Label", type: "text", required: true, maxLength: 40 },
-        ],
-      },
-      { key: "cta_label", label: "Button text", type: "text", maxLength: 40 },
-      { key: "cta_link", label: "Button link", type: "link" },
-      tone(), spacing(),
-    ],
-  },
-  {
-    type: "rich-text",
-    name: "Text",
-    description: "A heading and paragraphs, with an optional button.",
-    settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", maxLength: 160 },
-      { key: "text", label: "Text", type: "textarea", maxLength: 3000, help: "An empty line starts a new paragraph." },
-      { key: "cta_label", label: "Button text", type: "text", maxLength: 40 },
-      { key: "cta_link", label: "Button link", type: "link" },
-      { key: "align", label: "Alignment", type: "select", default: "center", options: [{ value: "start", label: "Left" }, { value: "center", label: "Centre" }] },
-      { key: "size", label: "Heading size", type: "select", default: "m", options: [{ value: "m", label: "Medium" }, { value: "l", label: "Large" }] },
-      tone(), spacing(),
-    ],
-  },
   {
     type: "testimonials",
     name: "Reviews",
@@ -313,27 +174,6 @@ const sections = [
         ],
       },
       { key: "style", label: "Layout", type: "select", default: "row", options: [{ value: "row", label: "Scrolling row" }, { value: "grid", label: "Grid" }] },
-      tone(), spacing(),
-    ],
-  },
-  {
-    type: "faq",
-    name: "Questions",
-    description: "Questions that open to their answers, marked up for search engines.",
-    settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", default: "Help", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", default: "Questions, answered", maxLength: 120 },
-      { key: "text", label: "Text", type: "textarea", maxLength: 240 },
-      {
-        key: "questions", label: "Questions", type: "list", itemLabel: "Question", max: 16,
-        fields: [
-          { key: "question", label: "Question", type: "text", required: true, maxLength: 160 },
-          { key: "answer", label: "Answer", type: "textarea", required: true, maxLength: 1200 },
-        ],
-      },
-      { key: "contact_label", label: "Contact button text", type: "text", maxLength: 40 },
-      { key: "contact_link", label: "Contact button link", type: "link" },
-      { key: "structured_data", label: "Show in search results (FAQ markup)", type: "boolean", default: true },
       tone(), spacing(),
     ],
   },
@@ -368,24 +208,6 @@ const sections = [
         fields: [{ key: "image", label: "Image", type: "image", required: true }, { key: "link", label: "Link", type: "link" }],
       },
       tone(), spacing(),
-    ],
-  },
-  {
-    type: "signup",
-    name: "Sign-up call",
-    description: "Invites buyers to join your list for early access and offers.",
-    settings: [
-      { key: "eyebrow", label: "Small heading", type: "text", maxLength: 60 },
-      { key: "heading", label: "Heading", type: "text", default: "Stay in touch", maxLength: 120 },
-      { key: "text", label: "Text", type: "textarea", maxLength: 240 },
-      { key: "button", label: "Button text", type: "text", default: "Join the list", maxLength: 40 },
-      { key: "link", label: "Button link", type: "link", default: "/newsletter" },
-      { key: "image", label: "Image", type: "image" },
-      {
-        key: "tone", label: "Colours", type: "select", default: "soft",
-        options: [{ value: "soft", label: "Soft" }, { value: "ink", label: "Dark" }, { value: "accent", label: "Brand colour" }],
-      },
-      spacing(),
     ],
   },
   // ── Landing kit ───────────────────────────────────────────────────────
@@ -524,6 +346,181 @@ const skins = [
       { key: "show_hover", label: "Second photo on hover", type: "boolean", default: true },
     ],
   },
+  {
+    id: "noor-product",
+    target: "product-main",
+    name: "Noor product page",
+    description: "Quiet photos beside the title and the store's own buy form, then the description, reviews and related products.",
+    settings: [
+      { key: "media_side", label: "Photos", type: "select", default: "start", options: SIDES },
+      { key: "show_breadcrumbs", label: "Breadcrumbs", type: "boolean", default: true },
+      { key: "show_description", label: "Description", type: "boolean", default: true },
+      { key: "show_reviews", label: "Reviews", type: "boolean", default: true },
+      { key: "show_related", label: "Related products", type: "boolean", default: true },
+    ],
+  },
+  // ── Skins of the store's own sections ─────────────────────────────────
+  // The merchant fills the store's section (its photos, products, questions);
+  // a skin gives it Noor's look and adds only what the section has no field for.
+  {
+    id: "noor-hero",
+    target: "section:hero",
+    name: "Noor hero",
+    description: "The first slide as a large photo with words over it or beside it; several slides become a slideshow.",
+    settings: [
+      EYEBROW,
+      { key: "secondary_label", label: "Second button text", type: "text", maxLength: 40 },
+      { key: "secondary_link", label: "Second button link", type: "link" },
+      { key: "layout", label: "Layout", type: "select", default: "overlay", options: [{ value: "overlay", label: "Words over the photo" }, { value: "split", label: "Words beside the photo" }] },
+      {
+        key: "position", label: "Words position", type: "select", default: "start",
+        options: [{ value: "start", label: "Left" }, { value: "center", label: "Centre" }, { value: "end", label: "Right" }],
+        help: "Beside the photo, Right puts the words on the left.",
+      },
+      { key: "height", label: "Height", type: "select", default: "l", options: HEIGHTS },
+      { key: "scrim", label: "Darken the photo", type: "select", default: "soft", options: SCRIMS },
+      { key: "autoplay", label: "Play slides automatically", type: "boolean", default: true },
+      { key: "interval", label: "Seconds per slide", type: "number", default: 6, min: 3, max: 12, integer: true },
+      tone("soft"),
+    ],
+  },
+  {
+    id: "noor-products-tabs",
+    target: "section:product-tabs",
+    name: "Noor product tabs",
+    description: "Products in tabs, as a grid or a scrolling row.",
+    settings: productsSkinSettings("tabs"),
+  },
+  {
+    id: "noor-products-grid",
+    target: "section:product-grid",
+    name: "Noor product grid",
+    description: "Products in a grid of the section's columns and rows.",
+    settings: productsSkinSettings("grid"),
+  },
+  {
+    id: "noor-products-rail",
+    target: "section:product-rail",
+    name: "Noor product row",
+    description: "Products in a scrolling row.",
+    settings: productsSkinSettings("rail"),
+  },
+  {
+    id: "noor-tiles-categories",
+    target: "section:category-tiles",
+    name: "Noor category tiles",
+    description: "The chosen categories as photo tiles: a mosaic, a row or circles.",
+    settings: tilesSkinSettings(),
+  },
+  {
+    id: "noor-tiles-cards",
+    target: "section:shop-by",
+    name: "Noor photo tiles",
+    description: "Photo cards with a label and a link as tiles: a mosaic, a row or circles.",
+    settings: tilesSkinSettings(),
+  },
+  {
+    id: "noor-promo-tiles",
+    target: "section:banner-mosaic",
+    name: "Noor promo tiles",
+    description: "Up to three large photo links side by side; each photo's description is its heading.",
+    settings: [{ key: "height", label: "Height", type: "select", default: "m", options: HEIGHTS.slice(0, 3) }, tone(), spacing()],
+  },
+  {
+    id: "noor-look",
+    target: "section:lookbook",
+    name: "Noor shop the look",
+    description: "A photo with numbered points beside the products in it.",
+    settings: [
+      { key: "eyebrow", label: "Small heading", type: "text", default: "Shop the look", maxLength: 60 },
+      { key: "text", label: "Text", type: "textarea", maxLength: 240 },
+      {
+        key: "hotspots", label: "Points", type: "list", itemLabel: "Point", max: 6,
+        fields: [
+          { key: "x", label: "Across (%)", type: "number", default: 50, min: 0, max: 100 },
+          { key: "y", label: "Down (%)", type: "number", default: 50, min: 0, max: 100 },
+          { key: "title", label: "Title", type: "text", required: true, maxLength: 60 },
+          { key: "text", label: "Text", type: "text", maxLength: 120 },
+          { key: "link", label: "Link", type: "link" },
+        ],
+      },
+      { key: "image_side", label: "Photo side", type: "select", default: "start", options: SIDES },
+      tone(), spacing(),
+    ],
+  },
+  {
+    id: "noor-sale",
+    target: "section:deal-block",
+    name: "Noor sale banner",
+    description: "A banner counting down to the promotion's end, then its products in a row.",
+    settings: [
+      EYEBROW,
+      { key: "text", label: "Text", type: "textarea", maxLength: 240 },
+      { key: "label", label: "Button text", type: "text", default: "View products", maxLength: 40 },
+      { key: "link", label: "Button link", type: "link", help: "Empty: the products' own listing." },
+      {
+        key: "tone", label: "Colours", type: "select", default: "ink",
+        options: [{ value: "ink", label: "Dark" }, { value: "accent", label: "Brand colour" }, { value: "soft", label: "Soft" }],
+      },
+      spacing(),
+    ],
+  },
+  {
+    id: "noor-promises",
+    target: "section:usp-strip",
+    name: "Noor promises",
+    description: "The store's delivery facts or your own points with icons.",
+    settings: [
+      EYEBROW,
+      { key: "heading", label: "Heading", type: "text", maxLength: 120 },
+      { key: "style", label: "Style", type: "select", default: "strip", options: [{ value: "strip", label: "A row" }, { value: "cards", label: "Cards" }, { value: "centered", label: "Centred" }] },
+      tone(), spacing("s"),
+    ],
+  },
+  {
+    id: "noor-story",
+    target: "section:editorial",
+    name: "Noor story and text",
+    description: "An editorial section's photo beside your words with points and numbers, or its heading and paragraphs. Other layouts stay the store's.",
+    settings: storySkinSettings(true),
+  },
+  {
+    id: "noor-text",
+    target: "section:seo-text",
+    name: "Noor text",
+    description: "Long text as a heading and paragraphs, with an optional button.",
+    settings: storySkinSettings(false),
+  },
+  {
+    id: "noor-faq",
+    target: "section:faq",
+    name: "Noor questions",
+    description: "Questions that open to their answers, marked up for search engines.",
+    settings: [
+      { key: "eyebrow", label: "Small heading", type: "text", default: "Help", maxLength: 60 },
+      { key: "text", label: "Text", type: "textarea", maxLength: 240 },
+      { key: "contact_label", label: "Contact button text", type: "text", maxLength: 40 },
+      { key: "contact_link", label: "Contact button link", type: "link" },
+      { key: "structured_data", label: "Show in search results (FAQ markup)", type: "boolean", default: true },
+      tone(), spacing(),
+    ],
+  },
+  {
+    id: "noor-signup",
+    target: "section:newsletter",
+    name: "Noor sign-up call",
+    description: "Invites buyers to join your list; the button opens the store's sign-up page.",
+    settings: [
+      EYEBROW,
+      { key: "button", label: "Button text", type: "text", default: "Join the list", maxLength: 40, help: "Used when the section has no button text of its own." },
+      { key: "link", label: "Button link", type: "link", default: "/newsletter" },
+      {
+        key: "tone", label: "Colours", type: "select", default: "soft",
+        options: [{ value: "soft", label: "Soft" }, { value: "ink", label: "Dark" }, { value: "accent", label: "Brand colour" }],
+      },
+      spacing(),
+    ],
+  },
 ] satisfies Skin[];
 
 /** Noor's look: warm paper, ink, a deep jade action colour, an editorial serif, quiet radius. */
@@ -556,6 +553,11 @@ const section = (id: string, type: string, values: Record<string, unknown> = {})
   id, type: "app", version: 1, settings: { app: `scalius.noor/${type}`, values },
 });
 
+/** One of the store's own sections, drawn by a Noor skin. */
+const skinned = (id: string, type: string, settings: Record<string, unknown>, skin: string, values: Record<string, unknown> = {}) => ({
+  id, type, version: 1, settings, skin: { app: `scalius.noor/${skin}`, values },
+});
+
 // Templates are starting layouts, not evidence of a merchant's policies or sales.
 // Applying one copies these settings; existing saved content is never rewritten.
 const templates = [
@@ -571,15 +573,21 @@ const templates = [
           header: { app: "scalius.noor/noor-header", values: { announcements: [] } },
           footer: { app: "scalius.noor/noor-footer", values: { payments: [], tagline: "", newsletter_heading: "Stay in touch", newsletter_text: "" } },
           "product-card": { app: "scalius.noor/noor-card", values: {} },
+          "product-main": { app: "scalius.noor/noor-product", values: {} },
         },
       },
       sections: [
-        section("noor-hero", "hero", { eyebrow: "", heading: "Explore our products", text: "", primary_label: "Shop all", height: "l", scrim: "soft" }),
-        section("noor-new", "products", { heading: "New arrivals", tab1_label: "New in", tab2_label: "On sale", tab2_products: "on-sale" }),
-        section("noor-tiles", "collection-tiles", { heading: "Shop by category" }),
+        // The hero shows once the merchant adds a slide with a photo.
+        skinned("noor-hero", "hero", { layout: "full-bleed", slides: [] }, "noor-hero", { height: "l", scrim: "soft" }),
+        skinned("noor-new", "product-tabs", {
+          title: "New arrivals",
+          tabs: [{ label: "New in", source: { kind: "newest" } }, { label: "On sale", source: { kind: "on-sale" } }],
+          limit: 8,
+        }, "noor-products-tabs"),
+        skinned("noor-tiles", "category-tiles", { style: "photo", title: "Shop by category", categoryIds: [] }, "noor-tiles-categories"),
         section("noor-feature", "featured-product", { eyebrow: "Featured product", points: [] }),
-        section("noor-best", "products", { heading: "Popular products", tab1_products: "popular", layout: "row", link_label: "Shop all" }),
-        section("noor-signup", "signup", { heading: "Stay in touch", text: "" }),
+        skinned("noor-best", "product-rail", { title: "Popular products", source: { kind: "popular" }, limit: 12 }, "noor-products-rail", { link_label: "Shop all" }),
+        skinned("noor-signup", "newsletter", { heading: "Stay in touch", text: "", email: "optional", whatsapp: false }, "noor-signup"),
       ],
     },
   },
@@ -613,9 +621,9 @@ const pagePresets = [
 export const manifest = {
   id: "scalius.noor",
   name: "Noor theme",
-  version: "1.1.0",
+  version: "2.0.0",
   apiVersion: PLUGIN_API_VERSION,
-  description: "An editorial storefront theme with its own header, footer and product card, twenty sections, and a landing kit for single-product campaign pages. The order form follows the store’s checkout readiness. Everything is customisable in the theme editor.",
+  description: "An editorial storefront theme with its own header, footer, product card and product page, a look for the store's own sections, nine sections of its own, and a landing kit for single-product campaign pages. The order form follows the store’s checkout readiness. Everything is customisable in the theme editor.",
   tagline: "An editorial theme with campaign landing pages",
   author: { name: "Scalius" },
   icon: "assets/icon.svg",

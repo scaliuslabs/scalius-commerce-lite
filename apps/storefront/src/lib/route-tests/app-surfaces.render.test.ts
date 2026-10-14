@@ -1,17 +1,15 @@
 // @vitest-environment node
 /**
  * Installed apps' storefront surfaces through the real pages (Astro container
- * API through a Vite dev server in middleware mode, API stubbed): homepage app
- * sections and their head tags, product page app blocks in their placements
- * (one batch with the product-apps part), app scripts on the pages they name,
- * and proxy pages drawn inside the store layout.
+ * API through a Vite dev server in middleware mode, API stubbed): app scripts
+ * on the pages they name, and proxy pages drawn inside the store layout.
+ * Component sections, blocks and skins have their own render tests.
  */
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 import type { ViteDevServer } from "vite";
 import { storefrontTemplateTheme, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
-import { serializeJsonLd } from "@scalius/shared/plugins/storefront";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const VIRTUAL_MODULES: Record<string, string> = {
@@ -86,10 +84,6 @@ const parse = (html: string) => new window.DOMParser().parseFromString(html, "te
 
 const envelope = (data: unknown) => JSON.stringify({ success: true, data });
 const thing = (name: string) => ({ "@context": "https://schema.org", "@type": "Thing", name });
-const head = (meta: Array<[string, string, string]>, jsonLd: unknown[] = []) => ({
-  meta: meta.map(([attribute, key, content]) => ({ attribute, key, content })),
-  jsonLd: jsonLd.map(serializeJsonLd),
-});
 
 const APP_SCRIPTS = [
   { pluginId: "acme.reviews", src: "https://cdn.acme.example/product.js", placement: "body-end", pages: ["product"] },
@@ -98,18 +92,7 @@ const APP_SCRIPTS = [
 ];
 
 function theme(): StorefrontThemeDocument {
-  const document = storefrontTemplateTheme("boutique");
-  return {
-    ...document,
-    pages: {
-      ...document.pages,
-      home: [
-        { id: "greeting", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: { title: "Hi" } } },
-        { id: "silent", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: {} } },
-        ...document.pages.home,
-      ],
-    },
-  } as StorefrontThemeDocument;
+  return storefrontTemplateTheme("boutique");
 }
 
 function layout() {
@@ -126,10 +109,6 @@ function layout() {
   };
 }
 
-const HOME_APPS = [
-  // Only "greeting" drew something; "silent" is missing and renders nothing.
-  { sectionId: "greeting", html: '<div class="greeting"><p>Hello from the app</p></div>', head: head([["name", "hello-verify", "token-1"]], [thing("Greeting")]) },
-];
 
 function productData(noIndex: boolean) {
   return {
@@ -194,20 +173,8 @@ function productData(noIndex: boolean) {
   };
 }
 
-const PRODUCT_BLOCKS = [
-  {
-    id: "heart",
-    app: "acme.wishlist/button",
-    placement: "buy-box",
-    html: '<form action="/apps/acme.wishlist/toggle" method="post" data-app-form><button type="submit" aria-pressed="false">Save</button></form>',
-    head: head([["property", "product:retailer_item_id", "LIN-1"]], [thing("Wishlist")]),
-  },
-  { id: "note", app: "acme.hello/note", placement: "below", html: "<p>A note below</p>", head: head([]) },
-];
-
 interface Stub {
   noIndex?: boolean;
-  productApps?: { status: number; blocks?: unknown[] };
   /** What the app answers at `/api/v1/plugins/<id>/public/...`. */
   app?: () => Response;
 }
@@ -222,17 +189,11 @@ function stubApi(stub: Stub = {}) {
         status: 200,
         body: envelope({
           seo: { homepageTitle: null, homepageMetaDescription: null },
-          sections: { lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null, apps: HOME_APPS },
+          sections: { lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null, apps: [] },
         }),
       };
     }
     if (path === "/api/v1/products/linen") return { status: 200, body: envelope(productData(stub.noIndex ?? false)) };
-    if (path === "/api/v1/storefront/product-apps/linen") {
-      const result = stub.productApps ?? { status: 200, blocks: PRODUCT_BLOCKS };
-      return result.status === 200
-        ? { status: 200, body: envelope({ blocks: result.blocks ?? [] }) }
-        : { status: result.status, body: JSON.stringify({ success: false, error: { code: "X", message: "x" } }) };
-    }
     if (path === "/api/v1/shipping-methods") return { status: 200, body: envelope({ shippingMethods: [] }) };
     if (path === "/api/v1/checkout/config") return { status: 200, body: envelope({ gateways: [] }) };
     return { status: 404, body: "{}" };
@@ -270,99 +231,31 @@ async function render(component: unknown, request: Request, params?: Record<stri
 const appScriptSources = (page: Document) =>
   Array.from(page.querySelectorAll("script[data-app-script]")).map((script) => script.getAttribute("src"));
 
-// ─── Homepage ─────────────────────────────────────────────────────────────
+// ─── App scripts ──────────────────────────────────────────────────────────
 
-describe("homepage app sections", () => {
-  it("renders what the app drew, nothing for a section without a drawing, and the head tags in the head", async () => {
+describe("app scripts on public pages", () => {
+  it("loads the scripts that name the home page or all, and nothing else", async () => {
     const { calls } = stubApi();
     const response = await render(HomePage, new Request("https://shop.test/"));
     expect(response.status).toBe(200);
     const page = parse(await response.text());
-
-    const sections = Array.from(page.querySelectorAll('[data-home-section="app"]'));
-    expect(sections.map((node) => node.getAttribute("data-section-id"))).toEqual(["greeting"]);
-    expect(sections[0]!.querySelector('[data-app-section="acme.hello/greeting"] .greeting')?.textContent).toBe("Hello from the app");
-    expect(page.querySelector('[data-section-id="silent"]')).toBeNull();
-
-    expect(page.head.querySelector('meta[name="hello-verify"]')?.getAttribute("content")).toBe("token-1");
-    const appJsonLd = Array.from(page.head.querySelectorAll('script[type="application/ld+json"][data-app-head]'));
-    expect(appJsonLd.map((node) => JSON.parse(node.textContent ?? "{}").name)).toEqual(["Greeting"]);
-
-    // The app scripts for "home" or "all": the listing and product ones stay away.
     expect(appScriptSources(page)).toEqual(["https://chat.example/all.js"]);
     expect(page.head.querySelector('script[data-app-script="acme.chat"]')?.hasAttribute("async")).toBe(true);
-    // Still one API call: the drawn sections ride in the homepage part.
-    expect(calls.filter((call) => call.startsWith("/api/v1/storefront/batch"))).toHaveLength(1);
+    expect(page.querySelector("[data-app-blocks]")).toBeNull();
+    // One API call: the page's batch.
     expect(calls).toHaveLength(1);
   });
-});
 
-// ─── Product page ─────────────────────────────────────────────────────────
-
-describe("product page app blocks", () => {
-  it("reads the blocks in the page's one batch and places them in the buy box and below the modules", async () => {
+  it("loads the product and all scripts on a product page, in one batch, and draws no route-drawn block", async () => {
     const { calls } = stubApi();
     const response = await render(ProductPage, new Request("https://shop.test/products/linen"), { slug: "linen" });
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control") ?? "").not.toContain("no-store");
     const html = await response.text();
     const page = parse(html);
-
     expect(calls).toHaveLength(1);
-    const batch = new URL(calls[0]!, "https://api.shop.test");
-    expect(batch.pathname).toBe("/api/v1/storefront/batch");
-    expect(batch.searchParams.getAll("r")).toContain("/api/v1/storefront/product-apps/linen");
-
-    // Buy box: after the buy buttons, before the delivery and returns facts.
-    const buyBox = page.querySelector('[data-app-blocks="buy-box"]')!;
-    expect(buyBox).not.toBeNull();
-    expect(buyBox.querySelector('[data-app-surface="acme.wishlist/button"] form[data-app-form]')).not.toBeNull();
-    const ctas = page.querySelector(".buy-box-ctas")!;
-    expect(ctas.compareDocumentPosition(buyBox) & 4).toBeTruthy();
-    expect(page.querySelector('[data-app-blocks="below"]')).not.toBeNull();
-    expect(page.querySelector('[data-app-blocks="buy-box"] [data-app-surface="acme.hello/note"]')).toBeNull();
-
-    // Below: after every template module, inside a module container without a heading.
-    const below = page.querySelector('[data-app-blocks="below"]')!;
-    expect(below.querySelector("h2")).toBeNull();
-    expect(below.textContent?.trim()).toBe("A note below");
-    for (const module of Array.from(page.querySelectorAll("[data-product-module]:not([data-app-blocks])"))) {
-      expect(module.compareDocumentPosition(below) & 4, module.getAttribute("data-product-module") ?? "").toBeTruthy();
-    }
-
-    // Meta in the head; JSON-LD beside the product's own, which stays.
-    expect(page.head.querySelector('meta[property="product:retailer_item_id"]')?.getAttribute("content")).toBe("LIN-1");
-    const jsonLd = Array.from(page.querySelectorAll('script[type="application/ld+json"]')).map((node) => JSON.parse(node.textContent ?? "{}"));
-    expect(jsonLd.map((entry) => entry["@type"])).toEqual(expect.arrayContaining(["Product", "BreadcrumbList", "Thing"]));
-    expect(page.head.querySelector('script[type="application/ld+json"][data-app-head]')).toBeNull();
-
-    // The enhancer ships with the surfaces (once); product and "all" scripts load, the listing one does not.
-    expect(html.match(/AppSurface\.astro\?astro&type=script/g)).toHaveLength(1);
+    expect(new URL(calls[0]!, "https://api.shop.test").searchParams.getAll("r").join(" ")).not.toContain("product-apps");
     expect(appScriptSources(page)).toEqual(["https://chat.example/all.js", "https://cdn.acme.example/product.js"]);
-  });
-
-  it("states no app JSON-LD on a product that is not indexed", async () => {
-    stubApi({ noIndex: true });
-    const page = parse(await (await render(ProductPage, new Request("https://shop.test/products/linen"), { slug: "linen" })).text());
-    expect(page.querySelector('script[type="application/ld+json"][data-app-head]')).toBeNull();
-    expect(page.head.querySelector('meta[property="product:retailer_item_id"]')).not.toBeNull();
-  });
-
-  it("renders the page without blocks when the read fails, for this request only", async () => {
-    stubApi({ productApps: { status: 500 } });
-    const response = await render(ProductPage, new Request("https://shop.test/products/linen"), { slug: "linen" });
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Cache-Control")).toContain("no-store");
-    const page = parse(await response.text());
-    expect(page.querySelector("[data-app-blocks]")).toBeNull();
-    expect(page.querySelector(".buy-box-ctas")).not.toBeNull();
-  });
-
-  it("renders no app markup at all when the theme has no blocks", async () => {
-    stubApi({ productApps: { status: 200, blocks: [] } });
-    const response = await render(ProductPage, new Request("https://shop.test/products/linen"), { slug: "linen" });
-    expect(response.headers.get("Cache-Control") ?? "").not.toContain("no-store");
-    const html = await response.text();
     expect(html).not.toContain("data-app-blocks");
     expect(html).not.toContain("AppSurface.astro?astro&type=script");
   });

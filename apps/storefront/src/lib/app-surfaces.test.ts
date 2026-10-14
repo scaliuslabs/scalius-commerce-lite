@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { serializeJsonLd, type PluginHead } from "@scalius/shared/plugins/storefront";
-import { layoutHasAppBlocks, mergeAppHeads, readAppBlocks, readAppHead, readHomepageAppSurfaces, readProductAppBlocks } from "./app-surfaces";
+import { layoutHasAppBlocks, mergeAppHeads, readAppBlocks, readHomepageAppSurfaces } from "./app-surfaces";
 import { appComponentsRenderOn, appScriptOrigins, appScriptsForPage, readAppScripts, storefrontAppPage } from "./app-scripts";
 import { setPageCspHeader } from "./middleware-helper/csp-handler";
 
@@ -10,49 +10,19 @@ const head = (meta: Array<["name" | "property", string, string]> = [], jsonLd: u
 });
 
 describe("app surfaces from the API", () => {
-  it("keeps the homepage's drawn sections by id and leaves out ones without HTML", () => {
+  it("keeps the homepage's component sections by id and leaves out anything else", () => {
+    const component = { pluginId: "acme.studio", type: "quote", values: { quote: "Loved it" }, media: [], lists: [] };
     const surfaces = readHomepageAppSurfaces([
-      { sectionId: "greeting", html: "<p>Hello</p>", head: head([["name", "acme-verify", "abc"]]) },
-      { sectionId: "empty", html: "   ", head: head() },
-      { sectionId: "greeting", html: "<p>Twice</p>", head: head() },
-      { sectionId: "Bad Id", html: "<p>x</p>" },
-      { html: "<p>no id</p>" },
+      { sectionId: "quote", component },
+      { sectionId: "quote", component: { ...component, type: "twice" } },
+      { sectionId: "drawn", html: "<p>Hello</p>", head: head() },
+      { sectionId: "Bad Id", component },
+      { component },
       "junk",
     ]);
-    expect([...surfaces.keys()]).toEqual(["greeting"]);
-    expect(surfaces.get("greeting")).toEqual({ sectionId: "greeting", html: "<p>Hello</p>", head: head([["name", "acme-verify", "abc"]]) });
+    expect([...surfaces.keys()]).toEqual(["quote"]);
+    expect(surfaces.get("quote")).toEqual({ sectionId: "quote", component });
     expect(readHomepageAppSurfaces(undefined).size).toBe(0);
-  });
-
-  it("keeps product blocks in order with their placement, and drops malformed ones", () => {
-    const blocks = readProductAppBlocks([
-      { id: "heart", app: "acme.wishlist/button", placement: "buy-box", html: "<form></form>", head: head() },
-      { id: "note", app: "acme.hello/note", placement: "below", html: "<p>Note</p>", head: null },
-      { id: "nowhere", app: "acme.hello/note", placement: "sidebar", html: "<p>x</p>" },
-      { id: "bad-app", app: "not an app", placement: "below", html: "<p>x</p>" },
-      { id: "blank", app: "acme.hello/note", placement: "below", html: "" },
-    ]);
-    expect(blocks.map((block) => [block.id, block.placement])).toEqual([["heart", "buy-box"], ["note", "below"]]);
-    expect(blocks[1]!.head).toEqual({ meta: [], jsonLd: [] });
-  });
-
-  it("renders head tags only in the API's shape, and never JSON-LD that could close its script", () => {
-    expect(readAppHead({
-      meta: [
-        { attribute: "name", key: "acme-verify", content: "abc" },
-        { attribute: "property", key: "product:brand", content: "Acme" },
-        { attribute: "http-equiv", key: "refresh", content: "0;url=https://evil.example" },
-        { attribute: "name", key: "Bad Key", content: "x" },
-        { attribute: "name", key: "empty", content: "  " },
-      ],
-      jsonLd: [serializeJsonLd({ "@context": "https://schema.org", "@type": "Thing", name: "</script>" }), '{"a":"</script><script>"}', 42],
-    })).toEqual({
-      meta: [
-        { attribute: "name", key: "acme-verify", content: "abc" },
-        { attribute: "property", key: "product:brand", content: "Acme" },
-      ],
-      jsonLd: [serializeJsonLd({ "@context": "https://schema.org", "@type": "Thing", name: "</script>" })],
-    });
   });
 
   it("merges several surfaces' head tags: each meta once (first wins), each JSON-LD once", () => {

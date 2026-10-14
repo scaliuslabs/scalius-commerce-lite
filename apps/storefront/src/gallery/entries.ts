@@ -67,8 +67,6 @@ export interface GalleryScenario {
   catalogSize?: 0 | 1 | 200;
   /** Configured section media IDs do not resolve (for example, deleted uploads). */
   missingSectionMedia?: boolean;
-  /** App sections and product blocks draw something. */
-  apps?: boolean;
   /** Real packed Noor through the production host; missing exercises core slot fallback. */
   noor?: "active" | "missing";
   /** A small authored menu; omitted retains the 1,000+ link stress fixture. */
@@ -515,20 +513,6 @@ const GALLERY_CART = JSON.stringify({
 
 function appEntries(): GalleryEntry[] {
   const base = baseTheme();
-  const home = clone(base);
-  home.pages.home = [
-    contentSection("hero", "hero"),
-    { id: "app-greeting", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: { heading: "Eid Mubarak from Nakshi Bazar", text: "Orders placed before the 28th arrive before Eid." } } },
-    contentSection("product-rail", "rail"),
-  ];
-  const product = clone(base);
-  product.blocks.product = {
-    ...product.blocks.product,
-    apps: [
-      { id: "wishlist", app: "acme.wishlist/button", values: { label: "Save to wishlist" } },
-      { id: "note", app: "acme.hello/note", values: { note: "Packed with care in Dhaka." } },
-    ],
-  };
   return [
     { id: entryId("app", "checkout-blocks"), family: "app:checkout-block", title: "App blocks at the checkout targets (cart page)", page: "cart", theme: clone(base), focus: MAIN, scenario: { checkoutBlocks: true, storage: { "cart:v3": GALLERY_CART } } },
     {
@@ -544,9 +528,6 @@ function appEntries(): GalleryEntry[] {
         { type: "#shippingAddress", text: "10 Down", expectVisible: '[id^="shippingAddress-suggestions-"] [role="option"]' },
       ],
     },
-    { id: entryId("app", "section"), family: "app:section", title: "App section on the home page", page: "home", theme: home, focus: { include: ['[data-section-id="app-greeting"]'] }, scenario: { apps: true } },
-    { id: entryId("app", "section", "empty"), family: "app:section", title: "App section that drew nothing", page: "home", theme: home, focus: WHOLE_PAGE, scenario: { apps: false } },
-    { id: entryId("app", "product-blocks"), family: "app:product-block", title: "App product blocks (buy box and below)", page: "product", theme: product, focus: MAIN, scenario: { apps: true, product: "fashion" } },
   ];
 }
 
@@ -620,15 +601,13 @@ function noorSectionEntries(): GalleryEntry[] {
       focus: { include: [`${scope} ${NOOR_SECTION_FIXTURES[type].subject}`] },
       scenario: { noor: "active", menu: "compact", ...(rtl ? { locale: "ar" } : {}) },
     };
-    if (type === "shop-the-look") entry.interact = [{ click: `${scope} .noor-spot:last-of-type summary`, expectVisible: `${scope} .noor-spot:last-of-type[open] .noor-spot-card` }];
-    if (type === "faq" && (values.questions as unknown[]).length > 1) entry.interact = [{ click: `${scope} .noor-faq-item:nth-child(2) summary`, expectVisible: `${scope} .noor-faq-item:nth-child(2)[open] .noor-faq-answer` }];
     entries.push(entry);
   };
   for (const [type, fixture] of Object.entries(NOOR_SECTION_FIXTURES)) add(type as keyof typeof NOOR_SECTION_FIXTURES, "default", structuredClone(fixture.values));
   for (const { type, max } of NOOR_REPEATED_FIXTURES) {
     add(type, "one", repeatedNoorValues(type, 1));
     add(type, "crowded", repeatedNoorValues(type, max));
-    if (["shop-the-look", "testimonials", "faq"].includes(type)) add(type, "rtl", repeatedNoorValues(type, max, true), true);
+    if (type === "testimonials") add(type, "rtl", repeatedNoorValues(type, max, true), true);
   }
   return entries;
 }
@@ -681,6 +660,9 @@ function noorEntries(): GalleryEntry[] {
   entries.push(tabs);
   const home = clone(base);
   home.apps!.skins!.header!.values.transparent_home = true;
+  // The template's hero (Noor's hero skin of the store's hero) with the fixture's photos.
+  const templateHero = home.pages.home[0]!;
+  home.pages.home[0] = { ...contentSection("hero", templateHero.id), ...("skin" in templateHero ? { skin: templateHero.skin } : {}) } as StorefrontSection;
   const homeEntry: GalleryEntry = { id: "noor-home", family: "integration:noor", title: "Noor transparent header over the first image hero", page: "home", theme: home, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact" } };
   entries.push(homeEntry);
   const textFirst = { ...homeEntry, id: "noor-home-text", title: "Noor transparent setting with a text section first", theme: clone(home) };
@@ -688,8 +670,16 @@ function noorEntries(): GalleryEntry[] {
   entries.push(textFirst);
   const noImage = { ...homeEntry, id: "noor-home-no-image", title: "Noor transparent setting with an image-less hero", theme: clone(home) };
   const hero = noImage.theme.pages.home[0]!;
-  if (hero.type === "app") hero.settings.values = { ...hero.settings.values, image: null, phone_image: null };
+  if (hero.type === "hero") hero.settings = { ...hero.settings, slides: [] };
   entries.push(noImage);
+  // Noor's skins of the store's own sections, over the fixture content of each.
+  const skinned = clone(base);
+  skinned.pages.home = ([
+    ["hero", "noor-hero"], ["product-tabs", "noor-products-tabs"], ["product-grid", "noor-products-grid"], ["product-rail", "noor-products-rail"],
+    ["category-tiles", "noor-tiles-categories"], ["shop-by", "noor-tiles-cards"], ["banner-mosaic", "noor-promo-tiles"], ["lookbook", "noor-look"],
+    ["deal-block", "noor-sale"], ["usp-strip", "noor-promises"], ["editorial", "noor-story"], ["seo-text", "noor-text"], ["faq", "noor-faq"], ["newsletter", "noor-signup"],
+  ] as const).map(([type, skin]) => ({ ...contentSection(type, `skin-${type}`), skin: { app: `scalius.noor/${skin}`, values: {} } }) as StorefrontSection);
+  entries.push({ id: "noor-section-skins", family: "integration:noor", title: "Noor skins of the store's own sections", page: "home", theme: skinned, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact" } });
   const slideshow = { ...homeEntry, id: "noor-home-slideshow", title: "Noor transparent header over the first slideshow", theme: clone(home) };
   slideshow.theme.pages.home[0] = { id: "noor-slideshow", type: "app", version: 1, settings: { app: "scalius.noor/slideshow", values: {
     autoplay: false,

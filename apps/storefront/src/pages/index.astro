@@ -4,7 +4,6 @@ import { getRuntimePresence } from "@/lib/api/runtime";
 import Layout from "../layouts/Layout.astro";
 import "../styles/global.css";
 import HomepageSections from "@/components/homepage/HomepageSections.astro";
-import AppHeadTags from "@/components/apps/AppHeadTags.astro";
 import {
   getCheckoutConfig, isCheckoutConfigReadFailure,
   getHomepageData,
@@ -19,7 +18,6 @@ import { heroLeadCandidates } from "@/lib/homepage-hero";
 import { homepageLandingPath } from "@/lib/homepage-landing";
 import {
   EMPTY_HOMEPAGE_SECTION_DATA,
-  homepageAppHeads,
   homepageCategoryTiles,
   homepageContent,
   homepageHero,
@@ -115,8 +113,6 @@ const deliveryFacts = showsDeliveryFacts
 
 const content = homepageContent(sectionData, deliveryFacts);
 const leadSection = homepageLeadSection(homeSections, content);
-// The head tags of the app sections that drew something (meta and JSON-LD).
-const appHeads = homepageAppHeads(homeSections, content);
 const phoneSections = homepagePhoneSections(homeSections, content);
 const headerLead = homepageLead(homeSections, phoneSections, content);
 const phoneHeroMoved = phoneSections !== homeSections;
@@ -195,10 +191,6 @@ const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
         />
       ))
     }
-  </Fragment>
-
-  <Fragment slot="head">
-    {appHeads.length > 0 && <AppHeadTags heads={appHeads} />}
   </Fragment>
 
   <h1 class="sr-only">{homepageHeading}</h1>

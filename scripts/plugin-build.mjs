@@ -316,8 +316,8 @@ export async function packStorefront(contract, manifest, source) {
     const loaded = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
     const definition = contract.storefrontDefinitionOf(loaded.default);
     if (!definition) fail("src/storefront has no default export from defineStorefront().");
-    const sections = storefront.sections.filter((section) => section.route === undefined);
-    const blocks = storefront.productBlocks.filter((block) => block.route === undefined);
+    const { sections } = storefront;
+    const blocks = storefront.productBlocks;
     const expected = [
       ...sections.map((section) => ({ kind: "section", key: section.type, components: definition.sections ?? {} })),
       ...blocks.map((block) => ({ kind: "block", key: block.type, components: definition.blocks ?? {} })),

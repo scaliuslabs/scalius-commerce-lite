@@ -683,10 +683,12 @@ describe("one private library document", () => {
     const release = "e".repeat(64);
     const app = { pluginId: "acme.theme", version: "1.0.0", source: "bundled", release,
       sections: ["hero"], sectionSettings: { hero: [] }, skins: [], blocks: [], islands: ["motion"], stylesheet: true, connect: [] };
+    const render = vi.spyOn(extensionHost.prototype, "render").mockResolvedValue("<h2>App default</h2>");
     const result = await renderPage(LibraryPage, { document: fixedTheme(), preview: fixedTheme(), appExtensions: [app],
-      previewData: { ...sectionData(), apps: [{ sectionId: "library-section", html: "<h2>App default</h2>", head: { meta: [], jsonLd: [] } }] },
+      previewData: { ...sectionData(), apps: [{ sectionId: "library-section", component: { pluginId: "acme.theme", type: "hero", values: {}, media: [], lists: [] } }] },
     }, { url: url("acme.theme/hero"), cookie: PREVIEW_COOKIE });
     expect(result.response.status).toBe(200);
+    expect(render).toHaveBeenCalledTimes(1);
     expect(result.html).toContain("App default");
     expect(result.html).toContain(`/_x/acme.theme/${release}/styles.css`);
     expect(result.html.match(/data-app-stylesheet/g)).toHaveLength(1);
@@ -695,7 +697,7 @@ describe("one private library document", () => {
     const app = { pluginId: "acme.theme", version: "1.0.0", source: "bundled", release: "e".repeat(64),
       sections: ["hero"], sectionSettings: { hero: [] }, skins: [], blocks: [], islands: [], stylesheet: false, connect: [] };
     const api = { document: fixedTheme(), preview: fixedTheme(), appExtensions: [app], previewData: { ...sectionData(), apps: [{
-      sectionId: "library-section", html: "", head: { meta: [], jsonLd: [] },
+      sectionId: "library-section",
       component: { pluginId: "acme.theme", type: "hero", values: {}, media: [], lists: [] },
     }] } };
     const render = vi.spyOn(extensionHost.prototype, "render").mockResolvedValue(null);
@@ -740,7 +742,7 @@ describe("one private library document", () => {
       const requested: string[][] = [];
       const result = await renderPage(LibraryPage, { document, preview: document, appExtensions: [app],
         onPreviewSections: (ids) => requested.push(ids), previewData: { ...sectionData(), apps: [{
-          sectionId: "library-section", html: "", head: { meta: [], jsonLd: [] },
+          sectionId: "library-section",
           component: { pluginId, type: "hero", values: {}, media: [], lists: [] },
         }] },
       }, { url: url(`${pluginId}/hero`, path), cookie: PREVIEW_COOKIE });

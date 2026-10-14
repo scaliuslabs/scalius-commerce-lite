@@ -18,11 +18,6 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
   "storefront.homepage.get": { limits: { request: 16_384 } },
   "storefront.landing.get": { limits: { request: 16_384 } },
   "storefront.template.get": { limits: { request: 16_384 } },
-  "storefront.product_apps.get": {
-    exposure: "excluded",
-    limits: { request: 16_384 },
-    reason: "Rendering infrastructure: apps' sanitized HTML for one product page, not structured agent data.",
-  },
   "storefront.app_blocks.get": {
     exposure: "excluded",
     limits: { request: 16_384 },

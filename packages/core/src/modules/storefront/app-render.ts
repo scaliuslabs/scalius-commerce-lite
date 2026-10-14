@@ -1,4 +1,4 @@
-// What drawing apps' storefront output reads first (apps/api
+// What drawing checkout and account blocks reads first (apps/api
 // plugins/storefront-render.ts): the store facts an app's `ctx.store`
 // carries and the active installations that draw. The storefront module owns
 // these reads (it already reads settings); the plugins module stays a leaf
@@ -67,23 +67,6 @@ export function planPluginRenderStoreFacts(db: Database) {
     },
   };
 }
-
-/**
- * What drawing these apps' storefront output reads first, in one batch: the
- * active installations of these ids (`plg:<id>` each) and the store facts.
- */
-export async function readPluginRenderContext(db: Database, pluginIds: readonly string[]): Promise<{
-  installations: Map<string, PluginInstallation>;
-  store: PluginRenderStoreFacts;
-}> {
-  const facts = planPluginRenderStoreFacts(db);
-  const results = await safeBatch(db, [selectActivePluginInstallations(db, pluginIds), ...facts.statements]);
-  return {
-    installations: activePluginInstallationsFromRows(results[0] as PluginInstallationRow[]),
-    store: await facts.resolve(results, 1),
-  };
-}
-
 /** One checkout or customer-account block to draw (`storefront.blocks`). */
 export interface PluginBlockRequest {
   pluginId: string;

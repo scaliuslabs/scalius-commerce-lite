@@ -223,7 +223,7 @@ export interface StorefrontExtension {
   /** Each component section's settings schema, by type (the storefront resolves the values). */
   sectionSettings: Record<string, PluginSettingsSchema>;
   skins: Array<{ id: string; target: StorefrontSkinTarget; settings: PluginSettingsSchema }>;
-  /** Component product blocks (`productBlocks` without a route), drawn at the edge. */
+  /** Product blocks (`productBlocks`), drawn at the edge. */
   blocks: Array<{ type: string; target: StorefrontBlockTarget; settings: PluginSettingsSchema }>;
   islands: string[];
   stylesheet: boolean;

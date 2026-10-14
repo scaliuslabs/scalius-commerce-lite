@@ -56,28 +56,27 @@ describe("canvas text in app sections", () => {
     key, label: `${key} label`, help: null, type, required: false, options: null, default: extra.default ?? null,
     min: null, max: null, integer: false, maxLength: extra.maxLength ?? null,
   });
-  const apps = (component: boolean) => appSectionsByKey([{
+  const apps = () => appSectionsByKey([{
     id: "acme.studio", name: "Studio", skins: [], templates: [], pagePresets: [], productBlocks: [],
-    sections: [{ key: "acme.studio/quote", type: "quote", name: "Quote", description: null, component,
+    sections: [{ key: "acme.studio/quote", type: "quote", name: "Quote", description: null,
       settings: [setting("quote", "textarea"), setting("author", "text", { default: "A buyer", maxLength: 40 }), setting("size", "number")] }],
   }]);
   const quote: StorefrontSection = { id: "app", type: "app", version: 1, settings: { app: "acme.studio/quote", values: { quote: "Loved it" } } };
   const quoteTarget: CanvasTextTarget = { page: { kind: "home" }, id: "app", type: "app", layout: "acme.studio/quote", field: "author", baseline: "A buyer" };
 
   it("edits a text setting the section's app declares, from its default, and writes only its value", () => {
-    expect(canvasTextField(quote, "author", apps(true))).toMatchObject({ value: "A buyer", maxLength: 40, multiline: false, patch: true, label: "author label" });
-    expect(canvasTextField(quote, "quote", apps(true))).toMatchObject({ value: "Loved it", maxLength: 2000, multiline: true, patch: false });
-    const result = commitCanvasText(theme([quote]), quoteTarget, "Rahim", undefined, apps(true));
+    expect(canvasTextField(quote, "author", apps())).toMatchObject({ value: "A buyer", maxLength: 40, multiline: false, patch: true, label: "author label" });
+    expect(canvasTextField(quote, "quote", apps())).toMatchObject({ value: "Loved it", maxLength: 2000, multiline: true, patch: false });
+    const result = commitCanvasText(theme([quote]), quoteTarget, "Rahim", undefined, apps());
     expect(result.ok && result.theme.pages.home[0]).toEqual({ ...quote, settings: { ...quote.settings, values: { quote: "Loved it", author: "Rahim" } } });
-    expect(commitCanvasText(theme([quote]), quoteTarget, "x".repeat(41), undefined, apps(true))).toEqual({ ok: false, reason: "too-long" });
+    expect(commitCanvasText(theme([quote]), quoteTarget, "x".repeat(41), undefined, apps())).toEqual({ ok: false, reason: "too-long" });
   });
 
-  it("refuses other settings, route sections, inactive apps and a section that changed app", () => {
-    for (const field of ["size", "missing", "values.author", "heading"]) expect(canvasTextField(quote, field, apps(true)), field).toBeNull();
-    expect(canvasTextField(quote, "author", apps(false))).toBeNull();
+  it("refuses other settings, inactive apps and a section that changed app", () => {
+    for (const field of ["size", "missing", "values.author", "heading"]) expect(canvasTextField(quote, field, apps()), field).toBeNull();
     expect(canvasTextField(quote, "author")).toBeNull();
     const moved = { ...quote, settings: { ...quote.settings, app: "acme.other/quote" } } as StorefrontSection;
-    expect(commitCanvasText(theme([moved]), quoteTarget, "Rahim", undefined, apps(true))).toEqual({ ok: false, reason: "missing" });
+    expect(commitCanvasText(theme([moved]), quoteTarget, "Rahim", undefined, apps())).toEqual({ ok: false, reason: "missing" });
   });
 
   it("names the app setting's own control", () => {
