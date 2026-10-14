@@ -7,7 +7,9 @@ import {
   CACHE_FRONTIER_KEY_HEADER,
   CACHE_FRONTIER_MAX_CHANGES,
   CACHE_FRONTIER_SECRET_PURPOSE,
+  decideCacheFrontierHit,
   hashCacheDep,
+  mergeCacheFrontier,
 } from "@scalius/shared/cache-frontier";
 import { deriveRuntimeSecret } from "@scalius/shared/runtime-secrets";
 import {
@@ -99,6 +101,21 @@ describe.each(["d1", "turso"] as const)("DVC clock reads (%s)", (provider) => {
         }
       }
     }
+  });
+
+  it("a capped answer never hides a key that changed inside it and again after it", async () => {
+    const { db, bump } = store(provider);
+    bump(5, ["p:x"]);
+    const cold = await readFrontierDelta(db, null, 4);
+    let frontier = mergeCacheFrontier(null, { ...cold, apiVersion: "v" }, 0, 100);
+    // K changes at 10, twenty other keys follow, then K changes again (its row now says 31).
+    bump(10, ["K"]);
+    for (let seq = 11; seq <= 30; seq += 1) bump(seq, [`p:${seq}`]);
+    bump(31, ["K"]);
+    frontier = mergeCacheFrontier(frontier, { ...await readFrontierDelta(db, frontier.S, 4), apiVersion: "v" }, 0, 100);
+    const entry = { apiVersion: "v", s0: 6, depHashes: [hashCacheDep("K")], validUntil: null, softMaxAgeSeconds: null, renderedAt: 0 };
+    expect(frontier.S).toBe(31);
+    expect(decideCacheFrontierHit(entry, frontier, 0)).not.toBe("serve");
   });
 
   it("frontier slow path: hashed keys in, changed after s0 out; bounded, and below the floor always changed", async () => {

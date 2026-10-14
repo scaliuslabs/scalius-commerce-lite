@@ -111,7 +111,7 @@ describe.runIf(postgresUrl)("0100 cache dependencies on PostgreSQL", () => {
     });
   }, 180_000);
 
-  it("commits in clock order under concurrent writers", async () => {
+  it.each(["READ COMMITTED", "SERIALIZABLE"])("commits in clock order under concurrent %s writers", async (isolation) => {
     const { client, connect } = await database((await compileCanonicalPostgresSchema()).sql);
     await client.query("INSERT INTO settings (id, key, value, type, category) VALUES ('set_shared', 'document', 'x', 'text', 'shared')");
     const writers = await Promise.all(Array.from({ length: 6 }, () => connect()));
@@ -120,23 +120,34 @@ describe.runIf(postgresUrl)("0100 cache dependencies on PostgreSQL", () => {
     const samples: Array<{ s0: number; pages: number }> = [];
     const read = (async () => {
       while (running) {
-        // READ COMMITTED: the clock first, then data in a later statement.
-        const s0 = Number((await reader.query("SELECT COALESCE((SELECT seq FROM cache_clock WHERE id = 1), 0) AS seq")).rows[0].seq);
+        // READ COMMITTED: the clock first (as cache-frontier.ts reads it), then data in a later statement.
+        const s0 = Number((await reader.query(`SELECT CASE WHEN k.m > c.seq THEN k.m ELSE c.seq END AS seq
+          FROM cache_clock c, (SELECT max(seq) AS m FROM cache_dep) k WHERE c.id = 1`)).rows[0].seq);
         const pages = Number((await reader.query("SELECT count(*)::bigint AS n FROM pages")).rows[0].n);
         samples.push({ s0, pages });
       }
     })();
+    let failures = 0;
     await Promise.all(writers.map(async (writer, w) => {
       for (let index = 0; index < 20; index += 1) {
-        await writer.query("BEGIN");
-        await writer.query(`INSERT INTO pages (id, title, slug, content) VALUES ('pg_${w}_${index}', 'P', 'p-${w}-${index}', 'x')`);
-        // Both a write before the bump and one after it hold row locks the others need.
-        await writer.query(`UPDATE settings SET value = '${w}-${index}' WHERE id = 'set_shared'`).catch(() => undefined);
-        await writer.query("COMMIT");
+        for (;;) {
+          try {
+            await writer.query(`BEGIN ISOLATION LEVEL ${isolation}`);
+            await writer.query(`INSERT INTO pages (id, title, slug, content) VALUES ('pg_${w}_${index}', 'P', 'p-${w}-${index}', 'x')`);
+            await writer.query("COMMIT");
+            break;
+          } catch (error) {
+            await writer.query("ROLLBACK");
+            if ((error as { code?: string }).code !== "40001") throw error;
+            failures += 1;
+          }
+        }
       }
     }));
     running = false;
     await read;
+    // Every page write advanced the same `pg:*` and `t:pages` keys, and none failed on them.
+    expect(failures).toBe(0);
     const keys = (await client.query("SELECT dep, seq FROM cache_dep WHERE dep LIKE 'pg:pg\\_%'")).rows
       .map((row) => Number(row.seq)).sort((a, b) => a - b);
     expect(keys).toHaveLength(120);
@@ -146,5 +157,36 @@ describe.runIf(postgresUrl)("0100 cache dependencies on PostgreSQL", () => {
       const committedAtOrBefore = keys.filter((seq) => seq <= sample.s0).length;
       expect(sample.pages).toBeGreaterThanOrEqual(committedAtOrBefore);
     }
+    // Compaction keeps each key's newest row and changes no reader's answer.
+    expect(Number((await client.query("SELECT count(*)::bigint AS n FROM cache_dep WHERE dep = 'pg:*'")).rows[0].n)).toBe(120);
+    expect(Number((await client.query("SELECT scalius_compat.cache_dep_compact() AS n")).rows[0].n)).toBeGreaterThan(0);
+    expect((await client.query("SELECT dep, count(*)::bigint AS n, max(seq) AS seq FROM cache_dep WHERE dep IN ('pg:*', 't:pages') GROUP BY dep ORDER BY dep")).rows)
+      .toEqual([{ dep: "pg:*", n: 1, seq: keys.at(-1) }, { dep: "t:pages", n: 1, seq: keys.at(-1) }]);
+  }, 180_000);
+
+  it("0151 turns an existing store's rows into the change log, exactly the fresh schema, continuing its clock", async () => {
+    const [fresh, before] = await Promise.all([
+      compileCanonicalPostgresSchema(),
+      compileCanonicalPostgresSchema({ beforeMigration: "0151_" }),
+    ]);
+    const freshDatabase = await database(fresh.sql);
+    const upgraded = await database(before.sql);
+    await upgraded.client.query("INSERT INTO pages (id, title, slug, content) VALUES ('pg_old', 'P', 'p-old', 'x')");
+    const oldClock = Number((await upgraded.client.query("SELECT seq FROM cache_clock WHERE id = 1")).rows[0].seq);
+    expect(oldClock).toBeGreaterThan(0);
+    await upgraded.client.query("BEGIN");
+    for (const statement of readFileSync(new URL("../migrations/postgres/0151_postgres_scale.sql", import.meta.url), "utf8").split("--> statement-breakpoint")) {
+      if (statement.trim() && !/scalius_schema_migrations/.test(statement)) await upgraded.client.query(statement);
+    }
+    await upgraded.client.query("COMMIT");
+    const [expected, actual] = await Promise.all([catalog(freshDatabase.client), catalog(upgraded.client)]);
+    expect(actual.columns).toEqual(expected.columns);
+    expect(actual.constraints).toEqual(expected.constraints);
+    expect(actual.indexes).toEqual(expected.indexes);
+    expect(actual.triggers).toEqual(expected.triggers);
+    expect(actual.functions).toEqual(expected.functions);
+    await upgraded.client.query("INSERT INTO pages (id, title, slug, content) VALUES ('pg_new', 'P', 'p-new', 'x')");
+    expect((await upgraded.client.query("SELECT dep, seq FROM cache_dep WHERE dep IN ('pg:pg_old', 'pg:pg_new') ORDER BY seq")).rows)
+      .toEqual([{ dep: "pg:pg_old", seq: oldClock }, { dep: "pg:pg_new", seq: oldClock + 1 }]);
   }, 180_000);
 });

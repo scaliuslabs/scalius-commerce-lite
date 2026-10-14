@@ -5,6 +5,7 @@
 // `dashboard.derived_projections.maintain` operation.
 import { sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
+import { advanceCacheDeps } from "@scalius/database/cache-dep-writes";
 import {
   conversationInboxCountsDriftSql, conversationInboxCountsRebuild,
   recommendationPairsDriftSql, recommendationPairsRepairStatements,
@@ -33,9 +34,7 @@ async function repairRecommendationPairs(db: Database, orderIds: string): Promis
   await safeBatch(db, [
     ...recommendationPairsRepairStatements(orderIds).map((text) => statement(db, text)),
     // The projection is not a dependency source: a repair invalidates its readers itself.
-    statement(db, "UPDATE cache_clock SET seq = seq + 1 WHERE id = 1"),
-    statement(db, `INSERT INTO cache_dep (dep, seq) VALUES ('recommendation-signals', (SELECT seq FROM cache_clock WHERE id = 1))
-      ON CONFLICT (dep) DO UPDATE SET seq = excluded.seq`),
+    advanceCacheDeps(db, ["recommendation-signals"]),
   ]);
 }
 

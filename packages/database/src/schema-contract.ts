@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 150,
-  name: "0150_facet_engine",
+  version: 151,
+  name: "0151_postgres_scale",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -531,6 +531,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 150,
     name: "0150_facet_engine",
     sourceSha256: "8a8b3c43467345d999d1f9be32ad19346ef1bf584dd84c0438af2d6c84d87a60",
+  },
+  {
+    version: 151,
+    name: "0151_postgres_scale",
+    sourceSha256: "7a7aba5c17a87178440dd453a8712ebebeddb52b32ac58f578e2273faf9be1d4",
   },
 ] as const;
 

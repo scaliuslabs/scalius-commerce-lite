@@ -9,6 +9,7 @@
     "./derived-projections": "./src/derived-projections.ts",
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
+    "./cache-dep-writes": "./src/cache-dep-writes.ts",
     "./postgres-adapter": "./src/postgres-adapter.ts",
     "./read-observer": "./src/read-observer.ts",
     "./read-freshness": "./src/read-freshness.ts",

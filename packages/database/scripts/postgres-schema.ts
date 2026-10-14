@@ -16,6 +16,8 @@ import {
 } from "./sqlite-provider-schema";
 import {
   CACHE_DEP_POSTGRES_BUMP_FUNCTION,
+  CACHE_DEP_POSTGRES_LOG_MIGRATION,
+  CACHE_DEP_POSTGRES_LOG_SQL,
   cacheDepPostgresTrigger,
 } from "./cache-dep-triggers";
 import { eventOutboxPostgresTrigger } from "./event-outbox-triggers";
@@ -495,11 +497,17 @@ export async function compileCanonicalPostgresSchema(
       "COMMIT;",
       "",
     ].join("\n\n");
+    // From 0151 the change log replaces the clock-row bump (cache-dep-triggers.ts).
+    const changeLog = cacheDepFunction.length > 0
+      && (!options.beforeMigration || options.beforeMigration > CACHE_DEP_POSTGRES_LOG_MIGRATION)
+      ? CACHE_DEP_POSTGRES_LOG_SQL.map((statement) => `${statement};`)
+      : [];
     const postDataSql = [
       "BEGIN;",
       ...indexObjects.map((object) => `${compileSqliteDdlForPostgres(object.sql)};`),
       ...cacheDepFunction,
       ...compiledTriggers,
+      ...changeLog,
       "COMMIT;",
       "",
     ].join("\n\n");

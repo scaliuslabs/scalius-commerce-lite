@@ -15,6 +15,13 @@
  * - `checkHashedDependencies`: the frontier slow path; the storefront holds
  *   only key hashes, so the API hashes the rows it scans.
  * - `readCommitSeq`: the clock after an admin write (§6.10).
+ *
+ * The clock S is the larger of `cache_clock.seq` and the newest `cache_dep`
+ * seq. On D1 and Turso the clock row is raised with every change, so both
+ * agree. On PostgreSQL `cache_dep` is an insert-only change log (a key may
+ * have several rows until the compaction drain removes the older ones) and
+ * the clock row is not written: seqs commit in order, so the newest
+ * committed seq is the clock. Every reader takes a key's largest seq.
  */
 import { sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
@@ -68,6 +75,29 @@ async function namedRows<T extends Record<string, unknown>>(
 }
 
 /**
+ * The clock row as one source `clock` (columns `s`, `floor`): S is null
+ * without the row, so a missing authority row never mints a zero proof.
+ */
+const CLOCK = sql`(
+  SELECT CASE WHEN k."m" > c."seq" THEN k."m" ELSE c."seq" END AS s, COALESCE(c."floor", 0) AS floor
+  FROM (SELECT 1 AS one) base
+  LEFT JOIN "cache_clock" c ON c."id" = 1
+  LEFT JOIN (SELECT MAX("seq") AS m FROM "cache_dep") k ON 1 = 1
+) clock`;
+
+/** Change rows as (dep, seq), each key once at its largest seq, ascending. */
+function latestPerKey(rows: ReadonlyArray<{ dep: unknown; seq: unknown }>): Array<readonly [string, number]> {
+  const latest = new Map<string, number>();
+  for (const row of rows) {
+    if (row.dep === null || row.dep === undefined) continue;
+    const dep = String(row.dep);
+    const seq = toNumber(row.seq);
+    if ((latest.get(dep) ?? -Infinity) < seq) latest.set(dep, seq);
+  }
+  return [...latest].sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+}
+
+/**
  * One statement: the clock row, the Platform settings row, and the keys of
  * `deps` changed after `since`. With no keys it is the clock read a render
  * takes its s0 from.
@@ -78,20 +108,16 @@ export async function readValidationSnapshot(
   since: number,
 ): Promise<ValidationSnapshot> {
   const rows = await namedRows<{ s: unknown; floor: unknown; pv: unknown; pr: unknown; dep: unknown; seq: unknown }>(db.all(sql`
-    SELECT c."seq" AS s, COALESCE(c."floor", 0) AS floor,
+    SELECT clock.s AS s, clock.floor AS floor,
       (SELECT st."value" FROM "settings" st WHERE st."category" = 'platform' AND st."key" = 'document') AS pv,
       (SELECT st."revision" FROM "settings" st WHERE st."category" = 'platform' AND st."key" = 'document') AS pr,
       d."dep" AS dep, d."seq" AS seq
-    FROM (SELECT 1 AS one) base
-    LEFT JOIN "cache_clock" c ON c."id" = 1
+    FROM ${CLOCK}
     LEFT JOIN "cache_dep" d
       ON d."seq" > ${since}
       AND d."dep" IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(deps)}))
   `), ["s", "floor", "pv", "pr", "dep", "seq"]);
-  const changed = new Map<string, number>();
-  for (const row of rows) {
-    if (row.dep !== null && row.dep !== undefined) changed.set(String(row.dep), toNumber(row.seq));
-  }
+  const changed = new Map(latestPerKey(rows));
   const first = rows[0]!;
   return {
     S: authoritativeClock(first?.s),
@@ -102,10 +128,13 @@ export async function readValidationSnapshot(
 }
 
 /**
- * The frontier answer for `since` (null: a cold frontier, newest `limit`
- * keys). At most `limit` changes; a capped answer is complete only up to the
- * last seq it holds in full, and a seq holding more keys than `limit` is
- * skipped by declaring a horizon at it, so progress never stalls.
+ * The frontier answer for `since` (null: a cold frontier): every key changed
+ * after the horizon, at its latest seq, up to the clock. It reads the newest
+ * `limit + 1` change rows after `since`; when there are more, the oldest row
+ * read sets the horizon and only rows above it are listed, so an entry from
+ * before the horizon takes the slow path. A key's row is its latest change,
+ * so an answer capped at an older seq could miss a key that changed again
+ * later; the horizon form never does, and it always reaches the clock.
  */
 export async function readFrontierDelta(
   db: Database,
@@ -113,43 +142,25 @@ export async function readFrontierDelta(
   limit: number = CACHE_FRONTIER_MAX_CHANGES,
 ): Promise<Omit<CacheFrontierDelta, "apiVersion">> {
   const bounded = Math.max(1, Math.min(CACHE_FRONTIER_MAX_CHANGES, Math.floor(limit)));
-  const window = since === null
-    ? sql`SELECT "dep", "seq" FROM "cache_dep" ORDER BY "seq" DESC LIMIT ${bounded + 1}`
-    : sql`SELECT "dep", "seq" FROM "cache_dep" WHERE "seq" > ${since} ORDER BY "seq" LIMIT ${bounded + 1}`;
   const rows = await namedRows<{ s: unknown; floor: unknown; dep: unknown; seq: unknown }>(db.all(sql`
-    SELECT c."seq" AS s, COALESCE(c."floor", 0) AS floor, d."dep" AS dep, d."seq" AS seq
-    FROM (SELECT 1 AS one) base
-    LEFT JOIN "cache_clock" c ON c."id" = 1
-    LEFT JOIN (${window}) d ON d."seq" <= COALESCE(c."seq", 0)
+    SELECT clock.s AS s, clock.floor AS floor, d."dep" AS dep, d."seq" AS seq
+    FROM ${CLOCK}
+    LEFT JOIN (
+      SELECT "dep", "seq" FROM "cache_dep" WHERE "seq" > ${since ?? -1} ORDER BY "seq" DESC LIMIT ${bounded + 1}
+    ) d ON d."seq" <= clock.s
   `), ["s", "floor", "dep", "seq"]);
   const clock = authoritativeClock(rows[0]?.s);
   const floor = toNumber(rows[0]!.floor);
-  const ascending = rows
-    .filter((row) => row.dep !== null && row.dep !== undefined)
-    .map((row) => [String(row.dep), toNumber(row.seq)] as const)
-    .sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-  const hashed = (list: ReadonlyArray<readonly [string, number]>) =>
-    list.map(([dep, seq]) => [hashCacheDep(dep), seq] as const);
-
-  if (since === null) {
-    if (ascending.length <= bounded) {
-      return { S: clock, horizon: floor, floor, clock, changes: hashed(ascending) };
-    }
-    // The oldest row fetched is the first one left out: everything above it is included.
-    const horizon = Math.max(ascending[0]![1], floor);
-    return { S: clock, horizon, floor, clock, changes: hashed(ascending.slice(1).filter(([, seq]) => seq > horizon)) };
-  }
-  const base = Math.max(since, floor);
-  if (ascending.length <= bounded) {
-    return { S: clock, horizon: base, floor, clock, changes: hashed(ascending) };
-  }
-  // Capped: rows at the cut seq may continue past the limit.
-  const cutSeq = ascending[bounded]![1];
-  const complete = ascending.filter(([, seq]) => seq < cutSeq);
-  if (complete.length === 0) {
-    return { S: cutSeq, horizon: cutSeq, floor, clock, changes: [] };
-  }
-  return { S: cutSeq - 1, horizon: base, floor, clock, changes: hashed(complete) };
+  const read = rows.filter((row) => row.dep !== null && row.dep !== undefined);
+  const base = Math.max(since ?? floor, floor);
+  // More rows than the limit: the oldest one read is the first left out.
+  const horizon = read.length > bounded
+    ? Math.max(base, Math.min(...read.map((row) => toNumber(row.seq))))
+    : base;
+  const changes = latestPerKey(read)
+    .filter(([, seq]) => seq > horizon)
+    .map(([dep, seq]) => [hashCacheDep(dep), seq] as const);
+  return { S: clock, horizon, floor, clock, changes };
 }
 
 /**
@@ -174,11 +185,10 @@ export async function checkHashedDependencies(
   hashes: readonly string[],
 ): Promise<Omit<CacheFrontierCheck, "apiVersion">> {
   const rows = await namedRows<{ s: unknown; floor: unknown; dep: unknown }>(db.all(sql`
-    SELECT c."seq" AS s, COALESCE(c."floor", 0) AS floor, d."dep" AS dep
-    FROM (SELECT 1 AS one) base
-    LEFT JOIN "cache_clock" c ON c."id" = 1
+    SELECT clock.s AS s, clock.floor AS floor, d."dep" AS dep
+    FROM ${CLOCK}
     LEFT JOIN (SELECT "dep", "seq" FROM "cache_dep" WHERE "seq" > ${s0} ORDER BY "seq" LIMIT ${FRONTIER_CHECK_MAX_ROWS + 1}) d
-      ON d."seq" <= COALESCE(c."seq", 0)
+      ON d."seq" <= clock.s
   `), ["s", "floor", "dep"]);
   const S = authoritativeClock(rows[0]?.s);
   const floor = toNumber(rows[0]!.floor);
@@ -190,7 +200,7 @@ export async function checkHashedDependencies(
 
 /** The clock now; after a committed write it is at least that write's seq. */
 export async function readCommitSeq(db: Database): Promise<number> {
-  const rows = await namedRows<{ s: unknown }>(db.all(sql`SELECT (SELECT "seq" FROM "cache_clock" WHERE "id" = 1) AS s`), ["s"]);
+  const rows = await namedRows<{ s: unknown }>(db.all(sql`SELECT clock.s AS s FROM ${CLOCK}`), ["s"]);
   return authoritativeClock(rows[0]?.s);
 }
 

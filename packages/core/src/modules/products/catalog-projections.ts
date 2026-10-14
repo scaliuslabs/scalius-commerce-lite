@@ -22,7 +22,6 @@
 import {
     attributeValues,
     cacheClock,
-    cacheDep,
     productAttributeValues,
     productAttributes,
     productBuyerState,
@@ -35,6 +34,7 @@ import {
     productVariants,
 } from "@scalius/database/schema";
 import { chunkForD1, type Database, safeBatch } from "@scalius/database/client";
+import { advanceCacheDeps } from "@scalius/database/cache-dep-writes";
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, eq, gt, isNull, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -428,21 +428,17 @@ export async function rebuildCatalogProjections(
             .where(eq(productBuyerState.isPublic, true))
             .groupBy(productFacetValues.facetKind, productFacetValues.facetKey, productFacetValues.valueKey);
         await safeBatch(db, [
-            db.insert(cacheDep).select(sql`
-                WITH expected AS MATERIALIZED (${counts.getSQL()})
-                SELECT 'store', COALESCE((SELECT seq FROM cache_clock WHERE id = 1), 0) + 1
-                WHERE EXISTS (
+            // Drifted counts change public facets: advance `store` once.
+            advanceCacheDeps(db, ["store"], {
+                with: sql`expected AS MATERIALIZED (${counts.getSQL()})`,
+                when: sql`EXISTS (
                     SELECT * FROM expected EXCEPT
                     SELECT facet_kind, facet_key, value_key, product_count FROM product_facet_public_counts WHERE product_count > 0
                 ) OR EXISTS (
                     SELECT facet_kind, facet_key, value_key, product_count FROM product_facet_public_counts WHERE product_count > 0
                     EXCEPT SELECT * FROM expected
-                )
-            `).onConflictDoUpdate({ target: cacheDep.dep, set: { seq: sql`excluded.seq` } }),
-            // PostgreSQL's ordinary dependency writers advance the clock in
-            // cache_dep_bump; it has no SQLite clock trigger for this upsert.
-            db.update(cacheClock).set({ seq: sql`(SELECT seq FROM cache_dep WHERE dep = 'store')` })
-                .where(and(eq(cacheClock.id, 1), sql`${cacheClock.seq} < (SELECT seq FROM cache_dep WHERE dep = 'store')`)),
+                )`,
+            }),
             db.delete(productFacetPublicCounts),
             db.insert(productFacetPublicCounts).select(counts),
         ] as never);

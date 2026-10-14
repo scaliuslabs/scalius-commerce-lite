@@ -105,27 +105,15 @@ export function frontierSlice(
   limit: number,
   floor: number,
 ): ClockDelta & { horizon: number } {
-  if (since === null) {
-    const newest = sortedAscending.slice(-limit);
-    const dropped = sortedAscending.length - newest.length;
-    // Everything with seq > horizon is included; ties at the cut move the horizon up.
-    let horizon = dropped > 0 ? sortedAscending[dropped - 1]![1] : floor;
-    const kept = newest.filter(([, seq]) => seq > horizon);
-    horizon = Math.max(horizon, floor);
-    return { S, changes: kept, floor, horizon };
-  }
-  const after = sortedAscending.filter(([, seq]) => seq > since);
-  if (after.length <= limit) return { S, changes: after, floor, horizon: since };
-  // Capped: complete only up to the last seq fully inside the limit.
-  const cutSeq = after[limit]![1];
-  const complete = after.filter(([, seq]) => seq < cutSeq);
-  if (complete.length === 0) {
-    // One seq holds more keys than the limit (a bulk write): the delta cannot
-    // enumerate it, so it advances by declaring a horizon instead. Entries
-    // rendered before it take the slow path; progress is never blocked.
-    return { S: cutSeq, changes: [], floor, horizon: cutSeq };
-  }
-  return { S: cutSeq - 1, changes: complete, floor, horizon: since };
+  const base = Math.max(since ?? floor, floor);
+  const after = sortedAscending.filter(([, seq]) => seq > (since ?? -1));
+  if (after.length <= limit) return { S, changes: after.filter(([, seq]) => seq > base), floor, horizon: base };
+  // Capped: the newest `limit` changes. The first one left out is the
+  // horizon (ties at it move it up); entries rendered before it take the slow
+  // path. A key's seq is its latest change, so a cut below S could miss a key
+  // that changed again after it: the answer always reaches S.
+  const horizon = Math.max(base, after[after.length - limit - 1]![1]);
+  return { S, changes: after.filter(([, seq]) => seq > horizon), floor, horizon };
 }
 
 // ---------------------------------------------------------------------------
@@ -204,17 +192,11 @@ export class TriggerClock implements DvcClock {
 
   async frontierDelta(since: number | null, limit: number) {
     const S = await this.current();
-    const rows = since === null
-      ? await this.sql.all<{ dep: string; seq: number | string }>(
-        `SELECT dep, seq FROM cache_dep WHERE seq <= ${this.param(1)} ORDER BY seq DESC LIMIT ${this.param(2)}`, [S, limit + 1])
-      : await this.sql.all<{ dep: string; seq: number | string }>(
-        `SELECT dep, seq FROM cache_dep WHERE seq > ${this.param(1)} AND seq <= ${this.param(2)} ORDER BY seq LIMIT ${this.param(3)}`, [since, S, limit + 1]);
+    // The `limit + 1` newest rows: the extra one sets the horizon.
+    const rows = await this.sql.all<{ dep: string; seq: number | string }>(
+      `SELECT dep, seq FROM cache_dep WHERE seq > ${this.param(1)} AND seq <= ${this.param(2)} ORDER BY seq DESC LIMIT ${this.param(3)}`,
+      [since ?? -1, S, limit + 1]);
     const ascending = rows.map((row) => [row.dep, Number(row.seq)] as const).sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]));
-    if (since === null) {
-      // `limit + 1` newest rows: the extra one sets the horizon.
-      const dropped = ascending.length > limit ? [ascending[0]!] : [];
-      return frontierSlice([...dropped, ...ascending.slice(dropped.length)], S, null, limit, 0);
-    }
     return frontierSlice(ascending, S, since, limit, 0);
   }
 }

@@ -67,8 +67,8 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NA
                     VALUES ('pav_a','prod_a','attr_mat','Cotton'),('pav_b','prod_b','attr_mat','Cotton')`);
         }
         await rebuildCatalogProjections(db);
-        const clocks = async () => (await client.query(`SELECT seq AS clock_seq,
-            coalesce((SELECT seq FROM cache_dep WHERE dep='store'),0) AS store_seq
+        const clocks = async () => (await client.query(`SELECT (SELECT max(seq) FROM cache_dep) AS clock_seq,
+            coalesce((SELECT max(seq) FROM cache_dep WHERE dep='store'),0) AS store_seq
             FROM cache_clock WHERE id=1`)).rows[0] as { clock_seq: number; store_seq: number };
         const counts = async () => (await client.query(`SELECT facet_kind,facet_key,value_key,product_count
             FROM product_facet_public_counts WHERE product_count>0 ORDER BY 1,2,3`)).rows;

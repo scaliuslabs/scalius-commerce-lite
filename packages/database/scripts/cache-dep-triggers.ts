@@ -19,9 +19,9 @@
  * bump conflict on the clock row and retry), so seq order is commit order.
  *
  * PostgreSQL: every trigger is a deferred constraint trigger. At commit it
- * locks the clock row (`UPDATE ... SET seq = seq + 1`), so bumping
- * transactions commit in seq order, and it takes that lock only after every
- * row lock the transaction needs is held, so the clock adds no deadlock.
+ * calls `cache_dep_bump`, which from 0151 appends to an insert-only change
+ * log under one seq per transaction (`CACHE_DEP_POSTGRES_LOG_SQL`), so
+ * bumping transactions commit in seq order without updating a shared row.
  */
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
@@ -300,6 +300,98 @@ BEGIN
   ON CONFLICT ("dep") DO UPDATE SET "seq" = excluded."seq";
 END
 $cache_dep_bump$`;
+
+/** The migration that turns PostgreSQL's `cache_dep` into an insert-only change log. */
+export const CACHE_DEP_POSTGRES_LOG_MIGRATION = "0151_postgres_scale";
+
+/**
+ * PostgreSQL from 0151: the 0100 bump made every writer update the clock row
+ * and each key's row, so concurrent SERIALIZABLE checkouts failed on those
+ * shared rows and retried. Now:
+ *
+ * - `cache_dep` is an insert-only change log, indexed on (`dep`, `seq`). A key
+ *   may have several rows; readers take its largest seq.
+ * - `cache_dep_next_seq()` gives a transaction one seq from a sequence and
+ *   holds a transaction advisory lock until the transaction ends, so seqs
+ *   commit in order: a reader that sees seq n sees every seq below it. The
+ *   deferred triggers take it at commit, after every row lock the
+ *   transaction needs, so it adds no deadlock and updates no shared row.
+ * - The clock is the newest committed seq; `cache_clock` keeps `floor` and
+ *   `coarse` (its `seq` is no longer written).
+ * - `cache_dep_compact()` deletes rows a newer row of the same key
+ *   supersedes, for the keys changed since its last run
+ *   (`cache_dep_compacted` holds that seq); the API's every-minute drain
+ *   calls it.
+ */
+export const CACHE_DEP_POSTGRES_LOG_SQL: readonly string[] = [
+  // The 0100 bump created the clock row on first use; readers need it now.
+  `INSERT INTO "cache_clock" ("id", "seq", "floor", "coarse") VALUES (1, 0, 0, 0) ON CONFLICT ("id") DO NOTHING`,
+  `ALTER TABLE "cache_dep" DROP CONSTRAINT "cache_dep_pkey"`,
+  `CREATE INDEX "cache_dep_dep_seq_idx" ON "cache_dep" ("dep", "seq")`,
+  `CREATE SEQUENCE scalius_compat."cache_dep_seq" AS bigint MINVALUE 0 START WITH 0`,
+  `SELECT setval('scalius_compat."cache_dep_seq"', GREATEST((SELECT "seq" FROM "cache_clock" WHERE "id" = 1), (SELECT max("seq") FROM "cache_dep"), 0))`,
+  `CREATE SEQUENCE scalius_compat."cache_dep_compacted" AS bigint MINVALUE 0 START WITH 0`,
+  `CREATE OR REPLACE FUNCTION scalius_compat."cache_dep_next_seq"()
+RETURNS bigint
+LANGUAGE plpgsql
+AS $cache_dep_next_seq$
+DECLARE
+  next_seq bigint := nullif(current_setting('scalius.cache_dep_seq', true), '')::bigint;
+BEGIN
+  IF next_seq IS NULL THEN
+    PERFORM pg_advisory_xact_lock(hashtextextended('scalius-cache-dep-clock', 0));
+    next_seq := nextval('scalius_compat."cache_dep_seq"');
+    PERFORM set_config('scalius.cache_dep_seq', next_seq::text, true);
+  END IF;
+  RETURN next_seq;
+END
+$cache_dep_next_seq$`,
+  `CREATE OR REPLACE FUNCTION scalius_compat."cache_dep_bump"(dep_keys text[])
+RETURNS void
+LANGUAGE plpgsql
+AS $cache_dep_bump$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM unnest(dep_keys) AS key_value WHERE key_value IS NOT NULL) THEN
+    RETURN;
+  END IF;
+  IF (SELECT "coarse" FROM "cache_clock" WHERE "id" = 1) = 1 THEN
+    dep_keys := ARRAY['store'];
+  END IF;
+  -- No uniqueness check: under SERIALIZABLE it would read the index pages
+  -- other writers insert into. A key bumped twice in one transaction has two
+  -- rows at one seq until compaction.
+  INSERT INTO "cache_dep" ("dep", "seq")
+  SELECT DISTINCT key_value, scalius_compat."cache_dep_next_seq"() FROM unnest(dep_keys) AS key_value WHERE key_value IS NOT NULL;
+END
+$cache_dep_bump$`,
+  `CREATE OR REPLACE FUNCTION scalius_compat."cache_dep_compact"()
+RETURNS bigint
+LANGUAGE plpgsql
+AS $cache_dep_compact$
+DECLARE
+  since bigint;
+  through bigint;
+  removed bigint;
+BEGIN
+  SELECT last_value INTO since FROM scalius_compat."cache_dep_compacted";
+  SELECT max("seq") INTO through FROM "cache_dep";
+  IF through IS NULL OR through <= since THEN
+    RETURN 0;
+  END IF;
+  DELETE FROM "cache_dep" WHERE ctid IN (
+    SELECT ranked.row_id FROM (
+      SELECT d.ctid AS row_id, row_number() OVER (PARTITION BY d."dep" ORDER BY d."seq" DESC) AS position
+      FROM "cache_dep" d
+      WHERE d."dep" IN (SELECT "dep" FROM "cache_dep" WHERE "seq" > since AND "seq" <= through)
+    ) AS ranked
+    WHERE ranked.position > 1
+  );
+  GET DIAGNOSTICS removed = ROW_COUNT;
+  PERFORM setval('scalius_compat."cache_dep_compacted"', through);
+  RETURN removed;
+END
+$cache_dep_compact$`,
+];
 
 // ---------------------------------------------------------------------------
 // Dialects

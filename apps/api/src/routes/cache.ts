@@ -1,8 +1,7 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 
 import { getDb } from "@scalius/database/client";
-import { cacheClock, cacheDep } from "@scalius/database/schema";
-import { eq, sql } from "drizzle-orm";
+import { advanceCacheDeps } from "@scalius/database/cache-dep-writes";
 import { ok } from "../utils/api-response";
 import { errorResponses, messageResponse } from "../schemas/responses";
 
@@ -27,12 +26,7 @@ const refreshRoute = createRoute({
 
 app.openapi(refreshRoute, async (c) => {
   const db = getDb(c.env);
-  const nextSequence = sql<number>`(select ${cacheClock.seq} from ${cacheClock} where ${cacheClock.id} = 1)`;
-  await db.batch([
-    db.update(cacheClock).set({ seq: sql`${cacheClock.seq} + 1` }).where(eq(cacheClock.id, 1)),
-    db.insert(cacheDep).values({ dep: "store", seq: nextSequence })
-      .onConflictDoUpdate({ target: cacheDep.dep, set: { seq: nextSequence } }),
-  ]);
+  await advanceCacheDeps(db, ["store"]);
   return ok(c, { message: "Store refreshed" });
 });
 

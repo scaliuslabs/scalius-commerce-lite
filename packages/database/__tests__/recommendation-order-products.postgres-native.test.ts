@@ -13,7 +13,7 @@ describe.runIf(nativePostgresUrl())("recommendation pairs on PostgreSQL", { time
     for (const statement of recommendationProjectionSeed.split(";").filter((s) => s.trim())) await db.run(sql.raw(statement));
     const assertProjection = async () => expect((await client.query(recommendationProjectionActual)).rows).toEqual((await client.query(recommendationProjectionOracle)).rows);
     await assertProjection();
-    const sequence = async () => Number((await client.query("SELECT seq FROM cache_dep WHERE dep='recommendation-signals'")).rows[0].seq);
+    const sequence = async () => Number((await client.query("SELECT max(seq) AS seq FROM cache_dep WHERE dep='recommendation-signals'")).rows[0].seq);
     const beforeEmail = await sequence();
     await db.run(sql`UPDATE orders SET customer_email='next@example.com' WHERE id='b'`);
     expect(await sequence()).toBeGreaterThan(beforeEmail);
@@ -45,12 +45,12 @@ describe.runIf(nativePostgresUrl())("recommendation pairs on PostgreSQL", { time
     const db = createPostgresDatabase(pg.url, {
       connect: connectNativePostgres, onSerializationRetry: () => { retries += 1; }, sleep: async () => {},
     });
-    // Hold only the existing deferred dependency clock lock. Both real adapter
+    // Hold only the dependency clock lock the deferred triggers take at commit. Both real adapter
     // writes reach their source/projection work before either can commit.
     const blocker = new Client({ connectionString: pg.url });
     await blocker.connect();
     await blocker.query("BEGIN");
-    await blocker.query("SELECT seq FROM cache_clock WHERE id=1 FOR UPDATE");
+    await blocker.query("SELECT pg_advisory_xact_lock(hashtextextended('scalius-cache-dep-clock', 0))");
     const pending = Promise.allSettled([Promise.resolve(db.run(sql.raw(race.left))), Promise.resolve(db.run(sql.raw(race.right)))]);
     let overlapped = false;
     try {

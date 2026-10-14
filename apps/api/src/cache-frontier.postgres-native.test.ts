@@ -54,6 +54,16 @@ describe.runIf(postgresUrl)("S4 clock reads: PostgreSQL parity with D1", () => {
     expect(await readCommitSeq(d1)).toBe(clock);
 
     const all = Array.from({ length: 40 }, (_, index) => `p:${index}`);
+    // PostgreSQL's change log keeps every change until compaction; readers take each key's newest.
+    const logRows = async () => Number((await pg.client.query("SELECT count(*)::bigint AS n FROM cache_dep")).rows[0].n);
+    const before = await logRows();
+    expect(before).toBeGreaterThan(Number((sqlite.prepare("SELECT count(*) AS n FROM cache_dep").get() as { n: number }).n));
+    for (const since of [d1Start, clock - 3]) {
+      const [a, b] = await Promise.all([readValidationSnapshot(d1, all, since), readValidationSnapshot(pg.db, all, since)]);
+      expect([...b.changed.entries()].sort()).toEqual([...a.changed.entries()].sort());
+    }
+    expect(Number((await pg.client.query("SELECT scalius_compat.cache_dep_compact() AS n")).rows[0].n)).toBe(before - await logRows());
+    expect(Number((await pg.client.query("SELECT scalius_compat.cache_dep_compact() AS n")).rows[0].n)).toBe(0);
     for (const since of [d1Start, d1Start + 10, clock - 3, clock]) {
       const [a, b] = await Promise.all([readValidationSnapshot(d1, all, since), readValidationSnapshot(pg.db, all, since)]);
       expect({ ...b, changed: [...b.changed.entries()].sort() }, `snapshot since ${since}`)

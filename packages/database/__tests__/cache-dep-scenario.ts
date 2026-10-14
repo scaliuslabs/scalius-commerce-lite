@@ -26,8 +26,10 @@ export const CACHE_DEP_SEED = [
   "INSERT INTO navigation_menu_publication_items (menu_id, revision, item_id, parent_id, position, label, label_mode, target_type, target_id, target_value, target_query, open_in_new_tab, is_enabled) VALUES ('menu_a', 1, 'item_1', NULL, 0, 'Sale', 'custom', 'internal_path', NULL, '/sale', NULL, 0, 1)",
 ];
 
+/** The clock as the API reads it: the clock row, or a newer change (PostgreSQL's change log). */
 async function clock(driver: CacheDepDriver): Promise<number> {
-  const [row] = await driver.rows("SELECT seq FROM cache_clock WHERE id = 1");
+  const [row] = await driver.rows(`SELECT CASE WHEN k.m > c.seq THEN k.m ELSE c.seq END AS seq
+    FROM cache_clock c, (SELECT max(seq) AS m FROM cache_dep) k WHERE c.id = 1`);
   return Number(row!.seq);
 }
 
@@ -36,7 +38,7 @@ export async function bumped(driver: CacheDepDriver, write: string | string[]): 
   const before = await clock(driver);
   for (const statement of Array.isArray(write) ? write : [write]) await driver.exec(statement);
   const after = await clock(driver);
-  const keys = await driver.rows(`SELECT dep, seq FROM cache_dep WHERE seq > ${before} ORDER BY dep`);
+  const keys = await driver.rows(`SELECT dep, max(seq) AS seq FROM cache_dep WHERE seq > ${before} GROUP BY dep ORDER BY dep`);
   const [max] = await driver.rows("SELECT max(seq) AS seq FROM cache_dep");
   // The clock is the newest key: a reader of `after` sees every key it covers.
   expect(Number(max!.seq ?? 0)).toBe(after);

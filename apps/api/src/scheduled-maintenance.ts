@@ -1,4 +1,5 @@
 import { getDb } from "@scalius/database/client";
+import { compactCacheDeps } from "@scalius/database/cache-dep-writes";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
 import { sweepReviewRequests } from "@scalius/core/modules/reviews";
 import { sweepDigitalUploads } from "@scalius/core/modules/digital";
@@ -681,6 +682,11 @@ export const BACKGROUND_DRAINS: ReadonlyArray<{ name: string; run(context: Sweep
   {
     name: "projection_rebuild_drain",
     run: ({ db }) => drainCatalogProjectionRebuild(db),
+  },
+  {
+    // PostgreSQL's dependency change log keeps each key's newest row (no query on D1 or Turso).
+    name: "cache_dep_compaction",
+    run: ({ db }) => compactCacheDeps(db),
   },
 ];
 

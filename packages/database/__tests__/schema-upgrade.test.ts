@@ -773,6 +773,12 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 151,
+        name: "0151_postgres_scale",
+        sqliteStatements: 2,
+        postgresStatements: 10,
+      },
     ]);
   });
 
@@ -972,6 +978,7 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
           { version: 148, name: "0148_queue_retirement" },
           { version: 149, name: "0149_strict_readers_reset" },
           { version: 150, name: "0150_facet_engine" },
+          { version: 151, name: "0151_postgres_scale" },
         ],
       });
     } finally {

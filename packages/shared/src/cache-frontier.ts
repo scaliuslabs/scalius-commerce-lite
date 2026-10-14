@@ -8,10 +8,10 @@
  *   more, never serve more.
  * - The API answers `GET /api/v1/storefront/frontier?since=<S>` with a
  *   `CacheFrontierDelta`: every key changed in `(horizon, S]` with its latest
- *   seq. A capped answer lowers `S` to the last complete clock value (or
- *   declares a horizon when one seq alone exceeds the limit); it never claims
- *   more than it holds. `clock` is the store clock at the read, so the caller
- *   knows whether to ask again.
+ *   seq. `S` is the store clock. A capped answer lists the newest changes and
+ *   raises the horizon to the first one it leaves out, so it never claims
+ *   more than it holds; entries older than the horizon take the slow path.
+ *   `clock` is the store clock at the read (`S < clock` means ask again).
  * - `POST /api/v1/storefront/frontier/check` is the slow path for an entry
  *   older than the frontier's horizon: hashes in, "changed after s0?" out.
  * - A storefront batch part in strict mode carries `StorefrontBatchPartCache`.
