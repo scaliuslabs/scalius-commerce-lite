@@ -14,6 +14,8 @@
  *   (default)          quick: the coverage sweep plus DVC_STEPS (default 150) random steps; CI.
  *   DVC_MODE=long      DVC_STEPS (default 20000) steps per seed, DVC_SEEDS seeds; see scripts/cache-dvc-long.mjs.
  *   DVC_SEED=<seed>    replay one seed (with the DVC_STEPS the failure printed).
+ *   DVC_SHARDS=<n>     quick mode with several seeds runs each seed in its own vitest process, n at a
+ *                      time (default: the machine's cores less one); 1 keeps every seed in this process.
  *   DVC_PROVIDER=turso the real Turso adapter over the same SQLite store.
  *   DVC_CLOCK=reference|triggers|auto (default auto: S1's triggers once the migration exists).
  *   DVC_RACE=<p>       inject a committed write before a render statement with probability p.
@@ -21,7 +23,11 @@
  *   DVC_REPORT=<file>  write the run's stats as JSON.
  */
 import "@hono/zod-openapi";
-import { writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { availableParallelism, tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
 import { createSqliteTursoDatabase } from "@scalius/database/testing/sqlite-d1";
@@ -75,7 +81,7 @@ const SEEDS = process.env.DVC_SEED
   : Array.from({ length: Number(process.env.DVC_SEEDS ?? 1) }, (_, index) => `${process.env.DVC_SEED_PREFIX ?? "dvc"}-${index + Number(process.env.DVC_SEED_OFFSET ?? 0)}`);
 // A loaded machine slows the same steps down; DVC_TIMEOUT_MS gives them time
 // without weakening the check.
-const TIMEOUT = Number(process.env.DVC_TIMEOUT_MS ?? (MODE === "long" ? 24 * 3600_000 : 240_000));
+const TIMEOUT = Number(process.env.DVC_TIMEOUT_MS ?? (MODE === "long" ? 24 * 3600_000 : 420_000));
 
 /**
  * `s4` (default): S4's production part cache end to end (the part reader's
@@ -335,7 +341,98 @@ describe("DVC directed scenarios", () => {
   }, 120_000);
 });
 
+/**
+ * A seed is CPU-bound and single-threaded, so seeds of one process queue behind
+ * each other. With several seeds in quick mode each one runs in its own vitest
+ * process (`DVC_SHARD=1`: the same file, one seed, the same checks, the full
+ * coverage sweep), up to DVC_SHARDS at a time; the wall time is the slowest
+ * seed, not their sum. A shard that fails fails its seed's test with its output.
+ */
+const IS_SHARD = process.env.DVC_SHARD === "1";
+const SHARDS = Math.max(1, Number(process.env.DVC_SHARDS ?? availableParallelism() - 1));
+const SHARDED = MODE === "quick" && !IS_SHARD && !process.env.DVC_SEED && SEEDS.length > 1 && SHARDS > 1;
+
+interface ShardResult {
+  seed: string;
+  code: number | null;
+  output: string;
+  reports: unknown[];
+}
+
+function runShard(seed: string, offset: number, directory: string): Promise<ShardResult> {
+  const vitest = join(createRequire(import.meta.url).resolve("vitest/package.json"), "..", "vitest.mjs");
+  const report = join(directory, `${seed}.json`);
+  const file = decodeURIComponent(new URL(import.meta.url).pathname);
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [vitest, "run", file, "-t", `never serves a stale entry as valid: ${seed}$`], {
+      env: {
+        ...process.env,
+        DVC_SHARD: "1",
+        DVC_SEEDS: "1",
+        DVC_SEED_OFFSET: String(offset),
+        DVC_REPORT: report,
+      },
+    });
+    let output = "";
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.stderr.on("data", (chunk) => { output += chunk; });
+    child.on("close", (code) => {
+      let reports: unknown[] = [];
+      try { reports = JSON.parse(readFileSync(report, "utf8")); } catch { /* the shard died before it wrote one */ }
+      resolve({ seed, code, output, reports });
+    });
+  });
+}
+
+function runShards(directory: string): Array<Promise<ShardResult>> {
+  const offset = Number(process.env.DVC_SEED_OFFSET ?? 0);
+  const results: Array<Promise<ShardResult>> = [];
+  let running = 0;
+  const waiting: Array<() => void> = [];
+  const next = () => {
+    running -= 1;
+    waiting.shift()?.();
+  };
+  SEEDS.forEach((seed, index) => {
+    results.push(new Promise<ShardResult>((resolve) => {
+      const start = () => {
+        running += 1;
+        void runShard(seed, offset + index, directory).then((result) => { next(); resolve(result); });
+      };
+      if (running < SHARDS) start();
+      else waiting.push(start);
+    }));
+  });
+  return results;
+}
+
 describe(`DVC differential property (${MODE}, ${PROVIDER})`, () => {
+  if (SHARDED) {
+    let directory = "";
+    let shards: Array<Promise<ShardResult>> = [];
+    beforeAll(() => {
+      directory = mkdtempSync(join(tmpdir(), "dvc-shards-"));
+      shards = runShards(directory);
+    });
+    afterAll(async () => {
+      await Promise.allSettled(shards);
+      rmSync(directory, { recursive: true, force: true });
+    });
+    SEEDS.forEach((seed, index) => {
+      it(`never serves a stale entry as valid: ${seed}`, async () => {
+        const result = await shards[index]!;
+        reports.push(...result.reports);
+        if (process.env.DVC_REPORT) writeFileSync(process.env.DVC_REPORT, JSON.stringify(reports, null, 2));
+        const lines = result.output.split("\n");
+        if (result.code !== 0) {
+          throw new Error(`seed ${seed} failed in its own process (exit ${result.code})\n${lines.slice(-400).join("\n")}`);
+        }
+        console.info(`[DVC shard ${seed}]\n${lines.slice(-30).join("\n")}`);
+      // The test waits for its shard, which may queue behind earlier waves.
+      }, TIMEOUT * Math.ceil(SEEDS.length / SHARDS));
+    });
+    return;
+  }
   for (const seed of SEEDS) {
     it(`never serves a stale entry as valid: ${seed}`, async () => {
       const harness = await DvcHarness.create(harnessConfig(seed));

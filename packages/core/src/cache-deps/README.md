@@ -187,7 +187,7 @@ The release gate must report zero findings. The property test runs random writes
 DVC_COLLECT=1 DVC_SEEDS=5 pnpm exec vitest run apps/api/src/cache-dvc.property.test.ts apps/api/src/cache-dvc.race.test.ts
 ```
 
-`DVC_COLLECT=1` lists every distinct finding instead of stopping at the first, and `DVC_SEEDS` sets the number of seeds. The header of the property test lists the other modes. `apps/api/src/cache-deps-coverage.test.ts` checks that every table a cached public read touches is registered or exempt.
+`DVC_COLLECT=1` lists every distinct finding instead of stopping at the first, and `DVC_SEEDS` sets the number of seeds. With more than one seed, each seed runs in its own vitest process (up to `DVC_SHARDS` at a time, default: cores less one), so the wall time is that of the slowest seed. The header of the property test lists the other modes. `apps/api/src/cache-deps-coverage.test.ts` checks that every table a cached public read touches is registered or exempt.
 
 ## Not observed
 
