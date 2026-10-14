@@ -10,7 +10,7 @@ A baseline is one measurement at one date on one build. Measure again before you
 
 | Area | Threshold | Enforced by |
 | --- | --- | --- |
-| Cache-hit TTFB, cache-miss TTFB, phone LCP, desktop LCP, CLS | 50 ms, 300 ms, 1500 ms, 1200 ms, 0.1 | `pnpm perf:storefront` (`DEFAULT_BUDGETS` in `scripts/storefront-perf.mjs`) |
+| Cache-hit TTFB, cache-miss TTFB, phone LCP, desktop LCP, CLS | 50 ms, 300 ms, 1200 ms, 800 ms, 0.05 | `pnpm perf:storefront` (`DEFAULT_BUDGETS` in `scripts/storefront-perf.mjs`) |
 | Template fidelity and page weights | `tolerances` and `budgets` in `scripts/storefront-fidelity/reference-metrics.json` (CLS 0.05 there) | `pnpm fidelity:check` |
 | API calls, D1 round trips and waves per page render | 1 call; per-page limits in [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md#budgets-and-guardrails) | `render-batch.test.ts`, `storefront-render-budget.test.ts` |
 | Dashboard first-render JavaScript (Brotli) | `BUNDLE_BUDGETS` in `scripts/admin-perf-check.mjs` | `pnpm check:admin-perf` |

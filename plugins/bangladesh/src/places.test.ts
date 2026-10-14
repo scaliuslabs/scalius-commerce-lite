@@ -138,3 +138,20 @@ describe("Bangladesh places", () => {
     expect(manifest.permissions).toEqual(["settings.delivery_locations.import"]);
   });
 });
+
+describe("the bundled place directory", () => {
+  // Bundled as text, the 2.3 MB dataset costs a Worker isolate almost nothing
+  // at start-up; as a JSON import it is one array literal that workerd compiles
+  // at every API isolate start (about 120 ms, docs/PERFORMANCE-RELEASE.md).
+  it("reaches the bundle as a string, parsed only when a seed runs", async () => {
+    const { build } = await import("esbuild");
+    const result = await build({
+      entryPoints: [new URL("./places.ts", import.meta.url).pathname],
+      bundle: true, write: false, format: "esm", platform: "neutral", logLevel: "silent",
+      external: ["@scalius/*"],
+    });
+    const code = result.outputFiles[0]!.text;
+    expect(code).toContain('{"key":"pathao:');
+    expect(code).not.toMatch(/\bkey: "pathao:/);
+  }, 30_000);
+});

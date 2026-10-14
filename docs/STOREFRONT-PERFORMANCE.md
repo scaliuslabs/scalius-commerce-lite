@@ -1,6 +1,6 @@
 # Storefront performance
 
-Last reviewed: 2026-10-03
+Last reviewed: 2026-10-14
 
 This document explains how the storefront renders and caches a page, what each page may cost, and how to measure it. It is for contributors and operators. Dated measurements and release thresholds are in [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEASE.md).
 
@@ -145,7 +145,7 @@ The validation statement reads the clock and the current Platform settings toget
 
 ## `pnpm perf:storefront`
 
-`pnpm perf:storefront` (`scripts/storefront-perf.mjs`) measures TTFB, LCP and CLS of built Workers. It sends only GET requests, except for the local `--d1-explorer` option. It checks the home page, the first category and product linked from home, `/search?q=a` and `/cart`. For each page it records:
+`pnpm perf:storefront` (`scripts/storefront-perf.mjs`) measures TTFB, LCP and CLS of built Workers. It sends only GET requests, except for the local `--d1-explorer` option. It checks the home page, the first category and product linked from home, `/search?q=a`, `/cart` and `/checkout`. For each page it records:
 
 - Server TTFB of a cache miss and the median of the hits. A 5xx first response is a failure. Against a remote base, it subtracts the TTFB of the edge's own `/cdn-cgi/trace` (the network round trip) from the hit TTFB and prints both values.
 - In headless Chrome, LCP, CLS, TTFB and transfer size, read 1.5 s after load with the browser cache off. The phone profile is 390x844 at DPR 3, 150 ms latency, 1.6 Mbps down, 750 kbps up, 4x CPU slowdown. The desktop profile is 1440x900.
@@ -156,9 +156,9 @@ It exits 1 when a threshold is exceeded:
 | --- | --- | --- |
 | Cache-hit TTFB | 50 ms | `--budget-ttfb-hit-ms` |
 | Cache-miss TTFB (and pages that always render) | 300 ms | `--budget-ttfb-miss-ms` |
-| Phone LCP | 1500 ms | `--budget-lcp-phone-ms` |
-| Desktop LCP | 1200 ms | `--budget-lcp-desktop-ms` |
-| CLS (either profile) | 0.1 | `--budget-cls` |
+| Phone LCP | 1200 ms | `--budget-lcp-phone-ms` |
+| Desktop LCP | 800 ms | `--budget-lcp-desktop-ms` |
+| CLS (either profile) | 0.05 | `--budget-cls` |
 
 Other flags: `--base <origin>` (default `http://localhost:4391`), `--paths "/,/products/x"`, `--runs <n>` (default 3), `--profiles phone,desktop`, `--no-browser` (TTFB only), `--json`, `--media-url <origin>`, `--no-binding-check` and `--cdp-port <port>` (default 9395; the script starts its own headless Chrome when nothing listens there).
 
@@ -190,6 +190,34 @@ pnpm perf:storefront --base https://storefront.scalius.com
 ```
 
 Miss TTFB from a laptop includes the network round trip to the edge. From Bangladesh, some ISPs reach Cloudflare in Europe (MXP, MAD, CDG, MRS) as often as in SIN or HKG, which adds 150-450 ms per TLS connection. Read the data center from `cf-ray` before you blame the server.
+
+## Comparison with other platforms
+
+`pnpm perf:compare` (`scripts/storefront-compare.mjs`) runs the same profile against any public stores: `--site <label>=<url>` per store, `--runs` at most 3. From each home page it takes the first listing and product link (Scalius `/categories/` and `/products/`, Shopify `/collections/` and `/products/`, WooCommerce `/shop/`, `/product-category/` and `/product/`) and the cart (`/cart` or `/basket`). It records the page TTFB on a warm connection, the TTFB of the site's `/robots.txt` on the same connection (the network and edge floor; "server" is the page less the floor), and phone and desktop LCP, CLS and transfer size. It sends only GET requests, one at a time, and never accepts a cookie dialog or touches a form.
+
+```sh
+pnpm perf:compare --site scalius=https://storefront.scalius.com \
+  --site shopify-dawn=https://theme-dawn-demo.myshopify.com --site woo-storefront=https://wp-skins.com
+```
+
+2026-10-14 from Dhaka (Cloudflare DAC), 3 runs per page, median. Shopify: the official Dawn theme demo. WooCommerce: a public Storefront-theme store (the official Storefront demo now redirects to woocommerce.com). The Scalius row is the live demo before the buyer-shell, cart and font changes of this date (its cart LCP was the late popular-products photo, about 1.0 s after them in the local A/B).
+
+| Site | Page | TTFB server / page / floor (ms) | Phone LCP (ms) | Phone CLS | Phone KB | Desktop LCP (ms) | Desktop CLS |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Scalius | home | 2 / 27 / 25 | 1376 | 0 | 209 | 436 | 0 |
+| Scalius | listing | 0 / 30 / 31 | 1316 | 0 | 235 | 280 | 0.001 |
+| Scalius | product | 0 / 25 / 26 | 1516 | 0 | 257 | 276 | 0 |
+| Scalius | cart | 2 / 26 / 24 | 2592 | 0 | 238 | 648 | 0 |
+| Shopify Dawn | home | 18 / 148 / 130 | 3816 | 0 | 849 | 236 | 0 |
+| Shopify Dawn | listing | 158 / 275 / 117 | 1800 | 0 | 701 | 344 | 0 |
+| Shopify Dawn | product | 47 / 169 / 122 | 2372 | 0 | 530 | 264 | 0 |
+| Shopify Dawn | cart | 0 / 128 / 140 | 1860 | 0 | 383 | 256 | 0 |
+| WooCommerce Storefront | home | 4 / 250 / 246 | 4732 | 0 | 1042 | 1992 | 0.223 |
+| WooCommerce Storefront | listing | 6 / 251 / 245 | 11668 | 0.034 | 2258 | 2328 | 0.042 |
+| WooCommerce Storefront | product | 26 / 274 / 248 | 4788 | 0.001 | 961 | 1064 | 0 |
+| WooCommerce Storefront | cart | 158 / 409 / 251 | 1428 | 0 | 224 | 1012 | 0 |
+
+Scalius pages are edge hits (about 25 ms at the DAC edge); Shopify pages pass to its origin (120-140 ms floor from Dhaka, 0-160 ms more). Phone LCP follows bytes on slow 4G: Scalius pages move 210-260 KB, Dawn 380-850 KB, the WooCommerce store 220-2,260 KB. A store's `/robots.txt` can itself be dynamic (WordPress), so read the floor column before comparing server times.
 
 ## `pnpm fidelity:check`
 

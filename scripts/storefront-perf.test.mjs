@@ -9,8 +9,8 @@ describe("storefront perf check", () => {
     const html = `<a href="/about">About</a><a href="/categories/bags?sort=new">Bags</a>
       <a href="/products/linen-shirt">Linen</a><a href="/products/other">Other</a>`;
 
-    expect(discoverPaths(html)).toEqual(["/", "/categories/bags", "/products/linen-shirt", "/search?q=a", "/cart"]);
-    expect(discoverPaths("<p>empty store</p>")).toEqual(["/", "/search?q=a", "/cart"]);
+    expect(discoverPaths(html)).toEqual(["/", "/categories/bags", "/products/linen-shirt", "/search?q=a", "/cart", "/checkout"]);
+    expect(discoverPaths("<p>empty store</p>")).toEqual(["/", "/search?q=a", "/cart", "/checkout"]);
   });
 
   it("takes the median of the finite samples", () => {
@@ -22,7 +22,7 @@ describe("storefront perf check", () => {
   it("judges cached pages on hit and miss TTFB and every page on LCP and CLS", () => {
     const fast = {
       path: "/", cacheable: true, ttfbHit: 20, ttfbMiss: 250,
-      phone: { lcp: 1400, cls: 0 }, desktop: { lcp: 900, cls: 0.02 },
+      phone: { lcp: 1150, cls: 0 }, desktop: { lcp: 700, cls: 0.02 },
     };
     expect(evaluateBudgets(fast)).toEqual([]);
 
@@ -33,8 +33,9 @@ describe("storefront perf check", () => {
     expect(evaluateBudgets(slow)).toEqual([
       "/products/x: ttfb hit ms 80 > 50",
       "/products/x: ttfb miss ms 900 > 300",
-      "/products/x: phone LCP ms 5500 > 1500",
-      "/products/x: phone CLS 0.2 > 0.1",
+      "/products/x: phone LCP ms 5500 > 1200",
+      "/products/x: desktop LCP ms 1100 > 800",
+      "/products/x: phone CLS 0.2 > 0.05",
     ]);
   });
 
