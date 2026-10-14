@@ -70,8 +70,8 @@ function order(phone: string, productIds: string[], status = "confirmed", create
     ).run(orderId, phone, status, createdAt, createdAt);
     productIds.forEach((productId, index) => {
         sqlite.prepare(
-            "INSERT INTO order_items (id, order_id, product_id, quantity) VALUES (?, ?, ?, 1)",
-        ).run(`${orderId}_line_${index}`, orderId, productId);
+            "INSERT INTO order_items (id, order_id, product_id, quantity, created_at) VALUES (?, ?, ?, 1, ?)",
+        ).run(`${orderId}_line_${index}`, orderId, productId, createdAt);
     });
 }
 
@@ -231,7 +231,8 @@ describe("product recommendations", () => {
         statementParams = [];
         expect((await rankProductRecommendations(db, { productIds: ["source"] })).rows.map((row) => row.id)).toEqual(["peer"]);
         const plan = rankingPlan();
-        expect(plan).toContain("SEARCH source_order USING INDEX recommendation_order_products_product_idx (product_id=? AND created_at>?)");
+        expect(plan).toContain("SEARCH line USING COVERING INDEX order_items_product_recent_idx (product_id=? AND created_at>?)");
+        expect(plan).toMatch(/SEARCH source_pair USING (COVERING )?INDEX sqlite_autoindex_recommendation_order_products_1 \(order_id=\? AND product_id=\?\)/);
         expect(plan).toContain("SEARCH sample USING INDEX recommendation_order_products_created_idx (created_at>?)");
         expect(plan).toMatch(/SEARCH peer USING (COVERING )?INDEX sqlite_autoindex_recommendation_order_products_1 \(order_id=\?\)/);
         expect(plan).toContain("SEARCH candidate USING INDEX sqlite_autoindex_product_buyer_state_1 (product_id=?)");
@@ -376,7 +377,7 @@ describe("product recommendations", () => {
         expect(wider.reason).toBe("also_bought");
     });
 
-    it("counts distinct real buyers by phone or normalized email, by the order's own time", async () => {
+    it("counts distinct real buyers by phone or normalized email", async () => {
         product({ id: "source", categoryId: "cat_shirts" });
         product({ id: "peer", categoryId: "cat_trousers", priceMinor: 900_000 });
         product({ id: "similar", categoryId: "cat_shirts" });
@@ -395,8 +396,6 @@ describe("product recommendations", () => {
         }
         order("01733333333", basket);
         sqlite.prepare("UPDATE orders SET deleted_at = ? WHERE id = ?").run(NOW, `ord_${orderSequence}`);
-        // Old line times never move an order out of (or into) a window.
-        sqlite.prepare("UPDATE order_items SET created_at = ?").run(NOW - 400 * 86_400);
         await rebuildCatalogProjections(db);
 
         const { value, dependencies } = await rankStrict(["source"], 8);

@@ -3,10 +3,10 @@
 //
 // One ranking statement scores a bounded pool of eligible (public, buyable,
 // buyer-state.ts) products against the source products:
-//   1. also bought — other products in the source products' latest
-//      ALSO_BOUGHT_SOURCE_ORDERS real orders (placed, not cancelled,
-//      refunded, returned or unfinished) within a year, counted by distinct
-//      buyer; two or more buyers rank a product first;
+//   1. also bought — other products in the real orders (placed, not
+//      cancelled, refunded, returned or unfinished) of the source products'
+//      latest ALSO_BOUGHT_SOURCE_ORDERS lines within a year, counted by
+//      distinct buyer; two or more buyers rank a product first;
 //   2. similarity — same published category, same active collection (manual
 //      list or dynamic category rule) and shared attribute values; a related
 //      product also scores when its buyer price is within 60–140% of the
@@ -69,13 +69,13 @@ export const MIN_ALSO_BOUGHT_BUYERS = 2;
 /** Distinct buyers in the popularity window before a product counts as popular. */
 export const MIN_POPULAR_BUYERS = 2;
 const ALSO_BOUGHT_WINDOW_SECONDS = 365 * 86_400;
-/** "Also bought" reads the source products' latest real orders in the window, at most this many. */
+/** "Also bought" reads the source products' latest order lines in the window, at most this many. */
 export const ALSO_BOUGHT_SOURCE_ORDERS = 1_000;
 const POPULAR_WINDOW_SECONDS = 30 * 86_400;
 /** Popularity reads the window's latest order/product pairs, at most this many. */
 export const POPULAR_SAMPLE_PAIRS = 5_000;
-/** Candidates per category, per collection rule category and per source attribute value. */
-export const RELATED_CANDIDATES_PER_SIGNAL = 200;
+/** Candidates from co-purchases, and per category, collection rule category and source attribute value. */
+export const RELATED_CANDIDATES_PER_SIGNAL = 100;
 
 export type ProductRecommendationReason = "also_bought" | "similar" | "popular" | "new_arrivals";
 
@@ -195,7 +195,7 @@ export async function rankProductRecommendations(
 /**
  * The ranking statement for up to `limit` rows (the request path caps it at
  * 12; the refresh job stores 24). It scores only a bounded candidate pool:
- * the co-buy peers of the source's latest orders, the newest eligible
+ * the most co-bought peers of the source's latest orders, the newest eligible
  * products of the source and collection-rule categories, manual collection
  * members and the first products sharing each source attribute value
  * (RELATED_CANDIDATES_PER_SIGNAL each), plus the `limit` most popular and
@@ -245,14 +245,24 @@ export async function rankRecommendationRows(
         WITH rec_source AS (
             SELECT DISTINCT CAST(value AS TEXT) AS product_id FROM json_each(${JSON.stringify(sourceIds)})
         ),
-        -- The source products' latest real orders in the window.
+        -- The source products' latest order lines (order_items_product_recent_idx),
+        -- then their real orders' time and buyer by primary key (the LEFT JOIN
+        -- keeps the bounded sample outer; a line of no real order has none).
+        rec_source_lines AS (
+            SELECT source_line.order_id, source_pair.created_at, source_pair.buyer
+            FROM (
+                SELECT line.order_id, line.product_id FROM order_items AS line
+                WHERE line.product_id IN (SELECT product_id FROM rec_source)
+                  AND line.created_at >= ${now} - ${n(ALSO_BOUGHT_WINDOW_SECONDS)}
+                ORDER BY line.created_at DESC, line.order_id DESC
+                LIMIT ${n(ALSO_BOUGHT_SOURCE_ORDERS)}
+            ) AS source_line
+            LEFT JOIN recommendation_order_products AS source_pair
+                ON source_pair.order_id = source_line.order_id AND source_pair.product_id = source_line.product_id
+        ),
         rec_source_orders AS (
-            SELECT source_order.order_id, source_order.created_at, source_order.buyer
-            FROM recommendation_order_products AS source_order
-            WHERE source_order.product_id IN (SELECT product_id FROM rec_source)
-              AND source_order.created_at >= ${now} - ${n(ALSO_BOUGHT_WINDOW_SECONDS)}
-            ORDER BY source_order.created_at DESC, source_order.order_id DESC
-            LIMIT ${n(ALSO_BOUGHT_SOURCE_ORDERS)}
+            SELECT order_id, created_at, buyer FROM rec_source_lines
+            WHERE created_at >= ${now} - ${n(ALSO_BOUGHT_WINDOW_SECONDS)}
         ),
         -- An order's pairs share its buyer.
         rec_co AS (
@@ -328,7 +338,9 @@ export async function rankRecommendationRows(
             WHERE source_value.product_id IN (SELECT product_id FROM rec_source)
         ),
         rec_pool AS (
-            SELECT product_id FROM rec_co
+            SELECT product_id FROM (
+                SELECT product_id FROM rec_co ORDER BY buyers DESC, product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
+            ) AS co_peer
             UNION SELECT product_id FROM rec_collection_links WHERE product_id IS NOT NULL
             -- The small source sets drive (a LEFT JOIN keeps them outer; a NULL
             -- id joins no candidate): each category's newest public products
@@ -368,8 +380,10 @@ export async function rankRecommendationRows(
             SELECT candidate.product_id AS id, candidate.product_created_at AS created_at,
                 COALESCE(co.buyers, 0) AS also_bought,
                 40 * CASE WHEN candidate.category_id IN (SELECT id FROM rec_categories) THEN 1 ELSE 0 END
-                + 25 * MIN((SELECT COUNT(DISTINCT link.collection_id) FROM rec_collection_links AS link
-                    WHERE link.product_id = candidate.product_id OR link.category_id = candidate.category_id), 2)
+                + 25 * MIN((SELECT COUNT(DISTINCT shared.collection_id) FROM (
+                    SELECT collection_id FROM rec_collection_links WHERE product_id = candidate.product_id
+                    UNION ALL SELECT collection_id FROM rec_collection_links WHERE category_id = candidate.category_id
+                ) AS shared), 2)
                 + 10 * MIN((SELECT COUNT(DISTINCT shared.attribute_id) FROM product_attribute_values AS shared
                     INNER JOIN rec_values ON rec_values.attribute_id = shared.attribute_id AND rec_values.value = shared.value
                     WHERE shared.product_id = candidate.product_id), 5)
