@@ -12371,6 +12371,22 @@
           "updatedAt": {
             "type": "string"
           },
+          "featureCount": {
+            "type": "object",
+            "properties": {
+              "on": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "on",
+              "total"
+            ],
+            "description": "How many of the app's features are on, of how many it declares (0 of 0: an app without features)."
+          },
           "functions": {
             "type": "array",
             "items": {
@@ -12437,6 +12453,7 @@
           "installedAt",
           "activatedAt",
           "updatedAt",
+          "featureCount",
           "functions"
         ]
       },
@@ -14347,6 +14364,20 @@
             "type": "string",
             "nullable": true,
             "description": "Send back to turn it on (the access shown); null while it is on."
+          },
+          "settings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The setting keys that belong to this feature (its providers' and settings groups' fields); the app lists them in `settings.fields` only while it is on."
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The ids of the dashboard pages (`admin.pages`) this feature adds while it is on."
           }
         },
         "required": [
@@ -14356,7 +14387,9 @@
           "enabled",
           "recommended",
           "request",
-          "grantKey"
+          "grantKey",
+          "settings",
+          "pages"
         ]
       },
       "AppLogLine": {
