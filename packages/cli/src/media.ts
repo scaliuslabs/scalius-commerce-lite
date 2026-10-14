@@ -5,7 +5,8 @@ import { CliError } from "./errors.js";
 import { findOperation, getIndexedOperations } from "./openapi.js";
 import { executeOperation } from "./operations.js";
 import { writeDiagnostic } from "./output.js";
-import type { OperationExecutionResult, ResolvedProfile, Runtime } from "./types.js";
+import { canHaveRenditions, encodeLocalRenditions } from "./renditions.js";
+import type { IndexedOperation, OpenApiDocument, OperationExecutionResult, ResolvedProfile, Runtime } from "./types.js";
 
 const MIB = 1024 * 1024;
 const SIGNATURE_BYTES = 4096;
@@ -66,6 +67,50 @@ async function inspectFile(path: string) {
   }
 }
 
+type RenditionState = "saved" | "pending" | "none";
+
+/**
+ * Encodes the WebP ladder next to the original on this machine (no server
+ * renders images) and saves it for the committed media. Never fails the
+ * upload: where the encoder is missing, the image is unusual or the server has
+ * no rendition route, the image stays pending and serves its original until
+ * an open dashboard renders it.
+ */
+async function saveLocalRenditions(
+  runtime: Runtime,
+  profile: ResolvedProfile,
+  document: OpenApiDocument,
+  operations: IndexedOperation[],
+  directory: string,
+  input: { path: string; mediaId: string; mimeType: string },
+): Promise<RenditionState> {
+  if (!canHaveRenditions(input.mimeType)) return "none";
+  try {
+    const save = findOperation(operations, "dashboard.media.variants_save");
+    const renditions = await encodeLocalRenditions(input.path, input.mimeType);
+    if (!renditions) {
+      writeDiagnostic(runtime, `Renditions for ${basename(input.path)} will be rendered by the dashboard (local encoder unavailable).`);
+      return "pending";
+    }
+    const files: string[] = [];
+    for (const { width, bytes } of renditions.files) {
+      const renditionPath = join(directory, `${input.mediaId}-${width}.webp`);
+      await writeFile(renditionPath, bytes, { flag: "wx", mode: 0o600 });
+      files.push(`w${width}=@${renditionPath}`);
+    }
+    await executeOperation(runtime, profile, document, save, {
+      input: { path: { id: input.mediaId }, body: { width: String(renditions.width), height: String(renditions.height) } },
+      files,
+      yes: true,
+      overwrite: false,
+    });
+    return "saved";
+  } catch {
+    writeDiagnostic(runtime, `Renditions for ${basename(input.path)} will be rendered by the dashboard.`);
+    return "pending";
+  }
+}
+
 export async function uploadMediaFiles(runtime: Runtime, profile: ResolvedProfile, paths: string[], folderId?: string): Promise<Record<string, unknown>> {
   if (paths.length < 1 || paths.length > 50) throw new CliError(5, "invalid_media_count", "Upload between 1 and 50 media files.");
   const { document, operations } = await getIndexedOperations(runtime, profile);
@@ -103,7 +148,9 @@ export async function uploadMediaFiles(runtime: Runtime, profile: ResolvedProfil
         } finally { await source.close(); }
         const committed = await executeOperation(runtime, profile, document, complete, { input: { path: { id: sessionId } }, files: [], yes: true, overwrite: false });
         const file = record(responseData(committed).file, "file");
-        uploaded.push({ path, filename: metadata.filename, mediaId: file.id, mimeType: file.mimeType, size: file.size });
+        const mediaId = String(file.id ?? "");
+        const renditions = await saveLocalRenditions(runtime, profile, document, operations, temporary, { path, mediaId, mimeType: metadata.mimeType });
+        uploaded.push({ path, filename: metadata.filename, mediaId: file.id, mimeType: file.mimeType, size: file.size, renditions });
       } catch (error) {
         await executeOperation(runtime, profile, document, abort, { input: { path: { id: sessionId } }, files: [], yes: true, overwrite: false }).catch(() => undefined);
         throw error;

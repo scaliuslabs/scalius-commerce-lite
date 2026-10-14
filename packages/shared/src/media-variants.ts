@@ -9,6 +9,11 @@
  * ladder is fixed, that URL alone tells every consumer (storefront, admin,
  * feeds, rich content) which smaller renditions exist, so no transform service
  * and no extra metadata round-trip are needed. Any other URL is served as-is.
+ *
+ * No Worker encodes images (there is no Cloudflare Images binding). The dashboard
+ * browser and the CLI (a generated copy of this file in
+ * packages/cli/src/generated, written by `pnpm generate:agent-contract`) encode
+ * the ladder; an image without one is "pending" and serves its original.
  */
 
 /**

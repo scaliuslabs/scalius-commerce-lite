@@ -1,7 +1,9 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
+import { mediaVariantWidths } from "../src/generated/media-variants.gen.js";
 import { ConfigStore } from "../src/config.js";
 import { uploadMediaFiles } from "../src/media.js";
 import type { OpenApiDocument } from "../src/types.js";
@@ -16,6 +18,29 @@ function mediaSpec(): OpenApiDocument {
       "x-scalius-agent": {
         surface: "dashboard", exposure: "execute", principals: ["admin"], risk: "write",
         openWorld: false, idempotency: "none", batch: "sequential", transport: "json", maxRequestBytes: 1024 * 1024,
+      },
+    },
+  };
+  document.paths!["/api/v1/admin/media/{id}/variants"] = {
+    post: {
+      operationId: "dashboard.media.variants_save",
+      parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
+      requestBody: {
+        required: true,
+        content: {
+          "multipart/form-data": {
+            schema: {
+              type: "object",
+              properties: { width: { type: "string" }, height: { type: "string" } },
+              required: ["width", "height"],
+              additionalProperties: { type: "string", format: "binary" },
+            },
+          },
+        },
+      },
+      "x-scalius-agent": {
+        surface: "dashboard", exposure: "execute", principals: ["admin"], risk: "write",
+        openWorld: false, idempotency: "none", batch: "forbidden", transport: "multipart", maxRequestBytes: 16 * 1024 * 1024,
       },
     },
   };
@@ -62,6 +87,60 @@ describe("guided media upload", () => {
       "/api/v1/admin/media/uploads/upload_12345678/complete",
     ]);
     expect(Buffer.from(requests[1]?.body ?? [])).toEqual(jpeg);
+  });
+
+  it("encodes the rendition ladder locally and saves it after the upload completes", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-media-test-"));
+    const path = join(directory, "hero.png");
+    const png = await sharp({ create: { width: 700, height: 350, channels: 3, background: { r: 10, g: 120, b: 200 } } }).png().toBuffer();
+    await writeFile(path, png);
+    let variantsForm: FormData | undefined;
+    const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/openapi.json")) return Response.json(mediaSpec());
+      if (url.pathname.endsWith("/media/uploads")) return Response.json({ success: true, data: { session: { id: "upload_12345678", expectedParts: 1, partSize: 5 * 1024 * 1024 } } }, { status: 201 });
+      if (url.pathname.includes("/parts/1")) return Response.json({ success: true, data: { partNumber: 1, size: png.length } });
+      if (url.pathname.endsWith("/complete")) return Response.json({ success: true, data: { file: { id: "media_12345678", mimeType: "image/png", size: png.length } } });
+      if (url.pathname === "/api/v1/admin/media/media_12345678/variants") {
+        variantsForm = init!.body as FormData;
+        return Response.json({ success: true, data: { file: { id: "media_12345678" } } });
+      }
+      return new Response(null, { status: 404 });
+    });
+    const context = await profile(directory, fetch as typeof globalThis.fetch);
+
+    await expect(uploadMediaFiles(context.runtime, context.profile, [path])).resolves.toMatchObject({
+      uploaded: [{ mediaId: "media_12345678", renditions: "saved" }],
+    });
+
+    expect(variantsForm?.get("width")).toBe("700");
+    expect(variantsForm?.get("height")).toBe("350");
+    const widths = mediaVariantWidths(700);
+    expect([...variantsForm!.keys()].filter((key) => /^w\d+$/.test(key)).sort()).toEqual(widths.map((width) => `w${width}`).sort());
+    const master = variantsForm!.get("w700") as Blob;
+    expect(await sharp(Buffer.from(await master.arrayBuffer())).metadata()).toMatchObject({ format: "webp", width: 700 });
+  });
+
+  it("keeps the upload and leaves renditions pending when the server has no rendition route", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "scalius-media-test-"));
+    const path = join(directory, "hero.jpg");
+    await writeFile(path, Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]));
+    const spec = mediaSpec();
+    delete spec.paths!["/api/v1/admin/media/{id}/variants"];
+    const fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/openapi.json")) return Response.json(spec);
+      if (url.pathname.endsWith("/media/uploads")) return Response.json({ success: true, data: { session: { id: "upload_12345678", expectedParts: 1, partSize: 5 * 1024 * 1024 } } }, { status: 201 });
+      if (url.pathname.includes("/parts/1")) return Response.json({ success: true, data: { partNumber: 1, size: 8 } });
+      if (url.pathname.endsWith("/complete")) return Response.json({ success: true, data: { file: { id: "media_12345678", mimeType: "image/jpeg", size: 8 } } });
+      return new Response(null, { status: 404 });
+    });
+    const context = await profile(directory, fetch as typeof globalThis.fetch);
+
+    await expect(uploadMediaFiles(context.runtime, context.profile, [path])).resolves.toMatchObject({
+      uploaded: [{ mediaId: "media_12345678", renditions: "pending" }],
+    });
+    expect(context.runtime.stderrText()).toContain("rendered by the dashboard");
   });
 
   it("rejects unsupported and mislabeled files before initiating", async () => {

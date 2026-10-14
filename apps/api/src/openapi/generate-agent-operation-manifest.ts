@@ -44,6 +44,19 @@ export const CLI_WORKFLOW_RESOLVER_CORE_PATH = resolve(
   apiSourceDirectory,
   "../../../packages/cli/src/generated/workflow-resolver-core.gen.ts",
 );
+// The published CLI carries no workspace dependency, so it gets a verbatim copy
+// of the rendition ladder: the API accepts renditions only at the widths
+// `mediaVariantWidths()` derives, and the CLI encodes them locally.
+export const MEDIA_VARIANTS_SOURCE_PATH = resolve(
+  apiSourceDirectory,
+  "../../../packages/shared/src/media-variants.ts",
+);
+export const CLI_MEDIA_VARIANTS_PATH = resolve(
+  apiSourceDirectory,
+  "../../../packages/cli/src/generated/media-variants.gen.ts",
+);
+const CLI_MEDIA_VARIANTS_HEADER =
+  "// Generated from packages/shared/src/media-variants.ts.\n// Do not edit by hand.\n\n";
 const CLI_WORKFLOW_RESOLVER_HEADER =
   "// Generated from apps/api/src/agent-access/workflows/resolver-core.ts.\n// Do not edit by hand.\n\n";
 
@@ -109,6 +122,21 @@ export function writeCliWorkflowResolverCore(): string {
   mkdirSync(dirname(CLI_WORKFLOW_RESOLVER_CORE_PATH), { recursive: true });
   writeFileSync(CLI_WORKFLOW_RESOLVER_CORE_PATH, source);
   return source;
+}
+
+export function generateCliMediaVariantsSource(): string {
+  return `${CLI_MEDIA_VARIANTS_HEADER}${readFileSync(MEDIA_VARIANTS_SOURCE_PATH, "utf8")}`;
+}
+
+export function writeCliMediaVariants(): string {
+  const source = generateCliMediaVariantsSource();
+  mkdirSync(dirname(CLI_MEDIA_VARIANTS_PATH), { recursive: true });
+  writeFileSync(CLI_MEDIA_VARIANTS_PATH, source);
+  return source;
+}
+
+export function assertCliMediaVariantsFresh(): void {
+  assertFileContent(CLI_MEDIA_VARIANTS_PATH, generateCliMediaVariantsSource(), "CLI rendition ladder");
 }
 
 /** The contract served at /api/v1/openapi.json: its Text module and the loader with its ETag. */

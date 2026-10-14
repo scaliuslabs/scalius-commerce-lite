@@ -99065,12 +99065,15 @@
         "security": [
           {
             "adminSession": []
+          },
+          {
+            "agentBearer": []
           }
         ],
         "x-scalius-agent": {
           "surface": "dashboard",
-          "exposure": "excluded",
-          "stability": "internal",
+          "exposure": "execute",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -99079,12 +99082,11 @@
           "idempotency": "none",
           "revision": "none",
           "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
+          "transport": "multipart",
+          "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16777216,
           "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "exclusionReason": "Browser-generated renditions from the dashboard; agent uploads get server-generated renditions at completion."
+          "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -236244,6 +236246,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.media.usage"
+          ]
+        },
+        {
+          "operationId": "dashboard.media.variants_save",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.media.variants_save"
           ]
         },
         {

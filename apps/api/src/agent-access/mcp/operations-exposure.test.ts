@@ -17,4 +17,11 @@ describe("MCP operation exposure", () => {
     expect(isMcpOperationExposure(operation("storefront.orders.payment.begin"))).toBe(true);
     expect(isMcpOperationExposure(operation("storefront.payment_recovery.begin"))).toBe(true);
   });
+
+  it("keeps the CLI's multipart rendition upload out of MCP", () => {
+    const variants = operation("dashboard.media.variants_save");
+    expect(variants.exposure).toBe("execute");
+    expect(variants.transport).toBe("multipart");
+    expect(isMcpOperationExposure(variants)).toBe(false);
+  });
 });

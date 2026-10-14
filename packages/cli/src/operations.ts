@@ -248,9 +248,13 @@ async function multipartBody(document: OpenApiDocument, operation: IndexedOperat
     else if (typeof value === "number" || typeof value === "boolean") form.append(key, String(value));
     else form.append(key, JSON.stringify(value));
   }
+  // A contract may declare named binary parts (`properties`) or any number of
+  // binary parts under names it derives (`additionalProperties`).
+  const extraPartSchema = isObject(schema) ? resolveRef(document, schema.additionalProperties) : undefined;
+  let totalBytes = 0;
   for (const fileValue of fileValues) {
     const assignment = parseFileAssignment(fileValue);
-    const property = resolveRef(document, properties[assignment.field]);
+    const property = resolveRef(document, properties[assignment.field] ?? extraPartSchema);
     const itemSchema = isObject(property) && property.type === "array" ? resolveRef(document, property.items) : property;
     if (!isObject(itemSchema) || itemSchema.type !== "string" || itemSchema.format !== "binary") {
       throw new CliError(5, "unknown_multipart_file", `Field '${assignment.field}' is not a contract-declared binary upload.`);
@@ -263,6 +267,10 @@ async function multipartBody(document: OpenApiDocument, operation: IndexedOperat
     }
     if (bytes.byteLength > MAX_MULTIPART_FILE_BYTES) {
       throw new CliError(5, "file_too_large", `File '${assignment.path}' exceeds 100 MiB.`);
+    }
+    totalBytes += bytes.byteLength;
+    if (operation.agent.maxRequestBytes !== undefined && totalBytes > operation.agent.maxRequestBytes) {
+      throw new CliError(5, "request_too_large", `Upload files for '${operation.id}' exceed the ${operation.agent.maxRequestBytes} byte request limit.`);
     }
     const copy = Uint8Array.from(bytes);
     form.append(assignment.field, new globalThis.Blob([copy]), basename(assignment.path));
