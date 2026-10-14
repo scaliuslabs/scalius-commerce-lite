@@ -1,6 +1,6 @@
 # Storefront components
 
-An app can redesign the storefront: its own header, footer and product card, new sections with their own logic, a single-page order landing, and ready-made templates that apply the whole look in one click. The merchant installs the app, activates it, picks its template in Online Store → Theme, and edits every section and slot in the theme editor like the built-in ones. Nobody forks the storefront.
+An app can redesign the storefront: skins of the header, footer, product card, product page, listings and any core section; new sections and product blocks with their own logic; a single-page order landing; and ready-made templates that apply the whole look in one click. The merchant installs the app, activates it, picks its template in Online Store → Theme, and edits every section and skin in the theme editor like the built-in ones. Nobody forks the storefront.
 
 The reference app is `plugins/noor` (Noor: a complete theme with 20 sections, its own header, footer and card, one template, and a landing kit with a page preset for Bangladesh-style single-product campaign pages with a cash-on-delivery order form). The small worked example is `apps/api/src/plugins/testing/apps/studio`.
 
@@ -9,10 +9,12 @@ Source of truth:
 | Part | Where |
 | --- | --- |
 | Contract (manifest, data shapes, render protocol, limits) | `packages/shared/src/plugins/storefront-components.ts`, `storefront-protocol.ts` (zod-free) |
+| Skins (targets, core section projections) | `packages/shared/src/storefront-theme/skins.ts`, `apps.ts` (`apps.skins`, a section's `skin`) |
+| Core embeds (`<scalius-embed>`) | `packages/shared/src/plugins/storefront-embeds.ts` (`splitStorefrontEmbeds`, `storefrontEmbedRule`) |
 | Output check | `packages/shared/src/plugins/html.ts` (`sanitizePluginHtml`, `component` profile) |
 | SDK | `@scalius/plugin-sdk/storefront`, `/storefront/testing`, `/island` (`packages/plugin-sdk/src/storefront/`) |
 | Packer | `scripts/plugin-build.mjs` (`packStorefront`, `writeStorefrontGenerated`) |
-| Host (storefront) | `apps/storefront/src/lib/extensions/` and `components/apps/AppComponent.astro` |
+| Host (storefront) | `apps/storefront/src/lib/extensions/` (projections in `data.ts`), `components/apps/{Skin,AppComponent,ComponentProductBlocks}.astro` |
 | Data | `packages/core/src/modules/storefront/app-components.ts` (`readAppComponentData`) |
 | Files | `GET /api/v1/storefront/extensions/{pluginId}/{release}`, served on the store's origin at `/_x/<plugin id>/<release>/<path>` |
 
@@ -37,26 +39,42 @@ The storefront runs the module in one of two loaders, with the same input and th
 | Point | Declare (`storefront.*`) | Implement (`defineStorefront`) | The theme stores |
 | --- | --- | --- | --- |
 | Component section | `sections: [{ type, name, settings }]` (no `route`) | `sections[type]` | a section `{ type: "app", settings: { app: "<id>/<type>", values } }` |
-| Header | `slots: [{ id, slot: "header", settings }]` | `slots[id]` | `apps.header: { app: "<id>/<slot id>", values }` |
-| Footer | `slots: [{ id, slot: "footer", settings }]` | `slots[id]` | `apps.footer` |
-| Product card | `slots: [{ id, slot: "product-card", settings }]` | `slots[id]` | `apps.productCard` |
+| Component product block | `productBlocks: [{ type, name, placement, settings }]` (no `route`) | `blocks[type]` | `blocks.product.apps: [{ id, app: "<id>/<type>", values }]` |
+| Skin of a unit | `skins: [{ id, target, name, settings }]` (≤ 30) | `skins[id]` | `apps.skins.<target>: { app: "<id>/<skin id>", values }` |
+| Skin of a core section | `skins: [{ id, target: "section:<type>", … }]` | `skins[id]` | the core section's `skin: { app, values }` |
 | Template | `templates: [{ id, name, theme }]` | | `apps.template` (a label) |
 | Page preset | `pagePresets: [{ id, name, sections }]` | | a new landing page's sections |
 | Island | `islands: [{ name }]` | `src/islands/<name>.ts` with `defineIsland` | |
 | Stylesheet | `stylesheet: true` | `src/storefront.css` | |
 | Browser hosts | `connect: ["api.example.com"]` | | |
 
-A section with a `route` is the older kind: the API calls the app's public route and caches the HTML (docs in `packages/plugin-sdk/README.md`). Both kinds coexist; component sections are faster (no network hop) and can show product cards, images and the order form.
+A section or product block with a `route` is the older kind: the API calls the app's public route and caches the HTML (docs in `packages/plugin-sdk/README.md`); it retires in slice K2. Component sections and blocks are faster (no network hop) and can show product cards, images and the order form.
 
 A **page preset** is a ready-made landing page: when the merchant makes a new landing page (`/pages/<slug>`), the editor offers "a blank page" or the presets of the active apps, and asks for a product when a preset's sections have `product` settings, which it fills in. Noor's "Product campaign" preset builds a complete Facebook-ad page (offer, promises, features, steps, reviews, questions, order form) in one step; every section stays editable and reorderable.
 
 A page may hold 24 sections, all of them component sections; at most 8 route sections render on one page (each is a call to its app).
 
-The card slot draws every product card the storefront shows: homepage rails, listings, search, related products. The header and footer slots replace the core header and footer on every page. When a slot's app is gone, inactive or fails, the core block renders: a theme never breaks.
+## Skins
+
+A **skin** is app markup for a core-owned unit. It gets the unit's public projection (the data the core renderer draws from, built by `apps/storefront/src/lib/extensions/data.ts`), and core draws the unit whenever the skin is missing, its app is inactive, or it draws nothing, fails, is late or misses a required embed. A theme never breaks.
+
+| Target | `data` (protocol type) | Core embeds it may place | Fallback |
+| --- | --- | --- | --- |
+| `header`, `footer` | `StorefrontHeaderData`, `StorefrontFooterData` | none (search, cart and account are attributes) | empty → core |
+| `product-card` | `StorefrontProductCardData` (`{ product, position, aboveFold }`) | none (`quickAdd`) | empty → core |
+| `product-main` | `StorefrontProductPage` | **`buy-form` (required, one)**, `reviews`, `recommendations` | no buy form → core |
+| `listing-main` | `StorefrontListingPage` | `filters`, `toolbar`, `pagination` (appended when left out) | empty → core |
+| `section:<type>` | `StorefrontSectionSkinData<CoreSectionSettings<type>>` | none (`quickAdd`) | empty → the core section |
+
+- `product-main` draws the product page's breadcrumbs, gallery and buy box. The buy form is `ProductBuyBox.astro`, the same component the core page draws: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app blocks, kept current as the buyer chooses. The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
+- `listing-main` draws the listing between the collection template's sections. The page links are numbered links on every listing, so crawlers reach every product.
+- A core section's projection is its settings at its `version` with references resolved by fixed rules (`resolveCoreSectionSettings`): `image`/`phoneImage`/`mediaId` → `StorefrontImage | null`; a product source → `StorefrontProductList` (`{ title, url, cards }`, as many cards as the core section shows); `categoryIds`/`collectionIds` → `StorefrontTile[]`; `promotionId` → `{ endsAt } | null`; a delivery-facts source → the store's facts; hidden blocks left out. A brand wall's brands arrive in `tiles`, a collections section's fallback products in `cards`. `recently-viewed`, `endless-grid` and `metaobjects` have no skin.
+- JSON-LD stays core's on product and listing pages: the host strips app JSON-LD from `product-main`, `listing-main` and product blocks.
+- **Product blocks** (component `productBlocks`) draw as `block` jobs at `product.buy-box` (in the buy box, after the buttons) or `product.below` (after the modules), from the same `StorefrontProductPage`.
 
 ## Settings
 
-Component sections and slots use the app settings types (`text`, `textarea`, `number`, `boolean`, `select`, `color`) and five more:
+Component sections, product blocks and skins use the app settings types (`text`, `textarea`, `number`, `boolean`, `select`, `color`) and five more:
 
 | Type | Stored | The component gets |
 | --- | --- | --- |
@@ -66,7 +84,7 @@ Component sections and slots use the app settings types (`text`, `textarea`, `nu
 | `link` | a storefront path or an `https://` URL | the string |
 | `list` (`fields`, `max`, `itemLabel`) | items of the fields above (no products) | items with their images resolved |
 
-The editor shows a media picker, a product source or product picker, a link field and a repeatable item list. Values are resolved against the schema as it is now (`resolveStorefrontSettings`): a removed setting drops, a new one takes its default, a deleted image or product resolves to `null`. Slot settings cannot use `image`, `products` or `product`: the chrome renders on every page and must not add reads.
+The editor shows a media picker, a product source or product picker, a link field and a repeatable item list. Values are resolved against the schema as it is now (`resolveStorefrontSettings`): a removed setting drops, a new one takes its default, a deleted image or product resolves to `null`. Skin and product block settings cannot use `image`, `products` or `product`: a skin draws from its unit's projection and must not add reads (ship images in the app's public files).
 
 The page reads every image, product list and picked product its component sections name in one batch (`readAppComponentData`), with the homepage limits (40 images, 8 product lists). That batch follows the apps' read, which names the settings schemas, so component sections add one wave to the page, and a `collection:` source one more (its rules are read first). `apps/api/src/storefront-render-budget.test.ts` measures both.
 
@@ -74,7 +92,7 @@ The page reads every image, product list and picked product its component sectio
 
 ```tsx
 // src/storefront.tsx (tsconfig: "jsxImportSource": "@scalius/plugin-sdk/storefront")
-import { defineStorefront, editable, Image, Island, Price, quickAdd, type SectionProps } from "@scalius/plugin-sdk/storefront";
+import { BuyForm, defineStorefront, editable, Image, Island, Price, quickAdd, raw, Reviews, type ProductMainProps, type SectionProps } from "@scalius/plugin-sdk/storefront";
 
 function Featured({ settings, context }: SectionProps<{ heading: string; products: StorefrontProductCard[] }>) {
   return (
@@ -94,7 +112,23 @@ function Featured({ settings, context }: SectionProps<{ heading: string; product
   );
 }
 
-export default defineStorefront({ sections: { featured: Featured }, slots: { "acme-card": Card } });
+function ProductMain({ data }: ProductMainProps) {
+  const { product } = data;
+  return (
+    <article class="acme-pdp">
+      <div class="acme-pdp-media">{product.media.map((image, index) => <Image image={image} loading={index === 0 ? "eager" : "lazy"} />)}</div>
+      <h1>{product.title}</h1>
+      <BuyForm title={false} />
+      <div class="acme-pdp-story">{raw(product.descriptionHtml)}</div>
+      <Reviews />
+    </article>
+  );
+}
+
+export default defineStorefront({
+  sections: { featured: Featured },
+  skins: { "acme-card": Card, "acme-pdp": ProductMain },
+});
 ```
 
 The SDK's primitives:
@@ -109,7 +143,7 @@ The SDK's primitives:
 - `asset(context, "public/font.woff2")`: a public file's URL.
 - `t(context, { en, bn, … })`: words in the page's language (exact BCP 47 tag, then its language, then English).
 - `formatNumber`, `plural(context, count, { en: { one: "# review", other: "# reviews" } })`, `formatMoney`, `formatDate`, `storeTime`: numbers, plurals, money and dates as the store writes them (`@scalius/shared/locale-format`); `context.store` carries the page's `language`, `locale` (language and the store's country), `currency` and `timeZone`, never a default.
-- `Checkout`: the core order form (below).
+- `BuyForm`, `Reviews`, `Recommendations`, `Filters`, `Toolbar`, `Pagination`, `OrderForm`: core embeds (below).
 
 JSX escapes every string. `raw(...)` passes HTML through; the output check still runs. Event handler attributes and functions as attributes are refused at render time.
 
@@ -181,11 +215,22 @@ pending hydration on removal, ignores imports from an old connection and
 mounts again when the element reconnects. Host cart subscriptions are released
 on removal or mount failure; your other resources still need that cleanup.
 
-## Core embeds: the single-page order
+## Core embeds
 
-`<Checkout product={settings.product} maxQuantity={5} />` places the store's own order form in the app's markup: option picker, quantity, name, phone, address. It is the Bangladesh-style landing page: the buyer orders without leaving the page.
+`<scalius-embed kind="…">` hands a spot in the app's markup back to the store, which renders its own interactive piece there with its own data, rules, words and scripts. The markup around it is the app's. Each render allows its own kinds and counts (`storefrontEmbedRule`); any other embed renders nothing, and `renderSkin` and the packer reject it.
 
-- The marker names the product by id (`data-product`), and only a product the section's settings gave it orders: the storefront replaces the marker with `OrderForm.astro` (at most 2 per page).
+| Kind (SDK) | Where | Renders |
+| --- | --- | --- |
+| `buy-form` (`<BuyForm title={false} />`) | `product-main` (required, one) | `ProductBuyBox.astro`: the real buy form posting to `/buy/<slug>` |
+| `reviews` (`<Reviews />`), `recommendations` (`<Recommendations />`) | `product-main` | the product's reviews and related products |
+| `filters`, `toolbar`, `pagination` | `listing-main` | `CatalogEmbed.astro`: the GET filter form, sort and page size, page links |
+| `order-form` (`<OrderForm product={…} />`) | component sections (two) | `OrderForm.astro`: the single-page order (below) |
+
+### The single-page order
+
+`<OrderForm product={settings.product} maxQuantity={5} />` places the store's own order form in the app's markup: option picker, quantity, name, phone, address. It is the Bangladesh-style landing page: the buyer orders without leaving the page.
+
+- The embed names the product by id (`data-product`), and only a product the section's settings gave it orders: the storefront replaces the embed with `OrderForm.astro` (at most 2 per section).
   The server render input contains no buyer form data. The resulting form belongs
   to core; trusted browser islands share its page and can access its DOM.
 - The form posts to `/checkout/quick`, the same cash-on-delivery pipeline as the product page's quick buy: stock, prices, the delivery quote, checkout functions and the order commit are the core's. The buyer confirms the total once and the order is placed.
@@ -203,7 +248,7 @@ pnpm plugin pack plugins/studio     # dist/ and, with --key, the signed upload Z
 pnpm plugin add plugins/studio      # bundle into the fork (every plan)
 ```
 
-`@scalius/plugin-sdk/storefront/testing` renders any section or slot with fixtures (`renderSection`, `renderHeader`, `renderFooter`, `renderProductCard`, `fixtureProductCard`, `fixtureContext`). The output runs through the same check the storefront applies.
+`@scalius/plugin-sdk/storefront/testing` renders any section, block or skin with fixtures (`renderSection`, `renderBlock`, `renderSkin(module, id, target, settings?, data?)`, `renderHeader`, `renderFooter`, `renderProductCard`; `fixtureProductPage`, `fixtureListingPage`, `fixtureSectionSkinData`, `fixtureProductCard`, `fixtureContext`). `renderSkin` throws when the storefront would draw the core unit instead (`checkSkinHtml`: a missing buy form, an embed the target does not allow). The output runs through the same check the storefront applies.
 
 `renderHeader` and the packer's header fixture render also check duplicate IDs,
 declared form targets, unsafe action links, inert sticky markers and island
@@ -214,8 +259,8 @@ exercise the composed page in the gallery/browser too.
 
 The packer (`packStorefront`):
 
-1. Compiles `src/storefront.tsx` with esbuild (minified, one ES module) and checks it exports a definition whose sections and slots match the manifest.
-2. Renders every section and slot once with fixture settings (a smoke render), so a module that throws fails the pack, not the store.
+1. Compiles `src/storefront.tsx` with esbuild (minified, one ES module) and checks it exports a definition whose sections, blocks and skins match the manifest.
+2. Renders every section, block and skin once with fixture settings and its target's fixture projection (a smoke render), so a module that throws, or a skin that breaks its target's embed rule, fails the pack, not the store.
 3. Compiles each island for browsers and checks it default-exports `defineIsland(...)`.
 4. Copies the stylesheet (rewriting `url(../public/...)`) and the public files, checking their types by their bytes.
 5. Checks the budgets and seals every file's SHA-256 into `plugin.js` (`//# scalius-storefront {...}`). The release signature covers `plugin.js`, so it pins every storefront file; install refuses a package whose files do not match.
@@ -231,16 +276,16 @@ The packer (`packStorefront`):
 | Markup per render | 256 KiB |
 | Jobs per batch | 120 |
 | Batch CPU (isolate) | 50 ms |
-| Batch wall time | 250 ms, then the core blocks render |
-| Sections, slots, templates, page presets, islands, connect hosts | 32, 10, 5, 8, 10, 10 |
+| Batch wall time | 250 ms, then the core units render |
+| Sections, product blocks, skins, templates, page presets, islands, connect hosts | 32, 10, 30, 5, 8, 10, 10 |
 
 Noor, a full theme, packs to a 40 KB module, 3.8 KB of islands and a 44 KB stylesheet.
 
 ## Performance
 
-- **One call per app per page.** Every component an app draws on a page (header, footer, every card in a listing, every section) joins one batch, sent once (`ExtensionHost`).
+- **One call per app per page.** Every component an app draws on a page (header, footer, every card in a listing, every section) joins one batch, sent once (`ExtensionHost`). A product-main or listing-main skin is drawn first (the page needs to know whether core draws), so those pages make one more batch to the app.
 - **Memo.** Each isolate keeps an LRU of rendered output (2,000 entries, 8 MiB) keyed by the app's release, the job and its context. A popular page's cards and chrome render once per isolate, not per request.
-- **No new reads.** Slots draw from data the page already has (the layout's menus and store info, the cards the page lists). Section data joins the page's existing batch.
+- **No new reads.** Skins and product blocks draw from data the page already has (the layout's menus and store info, the product part, the listing part, the homepage section data); their projections are built only when a skin draws. Component section data joins the page's existing batch. `apps/storefront/src/lib/route-tests/skins.render.test.ts` holds a skinned product page to one batch call.
 - **Existing page cache.** Rendered pages use the storefront's dependency-validated
   HTML cache; do not add purge or generation-bump paths. Release files are
   immutable for a year (`/_x/<id>/<release>/`), so an update is a new URL. Installs
@@ -272,6 +317,10 @@ The merchant owns their apps (private or uploaded). The platform makes what an a
 - Island code is served from the store's origin under its release; CSP `script-src` gains nothing. Connect hosts join `connect-src` and `img-src` only, on pages whose theme uses the app.
 - A page drawn with a fallback (a component late, failed, refused, or a release the isolate cannot load) is never stored in the page cache.
 - SVG files are served with a sandboxing CSP and `nosniff`.
+
+## Stored themes
+
+The document keeps skins under `apps.skins` (`header`, `footer`, `product-card`, `product-main`, `listing-main`) and a core section's own `skin`. The old `apps.header`, `apps.footer` and `apps.productCard` keys no longer parse: a stored theme that still has them reads as invalid (the storefront draws the default theme, the dashboard fails closed) until a data migration moves or resets them.
 
 ## Versioning
 

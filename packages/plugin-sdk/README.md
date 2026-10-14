@@ -16,7 +16,7 @@ Real apps in `plugins/`: `bkash` and `nagad` (payment providers) and `bangladesh
 | Order timeline entries | `timeline` | `ctx.timeline.add(…)` |
 | Custom fields, metaobjects | `customFields`, `metaobjects` | `ctx.customFields`, `ctx.api` (`dashboard.metaobjects.*`) |
 | Theme sections, product blocks, checkout and account blocks | `storefront.sections`, `productBlocks`, `blocks` | a public route that answers `{ html }` |
-| Storefront components: sections, header, footer, product card, templates | `storefront.sections` (no `route`), `slots`, `templates` | `defineStorefront` in `src/storefront.tsx` (`@scalius/plugin-sdk/storefront`) |
+| Storefront components: sections, product blocks, skins (header, footer, product card, product page, listing, core sections), templates | `storefront.sections` and `productBlocks` (no `route`), `skins`, `templates` | `defineStorefront` in `src/storefront.tsx` (`@scalius/plugin-sdk/storefront`) |
 | Client islands, stylesheet, public files | `storefront.islands`, `stylesheet`, `connect` | `src/islands/<name>.ts` (`defineIsland`), `src/storefront.css`, `public/` |
 | Scripts, head, proxy | `storefront.scripts`, `head`, `proxy` | |
 | Public routes, webhooks | `routes.public`, `routes.webhooks` | `routes.public[name]`, `routes.webhooks[name]` |
