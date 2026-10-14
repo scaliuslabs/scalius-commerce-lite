@@ -246,7 +246,9 @@ describe("Continue with an app", () => {
       const [body, signature] = cookieValue(cookie).split(".");
       const forged = Buffer.from(JSON.stringify({ ...(JSON.parse(Buffer.from(body!, "base64url").toString())), returnTo: "/steal" })).toString("base64url");
       await expectFailed(await get(`/identity/${providerPath()}/callback?code=new-user&state=${state}`, `${IDENTITY_STATE_COOKIE}=${forged}.${signature}`));
-      const flipped = signature!.slice(0, -1) + (signature!.endsWith("A") ? "B" : "A");
+      const signatureBytes = Buffer.from(signature!, "base64url");
+      signatureBytes[0] ^= 0x01;
+      const flipped = signatureBytes.toString("base64url");
       await expectFailed(await get(`/identity/${providerPath()}/callback?code=new-user&state=${state}`, `${IDENTITY_STATE_COOKIE}=${body}.${flipped}`));
       await expectFailed(await get(`/identity/${providerPath()}/callback?code=new-user&state=${state}`, `${IDENTITY_STATE_COOKIE}=garbage`));
     });

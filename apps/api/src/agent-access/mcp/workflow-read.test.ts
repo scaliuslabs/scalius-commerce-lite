@@ -107,7 +107,7 @@ function dailyData(): Record<string, unknown> {
             totalAmount: 2500,
             status: "processing",
             paymentStatus: "paid",
-            paymentMethod: "sslcommerz",
+            paymentMethod: "scalius.bangladesh:sslcommerz",
             fulfillmentStatus: "pending",
             createdAt: "2026-08-18T04:30:00.000Z",
             itemCount: 2,
@@ -167,10 +167,10 @@ function dailyData(): Record<string, unknown> {
     },
     "dashboard.payments.methods_get": {
       data: {
-        enabledMethods: ["sslcommerz", "cod"],
-        activeMethods: ["sslcommerz", "cod"],
-        defaultMethod: "sslcommerz",
-        activeDefaultMethod: "sslcommerz",
+        enabledMethods: ["scalius.bangladesh:sslcommerz", "cod"],
+        activeMethods: ["scalius.bangladesh:sslcommerz", "cod"],
+        defaultMethod: "scalius.bangladesh:sslcommerz",
+        activeDefaultMethod: "scalius.bangladesh:sslcommerz",
         gatewayStatus: {
           stripe: {
             configured: false,
@@ -178,7 +178,7 @@ function dailyData(): Record<string, unknown> {
             checkoutVisible: false,
             secretKey: "sk_hidden",
           },
-          sslcommerz: {
+          "scalius.bangladesh:sslcommerz": {
             configured: true,
             usable: true,
             checkoutVisible: true,
@@ -360,7 +360,7 @@ describe("executeAuthorizedWorkflowRead", () => {
             totalAmount: 2500,
             status: "processing",
             paymentStatus: "paid",
-            paymentMethod: "sslcommerz",
+            paymentMethod: "scalius.bangladesh:sslcommerz",
             fulfillmentStatus: "pending",
             createdAt: "2026-08-18T04:30:00.000Z",
             itemCount: 2,
@@ -396,10 +396,10 @@ describe("executeAuthorizedWorkflowRead", () => {
           }],
         },
         "readiness.payments": {
-          enabledMethods: ["sslcommerz", "cod"],
-          activeMethods: ["sslcommerz", "cod"],
-          defaultMethod: "sslcommerz",
-          activeDefaultMethod: "sslcommerz",
+          enabledMethods: ["scalius.bangladesh:sslcommerz", "cod"],
+          activeMethods: ["scalius.bangladesh:sslcommerz", "cod"],
+          defaultMethod: "scalius.bangladesh:sslcommerz",
+          activeDefaultMethod: "scalius.bangladesh:sslcommerz",
           gatewayStatus: {
             stripeConfigured: false,
             stripeUsable: false,
