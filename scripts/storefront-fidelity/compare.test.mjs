@@ -443,6 +443,6 @@ describe("reference-metrics.json", () => {
     expect(reference.sites.daraz.desktop["listing.filterRowPitch"].v).toBe(18);
     expect(reference.sites.startech.desktop["listing.bottomOf20"].v).toBe(3742);
     expect({ ...DEFAULT_TOLERANCES, ...reference.tolerances }).toEqual(DEFAULT_TOLERANCES);
-    expect(reference.budgets).toMatchObject({ ttfbHitMs: 50, ttfbMissMs: 300, lcpPhoneMs: 1500, lcpDesktopMs: 1200, cls: 0.05, pdpHtmlKB: 120, categoryHtmlKB: 150, headerHtmlKB: 45, jsonLdKB: 20 });
+    expect(reference.budgets).toMatchObject({ ttfbHitMs: 50, ttfbMissMs: 300, lcpPhoneMs: 1500, lcpDesktopMs: 1200, cls: 0.01, pdpHtmlKB: 120, categoryHtmlKB: 150, headerHtmlKB: 45, jsonLdKB: 20 });
   });
 });

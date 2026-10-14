@@ -238,8 +238,12 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
       await mf.ready;
       return record(id, label, 2, page(parts));
     };
-    await fresh("workerd-page-product-fresh", "Storefront product page, first request of a fresh isolate", ["/api/v1/storefront/layout", "/api/v1/products/cotton-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/cotton-panjabi"]);
-    await fresh("workerd-page-home-fresh", "Storefront home page, first request of a fresh isolate", ["/api/v1/storefront/layout", "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"]);
+    const product = await fresh("workerd-page-product-fresh", "Storefront product page, first request of a fresh isolate", ["/api/v1/storefront/layout", "/api/v1/products/cotton-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/cotton-panjabi"]);
+    const home = await fresh("workerd-page-home-fresh", "Storefront home page, first request of a fresh isolate", ["/api/v1/storefront/layout", "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"]);
+    // Generous guards (measured 136 and 124 ms on the reference laptop, 2026-10-14):
+    // a page that loads far more code on a cold isolate fails here.
+    expect(product.cold.cpuMs, "fresh-isolate product page CPU").toBeLessThan(300);
+    expect(home.cold.cpuMs, "fresh-isolate home page CPU").toBeLessThan(300);
   });
 
   it("checkout: tax quote and a 20-line commit", async () => {

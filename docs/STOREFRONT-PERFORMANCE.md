@@ -99,7 +99,8 @@ A page entry is valid by committed dependencies, not by age, so an unchanged ent
 
 The `GET /cart` and `GET /checkout` HTML does not depend on the buyer, so the gateway caches it like a public page (`isBuyerShellPathname` in `apps/storefront/src/lib/cache-policy.ts`). A page that always rendered paid one placed-API round trip per view: from Dhaka about 150 ms for the API hop alone and 285-1,400 ms for `/checkout` (2026-10-14). A shell hit costs what any page hit costs.
 
-- The cart lines live in `localStorage` (`cart:v3`). An inline script paints them, or the empty state, before first paint. The checkout reads its session from the browser. Sign-in state comes from the browser (`cs_auth=1`). Saved details, discounts, cart validation, the tax quote, the payment options of the quote and the order come from no-store APIs or the POST.
+- The cart lines live in `localStorage` (`cart:v3`). An inline script paints them, or the empty state, before first paint. The checkout page does the same for a browser without a checkout session: an inline script marks the root before first paint and CSS shows the server-rendered "return to your cart" state, so nothing moves when the page script loads (CLS 0.035 to 0; `checkout-first-paint.test.ts`).
+- The page scripts' config and checkout copy (about 40 KB) are inlined after the page content on both shells, so the content paints without waiting for those bytes. The checkout reads its session from the browser. Sign-in state comes from the browser (`cs_auth=1`). Saved details, discounts, cart validation, the tax quote, the payment options of the quote and the order come from no-store APIs or the POST.
 - The reads are public and dependency-validated: layout, cities, shipping methods, checkout copy and checkout settings (the checkout needs only the layout, settings and copy).
 - The key drops every query. A session cookie (`cs_tok`, `cs_auth`) bypasses the cache. A POST is never cached. `/checkout/quick`, receipts, payment recovery and accounts are never shells.
 - A failed read (fail-closed "checkout unavailable") renders for this request only: `markRenderUncacheable` sets `no-store`, the middleware answers `BYPASS_DEGRADED`, and the gateway does not store it. A store that is really unavailable is a valid answer and is stored.
@@ -117,7 +118,8 @@ The `GET /cart` and `GET /checkout` HTML does not depend on the buyer, so the ga
 | The same page again (all parts validated hits) | same test | exactly 1 statement, 1 wave, identical bodies |
 | A page with one app drawing | same test (`APP_PAGE_D1_BUDGETS`) | home 11 / 2, product 19 / 3 |
 | Batch safety, and batchable reads only in read-only route families | `storefront-batch*.test.ts`, `runtime/storefront-render-families.test.ts` | exact |
-| API Worker size | `pnpm check:api-bundle` (also in every deploy) | at most 90% of 64 MiB uncompressed |
+| API Worker size | `pnpm check:api-bundle` (also in every deploy) | at most 90% of 64 MiB uncompressed, and at most 9 MiB of JavaScript (compiled at every isolate start) |
+| CPU of a storefront page on a fresh API isolate | `FREE_PLAN_WORKERD=1` harness (`free-plan-workerd.test.ts`) | under 300 ms for the product and home batches (measured 136 and 124 ms) |
 | Product JSON-LD weight | `commerce-structured-data.product-group.test.ts` | at most 20 KB (`PRODUCT_JSON_LD_MAX_BYTES`) |
 | Dependency cache correctness | `cache-dvc.property.test.ts`, `cache-dvc.race.test.ts` | zero findings |
 | TTFB, LCP and CLS in a real browser | `pnpm perf:storefront` | [thresholds](#pnpm-perfstorefront) |
@@ -148,7 +150,7 @@ The validation statement reads the clock and the current Platform settings toget
 `pnpm perf:storefront` (`scripts/storefront-perf.mjs`) measures TTFB, LCP and CLS of built Workers. It sends only GET requests, except for the local `--d1-explorer` option. It checks the home page, the first category and product linked from home, `/search?q=a`, `/cart` and `/checkout`. For each page it records:
 
 - Server TTFB of a cache miss and the median of the hits. A 5xx first response is a failure. Against a remote base, it subtracts the TTFB of the edge's own `/cdn-cgi/trace` (the network round trip) from the hit TTFB and prints both values.
-- In headless Chrome, LCP, CLS, TTFB and transfer size, read 1.5 s after load with the browser cache off. The phone profile is 390x844 at DPR 3, 150 ms latency, 1.6 Mbps down, 750 kbps up, 4x CPU slowdown. The desktop profile is 1440x900.
+- In headless Chrome, LCP, CLS, TTFB and transfer size, read 1.5 s after load with the browser cache off. The phone profile is 390x844 at DPR 3, 150 ms latency, 1.6 Mbps down, 750 kbps up, 4x CPU slowdown. The desktop profile is 1440x900. The browser window takes the profile's size too (`sizeWindow`; Chrome keeps it at least 500 px wide), because Chrome's preload scanner reads a preload's `media` and `imagesizes` against the window, not the emulated viewport. In the default 800 px headless window a phone run also fetched the desktop hero and the heading font: on the 30k-product home page that measured 1,824 ms phone LCP instead of 868 ms.
 
 It exits 1 when a threshold is exceeded:
 
@@ -158,7 +160,7 @@ It exits 1 when a threshold is exceeded:
 | Cache-miss TTFB (and pages that always render) | 300 ms | `--budget-ttfb-miss-ms` |
 | Phone LCP | 1200 ms | `--budget-lcp-phone-ms` |
 | Desktop LCP | 800 ms | `--budget-lcp-desktop-ms` |
-| CLS (either profile) | 0.05 | `--budget-cls` |
+| CLS (either profile) | 0.01 | `--budget-cls` |
 
 Other flags: `--base <origin>` (default `http://localhost:4391`), `--paths "/,/products/x"`, `--runs <n>` (default 3), `--profiles phone,desktop`, `--no-browser` (TTFB only), `--json`, `--media-url <origin>`, `--no-binding-check` and `--cdp-port <port>` (default 9395; the script starts its own headless Chrome when nothing listens there).
 
@@ -250,7 +252,7 @@ Budgets (`budgets` in `reference-metrics.json`):
 | --- | --- |
 | TTFB hit / miss | 50 ms / 300 ms |
 | LCP phone / desktop | 1500 ms / 1200 ms |
-| CLS | 0.05 |
+| CLS | 0.01 |
 | Product page HTML | 120 KB |
 | Category page HTML | 150 KB |
 | Header HTML | 45 KB; at most 150 links |
