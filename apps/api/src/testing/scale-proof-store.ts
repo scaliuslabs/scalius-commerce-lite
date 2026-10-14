@@ -26,13 +26,13 @@ export interface CheckoutLine {
 
 /** How big the store is: the proof states it beside every number. */
 export async function storeSize(db: Database): Promise<Record<string, number>> {
-  const rows = async (table: unknown) => Number((await db.select({ n: count() }).from(table as never))[0]!.n);
+  const total = async (rows: PromiseLike<Array<{ n: number }>>) => Number((await rows)[0]!.n);
   return {
-    orders: await rows(orders),
-    orderItems: await rows(orderItems),
-    products: await rows(products),
-    skus: await rows(productVariants),
-    customers: await rows(customers),
+    orders: await total(db.select({ n: count() }).from(orders)),
+    orderItems: await total(db.select({ n: count() }).from(orderItems)),
+    products: await total(db.select({ n: count() }).from(products)),
+    skus: await total(db.select({ n: count() }).from(productVariants)),
+    customers: await total(db.select({ n: count() }).from(customers)),
   };
 }
 
