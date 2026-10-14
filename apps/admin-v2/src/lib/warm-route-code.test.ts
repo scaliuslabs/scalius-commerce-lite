@@ -13,8 +13,8 @@ describe("everyday route code warming", () => {
 
   it("loads the code of the screens this person may open, and nothing else", () => {
     const loadRouteChunk = vi.fn(() => Promise.resolve());
-    const looseRoutesById = Object.fromEntries(EVERYDAY_ROUTES.flatMap(({ ids }) => ids.map((id) => [id, { id }])));
-    warmEverydayRouteCode({ looseRoutesById, loadRouteChunk }, (path) => path === "/admin/orders");
+    const routesById = Object.fromEntries(EVERYDAY_ROUTES.flatMap(({ ids }) => ids.map((id) => [id, { id }])));
+    warmEverydayRouteCode({ routesById, loadRouteChunk }, (path) => path === "/admin/orders");
     expect(loadRouteChunk.mock.calls.map((call) => (call as unknown as [{ id: string }])[0].id)).toEqual([
       "/admin/orders/_list",
       "/admin/orders/_list/",

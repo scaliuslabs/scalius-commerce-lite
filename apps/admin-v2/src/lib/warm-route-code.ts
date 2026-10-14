@@ -18,7 +18,7 @@ export const EVERYDAY_ROUTES: ReadonlyArray<{ path: string; ids: readonly string
 export const ROUTE_CODE_WARM_DELAY_MS = 2_000;
 
 interface RouteChunkLoader {
-  looseRoutesById: Record<string, unknown>;
+  routesById: object;
   loadRouteChunk: (route: never) => Promise<void> | undefined;
 }
 
@@ -36,7 +36,7 @@ export function warmEverydayRouteCode(router: RouteChunkLoader, canOpen: (path: 
   for (const { path, ids } of EVERYDAY_ROUTES) {
     if (!canOpen(path)) continue;
     for (const id of ids) {
-      const route = router.looseRoutesById[id];
+      const route = (router.routesById as Record<string, unknown>)[id];
       // A failed fetch here only means the page loads its code when opened, as before.
       if (route) void router.loadRouteChunk(route as never)?.catch(() => {});
     }

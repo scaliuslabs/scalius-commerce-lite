@@ -92,7 +92,7 @@ function InvoicesPage() {
   );
 }
 
-function InvoicesError({ error, reset }: { error: Error; reset: () => void }) {
+function InvoicesError({ error, reset }: { error: unknown; reset: () => void }) {
   const t = useMessages(orderDetailMessages);
   const router = useRouter();
   return (

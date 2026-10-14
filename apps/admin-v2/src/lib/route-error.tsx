@@ -31,7 +31,7 @@ export function RouteErrorComponent({
   reset,
   fullPage = false,
 }: {
-  error: Error;
+  error: unknown;
   reset: () => void;
   fullPage?: boolean;
 }): JSX.Element {

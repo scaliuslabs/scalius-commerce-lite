@@ -13,8 +13,8 @@ interface RouteNode {
  * Whether a route's page code (and its layouts') is already in this tab. The
  * router marks a route once it has fetched its split component chunks.
  */
-export function routeCodeReady(routesById: Record<string, unknown>, routeId: string): boolean {
-  let route = routesById[routeId] as RouteNode | undefined;
+export function routeCodeReady(routesById: object, routeId: string): boolean {
+  let route = (routesById as Record<string, RouteNode | undefined>)[routeId];
   if (!route) return true;
   while (route) {
     if (route.options.component?.preload && !route._componentsLoaded) return false;
@@ -44,7 +44,7 @@ export function useOfflineNavigation(): { online: boolean; waiting: boolean } {
 
   useBlocker({
     shouldBlockFn: ({ next }) => {
-      if (isOnline() || routeCodeReady(router.looseRoutesById, next.routeId)) {
+      if (isOnline() || routeCodeReady(router.routesById, next.routeId)) {
         setWaiting(null);
         return false;
       }

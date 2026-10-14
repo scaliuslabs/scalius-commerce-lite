@@ -4,7 +4,7 @@ import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 
 /** Create/Edit order load failure: what failed, why, Try again, Back to orders. */
-export function OrderFormRouteError({ error, reset }: { error: Error; reset: () => void }) {
+export function OrderFormRouteError({ error, reset }: { error: unknown; reset: () => void }) {
   const t = useMessages(orderFormMessages);
   const router = useRouter();
   return (
