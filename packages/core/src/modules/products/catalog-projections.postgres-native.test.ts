@@ -453,6 +453,11 @@ describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NA
         expect(facetsBySlug.brand?.values).toEqual([{ value: "walton", label: "Walton", count: 1, swatch: null }]);
         expect(facetsBySlug.display).toMatchObject({ display: "range", unit: "in", range: { min: 15.6, max: 15.6 } });
         expect(facetsBySlug["option.size"]?.values.map((value) => [value.value, value.count])).toEqual([["s", 0], ["m", 0]]);
+        // Plain shop-all reads the maintained public counts; the scope's own rows give the same facets.
+        const valueFacets = (facets: typeof typedListing.facets) => facets.filter((facet) => facet.kind !== "category");
+        const scopedAll = await getStorefrontCategoryProducts(db, shirts, { page: 1, limit: 10 });
+        expect(valueFacets(newest.facets).map((facet) => facet.slug)).toEqual(["brand", "option.size", "display", "material", "wifi"]);
+        expect(valueFacets(newest.facets)).toEqual(valueFacets(scopedAll.facets));
         const comparison = await getStorefrontProductComparison(db, [optioned.id, simple.id]);
         expect(comparison.products.map((product) => product.id)).toEqual([optioned.id, simple.id]);
         expect(comparison.groups[0]?.rows.find((row) => row.slug === "display")?.values).toEqual(["1000 in", "15.60 in"]);

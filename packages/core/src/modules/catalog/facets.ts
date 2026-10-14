@@ -803,14 +803,23 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
             GROUP BY option_row.facet_key, option_row.value_key
             HAVING option_row.facet_key IS NOT NULL
     `;
-    // Every public product with nothing selected: the maintained counts, each
-    // value's label, order and sample SKU from its first public row.
+    // Every public product with nothing selected: the maintained counts. Only
+    // values that can be shown (every count tie within the value cap, and
+    // every value of a number attribute, for its range) read their label,
+    // order and sample SKU, from their first public row.
     const publicValueCounts = sql`
             SELECT public_value.facet_kind AS facet_kind, public_value.facet_key AS facet_id,
                 public_value.value_key AS value_key, public_value.product_count AS value_count,
                 sample_row.value_label AS value_label, sample_row.sort_order AS value_sort,
                 sample_row.value_number AS value_number, sample_row.variant_id AS sample_sku
-            FROM product_facet_public_counts AS public_value
+            FROM (
+                SELECT counted.facet_kind, counted.facet_key, counted.value_key, counted.product_count,
+                    RANK() OVER (PARTITION BY counted.facet_kind, counted.facet_key ORDER BY counted.product_count DESC) AS count_rank
+                FROM product_facet_public_counts AS counted
+                WHERE counted.product_count > 0
+            ) AS public_value
+            LEFT JOIN ${productAttributes} AS public_attribute
+                ON public_value.facet_kind = 'attribute' AND public_attribute.id = public_value.facet_key
             INNER JOIN product_facet_values AS sample_row
                 ON sample_row.facet_key = public_value.facet_key
                AND sample_row.owner_id = (
@@ -820,7 +829,7 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
                    WHERE first_row.facet_key = public_value.facet_key AND first_row.value_key = public_value.value_key
                    ORDER BY first_row.product_id, first_row.owner_id LIMIT 1
                )
-            WHERE public_value.product_count > 0
+            WHERE public_value.count_rank <= ${sql.raw(String(valueLimit))} OR public_attribute.value_type = 'number'
     `;
     const scopeSummary = sql`
         SELECT COUNT(*) AS listing_count, MIN(listing_from_minor) AS listing_min, MAX(listing_to_minor) AS listing_max
