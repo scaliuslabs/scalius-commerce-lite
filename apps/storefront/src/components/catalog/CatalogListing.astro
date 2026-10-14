@@ -48,6 +48,7 @@ import {
   catalogPopularFilters,
   catalogQuickFilters,
   catalogShelves,
+  catalogSortOptions,
   type CatalogListingLink,
 } from "@/lib/catalog-listing";
 import { STOREFRONT_FILTER_VALUES_IN_HTML } from "@scalius/shared/storefront-theme";
@@ -168,17 +169,7 @@ const ruledRail = showFilters && placement === "sidebar" && presentation.filters
 const specRail = bandStyle === "beside-filters" && (placement === "sidebar" || specSearch);
 // Amazon and Daraz: the phone's chip row, the facets in a split sheet.
 const marketplacePhoneFilters = phoneBar === "split-sheet" && showFilters;
-const sortOptions = [
-  ...(defaultSort === "relevance" ? [{ value: "relevance", label: "Best match" }] : []),
-  { value: "newest", label: newestLabel },
-  { value: "price-asc", label: "Price: Low to High" },
-  { value: "price-desc", label: "Price: High to Low" },
-  { value: "name-asc", label: "Name: A to Z" },
-  { value: "name-desc", label: "Name: Z to A" },
-  { value: "discount", label: "Biggest discount" },
-  // Amazon's "Avg. Customer Review": offered once the store has reviews.
-  ...(hasReviews || sortBy === "rating" ? [{ value: "rating", label: "Top rated" }] : []),
-];
+const sortOptions = catalogSortOptions({ defaultSort, sortBy, newestLabel, hasReviews });
 const viewSelect = { pathname, defaultSort, currentFilters };
 // More than one page, or a size the buyer chose: the page size helps.
 const showPageSize = piece("per-page") && (pagination.total > limit || limit !== DEFAULT_PRODUCT_LIST_PAGE_SIZE);

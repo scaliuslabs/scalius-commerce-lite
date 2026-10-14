@@ -17,7 +17,7 @@ export const PLUGIN_SETTING_TYPES = [
   "url",
   "email",
   "color",
-  // Storefront component settings only (sections and slots an app's storefront
+  // Storefront component settings only (sections, blocks and skins an app's storefront
   // module draws): the storefront resolves them before the component renders.
   "image",
   "products",
@@ -29,7 +29,8 @@ export type PluginSettingType = (typeof PLUGIN_SETTING_TYPES)[number];
 
 /**
  * Types only a storefront component's settings may use (`storefront.sections`
- * drawn by the storefront module, and `storefront.slots`). A component gets
+ * drawn by the storefront module, component `productBlocks` and `storefront.skins`;
+ * skins and blocks name no images or products). A component gets
  * them resolved: an image as its URLs and size, a product source as its
  * products' cards, a link as a safe href, a list as its items.
  */

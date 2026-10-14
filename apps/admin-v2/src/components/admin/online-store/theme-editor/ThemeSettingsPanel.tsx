@@ -3,7 +3,7 @@
  * brand images and product cards, store-wide. The header (with its
  * announcement bar and menus) and the footer are rows of every page's tree;
  * their settings are here too, for the editor's settings panel. An app can
- * fill the header, the footer or the product card (AppSlotSettings.tsx).
+ * skin the header, the footer or the product card (AppSkinSettings.tsx).
  */
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
@@ -38,7 +38,7 @@ import { blockFallback, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } 
 import { TypographyCard } from "../TypographyCard";
 import { ThemeRevealContext, useThemeReveal, type ThemeRevealRequest, type ThemeSettingsGroup } from "../theme-reveal";
 import { Field } from "~/components/ui/field";
-import { AppSlotSettings, type SlotSettingsPlace } from "./AppSlotSettings";
+import { AppSkinSettings, type SkinSettingsPlace } from "./AppSkinSettings";
 
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 
@@ -221,7 +221,7 @@ export function ThemeSettingsPanel({ theme, resolved, media, apps, setDraft, rev
       </SettingsGroup>
       {/* One card for the whole store: its facts, buy action and hover photo; its shape follows the style above. */}
       <SettingsGroup title={t("productCards")} name="productCards">
-        <AppSlotSettings slot="product-card" theme={theme} apps={apps} media={media} setDraft={setDraft}>
+        <AppSkinSettings unit="product-card" theme={theme} apps={apps} media={media} setDraft={setDraft}>
           {() => (
             <>
               <div className="max-w-48">
@@ -230,7 +230,7 @@ export function ThemeSettingsPanel({ theme, resolved, media, apps, setDraft, rev
               {block.fields("card")}
             </>
           )}
-        </AppSlotSettings>
+        </AppSkinSettings>
       </SettingsGroup>
     </OpenGroup.Provider>
     </ThemeRevealContext.Provider>
@@ -266,13 +266,13 @@ type PartProps = { theme: Theme; resolved: ResolvedStorefrontTheme; media: Media
 /** The header's layout and the menus it shows on computers and phones (or the app that draws the header). */
 export function HeaderSettings({ theme, resolved, media, apps, setDraft }: PartProps) {
   return (
-    <AppSlotSettings slot="header" theme={theme} apps={apps} media={media} setDraft={setDraft}>
+    <AppSkinSettings unit="header" theme={theme} apps={apps} media={media} setDraft={setDraft}>
       {(place) => <BuiltInHeaderSettings theme={theme} resolved={resolved} media={media} setDraft={setDraft} place={place} />}
-    </AppSlotSettings>
+    </AppSkinSettings>
   );
 }
 
-function BuiltInHeaderSettings({ theme, resolved, media, setDraft, place }: Omit<PartProps, "apps"> & { place: SlotSettingsPlace }) {
+function BuiltInHeaderSettings({ theme, resolved, media, setDraft, place }: Omit<PartProps, "apps"> & { place: SkinSettingsPlace }) {
   const t = useMessages(onlineStoreMessages);
   const fitReason = useFitReason(resolved.facts);
   const editor = useMessages(themeEditorMessages);
@@ -349,7 +349,7 @@ export function FooterSettings({ theme, resolved, media, apps, setDraft }: PartP
   const t = useMessages(onlineStoreMessages);
   const block = useBlockChoice(theme, resolved, setDraft, media);
   return (
-    <AppSlotSettings slot="footer" theme={theme} apps={apps} media={media} setDraft={setDraft}>
+    <AppSkinSettings unit="footer" theme={theme} apps={apps} media={media} setDraft={setDraft}>
       {() => (
         <div className="space-y-3">
           <p className="text-body text-muted-foreground">{t("footerLayoutHelp")}</p>
@@ -364,6 +364,6 @@ export function FooterSettings({ theme, resolved, media, apps, setDraft }: PartP
           {block.fields("footer")}
         </div>
       )}
-    </AppSlotSettings>
+    </AppSkinSettings>
   );
 }

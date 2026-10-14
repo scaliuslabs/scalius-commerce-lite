@@ -1,6 +1,6 @@
 import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { STOREFRONT_COMPONENT_SLOTS } from "@scalius/shared/plugins/storefront-protocol";
+
 import { readStorefrontAppTemplateTheme, readStorefrontPagePresetSections, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import {
   THEME_VERSION_CHANGES_MAX,
@@ -233,12 +233,12 @@ const themeAppSurfacesSchema = z.object({
     /** Drawn at the edge by the app's storefront module (it can use image, products, link and list settings). */
     component: z.boolean(),
   })),
-  /** Theme slots the app fills: the theme's header, footer or product card, with their settings. */
-  slots: z.array(z.object({
-    /** `<app id>/<slot id>`: what the theme's `apps.header`, `apps.footer` or `apps.productCard` names. */
+  /** Skins the app draws: a core-owned unit (header, footer, product card, product page, listing, a core section), with their settings. */
+  skins: z.array(z.object({
+    /** `<app id>/<skin id>`: what the theme's `apps.skins.<unit>` or a core section's `skin` names. */
     key: z.string(),
     id: z.string(),
-    slot: z.enum(STOREFRONT_COMPONENT_SLOTS),
+    target: z.string(),
     name: z.string(),
     description: z.string().nullable(),
     settings: z.array(appSettingFieldSchema),
@@ -289,13 +289,13 @@ function themeAppSurfaces(installations: PluginInstallations) {
           settings: section.settings.map(appSettingField),
           component: section.route === undefined,
         })),
-        slots: code ? storefront.slots.map((slot) => ({
-          key: pluginSurfaceKey(installation.pluginId, slot.id),
-          id: slot.id,
-          slot: slot.slot,
-          name: slot.name,
-          description: slot.description ?? null,
-          settings: slot.settings.map(appSettingField),
+        skins: code ? storefront.skins.map((skin) => ({
+          key: pluginSurfaceKey(installation.pluginId, skin.id),
+          id: skin.id,
+          target: skin.target,
+          name: skin.name,
+          description: skin.description ?? null,
+          settings: skin.settings.map(appSettingField),
         })) : [],
         templates: code ? storefront.templates.flatMap((template) => {
           const theme = readStorefrontAppTemplateTheme(template.theme);
@@ -317,7 +317,8 @@ function themeAppSurfaces(installations: PluginInstallations) {
             sections: sections as unknown as Array<Record<string, unknown>>,
           }] : [];
         }) : [],
-        productBlocks: storefront.productBlocks.map((block) => ({
+        // A component block needs the approved grant to cover storefront code.
+        productBlocks: storefront.productBlocks.filter((block) => block.route !== undefined || code).map((block) => ({
           key: pluginSurfaceKey(installation.pluginId, block.type),
           type: block.type,
           name: block.name,
@@ -326,32 +327,29 @@ function themeAppSurfaces(installations: PluginInstallations) {
         })),
       };
     })
-    .filter((surfaces) => surfaces.sections.length + surfaces.productBlocks.length + surfaces.slots.length + surfaces.templates.length + surfaces.pagePresets.length > 0)
+    .filter((surfaces) => surfaces.sections.length + surfaces.productBlocks.length + surfaces.skins.length + surfaces.templates.length + surfaces.pagePresets.length > 0)
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 }
 
 /**
- * The images the theme's app sections and slots name (`image` settings and
+ * The images the theme's app sections name (`image` settings and
  * images in `list` items), read with each active app's own schema, so the
  * editor previews them like the theme's own images.
  */
 function themeAppMediaIds(theme: StorefrontThemeDocument, installations: PluginInstallations): string[] {
   const sections = new Map<string, PluginSettingsSchema>();
-  const slots = new Map<string, PluginSettingsSchema>();
   for (const installation of installations) {
     if (installation.status !== "active") continue;
     const { storefront } = installation.manifest;
     for (const section of storefront.sections) sections.set(pluginSurfaceKey(installation.pluginId, section.type), section.settings);
-    for (const slot of storefront.slots) slots.set(pluginSurfaceKey(installation.pluginId, slot.id), slot.settings);
   }
   const placed = [
     ...theme.pages.home,
     ...Object.values(theme.pages.landing).flatMap((page) => page.sections),
     ...Object.values(theme.pages.templates).flatMap((template) => template.sections),
   ].flatMap((section) => (section.type === "app" ? [{ schema: sections.get(section.settings.app), values: section.settings.values }] : []));
-  const filled = [theme.apps?.header, theme.apps?.footer, theme.apps?.productCard]
-    .flatMap((slot) => (slot ? [{ schema: slots.get(slot.app), values: slot.values }] : []));
-  return [...new Set([...placed, ...filled].flatMap(({ schema, values }) => (schema ? storefrontSettingNeeds(schema, values).mediaIds : [])))];
+  // Skins name no images (their settings never do), so only app sections can.
+  return [...new Set(placed.flatMap(({ schema, values }) => (schema ? storefrontSettingNeeds(schema, values).mediaIds : [])))];
 }
 
 const getThemeEditorRoute = createRoute({

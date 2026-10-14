@@ -231,7 +231,8 @@ function sourceTitleAndHref(
   }
 }
 
-function sourceProducts(
+/** A product source as a section shows it: its first `limit` products, title and listing link; null without products. */
+export function homepageSourceProducts(
   source: StorefrontProductSource,
   limit: number,
   content: HomepageContent,
@@ -250,7 +251,7 @@ export function homepageSectionProducts(
   if (section.type === "collections" || section.type === "product-tabs") return null;
   const [request] = homeSectionProductLists(section);
   if (!request) return null;
-  const shown = sourceProducts(request.source, request.limit, content);
+  const shown = homepageSourceProducts(request.source, request.limit, content);
   if (!shown) return null;
   const title = "title" in section.settings ? section.settings.title.trim() : "";
   return { products: shown.products, title: title || shown.title, href: shown.href };
@@ -271,7 +272,7 @@ export function homepageSectionTabs(
     const key = storefrontProductSourceKey(tab.source);
     if (seen.has(key)) return [];
     seen.add(key);
-    const shown = sourceProducts(tab.source, section.settings.limit, content);
+    const shown = homepageSourceProducts(tab.source, section.settings.limit, content);
     return shown ? [{ key, products: shown.products, title: tab.label.trim() || shown.title, href: shown.href }] : [];
   });
 }
@@ -529,7 +530,8 @@ export function homepageRenderUnits(
   const units: HomepageRenderUnit[] = [];
   for (const section of sections) {
     if (!homepageSectionRenders(section, content)) continue;
-    if (section.type === "banner" && section.settings.layout !== "full") {
+    // A skinned banner is a unit of its own: its skin draws it whole.
+    if (section.type === "banner" && section.settings.layout !== "full" && !section.skin) {
       const last = units.at(-1);
       const size = section.settings.layout === "two-up" ? 2 : 4;
       if (last?.kind === "banners" && last.layout === section.settings.layout && last.sections.length < size) {

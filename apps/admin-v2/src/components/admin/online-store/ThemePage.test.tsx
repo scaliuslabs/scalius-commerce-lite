@@ -233,12 +233,12 @@ describe("themes page", () => {
       id: "acme.studio",
       name: "Acme Studio",
       sections: [],
-      slots: [],
+      skins: [],
       productBlocks: [],
       pagePresets: [],
       templates: [
         { key: "acme.studio/bold", id: "bold", name: "Studio Bold", description: "Big type, quiet colours.",
-          theme: { tokens: bold.tokens, apps: { header: { app: "acme.studio/header", values: { tagline: "Hi" } } } } },
+          theme: { tokens: bold.tokens, apps: { skins: { header: { app: "acme.studio/header", values: { tagline: "Hi" } } } } } },
         // A template this document version cannot read is never offered.
         { key: "acme.studio/future", id: "future", name: "Studio Future", description: null, theme: { tokens: { unknown: true } } },
       ],
@@ -263,7 +263,7 @@ describe("themes page", () => {
       await act(async () => confirm("Replace").click());
       const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
       expect(saved.tokens).toEqual(bold.tokens);
-      expect(saved.apps).toEqual({ header: { app: "acme.studio/header", values: { tagline: "Hi" } }, template: "acme.studio/bold" });
+      expect(saved.apps).toEqual({ skins: { header: { app: "acme.studio/header", values: { tagline: "Hi" } } }, template: "acme.studio/bold" });
       expect(saved.brand).toEqual(theme.brand);
       expect(saved.pages).toEqual(theme.pages);
       expect(toasts.success).toHaveBeenCalledWith("Template applied");

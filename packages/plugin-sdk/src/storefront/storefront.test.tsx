@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { STOREFRONT_COMPONENT_ABI } from "@scalius/shared/plugins/storefront-protocol";
 import {
   CartCount,
-  Checkout,
+  OrderForm,
   Image,
   Island,
   Price,
@@ -57,12 +57,12 @@ const Header = ({ data }: HeaderProps) => (
 
 const storefront = defineStorefront({
   sections: { hero: Hero, broken: () => { throw new Error("boom"); } },
-  slots: { "clean-card": Card, "clean-header": Header },
+  skins: { "clean-card": Card, "clean-header": Header },
 });
 
 describe("storefront JSX", () => {
   it("keeps host action fallback routes and sticky geometry opt-in in rendered markup", () => {
-    const app = defineStorefront({ slots: { header: ({ data }: HeaderProps) => (
+    const app = defineStorefront({ skins: { header: ({ data }: HeaderProps) => (
       <header {...stickyHeader()}>
         <a href={data.routes.search} {...searchOpener()}>Search</a>
         <a href={data.routes.account} {...accountLink()}>Account</a>
@@ -205,7 +205,7 @@ describe("words, numbers and dates in the page's locale", () => {
   });
 
   it("embeds the order form by product id, never by a URL a canonical path can change", () => {
-    expect(Checkout({ product: fixtureProductCard({ id: "prod_9", url: "/products/another" }) }).value).toBe('<scalius-checkout data-product="prod_9"></scalius-checkout>');
-    expect(Checkout({ product: null }).value).toBe("");
+    expect(OrderForm({ product: fixtureProductCard({ id: "prod_9", url: "/products/another" }) }).value).toBe('<scalius-embed kind="order-form" data-product="prod_9"></scalius-embed>');
+    expect(OrderForm({ product: null }).value).toBe("");
   });
 });

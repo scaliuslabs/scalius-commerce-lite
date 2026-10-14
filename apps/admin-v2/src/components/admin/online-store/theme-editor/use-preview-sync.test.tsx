@@ -194,12 +194,12 @@ describe("field patches and canonical fallback", () => {
   });
 });
 
-describe("app sections and slots", () => {
+describe("app sections and skins", () => {
   const setting = (key: string, type: "text" | "textarea" | "number") => ({
     key, label: key, help: null, type, required: false, options: null, default: null, min: null, max: null, integer: false, maxLength: null,
   });
   const appSections = appSectionsByKey([{
-    id: "acme.studio", name: "Studio", slots: [], templates: [], pagePresets: [], productBlocks: [],
+    id: "acme.studio", name: "Studio", skins: [], templates: [], pagePresets: [], productBlocks: [],
     sections: [{ key: "acme.studio/quote", type: "quote", name: "Quote", description: null, component: true,
       settings: [setting("quote", "textarea"), setting("author", "text"), setting("size", "number")] }],
   }]);
@@ -217,10 +217,10 @@ describe("app sections and slots", () => {
     expect(renders()).toEqual([expect.objectContaining({ body: expect.objectContaining({ only: "app" }) })]);
   });
 
-  it("saves at once and loads the page again when an app fills the header", () => {
+  it("saves at once and loads the page again when an app skins the header", () => {
     const saved = theme([]);
     start(saved);
-    const next = { ...saved, apps: { header: { app: "acme.studio/header", values: {} } } };
+    const next = { ...saved, apps: { skins: { header: { app: "acme.studio/header", values: {} } } } };
     update({ working: next, sendable: next });
     expect(needSave).toHaveBeenCalledTimes(1);
     expect(reload).not.toHaveBeenCalled();

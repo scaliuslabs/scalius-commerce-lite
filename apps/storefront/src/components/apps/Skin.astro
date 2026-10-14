@@ -1,0 +1,35 @@
+---
+// A core-owned unit an app skin may draw (docs/STOREFRONT-COMPONENTS.md
+// "Skins"): the skin the theme names for `target` (or `skin`, a core
+// section's own), drawn from the unit's projection, else the core unit in
+// the default slot. Core draws whenever there is no skin, its app is not
+// active, or the skin draws nothing, fails, is late or misses a required
+// embed. The projection is built only when a skin will draw (`data` is
+// called lazily), and the core unit renders only when it is needed.
+import type { StorefrontSkinRef } from "@scalius/shared/storefront-theme";
+import type { StorefrontSkinTarget } from "@scalius/shared/plugins/storefront-protocol";
+import AppComponent from "./AppComponent.astro";
+import { appSkin, renderAppSkin } from "@/lib/extensions";
+import type { EmbedRenderers } from "@/lib/extensions/embeds";
+
+interface Props {
+  target: StorefrontSkinTarget;
+  /** A core section's own skin (`section.skin`); omitted: the theme's `apps.skins.<target>`. */
+  skin?: StorefrontSkinRef | null;
+  /** The unit's projection (the skin job's `data`), built only when a skin draws. */
+  data: () => unknown;
+  /** A core section's placement id (section skins). */
+  instanceId?: string;
+  embeds?: EmbedRenderers;
+  editorMark?: string | undefined;
+}
+
+const { target, skin: ref, data, instanceId, embeds, editorMark } = Astro.props;
+// A section without a skin of its own never looks up the theme's skins.
+const skin = ref === null ? null : await appSkin(Astro.locals, Astro.url, target, ref);
+const markup = skin
+  ? await renderAppSkin(Astro.locals, Astro.url, skin, { data: await data(), ...(instanceId !== undefined ? { instanceId } : {}) } as never)
+  : null;
+---
+
+{markup ? <AppComponent markup={markup} embeds={embeds} editorMark={editorMark} /> : <slot />}

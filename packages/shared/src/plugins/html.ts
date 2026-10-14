@@ -6,7 +6,7 @@
 //   and form tags; no inline style, no `id`, no `h1` (the page owns it), no
 //   SVG; forms post only to the app's own proxy (`/apps/<plugin id>/...`),
 //   and only for apps with the proxy.
-// - "component": storefront components, sections and theme slots
+// - "component": storefront components: sections, product blocks and skins
 //   (docs/STOREFRONT-COMPONENTS.md, "Output"). Adds what a theme draws with:
 //   `h1`, `video`, an SVG drawing subset, inline style that loads nothing
 //   (no `url()` or other loading function, no escapes, no comments), `id`s
@@ -80,7 +80,7 @@ const SVG_TAGS: Readonly<Record<string, string>> = {
   stop: "stop", clippath: "clipPath",
 };
 
-const COMPONENT_TAGS = new Set([...SURFACE_TAGS, "h1", "video", "scalius-island", "scalius-checkout", ...Object.keys(SVG_TAGS)]);
+const COMPONENT_TAGS = new Set([...SURFACE_TAGS, "h1", "video", "scalius-island", "scalius-embed", ...Object.keys(SVG_TAGS)]);
 
 /** Dropped with everything inside them (executable, raw text, foreign parsing, or loading). */
 const DROP_WITH_CONTENT = new Set([
@@ -124,6 +124,7 @@ const COMPONENT_TAG_ATTRIBUTES: Record<string, ReadonlySet<string>> = {
   img: new Set(["fetchpriority"]),
   input: new Set(["autofocus"]),
   label: new Set(["for"]),
+  "scalius-embed": new Set(["kind"]),
   source: new Set(["src"]),
   video: new Set(["src", "poster", "preload", "muted", "loop", "playsinline", "controls", "autoplay", "width", "height"]),
 };

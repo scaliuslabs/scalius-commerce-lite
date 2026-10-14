@@ -1,0 +1,76 @@
+---
+// The product page's buy box: the summary (title, price, options, buyer
+// inputs, quantity, buttons) with what sits in it (rating, key features,
+// EMI, contact links, app blocks, digital promise, delivery facts,
+// warranty). One component for both places it draws: the core product page,
+// and a product-main skin's buy form embed (`<scalius-embed kind="buy-form">`),
+// so a skin always gets the store's own form, rules, scripts and words.
+import type { ComponentProps } from "astro/types";
+import type { ProductAppBlock } from "@/lib/app-surfaces";
+import type { AppProductBlock } from "@/lib/extensions";
+import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
+import type { DeliveryFact } from "@/lib/delivery-facts";
+import type { ProductFulfilment } from "@/lib/delivery-facts";
+import type { StoreContactLink } from "@/lib/store-contact";
+import DeliveryFacts from "@/components/DeliveryFacts.astro";
+import ProductAppBlocks from "@/components/apps/ProductAppBlocks.astro";
+import ComponentProductBlocks from "@/components/apps/ComponentProductBlocks.astro";
+import DigitalPromise from "./DigitalPromise.astro";
+import ProductEmiLine from "./ProductEmiLine.astro";
+import ProductSummary from "./ProductSummary.astro";
+import WarrantyRow from "./WarrantyRow.astro";
+import ProductFeatureList from "./modules/ProductFeatureList.astro";
+import ReviewsSummary from "./reviews/ReviewsSummary.astro";
+import { buyBoxFeatures } from "./lib/product-page-modules";
+
+type SummaryProps = ComponentProps<typeof ProductSummary>;
+
+interface Props {
+  summary: SummaryProps;
+  reviewCopy: ComponentProps<typeof ReviewsSummary>["copy"];
+  /** Key features in the buy box (the template's choice). */
+  features: { shown: boolean; title: string };
+  /** The EMI line (the buy box's setting and the product's EMI plan). */
+  emi: boolean;
+  contactLinks: readonly StoreContactLink[];
+  /** Route-drawn app blocks of the buy box. */
+  appBlocks: readonly ProductAppBlock[];
+  /** Component app blocks of the buy box, and the page projection they draw from. */
+  componentBlocks: readonly AppProductBlock[];
+  blockData: () => StorefrontProductPage;
+  fulfilment: ProductFulfilment;
+  deliveryFacts: DeliveryFact[];
+  canPurchaseAny: boolean;
+}
+
+const { summary, reviewCopy, features, emi, contactLinks, appBlocks, componentBlocks, blockData, fulfilment, deliveryFacts, canPurchaseAny } = Astro.props;
+const { product } = summary;
+---
+
+<ProductSummary {...summary}>
+  <ReviewsSummary slot="after-title" product={product} copy={reviewCopy} />
+  {features.shown && (
+    <ProductFeatureList slot="after-actions" features={buyBoxFeatures(product)} variant="list" title={features.title} />
+  )}
+  {emi && product.emi && (
+    <ProductEmiLine slot="after-price" emi={product.emi} currencyCode={summary.currencyCode ?? ""} currencySymbol={summary.currencySymbol ?? ""} />
+  )}
+  {contactLinks.length > 0 && (
+    <nav slot="after-actions" data-product-contact aria-label="Contact the store" class="mt-3 flex flex-wrap gap-2">
+      {contactLinks.map((link) => (
+        <a
+          href={link.href}
+          data-product-contact-link={link.kind}
+          class="inline-flex min-h-11 items-center justify-center rounded-md border border-primary px-4 text-sm font-semibold text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          aria-label={link.kind === "phone" ? `Call ${link.label}` : "Contact on WhatsApp"}
+          {...(link.kind === "whatsapp" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        >{link.kind === "phone" ? "Call" : "WhatsApp"}</a>
+      ))}
+    </nav>
+  )}
+  <ProductAppBlocks slot="after-actions" blocks={appBlocks} placement="buy-box" />
+  <ComponentProductBlocks slot="after-actions" blocks={componentBlocks} target="product.buy-box" data={blockData} />
+  <DigitalPromise slot="after-actions" product={product} fulfilment={fulfilment} />
+  {canPurchaseAny && <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />}
+  <WarrantyRow slot="after-actions" product={product} copy={summary.actionCopy} />
+</ProductSummary>

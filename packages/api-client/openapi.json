@@ -2978,190 +2978,25 @@
           "apps": {
             "type": "object",
             "properties": {
-              "header": {
+              "skins": {
                 "type": "object",
                 "properties": {
-                  "app": {
-                    "type": "string",
-                    "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+                  "header": {
+                    "$ref": "#/components/schemas/StorefrontSkinRef"
                   },
-                  "values": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "maxLength": 5000
-                        },
-                        {
-                          "type": "number"
-                        },
-                        {
-                          "type": "boolean"
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "maxLength": 64
-                          },
-                          "maxItems": 50
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "maxLength": 5000
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "boolean"
-                                },
-                                {}
-                              ]
-                            }
-                          },
-                          "maxItems": 24
-                        },
-                        {}
-                      ]
-                    }
+                  "footer": {
+                    "$ref": "#/components/schemas/StorefrontSkinRef"
+                  },
+                  "product-card": {
+                    "$ref": "#/components/schemas/StorefrontSkinRef"
+                  },
+                  "product-main": {
+                    "$ref": "#/components/schemas/StorefrontSkinRef"
+                  },
+                  "listing-main": {
+                    "$ref": "#/components/schemas/StorefrontSkinRef"
                   }
                 },
-                "required": [
-                  "app",
-                  "values"
-                ],
-                "additionalProperties": false
-              },
-              "footer": {
-                "type": "object",
-                "properties": {
-                  "app": {
-                    "type": "string",
-                    "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                  },
-                  "values": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "maxLength": 5000
-                        },
-                        {
-                          "type": "number"
-                        },
-                        {
-                          "type": "boolean"
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "maxLength": 64
-                          },
-                          "maxItems": 50
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "maxLength": 5000
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "boolean"
-                                },
-                                {}
-                              ]
-                            }
-                          },
-                          "maxItems": 24
-                        },
-                        {}
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "app",
-                  "values"
-                ],
-                "additionalProperties": false
-              },
-              "productCard": {
-                "type": "object",
-                "properties": {
-                  "app": {
-                    "type": "string",
-                    "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                  },
-                  "values": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "maxLength": 5000
-                        },
-                        {
-                          "type": "number"
-                        },
-                        {
-                          "type": "boolean"
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "maxLength": 64
-                          },
-                          "maxItems": 50
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "maxLength": 5000
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "boolean"
-                                },
-                                {}
-                              ]
-                            }
-                          },
-                          "maxItems": 24
-                        },
-                        {}
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "app",
-                  "values"
-                ],
                 "additionalProperties": false
               },
               "template": {
@@ -3264,6 +3099,68 @@
           "brand",
           "blocks",
           "pages"
+        ],
+        "additionalProperties": false
+      },
+      "StorefrontSkinRef": {
+        "type": "object",
+        "properties": {
+          "app": {
+            "type": "string",
+            "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 5000
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "maxItems": 50
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 5000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {}
+                      ]
+                    }
+                  },
+                  "maxItems": 24
+                },
+                {}
+              ]
+            }
+          }
+        },
+        "required": [
+          "app",
+          "values"
         ],
         "additionalProperties": false
       },
@@ -3455,6 +3352,9 @@
                     "slides"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -3571,6 +3471,9 @@
                     "source"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -3645,6 +3548,9 @@
                     "categoryIds"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -3712,6 +3618,9 @@
                     "collectionIds"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -3860,6 +3769,9 @@
                     "limit"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4014,6 +3926,9 @@
                     "rows"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4162,6 +4077,9 @@
                     "source"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4332,6 +4250,9 @@
                     "limit"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4416,6 +4337,9 @@
                     "cards"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4495,6 +4419,9 @@
                     "tiles"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4652,6 +4579,9 @@
                     "photo"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4745,6 +4675,9 @@
                     "cta"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4803,6 +4736,9 @@
                     "style"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4997,6 +4933,9 @@
                       "additionalProperties": false
                     }
                   ]
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5075,6 +5014,9 @@
                     "items"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5153,6 +5095,9 @@
                     "cards"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5226,6 +5171,9 @@
                     "pageSize"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5281,6 +5229,9 @@
                     "body"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5331,6 +5282,9 @@
                     "title"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5401,6 +5355,9 @@
                     "limit"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5471,6 +5428,9 @@
                     "text"
                   ],
                   "additionalProperties": false
+                },
+                "skin": {
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -10504,7 +10464,7 @@
               ]
             }
           },
-          "slots": {
+          "skins": {
             "type": "array",
             "items": {
               "type": "object",
@@ -10515,13 +10475,8 @@
                 "id": {
                   "type": "string"
                 },
-                "slot": {
-                  "type": "string",
-                  "enum": [
-                    "header",
-                    "footer",
-                    "product-card"
-                  ]
+                "target": {
+                  "type": "string"
                 },
                 "name": {
                   "type": "string"
@@ -10540,7 +10495,7 @@
               "required": [
                 "key",
                 "id",
-                "slot",
+                "target",
                 "name",
                 "description",
                 "settings"
@@ -10656,7 +10611,7 @@
           "id",
           "name",
           "sections",
-          "slots",
+          "skins",
           "templates",
           "pagePresets",
           "productBlocks"
@@ -24649,7 +24604,7 @@
                                   }
                                 }
                               },
-                              "slots": {
+                              "skins": {
                                 "type": "array",
                                 "items": {
                                   "type": "object",
@@ -24657,13 +24612,9 @@
                                     "id": {
                                       "type": "string"
                                     },
-                                    "slot": {
+                                    "target": {
                                       "type": "string",
-                                      "enum": [
-                                        "header",
-                                        "footer",
-                                        "product-card"
-                                      ]
+                                      "description": "The unit the skin draws: header, footer, product-card, product-main, listing-main or section:<core section type>."
                                     },
                                     "settings": {
                                       "type": "array",
@@ -24675,7 +24626,37 @@
                                   },
                                   "required": [
                                     "id",
-                                    "slot",
+                                    "target",
+                                    "settings"
+                                  ]
+                                }
+                              },
+                              "blocks": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    },
+                                    "target": {
+                                      "type": "string",
+                                      "enum": [
+                                        "product.buy-box",
+                                        "product.below"
+                                      ]
+                                    },
+                                    "settings": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "additionalProperties": {}
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "target",
                                     "settings"
                                   ]
                                 }
@@ -24703,13 +24684,14 @@
                               "release",
                               "sections",
                               "sectionSettings",
-                              "slots",
+                              "skins",
+                              "blocks",
                               "islands",
                               "stylesheet",
                               "connect"
                             ]
                           },
-                          "description": "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections and slots their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts."
+                          "description": "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections, component product blocks and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts."
                         },
                         "appBlockPages": {
                           "type": "array",

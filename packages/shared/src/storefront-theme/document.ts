@@ -23,9 +23,9 @@ import {
   type StorefrontBlockSlot,
   type StorefrontThemeBlocks,
 } from "./blocks";
-import { storefrontThemeAppsSchema } from "./apps";
+import { storefrontSkinRefSchema, storefrontThemeAppsSchemaOf } from "./apps";
 import { storefrontThemeBrandSchema } from "./brand";
-import { storefrontSectionListSchema } from "./sections";
+import { storefrontSectionListSchemaOf } from "./sections";
 import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefrontPageTemplateSchemaOf, storefrontPageTemplatesSchemaOf } from "./pages";
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
 
@@ -114,7 +114,8 @@ export type StorefrontSchemaNamer = <Schema extends z.ZodType>(name: string, sch
 
 /** The document schema and its shared parts, each part named by `name`. */
 export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer = (_name, schema) => schema) {
-  const sections = name("StorefrontSectionList", storefrontSectionListSchema);
+  const skin = name("StorefrontSkinRef", storefrontSkinRefSchema);
+  const sections = name("StorefrontSectionList", storefrontSectionListSchemaOf(skin));
   const landingPage = name("StorefrontLandingPage", storefrontLandingPageSchemaOf(sections));
   const pageTemplate = name("StorefrontPageTemplate", storefrontPageTemplateSchemaOf(sections));
   const document = z.object({
@@ -130,10 +131,11 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
     brand: storefrontThemeBrandSchema,
     blocks: storefrontThemeBlocksSchema,
     /**
-     * Slots installed apps fill (header, footer, product card) and the app
-     * template the look came from. Absent: every slot is the core block's.
+     * The units app skins draw (header, footer, product card, product page,
+     * listing) and the app template the look came from. Absent: core draws
+     * every unit.
      */
-    apps: storefrontThemeAppsSchema.optional(),
+    apps: storefrontThemeAppsSchemaOf(skin).optional(),
     /**
      * Section pages: the homepage and landing pages (`/pages/<slug>`), and the
      * sections around the product, listing, cart and CMS pages' fixed parts.

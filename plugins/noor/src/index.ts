@@ -1,5 +1,5 @@
 // Noor: a complete storefront theme as an app. It gives the theme its own
-// header, footer and product card (slots), twenty sections and one template;
+// header, footer and product card (skins), twenty sections and one template;
 // its landing kit (a product hero, features or steps, and the order section
 // with the store's own order form) builds single-product campaign pages on
 // any landing page, and its page preset makes one in a step. Everything is
@@ -13,7 +13,7 @@ import { definePlugin, PLUGIN_API_VERSION, type PluginManifestInput } from "@sca
 
 type Storefront = NonNullable<PluginManifestInput["storefront"]>;
 type Section = NonNullable<Storefront["sections"]>[number];
-type Slot = NonNullable<Storefront["slots"]>[number];
+type Skin = NonNullable<Storefront["skins"]>[number];
 type Template = NonNullable<Storefront["templates"]>[number];
 type Preset = NonNullable<Storefront["pagePresets"]>[number];
 type Field = NonNullable<Section["settings"]>[number];
@@ -454,10 +454,10 @@ const sections = [
   },
 ] satisfies Section[];
 
-const slots = [
+const skins = [
   {
     id: "noor-header",
-    slot: "header",
+    target: "header",
     name: "Noor header",
     description: "Announcements, a centred logo with full-width menus, search and a phone drawer; a campaign header on landing pages.",
     settings: [
@@ -481,7 +481,7 @@ const slots = [
   },
   {
     id: "noor-footer",
-    slot: "footer",
+    target: "footer",
     name: "Noor footer",
     description: "A sign-up band, your contact details and menus, and the payment methods you take.",
     settings: [
@@ -502,7 +502,7 @@ const slots = [
   },
   {
     id: "noor-card",
-    slot: "product-card",
+    target: "product-card",
     name: "Noor card",
     description: "A quiet photo with a second photo on hover, small badges, and add to cart on the photo.",
     settings: [
@@ -524,7 +524,7 @@ const slots = [
       { key: "show_hover", label: "Second photo on hover", type: "boolean", default: true },
     ],
   },
-] satisfies Slot[];
+] satisfies Skin[];
 
 /** Noor's look: warm paper, ink, a deep jade action colour, an editorial serif, quiet radius. */
 const tokens = {
@@ -567,9 +567,11 @@ const templates = [
       tokens,
       blocks: { navigation: { source: "menu", maxTopItems: 7, linkBudget: 150 } },
       apps: {
-        header: { app: "scalius.noor/noor-header", values: { announcements: [] } },
-        footer: { app: "scalius.noor/noor-footer", values: { payments: [], tagline: "", newsletter_heading: "Stay in touch", newsletter_text: "" } },
-        productCard: { app: "scalius.noor/noor-card", values: {} },
+        skins: {
+          header: { app: "scalius.noor/noor-header", values: { announcements: [] } },
+          footer: { app: "scalius.noor/noor-footer", values: { payments: [], tagline: "", newsletter_heading: "Stay in touch", newsletter_text: "" } },
+          "product-card": { app: "scalius.noor/noor-card", values: {} },
+        },
       },
       sections: [
         section("noor-hero", "hero", { eyebrow: "", heading: "Explore our products", text: "", primary_label: "Shop all", height: "l", scrim: "soft" }),
@@ -629,7 +631,7 @@ export const manifest = {
   },
   storefront: {
     sections,
-    slots,
+    skins,
     templates,
     pagePresets,
     islands: [

@@ -9,7 +9,7 @@ import type { Database } from "@scalius/database/client";
 import { pluginInstallations, type PluginInstallationRow } from "@scalius/database/schema";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { deps } from "../../cache-deps";
-import { pluginHasStorefrontModule, type StorefrontExtension } from "@scalius/shared/plugins";
+import { pluginHasStorefrontModule, type StorefrontExtension, type StorefrontSkinTarget } from "@scalius/shared/plugins";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
 
 /**
@@ -77,8 +77,9 @@ export function activePluginStorefrontScripts(installations: Iterable<PluginInst
 /**
  * Active apps with storefront components, as the layout payload lists them
  * (`appExtensions`, `StorefrontExtension`): their release, the component
- * sections and slots their storefront module draws (with the settings
- * schemas the storefront resolves), islands, stylesheet and browser hosts.
+ * sections, component product blocks and skins their storefront module
+ * draws (with the settings schemas the storefront resolves), islands,
+ * stylesheet and browser hosts.
  * An app whose approved grant does not cover storefront code (approved
  * before it asked) is left out until a Super Admin approves the update.
  */
@@ -96,7 +97,9 @@ export function activePluginStorefrontExtensions(installations: Iterable<PluginI
       release: installation.bundleSha256,
       sections: storefront.sections.filter((section) => section.route === undefined).map((section) => section.type),
       sectionSettings: Object.fromEntries(storefront.sections.filter((section) => section.route === undefined).map((section) => [section.type, section.settings])),
-      slots: storefront.slots.map((slot) => ({ id: slot.id, slot: slot.slot, settings: slot.settings })),
+      skins: storefront.skins.map((skin) => ({ id: skin.id, target: skin.target as StorefrontSkinTarget, settings: skin.settings })),
+      blocks: storefront.productBlocks.filter((block) => block.route === undefined)
+        .map((block) => ({ type: block.type, target: `product.${block.placement}` as const, settings: block.settings })),
       islands: storefront.islands.map((island) => island.name),
       stylesheet: storefront.stylesheet,
       connect: storefront.connect.filter((host) => granted.has(host)),

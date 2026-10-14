@@ -61,8 +61,8 @@ import {
 } from "@/lib/partytown-config";
 import { partytownLoaderPath } from "virtual:scalius/partytown";
 import { getRuntimePresence } from "@/lib/api/runtime";
-import { defaultLocale, hreflangAlternates, marketOfPresence, presenceCountry, stripPresencePath } from "@scalius/shared/markets";
-import { hasSeveralMarkets, hasSeveralPresences, languageOptions, pageMarket, selectedMarketCountry } from "@/lib/market-selector";
+import { hreflangAlternates, marketOfPresence, presenceCountry, stripPresencePath } from "@scalius/shared/markets";
+import { hasSeveralMarkets, hasSeveralPresences, languageOptions, pageMarket, presencePageLanguage, selectedMarketCountry } from "@/lib/market-selector";
 import LanguageSelector from "../components/markets/LanguageSelector.astro";
 import MarketSelector from "../components/markets/MarketSelector.astro";
 import MarketSuggestion from "../components/markets/MarketSuggestion.astro";
@@ -216,9 +216,7 @@ const marketMatrix = layoutData?.markets ?? { markets: [] };
 const presenceEntry = marketPresence ? marketOfPresence(marketMatrix, marketPresence) : null;
 // Root pages: the store default language once the store sells at more than
 // one URL (hreflang names it); a single-presence store keeps today's rule.
-const pageLanguage = presenceEntry?.presence.locale
-  ?? (hasSeveralPresences(marketMatrix) ? defaultLocale(marketMatrix) : null)
-  ?? documentLanguage;
+const pageLanguage = presencePageLanguage(marketMatrix, marketPresence, documentLanguage);
 // App components draw after this, in the page's language; no app JSON-LD on a noindex page.
 setExtensionPage(Astro.locals, { language: pageLanguage, storeName: storeDisplayName ?? "", noIndex: noindex === true });
 // The page's country: the store's (the backup market's). Numbers and dates are

@@ -1,11 +1,9 @@
 ---
-// The store footer: the app footer the theme names (`apps.footer`, an app's
-// footer slot), else the theme's own footer (CoreFooter.astro). An app
-// footer that is inactive, draws nothing, fails or is late gives way to the
-// core footer.
-import { storefrontExtensionBase } from "@scalius/shared/plugins/storefront-protocol";
-import AppComponent from "@/components/apps/AppComponent.astro";
-import { appSlot, requestExtensions } from "@/lib/extensions";
+// The store footer: the app footer skin the theme names
+// (`apps.skins.footer`), else the theme's own footer (CoreFooter.astro). An
+// app footer that is inactive, draws nothing, fails or is late gives way to
+// the core footer.
+import Skin from "@/components/apps/Skin.astro";
 import { footerData } from "@/lib/extensions/data";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import CoreFooter from "./CoreFooter.astro";
@@ -13,29 +11,17 @@ import CoreFooter from "./CoreFooter.astro";
 type Props = import("astro/types").ComponentProps<typeof CoreFooter>;
 
 const props = Astro.props;
-const app = await appSlot(Astro.locals, Astro.url, "footer");
-let html: string | null = null;
-if (app) {
-  const theme = await currentRequestTheme(Astro.locals);
-  const { host } = await requestExtensions(Astro.locals, Astro.url);
-  html = await host.render(app.extension, {
-    kind: "slot",
-    slot: "footer",
-    component: app.component,
-    settings: app.settings,
-    data: footerData({
-      theme,
-      storeName: props.storeName,
-      storePhone: props.storePhone,
-      menus: props.menus,
-      policies: props.policies,
-      business: props.business,
-      social: props.social,
-    }),
-  });
-}
+const data = async () => footerData({
+  theme: await currentRequestTheme(Astro.locals),
+  storeName: props.storeName,
+  storePhone: props.storePhone,
+  menus: props.menus,
+  policies: props.policies,
+  business: props.business,
+  social: props.social,
+});
 ---
 
-{html?.trim() && app
-  ? <AppComponent html={html} pluginId={app.extension.pluginId} base={storefrontExtensionBase(app.extension.pluginId, app.extension.release)} />
-  : <CoreFooter {...props} />}
+<Skin target="footer" data={data}>
+  <CoreFooter {...props} />
+</Skin>

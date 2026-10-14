@@ -45,7 +45,7 @@ function settingsFor(type: string, values: Record<string, unknown> = {}) {
 }
 
 function slotSettings(id: string, values: Record<string, unknown> = {}) {
-  const slot = declared.storefront.slots.find((entry) => entry.id === id)!;
+  const slot = declared.storefront.skins.find((entry) => entry.id === id)!;
   return resolveStorefrontSettings(slot.settings, values, { image: () => null, products: () => [] });
 }
 
@@ -70,11 +70,11 @@ describe("Noor manifest", () => {
     for (const template of declared.storefront.templates) {
       const theme = readStorefrontAppTemplateTheme(template.theme)!;
       sections.push(...(theme.sections ?? []));
-      for (const placement of Object.values(theme.apps ?? {})) {
+      for (const placement of Object.values(theme.apps?.skins ?? {})) {
         if (!placement) continue;
-        const slot = declared.storefront.slots.find((slot) => `${declared.id}/${slot.id}` === placement.app)!;
-        expect(slot, placement.app).toBeDefined();
-        validate(placement.app, slot.settings, placement.values);
+        const skin = declared.storefront.skins.find((entry) => `${declared.id}/${entry.id}` === placement.app)!;
+        expect(skin, placement.app).toBeDefined();
+        validate(placement.app, skin.settings, placement.values);
       }
     }
     for (const section of sections) {
@@ -93,7 +93,7 @@ describe("Noor manifest", () => {
     expect(checkPluginHandlers(pluginHandlerInventory(declared), plugin)).toEqual([]);
     const sections = Object.keys(storefront.definition.sections ?? {}).sort();
     expect(sections).toEqual(declared.storefront.sections.map((section) => section.type).sort());
-    expect(Object.keys(storefront.definition.slots ?? {}).sort()).toEqual(["noor-card", "noor-footer", "noor-header"]);
+    expect(Object.keys(storefront.definition.skins ?? {}).sort()).toEqual(["noor-card", "noor-footer", "noor-header"]);
     expect(declared.storefront.sections).toHaveLength(20);
   });
 
@@ -110,7 +110,7 @@ describe("Noor manifest", () => {
     const document = applyStorefrontAppTemplate(DEFAULT_STOREFRONT_THEME, "scalius.noor/noor", theme!);
     const result = storefrontThemeDocumentSchema.safeParse(document);
     expect(result.success ? [] : result.error.issues).toEqual([]);
-    expect(document.apps?.header?.app).toBe("scalius.noor/noor-header");
+    expect(document.apps?.skins?.header?.app).toBe("scalius.noor/noor-header");
     expect(document.apps?.template).toBe("scalius.noor/noor");
     // The header shows the merchant's own menu, in their order.
     expect(document.blocks.navigation.source).toBe("menu");
@@ -132,9 +132,9 @@ describe("Noor manifest", () => {
       const rendered = renderSection(storefront, section.settings.app.slice("scalius.noor/".length), settingsFor(section.settings.app.slice("scalius.noor/".length), values));
       expect(rendered).not.toMatch(/Cash on delivery|two.days|seven.day|40%|1,200\s*(?:happy|customers|reviews|orders)|quality checked|pure cotton|inspect|check the product before/i);
     }
-    expect(template.apps?.header?.values.announcements).toEqual([]);
-    expect(template.apps?.footer?.values.payments).toEqual([]);
-    expect(template.apps?.footer?.values.tagline).toBe("");
+    expect(template.apps?.skins?.header?.values.announcements).toEqual([]);
+    expect(template.apps?.skins?.footer?.values.payments).toEqual([]);
+    expect(template.apps?.skins?.footer?.values.tagline).toBe("");
     expect(campaign.map((section) => section.id)).toEqual(["lp-hero", "lp-features", "lp-steps", "lp-order"]);
     const appCampaign = campaign.filter((section) => section.type === "app");
     const hero = appCampaign[0]!.settings.values;
@@ -144,7 +144,7 @@ describe("Noor manifest", () => {
     expect(html).not.toContain("noor-urgency");
     expect(renderSection(storefront, "landing-features", settingsFor("landing-features", appCampaign[1]!.settings.values))).toBe("");
     const order = renderSection(storefront, "landing-order", settingsFor("landing-order", { ...appCampaign.at(-1)!.settings.values, product: "prod_1" }));
-    expect(order).toContain("scalius-checkout");
+    expect(order).toContain('<scalius-embed kind="order-form"');
     expect(order).not.toContain("noor-assure");
   });
 
@@ -433,7 +433,7 @@ describe("Noor landing kit", () => {
     const html = shown(render("landing-order", { assurances: [{ icon: "truck", text: "2-day delivery" }], max_quantity: 3 }));
     expect(html).toContain('id="noor-order-app-landing-order"');
     // The embed names the product by id, never by a URL a canonical path override can change.
-    expect(html).toContain('<scalius-checkout data-product="product:prod_1-1" data-max-quantity="3"></scalius-checkout>');
+    expect(html).toContain('<scalius-embed kind="order-form" data-product="product:prod_1-1" data-max-quantity="3"></scalius-embed>');
     expect(html).toContain('data-island="landing-bar"');
     expect(html).toContain("2-day delivery");
     expect(html).not.toContain("Cash on delivery: pay when it arrives");
@@ -481,7 +481,7 @@ describe("Noor landing kit", () => {
       { image: () => null, products: () => [fixtureProductCard({ soldOut: true })] },
     ));
     expect(html).toContain("Sold out for now");
-    expect(html).not.toContain("scalius-checkout");
+    expect(html).not.toContain("scalius-embed");
   });
 
   it("asks for a product only in the editor's preview", () => {

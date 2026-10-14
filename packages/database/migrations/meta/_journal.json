@@ -1072,6 +1072,13 @@
       "when": 1792300000000,
       "tag": "0152_search_index",
       "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "6",
+      "when": 1792400000000,
+      "tag": "0153_theme_skins",
+      "breakpoints": true
     }
   ]
 }

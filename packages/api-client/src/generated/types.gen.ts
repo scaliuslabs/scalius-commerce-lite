@@ -659,29 +659,12 @@ export type StorefrontThemeDocument = {
         };
     };
     apps?: {
-        header?: {
-            app: string;
-            values: {
-                [key: string]: string | number | boolean | Array<string> | Array<{
-                    [key: string]: string | number | boolean | unknown;
-                }> | unknown;
-            };
-        };
-        footer?: {
-            app: string;
-            values: {
-                [key: string]: string | number | boolean | Array<string> | Array<{
-                    [key: string]: string | number | boolean | unknown;
-                }> | unknown;
-            };
-        };
-        productCard?: {
-            app: string;
-            values: {
-                [key: string]: string | number | boolean | Array<string> | Array<{
-                    [key: string]: string | number | boolean | unknown;
-                }> | unknown;
-            };
+        skins?: {
+            header?: StorefrontSkinRef;
+            footer?: StorefrontSkinRef;
+            'product-card'?: StorefrontSkinRef;
+            'product-main'?: StorefrontSkinRef;
+            'listing-main'?: StorefrontSkinRef;
         };
         template?: string;
     };
@@ -702,6 +685,15 @@ export type StorefrontThemeDocument = {
             cart: StorefrontPageTemplate;
             page: StorefrontPageTemplate;
         };
+    };
+};
+
+export type StorefrontSkinRef = {
+    app: string;
+    values: {
+        [key: string]: string | number | boolean | Array<string> | Array<{
+            [key: string]: string | number | boolean | unknown;
+        }> | unknown;
     };
 };
 
@@ -740,6 +732,7 @@ export type StorefrontSectionList = Array<{
         }>;
         phoneHeight?: 'screen' | 'compact';
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'usp-strip';
@@ -759,6 +752,7 @@ export type StorefrontSectionList = Array<{
             }>;
         };
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'category-tiles';
@@ -770,6 +764,7 @@ export type StorefrontSectionList = Array<{
         title: string;
         categoryIds: Array<string>;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'collections';
@@ -781,6 +776,7 @@ export type StorefrontSectionList = Array<{
         collectionIds: Array<string>;
         title?: string;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'product-rail';
@@ -804,6 +800,7 @@ export type StorefrontSectionList = Array<{
         };
         limit: number;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'product-grid';
@@ -828,6 +825,7 @@ export type StorefrontSectionList = Array<{
         columns: number;
         rows: number;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'deal-block';
@@ -851,6 +849,7 @@ export type StorefrontSectionList = Array<{
         };
         promotionId?: string | null;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'product-tabs';
@@ -878,6 +877,7 @@ export type StorefrontSectionList = Array<{
         }>;
         limit: number;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'shop-by';
@@ -893,6 +893,7 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'banner-mosaic';
@@ -907,6 +908,7 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'lookbook';
@@ -931,6 +933,7 @@ export type StorefrontSectionList = Array<{
         };
         photo: 'tall' | 'square';
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'banner';
@@ -947,6 +950,7 @@ export type StorefrontSectionList = Array<{
             href: string;
         } | null;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'brand-wall';
@@ -957,6 +961,7 @@ export type StorefrontSectionList = Array<{
         title: string;
         style: 'grid' | 'rail';
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'editorial';
@@ -989,6 +994,7 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'faq';
@@ -1003,6 +1009,7 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'utility-cards';
@@ -1017,6 +1024,7 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'endless-grid';
@@ -1027,6 +1035,7 @@ export type StorefrontSectionList = Array<{
         title: string;
         pageSize: 12 | 24 | 36;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'seo-text';
@@ -1037,6 +1046,7 @@ export type StorefrontSectionList = Array<{
         heading: string;
         body: string;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'recently-viewed';
@@ -1046,6 +1056,7 @@ export type StorefrontSectionList = Array<{
     settings: {
         title: string;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'metaobjects';
@@ -1058,6 +1069,7 @@ export type StorefrontSectionList = Array<{
         layout: 'list' | 'grid' | 'accordion';
         limit: number;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'newsletter';
@@ -1071,6 +1083,7 @@ export type StorefrontSectionList = Array<{
         whatsapp?: boolean;
         buttonLabel?: string;
     };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'app';
@@ -2210,10 +2223,10 @@ export type ThemeAppSurfaces = {
         settings: Array<AppSettingField>;
         component: boolean;
     }>;
-    slots: Array<{
+    skins: Array<{
         key: string;
         id: string;
-        slot: 'header' | 'footer' | 'product-card';
+        target: string;
         name: string;
         description: string | null;
         settings: Array<AppSettingField>;
@@ -6344,7 +6357,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 pages: Array<'all' | 'home' | 'product' | 'listing' | 'cart'>;
             }>;
             /**
-             * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections and slots their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
+             * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections, component product blocks and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
              */
             appExtensions: Array<{
                 pluginId: string;
@@ -6360,9 +6373,19 @@ export type GetApiV1StorefrontLayoutResponses = {
                         [key: string]: unknown;
                     }>;
                 };
-                slots: Array<{
+                skins: Array<{
                     id: string;
-                    slot: 'header' | 'footer' | 'product-card';
+                    /**
+                     * The unit the skin draws: header, footer, product-card, product-main, listing-main or section:<core section type>.
+                     */
+                    target: string;
+                    settings: Array<{
+                        [key: string]: unknown;
+                    }>;
+                }>;
+                blocks: Array<{
+                    type: string;
+                    target: 'product.buy-box' | 'product.below';
                     settings: Array<{
                         [key: string]: unknown;
                     }>;

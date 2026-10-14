@@ -130,7 +130,7 @@ export async function loadPluginContract() {
         'export * from "@scalius/shared/plugins";',
         'export { checkPluginAsset, checkStorefrontPublicFile } from "@scalius/shared/plugins/assets";',
         'export { storefrontDefinitionOf } from "./src/storefront/define";',
-        'export { checkStorefrontHeaderHtml, fixtureContext, fixtureFooterData, fixtureHeaderData, fixtureProductCard } from "./src/storefront/testing";',
+        'export { checkSkinHtml, checkStorefrontHeaderHtml, fixtureContext, fixtureProductCard, fixtureProductPage, fixtureSkinData } from "./src/storefront/testing";',
       ].join("\n"),
       resolveDir: join(root, "packages/plugin-sdk"),
       loader: "ts",
@@ -265,8 +265,9 @@ function smokeSettings(contract, schema) {
  *
  * - `src/storefront.(tsx|ts|jsx|js)` → `storefront/storefront.js`: one
  *   self-contained, minified module whose default export is
- *   `defineStorefront()`, with a component for every component section and
- *   slot (and no other), each rendering its defaults without throwing;
+ *   `defineStorefront()`, with a component for every component section,
+ *   component product block and skin (and no other), each rendering its
+ *   defaults without throwing and every skin keeping its target's embed rule;
  * - `src/islands/<name>.(ts|tsx|js|jsx)` → `storefront/islands/<name>.js`, one
  *   per declared island, minified for browsers;
  * - `src/storefront.css` → `storefront/styles.css` when the manifest declares
@@ -289,8 +290,8 @@ export async function packStorefront(contract, manifest, source) {
   // The module.
   const moduleEntry = firstExisting(join(directory, "src"), "storefront");
   const needsModule = contract.pluginHasStorefrontModule(storefront);
-  if (needsModule && !moduleEntry) fail("the manifest declares component sections or slots: write them in src/storefront.tsx (defineStorefront).");
-  if (!needsModule && moduleEntry) fail("src/storefront exists but the manifest declares no component section (a section without a route) or slot.");
+  if (needsModule && !moduleEntry) fail("the manifest declares component sections, product blocks or skins: write them in src/storefront.tsx (defineStorefront).");
+  if (!needsModule && moduleEntry) fail("src/storefront exists but the manifest declares no component section or product block (one without a route) or skin.");
   if (moduleEntry) {
     const result = await esbuild.build({
       entryPoints: [moduleEntry],
@@ -316,9 +317,11 @@ export async function packStorefront(contract, manifest, source) {
     const definition = contract.storefrontDefinitionOf(loaded.default);
     if (!definition) fail("src/storefront has no default export from defineStorefront().");
     const sections = storefront.sections.filter((section) => section.route === undefined);
+    const blocks = storefront.productBlocks.filter((block) => block.route === undefined);
     const expected = [
       ...sections.map((section) => ({ kind: "section", key: section.type, components: definition.sections ?? {} })),
-      ...storefront.slots.map((slot) => ({ kind: "slot", key: slot.id, components: definition.slots ?? {} })),
+      ...blocks.map((block) => ({ kind: "block", key: block.type, components: definition.blocks ?? {} })),
+      ...storefront.skins.map((skin) => ({ kind: "skin", key: skin.id, components: definition.skins ?? {} })),
     ];
     for (const { kind, key, components } of expected) {
       if (typeof components[key] !== "function") fail(`the ${kind} ${key} has no component in defineStorefront({ ${kind}s }).`);
@@ -326,28 +329,35 @@ export async function packStorefront(contract, manifest, source) {
     for (const key of Object.keys(definition.sections ?? {})) {
       if (!sections.some((section) => section.type === key)) fail(`defineStorefront has a section ${key} the manifest does not declare as a component section.`);
     }
-    for (const key of Object.keys(definition.slots ?? {})) {
-      if (!storefront.slots.some((slot) => slot.id === key)) fail(`defineStorefront has a slot ${key} the manifest does not declare.`);
+    for (const key of Object.keys(definition.blocks ?? {})) {
+      if (!blocks.some((block) => block.type === key)) fail(`defineStorefront has a block ${key} the manifest does not declare as a component product block.`);
     }
-    // Smoke render: every component draws its defaults.
+    for (const key of Object.keys(definition.skins ?? {})) {
+      if (!storefront.skins.some((skin) => skin.id === key)) fail(`defineStorefront has a skin ${key} the manifest does not declare.`);
+    }
+    // Smoke render: every component draws its defaults over the fixture data.
     const jobs = [
       ...sections.map((section) => ({ id: `section:${section.type}`, kind: "section", type: section.type, instanceId: "smoke", settings: smokeSettings(contract, section.settings) })),
-      ...storefront.slots.map((slot) => {
-        const settings = smokeSettings(contract, slot.settings);
-        const data = slot.slot === "header" ? contract.fixtureHeaderData()
-          : slot.slot === "footer" ? contract.fixtureFooterData()
-          : { product: contract.fixtureProductCard(), position: 0, aboveFold: true };
-        return { id: `slot:${slot.id}`, kind: "slot", slot: slot.slot, component: slot.id, settings, data };
-      }),
+      ...blocks.map((block) => ({
+        id: `block:${block.type}`, kind: "block", target: `product.${block.placement}`, type: block.type, instanceId: "smoke",
+        settings: smokeSettings(contract, block.settings), data: contract.fixtureProductPage(),
+      })),
+      ...storefront.skins.map((skin) => ({
+        id: `skin:${skin.id}`, kind: "skin", target: skin.target, component: skin.id, settings: smokeSettings(contract, skin.settings),
+        data: contract.fixtureSkinData(skin.target),
+        ...(skin.target.startsWith("section:") ? { instanceId: "smoke" } : {}),
+      })),
     ];
     const reply = loaded.default.render({ abi: contract.STOREFRONT_COMPONENT_ABI, context: contract.fixtureContext(), jobs });
     for (const result of reply.results) {
       if ("error" in result) fail(`${result.id} fails to render its defaults: ${result.error}`);
       if (Buffer.byteLength(result.html) > limits.htmlBytes) fail(`${result.id} renders ${Buffer.byteLength(result.html)} bytes of HTML; the limit is ${limits.htmlBytes}.`);
-      if (jobs.some((job) => job.id === result.id && job.kind === "slot" && job.slot === "header")) {
-        const issues = contract.checkStorefrontHeaderHtml(result.html, { islands: storefront.islands.map((island) => island.name) });
-        if (issues.length > 0) fail(`${result.id} has invalid header markup: ${issues.join(" ")}`);
-      }
+      const job = jobs.find((each) => each.id === result.id);
+      if (job?.kind !== "skin") continue;
+      // The storefront would draw the core unit instead of a skin that breaks its target's embed rule.
+      const issues = contract.checkSkinHtml(job.target, result.html);
+      if (job.target === "header") issues.push(...contract.checkStorefrontHeaderHtml(result.html, { islands: storefront.islands.map((island) => island.name) }));
+      if (issues.length > 0) fail(`${result.id} (${job.target}): ${issues.join(" ")}`);
     }
     files.push(storefrontFile(contract, contract.STOREFRONT_MODULE_FILE, Buffer.from(code)));
   }
@@ -423,7 +433,7 @@ export async function packStorefront(contract, manifest, source) {
   }
   if (publicBytes > limits.publicBytes) fail(`public/ is ${publicBytes} bytes; the limit is ${limits.publicBytes}.`);
   if (files.length > 0 && !needsModule && storefront.islands.length === 0 && !storefront.stylesheet) {
-    fail("public/ files are served only with storefront components: declare a component section, slot, island or stylesheet.");
+    fail("public/ files are served only with storefront components: declare a component section or product block, a skin, an island or a stylesheet.");
   }
   return files;
 }
@@ -443,7 +453,7 @@ function prebuiltStorefront(contract, directory, manifest, fail) {
     return storefrontFile(contract, path, new Uint8Array(readFileSync(join(prebuiltDir, path))));
   });
   const has = (path) => files.some((file) => file.path === path);
-  if (contract.pluginHasStorefrontModule(manifest.storefront) !== has(contract.STOREFRONT_MODULE_FILE)) fail("storefront/storefront.js does not match the manifest's component sections and slots.");
+  if (contract.pluginHasStorefrontModule(manifest.storefront) !== has(contract.STOREFRONT_MODULE_FILE)) fail("storefront/storefront.js does not match the manifest's component sections, product blocks and skins.");
   if (manifest.storefront.stylesheet !== has(contract.STOREFRONT_STYLESHEET_FILE)) fail("storefront/styles.css does not match the manifest's stylesheet.");
   for (const island of manifest.storefront.islands) if (!has(contract.storefrontIslandFile(island.name))) fail(`storefront/islands/${island.name}.js is missing.`);
   for (const file of files) {

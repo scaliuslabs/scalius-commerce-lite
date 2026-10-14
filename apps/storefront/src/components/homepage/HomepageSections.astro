@@ -11,6 +11,9 @@
 // units in place; `only` renders the one unit holding a section, which the
 // preview-only render route returns. App sections (`type: "app"`) are units
 // like any other: what their app drew, marked the same way, never the lead.
+// A core section with an app skin (`section.skin`) draws through the skin
+// from its projection, and through its core component whenever the skin
+// cannot (SectionSkin.astro).
 import type { StorefrontSection } from "@scalius/shared/storefront-theme";
 import {
   dealEndsAt,
@@ -51,6 +54,7 @@ import BannerMosaic from "./BannerMosaic.astro";
 import BrandWall from "./BrandWall.astro";
 import RecentlyViewed from "./RecentlyViewed.astro";
 import AppSection from "./AppSection.astro";
+import SectionSkin from "./SectionSkin.astro";
 import NewsletterSection from "./NewsletterSection.astro";
 import { newsletterLanguage } from "@/lib/newsletter-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
@@ -128,6 +132,7 @@ const root = only
     const headingId = `home-${section.id}-title`;
     return (
       <div {...wrapper} data-home-section={section.type} data-section-id={section.id} data-theme-section-id={marks ? section.id : undefined}>
+        <SectionSkin section={section} content={content} {...money}>
         {section.type === "hero" && (
           <section class:list={["w-full", section.settings.layout === "wide-editorial" && "md:mb-5"]}>
             <Hero
@@ -254,6 +259,7 @@ const root = only
         {section.type === "newsletter" && <NewsletterSection section={section} language={language} />}
 
         {section.type === "app" && appSurface && <AppSection section={section} surface={appSurface} headerLead={section.id === headerLeadSectionId} />}
+        </SectionSkin>
       </div>
     );
   })}

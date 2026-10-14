@@ -11,13 +11,18 @@ import {
   getThemePreviewProductAppBlocks,
 } from "@/lib/api";
 import AppHeadTags from "@/components/apps/AppHeadTags.astro";
+import AppComponent from "@/components/apps/AppComponent.astro";
+import ComponentProductBlocks from "@/components/apps/ComponentProductBlocks.astro";
 import ProductAppBlocks from "@/components/apps/ProductAppBlocks.astro";
+import { appProductBlocks, appSkin, renderAppSkin } from "@/lib/extensions";
+import { productPageData } from "@/lib/extensions/data";
+import type { EmbedRender, EmbedRenderers } from "@/lib/extensions/embeds";
+import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
 import { THEME_EDITOR_MARKS, themeEditorModuleMark } from "@scalius/shared/theme-editor-bridge";
 import TemplateSections from "@/components/homepage/TemplateSections.astro";
 import { templateSectionData } from "@/lib/template-sections";
 import { markRenderUncacheable } from "@/lib/cache-policy";
-import DeliveryFacts from "@/components/DeliveryFacts.astro";
 import { buildDeliveryFacts, productFulfilment } from "@/lib/delivery-facts";
 import { resolveProductPageCopy } from "@/components/product/lib/buyer-inputs";
 import { formatMoney } from "@/lib/currency";
@@ -28,13 +33,10 @@ import ProductGallery from "@/components/product/ProductGallery.astro";
 import Container from "@/components/ui/Container.astro";
 import ProductPageLayout from "@/components/product/ProductPageLayout.astro";
 import ProductSectionNav from "@/components/product/ProductSectionNav.astro";
-import ProductSummary from "@/components/product/ProductSummary.astro";
+import ProductBuyBox from "@/components/product/ProductBuyBox.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import RecentlyViewedRecord from "@/components/homepage/RecentlyViewedRecord.astro";
 import StickyBuyBar from "@/components/product/StickyBuyBar.astro";
-import ProductEmiLine from "@/components/product/ProductEmiLine.astro";
-import DigitalPromise from "@/components/product/DigitalPromise.astro";
-import WarrantyRow from "@/components/product/WarrantyRow.astro";
 import ProductReviews from "@/components/product/reviews/ProductReviews.astro";
 import ProductModule from "@/components/product/modules/ProductModule.astro";
 import ProductSpecTable from "@/components/product/modules/ProductSpecTable.astro";
@@ -47,7 +49,6 @@ import ProductRecentlyViewed from "@/components/product/modules/ProductRecentlyV
 import ProductDetails from "@/components/product/ProductDetails.astro";
 import {
   KEY_ATTRIBUTES_MAX,
-  buyBoxFeatures,
   compareSimilarProducts,
   descriptionInInfoColumn,
   featuresPlacement,
@@ -55,7 +56,6 @@ import {
   publicSpecificationRows,
   renderedContentBlocks,
 } from "@/components/product/lib/product-page-modules";
-import ReviewsSummary from "@/components/product/reviews/ReviewsSummary.astro";
 import { reviewStructuredData } from "@/lib/review-structured-data";
 import { pickReviewCopy, readProductReviews } from "@/components/product/reviews/review-format";
 import { pickReviewFormCopy } from "@/lib/account-reviews";
@@ -551,6 +551,84 @@ const primarySchemaAvailability = selectedBuyerVariant
   ? isVariantAvailable(selectedBuyerVariant)
   : buyerStockSummary.canPurchaseAny;
 
+// An app skin of the product page's main part (`apps.skins["product-main"]`):
+// drawn from the page's projection around the store's own buy form, else
+// the core breadcrumbs, gallery and buy box. The reviews and related
+// products it places replace the template's modules of the same. The
+// projection is built once, only when a skin or a component block draws.
+const productPath = product.canonicalPath?.startsWith("/") ? product.canonicalPath : `/products/${product.slug}`;
+let pageProjection: StorefrontProductPage | null = null;
+const productPageProjection = (): StorefrontProductPage => pageProjection ??= productPageData({
+  product,
+  media,
+  variants: buyerVariants,
+  options: productOptions,
+  url: productPath,
+  breadcrumbs: [
+    { title: "Home", url: "/" },
+    ...(productCategory ? [{ title: productCategory.name, url: productCategory.canonicalPath || `/categories/${encodeURIComponent(productCategory.slug)}` }] : []),
+    { title: product.name, url: productPath },
+  ],
+  price: { current: buyerDisplayedPrice, regular: buyerPricePresentation.pricing.originalPrice, from: buyerPricePresentation.isStartingAt },
+  variantPrice: getVariantSchemaPrice,
+  money: (amount) => formatMoney(amount, { code: currencyCode, symbol: currencySymbol }),
+});
+const productMainSkin = await appSkin(Astro.locals, Astro.url, "product-main");
+const productMainMarkup = productMainSkin
+  ? await renderAppSkin(Astro.locals, Astro.url, productMainSkin, { data: productPageProjection() })
+  : null;
+const skinEmbeds = productMainMarkup?.embeds ?? new Set<string>();
+const shownModules = pageModules.filter((module) =>
+  !(module === "reviews" && skinEmbeds.has("reviews")) && !(module === "related" && skinEmbeds.has("recommendations")));
+const componentBlocks = await appProductBlocks(Astro.locals, Astro.url);
+const buyBox = {
+  summary: {
+    product,
+    category: productCategory,
+    variants: buyerVariants,
+    options: productOptions,
+    currencySymbol,
+    currencyCode,
+    currencyDecimalPlaces,
+    priceIncrementMinor: currencyPriceIncrement,
+    initialVariant: queryVariantSelection?.variant,
+    initialUnavailableVariant: unavailableQueryVariantSelection?.variant,
+    quickBuyNotice,
+    actionCopy: productPageCopy,
+    fulfilmentBadge,
+    look: buyBoxLook,
+    stockWords: shop.product.stock,
+    soldOutCopy: { note: shop.product.soldOutNote, similar: shop.product.seeSimilar },
+    details: detailsInBuyBox,
+    detailsFeatures: featuresAt === "description",
+  },
+  reviewCopy,
+  features: { shown: featuresAt === "buy-box", title: productPageCopy.productKeyFeaturesText },
+  emi: buyBoxShowsEmi,
+  contactLinks,
+  appBlocks,
+  componentBlocks,
+  blockData: productPageProjection,
+  fulfilment: pageFulfilment,
+  deliveryFacts,
+  canPurchaseAny: buyerStockSummary.canPurchaseAny,
+};
+// What a product-main skin's embeds render: the store's own buy box (the
+// skin owns the description), reviews and related products.
+const productEmbeds: EmbedRenderers = {
+  "buy-form": ({ data }) => ({
+    component: ProductBuyBox as EmbedRender["component"],
+    props: { ...buyBox, summary: { ...buyBox.summary, details: false, title: data.title !== "false" } },
+  }),
+  reviews: () => ({
+    component: ProductReviews as EmbedRender["component"],
+    props: { product, copy: reviewCopy, formCopy: reviewFormCopy, language: reviewLanguage, storeName: sellerSchemaName },
+  }),
+  recommendations: () => recommendations.products.length > 0
+    ? { component: RelatedProducts as EmbedRender["component"], props: { recommendations, currencySymbol, currencyCode } }
+    : null,
+};
+
 // Product JSON-LD -- per SEO-01 (merchant listing spec). The description is
 // stated once (plain text, capped), never per variant.
 const schemaDescription = productSchemaDescription(product.description, product.name);
@@ -559,7 +637,7 @@ const schemaDescription = productSchemaDescription(product.description, product.
 // Review items are stated only where the page shows them (the `reviews`
 // module); the rating stays with the summary under the title.
 const pageReviewSchema = reviewStructuredData(product);
-const reviewSchema = pageReviewSchema && !pageModules.includes("reviews")
+const reviewSchema = pageReviewSchema && !shownModules.includes("reviews") && !skinEmbeds.has("reviews")
   ? { aggregateRating: pageReviewSchema.aggregateRating }
   : pageReviewSchema;
 const productJsonLd =
@@ -704,7 +782,7 @@ const productCategoryAnalytics = productCategory
 
   <Fragment slot="preload">
     {
-      initialGalleryPreload && (
+      initialGalleryPreload && !productMainMarkup && (
         <link
           rel="preload"
           as="image"
@@ -753,79 +831,38 @@ const productCategoryAnalytics = productCategory
     data-fb-category-details={JSON.stringify(productCategoryAnalytics)}
     data-fb-variants-details={JSON.stringify(fbViewVariants)}
   >
-    <div class="lg:pt-2">
-      <ProductBreadcrumbs product={product} category={productCategory} />
-    </div>
+    {productMainMarkup ? (
+      <div data-product-main="skin" data-theme-section-id={editorMarks ? THEME_EDITOR_MARKS.productMain : undefined}>
+        <AppComponent markup={productMainMarkup} embeds={productEmbeds} />
+      </div>
+    ) : (
+      <Fragment>
+        <div class="lg:pt-2">
+          <ProductBreadcrumbs product={product} category={productCategory} />
+        </div>
 
-    <Container
-      as="section"
-      class="py-2 sm:py-4 lg:py-6"
-      style={factsColumn ? "max-inline-size: 87.5rem" : undefined}
-      data-theme-section-id={editorMarks ? THEME_EDITOR_MARKS.productMain : undefined}
-    >
-      <ProductPageLayout gallery={productPageLayout.gallery} factsColumn={factsColumn}>
-        <ProductGallery
-          product={product}
-          media={media}
-          layout={galleryLayout}
-          initialProductMediaId={initialGalleryProductMediaId}
-          playVideoLabel={productPageCopy.productPlayVideoText}
-          zoomLabel={shop.product.zoomPhoto}
-          zoomOfLabel={shop.product.zoomPhotoOf}
-          showAllLabel={shop.product.showAllPhotos}
-        />
-        <ProductSummary
-          product={product}
-          category={productCategory}
-          variants={buyerVariants}
-          options={productOptions}
-          currencySymbol={currencySymbol}
-          currencyCode={currencyCode}
-          currencyDecimalPlaces={currencyDecimalPlaces}
-          priceIncrementMinor={currencyPriceIncrement}
-          initialVariant={queryVariantSelection?.variant}
-          initialUnavailableVariant={unavailableQueryVariantSelection?.variant}
-          quickBuyNotice={quickBuyNotice}
-          actionCopy={productPageCopy}
-          fulfilmentBadge={fulfilmentBadge}
-          look={buyBoxLook}
-          stockWords={shop.product.stock}
-          soldOutCopy={{ note: shop.product.soldOutNote, similar: shop.product.seeSimilar }}
-          details={detailsInBuyBox}
-          detailsFeatures={featuresAt === "description"}
+        <Container
+          as="section"
+          class="py-2 sm:py-4 lg:py-6"
+          style={factsColumn ? "max-inline-size: 87.5rem" : undefined}
+          data-theme-section-id={editorMarks ? THEME_EDITOR_MARKS.productMain : undefined}
         >
-          <ReviewsSummary slot="after-title" product={product} copy={reviewCopy} />
-          {featuresAt === "buy-box" && (
-            <ProductFeatureList
-              slot="after-actions"
-              features={buyBoxFeatures(product)}
-              variant="list"
-              title={productPageCopy.productKeyFeaturesText}
+          <ProductPageLayout gallery={productPageLayout.gallery} factsColumn={factsColumn}>
+            <ProductGallery
+              product={product}
+              media={media}
+              layout={galleryLayout}
+              initialProductMediaId={initialGalleryProductMediaId}
+              playVideoLabel={productPageCopy.productPlayVideoText}
+              zoomLabel={shop.product.zoomPhoto}
+              zoomOfLabel={shop.product.zoomPhotoOf}
+              showAllLabel={shop.product.showAllPhotos}
             />
-          )}
-          {buyBoxShowsEmi && product.emi && (
-            <ProductEmiLine slot="after-price" emi={product.emi} currencyCode={currencyCode} currencySymbol={currencySymbol} />
-          )}
-          {contactLinks.length > 0 && (
-            <nav slot="after-actions" data-product-contact aria-label="Contact the store" class="mt-3 flex flex-wrap gap-2">
-              {contactLinks.map((link) => (
-                <a
-                  href={link.href}
-                  data-product-contact-link={link.kind}
-                  class="inline-flex min-h-11 items-center justify-center rounded-md border border-primary px-4 text-sm font-semibold text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                  aria-label={link.kind === "phone" ? `Call ${link.label}` : "Contact on WhatsApp"}
-                  {...(link.kind === "whatsapp" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                >{link.kind === "phone" ? "Call" : "WhatsApp"}</a>
-              ))}
-            </nav>
-          )}
-          <ProductAppBlocks slot="after-actions" blocks={appBlocks} placement="buy-box" />
-          <DigitalPromise slot="after-actions" product={product} fulfilment={pageFulfilment} />
-          {buyerStockSummary.canPurchaseAny && <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />}
-          <WarrantyRow slot="after-actions" product={product} copy={productPageCopy} />
-        </ProductSummary>
-      </ProductPageLayout>
-    </Container>
+            <ProductBuyBox {...buyBox} />
+          </ProductPageLayout>
+        </Container>
+      </Fragment>
+    )}
 
     <StickyBuyBar productName={product.name} phone={sticky.phoneBottom === "buy-bar"} desktop={sticky.desktop === "product-bar"} />
 
@@ -838,7 +875,7 @@ const productCategoryAnalytics = productCategory
     />
 
     {/* The template's modules below the fold, in its order (each a preview mark in the theme editor). */}
-    {pageModules.map((module) => <ThemeEditorMark id={editorMarks ? themeEditorModuleMark(module) : null}>{(() => {
+    {shownModules.map((module) => <ThemeEditorMark id={editorMarks ? themeEditorModuleMark(module) : null}>{(() => {
       switch (module) {
         case "compare-similar":
           return (
@@ -905,8 +942,9 @@ const productCategoryAnalytics = productCategory
     })()}</ThemeEditorMark>)}
 
     {/* Installed apps' blocks after the template's modules. */}
-    <ThemeEditorMark id={editorMarks && appBlocks.some((block) => block.placement === "below") ? THEME_EDITOR_MARKS.productApps : null}>
+    <ThemeEditorMark id={editorMarks && (appBlocks.some((block) => block.placement === "below") || componentBlocks.some((block) => block.target === "product.below")) ? THEME_EDITOR_MARKS.productApps : null}>
       <ProductAppBlocks blocks={appBlocks} placement="below" />
+      <ComponentProductBlocks blocks={componentBlocks} target="product.below" data={productPageProjection} />
     </ThemeEditorMark>
   </div>
 

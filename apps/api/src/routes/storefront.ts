@@ -2,7 +2,7 @@
 // Storefront API — thin HTTP layer.
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
-import { STOREFRONT_COMPONENT_SLOTS } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_BLOCK_TARGETS } from "@scalius/shared/plugins/storefront-protocol";
 import { PLUGIN_STOREFRONT_SCRIPT_PAGES } from "@scalius/shared/plugins/manifest";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
@@ -412,16 +412,21 @@ const layoutDataSchema = z.object({
     release: z.string().openapi({ description: "The release's bundle SHA-256: names its storefront files (/_x/<plugin id>/<release>/) and its isolate." }),
     sections: z.array(z.string()),
     sectionSettings: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
-    slots: z.array(z.object({
+    skins: z.array(z.object({
       id: z.string(),
-      slot: z.enum(STOREFRONT_COMPONENT_SLOTS),
+      target: z.string().openapi({ description: "The unit the skin draws: header, footer, product-card, product-main, listing-main or section:<core section type>." }),
+      settings: z.array(z.record(z.string(), z.unknown())),
+    })),
+    blocks: z.array(z.object({
+      type: z.string(),
+      target: z.enum(STOREFRONT_BLOCK_TARGETS),
       settings: z.array(z.record(z.string(), z.unknown())),
     })),
     islands: z.array(z.string()),
     stylesheet: z.boolean(),
     connect: z.array(z.string()),
   })).openapi({
-    description: "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections and slots their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
+    description: "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections, component product blocks and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
   }),
   appBlockPages: z.array(z.enum(PLUGIN_BLOCK_PAGES)).openapi({
     description: "The page groups where an active app draws a checkout or customer-account block. Only these pages read /storefront/app-blocks/{page}.",

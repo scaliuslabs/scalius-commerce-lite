@@ -6,7 +6,6 @@ import {
   STOREFRONT_TEMPLATES,
   STOREFRONT_THEME_COLOR_KEYS,
   STOREFRONT_TYPE_PAIRING_SPECS,
-  STOREFRONT_APP_SLOT_KEYS,
   applyStorefrontAppTemplate,
   isStorefrontThemeHexColor,
   listStorefrontThemeDocumentContrastProblems,
@@ -20,20 +19,22 @@ import {
   storefrontThemeWithContent,
   type ResolvedStorefrontTheme,
   type StoreShape,
-  type StorefrontAppSlot,
   type StorefrontAppTemplateTheme,
   type StorefrontBlockSlot,
   type StorefrontProductAppBlock,
   type StorefrontProductModule,
+  type StorefrontSkinRef,
   type StorefrontTemplateId,
   type StorefrontThemeColorKey,
   type StorefrontThemeDocument,
   type StorefrontThemeFallback,
+  type StorefrontThemeSkinUnit,
   type StorefrontThemeTokens,
   type StorefrontTypePairing,
 } from "@scalius/shared/storefront-theme";
 import { PLUGIN_PRODUCT_BLOCKS_MAX } from "@scalius/shared/plugins/storefront";
-import type { ThemeApp, ThemeAppBlock, ThemeAppSlot } from "~/lib/api-query-options/online-store";
+import { STOREFRONT_SKIN_UNITS } from "@scalius/shared/plugins/storefront-protocol";
+import type { ThemeApp, ThemeAppBlock, ThemeAppSkin } from "~/lib/api-query-options/online-store";
 import { appValuesInvalid, type AppSettingValues } from "./schema-form/app-settings";
 
 /**
@@ -273,7 +274,7 @@ export function appTemplates(apps: readonly ThemeApp[]): AppTemplateEntry[] {
   }));
 }
 
-/** An app template applied to the document (`applyStorefrontAppTemplate`): its look, slots and homepage sections. */
+/** An app template applied to the document (`applyStorefrontAppTemplate`): its look, skins and homepage sections. */
 export function applyAppTemplate(template: AppTemplateEntry, current: StorefrontThemeDocument): StorefrontThemeDocument {
   return applyStorefrontAppTemplate(current, template.key, template.theme);
 }
@@ -450,48 +451,50 @@ export function toggleProductModule(
   return at < 0 ? [...rest, module] : [...rest.slice(0, at), module, ...rest.slice(at)];
 }
 
-// ─── Theme slots apps fill ────────────────────────────────────────────────
+// ─── App skins of the theme's units ───────────────────────────────────────
 
-/** The theme slots an app can fill. */
-export type AppSlotKind = ThemeAppSlot["slot"];
+/** The units an app skin can draw (a core section's skin sits on its placement). */
+export type AppSkinUnit = StorefrontThemeSkinUnit;
+export const APP_SKIN_UNITS = STOREFRONT_SKIN_UNITS satisfies readonly AppSkinUnit[];
 
-/** An app's slot as the workspace offers it, with its app. */
-export interface AppSlotEntry {
+/** An app's skin as the workspace offers it, with its app. */
+export interface AppSkinEntry {
   app: ThemeApp;
-  slot: ThemeAppSlot;
+  skin: ThemeAppSkin;
 }
 
-/** The active apps' slots by key (`<plugin id>/<slot id>`). */
-export function appSlotsByKey(apps: readonly ThemeApp[]): ReadonlyMap<string, AppSlotEntry> {
-  return new Map(apps.flatMap((app) => app.slots.map((slot) => [slot.key, { app, slot }] as const)));
+/** The active apps' skins by key (`<plugin id>/<skin id>`). */
+export function appSkinsByKey(apps: readonly ThemeApp[]): ReadonlyMap<string, AppSkinEntry> {
+  return new Map(apps.flatMap((app) => app.skins.map((skin) => [skin.key, { app, skin }] as const)));
 }
 
-/** The app that fills a slot in the theme, or null for the built-in block. */
-export function themeAppSlot(theme: StorefrontThemeDocument, slot: AppSlotKind): StorefrontAppSlot | null {
-  return theme.apps?.[STOREFRONT_APP_SLOT_KEYS[slot]] ?? null;
+/** The app skin drawing a unit in the theme, or null for the built-in one. */
+export function themeAppSkin(theme: StorefrontThemeDocument, unit: AppSkinUnit): StorefrontSkinRef | null {
+  return theme.apps?.skins?.[unit] ?? null;
 }
 
 /**
- * The theme with an app filling a slot, or the built-in block back (null).
- * A theme whose apps fill nothing and name no template has no `apps`, as
- * before any app filled one.
+ * The theme with an app skin drawing a unit, or the built-in one back
+ * (null). A theme whose skins draw nothing and name no template has no
+ * `apps`, as before any app drew one.
  */
-export function setThemeAppSlot(theme: StorefrontThemeDocument, slot: AppSlotKind, value: StorefrontAppSlot | null): StorefrontThemeDocument {
-  const key = STOREFRONT_APP_SLOT_KEYS[slot];
-  const { [key]: _previous, ...rest } = theme.apps ?? {};
-  const apps = value ? { ...rest, [key]: value } : rest;
+export function setThemeAppSkin(theme: StorefrontThemeDocument, unit: AppSkinUnit, value: StorefrontSkinRef | null): StorefrontThemeDocument {
+  const { [unit]: _previous, ...others } = theme.apps?.skins ?? {};
+  const skins = value ? { ...others, [unit]: value } : others;
+  const { skins: _skins, ...rest } = theme.apps ?? {};
+  const apps = Object.keys(skins).length > 0 ? { ...rest, skins } : rest;
   const { apps: _apps, ...document } = theme;
   return Object.keys(apps).length > 0 ? { ...document, apps } : document;
 }
 
-/** The slots whose values break what their app declares (slots of inactive apps are not judged). */
-export function invalidAppSlots(theme: StorefrontThemeDocument, byKey: ReadonlyMap<string, AppSlotEntry>): AppSlotKind[] {
-  return (Object.keys(STOREFRONT_APP_SLOT_KEYS) as AppSlotKind[]).filter((slot) => {
-    const filled = themeAppSlot(theme, slot);
-    const entry = filled ? byKey.get(filled.app) : undefined;
-    return entry !== undefined && entry.slot.slot === slot && appValuesInvalid(entry.slot.settings, filled!.values);
+/** The units whose skin values break what their app declares (skins of inactive apps are not judged). */
+export function invalidAppSkins(theme: StorefrontThemeDocument, byKey: ReadonlyMap<string, AppSkinEntry>): AppSkinUnit[] {
+  return APP_SKIN_UNITS.filter((unit) => {
+    const chosen = themeAppSkin(theme, unit);
+    const entry = chosen ? byKey.get(chosen.app) : undefined;
+    return entry !== undefined && entry.skin.target === unit && appValuesInvalid(entry.skin.settings, chosen!.values);
   });
 }
 
-/** The field ids of a slot's app settings start with this (`theme-app-slot-header`). */
-export const appSlotFieldPrefix = (slot: AppSlotKind) => `theme-app-slot-${slot}`;
+/** The field ids of a skin's app settings start with this (`theme-app-skin-header`). */
+export const appSkinFieldPrefix = (unit: AppSkinUnit) => `theme-app-skin-${unit}`;

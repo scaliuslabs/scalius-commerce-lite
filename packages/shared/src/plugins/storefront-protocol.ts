@@ -9,9 +9,69 @@
 /** The render protocol between the storefront and a storefront module. */
 export const STOREFRONT_COMPONENT_ABI = 1 as const;
 
-/** Theme slots an app can fill. The core block renders whenever the app's slot draws nothing. */
-export const STOREFRONT_COMPONENT_SLOTS = ["header", "footer", "product-card"] as const;
-export type StorefrontComponentSlot = (typeof STOREFRONT_COMPONENT_SLOTS)[number];
+/**
+ * Core-owned units an app may redraw: its **skin** of the unit gets the
+ * unit's public projection (the data the core renderer uses), and core draws
+ * the unit whenever the skin is missing, fails or draws nothing.
+ */
+export const STOREFRONT_SKIN_UNITS = ["header", "footer", "product-card", "product-main", "listing-main"] as const;
+export type StorefrontSkinUnit = (typeof STOREFRONT_SKIN_UNITS)[number];
+/** A core section's skin targets `section:<core section type>` (`section:hero`). */
+export const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
+/** What a skin redraws: a fixed unit, or one core section type. */
+export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
+
+/** Where an app's component product block draws: in the buy box after the buttons, or after the page's modules. */
+export const STOREFRONT_BLOCK_TARGETS = ["product.buy-box", "product.below"] as const;
+export type StorefrontBlockTarget = (typeof STOREFRONT_BLOCK_TARGETS)[number];
+
+/**
+ * Core embeds: `<scalius-embed kind="…">` in a component's markup, where the
+ * store renders its own interactive piece with its own data, rules, words
+ * and scripts, so an app composes the store's buy form, filters and paging
+ * instead of re-implementing them. The markup around an embed is the app's.
+ *
+ * - `buy-form`: the product's price, options, buyer inputs, quantity and
+ *   buttons (a real form; works before hydration). `data-title="false"`
+ *   leaves out its heading when the skin draws the product title itself.
+ * - `reviews`, `recommendations`: the product's reviews and related products.
+ * - `filters`, `toolbar` (sort and page size), `pagination`: the listing's.
+ * - `order-form`: the single-page order form of a landing page, for a
+ *   product the section was given (`data-product`, `data-max-quantity`,
+ *   `data-submit-label`).
+ */
+export const STOREFRONT_EMBED_KINDS = ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form"] as const;
+export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
+export const STOREFRONT_EMBED_TAG = "scalius-embed";
+
+/**
+ * What one render may embed: each allowed kind with how many render (any
+ * beyond render nothing, as does a kind not listed), the kinds it must place
+ * (without one, core draws the unit instead), and the kinds the host appends
+ * when the markup leaves them out (a listing always pages, so crawlers reach
+ * every product).
+ */
+export interface StorefrontEmbedRule {
+  allowed: Partial<Record<StorefrontEmbedKind, number>>;
+  required: readonly StorefrontEmbedKind[];
+  appended: readonly StorefrontEmbedKind[];
+}
+
+const NO_EMBEDS: StorefrontEmbedRule = { allowed: {}, required: [], appended: [] };
+
+/** The embed rule of a render: a component section, a skin's target or a product block. */
+export function storefrontEmbedRule(unit: "section" | "block" | StorefrontSkinTarget): StorefrontEmbedRule {
+  switch (unit) {
+    case "section":
+      return { allowed: { "order-form": 2 }, required: [], appended: [] };
+    case "product-main":
+      return { allowed: { "buy-form": 1, reviews: 1, recommendations: 1 }, required: ["buy-form"], appended: [] };
+    case "listing-main":
+      return { allowed: { filters: 1, toolbar: 1, pagination: 1 }, required: [], appended: ["pagination"] };
+    default:
+      return NO_EMBEDS;
+  }
+}
 
 /** When an island's client module loads. */
 export const STOREFRONT_ISLAND_HYDRATION = ["load", "idle", "visible", "interaction"] as const;
@@ -159,7 +219,7 @@ export interface StorefrontStoreInfo {
   logoWidth: number;
 }
 
-/** What a header slot gets: the store, its header menu and the core routes. */
+/** What a header skin gets: the store, its header menu and the core routes. */
 export interface StorefrontHeaderData {
   store: StorefrontStoreInfo;
   menu: StorefrontMenuItem[];
@@ -203,6 +263,117 @@ export interface StorefrontFooterData {
   year: number;
 }
 
+/** What a product-card skin gets: the card, its place in its list, and whether it shows before the first scroll. */
+export interface StorefrontProductCardData {
+  product: StorefrontProductCard;
+  position: number;
+  aboveFold: boolean;
+}
+
+/** Storefront-visible custom fields, by `<namespace>.<key>` (JSON per type; money in major units). */
+export type StorefrontFieldValues = Record<string, unknown>;
+
+/** A page link: its title and store path. */
+export interface StorefrontLink {
+  title: string;
+  url: string;
+}
+
+/**
+ * What a product-main skin and a product block get: the product as the core
+ * product page shows it, priced in the page's market. Availability is a
+ * band, never a quantity. The buy form (`<scalius-embed kind="buy-form">`)
+ * is the only way to buy: it keeps price and stock current as the buyer
+ * chooses options.
+ */
+export interface StorefrontProductPage {
+  product: {
+    id: string;
+    title: string;
+    url: string;
+    brand: StorefrontLink | null;
+    /** The merchant's description, sanitized by the store; "" without one. */
+    descriptionHtml: string;
+    /** Photos (a video's poster), in the gallery's order; 20 at most. */
+    media: StorefrontImage[];
+    /** The price the page opens on (the lowest when options are priced differently). */
+    price: StorefrontMoney;
+    compareAt: StorefrontMoney | null;
+    priceVaries: boolean;
+    availability: "untracked" | "out_of_stock" | "low_stock" | "in_stock";
+    rating: { average: number; count: number } | null;
+    /** The merchant's option axes, in order, with their values. */
+    options: Array<{ name: string; values: Array<{ label: string; swatch: string | null }> }>;
+    /** The buyer's SKUs (100 at most; sold-out ones `available: false`), each with its value of every option, in option order. */
+    variants: Array<{
+      id: string;
+      title: string;
+      options: string[];
+      price: StorefrontMoney;
+      compareAt: StorefrontMoney | null;
+      available: boolean;
+      image: StorefrontImage | null;
+    }>;
+    fields: StorefrontFieldValues;
+    /** Home first, the product last. */
+    breadcrumbs: StorefrontLink[];
+  };
+}
+
+/** What a listing-main skin gets: the listing as the core listing page shows it (this page of it). */
+export interface StorefrontListingPage {
+  kind: "category" | "collection" | "brand" | "search";
+  title: string;
+  /** The merchant's description on the first page, sanitized by the store; null otherwise. */
+  descriptionHtml: string | null;
+  /** The listing's banner image, when the theme shows one. */
+  image: StorefrontImage | null;
+  cards: StorefrontProductCard[];
+  /** Products in the whole listing (a lower bound when `totalIsCapped`). */
+  total: number;
+  totalIsCapped: boolean;
+  page: number;
+  pageCount: number;
+  /** Home and the published ancestors (empty on search). */
+  breadcrumbs: StorefrontLink[];
+  fields: StorefrontFieldValues;
+}
+
+/** A category, collection or brand as a tile shows it. */
+export interface StorefrontTile {
+  id: string;
+  title: string;
+  url: string;
+  image: StorefrontImage | null;
+  /** A collection's own products (collections sections only); empty otherwise. */
+  cards: StorefrontProductCard[];
+}
+
+/** A product source as a section shows it: its title, its listing ("View all"; null without one) and its first cards. */
+export interface StorefrontProductList {
+  title: string;
+  url: string | null;
+  cards: StorefrontProductCard[];
+}
+
+/**
+ * What a core section's skin (`section:<type>`) gets: the section's settings
+ * at its `version` with every reference resolved by fixed rules (a media id
+ * as `StorefrontImage | null`, a product source as `StorefrontProductList`,
+ * category and collection ids as `StorefrontTile[]`, a promotion id as
+ * `{ endsAt }`), hidden blocks left out. `CoreSectionSettings<"hero">`
+ * (`@scalius/shared/storefront-theme`) types one section's settings.
+ */
+export interface StorefrontSectionSkinData<Settings = Record<string, unknown>> {
+  type: string;
+  version: number;
+  settings: Settings;
+  /** Store data the section shows beyond its settings: a brand wall's brands. */
+  tiles: StorefrontTile[];
+  /** A collections section's newest products when no collection has any; an endless grid's first page. */
+  cards: StorefrontProductCard[];
+}
+
 /** A section's settings as its component gets them: every image, product source, link and list resolved. */
 export type StorefrontResolvedSettings = Record<string, StorefrontResolvedValue>;
 export type StorefrontResolvedValue =
@@ -236,6 +407,28 @@ export interface StorefrontRenderContext {
   preview: boolean;
 }
 
+interface SkinJobBase {
+  id: string;
+  kind: "skin";
+  /** The manifest skin id. */
+  component: string;
+  /** The merchant's values for the skin (no images or products: a skin reads nothing). */
+  settings: StorefrontResolvedSettings;
+}
+
+export type StorefrontSkinJob =
+  | (SkinJobBase & { target: "header"; data: StorefrontHeaderData })
+  | (SkinJobBase & { target: "footer"; data: StorefrontFooterData })
+  | (SkinJobBase & { target: "product-card"; data: StorefrontProductCardData })
+  | (SkinJobBase & { target: "product-main"; data: StorefrontProductPage })
+  | (SkinJobBase & { target: "listing-main"; data: StorefrontListingPage })
+  | (SkinJobBase & {
+    target: `section:${string}`;
+    /** The theme's id of the section placement. */
+    instanceId: string;
+    data: StorefrontSectionSkinData;
+  });
+
 export type StorefrontRenderJob =
   | {
     id: string;
@@ -246,30 +439,18 @@ export type StorefrontRenderJob =
     instanceId: string;
     settings: StorefrontResolvedSettings;
   }
+  | StorefrontSkinJob
   | {
     id: string;
-    kind: "slot";
-    slot: "header";
-    /** The manifest slot id. */
-    component: string;
+    /** A component product block (a `productBlocks` entry without a route). */
+    kind: "block";
+    target: StorefrontBlockTarget;
+    /** The manifest block type. */
+    type: string;
+    /** The theme's id of this placement. */
+    instanceId: string;
     settings: StorefrontResolvedSettings;
-    data: StorefrontHeaderData;
-  }
-  | {
-    id: string;
-    kind: "slot";
-    slot: "footer";
-    component: string;
-    settings: StorefrontResolvedSettings;
-    data: StorefrontFooterData;
-  }
-  | {
-    id: string;
-    kind: "slot";
-    slot: "product-card";
-    component: string;
-    settings: StorefrontResolvedSettings;
-    data: { product: StorefrontProductCard; position: number; aboveFold: boolean };
+    data: StorefrontProductPage;
   };
 
 export interface StorefrontRenderBatch {

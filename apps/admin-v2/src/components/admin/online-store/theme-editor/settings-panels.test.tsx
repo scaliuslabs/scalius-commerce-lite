@@ -19,7 +19,7 @@ import {
 } from "@scalius/shared/storefront-theme";
 import type { ThemeApp } from "~/lib/api-query-options/online-store";
 import { useMediaPreviews } from "../schema-form/resource-fields";
-import { appBlocksByKey, appSlotsByKey, invalidAppSlots, productAppBlocksInvalid, resolveThemeForStore, themeDraftInvalid } from "../theme-settings";
+import { appBlocksByKey, appSkinsByKey, invalidAppSkins, productAppBlocksInvalid, resolveThemeForStore, themeDraftInvalid } from "../theme-settings";
 import type { SetTheme } from "../theme-fields";
 import { EDITOR_PARTS, moduleId, type EditorPage } from "./editor-pages";
 import { PartSettings } from "./SelectionPanes";
@@ -443,7 +443,7 @@ describe("product page app blocks", () => {
     id: "acme.reviews",
     name: "Acme Reviews",
     sections: [],
-    slots: [],
+    skins: [],
     templates: [], pagePresets: [],
     productBlocks: [
       {
@@ -527,8 +527,8 @@ describe("product page app blocks", () => {
   });
 });
 
-describe("theme slots apps fill", () => {
-  type Field = ThemeApp["slots"][number]["settings"][number];
+describe("app skins of the theme's units", () => {
+  type Field = ThemeApp["skins"][number]["settings"][number];
   const setting = (key: string, label: string, extra: Partial<Field> = {}): Field => ({
     key, label, help: null, type: "text", required: false, options: null, default: null,
     min: null, max: null, integer: false, maxLength: null, ...extra,
@@ -539,36 +539,38 @@ describe("theme slots apps fill", () => {
     sections: [],
     templates: [], pagePresets: [],
     productBlocks: [],
-    slots: [
-      { key: "acme.studio/header", id: "header", slot: "header", name: "Studio header", description: "A centred logo and a search bar.", settings: [
+    skins: [
+      { key: "acme.studio/header", id: "header", target: "header", name: "Studio header", description: "A centred logo and a search bar.", settings: [
         setting("tagline", "Tagline", { maxLength: 60, default: "Free delivery in Dhaka" }),
         setting("sticky", "Stay on top", { type: "boolean", default: true }),
       ] },
-      { key: "acme.studio/footer", id: "footer", slot: "footer", name: "Studio footer", description: null, settings: [] },
-      { key: "acme.studio/card", id: "card", slot: "product-card", name: "Studio card", description: null, settings: [
+      { key: "acme.studio/footer", id: "footer", target: "footer", name: "Studio footer", description: null, settings: [] },
+      { key: "acme.studio/card", id: "card", target: "product-card", name: "Studio card", description: null, settings: [
         setting("badge", "Badge text", { required: true, maxLength: 20 }),
       ] },
+      { key: "acme.studio/pdp", id: "pdp", target: "product-main", name: "Studio product page", description: "An editorial gallery around the store's buy form.", settings: [] },
+      { key: "acme.studio/grid", id: "grid", target: "listing-main", name: "Studio listing", description: null, settings: [] },
     ],
   };
-  const slotChoice = () => container.querySelector<HTMLElement>("[data-app-slot]")!;
-  const fallback = () => container.querySelector<HTMLElement>("[data-app-slot-fallback]");
+  const skinChoice = () => container.querySelector<HTMLElement>("[data-app-skin]")!;
+  const fallback = () => container.querySelector<HTMLElement>("[data-app-skin-fallback]");
   /** The built-in header's settings: its groups, starting with Layout. */
   const headerGroups = (scope: ParentNode = container) => [...scope.querySelectorAll("h2 > button[aria-expanded]")].map((each) => each.textContent);
 
   it("shows the built-in header alone while no app offers one", () => {
-    renderPart(DEFAULT_STOREFRONT_THEME, EDITOR_PARTS.header, { kind: "home" }, [{ ...STUDIO, slots: [] }]);
-    expect(container.querySelector("[data-app-slot]")).toBeNull();
+    renderPart(DEFAULT_STOREFRONT_THEME, EDITOR_PARTS.header, { kind: "home" }, [{ ...STUDIO, skins: [] }]);
+    expect(container.querySelector("[data-app-skin]")).toBeNull();
     expect(headerGroups()[0]).toBe("Layout");
   });
 
   it("puts an app's header in the theme with its defaults, keeps the built-in one as the fallback, and takes it back", () => {
     renderPart(DEFAULT_STOREFRONT_THEME, EDITOR_PARTS.header, { kind: "home" }, [STUDIO]);
-    expect(radioIn(slotChoice(), "built-in").getAttribute("aria-checked")).toBe("true");
-    expect(slotChoice().textContent).toContain("A centred logo and a search bar. From Acme Studio");
-    click(radioIn(slotChoice(), "acme.studio/header"));
-    expect(latest.apps).toEqual({ header: { app: "acme.studio/header", values: { tagline: "Free delivery in Dhaka", sticky: true } } });
-    type(field("theme-app-slot-header-tagline"), "Eid orders ship free");
-    expect(latest.apps?.header?.values).toEqual({ tagline: "Eid orders ship free", sticky: true });
+    expect(radioIn(skinChoice(), "built-in").getAttribute("aria-checked")).toBe("true");
+    expect(skinChoice().textContent).toContain("A centred logo and a search bar. From Acme Studio");
+    click(radioIn(skinChoice(), "acme.studio/header"));
+    expect(latest.apps).toEqual({ skins: { header: { app: "acme.studio/header", values: { tagline: "Free delivery in Dhaka", sticky: true } } } });
+    type(field("theme-app-skin-header-tagline"), "Eid orders ship free");
+    expect(latest.apps?.skins?.header?.values).toEqual({ tagline: "Eid orders ship free", sticky: true });
     expect(storefrontThemeDocumentSchema.safeParse(latest).success).toBe(true);
 
     // The built-in settings stay, folded, as what the store shows without the app.
@@ -579,32 +581,48 @@ describe("theme slots apps fill", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(headerGroups(fallback()!)[0]).toBe("Layout");
 
-    click(radioIn(slotChoice(), "built-in"));
+    click(radioIn(skinChoice(), "built-in"));
     expect("apps" in latest).toBe(false);
     expect(fallback()).toBeNull();
     expect(headerGroups()[0]).toBe("Layout");
   });
 
   it("says when the chosen app is not active, and keeps the theme valid", () => {
-    const gone = { ...DEFAULT_STOREFRONT_THEME, apps: { footer: { app: "acme.gone/footer", values: { note: "kept" } } } };
+    const gone = { ...DEFAULT_STOREFRONT_THEME, apps: { skins: { footer: { app: "acme.gone/footer", values: { note: "kept" } } } } };
     renderPart(gone, EDITOR_PARTS.footer, { kind: "home" }, [STUDIO]);
-    expect(radioIn(slotChoice(), "acme.gone/footer").getAttribute("aria-checked")).toBe("true");
-    expect(slotChoice().textContent).toContain("acme.gone/footer isn't active, so your store shows the built-in one.");
-    click(radioIn(slotChoice(), "acme.studio/footer"));
-    expect(latest.apps).toEqual({ footer: { app: "acme.studio/footer", values: {} } });
-    expect(slotChoice().textContent).toContain("The app has no settings for this.");
+    expect(radioIn(skinChoice(), "acme.gone/footer").getAttribute("aria-checked")).toBe("true");
+    expect(skinChoice().textContent).toContain("acme.gone/footer isn't active, so your store shows the built-in one.");
+    click(radioIn(skinChoice(), "acme.studio/footer"));
+    expect(latest.apps).toEqual({ skins: { footer: { app: "acme.studio/footer", values: {} } } });
+    expect(skinChoice().textContent).toContain("The app has no settings for this.");
   });
 
-  it("fills the product card from Theme settings, holding an invalid value back", () => {
+  it("skins the product card from Theme settings, holding an invalid value back", () => {
     renderThemeSettings(DEFAULT_STOREFRONT_THEME, "Product cards", [STUDIO]);
-    click(radioIn(slotChoice(), "acme.studio/card"));
-    expect(latest.apps).toEqual({ productCard: { app: "acme.studio/card", values: {} } });
-    expect(container.querySelector("#theme-app-slot-product-card-badge-note")?.textContent).toBe("Fill this in.");
-    expect(invalidAppSlots(latest, appSlotsByKey([STUDIO]))).toEqual(["product-card"]);
-    type(field("theme-app-slot-product-card-badge"), "New");
-    expect(invalidAppSlots(latest, appSlotsByKey([STUDIO]))).toEqual([]);
+    click(radioIn(skinChoice(), "acme.studio/card"));
+    expect(latest.apps).toEqual({ skins: { "product-card": { app: "acme.studio/card", values: {} } } });
+    expect(container.querySelector("#theme-app-skin-product-card-badge-note")?.textContent).toBe("Fill this in.");
+    expect(invalidAppSkins(latest, appSkinsByKey([STUDIO]))).toEqual(["product-card"]);
+    type(field("theme-app-skin-product-card-badge"), "New");
+    expect(invalidAppSkins(latest, appSkinsByKey([STUDIO]))).toEqual([]);
     // The built-in card's settings are the fallback.
     click(fallback()!.querySelector<HTMLButtonElement>("button[aria-expanded]")!);
     expect(fallback()!.textContent).toContain("Buy action");
+  });
+
+  it("offers product page skins on the product part, keeping the built-in settings as the fallback", () => {
+    renderPart(DEFAULT_STOREFRONT_THEME, EDITOR_PARTS.productMain, { kind: "product" }, [STUDIO]);
+    expect(skinChoice().getAttribute("data-app-skin")).toBe("product-main");
+    expect(skinChoice().textContent).toContain("Built-in product page");
+    click(radioIn(skinChoice(), "acme.studio/pdp"));
+    expect(latest.apps).toEqual({ skins: { "product-main": { app: "acme.studio/pdp", values: {} } } });
+    expect(fallback()).not.toBeNull();
+  });
+
+  it("offers listing skins on the listing part", () => {
+    renderPart(DEFAULT_STOREFRONT_THEME, EDITOR_PARTS.listing, { kind: "collection" }, [STUDIO]);
+    expect(skinChoice().getAttribute("data-app-skin")).toBe("listing-main");
+    click(radioIn(skinChoice(), "acme.studio/grid"));
+    expect(latest.apps).toEqual({ skins: { "listing-main": { app: "acme.studio/grid", values: {} } } });
   });
 });

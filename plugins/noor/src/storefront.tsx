@@ -54,7 +54,7 @@ export default defineStorefront({
     "landing-features": LandingFeatures,
     "landing-order": LandingOrder,
   },
-  slots: {
+  skins: {
     "noor-header": Header,
     "noor-footer": Footer,
     "noor-card": Card,

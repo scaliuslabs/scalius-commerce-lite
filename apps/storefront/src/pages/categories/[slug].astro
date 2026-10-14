@@ -14,6 +14,7 @@ import {
   type Category,
 } from "@/lib/api";
 import CatalogListingPage from "@/components/catalog/CatalogListingPage.astro";
+import { storefrontFieldValues } from "@/lib/extensions/data";
 import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
 import { catalogChildLinks } from "@/lib/catalog-listing";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
@@ -231,6 +232,7 @@ const collectionJsonLd =
   <CatalogListingPage
     template
     kind="category"
+    fields={storefrontFieldValues(category.customFields)}
     data={{
       "data-category-name": category.name,
       "data-products-for-analytics": JSON.stringify(analyticsProductData),

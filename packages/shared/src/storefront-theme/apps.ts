@@ -44,29 +44,38 @@ export const storefrontProductAppBlocksSchema = z.array(storefrontProductAppBloc
   .refine((blocks) => new Set(blocks.map((block) => block.id)).size === blocks.length, "Each block id appears once.");
 
 /**
- * A theme slot an app fills (`storefront.slots` of its manifest): the app's
- * `<plugin id>/<slot id>` and the merchant's values for it. While the app is
- * inactive, no longer declares the slot or draws nothing, the core block of
- * that slot renders, so a slot never leaves the page without a header,
- * footer or card.
+ * An app's skin of a core-owned unit (`storefront.skins` of its manifest):
+ * the app's `<plugin id>/<skin id>` and the merchant's values for it. While
+ * the app is inactive, no longer declares the skin for that unit, or draws
+ * nothing, core draws the unit, so a page never lacks its header, footer,
+ * card, product page, listing or section.
  */
-export const storefrontAppSlotSchema = z.object({
+export const storefrontSkinRefSchema = z.object({
   app: storefrontAppKeySchema,
   values: storefrontAppValuesSchema,
 }).strict();
-export type StorefrontAppSlot = z.infer<typeof storefrontAppSlotSchema>;
+export type StorefrontSkinRef = z.infer<typeof storefrontSkinRefSchema>;
 
 /**
- * The document's `apps`: the slots apps fill, and the app template the look
- * was applied from (a label, like `template`).
+ * The document's `apps`: the units app skins draw, by skin target (a core
+ * section's skin sits on its placement instead), and the app template the
+ * look was applied from (a label, like `template`). `skin` is the skin
+ * reference schema (the API passes its named one, so its contract states it once).
  */
-export const storefrontThemeAppsSchema = z.object({
-  header: storefrontAppSlotSchema.optional(),
-  footer: storefrontAppSlotSchema.optional(),
-  productCard: storefrontAppSlotSchema.optional(),
-  template: storefrontAppKeySchema.optional(),
-}).strict();
-export type StorefrontThemeApps = z.infer<typeof storefrontThemeAppsSchema>;
+export function storefrontThemeAppsSchemaOf(skin: typeof storefrontSkinRefSchema) {
+  return z.object({
+    skins: z.object({
+      header: skin.optional(),
+      footer: skin.optional(),
+      "product-card": skin.optional(),
+      "product-main": skin.optional(),
+      "listing-main": skin.optional(),
+    }).strict().optional(),
+    template: storefrontAppKeySchema.optional(),
+  }).strict();
+}
 
-/** The document key of each slot (`header`, `footer`, `productCard`). */
-export const STOREFRONT_APP_SLOT_KEYS = { header: "header", footer: "footer", "product-card": "productCard" } as const;
+export const storefrontThemeAppsSchema = storefrontThemeAppsSchemaOf(storefrontSkinRefSchema);
+export type StorefrontThemeApps = z.infer<typeof storefrontThemeAppsSchema>;
+export type StorefrontThemeSkins = NonNullable<StorefrontThemeApps["skins"]>;
+export type StorefrontThemeSkinUnit = keyof StorefrontThemeSkins;

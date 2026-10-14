@@ -1,5 +1,5 @@
 // acme.studio: a complete theme as an app. Its storefront module
-// (storefront.tsx) fills the header, footer and product card slots and draws
+// (storefront.tsx) skins the header, footer and product card and draws
 // four component sections; one island adds carousel buttons; one stylesheet
 // styles it all with the store's own colour and type tokens. The template
 // applies the whole look in one click and keeps the merchant's content.
@@ -64,20 +64,20 @@ export const manifest = {
         ],
       },
     ],
-    slots: [
+    skins: [
       {
-        id: "studio-header", slot: "header", name: "Studio header",
+        id: "studio-header", target: "header", name: "Studio header",
         settings: [
           { key: "sticky", label: "Stay on screen while scrolling", type: "boolean", default: true },
           { key: "show_search", label: "Show search", type: "boolean", default: true },
         ],
       },
       {
-        id: "studio-footer", slot: "footer", name: "Studio footer",
+        id: "studio-footer", target: "footer", name: "Studio footer",
         settings: [{ key: "tagline", label: "Tagline", type: "text", default: "Made with care.", maxLength: 120 }],
       },
       {
-        id: "studio-card", slot: "product-card", name: "Studio card",
+        id: "studio-card", target: "product-card", name: "Studio card",
         settings: [
           {
             key: "ratio", label: "Photo shape", type: "select", default: "portrait",
@@ -93,9 +93,11 @@ export const manifest = {
       description: "The Studio header, footer and card, with a hero, featured products and questions on the homepage.",
       theme: {
         apps: {
-          header: { app: "acme.studio/studio-header", values: {} },
-          footer: { app: "acme.studio/studio-footer", values: {} },
-          productCard: { app: "acme.studio/studio-card", values: {} },
+          skins: {
+            header: { app: "acme.studio/studio-header", values: {} },
+            footer: { app: "acme.studio/studio-footer", values: {} },
+            "product-card": { app: "acme.studio/studio-card", values: {} },
+          },
         },
         sections: [
           { id: "app-studio-hero", type: "app", version: 1, settings: { app: "acme.studio/hero", values: {} } },

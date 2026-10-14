@@ -10,6 +10,7 @@ export * from "./storefront-theme/apps";
 export * from "./storefront-theme/app-templates";
 export * from "./storefront-theme/blocks";
 export * from "./storefront-theme/sections";
+export * from "./storefront-theme/skins";
 export * from "./storefront-theme/home-data";
 export * from "./storefront-theme/document";
 export * from "./storefront-theme/pages";

@@ -1,12 +1,11 @@
 ---
-// The store header: the app header the theme names (`apps.header`, an app's
-// header slot), else the theme's own header (CoreHeader.astro). An app
-// header that is inactive, fails or is late gives way to the core header,
-// so a page always has one.
-import { storefrontExtensionBase } from "@scalius/shared/plugins/storefront-protocol";
+// The store header: the app header skin the theme names
+// (`apps.skins.header`), else the theme's own header (CoreHeader.astro). An
+// app header that is inactive, fails or is late gives way to the core
+// header, so a page always has one.
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
-import AppComponent from "@/components/apps/AppComponent.astro";
-import { appSlot, requestExtensions } from "@/lib/extensions";
+import Skin from "@/components/apps/Skin.astro";
+import { appSkin } from "@/lib/extensions";
 import { headerData, headerPageData } from "@/lib/extensions/data";
 import type { HomepageHeaderLead } from "@/lib/homepage-sections";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
@@ -16,25 +15,16 @@ type Props = import("astro/types").ComponentProps<typeof CoreHeader> & { pageLea
 
 const { pageLead, ...props } = Astro.props;
 const theme = await currentRequestTheme(Astro.locals);
-const app = await appSlot(Astro.locals, Astro.url, "header");
-let html: string | null = null;
-if (app) {
-  const { host } = await requestExtensions(Astro.locals, Astro.url);
-  html = await host.render(app.extension, {
-    kind: "slot",
-    slot: "header",
-    component: app.component,
-    settings: app.settings,
-    data: headerData({ theme, storeName: props.storeName ?? null, navigation: props.navigation ?? [], categoryTree: props.categoryTree,
-      ...(pageLead !== undefined ? { page: headerPageData(pageLead, app.extension) } : {}),
-    }),
+const data = async () => {
+  const skin = await appSkin(Astro.locals, Astro.url, "header");
+  return headerData({ theme, storeName: props.storeName ?? null, navigation: props.navigation ?? [], categoryTree: props.categoryTree,
+    ...(pageLead !== undefined && skin ? { page: headerPageData(pageLead, skin.extension) } : {}),
   });
-}
-const preview = theme.preview !== null;
+};
 ---
 
 <div class="contents" data-storefront-header>
-{html !== null && html.trim() !== "" && app
-  ? <AppComponent html={html} pluginId={app.extension.pluginId} base={storefrontExtensionBase(app.extension.pluginId, app.extension.release)} editorMark={preview ? THEME_EDITOR_MARKS.header : undefined} />
-  : <CoreHeader {...props} />}
+  <Skin target="header" data={data} editorMark={theme.preview !== null ? THEME_EDITOR_MARKS.header : undefined}>
+    <CoreHeader {...props} />
+  </Skin>
 </div>

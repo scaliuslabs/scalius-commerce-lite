@@ -1,38 +1,35 @@
 ---
-// One app component's markup (docs/STOREFRONT-COMPONENTS.md): a section, or
-// the header, footer or card slot an app fills. The HTML was drawn by the
-// app's storefront module and checked by the host (lib/extensions/host.ts).
-// The wrapper names the app and its file base for the client runtime and
-// adds no box (`display: contents`), so grids and sticky headers lay out
-// as the app wrote them. Core embeds in it (`<scalius-checkout>`) render the
-// store's own surface in place (lib/extensions/embeds.ts).
-import OrderForm from "@/components/checkout/OrderForm.astro";
-import { splitCoreEmbeds } from "@/lib/extensions/embeds";
+// One app component's markup (docs/STOREFRONT-COMPONENTS.md): a section, a
+// product block, or a skin of a core-owned unit. The HTML was drawn by the
+// app's storefront module, checked by the host (lib/extensions/host.ts) and
+// cut at its core embeds (`appMarkup`). The wrapper names the app and its
+// file base for the client runtime and adds no box (`display: contents`), so
+// grids and sticky headers lay out as the app wrote them. Each embed renders
+// the store's own component in place, as the page's `embeds` say
+// (lib/extensions/embeds.ts); one the page gives no renderer renders nothing.
+import type { AppMarkup } from "@/lib/extensions";
+import type { EmbedRenderers } from "@/lib/extensions/embeds";
 
 interface Props {
-  html: string;
-  pluginId: string;
-  /** `/_x/<plugin id>/<release>/`. */
-  base: string;
-  /** The placement identity, when the caller has one (for repeated embeds). */
-  instanceId?: string;
+  markup: AppMarkup;
+  embeds?: EmbedRenderers;
   /** The theme editor's mark (preview only). */
   editorMark?: string | undefined;
-  /** The theme editor's preview: embeds never post. */
-  preview?: boolean;
-  /** The products this component was given, id to handle: the only ones an embed may order. */
-  products?: ReadonlyMap<string, string>;
 }
 
-const { html, pluginId, base, instanceId, editorMark, preview = false, products } = Astro.props;
-const parts = splitCoreEmbeds(html);
-const embedPrefix = parts.some((part) => part.kind === "checkout") ? encodeURIComponent(instanceId ?? crypto.randomUUID()) : "";
+const { markup, embeds = {}, editorMark } = Astro.props;
+type AnyComponent = (props: Record<string, unknown>) => unknown;
+const parts = markup.parts.map((part) => {
+  if (part.kind === "html") return part;
+  const rendered = embeds[part.embed]?.({ data: part.data, index: part.index }) ?? null;
+  return { kind: "embed" as const, embed: part.embed, Embed: rendered ? rendered.component as unknown as AnyComponent : null, props: rendered?.props ?? {} };
+});
 ---
 
-<div class="contents" data-sx-app={pluginId} data-sx-base={base} data-theme-section-id={editorMark}>
-  {parts.map((part, index) => part.kind === "html"
+<div class="contents" data-sx-app={markup.pluginId} data-sx-base={markup.base} data-theme-section-id={editorMark}>
+  {parts.map((part) => part.kind === "html"
     ? <Fragment set:html={part.html} />
-    : products?.has(part.product) && <OrderForm slug={products.get(part.product)!} idPrefix={`order-${embedPrefix}-${index}`} maxQuantity={part.maxQuantity} submitLabel={part.submitLabel ?? undefined} preview={preview} />)}
+    : part.Embed && <div class="contents" data-sx-embed={part.embed}><part.Embed {...part.props} /></div>)}
 </div>
 
 <script>

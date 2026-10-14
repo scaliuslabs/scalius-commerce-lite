@@ -1,0 +1,109 @@
+---
+// The listing's own pieces a listing-main skin places
+// (`<scalius-embed kind="filters | toolbar | pagination">`): the filters (a
+// GET form that works without JavaScript, open beside the skin's results),
+// the sort and page-size controls, and the page links. Same data, rules,
+// words and scripts as the core listing (CatalogListing.astro); paging is
+// always numbered links, so crawlers reach every product.
+import type { ComponentProps } from "astro/types";
+import CatalogBandTools from "./CatalogBandTools.astro";
+import CatalogFilters from "./CatalogFilters.astro";
+import CatalogPagination from "./CatalogPagination.astro";
+import type CatalogListing from "./CatalogListing.astro";
+import { STOREFRONT_FILTER_VALUES_IN_HTML } from "@scalius/shared/storefront-theme";
+import {
+  PRODUCT_LIST_SHOW_ALL_PARAM,
+  DEFAULT_PRODUCT_LIST_PAGE_SIZE,
+  buildProductListHref,
+  countActiveProductListFilters,
+} from "@/lib/product-list-query";
+import { catalogFacetGroups, catalogFacetValueCounts, catalogRatingRows, showsCatalogPriceFilter, visibleCatalogFacets } from "@/lib/catalog-filters";
+import { catalogListingControls, catalogListingPresentation, catalogSortOptions } from "@/lib/catalog-listing";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+
+type ListingProps = ComponentProps<typeof CatalogListing>;
+
+interface Props {
+  kind: "filters" | "toolbar" | "pagination";
+  listing: Omit<ListingProps, "band" | "pills">;
+}
+
+const { kind, listing } = Astro.props;
+const { products, pagination, facets, ratingFacet = [], priceRange, queryState, pathname, resetPath, searchLabel, newestLabel = "Latest", countEndpoint, currencySymbol, currencyCode, listingTemplate = null } = listing;
+const { currentFilters, sortBy, defaultSort, query, limit } = queryState;
+const { resolved } = await currentRequestTheme(Astro.locals);
+const hasReviews = resolved.facts.hasReviews;
+const refinementCount = countActiveProductListFilters(currentFilters) - (query ? 1 : 0);
+const shownFacets = visibleCatalogFacets(facets, currentFilters);
+const showsPrice = showsCatalogPriceFilter(priceRange, currentFilters);
+const ratingRows = catalogRatingRows(ratingFacet, currentFilters, hasReviews);
+const controls = catalogListingControls({
+  total: pagination.total,
+  refinementCount,
+  facetValueCounts: [
+    ...catalogFacetValueCounts(shownFacets, showsPrice ? priceRange : undefined),
+    ratingRows.filter(({ count }) => count > 0).length,
+  ],
+  storeShown: resolved.blocks.listing.filters.shown,
+});
+const pageUrl = (page: number) =>
+  buildProductListHref({ pathname, currentFilters, overrides: { page, [PRODUCT_LIST_SHOW_ALL_PARAM]: null }, defaultSort });
+const presentation = catalogListingPresentation(resolved, listingTemplate).filters;
+const groups = kind === "filters"
+  ? catalogFacetGroups(shownFacets, {
+    valuesInHtml: STOREFRONT_FILTER_VALUES_IN_HTML,
+    showAll: typeof currentFilters[PRODUCT_LIST_SHOW_ALL_PARAM] === "string" ? currentFilters[PRODUCT_LIST_SHOW_ALL_PARAM] as string : null,
+  })
+  : [];
+---
+
+{kind === "filters" && controls.filters && (
+  <div id="filter-section" data-catalog-embed="filters" data-placement="sidebar">
+    <CatalogFilters
+      groups={groups}
+      priceRange={priceRange}
+      currentFilters={currentFilters}
+      query={query}
+      sortBy={sortBy}
+      defaultSort={defaultSort}
+      total={pagination.total}
+      totalIsCapped={pagination.totalIsCapped}
+      pathname={pathname}
+      resetPath={resetPath}
+      searchLabel={searchLabel}
+      countEndpoint={countEndpoint}
+      currencySymbol={currencySymbol}
+      currencyCode={currencyCode}
+      presentation={{ ...presentation, placement: "sidebar" }}
+      ratingRows={ratingRows}
+    />
+  </div>
+)}
+{kind === "toolbar" && (controls.sort || pagination.total > limit) && (
+  <CatalogBandTools
+    drawerButton={false}
+    refinementCount={refinementCount}
+    quickFilters={[]}
+    showPageSize={pagination.total > limit || limit !== DEFAULT_PRODUCT_LIST_PAGE_SIZE}
+    showSort={controls.sort}
+    showViewToggle={false}
+    limit={limit}
+    sortBy={sortBy}
+    sortOptions={catalogSortOptions({ defaultSort, sortBy, newestLabel, hasReviews })}
+    viewSelect={{ pathname, defaultSort, currentFilters }}
+    results="grid"
+  />
+)}
+{kind === "pagination" && products.length > 0 && <CatalogPagination page={pagination.page} totalPages={pagination.totalPages} getPageUrl={pageUrl} />}
+
+<script>
+  import { setupCatalogFilters } from "@/lib/catalog-filters";
+  import { setupCatalogSorts } from "@/lib/catalog-sort";
+
+  const setup = () => {
+    setupCatalogFilters();
+    setupCatalogSorts();
+  };
+  document.addEventListener("DOMContentLoaded", setup);
+  document.addEventListener("astro:page-load", setup);
+</script>

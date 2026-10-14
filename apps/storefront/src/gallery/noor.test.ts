@@ -88,9 +88,9 @@ describe("packed Noor gallery integration", () => {
     const layout = await read("noor-product", "storefront/layout");
     expect(readStorefrontExtensions(layout.appExtensions)).toEqual([NOOR_EXTENSION]);
     expect(NOOR_EXTENSION.release).toBe(BUNDLED_STOREFRONT_EXTENSIONS[NOOR_EXTENSION.pluginId]!.release);
-    expect(NOOR_EXTENSION.slots.map((slot) => slot.slot)).toEqual(["header", "footer", "product-card"]);
+    expect(NOOR_EXTENSION.skins.map((skin) => skin.target)).toEqual(["header", "footer", "product-card"]);
     expect((await read("noor-product-missing", "storefront/layout")).appExtensions).toEqual([]);
-    expect(galleryEntry("noor-product-missing")!.theme.apps!.header).toEqual(galleryEntry("noor-product")!.theme.apps!.header);
+    expect(galleryEntry("noor-product-missing")!.theme.apps!.skins!.header).toEqual(galleryEntry("noor-product")!.theme.apps!.skins!.header);
     expect(galleryEntry("noor-product-core")!.theme.apps).toEqual({});
   });
 
@@ -101,7 +101,7 @@ describe("packed Noor gallery integration", () => {
       expect(entry.theme.blocks.product.sticky).toEqual({ phoneTop: "anchor-bar", phoneBottom: "buy-bar", desktop: "anchor-bar" });
       expect(galleryRenderPlan(id, origin)!.page).toBe("/src/pages/products/[slug].astro");
     }
-    expect(galleryEntry("noor-product-static")!.theme.apps!.header!.values.sticky).toBe(false);
+    expect(galleryEntry("noor-product-static")!.theme.apps!.skins!.header!.values.sticky).toBe(false);
     expect(galleryEntry("noor-product-quiet")!.theme.blocks.topBar.variant).toBe("none");
     expect(galleryNavigation(galleryEntry("noor-product")!)).toHaveLength(5);
     expect(galleryNavigation(galleryEntry("noor-product-dense")!)).toHaveLength(18);
@@ -132,7 +132,7 @@ describe("packed Noor gallery integration", () => {
 
   it("provides real first-section inputs for transparent header decisions and both core sticky layouts", async () => {
     for (const id of ["noor-home", "noor-home-text", "noor-home-no-image", "noor-home-slideshow"]) {
-      expect(galleryEntry(id)!.theme.apps!.header!.values.transparent_home).toBe(true);
+      expect(galleryEntry(id)!.theme.apps!.skins!.header!.values.transparent_home).toBe(true);
     }
     expect(galleryEntry("noor-home-text")!.theme.pages.home[0]!.type).toBe("editorial");
     for (const [id, type, mediaCount] of [["noor-home", "hero", 1], ["noor-home-no-image", "hero", 0], ["noor-home-slideshow", "slideshow", 2]] as const) {
@@ -143,7 +143,7 @@ describe("packed Noor gallery integration", () => {
       expect(lead.media).toHaveLength(mediaCount);
     }
     const menuRow = galleryEntry("core-product-menu-row")!;
-    expect(menuRow.theme.apps?.header).toBeUndefined();
+    expect(menuRow.theme.apps?.skins?.header).toBeUndefined();
     expect(menuRow.theme.blocks.desktopNav.variant).toBe("sticky-category-bar");
     expect(galleryEntry("noor-product-buybar")!.theme.blocks.product.sticky.desktop).toBe("product-bar");
     expect(galleryEntry("noor-product-tabs")!.theme.blocks.product.sticky).toEqual({ phoneTop: "none", phoneBottom: "buy-bar", desktop: "none" });
@@ -156,10 +156,10 @@ describe("packed Noor gallery integration", () => {
       store: { name: "Gallery store", currency: "BDT", locale: "en-BD", language: "en", timeZone: "Asia/Dhaka" },
       page: { kind: "product", path: "/products/jamdani-saree" }, assets: "", preview: false,
     } });
-    const slot = NOOR_EXTENSION.slots.find((item) => item.slot === "header")!;
+    const skin = NOOR_EXTENSION.skins.find((item) => item.target === "header")!;
     const html = await host.render(NOOR_EXTENSION, {
-      kind: "slot", slot: "header", component: slot.id,
-      settings: resolveStorefrontSettings(slot.settings, { sticky: true }, { image: () => null, products: () => [] }),
+      kind: "skin", target: "header", component: skin.id,
+      settings: resolveStorefrontSettings(skin.settings, { sticky: true }, { image: () => null, products: () => [] }),
       data: { store: { name: "Gallery store", url: "/", logo: null, logoWidth: 140 }, menu: [], categories: [], announcement: null,
         routes: { home: "/", search: "/search", cart: "/cart", account: "/account" }, searchParam: "q" },
     });

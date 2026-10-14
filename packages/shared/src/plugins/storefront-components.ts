@@ -1,8 +1,9 @@
 // Storefront components (docs/STOREFRONT-COMPONENTS.md): the presentation an
 // app compiles once and the storefront runs at the edge. An app's storefront
-// module draws its sections and fills theme slots (the header, the footer,
-// the product card) from the merchant's settings and the data the page
-// already read. It is a pure function of its input: no network, no storage,
+// module draws its sections and product blocks, and skins of core-owned units
+// (the header, the footer, the product card, the product page's main part,
+// the listing, core sections), from the merchant's settings and the data the
+// page already read. It is a pure function of its input: no network, no storage,
 // no bindings. The storefront calls it once per page batch, in its own
 // isolate (Workers Paid, `LOADER`) or compiled in (bundled apps, every plan),
 // with the same input and the same output. Its client code runs only as
@@ -14,9 +15,10 @@
 
 import { z } from "zod";
 import {
-  STOREFRONT_COMPONENT_SLOTS,
-  type StorefrontComponentSlot,
+  STOREFRONT_BLOCK_TARGETS,
+  type StorefrontBlockTarget,
   type StorefrontImage,
+  type StorefrontSkinTarget,
   type StorefrontProductCard,
   type StorefrontResolvedSettings,
   type StorefrontResolvedValue,
@@ -30,6 +32,7 @@ import {
   type PluginSettingItem,
   type PluginSettingsSchema,
 } from "./settings-schema";
+import { isStorefrontSkinTarget } from "../storefront-theme/skins";
 
 /** The zod-free part (constants, data shapes, render messages): ./storefront-protocol.ts. */
 export * from "./storefront-protocol";
@@ -40,16 +43,27 @@ const name = z.string().regex(PLUGIN_NAME_PATTERN);
 const title = z.string().trim().min(1).max(80);
 const description = z.string().trim().min(1).max(500);
 
-/** A theme slot the app's storefront module fills (`storefront.slots`). */
-export const storefrontSlotDeclarationSchema = z.object({
+/** The most skins one app declares. */
+export const STOREFRONT_SKINS_MAX = 30;
+
+/**
+ * A skin the app's storefront module draws (`storefront.skins`): app markup
+ * for one core-owned unit (`header`, `footer`, `product-card`,
+ * `product-main`, `listing-main`, or a core section `section:<type>`). It
+ * gets the unit's public projection and the merchant's values for its
+ * settings; core draws the unit whenever it is missing, fails or draws
+ * nothing. A skin reads nothing, so its settings name no images or products
+ * (ship images in the app's public files).
+ */
+export const storefrontSkinDeclarationSchema = z.object({
   /** Unique per app: the theme names it `<plugin id>/<id>`. */
   id: name,
-  slot: z.enum(STOREFRONT_COMPONENT_SLOTS),
+  target: z.string().max(64).refine(isStorefrontSkinTarget, "Use header, footer, product-card, product-main, listing-main or section:<core section type>."),
   name: title,
   description: description.optional(),
   settings: pluginSettingsSchemaSchema.default([]),
 }).strict();
-export type StorefrontSlotDeclaration = z.infer<typeof storefrontSlotDeclarationSchema>;
+export type StorefrontSkinDeclaration = z.infer<typeof storefrontSkinDeclarationSchema> & { target: StorefrontSkinTarget };
 
 /**
  * A ready-made look (`storefront.templates`): theme values the template
@@ -90,7 +104,7 @@ export const storefrontIslandDeclarationSchema = z.object({
 }).strict();
 
 export const storefrontComponentsManifestSchema = {
-  slots: z.array(storefrontSlotDeclarationSchema).max(10).default([]),
+  skins: z.array(storefrontSkinDeclarationSchema).max(STOREFRONT_SKINS_MAX).default([]),
   templates: z.array(storefrontTemplateDeclarationSchema).max(5).default([]),
   pagePresets: z.array(storefrontPagePresetDeclarationSchema).max(8).default([]),
   islands: z.array(storefrontIslandDeclarationSchema).max(10).default([]),
@@ -194,8 +208,8 @@ export function resolveStorefrontSettings(schema: PluginSettingsSchema, stored: 
 
 /**
  * One active app with storefront components, as the layout read lists it:
- * enough for the storefront to load its module, resolve slot settings and
- * name its files, with no further read.
+ * enough for the storefront to load its module, resolve skin and block
+ * settings and name its files, with no further read.
  */
 export interface StorefrontExtension {
   pluginId: string;
@@ -208,7 +222,9 @@ export interface StorefrontExtension {
   sections: string[];
   /** Each component section's settings schema, by type (the storefront resolves the values). */
   sectionSettings: Record<string, PluginSettingsSchema>;
-  slots: Array<{ id: string; slot: StorefrontComponentSlot; settings: PluginSettingsSchema }>;
+  skins: Array<{ id: string; target: StorefrontSkinTarget; settings: PluginSettingsSchema }>;
+  /** Component product blocks (`productBlocks` without a route), drawn at the edge. */
+  blocks: Array<{ type: string; target: StorefrontBlockTarget; settings: PluginSettingsSchema }>;
   islands: string[];
   stylesheet: boolean;
   connect: string[];
@@ -227,13 +243,20 @@ export function readStorefrontExtensions(value: unknown): StorefrontExtension[] 
     if (typeof item.pluginId !== "string" || typeof item.version !== "string" || typeof item.release !== "string" || !RELEASE.test(item.release)) continue;
     if (item.source !== "bundled" && item.source !== "registry" && item.source !== "upload") continue;
     const names = (list: unknown) => Array.isArray(list) ? list.filter((name): name is string => typeof name === "string" && PLUGIN_NAME_PATTERN.test(name)) : [];
-    const slots = Array.isArray(item.slots) ? item.slots.flatMap((slot) => {
-      if (typeof slot !== "object" || slot === null) return [];
-      const record = slot as Record<string, unknown>;
-      if (typeof record.id !== "string" || !PLUGIN_NAME_PATTERN.test(record.id)) return [];
-      if (!(STOREFRONT_COMPONENT_SLOTS as readonly unknown[]).includes(record.slot)) return [];
+    const skins = Array.isArray(item.skins) ? item.skins.flatMap((skin) => {
+      if (typeof skin !== "object" || skin === null) return [];
+      const record = skin as Record<string, unknown>;
+      if (typeof record.id !== "string" || !PLUGIN_NAME_PATTERN.test(record.id) || !isStorefrontSkinTarget(record.target)) return [];
       const settings = pluginSettingsSchemaSchema.safeParse(record.settings ?? []);
-      return settings.success ? [{ id: record.id, slot: record.slot as StorefrontComponentSlot, settings: settings.data }] : [];
+      return settings.success ? [{ id: record.id, target: record.target, settings: settings.data }] : [];
+    }) : [];
+    const blocks = Array.isArray(item.blocks) ? item.blocks.flatMap((block) => {
+      if (typeof block !== "object" || block === null) return [];
+      const record = block as Record<string, unknown>;
+      if (typeof record.type !== "string" || !PLUGIN_NAME_PATTERN.test(record.type)) return [];
+      if (!(STOREFRONT_BLOCK_TARGETS as readonly unknown[]).includes(record.target)) return [];
+      const settings = pluginSettingsSchemaSchema.safeParse(record.settings ?? []);
+      return settings.success ? [{ type: record.type, target: record.target as StorefrontBlockTarget, settings: settings.data }] : [];
     }) : [];
     const sectionSettings: Record<string, PluginSettingsSchema> = {};
     if (typeof item.sectionSettings === "object" && item.sectionSettings !== null) {
@@ -250,7 +273,8 @@ export function readStorefrontExtensions(value: unknown): StorefrontExtension[] 
       release: item.release,
       sections: names(item.sections),
       sectionSettings,
-      slots,
+      skins,
+      blocks,
       islands: names(item.islands),
       stylesheet: item.stylesheet === true,
       connect: Array.isArray(item.connect) ? item.connect.filter((host): host is string => typeof host === "string" && HOST.test(host)) : [],
