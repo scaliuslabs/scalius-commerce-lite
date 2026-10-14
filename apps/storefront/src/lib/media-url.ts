@@ -131,7 +131,9 @@ export function getSameOriginMediaSource(): string {
       // A merchant CDN on another origin keeps its own address; a "CDN" that
       // is just the platform media origin is served from the store origin.
       const cdn = getRuntimeImageCdnBaseUrl()?.trim();
-      if (cdn && new URL(cdn).origin !== new URL(source).origin) return "";
+      // The CDN setting may be a bare host ("cdn.example.com").
+      const cdnOrigin = cdn ? new URL(/^https?:\/\//i.test(cdn) ? cdn : `https://${cdn}`).origin : "";
+      if (cdnOrigin && cdnOrigin !== new URL(source).origin) return "";
       return new URL(source).origin === new URL(storefront).origin ? "" : source;
     } catch {
       return "";

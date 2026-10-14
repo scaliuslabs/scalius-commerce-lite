@@ -85,6 +85,12 @@ describe("media on the store's own origin", () => {
       expect(getSameOriginMediaSource()).toBe("https://cloud.example.test");
       expect(resolveMediaUrl("https://cloud.example.test/media/a.jpg")).toBe("https://shop.example.test/media/a.jpg");
     });
+    requestRuntime.run({ ...runtime, IMAGE_CDN_BASE_URL: "cloud.example.test" }, () => {
+      expect(getSameOriginMediaSource()).toBe("https://cloud.example.test");
+    });
+    requestRuntime.run({ ...runtime, IMAGE_CDN_BASE_URL: "images.example.test" }, () => {
+      expect(getSameOriginMediaSource()).toBe("");
+    });
   });
 
   it("keeps the direct media address on the Free profile, and on a layout that does not say", () => {
