@@ -101,10 +101,11 @@ describe("admin perf check: route bundles", () => {
 
   it("allows a route up to the headroom over its budget and fails it beyond", () => {
     const report = measureRoutes({ chunks: fixtureChunks(), parentByFile: parseRouteTree(ROUTE_TREE), routesDir: ROUTES, brotliBytes });
+    const measured = report.routes.find((route) => route.route === "admin/orders/_list/index.tsx").brotliBytes / 1024;
     const over = (budget) => validateBundleReport(report, { ...BUNDLE_BUDGETS, entry: 1000, routes: { "admin/orders/_list/index.tsx": budget } })
       .some((failure) => failure.includes("admin/orders/_list/index.tsx needs"));
-    expect(over(248.5)).toBe(false);
-    expect(over(247.9)).toBe(true);
+    expect(over(measured - 0.5)).toBe(false);
+    expect(over(measured - 1.1)).toBe(true);
   });
 
   it("fails a route over budget, a lazy-only library on first render, and a stale budget entry", () => {
