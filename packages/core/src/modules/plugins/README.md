@@ -18,11 +18,13 @@ Records, KV, logs, deliveries and cron runs belong to the plugin id, not to the 
 
 ## Lifecycle
 
-Status is `installed`, `active`, `disabled` or `failed`. Activate, deactivate, update, uninstall and settings writes compare-and-set on `plugin_installations.revision` (`installation.revision_conflict`).
+Status is `installed`, `active`, `disabled` or `failed`.
+
+No read mappings for retired manifest shapes before v2 is stable. A row whose stored manifest no longer parses is skipped by the runtime but never hidden (`readPluginInstallations`): a bundled one is rewritten from the deployed code by the next sync (its approved grant decides active or waiting for approval); any other is listed on the Apps page as failed, reinstall needed. Activate, deactivate, update, uninstall and settings writes compare-and-set on `plugin_installations.revision` (`installation.revision_conflict`).
 
 1. `installPlugin` adds an `installed` row with the setting defaults. Nothing runs. Bundled apps install from `apps/api/src/plugins/bundled-sync.ts`.
 2. `activatePlugin` needs the required settings filled, stores the grant the manifest asks for and sets `active`. Only a Super Admin may activate.
-3. `updatePluginInstallation` replaces the manifest, rewrites the registrations, migrates the settings and re-indexes changed collections. An active app whose update asks for more access returns to `installed` until a Super Admin approves it.
+3. `updatePluginInstallation` replaces the manifest, rewrites the registrations, migrates the settings and re-indexes changed collections. An active app whose update asks for more access returns to `installed` until a Super Admin approves it; presentation (sections, blocks, skins) under an approved `storefrontCode` grant asks for nothing new. It also replaces a row whose stored manifest no longer reads (its grant still decides). The bundled sync marks a running app `failed` with the reason when the deployed release cannot be installed.
 4. Deactivate sets `disabled`. `markPluginFailed` sets `failed` when the host cannot load the code.
 5. `uninstallPlugin` removes the row. With `keepData` it cancels waiting deliveries. Without it, it also deletes the app's records, KV, logs, deliveries, cron runs, data-update rows and custom-field definitions.
 6. `setPluginFeature` turns one of an active app's features on (a Super Admin's consent to that feature's access, checked by grant key) or off (revoked at once). The grant records the features that are on (`grant.features`); `toPluginInstallation` reads the manifest through `pluginManifestWithFeatures`, so `installation.manifest` is the app as it runs and every runtime reader skips off features. `declaredManifest` keeps the whole declaration. Registrations follow in the same batch. An update keeps the features that are on and starts new ones off; settings of an off feature stay stored but are hidden and refused on write.

@@ -26,6 +26,7 @@ import {
   latestPluginCronRuns,
   listPluginEventDeliveries,
   listPluginInstallations,
+  readPluginInstallations,
   listPluginLogs,
   pluginNeedsApproval,
   requirePluginInstallation,
@@ -33,6 +34,7 @@ import {
   writePluginSettings,
   type PluginEventDeliveryView,
   type PluginInstallation,
+  type UnreadablePluginInstallation,
 } from "@scalius/core/modules/plugins";
 import { PERMISSION_METADATA } from "@scalius/core/auth/rbac/permission-metadata";
 import {
@@ -659,11 +661,46 @@ app.openapi(listRoute, async (c) => {
   noStore(c);
   const db = c.get("db");
   await syncBundledPlugins(db);
-  const installations = await listPluginInstallations(db);
-  const installed = new Set(installations.map((installation) => installation.pluginId));
+  const { installations, unreadable } = await readPluginInstallations(db);
+  const apps = [...installations.map(summary), ...unreadable.map(unreadableSummary)].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const installed = new Set(apps.map((entry) => entry.id));
   const available = PLUGIN_CATALOG.filter((entry) => !installed.has(entry.id)).map(catalogListing);
-  return ok(c, { apps: installations.map(summary), available, sandboxAvailable: sandboxAvailable(c) });
+  return ok(c, { apps, available, sandboxAvailable: sandboxAvailable(c) });
 });
+
+/**
+ * An installed app whose saved manifest this release cannot read: it cannot
+ * run, so it is listed as failed with the reason instead of vanishing from
+ * the page (a bundled one is rewritten from the deployed code by the sync).
+ */
+function unreadableSummary(installation: UnreadablePluginInstallation): ReturnType<typeof summary> {
+  return {
+    id: installation.pluginId,
+    name: installation.name ?? installation.pluginId,
+    version: installation.version,
+    description: "",
+    translations: null,
+    author: { name: "", url: null },
+    homepage: null,
+    tagline: null,
+    icon: null,
+    categories: [],
+    countries: null,
+    source: installation.source,
+    status: "failed",
+    needsApproval: false,
+    thirdParty: isThirdPartyPlugin(installation.pluginId),
+    signed: false,
+    failureReason: installation.failureReason
+      ?? `Reinstall needed: this release cannot read the saved version ${installation.version} of this app, so it is not running.`,
+    revision: installation.revision,
+    installedAt: iso(installation.installedAt),
+    activatedAt: isoOrNull(installation.activatedAt),
+    updatedAt: iso(installation.updatedAt),
+    featureCount: { on: 0, total: 0 },
+    functions: [],
+  };
+}
 
 function catalogListing(entry: (typeof PLUGIN_CATALOG)[number]) {
   const { listing } = entry;

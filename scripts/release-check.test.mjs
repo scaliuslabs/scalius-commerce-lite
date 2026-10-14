@@ -442,3 +442,30 @@ describe("public API reads", () => {
     for (const read of ["/storefront/layout", "/checkout/config", "/products?limit=24"]) expect(PUBLIC_API_READS).toContain(read);
   });
 });
+
+describe("theme apps", () => {
+  // The demo after a deploy: the theme still drew with Noor, but Noor had dropped off the layout.
+  const theme = {
+    apps: { skins: { header: { app: "scalius.noor/noor-header", values: {} }, "product-card": { app: "scalius.noor/noor-card", values: {} } } },
+    pages: { home: { sections: [
+      { id: "hero", type: "hero", skin: { app: "scalius.noor/section-hero", values: {} } },
+      { id: "app", type: "app", app: "acme.reviews/reviews", values: {} },
+    ] } },
+  };
+
+  it("fails when the published theme draws with an app that is not active, naming it", async () => {
+    const { evaluateThemeApps } = await import("./release-check.mjs");
+    const evaluation = evaluateThemeApps({ theme, appExtensions: [{ pluginId: "acme.reviews" }] });
+    expect(evaluation.ok).toBe(false);
+    expect(evaluation.referenced).toEqual(["acme.reviews", "scalius.noor"]);
+    expect(evaluation.inactive).toEqual(["scalius.noor"]);
+    expect(evaluation.errors[0]).toContain("scalius.noor");
+  });
+
+  it("passes when every app the theme draws with is active, and when it draws with none", async () => {
+    const { evaluateThemeApps } = await import("./release-check.mjs");
+    expect(evaluateThemeApps({ theme, appExtensions: [{ pluginId: "scalius.noor" }, { pluginId: "acme.reviews" }] }).ok).toBe(true);
+    expect(evaluateThemeApps({ theme: { pages: {} }, appExtensions: [] })).toMatchObject({ ok: true, referenced: [] });
+    expect(evaluateThemeApps({ appExtensions: [] }).ok).toBe(false);
+  });
+});

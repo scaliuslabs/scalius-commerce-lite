@@ -1796,6 +1796,68 @@ async function checkPublicApiReads(options, { fetchImpl, logger }) {
   return { reads };
 }
 
+/** An app surface key in the theme document: `<plugin id>/<surface>` (PLUGIN_SURFACE_KEY_PATTERN). */
+const THEME_APP_KEY = /^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\/([a-z][a-z0-9-]{0,47})$/;
+
+/**
+ * Whether every app the published theme draws with (skins, app sections and
+ * product blocks: each `app: "<plugin id>/<surface>"` in the document) is
+ * among the layout's active storefront apps (`appExtensions`). The storefront
+ * draws core in place of an inactive app, so a theme whose app stopped (an
+ * update waiting for approval, a release that could not be installed, a saved
+ * manifest that no longer reads) still renders 200 and only this notices it.
+ */
+export function evaluateThemeApps(layout) {
+  const errors = [];
+  if (!isRecord(layout) || !isRecord(layout.theme) || !Array.isArray(layout.appExtensions)) {
+    return { ok: false, errors: ["The layout has no theme document or appExtensions list."], referenced: [], inactive: [] };
+  }
+  const referenced = new Set();
+  const visit = (value, depth) => {
+    if (depth > 12) return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1);
+      return;
+    }
+    if (!isRecord(value)) return;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "app" && typeof child === "string") {
+        const match = THEME_APP_KEY.exec(child);
+        if (match) referenced.add(match[1]);
+      } else {
+        visit(child, depth + 1);
+      }
+    }
+  };
+  visit(layout.theme, 0);
+  const active = new Set(layout.appExtensions
+    .map((extension) => (isRecord(extension) && typeof extension.pluginId === "string" ? extension.pluginId : null))
+    .filter(Boolean));
+  const inactive = [...referenced].filter((pluginId) => !active.has(pluginId)).sort();
+  for (const pluginId of inactive) {
+    errors.push(`The published theme draws with ${pluginId}, which is not an active storefront app: open Apps in the dashboard (it is waiting for approval, failed or stopped), or remove it from the theme.`);
+  }
+  return { ok: errors.length === 0, errors, referenced: [...referenced].sort(), inactive };
+}
+
+async function checkThemeApps(options, { fetchImpl, logger }) {
+  const url = buildApiV1Url(options.apiBaseUrl, "/storefront/layout");
+  const response = await fetchJson(url, { fetchImpl, timeoutMs: options.timeoutMs });
+  requireStatus(response, "API /storefront/layout", (status) => status >= 200 && status < 300);
+  let payload;
+  try {
+    payload = JSON.parse(response.body);
+  } catch {
+    throw new Error("API /storefront/layout did not return JSON.");
+  }
+  const evaluation = evaluateThemeApps(isRecord(payload) && isRecord(payload.data) ? payload.data : payload);
+  if (!evaluation.ok) throw new Error(evaluation.errors.join(" "));
+  logger?.log(evaluation.referenced.length > 0
+    ? `PASS theme apps: the published theme's apps are active (${evaluation.referenced.join(", ")}).`
+    : "PASS theme apps: the published theme draws with no app.");
+  return { referenced: evaluation.referenced };
+}
+
 async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
   const publicPages = [];
   for (const path of ["/", "/search?q=release-check"]) {
@@ -2383,6 +2445,8 @@ export async function runReleaseCheck(options, {
     checkStorefrontPages(options, { fetchImpl, logger }));
   await runStep(result, "publicApiReads", () =>
     checkPublicApiReads(options, { fetchImpl, logger }));
+  await runStep(result, "themeApps", () =>
+    checkThemeApps(options, { fetchImpl, logger }));
   await runStep(result, "storefrontCacheHeaders", () =>
     checkStorefrontCacheHeaders(options, { fetchImpl, logger }));
   const discovery = await runStep(result, "discovery", () =>
