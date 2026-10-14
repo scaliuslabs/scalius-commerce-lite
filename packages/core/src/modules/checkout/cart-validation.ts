@@ -400,8 +400,10 @@ export function selectStorefrontCartProductRows(
                 sql`${products.id} IN (
                     SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
                 )`,
-                eq(products.isActive, true),
-                isNull(products.deletedAt),
+                // Filters, not indexes: the id set drives (no D1 statistics; an
+                // is_active/deleted_at index walk reads every live product).
+                sql`+${products.isActive} = 1`,
+                sql`+${products.deletedAt} IS NULL`,
                 productPublishedToChannelSql(sql`${products.id}`, salesChannelId),
             ),
         );

@@ -1171,8 +1171,10 @@ export function selectReservationVariantStates(
           SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...new Set(variantIds)])})
         )`,
         isNull(productVariants.deletedAt),
-        eq(products.isActive, true),
-        isNull(products.deletedAt),
+        // Filters, not indexes: the id set drives (no D1 statistics; an
+        // is_active/deleted_at index walk reads every live product's SKUs).
+        sql`+${products.isActive} = 1`,
+        sql`+${products.deletedAt} IS NULL`,
       ),
     );
 }
