@@ -4,7 +4,7 @@ The notifications domain sends buyer and staff messages over email, SMS, WhatsAp
 
 ## Where it fits
 
-- Layer L6. Imports from other domains: `delivery`, `order-kernel`, `platform`, `settings` (`scripts/core-domain-graph.allow.json`).
+- Layer L6. Imports from other domains: `order-kernel`, `platform`, `settings` (`scripts/core-domain-graph.allow.json`).
 - `index.ts` is the server API. `browser.ts` is the closed browser entry: `notification-types.ts`, `message-copy.ts` and `notification-templates.ts` (pure, no database).
 - Provider clients live in `packages/core/src/integrations/` (`email`, `sms`, `whatsapp.ts`, `firebase`, `provider-port.ts`).
 - The API resolves message content from the digital, gift-cards and reviews domains at send time (`apps/api/src/notification-content/*`).
