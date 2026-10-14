@@ -1,3 +1,5 @@
+import { sql, type SQL } from "drizzle-orm";
+
 export type InventoryLedgerPool = "regular" | "preorder" | "backorder";
 
 export type InventoryCounterState = {
@@ -268,3 +270,24 @@ export function getNextReservationGeneration(
   if (active != null) return active;
   return (balances.at(-1)?.generation ?? 0) + 1;
 }
+
+/**
+ * Put in the WHERE of every ledger-v2 movement insert (`INSERT ... SELECT ...
+ * FROM product_variants`): the insert reads its own `(variant_id,
+ * stock_version_after)` key first. It filters nothing (a count is never
+ * negative), so a genuine duplicate still fails on
+ * `inventory_movements_variant_version_uidx` as before. On PostgreSQL the read
+ * is what lets SERIALIZABLE classify the race: two writers claiming the same
+ * next version of one SKU fail with a serialization failure (40001), which the
+ * adapter retries on a fresh snapshot where the CAS answers, instead of a
+ * unique violation (23505) it cannot tell from a real duplicate. On D1 and
+ * Turso it is one index probe.
+ */
+export function ledgerVersionKeyRead(stockVersionAfter: SQL | number): SQL {
+  return sql`AND (
+    SELECT count(*) FROM "inventory_movements" AS "version_claim"
+    WHERE "version_claim"."variant_id" = "product_variants"."id"
+      AND "version_claim"."stock_version_after" = ${stockVersionAfter}
+  ) >= 0`;
+}
+

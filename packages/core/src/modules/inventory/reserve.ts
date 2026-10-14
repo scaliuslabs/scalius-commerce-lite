@@ -24,6 +24,7 @@ import {
   getReservationGenerationBalances,
   type InventoryLedgerV2EdgeFields,
   type InventoryLedgerV2Event,
+  ledgerVersionKeyRead,
 } from "./ledger-v2";
 
 const MAX_RETRIES = 3;
@@ -819,6 +820,7 @@ function buildReservationMovementInsert(
       FROM ${productVariants}
       WHERE ${productVariants.id} = ${claim.variantId}
         AND ${productVariants.stockVersion} = ${variant.stockVersion}
+        ${ledgerVersionKeyRead(claim.stockVersionAfter)}
     `)
     .returning({ id: inventoryMovements.id });
 }
@@ -904,6 +906,7 @@ function buildFreshReservationMovementInsert(
         AND ${product.isActive} = 1
         AND ${product.deletedAt} IS NULL
         AND ${availability}
+        ${ledgerVersionKeyRead(sql`${variant.stockVersion} + 1`)}
     `)
     .returning({ id: inventoryMovements.id });
 }

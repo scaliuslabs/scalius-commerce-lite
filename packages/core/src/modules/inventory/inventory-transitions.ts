@@ -20,6 +20,7 @@ import {
     getReservationGenerationBalances,
     type InventoryLedgerV2EdgeFields,
     type InventoryLedgerV2Event,
+  ledgerVersionKeyRead,
 } from "./ledger-v2";
 import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
 import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
@@ -1054,6 +1055,7 @@ function buildTransitionMovementInsert(
             WHERE ${productVariants.id} = ${claim.variantId}
               AND ${productVariants.stockVersion} = ${variant.stockVersion}
               ${counterGuardSql}
+              ${ledgerVersionKeyRead(claim.stockVersionAfter)}
         `)
         .returning({ id: inventoryMovements.id });
 }

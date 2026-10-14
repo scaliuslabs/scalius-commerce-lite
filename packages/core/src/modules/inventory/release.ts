@@ -23,6 +23,7 @@ import {
   getReservationGenerationBalances,
   type InventoryLedgerV2EdgeFields,
   type InventoryLedgerV2Event,
+  ledgerVersionKeyRead,
 } from "./ledger-v2";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
@@ -769,6 +770,7 @@ function buildReleaseMovementInsert(
       WHERE ${productVariants.id} = ${claim.variantId}
         AND ${productVariants.stockVersion} = ${variant.stockVersion}
         AND ${productVariants.reservedStock} >= ${Math.abs(claim.quantity)}
+        ${ledgerVersionKeyRead(claim.stockVersionAfter)}
     `)
     .returning({ id: inventoryMovements.id });
 }

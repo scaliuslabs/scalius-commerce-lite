@@ -5,6 +5,7 @@ import {
   buildInventoryLedgerV2Edge,
   type InventoryCounterState,
   type InventoryLedgerPool,
+  ledgerVersionKeyRead,
 } from "./ledger-v2";
 import { defaultInventoryLocationIdSql } from "./locations";
 
@@ -77,6 +78,7 @@ export function buildStockMovementClaim(
       WHERE ${productVariants.id} = ${params.variantId}
         AND ${productVariants.stockVersion} = ${edge.stockVersionBefore}
         ${params.allowRetired ? sql`` : sql`AND ${productVariants.deletedAt} IS NULL`}
+        ${ledgerVersionKeyRead(edge.stockVersionAfter)}
     `)
     .returning({ id: inventoryMovements.id });
 }
