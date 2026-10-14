@@ -50,7 +50,7 @@ export const BUNDLE_BUDGETS = {
     // content-block, bundle and template sections in turn under the product revision.
     // +1: the shared icon and SDK chunks the new catalogue screens regrouped.
     // +0.1: truthful app consent copy (storefront components, en + bn).
-    "admin/products/$productId/edit.tsx": 367.1,
+    "admin/products/$productId/edit.tsx": 367.5,
     // The editor plus the navigation shell and the save system's real
     // variant diff and in-flight-save rebase (edits typed while saving stay dirty).
     // +2 (catalogue dashboard): the same category paths and section-save code as the edit

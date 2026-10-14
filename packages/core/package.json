@@ -97,7 +97,7 @@
     "@scalius/shared": "workspace:*",
     "better-auth": "^1.7.7",
     "currency.js": "^2.0.4",
-    "drizzle-orm": "^0.45.3",
+    "drizzle-orm": "^0.45.4",
     "jose": "^6.2.12",
     "nanoid": "^6.0.2",
     "stripe": "^22.6.0",
@@ -109,10 +109,10 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261006.1",
+    "@cloudflare/workers-types": "^5.20261014.1",
     "@scalius/tsconfig": "workspace:*",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.4"
   },
   "license": "AGPL-3.0-only"
 }

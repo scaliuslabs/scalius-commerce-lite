@@ -21,15 +21,17 @@ peerDependencyRules:
     - react-is
 
 overrides:
-  react: "^19.2.8"
-  react-dom: "^19.2.8"
-  react-is: "^19.2.8"
+  # React 19.3.0 adds 7 KiB Brotli to the dashboard entry chunk and breaks the
+  # admin-perf budgets for no feature we use; hold 19.2.8 until a budgeted upgrade.
+  react: "19.2.8"
+  react-dom: "19.2.8"
+  react-is: "19.2.8"
   picomatch: ">=2.3.2"
   yaml: ">=2.8.3"
   dompurify: ">=3.4.13"
   postcss: ">=8.5.23"
   jws: "^3.2.3"
-  esbuild: "0.28.1"
+  esbuild: "0.28.2"
   mdast-util-to-hast: "^13.2.1"
   markdown-it: ">=14.1.1"
   devalue: "5.9.4"
@@ -39,7 +41,7 @@ overrides:
   undici: "8.11.2"
   fast-uri: "3.1.8"
   svgo: "4.1.0"
-  wrangler: "4.148.0"
+  wrangler: "4.150.0"
   partyserver: "0.5.9"
   better-call: "1.4.0"
   shell-quote: "1.8.4"
@@ -92,15 +94,15 @@ minimumReleaseAgeExclude:
   - '@astrojs/cloudflare@14.1.4 || 14.3.4'
   - '@vitejs/plugin-react@6.0.3 || 6.0.5'
   - vite@8.1.5 || 8.2.0 || 8.3.3
-  - '@cloudflare/workers-types@5.20260719.1 || 5.20260721.1 || 5.20260722.1 || 5.20260730.1 || 5.20261006.1'
+  - '@cloudflare/workers-types@5.20260719.1 || 5.20260721.1 || 5.20260722.1 || 5.20260730.1 || 5.20261006.1 || 5.20261014.1'
   - '@cloudflare/workerd-darwin-64@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1'
   - '@cloudflare/workerd-darwin-arm64@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1'
   - '@cloudflare/workerd-linux-64@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1'
   - '@cloudflare/workerd-linux-arm64@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1'
   - '@cloudflare/workerd-windows-64@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1'
-  - miniflare@4.20260714.0 || 4.20260721.0 || 4.20260730.0 || 5.20260831.0-alpha || 5.20261006.0-alpha
+  - miniflare@4.20260714.0 || 4.20260721.0 || 4.20260730.0 || 5.20260831.0-alpha || 5.20261006.0-alpha || 5.20261006.2-beta
   - workerd@1.20260714.1 || 1.20260721.1 || 1.20260730.1 || 1.20261006.1
-  - wrangler@4.112.0 || 4.113.0 || 4.116.0 || 4.128.0 || 4.148.0
+  - wrangler@4.112.0 || 4.113.0 || 4.116.0 || 4.128.0 || 4.148.0 || 4.150.0
   - '@tanstack/query-core@5.101.3'
   - '@tanstack/react-query@5.101.3'
   - '@cloudflare/vite-plugin@1.46.0 || 1.49.0'
@@ -112,6 +114,33 @@ minimumReleaseAgeExclude:
   - '@astrojs/internal-helpers@0.12.0'
   - '@tursodatabase/serverless@1.4.1'
   - nanostores@1.5.5
+  - '@oxlint/binding-android-arm-eabi@1.88.0'
+  - '@oxlint/binding-android-arm64@1.88.0'
+  - '@oxlint/binding-darwin-arm64@1.88.0'
+  - '@oxlint/binding-darwin-x64@1.88.0'
+  - '@oxlint/binding-freebsd-x64@1.88.0'
+  - '@oxlint/binding-linux-arm-gnueabihf@1.88.0'
+  - '@oxlint/binding-linux-arm-musleabihf@1.88.0'
+  - '@oxlint/binding-linux-arm64-gnu@1.88.0'
+  - '@oxlint/binding-linux-arm64-musl@1.88.0'
+  - '@oxlint/binding-linux-ppc64-gnu@1.88.0'
+  - '@oxlint/binding-linux-riscv64-gnu@1.88.0'
+  - '@oxlint/binding-linux-riscv64-musl@1.88.0'
+  - '@oxlint/binding-linux-s390x-gnu@1.88.0'
+  - '@oxlint/binding-linux-x64-gnu@1.88.0'
+  - '@oxlint/binding-linux-x64-musl@1.88.0'
+  - '@oxlint/binding-openharmony-arm64@1.88.0'
+  - '@oxlint/binding-win32-arm64-msvc@1.88.0'
+  - '@oxlint/binding-win32-ia32-msvc@1.88.0'
+  - '@oxlint/binding-win32-x64-msvc@1.88.0'
+  - '@turbo/darwin-64@2.11.8'
+  - '@turbo/darwin-arm64@2.11.8'
+  - '@turbo/linux-64@2.11.8'
+  - '@turbo/linux-arm64@2.11.8'
+  - '@turbo/windows-64@2.11.8'
+  - '@turbo/windows-arm64@2.11.8'
+  - oxlint@1.88.0
+  - turbo@2.11.8
 
 patchedDependencies:
   # Upstream 0.10.3 accepts a previous refresh token repeatedly (cloudflare/workers-oauth-provider#43).

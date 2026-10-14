@@ -27,7 +27,7 @@
     "@scalius/shared": "workspace:*",
     "agents": "0.22.0",
     "better-auth": "^1.7.7",
-    "drizzle-orm": "^0.45.3",
+    "drizzle-orm": "^0.45.4",
     "hono": "4.13.13",
     "jsonwebtoken": "^9.0.3",
     "nanoid": "^6.0.2",
@@ -35,12 +35,12 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261006.1",
+    "@cloudflare/workers-types": "^5.20261014.1",
     "@scalius/tsconfig": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.3",
-    "wrangler": "4.148.0"
+    "vitest": "^5.0.4",
+    "wrangler": "4.150.0"
   }
 }

@@ -27,8 +27,8 @@
     "@scalius/shared": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261006.1",
+    "@cloudflare/workers-types": "^5.20261014.1",
     "@scalius/tsconfig": "workspace:*",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.4"
   }
 }
