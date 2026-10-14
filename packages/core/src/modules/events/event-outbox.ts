@@ -152,35 +152,32 @@ export async function dispatchPendingEvents(options: {
     // Nobody listens: settle the due rows in place, oldest first. A target
     // added later receives only events that occur after it exists. `limit`
     // sizes fan-out work (several queries an event); a settle is one
-    // statement for up to EVENT_FLUSH_BATCH_SIZE rows, so it takes up to
-    // MAX_EVENT_FLUSH_LIMIT and a backlog clears in one drain instead of
-    // writing a few rows on every later tick.
-    for (let round = 0; round < MAX_EVENT_FLUSH_LIMIT / EVENT_FLUSH_BATCH_SIZE; round += 1) {
-      const oldestDue = db
-        .select({ id: eventOutbox.id })
-        .from(eventOutbox)
-        .where(claimableCondition())
-        .orderBy(asc(eventOutbox.nextAttemptAt), asc(eventOutbox.id))
-        .limit(EVENT_FLUSH_BATCH_SIZE);
-      const settled = await db
-        .update(eventOutbox)
-        .set({
-          status: "dispatched",
-          claimId: null,
-          claimExpiresAt: null,
-          lastError: null,
-          dispatchedAt: sql`unixepoch()`,
-          updatedAt: sql`unixepoch()`,
-        })
-        .where(and(inArray(eventOutbox.id, oldestDue), claimableCondition()))
-        .returning(flushedColumns());
-      for (const row of settled) {
-        const event = toOutboxEvent(row);
-        if (event) flushed.push(event);
-      }
-      result.settledWithoutSubscribers += settled.length;
-      if (settled.length < EVENT_FLUSH_BATCH_SIZE) break;
+    // statement whatever it takes, so it takes a full EVENT_FLUSH_BATCH_SIZE:
+    // a backlog clears in a few drains instead of writing two rows on every
+    // later tick, at the same D1 calls per drain.
+    const oldestDue = db
+      .select({ id: eventOutbox.id })
+      .from(eventOutbox)
+      .where(claimableCondition())
+      .orderBy(asc(eventOutbox.nextAttemptAt), asc(eventOutbox.id))
+      .limit(EVENT_FLUSH_BATCH_SIZE);
+    const settled = await db
+      .update(eventOutbox)
+      .set({
+        status: "dispatched",
+        claimId: null,
+        claimExpiresAt: null,
+        lastError: null,
+        dispatchedAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(and(inArray(eventOutbox.id, oldestDue), claimableCondition()))
+      .returning(flushedColumns());
+    for (const row of settled) {
+      const event = toOutboxEvent(row);
+      if (event) flushed.push(event);
     }
+    result.settledWithoutSubscribers = settled.length;
     result.scanned = Math.max(result.scanned, result.settledWithoutSubscribers);
     await report();
     return result;
