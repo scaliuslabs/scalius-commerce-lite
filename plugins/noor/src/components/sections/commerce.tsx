@@ -1,7 +1,9 @@
-// Noor's selling sections: products with up to three tabs (radio tabs, no
-// script), a featured product, shop the look (a photo with hotspots beside
-// its products), collection tiles (mosaic, row or circles), promo tiles and
-// a sale banner with a live countdown.
+// Noor's selling markup: products with tabs (radio tabs, no script), a
+// featured product (Noor's own section), shop the look (a photo with
+// hotspots beside its products), collection tiles (mosaic, row or circles),
+// promo tiles and a sale banner with a live countdown. Everything but the
+// featured product is drawn by a skin of the matching core section
+// (../skins.tsx), which maps the core section's data onto these settings.
 
 import {
   Image,
@@ -26,12 +28,7 @@ export interface ShowcaseSettings {
   text: string | null;
   link: string | null;
   link_label: string | null;
-  tab1_label: string | null;
-  tab1_products: StorefrontProductCard[];
-  tab2_label: string | null;
-  tab2_products: StorefrontProductCard[];
-  tab3_label: string | null;
-  tab3_products: StorefrontProductCard[];
+  tabs: Array<{ label: string | null; products: StorefrontProductCard[] }>;
   layout: string;
   columns: number;
   tone: string;
@@ -39,11 +36,9 @@ export interface ShowcaseSettings {
 }
 
 export function ProductShowcase({ settings, context, instanceId }: SectionProps<ShowcaseSettings>) {
-  const tabs = [
-    { label: text(settings.tab1_label), products: settings.tab1_products },
-    { label: text(settings.tab2_label), products: settings.tab2_products },
-    { label: text(settings.tab3_label), products: settings.tab3_products },
-  ].filter((tab) => tab.products.length > 0);
+  const tabs = settings.tabs
+    .map((tab) => ({ label: text(tab.label), products: tab.products }))
+    .filter((tab) => tab.products.length > 0);
   if (tabs.length === 0) return null;
   const layout = choice(settings.layout, ["grid", "row"] as const, "grid");
   const name = `noor-tab-${instanceId}`;
@@ -254,10 +249,10 @@ export interface CountdownSettings {
   eyebrow: string | null;
   heading: string | null;
   text: string | null;
-  ends_at: string | null;
+  /** When the sale ends, as epoch ms (a running promotion's end, or a typed time through `countdownEnd`). */
+  end: number | null;
   label: string | null;
   link: string | null;
-  image: StorefrontImage | null;
   tone: string;
   spacing: string;
 }
@@ -298,20 +293,18 @@ export function Countdown({ end, context, size = "m" }: { end: number; context: 
 export function PromoCountdown({ settings, context }: SectionProps<CountdownSettings>) {
   const heading = text(settings.heading);
   if (!heading) return null;
-  const end = countdownEnd(settings.ends_at, context.store.timeZone);
   const tone = choice(settings.tone, ["ink", "accent", "soft"] as const, "ink");
   return (
     <Section name="sale" space={settings.spacing}>
-      <div class={cx("noor-sale", `is-${tone}`, settings.image && "has-image")}>
-        {settings.image ? <Image image={settings.image} sizes="100vw" class="noor-cover noor-sale-img" alt="" /> : null}
+      <div class={cx("noor-sale", `is-${tone}`)}>
         <div class="noor-sale-copy">
           {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
           <h2 class="noor-h2" {...editable(context, "heading")}>{heading}</h2>
           {text(settings.text) ? <p class="noor-lede" {...editable(context, "text")}>{settings.text}</p> : null}
         </div>
-        {end ? <Countdown end={end} context={context} /> : null}
+        {settings.end ? <Countdown end={settings.end} context={context} /> : null}
         {text(settings.label) && text(settings.link) ? (
-          <Button href={settings.link!} variant={tone === "soft" && !settings.image ? "solid" : "light"} size="large" editableKey="label" context={context}>{settings.label}</Button>
+          <Button href={settings.link!} variant={tone === "soft" ? "solid" : "light"} size="large" editableKey="label" context={context}>{settings.label}</Button>
         ) : null}
       </div>
     </Section>

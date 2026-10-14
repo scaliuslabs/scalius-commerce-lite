@@ -32,6 +32,7 @@ import { resolveBuyerAvailabilityBand, type BuyerAvailabilityBand } from "@scali
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { resolveStorefrontSettings, type StorefrontExtension } from "@scalius/shared/plugins/storefront-components";
 import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
+import { parsePluginSurfaceKey } from "@scalius/shared/plugins/storefront";
 import { mediaImageSrcSet, mediaImageUrl } from "@scalius/shared/media-variants";
 import type {
   CategoryNavigationNode,
@@ -113,7 +114,19 @@ export function headerData(input: {
 
 /** No reads: a header sees only its own lead section's normalized settings and resolved media. */
 export function headerPageData(lead: HomepageHeaderLead, extension: StorefrontExtension): NonNullable<StorefrontHeaderData["page"]> {
-  if (!lead || lead.kind === "core") return { lead };
+  if (!lead) return { lead };
+  if (lead.kind === "core") {
+    // The header sees its own app's skin of that section, never another app's.
+    const key = lead.skin ? parsePluginSurfaceKey(lead.skin.app) : null;
+    const skin = key?.pluginId === extension.pluginId ? extension.skins.find((entry) => entry.id === key.type) : undefined;
+    return {
+      lead: {
+        kind: "core",
+        type: lead.type,
+        ...(skin && lead.skin ? { skin: { id: skin.id, settings: componentSectionSettings(skin.settings, lead.skin.values, new Map(), new Map()) } } : {}),
+      },
+    };
+  }
   const { pluginId, type, instanceId } = lead;
   const schema = pluginId === extension.pluginId && extension.sections.includes(type)
     ? extension.sectionSettings[type]

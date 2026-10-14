@@ -35,12 +35,13 @@ export interface HeaderSettings {
 /** Only this plugin's resolved, image-backed lead can support light overlay chrome. */
 function supportsOverlay(data: HeaderProps<HeaderSettings>["data"]): boolean {
   const lead = data.page?.lead;
+  // The store's hero drawn by Noor's hero skin: it renders only with a photo, and overlays unless split.
+  if (lead?.kind === "core") return lead.type === "hero" && lead.skin?.id === "noor-hero" && lead.skin.settings.layout !== "split";
   if (lead?.kind !== "app" || lead.pluginId !== "scalius.noor" || !lead.settings) return false;
   const hasImage = (value: unknown): boolean => typeof value === "object" && value !== null
     && "url" in value && typeof value.url === "string" && value.url.length > 0;
   const images = (settings: unknown) => typeof settings === "object" && settings !== null
     && (("image" in settings && hasImage(settings.image)) || ("phone_image" in settings && hasImage(settings.phone_image)));
-  if (lead.type === "hero") return lead.settings.layout !== "split" && images(lead.settings);
   return lead.type === "slideshow" && Array.isArray(lead.settings.slides)
     && lead.settings.slides.some(images);
 }

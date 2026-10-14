@@ -480,7 +480,7 @@ export type HomepageRenderUnit =
 
 /** Internal lead data from the homepage read; headerPageData restricts it to the receiving app. */
 export type HomepageHeaderLead =
-  | { kind: "core"; type: string }
+  | { kind: "core"; type: string; skin?: { app: string; values: Record<string, unknown> } }
   | {
       kind: "app";
       pluginId: string;
@@ -508,7 +508,7 @@ export function homepageLead(
   const component = homepageAppSurface(section, content)?.component;
   return component
     ? { kind: "app", pluginId: component.pluginId, type: component.type, instanceId: section.id, values: component.values, media: component.media }
-    : { kind: "core", type: section.type };
+    : { kind: "core", type: section.type, ...("skin" in section && section.skin ? { skin: { app: section.skin.app, values: section.skin.values } } : {}) };
 }
 
 export function homepageRenderUnits(

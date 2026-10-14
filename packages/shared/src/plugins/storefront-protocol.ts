@@ -233,7 +233,12 @@ export interface StorefrontHeaderData {
   /** The first selected homepage render unit, only when desktop and phone agree. */
   page?: {
     lead:
-      | { kind: "core"; type: string }
+      | {
+          kind: "core";
+          type: string;
+          /** The header's own app skin of that core section (same-plugin only): its skin id and resolved values. */
+          skin?: { id: string; settings: StorefrontResolvedSettings };
+        }
       | {
           kind: "app";
           pluginId: string;

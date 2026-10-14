@@ -8,8 +8,7 @@ import { getDb } from "@scalius/database/client";
 import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
 import { activatePlugin, installPlugin } from "@scalius/core/modules/plugins";
-import { BUNDLED_PLUGINS } from "./plugins/bundled.gen";
-import { manifest as noorManifest } from "../../../plugins/noor/src/index";
+import { parsePluginManifest } from "@scalius/shared/plugins";
 import {
   createNavigationMenu,
   createNavigationMenuItem,
@@ -68,6 +67,22 @@ const PAGE_PARTS: Record<keyof typeof PAGE_D1_BUDGETS, string[]> = {
   // The buyer shells (cached like public pages; a signed-in buyer renders them live).
   cart: ["/api/v1/storefront/layout", "/api/v1/locations/cities", "/api/v1/shipping-methods", "/api/v1/checkout-languages/active", "/api/v1/checkout/config", "/api/v1/products/recommendations?limit=8"],
   checkout: ["/api/v1/storefront/layout", "/api/v1/checkout/config", "/api/v1/checkout-languages/active"],
+};
+
+/** Component sections that name product sources and a picked product (what a theme app's shelf and order sections do). */
+const SHELF_MANIFEST = {
+  id: "acme.shelf",
+  name: "Shelf",
+  version: "1.0.0",
+  apiVersion: "2026-10",
+  description: "Product shelves for the render budget test.",
+  author: { name: "Acme" },
+  storefront: {
+    sections: [
+      { type: "shelf", name: "Shelf", settings: [{ key: "heading", label: "Heading", type: "text" }, { key: "products", label: "Products", type: "products", default: "newest", limit: 8 }] },
+      { type: "order", name: "Order", settings: [{ key: "product", label: "Product", type: "product" }] },
+    ],
+  },
 };
 
 const SEED = `
@@ -271,10 +286,12 @@ async function renderPage(
   if (extraSeed) sqlite.exec(extraSeed);
   await options.prepare?.(db);
   if (options.components?.length) {
-    // Noor ships component sections; activation grants its storefront code.
-    sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('noor-owner', 'Owner', 'noor-owner@shop.test', 1, 'admin', 1)").run();
-    const noor = await installPlugin(db, { manifest: noorManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["scalius.noor"]!.sha256, actorUserId: "noor-owner" });
-    await activatePlugin(db, "scalius.noor", { actorUserId: "noor-owner", expectedRevision: noor.revision });
+    // An app with component sections reading products; activation grants its storefront code.
+    sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('shelf-owner', 'Owner', 'shelf-owner@shop.test', 1, 'admin', 1)").run();
+    const parsed = parsePluginManifest(SHELF_MANIFEST);
+    if (!parsed.ok) throw new Error("Invalid shelf manifest");
+    const shelf = await installPlugin(db, { manifest: parsed.manifest, source: "bundled", bundleSha256: "c".repeat(64), actorUserId: "shelf-owner" });
+    await activatePlugin(db, "acme.shelf", { actorUserId: "shelf-owner", expectedRevision: shelf.revision });
   }
   const sectionPage = page === "home" || page === "landing";
   const theme = sectionPage ? everySectionTheme() : storefrontTemplateTheme("department-mall");
@@ -598,10 +615,10 @@ describe("storefront page render D1 budget", () => {
 
   it("gives app component sections their products and images from the homepage's batches", async () => {
     const section = (id: string, type: string, values: Record<string, unknown>): StorefrontSection =>
-      ({ id, type: "app", version: 1, settings: { app: `scalius.noor/${type}`, values } }) as StorefrontSection;
-    const listed = section("noor-products", "products", { heading: "New", tab1_label: "New", tab1_products: "newest" });
-    const picked = section("noor-order", "landing-order", { product: "p_linen" });
-    const collected = section("noor-collected", "products", { heading: "Best", tab1_label: "Best", tab1_products: "collection:col_grid" });
+      ({ id, type: "app", version: 1, settings: { app: `acme.shelf/${type}`, values } }) as StorefrontSection;
+    const listed = section("noor-products", "shelf", { heading: "New", products: "newest" });
+    const picked = section("noor-order", "order", { product: "p_linen" });
+    const collected = section("noor-collected", "shelf", { heading: "Best", products: "collection:col_grid" });
     const measure = async (components: StorefrontSection[]) => {
       const result = await renderPage("home", "", { components });
       const apps = (result.bodies[1] as { data: { sections: { apps: Array<{ sectionId: string; component?: { lists: Array<{ source: string; products: unknown[] }> } }> } } }).data.sections.apps;

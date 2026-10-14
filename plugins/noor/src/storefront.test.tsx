@@ -78,23 +78,40 @@ describe("Noor manifest", () => {
       }
     }
     for (const section of sections) {
-      if (section.type !== "app") continue;
+      if (section.type !== "app") {
+        // One of the store's own sections drawn by a Noor skin of the section's type.
+        const placement = (section as { skin?: { app: string; values: Record<string, unknown> } }).skin!;
+        const skin = declared.storefront.skins.find((entry) => `${declared.id}/${entry.id}` === placement.app)!;
+        expect(skin, section.id).toBeDefined();
+        expect(skin.target, section.id).toBe(`section:${section.type}`);
+        validate(section.id, skin.settings, placement.values);
+        continue;
+      }
       const declaration = declared.storefront.sections.find((item) => `${declared.id}/${item.type}` === section.settings.app)!;
       expect(declaration, section.settings.app).toBeDefined();
       validate(section.id, declaration.settings, section.settings.values);
     }
-    const products = declared.storefront.sections.find((section) => section.type === "products")!;
-    const invalid = validatePluginSettingValues(products.settings.filter((field) => field.key === "tab1_products"), { tab1_products: "featured" });
+    const tabs = declared.storefront.skins.find((skin) => skin.id === "noor-products-tabs")!;
+    const invalid = validatePluginSettingValues(tabs.settings.filter((field) => field.key === "columns"), { columns: 9 });
     expect(invalid.ok).toBe(false);
-    if (!invalid.ok) expect(invalid.errors).toEqual([expect.objectContaining({ key: "tab1_products" })]);
+    if (!invalid.ok) expect(invalid.errors).toEqual([expect.objectContaining({ key: "columns" })]);
   });
 
   it("is a valid manifest whose module draws every declared component", () => {
     expect(checkPluginHandlers(pluginHandlerInventory(declared), plugin)).toEqual([]);
     const sections = Object.keys(storefront.definition.sections ?? {}).sort();
     expect(sections).toEqual(declared.storefront.sections.map((section) => section.type).sort());
-    expect(Object.keys(storefront.definition.skins ?? {}).sort()).toEqual(["noor-card", "noor-footer", "noor-header"]);
-    expect(declared.storefront.sections).toHaveLength(20);
+    expect(Object.keys(storefront.definition.skins ?? {}).sort()).toEqual(declared.storefront.skins.map((skin) => skin.id).sort());
+    // The nine sections the store has no equivalent of; the rest are skins of the store's own sections.
+    expect(declared.storefront.sections.map((section) => section.type).sort()).toEqual([
+      "featured-product", "gallery", "landing-features", "landing-hero", "landing-order", "marquee", "slideshow", "testimonials", "video",
+    ]);
+    expect(declared.storefront.skins.map((skin) => skin.target).sort()).toEqual([
+      "footer", "header", "product-card", "product-main",
+      "section:banner-mosaic", "section:category-tiles", "section:deal-block", "section:editorial", "section:faq", "section:hero",
+      "section:lookbook", "section:newsletter", "section:product-grid", "section:product-rail", "section:product-tabs",
+      "section:seo-text", "section:shop-by", "section:usp-strip",
+    ]);
   });
 
   it("asks for nothing but storefront code", () => {
@@ -123,9 +140,13 @@ describe("Noor manifest", () => {
     const template = readStorefrontAppTemplateTheme(declared.storefront.templates[0]!.theme)!;
     const campaign = readStorefrontPagePresetSections(declared.storefront.pagePresets[0]!.sections)!;
     const sections = [...(template.sections ?? []), ...campaign];
-    const trustTypes = ["scalius.noor/testimonials", "scalius.noor/faq", "scalius.noor/promises"];
+    // Testimonials, questions and promises are the merchant's to write: a template starts with none of them.
+    const trustTypes = ["scalius.noor/testimonials", "faq", "usp-strip", "editorial"];
     for (const section of sections) {
-      if (section.type !== "app") throw new Error("Expected app preset section");
+      if (section.type !== "app") {
+        expect(trustTypes).not.toContain(section.type);
+        continue;
+      }
       expect(trustTypes).not.toContain(section.settings.app);
       const values = section.settings.values;
       for (const field of ["assurances", "stats", "summary", "urgency", "ends_at"]) expect(values[field]).toBeUndefined();
@@ -149,10 +170,9 @@ describe("Noor manifest", () => {
   });
 
   it("resolves omitted copy neutrally while preserving explicit merchant values", () => {
-    expect(settingsFor("hero")).toMatchObject({ heading: "Explore our products", text: null, eyebrow: null });
     expect(settingsFor("landing-hero")).toMatchObject({ badge: null, urgency: null });
-    expect(settingsFor("sale-countdown")).toMatchObject({ heading: null, eyebrow: null });
-    expect(renderSection(storefront, "sale-countdown", settingsFor("sale-countdown"))).toBe("");
+    expect(slotSettings("noor-hero")).toMatchObject({ eyebrow: null, secondary_label: null });
+    expect(slotSettings("noor-sale")).toMatchObject({ eyebrow: null, text: null });
     expect(settingsFor("testimonials")).toMatchObject({ heading: "Customer reviews", items: [] });
     const unrated = settingsFor("testimonials", { items: [{ quote: "A merchant-supplied quote without a score", name: "Customer" }] });
     expect(unrated.items).toEqual([expect.objectContaining({ rating: null })]);
@@ -160,7 +180,7 @@ describe("Noor manifest", () => {
     expect(settingsFor("gallery")).toMatchObject({ heading: "Gallery", handle: null });
     expect(slotSettings("noor-footer")).toMatchObject({ tagline: null, newsletter_text: null, payments: [] });
     const saved = { heading: "Our real promotion", text: "Delivery in five days", eyebrow: "Merchant's collection" };
-    expect(settingsFor("hero", saved)).toMatchObject(saved);
+    expect(settingsFor("featured-product", saved)).toMatchObject(saved);
   });
 
   it("keeps merchant-authored saved claims and testimonials renderable", () => {
@@ -239,7 +259,8 @@ describe("Noor chrome", () => {
 
   it("sits over the hero only on the homepage", () => {
     const settings = slotSettings("noor-header", { transparent_home: true });
-    const lead = { kind: "app" as const, pluginId: "scalius.noor", type: "hero", instanceId: "hero-first", settings: settingsFor("hero", { image: "hero" }) };
+    // The store's hero, drawn by Noor's hero skin.
+    const lead = { kind: "core" as const, type: "hero", skin: { id: "noor-hero", settings: slotSettings("noor-hero") } };
     expect(renderHeader(storefront, "noor-header", settings, { page: { lead } })).toContain("is-transparent");
     expect(renderHeader(storefront, "noor-header", settings)).not.toContain("is-transparent");
     expect(renderHeader(storefront, "noor-header", settings, {}, { context: { page: { kind: "product", path: "/products/x" } } })).not.toContain("is-transparent");
@@ -247,15 +268,19 @@ describe("Noor chrome", () => {
 
   it("keeps solid chrome for non-overlay or unresolved leading sections", () => {
     const settings = slotSettings("noor-header", { transparent_home: true });
-    const app = { kind: "app" as const, pluginId: "scalius.noor", type: "hero", instanceId: "first" };
+    const app = { kind: "app" as const, pluginId: "scalius.noor", type: "slideshow", instanceId: "first" };
+    const hero = { kind: "core" as const, type: "hero" };
     const leads = [
       null,
       { kind: "core" as const, type: "product-grid" },
+      // The store's own hero, or another skin's, or one Noor draws beside the photo.
+      hero,
+      { ...hero, skin: { id: "other-hero", settings: slotSettings("noor-hero") } },
+      { ...hero, skin: { id: "noor-hero", settings: slotSettings("noor-hero", { layout: "split" }) } },
+      { kind: "core" as const, type: "seo-text", skin: { id: "noor-hero", settings: slotSettings("noor-hero") } },
       app,
-      { ...app, settings: settingsFor("hero") },
-      { ...app, settings: settingsFor("hero", { image: "hero", layout: "split" }) },
-      { ...app, pluginId: "another.theme", settings: settingsFor("hero", { image: "hero" }) },
-      { ...app, type: "slideshow", settings: settingsFor("slideshow", { slides: [] }) },
+      { ...app, pluginId: "another.theme", settings: settingsFor("slideshow", { slides: [{ image: "hero" }] }) },
+      { ...app, settings: settingsFor("slideshow", { slides: [] }) },
     ];
     for (const lead of leads) expect(renderHeader(storefront, "noor-header", settings, { page: { lead } })).not.toContain("is-transparent");
   });
@@ -330,51 +355,16 @@ describe("Noor sections", () => {
       const html = renderSection(storefront, section.type, settingsFor(section.type));
       if (html) expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
     }
-    expect(renderSection(storefront, "faq", settingsFor("faq"))).toBe("");
     expect(renderSection(storefront, "slideshow", settingsFor("slideshow"))).toBe("");
     expect(renderSection(storefront, "landing-order", settingsFor("landing-order"))).toBe("");
   });
 
   it("shells every section in the store's rhythm, its own tone and spacing", () => {
-    const html = renderSection(storefront, "image-text", settingsFor("image-text", { heading: "Our story", tone: "ink", spacing: "l" }));
-    expect(html).toContain('<section class="noor-s noor-s-story" data-tone="ink" data-space="l">');
+    const items = [{ quote: "Lovely", name: "Customer" }];
+    const html = renderSection(storefront, "testimonials", settingsFor("testimonials", { items, tone: "ink", spacing: "l" }));
+    expect(html).toContain('<section class="noor-s noor-s-testimonials" data-tone="ink" data-space="l">');
     // An unknown stored value falls back instead of breaking the layout.
-    expect(renderSection(storefront, "image-text", settingsFor("image-text", { heading: "Our story", spacing: "huge" }))).toContain('data-space="m"');
-  });
-
-  it("draws one eager hero image with a responsive phone crop", () => {
-    const html = shown(renderSection(storefront, "hero", settingsFor("hero", { image: "wide", phone_image: "tall" })));
-    expect(html).toContain('loading="eager" fetchpriority="high"');
-    expect(html).toContain('<picture><source media="(max-width: 47.99rem)"');
-    expect(html).toContain('srcset="https://media.example.com/tall-600.webp 600w, https://media.example.com/tall-1200.webp 1200w"');
-    expect(html.match(/<img\b/g)).toHaveLength(1);
-    expect(html).toContain('href="/search"');
-    expect(shown(renderSection(storefront, "hero", settingsFor("hero", { image: "wide", layout: "split" })))).toContain("noor-hero is-split");
-  });
-
-  it("draws product tabs as radios with one panel each", () => {
-    const html = shown(renderSection(storefront, "products", settingsFor("products", {
-      tab1_label: "New in", tab2_label: "On sale", tab2_products: "on-sale", tab3_label: "Popular", tab3_products: "popular",
-    })));
-    expect(html.match(/type="radio"/g)).toHaveLength(3);
-    expect(html.match(/class="noor-tabpanel"/g)).toHaveLength(3);
-    expect(html.match(/<article class="noor-card /g)).toHaveLength(6);
-  });
-
-  it("draws a scrolling row with its rail island", () => {
-    const html = shown(renderSection(storefront, "products", settingsFor("products", { layout: "row" })));
-    expect(html).toContain('data-island="rail"');
-    expect(html).toContain('class="noor-products is-row" data-track');
-  });
-
-  it("draws the questions with FAQPage structured data that survives the output check", () => {
-    const html = shown(renderSection(storefront, "faq", settingsFor("faq", {
-      questions: [{ question: "Delivery?", answer: "Two days <fast>." }, { question: "COD?", answer: "Yes." }],
-    })));
-    const json = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)![1]!);
-    expect(json["@type"]).toBe("FAQPage");
-    expect(json.mainEntity[0].acceptedAnswer.text).toBe("Two days <fast>.");
-    expect(html).toContain("Two days &lt;fast&gt;.");
+    expect(renderSection(storefront, "testimonials", settingsFor("testimonials", { items, spacing: "huge" }))).toContain('data-space="m"');
   });
 
   it("draws the slideshow's slides, with arrows and dots for its island", () => {
@@ -395,15 +385,12 @@ describe("Noor sections", () => {
     expect(countdownEnd("2028-02-29 12:00", "UTC")).toBe(Date.UTC(2028, 1, 29, 12));
     expect(countdownEnd("2000-02-29 12:00", "UTC")).toBe(Date.UTC(2000, 1, 29, 12));
     expect(countdownEnd("2026-12-31 18:00", "not-a-time-zone")).toBe(Date.UTC(2026, 11, 31, 18));
-    expect(shown(renderSection(storefront, "sale-countdown", settingsFor("sale-countdown", { heading: "Sale ends", ends_at: "2026-02-31" })))).not.toContain('data-island="countdown"');
   });
 
   it("counts the sale down to the store's local time", () => {
     expect(countdownEnd("2026-12-31 18:00", "Asia/Dhaka")).toBe(Date.UTC(2026, 11, 31, 12, 0));
     expect(countdownEnd("2026-12-31", "Asia/Dhaka")).toBe(Date.UTC(2026, 11, 31, 17, 59, 59));
     expect(countdownEnd("31/12/2026", "Asia/Dhaka")).toBeNull();
-    const html = renderSection(storefront, "sale-countdown", settingsFor("sale-countdown", { heading: "Sale ends", ends_at: "2026-12-31 18:00" }));
-    expect(html).toContain(`data-props="{&quot;end&quot;:${Date.UTC(2026, 11, 31, 12, 0)}}"`);
   });
 });
 

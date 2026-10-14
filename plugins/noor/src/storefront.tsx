@@ -1,13 +1,31 @@
-// Noor's storefront module: the header, footer and product card it gives
-// the theme, and its sections, by the ids its manifest declares.
+// Noor's storefront module: the header, footer, product card and product page
+// it gives the theme, its skins of the store's own sections, and the nine
+// sections of its own, by the ids its manifest declares.
 
 import { defineStorefront, type ProductCardProps } from "@scalius/plugin-sdk/storefront";
 import { Footer } from "./components/footer";
 import { Header } from "./components/header";
+import { ProductPage } from "./components/product";
+import {
+  CategoryTilesSkin,
+  FaqSkin,
+  HeroSkin,
+  LookSkin,
+  ProductGridSkin,
+  ProductRailSkin,
+  ProductTabsSkin,
+  PromisesSkin,
+  PromoTilesSkin,
+  SaleSkin,
+  ShopByTilesSkin,
+  SignupSkin,
+  StorySkin,
+  TextSkin,
+} from "./components/skins";
 import { ProductCard } from "./components/ui";
-import { CollectionTiles, FeaturedProduct, ProductShowcase, PromoCountdown, PromoTiles, ShopTheLook } from "./components/sections/commerce";
-import { Faq, Gallery, Marquee, Promises, RichText, SignupCall, Story, Testimonials, VideoFeature } from "./components/sections/content";
-import { Hero, Slideshow } from "./components/sections/hero";
+import { FeaturedProduct } from "./components/sections/commerce";
+import { Gallery, Marquee, Testimonials, VideoFeature } from "./components/sections/content";
+import { Slideshow } from "./components/sections/hero";
 import { LandingFeatures, LandingHero, LandingOrder } from "./components/sections/landing";
 
 interface CardSettings {
@@ -33,23 +51,12 @@ function Card({ data, settings, context }: ProductCardProps<CardSettings>) {
 
 export default defineStorefront({
   sections: {
-    hero: Hero,
     slideshow: Slideshow,
     marquee: Marquee,
-    products: ProductShowcase,
     "featured-product": FeaturedProduct,
-    "collection-tiles": CollectionTiles,
-    "promo-tiles": PromoTiles,
-    "shop-the-look": ShopTheLook,
-    "sale-countdown": PromoCountdown,
-    promises: Promises,
-    "image-text": Story,
-    "rich-text": RichText,
     testimonials: Testimonials,
-    faq: Faq,
     video: VideoFeature,
     gallery: Gallery,
-    signup: SignupCall,
     "landing-hero": LandingHero,
     "landing-features": LandingFeatures,
     "landing-order": LandingOrder,
@@ -58,5 +65,20 @@ export default defineStorefront({
     "noor-header": Header,
     "noor-footer": Footer,
     "noor-card": Card,
+    "noor-product": ProductPage,
+    "noor-hero": HeroSkin,
+    "noor-products-tabs": ProductTabsSkin,
+    "noor-products-grid": ProductGridSkin,
+    "noor-products-rail": ProductRailSkin,
+    "noor-tiles-categories": CategoryTilesSkin,
+    "noor-tiles-cards": ShopByTilesSkin,
+    "noor-promo-tiles": PromoTilesSkin,
+    "noor-look": LookSkin,
+    "noor-sale": SaleSkin,
+    "noor-promises": PromisesSkin,
+    "noor-story": StorySkin,
+    "noor-text": TextSkin,
+    "noor-faq": FaqSkin,
+    "noor-signup": SignupSkin,
   },
 });

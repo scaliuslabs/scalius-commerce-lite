@@ -2,7 +2,7 @@
 
 An app can redesign the storefront: skins of the header, footer, product card, product page, listings and any core section; new sections and product blocks with their own logic; a single-page order landing; and ready-made templates that apply the whole look in one click. The merchant installs the app, activates it, picks its template in Online Store → Theme, and edits every section and skin in the theme editor like the built-in ones. Nobody forks the storefront.
 
-The reference app is `plugins/noor` (Noor: a complete theme with 20 sections, its own header, footer and card, one template, and a landing kit with a page preset for Bangladesh-style single-product campaign pages with a cash-on-delivery order form). The small worked example is `apps/api/src/plugins/testing/apps/studio`.
+The reference app is `plugins/noor` (Noor: a complete theme with nine sections of its own, skins of the store's own header, footer, card, product page and fourteen core sections, one template, and a landing kit with a page preset for Bangladesh-style single-product campaign pages with a cash-on-delivery order form). The small worked example is `apps/api/src/plugins/testing/apps/studio`.
 
 Source of truth:
 

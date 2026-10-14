@@ -338,7 +338,6 @@ export interface SignupSettings {
   text: string | null;
   button: string | null;
   link: string | null;
-  image: StorefrontImage | null;
   tone: string;
   spacing: string;
 }
@@ -348,8 +347,7 @@ export function SignupCall({ settings, context }: SectionProps<SignupSettings>) 
   if (!heading) return null;
   return (
     <Section name="signup" space={settings.spacing}>
-      <div class={cx("noor-callout", `is-${choice(settings.tone, ["soft", "ink", "accent"] as const, "soft")}`, settings.image && "has-image")}>
-        {settings.image ? <div class="noor-callout-media"><Image image={settings.image} sizes="(min-width: 768px) 40vw, 100vw" class="noor-cover" alt="" /></div> : null}
+      <div class={cx("noor-callout", `is-${choice(settings.tone, ["soft", "ink", "accent"] as const, "soft")}`)}>
         <div class="noor-callout-copy">
           {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
           <h2 class="noor-h2" {...editable(context, "heading")}>{heading}</h2>
