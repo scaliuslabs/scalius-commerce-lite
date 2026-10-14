@@ -1,23 +1,26 @@
-// After store setup chose Bangladesh: the Bangladesh pack (SMS gateways,
-// courier fraud checks, the City/Thana/Area places) in one step, as Shopify
-// offers a region's apps during setup.
+// After store setup chose Bangladesh: the Bangladesh pack (payments,
+// couriers, SMS gateways, courier fraud checks, the City/Thana/Area places)
+// in one step, as Shopify offers a region's apps during setup.
 // - Compiled into this store (listed in scalius.plugins.json): Activate,
-//   through the same consent dialog as the Apps page. Activation loads the
-//   places and moves any SMS or fraud keys saved before the pack.
+//   through the same consent dialog as the Apps page. Activation asks for
+//   nothing; every service is a feature that starts off.
+// - Active: its features, each turned on with its own consent (Places is
+//   recommended and turning it on loads the places), then the next steps.
 // - Not compiled in: the operator's `pnpm plugin add` command, as the Apps
 //   page shows it.
-// - Active: the next steps.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { usePermissions } from "~/contexts/PermissionContext";
-import { useMessages } from "~/i18n";
+import { useLocale, useMessages } from "~/i18n";
 import { storeSetupMessages } from "~/i18n/store-setup";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { appQueryOptions, appsQueryOptions } from "~/lib/api-query-options/apps";
 import { ActivateAppDialog } from "../apps/AppDialogs";
+import { localizedAppDetail } from "../apps/app-detail-text";
+import { AppFeatures } from "../apps/AppFeatures";
 import { AppIcon } from "../apps/AppIcon";
 
 export { BANGLADESH_PACK_ID } from "~/lib/bangladesh-pack";
@@ -26,11 +29,13 @@ import { BANGLADESH_PACK_ID } from "~/lib/bangladesh-pack";
 export function BangladeshPackStep({ onDone }: { onDone: () => void }) {
   const t = useMessages(storeSetupMessages);
   const { hasPermission, isSuperAdmin } = usePermissions();
+  const locale = useLocale();
   const canSeeApps = hasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
+  const canManage = hasPermission(ADMIN_PERMISSIONS.APPS_MANAGE);
   const apps = useQuery({ ...appsQueryOptions(), enabled: canSeeApps });
   const installed = apps.data?.apps.find((app) => app.id === BANGLADESH_PACK_ID) ?? null;
   const available = apps.data?.available.find((app) => app.id === BANGLADESH_PACK_ID) ?? null;
-  const detail = useQuery({ ...appQueryOptions(BANGLADESH_PACK_ID), enabled: Boolean(installed) && isSuperAdmin });
+  const detail = useQuery({ ...appQueryOptions(BANGLADESH_PACK_ID), enabled: Boolean(installed) && (isSuperAdmin || canManage) });
   const [activating, setActivating] = useState(false);
   const active = installed?.status === "active" && !installed.needsApproval;
 
@@ -49,6 +54,7 @@ export function BangladeshPackStep({ onDone }: { onDone: () => void }) {
       ) : apps.isPending ? null : active ? (
         <div className="flex flex-col gap-3">
           <Badge variant="success" className="self-start">{t("bdPackActive")}</Badge>
+          {detail.data ? <AppFeatures app={localizedAppDetail(detail.data, locale)} canManage={canManage} isSuperAdmin={isSuperAdmin} /> : null}
           <p className="text-body">{t("bdPackNext")}</p>
           <ul className="flex list-disc flex-col gap-1 ps-5 text-body">
             <li><Link className="text-link hover:underline" to="/admin/settings/shipping" hash="couriers">{t("bdPackNextKeys")}</Link></li>

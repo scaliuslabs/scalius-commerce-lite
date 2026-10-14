@@ -23,8 +23,10 @@ const sdk = vi.hoisted(() => ({
   postApiV1AdminAppsUpload: vi.fn(),
   postApiV1AdminAppsStopThirdParty: vi.fn(),
   postApiV1AdminAppsByIdStop: vi.fn(),
+  postApiV1AdminAppsByIdFeaturesByFeatureIdEnable: vi.fn(),
+  postApiV1AdminAppsByIdFeaturesByFeatureIdDisable: vi.fn(),
 }));
-const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
+const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }));
 const navigate = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("sonner", () => ({ toast: toasts }));
@@ -148,9 +150,46 @@ function detail(overrides: Record<string, unknown> = {}) {
     storageUsage: { bytes: 0, measuredAt: null },
     signer: null,
     migrations: { declared: [], applied: 0 },
+    features: [],
     ...overrides,
   };
 }
+
+/** One feature of an app, off unless `enabled`. */
+function feature(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "bkash",
+    name: "bKash",
+    description: "Take bKash payments at checkout.",
+    enabled: false,
+    recommended: false,
+    request: {
+      scopes: [],
+      allowedHosts: ["tokenized.pay.bka.sh", "tokenized.sandbox.bka.sh"],
+      providers: [{ id: "acme.loyalty:bkash", kind: "payment", name: "bKash", icon: null }],
+      events: [],
+      functions: [],
+      publicRoutes: false,
+      storefront: false,
+      admin: false,
+      cron: [],
+    },
+    grantKey: "feature-key-bkash",
+    ...overrides,
+  };
+}
+
+const placesFeature = () => feature({
+  id: "places",
+  name: "Bangladesh places",
+  description: "The City, Thana and Area list.",
+  recommended: true,
+  request: {
+    scopes: [{ name: "write_places", risk: "write", sensitive: false }],
+    allowedHosts: [], providers: [], events: [], functions: [], publicRoutes: false, storefront: false, admin: true, cron: ["places-sync"],
+  },
+  grantKey: "feature-key-places",
+});
 
 function delivery(overrides: Record<string, unknown> = {}) {
   return {
@@ -774,6 +813,73 @@ function pack(overrides: Record<string, unknown> = {}) {
     ...overrides,
   });
 }
+
+describe("App page: features", () => {
+  it("lists every feature off, grouped, and asks a Super Admin to approve only that feature's access", async () => {
+    sdk.postApiV1AdminAppsByIdFeaturesByFeatureIdEnable.mockImplementation(() =>
+      ok({ app: detail({ status: "active", revision: 5, features: [feature({ enabled: true, grantKey: null }), placesFeature()] }), changed: true, hookError: null }));
+    await renderApp(detail({ status: "active", features: [feature(), placesFeature()] }), MANAGER, true);
+
+    expect(text()).toContain("Features");
+    expect(text()).toContain("Payments");
+    expect(text()).toContain("Recommended");
+    const switches = [...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')];
+    expect(switches.map((element) => element.getAttribute("aria-checked"))).toEqual(["false", "false"]);
+    await click(switches[0]!);
+
+    expect(dialog().textContent).toContain("Turn on bKash?");
+    expect(dialog().textContent).toContain("tokenized.pay.bka.sh");
+    expect(dialog().textContent).toContain("Takes payments");
+    // Only this feature's access: not the places scope.
+    expect(dialog().textContent).not.toContain("Load delivery places");
+    await click(button("Turn on", dialog()));
+    expect(sdk.postApiV1AdminAppsByIdFeaturesByFeatureIdEnable).toHaveBeenCalledWith({
+      path: { id: "acme.loyalty", featureId: "bkash" },
+      body: { expectedRevision: 3, grantKey: "feature-key-bkash" },
+    });
+    await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith("bKash is on."));
+  });
+
+  it("lets a manager turn a feature off but not on, and says why", async () => {
+    sdk.postApiV1AdminAppsByIdFeaturesByFeatureIdDisable.mockImplementation(() =>
+      ok({ app: detail({ status: "active", revision: 4, features: [feature(), placesFeature()] }), changed: true, hookError: null }));
+    await renderApp(detail({ status: "active", features: [feature({ enabled: true, grantKey: null }), placesFeature()] }), MANAGER, false);
+    expect(text()).toContain("Only a Super Admin can turn a feature on");
+    const [bkash, places] = [...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')];
+    expect(places!.disabled).toBe(true);
+    await click(bkash!);
+    expect(dialog().textContent).toContain("Turn off bKash?");
+    await click(button("Turn off", dialog()));
+    expect(sdk.postApiV1AdminAppsByIdFeaturesByFeatureIdDisable).toHaveBeenCalledWith({
+      path: { id: "acme.loyalty", featureId: "bkash" },
+      body: { expectedRevision: 3 },
+    });
+    await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith("bKash is off."));
+  });
+
+  it("keeps features off until the app is active, and shows every feature's access on Permissions", async () => {
+    await renderApp(detail({ features: [feature(), placesFeature()] }), MANAGER, true);
+    expect(text()).toContain("Activate the app first.");
+    expect([...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')].every((element) => element.disabled)).toBe(true);
+    expect(text()).toContain("Access by feature");
+    expect(text()).toContain("Load delivery places");
+  });
+
+  it("names features in Bangla from the app's translations", async () => {
+    setLocale("bn");
+    try {
+      await renderApp(detail({
+        status: "active",
+        features: [placesFeature()],
+        translations: { bn: { features: { places: { name: "বাংলাদেশের এলাকা", description: "শহর, থানা ও এলাকা।" } } } },
+      }), MANAGER, true);
+      expect(text()).toContain("বাংলাদেশের এলাকা");
+      expect(text()).toContain("প্রস্তাবিত");
+    } finally {
+      setLocale("en");
+    }
+  });
+});
 
 describe("App page: settings and services", () => {
   it("has Overview, Settings and Permissions tabs", async () => {

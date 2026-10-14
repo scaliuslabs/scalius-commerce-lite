@@ -67,7 +67,7 @@ describe("where an app appears", () => {
     const manifest = await manifestOf("bangladesh");
     const entries = appearsEntries(detailOf(manifest));
     // Every provider, each on its capability page with its sheet open.
-    expect(manifest.providers).toHaveLength(11);
+    expect(manifest.providers).toHaveLength(13);
     for (const provider of manifest.providers) {
       const id = qualifiedProviderId(manifest.id, provider.id);
       const entry = entries.find((candidate) => candidate.key === `provider:${id}`);

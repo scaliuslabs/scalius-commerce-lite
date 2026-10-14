@@ -1,6 +1,7 @@
 // One installed app (Shopify's app details), in three tabs. Overview: what it
 // is (tagline, description, screenshots, developer, categories, countries,
-// links, version and changelog), where it appears, its checkout functions,
+// links, version and changelog), its features (each turned on by itself,
+// with its own consent), where it appears, its checkout functions,
 // scheduled jobs and activity. Settings: its app-wide settings in their
 // sections, and each service it offers as a collapsed group. Permissions:
 // what it may do. Everything is drawn from the API's description of the
@@ -30,6 +31,7 @@ import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import type { AppDetail, AppFunction } from "~/lib/api-query-options/apps";
 import { formatDuration, formatWhen } from "../settings/webhooks/webhook-format";
 import { AppAccess } from "./AppAccess";
+import { AppFeatureAccess, AppFeatures } from "./AppFeatures";
 import { checkoutFunctions, isKnownFunctionPoint } from "./app-functions";
 import { AppActivity } from "./AppActivity";
 import { AppIcon } from "./AppIcon";
@@ -234,6 +236,7 @@ function AppPage({ app, tab, onTab }: { app: AppDetail; tab: AppPageTab; onTab: 
           {/* Every tab stays mounted: unsaved settings survive a look at another tab. */}
           <TabsContent value="overview" forceMount className="space-y-4 data-[state=inactive]:hidden">
             <Overview app={app} />
+            <AppFeatures app={app} canManage={canManage} isSuperAdmin={isSuperAdmin} />
             <AppWhereItAppears app={app} />
             {functions.length > 0 ? <CheckoutFunctions functions={functions} /> : null}
             {app.cron.length > 0 ? <Jobs app={app} /> : null}
@@ -242,7 +245,7 @@ function AppPage({ app, tab, onTab }: { app: AppDetail; tab: AppPageTab; onTab: 
           <TabsContent value="settings" forceMount className="data-[state=inactive]:hidden">
             <AppSettingsTab app={app} canManage={canManage} />
           </TabsContent>
-          <TabsContent value="permissions" forceMount className="data-[state=inactive]:hidden">
+          <TabsContent value="permissions" forceMount className="space-y-4 data-[state=inactive]:hidden">
             <Card>
               <CardHeader>
                 <CardTitle>{t("accessTitle")}</CardTitle>
@@ -252,6 +255,7 @@ function AppPage({ app, tab, onTab }: { app: AppDetail; tab: AppPageTab; onTab: 
                 <AppAccess app={app} />
               </CardContent>
             </Card>
+            <AppFeatureAccess app={app} />
           </TabsContent>
         </Tabs>
       </div>

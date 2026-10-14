@@ -37,6 +37,15 @@ export function localizedAppDetail(app: AppDetail, locale: Locale): AppDetail {
   const group = (id: string) => text.settingsGroups?.[id];
   return {
     ...localizedApp(app, locale),
+    features: app.features.map((feature) => ({
+      ...feature,
+      name: text.features?.[feature.id]?.name ?? feature.name,
+      description: text.features?.[feature.id]?.description ?? feature.description,
+      request: {
+        ...feature.request,
+        providers: feature.request.providers.map((provider) => ({ ...provider, name: providerLabel(provider.name, locale) })),
+      },
+    })),
     admin: {
       ...app.admin,
       pages: app.admin.pages.map((page) => localizedPage(page, text)),
