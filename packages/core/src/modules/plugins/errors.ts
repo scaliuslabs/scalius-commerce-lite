@@ -14,6 +14,10 @@ export type PluginErrorCode =
   | "installation.inactive"
   | "installation.settings_incomplete"
   | "installation.grant_changed"
+  /** An update waits for a Super Admin: nothing may change its grant until then. */
+  | "installation.needs_approval"
+  /** The app declares no feature with that id (`manifest.features`). */
+  | "feature.not_found"
   | "delivery.not_found"
   | "delivery.not_retryable"
   | "settings.invalid"
@@ -79,6 +83,8 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "installation.revision_conflict": 409,
   "installation.inactive": 409,
   "installation.grant_changed": 409,
+  "installation.needs_approval": 409,
+  "feature.not_found": 404,
   "delivery.not_found": 404,
   "delivery.not_retryable": 409,
   "settings.key_unavailable": 503,

@@ -12533,6 +12533,20 @@
                   }
                 }
               }
+            },
+            "features": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                }
+              }
             }
           }
         },
@@ -13335,6 +13349,13 @@
                 },
                 "description": "The requested scopes, for the consent screen."
               },
+              "features": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AppFeature"
+                },
+                "description": "Parts of the app turned on one at a time; each starts off. Off features' providers, settings, routes and jobs do not run and are not listed here."
+              },
               "activatedBy": {
                 "type": "object",
                 "nullable": true,
@@ -14019,6 +14040,7 @@
               "granted",
               "added",
               "scopes",
+              "features",
               "activatedBy",
               "runtime",
               "runtimeAvailable",
@@ -14130,6 +14152,13 @@
               "type": "string"
             },
             "description": "Hosts the app's storefront islands reach from the buyer's browser."
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The app's features that are on (apps that declare features)."
           }
         },
         "required": [
@@ -14145,6 +14174,190 @@
           "customFieldOwners"
         ],
         "description": "What an app may do; the consent screen lists it in plain words."
+      },
+      "AppFeature": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "recommended": {
+            "type": "boolean",
+            "description": "Suggested during setup; it still starts off."
+          },
+          "request": {
+            "type": "object",
+            "properties": {
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "enum": [
+                        "read_products",
+                        "write_products",
+                        "read_orders",
+                        "write_orders",
+                        "write_fulfillments",
+                        "read_customers",
+                        "write_customers",
+                        "write_marketing",
+                        "read_discounts",
+                        "write_discounts",
+                        "read_content",
+                        "write_content",
+                        "read_objects",
+                        "write_objects",
+                        "read_files",
+                        "write_files",
+                        "read_settings",
+                        "write_places"
+                      ]
+                    },
+                    "risk": {
+                      "type": "string",
+                      "enum": [
+                        "read",
+                        "write",
+                        "destructive",
+                        "financial"
+                      ],
+                      "description": "The highest risk among the operations the scope lets this app call."
+                    },
+                    "sensitive": {
+                      "type": "boolean",
+                      "description": "The scope reaches sensitive data or settings."
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "risk",
+                    "sensitive"
+                  ]
+                },
+                "description": "Store access this feature adds, for its consent dialog."
+              },
+              "allowedHosts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Outside services this feature talks to."
+              },
+              "providers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "payment",
+                        "courier",
+                        "sms",
+                        "email",
+                        "fraud",
+                        "tax",
+                        "translation",
+                        "ai",
+                        "messaging",
+                        "push",
+                        "search",
+                        "address",
+                        "fx",
+                        "identity"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "icon": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "name",
+                    "icon"
+                  ]
+                }
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "functions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "publicRoutes": {
+                "type": "boolean",
+                "description": "Receives requests from outside the dashboard (webhooks, public routes)."
+              },
+              "storefront": {
+                "type": "boolean",
+                "description": "Adds to the storefront."
+              },
+              "admin": {
+                "type": "boolean",
+                "description": "Adds pages, cards or actions to the dashboard."
+              },
+              "cron": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Scheduled jobs it runs."
+              }
+            },
+            "required": [
+              "scopes",
+              "allowedHosts",
+              "providers",
+              "events",
+              "functions",
+              "publicRoutes",
+              "storefront",
+              "admin",
+              "cron"
+            ],
+            "description": "What turning this feature on asks for: only the feature's own part, never the app's base."
+          },
+          "grantKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "Send back to turn it on (the access shown); null while it is on."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "enabled",
+          "recommended",
+          "request",
+          "grantKey"
+        ]
       },
       "AppLogLine": {
         "type": "object",
@@ -206566,6 +206779,523 @@
         }
       }
     },
+    "/api/v1/admin/apps/{id}/features": {
+      "get": {
+        "operationId": "dashboard.apps.features_list",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "List an app's features: which are on, and what each asks for",
+        "description": "Each feature starts off. Turning one on asks a Super Admin to approve that feature's own access (dashboard.apps.feature_enable); turning one off revokes it at once.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$",
+              "description": "The app's id (vendor.name)."
+            },
+            "required": true,
+            "description": "The app's id (vendor.name).",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Features",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "revision": {
+                          "type": "integer"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "installed",
+                            "active",
+                            "disabled",
+                            "failed"
+                          ]
+                        },
+                        "features": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/AppFeature"
+                          }
+                        }
+                      },
+                      "required": [
+                        "revision",
+                        "status",
+                        "features"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.view"
+        }
+      }
+    },
+    "/api/v1/admin/apps/{id}/features/{featureId}/enable": {
+      "post": {
+        "operationId": "dashboard.apps.feature_enable",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Turn on one of an app's features and approve its access (Super Admin)",
+        "description": "The app must be on. Approves only this feature's scopes and hosts (grantKey: the feature's, as shown), records the approving Super Admin as the app's acting user, then runs the app's enable hook. Its providers, settings, routes and jobs start with the write.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$",
+              "description": "The app's id (vendor.name)."
+            },
+            "required": true,
+            "description": "The app's id (vendor.name).",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,47}$",
+              "description": "The feature's id (manifest.features[].id)."
+            },
+            "required": true,
+            "description": "The feature's id (manifest.features[].id).",
+            "name": "featureId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The app's current revision (every change advances it)."
+                  },
+                  "grantKey": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 65536
+                  }
+                },
+                "required": [
+                  "expectedRevision",
+                  "grantKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "On",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "app": {
+                          "$ref": "#/components/schemas/AppDetail"
+                        },
+                        "changed": {
+                          "type": "boolean",
+                          "description": "False when the feature was already in that state."
+                        },
+                        "hookError": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "app",
+                        "changed",
+                        "hookError"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 131072,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Turning on an app feature approves its access to store data and outside services: a Super Admin's consent in the dashboard. Agents list features and turn them off."
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
+    "/api/v1/admin/apps/{id}/features/{featureId}/disable": {
+      "post": {
+        "operationId": "dashboard.apps.feature_disable",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Turn off one of an app's features (its access is revoked)",
+        "description": "Runs the app's disable hook while the feature is still on, then revokes the feature's scopes and hosts and stops its providers, routes and jobs. Its settings stay for when it is turned on again.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$",
+              "description": "The app's id (vendor.name)."
+            },
+            "required": true,
+            "description": "The app's id (vendor.name).",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,47}$",
+              "description": "The feature's id (manifest.features[].id)."
+            },
+            "required": true,
+            "description": "The feature's id (manifest.features[].id).",
+            "name": "featureId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The app's current revision (every change advances it)."
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Off",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "app": {
+                          "$ref": "#/components/schemas/AppDetail"
+                        },
+                        "changed": {
+                          "type": "boolean",
+                          "description": "False when the feature was already in that state."
+                        },
+                        "hookError": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "app",
+                        "changed",
+                        "hookError"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
     "/api/v1/admin/apps/{id}/settings": {
       "put": {
         "operationId": "dashboard.apps.settings_update",
@@ -229667,6 +230397,8 @@
           "dashboard.apps.list",
           "dashboard.apps.surfaces",
           "dashboard.apps.get",
+          "dashboard.apps.features_list",
+          "dashboard.apps.feature_disable",
           "dashboard.apps.logs_list",
           "dashboard.apps.deliveries_list",
           "dashboard.apps.delivery_retry",
@@ -229679,6 +230411,7 @@
         "requiresVerification": true,
         "rules": [
           "Apps read and change store data under their approved access; approving an app or an update that asks for more is the Super Admin's step in the dashboard, never an agent's.",
+          "An app's features start off; turning one on approves its access and is the Super Admin's step in the dashboard. Agents list features and may turn one off (it stops that part at once).",
           "Settings, deactivation and uninstall need the app's current revision; read it first. A secret setting is write-only: never ask for or repeat its value.",
           "Uninstall with keepData false deletes the app's data and custom fields: confirm that choice in plain words first.",
           "After a retry or a settings change, read the deliveries or log again and report what happened."
@@ -234035,6 +234768,22 @@
         },
         {
           "operationId": "dashboard.apps.delivery_retry",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-manage"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.feature_disable",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-manage"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.features_list",
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [

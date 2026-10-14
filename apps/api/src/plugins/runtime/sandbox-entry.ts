@@ -56,9 +56,9 @@ export default class PluginSandbox extends WorkerEntrypoint {
     bridge: PluginRuntimeBridge,
     seed: PluginContextSeed,
     hook: PluginLifecycleHook,
-    options: { keepData?: boolean } = {},
+    options: { keepData?: boolean; feature?: string } = {},
   ): Promise<PluginInvocationResult> {
-    return invokePluginDefinition(pluginModule, { kind: "lifecycle", hook, keepData: options.keepData }, seed, bridge);
+    return invokePluginDefinition(pluginModule, { kind: "lifecycle", hook, keepData: options.keepData, feature: options.feature }, seed, bridge);
   }
 
   invokeMigration(bridge: PluginRuntimeBridge, seed: PluginContextSeed, version: number): Promise<PluginInvocationResult> {

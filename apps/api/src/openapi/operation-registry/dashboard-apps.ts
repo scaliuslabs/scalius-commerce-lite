@@ -27,6 +27,24 @@ export const DASHBOARD_APP_OPERATIONS = {
     revision: "required",
     limits: { request: 16_384, response: 65_536 },
   },
+  // Features (`manifest.features`): reading them is a plain read; turning one
+  // on approves its access, a Super Admin's consent in the dashboard like
+  // activation; turning one off only narrows access, so agents may.
+  "dashboard.apps.features_list": { limits: { response: 65_536 } },
+  "dashboard.apps.feature_enable": {
+    exposure: "excluded",
+    risk: "security",
+    batch: "forbidden",
+    revision: "required",
+    limits: { request: 131_072, response: 65_536 },
+    reason: "Turning on an app feature approves its access to store data and outside services: a Super Admin's consent in the dashboard. Agents list features and turn them off.",
+  },
+  "dashboard.apps.feature_disable": {
+    risk: "security",
+    batch: "forbidden",
+    revision: "required",
+    limits: { request: 16_384, response: 65_536 },
+  },
   "dashboard.apps.settings_update": {
     risk: "security",
     batch: "forbidden",

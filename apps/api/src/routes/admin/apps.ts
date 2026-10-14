@@ -1,7 +1,9 @@
 // Admin OpenAPI routes for installed apps (plugins, docs/platform/PLUGINS.md):
 // the list (bundled plugins appear as installed automatically), one app's
 // detail with its consent request in structured form, activation (Super Admin
-// approves the grant), settings (secrets write-only), deactivation,
+// approves the grant), its features (each off until a Super Admin turns it on
+// and approves that feature's access; anyone who manages apps turns one
+// off), settings (secrets write-only), deactivation,
 // uninstall (keep or delete data), the plugin log and event deliveries, and
 // the listing images (icon, screenshots) of installed and catalogued apps.
 // RBAC: apps.view / apps.manage (route-permissions/apps.ts); plugins can
@@ -42,6 +44,7 @@ import {
   PLUGIN_FUNCTION_POINTS,
   PLUGIN_NAV_PLACEMENTS,
   PLUGIN_SCOPE_NAMES,
+  pluginFeatureRequest,
   pluginGrantAdditions,
   pluginGrantKey,
   pluginGrantRequest,
@@ -116,6 +119,7 @@ const grantSchema = z.object({
   customFieldOwners: z.array(z.string()),
   storefrontCode: z.literal(true).optional().openapi({ description: "Draws on the storefront with its own code: components, client islands or a stylesheet." }),
   storefrontConnect: z.array(z.string()).optional().openapi({ description: "Hosts the app's storefront islands reach from the buyer's browser." }),
+  features: z.array(z.string()).optional().openapi({ description: "The app's features that are on (apps that declare features)." }),
 }).openapi("AppGrant", { description: "What an app may do; the consent screen lists it in plain words." });
 
 /** The manifest's text in other languages (BCP 47 tag → text); the dashboard picks its own. */
@@ -132,6 +136,7 @@ const appTranslationsSchema = z.record(z.string(), z.object({
     tabs: z.record(z.string(), z.record(z.string(), z.string())).optional(),
     settingsGroups: z.record(z.string(), z.object({ title: z.string().optional(), description: z.string().optional() })).optional(),
     settings: z.record(z.string(), z.object({ label: z.string().optional(), help: z.string().optional(), options: z.record(z.string(), z.string()).optional() })).optional(),
+    features: z.record(z.string(), z.object({ name: z.string().optional(), description: z.string().optional() })).optional(),
   })).nullable().openapi("AppTranslations", { description: "Name, tagline, description and surface titles by BCP 47 language tag (null: English only)." });
 
 /** What every app card shows besides its name, before and after install. */
@@ -217,17 +222,41 @@ const appProviderEntrySchema = z.object({
   icon: z.string().nullable().openapi({ description: "Same-origin address of the provider's own mark, else the app's icon." }),
 }).openapi("AppProviderEntry");
 
+const scopeRowSchema = z.object({
+  name: z.enum(PLUGIN_SCOPE_NAMES),
+  risk: z.enum(["read", "write", "destructive", "financial"]).openapi({ description: "The highest risk among the operations the scope lets this app call." }),
+  sensitive: z.boolean().openapi({ description: "The scope reaches sensitive data or settings." }),
+});
+
+/** One part of the app a merchant turns on by itself (`manifest.features`). */
+const appFeatureSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  enabled: z.boolean(),
+  recommended: z.boolean().openapi({ description: "Suggested during setup; it still starts off." }),
+  request: z.object({
+    scopes: z.array(scopeRowSchema).openapi({ description: "Store access this feature adds, for its consent dialog." }),
+    allowedHosts: z.array(z.string()).openapi({ description: "Outside services this feature talks to." }),
+    providers: z.array(z.object({ id: z.string(), kind: z.enum(PROVIDER_KINDS), name: z.string(), icon: z.string().nullable() })),
+    events: z.array(z.string()),
+    functions: z.array(z.string()),
+    publicRoutes: z.boolean().openapi({ description: "Receives requests from outside the dashboard (webhooks, public routes)." }),
+    storefront: z.boolean().openapi({ description: "Adds to the storefront." }),
+    admin: z.boolean().openapi({ description: "Adds pages, cards or actions to the dashboard." }),
+    cron: z.array(z.string()).openapi({ description: "Scheduled jobs it runs." }),
+  }).openapi({ description: "What turning this feature on asks for: only the feature's own part, never the app's base." }),
+  grantKey: z.string().nullable().openapi({ description: "Send back to turn it on (the access shown); null while it is on." }),
+}).openapi("AppFeature");
+
 const appDetailSchema = appSummarySchema.extend({
   ...listingDetailFields,
   grantKey: z.string().openapi({ description: "Send back on activation: approving a request nobody was shown is refused." }),
   request: grantSchema,
   granted: grantSchema.nullable(),
   added: grantSchema.openapi({ description: "What the request adds to the approved grant (everything before the first approval)." }),
-  scopes: z.array(z.object({
-    name: z.enum(PLUGIN_SCOPE_NAMES),
-    risk: z.enum(["read", "write", "destructive", "financial"]).openapi({ description: "The highest risk among the operations the scope lets this app call." }),
-    sensitive: z.boolean().openapi({ description: "The scope reaches sensitive data or settings." }),
-  })).openapi({ description: "The requested scopes, for the consent screen." }),
+  scopes: z.array(scopeRowSchema).openapi({ description: "The requested scopes, for the consent screen." }),
+  features: z.array(appFeatureSchema).openapi({ description: "Parts of the app turned on one at a time; each starts off. Off features' providers, settings, routes and jobs do not run and are not listed here." }),
   activatedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
   runtime: z.enum(["bundled", "sandbox"]),
   runtimeAvailable: z.boolean(),
@@ -368,7 +397,7 @@ function providerEntry(installation: PluginInstallation, provider: PluginManifes
     providerId: provider.id,
     kind: provider.kind,
     name: provider.name,
-    icon: providerIconUrl(installation.pluginId, installation.manifest, provider.id, installation.bundleSha256),
+    icon: providerIconUrl(installation.pluginId, installation.declaredManifest, provider.id, installation.bundleSha256),
   };
 }
 
@@ -384,7 +413,7 @@ function missingSettings(installation: PluginInstallation, described: ReturnType
 }
 
 /** Each requested scope with the highest risk among the operations it lets this app (in its tier) call. */
-async function scopeRows(installation: PluginInstallation, request: PluginGrantRequest) {
+async function scopeRows(installation: PluginInstallation, request: Pick<PluginGrantRequest, "scopes">) {
   const { derivePluginRiskCeiling } = await import("../../plugins/authority");
   const firstParty = isFirstPartyBundledPlugin(installation);
   return request.scopes.map((name) => {
@@ -403,19 +432,47 @@ function runtimeAvailable(c: Context<{ Bindings: Env }>, installation: PluginIns
   return sandboxAvailable(c);
 }
 
+/** Each declared feature with its state and what turning it on asks for. */
+async function featureRows(installation: PluginInstallation) {
+  const declared = installation.declaredManifest;
+  return Promise.all(declared.features.map(async (feature) => {
+    const enabled = installation.features.includes(feature.id);
+    const request = pluginFeatureRequest(declared, feature.id)!;
+    return {
+      id: feature.id,
+      name: feature.name,
+      description: feature.description,
+      enabled,
+      recommended: feature.recommended,
+      request: {
+        ...request,
+        scopes: await scopeRows(installation, request),
+        providers: request.providers.map((provider) => ({
+          id: qualifiedProviderId(installation.pluginId, provider.id),
+          kind: provider.kind as (typeof PROVIDER_KINDS)[number],
+          name: provider.name,
+          icon: providerIconUrl(installation.pluginId, declared, provider.id, installation.bundleSha256),
+        })),
+      },
+      grantKey: enabled ? null : pluginGrantKey(pluginGrantRequest(declared, [...installation.features, feature.id])),
+    };
+  }));
+}
+
 async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstallation) {
   const db = c.get("db");
   const { manifest } = installation;
-  const request = pluginGrantRequest(manifest);
+  const request = pluginGrantRequest(installation.declaredManifest, installation.features);
   const described = describePluginSettings(installation);
   const caps = planLimits().plugins;
-  const [approver, lastRuns, scopes, registrySettings] = await Promise.all([
+  const [approver, lastRuns, scopes, registrySettings, features] = await Promise.all([
     installation.activatedBy
       ? db.select({ id: userTable.id, name: userTable.name }).from(userTable).where(eq(userTable.id, installation.activatedBy)).get()
       : Promise.resolve(undefined),
     latestPluginCronRuns(db, installation.pluginId, manifest.cron.map((job) => job.name)),
     scopeRows(installation, request),
     installation.signerKeyId ? pluginRegistrySettingsDocument.read(db) : Promise.resolve({ registries: [], trustedKeys: [] }),
+    featureRows(installation),
   ]);
   const available = runtimeAvailable(c, installation);
   return {
@@ -426,6 +483,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     granted: installation.grant,
     added: pluginGrantAdditions(installation.grant, request),
     scopes,
+    features,
     activatedBy: approver ? { id: approver.id, name: approver.name } : null,
     runtime: installation.source === "bundled" ? "bundled" as const : "sandbox" as const,
     runtimeAvailable: available,
@@ -643,7 +701,8 @@ app.openapi(assetRoute, async (c) => {
   const installation = await requirePluginInstallation(c.get("db"), id).catch(() => null);
   let response: Response | null = null;
   if (installation) {
-    const target = pluginAssetPath(installation.manifest, asset);
+    // Off features' provider marks too: the features list shows them.
+    const target = pluginAssetPath(installation.declaredManifest, asset);
     if (!target) return missing();
     const current = version.length >= 16 && installation.bundleSha256.startsWith(version);
     if (installation.source === "bundled") {
@@ -865,6 +924,115 @@ app.openapi(deactivateRoute, async (c) => {
   const { deactivatePluginWithHooks } = await lifecycle();
   const result = await deactivatePluginWithHooks(lifecycleContext(c), id, { expectedRevision: c.req.valid("json").expectedRevision });
   return ok(c, { app: await detail(c, result.installation), hookError: result.hookError });
+});
+
+// ── Features ──
+
+const featureParams = idParams.extend({
+  featureId: z.string().regex(/^[a-z][a-z0-9-]{0,47}$/).openapi({ description: "The feature's id (manifest.features[].id)." }),
+});
+const featureResultSchema = successEnvelope(z.object({
+  app: appDetailSchema,
+  changed: z.boolean().openapi({ description: "False when the feature was already in that state." }),
+  hookError: z.string().nullable(),
+}));
+
+const featuresListRoute = createRoute({
+  method: "get",
+  path: "/{id}/features",
+  operationId: "dashboard.apps.features_list",
+  tags: ["Admin - Apps"],
+  summary: "List an app's features: which are on, and what each asks for",
+  description: "Each feature starts off. Turning one on asks a Super Admin to approve that feature's own access (dashboard.apps.feature_enable); turning one off revokes it at once.",
+  request: { params: idParams },
+  responses: {
+    200: {
+      description: "Features",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({ revision: z.number().int(), status: z.enum(["installed", "active", "disabled", "failed"]), features: z.array(appFeatureSchema) })),
+        },
+      },
+    },
+    ...readErrors,
+  },
+});
+
+app.openapi(featuresListRoute, async (c) => {
+  noStore(c);
+  const installation = await loadApp(c, c.req.valid("param").id);
+  return ok(c, { revision: installation.revision, status: installation.status, features: await featureRows(installation) });
+});
+
+const featureEnableRoute = createRoute({
+  method: "post",
+  path: "/{id}/features/{featureId}/enable",
+  operationId: "dashboard.apps.feature_enable",
+  tags: ["Admin - Apps"],
+  summary: "Turn on one of an app's features and approve its access (Super Admin)",
+  description: "The app must be on. Approves only this feature's scopes and hosts (grantKey: the feature's, as shown), records the approving Super Admin as the app's acting user, then runs the app's enable hook. Its providers, settings, routes and jobs start with the write.",
+  request: {
+    params: featureParams,
+    body: {
+      required: true,
+      content: { "application/json": { schema: z.object({ expectedRevision: revisionSchema, grantKey: z.string().min(2).max(65_536) }) } },
+    },
+  },
+  responses: {
+    200: { description: "On", content: { "application/json": { schema: featureResultSchema } } },
+    ...mutationErrors,
+  },
+});
+
+app.openapi(featureEnableRoute, async (c) => {
+  noStore(c);
+  const actor = c.get("user") as { id?: string; isSuperAdmin?: boolean } | undefined;
+  // Consent is a person's: a Super Admin in the dashboard, never an agent or a plugin.
+  if (!actor?.id || actor.isSuperAdmin !== true || c.get("agentPrincipal") || c.get("pluginPrincipal")) {
+    throw new ForbiddenError("Only a Super Admin can approve a feature's access.");
+  }
+  const { id, featureId } = c.req.valid("param");
+  const body = c.req.valid("json");
+  await loadApp(c, id);
+  const { setPluginFeatureWithHooks } = await lifecycle();
+  const result = await setPluginFeatureWithHooks(lifecycleContext(c), id, {
+    feature: featureId,
+    enabled: true,
+    expectedRevision: body.expectedRevision,
+    expectedGrantKey: body.grantKey,
+    actorUserId: actor.id,
+  });
+  return ok(c, { app: await detail(c, result.installation), changed: result.changed, hookError: result.hookError });
+});
+
+const featureDisableRoute = createRoute({
+  method: "post",
+  path: "/{id}/features/{featureId}/disable",
+  operationId: "dashboard.apps.feature_disable",
+  tags: ["Admin - Apps"],
+  summary: "Turn off one of an app's features (its access is revoked)",
+  description: "Runs the app's disable hook while the feature is still on, then revokes the feature's scopes and hosts and stops its providers, routes and jobs. Its settings stay for when it is turned on again.",
+  request: {
+    params: featureParams,
+    body: { required: true, content: { "application/json": { schema: z.object({ expectedRevision: revisionSchema }) } } },
+  },
+  responses: {
+    200: { description: "Off", content: { "application/json": { schema: featureResultSchema } } },
+    ...mutationErrors,
+  },
+});
+
+app.openapi(featureDisableRoute, async (c) => {
+  noStore(c);
+  const { id, featureId } = c.req.valid("param");
+  const body = c.req.valid("json");
+  const { setPluginFeatureWithHooks } = await lifecycle();
+  const result = await setPluginFeatureWithHooks(lifecycleContext(c), id, {
+    feature: featureId,
+    enabled: false,
+    expectedRevision: body.expectedRevision,
+  });
+  return ok(c, { app: await detail(c, result.installation), changed: result.changed, hookError: result.hookError });
 });
 
 // ── Settings ──

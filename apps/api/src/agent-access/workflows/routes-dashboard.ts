@@ -1382,6 +1382,8 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
       "dashboard.apps.list",
       "dashboard.apps.surfaces",
       "dashboard.apps.get",
+      "dashboard.apps.features_list",
+      "dashboard.apps.feature_disable",
       "dashboard.apps.logs_list",
       "dashboard.apps.deliveries_list",
       "dashboard.apps.delivery_retry",
@@ -1394,6 +1396,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresVerification: true,
     rules: [
       "Apps read and change store data under their approved access; approving an app or an update that asks for more is the Super Admin's step in the dashboard, never an agent's.",
+      "An app's features start off; turning one on approves its access and is the Super Admin's step in the dashboard. Agents list features and may turn one off (it stops that part at once).",
       "Settings, deactivation and uninstall need the app's current revision; read it first. A secret setting is write-only: never ask for or repeat its value.",
       "Uninstall with keepData false deletes the app's data and custom fields: confirm that choice in plain words first.",
       "After a retry or a settings change, read the deliveries or log again and report what happened.",

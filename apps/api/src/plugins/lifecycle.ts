@@ -4,6 +4,9 @@
 //   activate    approve the grant (Super Admin; core records the approver and
 //               grant key), then `install` on the first activation and
 //               `activate` every time;
+//   feature on  approve that feature's access (Super Admin), then `enable`
+//               with `{ feature }`;
+//   feature off `disable` with `{ feature }` while it is still on, then revoke;
 //   deactivate  `deactivate` while still active, then stop;
 //   uninstall   `uninstall` (with the keep/delete choice) when the plugin is
 //               active, then remove it with or without its data. Uninstalling
@@ -21,6 +24,7 @@ import {
   pluginNeedsApproval,
   requirePluginInstallation,
   restorePluginRelease,
+  setPluginFeature,
   uninstallPlugin,
   updatePluginInstallation,
   type PluginInstallation,
@@ -43,10 +47,11 @@ function hostFor(context: LifecycleContext): PluginHost {
 export async function activatePluginWithHooks(
   context: LifecycleContext,
   pluginId: string,
-  options: { actorUserId: string; expectedRevision: number; expectedGrantKey: string },
+  options: { actorUserId: string; expectedRevision: number; expectedGrantKey: string; features?: readonly string[] },
 ): Promise<{ installation: PluginInstallation; hookError: string | null }> {
   const before = await requirePluginInstallation(context.db, pluginId);
   const installation = await activatePlugin(context.db, pluginId, options);
+  const turnedOn = installation.features.filter((feature) => !before.features.includes(feature));
   // The app's content types (manifest.metaobjects), created or updated in its namespace.
   const typeProblems = await syncPluginMetaobjects(context.db, installation);
   const host = hostFor(context);
@@ -68,8 +73,36 @@ export async function activatePluginWithHooks(
   }
   const activate = await host.invokeLifecycle(installation, "activate");
   if (!activate.ok) hookError ??= activate.error;
+  // Features approved with the activation start like ones turned on later.
+  for (const feature of turnedOn) {
+    const enabled = await host.invokeLifecycle(installation, "enable", { feature });
+    if (!enabled.ok) hookError ??= enabled.error;
+  }
   if (typeProblems) hookError = hookError ? `${typeProblems} ${hookError}` : typeProblems;
   return { installation: await requirePluginInstallation(context.db, pluginId), hookError };
+}
+
+export async function setPluginFeatureWithHooks(
+  context: LifecycleContext,
+  pluginId: string,
+  options: { feature: string; enabled: boolean; expectedRevision: number; expectedGrantKey?: string; actorUserId?: string },
+): Promise<{ installation: PluginInstallation; changed: boolean; hookError: string | null }> {
+  let hookError: string | null = null;
+  if (!options.enabled) {
+    const current = await requirePluginInstallation(context.db, pluginId);
+    // The hook runs while the feature still has its access (to tidy up at its provider).
+    if (current.status === "active" && current.revision === options.expectedRevision && current.features.includes(options.feature)) {
+      const outcome = await hostFor(context).invokeLifecycle(current, "disable", { feature: options.feature });
+      if (!outcome.ok) hookError = outcome.error;
+    }
+  }
+  const result = await setPluginFeature(context.db, pluginId, options);
+  if (options.enabled && result.changed) {
+    const outcome = await hostFor(context).invokeLifecycle(result.installation, "enable", { feature: options.feature });
+    if (!outcome.ok) hookError = outcome.error;
+    return { installation: await requirePluginInstallation(context.db, pluginId), changed: true, hookError };
+  }
+  return { ...result, hookError };
 }
 
 export async function deactivatePluginWithHooks(

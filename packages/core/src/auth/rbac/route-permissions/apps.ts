@@ -20,6 +20,11 @@ export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/apps/*": { GET: view },
   "/api/v1/admin/apps/*/activate": { POST: manage },
   "/api/v1/admin/apps/*/deactivate": { POST: manage },
+  // Features: listing is a read; turning one on is also Super Admin only
+  // (enforced by the route: it approves the feature's access).
+  "/api/v1/admin/apps/*/features": { GET: view },
+  "/api/v1/admin/apps/*/features/*/enable": { POST: manage },
+  "/api/v1/admin/apps/*/features/*/disable": { POST: manage },
   "/api/v1/admin/apps/*/settings": { PUT: manage },
   "/api/v1/admin/apps/*/uninstall": { POST: manage },
   "/api/v1/admin/apps/*/logs": { GET: view },

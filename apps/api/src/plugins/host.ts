@@ -301,9 +301,10 @@ export class PluginHost {
   async invokeLifecycle(
     installation: PluginInstallation,
     hook: PluginLifecycleHook,
-    options: { keepData?: boolean } = {},
+    options: { keepData?: boolean; feature?: string } = {},
   ): Promise<PluginInvocationOutcome> {
-    const outcome = await this.run(installation, { kind: "lifecycle", hook, keepData: options.keepData }, `lifecycle:${hook}`, installation.manifest.limits.wallMs);
+    const source = options.feature ? `lifecycle:${hook}:${options.feature}` : `lifecycle:${hook}`;
+    const outcome = await this.run(installation, { kind: "lifecycle", hook, keepData: options.keepData, feature: options.feature }, source.slice(0, 80), installation.manifest.limits.wallMs);
     return outcome.ok ? { ok: true, value: null, error: null } : failed(outcome);
   }
 
@@ -350,7 +351,8 @@ export class PluginHost {
         store: store ?? { name: "", url: null, currency: "", decimalPlaces: 0, timezone: storeTimeZoneOf(this.env), locale: "en" },
         settings: settings.values,
         collections: Object.keys(installation.manifest.storage),
-        inventory: pluginHandlerInventory(installation.manifest),
+        inventory: pluginHandlerInventory(installation.manifest, installation.declaredManifest),
+        features: installation.features,
       },
       secrets,
       unreadable: settings.unreadableSecrets,

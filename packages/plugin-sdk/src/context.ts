@@ -191,8 +191,14 @@ export interface PluginLogger {
 export interface PluginContext {
   plugin: { id: string; version: string };
   store: PluginStoreInfo;
-  /** The installation's settings; secrets are present only here, decrypted. */
+  /** The installation's settings; secrets are present only here, decrypted. A feature's settings are present only while it is on. */
   settings: Readonly<Record<string, PluginSettingValue>>;
+  /**
+   * The app's features that are on (`manifest.features`). An off feature's
+   * providers, routes, jobs and settings do not exist; use this to leave its
+   * parts out of shared screens (`ctx.features.includes("pathao")`).
+   */
+  features: readonly string[];
   api: PluginApi;
   storage: PluginStorage;
   kv: PluginKv;

@@ -1,7 +1,14 @@
 // Plugin installations (docs/platform/PLUGINS.md, P1): install, approve and
-// activate, deactivate, update, uninstall, and the merchant's settings. Every
-// write is a compare-and-set on `revision`; the extension-point registrations
-// are rewritten in the same batch as the manifest they derive from.
+// activate, turn features on and off, deactivate, update, uninstall, and the
+// merchant's settings. Every write is a compare-and-set on `revision`; the
+// extension-point registrations are rewritten in the same batch as the
+// manifest or grant they derive from.
+//
+// Features (`manifest.features`): the approved grant records which are on.
+// An installation is read through `pluginManifestWithFeatures`, so
+// `installation.manifest` is the app as it runs (off features removed) and
+// every runtime reader gates on it; `declaredManifest` keeps the whole
+// declaration for the dashboard, updates and the load check.
 
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
@@ -26,12 +33,15 @@ import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placehol
 import {
   FIRST_PARTY_PLUGIN_VENDOR,
   isPluginScope,
+  knownPluginFeatures,
   legacyPermissionScope,
   parsePluginManifest,
   pluginCompatibility,
   pluginGrantExpands,
   pluginGrantKey,
   pluginGrantRequest,
+  pluginFeatureOwners,
+  pluginManifestWithFeatures,
   pluginSettingDefaults,
   validatePluginSettingValues,
   type PluginGrantRequest,
@@ -56,7 +66,15 @@ export interface PluginInstallation {
   version: string;
   source: PluginInstallationSource;
   bundleSha256: string;
+  /**
+   * The manifest as the app runs: the base plus the features that are on
+   * (`pluginManifestWithFeatures`). Every runtime reader uses this one.
+   */
   manifest: PluginManifest;
+  /** The manifest as declared, every feature included (dashboard, updates, load check). */
+  declaredManifest: PluginManifest;
+  /** The features that are on (`grant.features`, declared ones only); none before approval. */
+  features: string[];
   /** The approved grant; null until a Super Admin approves one. */
   grant: PluginGrantRequest | null;
   grantKey: string | null;
@@ -123,12 +141,16 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
   if (raw.storefrontCode !== undefined && raw.storefrontCode !== true) return null;
   const connect = raw.storefrontConnect === undefined ? undefined : stringList(raw.storefrontConnect);
   if (connect === null) return null;
+  // Features (added later): absent on grants of apps that declare none.
+  const features = raw.features === undefined ? undefined : stringList(raw.features);
+  if (features === null) return null;
   return {
     ...(parsed as Record<(typeof lists)[number], string[]>),
     publicRoutes: raw.publicRoutes,
     storefrontSurfaces: raw.storefrontSurfaces,
     ...(raw.storefrontCode === true ? { storefrontCode: true as const } : {}),
     ...(connect && connect.length > 0 ? { storefrontConnect: connect } : {}),
+    ...(features ? { features } : {}),
   } as PluginGrantRequest;
 }
 
@@ -165,13 +187,17 @@ export function toPluginInstallation(row: PluginInstallationRow): PluginInstalla
   const manifestJson = storedManifest ? upgradeStoredPluginManifest(storedManifest) : null;
   const parsed = manifestJson ? parsePluginManifest(manifestJson) : null;
   if (!parsed?.ok || parsed.manifest.id !== row.pluginId) return null;
+  const grant = parseStoredPluginGrant(row.grantJson);
+  const features = knownPluginFeatures(parsed.manifest, grant?.features ?? []);
   return {
     pluginId: row.pluginId,
     version: row.version,
     source: row.source,
     bundleSha256: row.bundleSha256,
-    manifest: parsed.manifest,
-    grant: parseStoredPluginGrant(row.grantJson),
+    manifest: pluginManifestWithFeatures(parsed.manifest, features),
+    declaredManifest: parsed.manifest,
+    features,
+    grant,
     grantKey: row.grantKey,
     status: row.status,
     failureReason: row.failureReason,
@@ -230,6 +256,7 @@ export function requireInstallableManifest(value: unknown, source: PluginInstall
   return manifest;
 }
 
+/** Registrations of the running manifest: an off feature registers nothing. */
 function registrationRows(pluginId: string, manifest: PluginManifest) {
   return [
     ...manifest.events.map((filter) => ({ kind: "event" as const, name: filter, pluginId, priority: 100 })),
@@ -301,9 +328,9 @@ function salesChannelStatusStatements(db: Database, pluginId: string, manifest: 
     ))];
 }
 
-/** Registration inserts, chunked within D1's bound-parameter limit (4 per row). */
-function registrationInserts(db: Database, pluginId: string, manifest: PluginManifest) {
-  const rows = registrationRows(pluginId, manifest);
+/** Registration inserts for `declared` with `features` on, chunked within D1's bound-parameter limit (4 per row). */
+function registrationInserts(db: Database, pluginId: string, declared: PluginManifest, features: readonly string[]) {
+  const rows = registrationRows(pluginId, pluginManifestWithFeatures(declared, features));
   const statements = [];
   for (let start = 0; start < rows.length; start += 24) {
     statements.push(db.insert(pluginRegistrations).values(rows.slice(start, start + 24)));
@@ -393,7 +420,8 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
         migratedVersion: migratedVersionSql(manifest.id),
         signerKeyId: input.signerKeyId ?? null,
       }),
-      ...registrationInserts(db, manifest.id, manifest),
+      // Nothing is approved yet: only the base registers (every feature starts off).
+      ...registrationInserts(db, manifest.id, manifest, []),
       ...salesChannelStatements(db, manifest.id, manifest.salesChannels, false),
     ] as never);
   } catch (error) {
@@ -417,6 +445,8 @@ function missingRequiredSettings(installation: PluginInstallation): string[] {
  * A Super Admin approves the manifest's grant request and the plugin starts
  * running. Required settings must be filled first. The caller checks that the
  * actor is a Super Admin; the actor is recorded as the plugin's acting user.
+ * `features` turns those features on with the approval (left out: the ones
+ * on before, none on a first activation).
  */
 export async function activatePlugin(
   db: Database,
@@ -430,14 +460,17 @@ export async function activatePlugin(
      * approving something nobody saw.
      */
     expectedGrantKey?: string;
+    features?: readonly string[];
   },
 ): Promise<PluginInstallation> {
-  const installation = await requirePluginInstallation(db, pluginId);
+  const current = await requirePluginInstallation(db, pluginId);
+  const features = options.features ? knownPluginFeatures(current.declaredManifest, options.features) : current.features;
+  const installation = withFeatures(current, features);
   const missing = missingRequiredSettings(installation);
   if (missing.length > 0) {
     throw new PluginError("installation.settings_incomplete", `Fill in the required settings first: ${missing.join(", ")}.`, { missing });
   }
-  const grant = pluginGrantRequest(installation.manifest);
+  const grant = pluginGrantRequest(installation.declaredManifest, features);
   if (options.expectedGrantKey !== undefined && options.expectedGrantKey !== pluginGrantKey(grant)) {
     throw new PluginError("installation.grant_changed", `${installation.manifest.name} now asks for different access; review it again.`, {
       currentRevision: installation.revision,
@@ -456,6 +489,8 @@ export async function activatePlugin(
         revision: sql`${pluginInstallations.revision} + 1`,
         updatedAt: sql`unixepoch()`,
       }).where(eq(pluginInstallations.pluginId, pluginId)),
+      db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
+      ...registrationInserts(db, pluginId, installation.declaredManifest, features),
       // Its sales channels are on while it runs.
       ...salesChannelStatusStatements(db, pluginId, installation.manifest, true),
     ] as never);
@@ -464,6 +499,79 @@ export async function activatePlugin(
     throw error;
   }
   return requirePluginInstallation(db, pluginId);
+}
+
+/** The installation as it would run with exactly `features` on. */
+function withFeatures(installation: PluginInstallation, features: readonly string[]): PluginInstallation {
+  const known = knownPluginFeatures(installation.declaredManifest, features);
+  return { ...installation, features: known, manifest: pluginManifestWithFeatures(installation.declaredManifest, known) };
+}
+
+/**
+ * Turns one of an active app's features on or off. On asks for that feature's
+ * access, so the caller checks the actor is a Super Admin (a person's consent)
+ * and passes the grant key of the request it showed (`expectedGrantKey`, the
+ * key of `pluginGrantRequest(declared, features + feature)`); the approver
+ * becomes the app's acting user. Off revokes the feature's access at once and
+ * needs no approval. Either way its registrations follow in the same batch,
+ * so an off feature's providers, events, functions and cron jobs stop with
+ * the write. Turning on a feature that is on (or off one that is off) changes
+ * nothing.
+ */
+export async function setPluginFeature(
+  db: Database,
+  pluginId: string,
+  options: {
+    feature: string;
+    enabled: boolean;
+    expectedRevision: number;
+    actorUserId?: string;
+    expectedGrantKey?: string;
+  },
+): Promise<{ installation: PluginInstallation; changed: boolean }> {
+  const installation = await requirePluginInstallation(db, pluginId);
+  const declared = installation.declaredManifest;
+  if (!declared.features.some((feature) => feature.id === options.feature)) {
+    throw new PluginError("feature.not_found", `${declared.name} has no feature ${options.feature}.`);
+  }
+  if (installation.revision !== options.expectedRevision) await requireRevision(db, pluginId, options.expectedRevision, []);
+  const on = installation.features.includes(options.feature);
+  if (on === options.enabled) return { installation, changed: false };
+  if (options.enabled && (installation.status !== "active" || !installation.grant)) {
+    throw new PluginError("installation.inactive", `Turn on ${declared.name} first, then its features.`);
+  }
+  if (!installation.grant) throw new PluginError("installation.inactive", `${declared.name} is not approved.`);
+  const features = options.enabled
+    ? [...installation.features, options.feature]
+    : installation.features.filter((feature) => feature !== options.feature);
+  const grant = pluginGrantRequest(declared, features);
+  // Off only ever narrows: an update still waiting for approval is not approved by it.
+  if (!options.enabled && pluginGrantExpands(installation.grant, grant)) {
+    throw new PluginError("installation.needs_approval", `${declared.name} waits for its update's approval; approve or remove it first.`);
+  }
+  if (options.enabled && options.expectedGrantKey !== undefined && options.expectedGrantKey !== pluginGrantKey(grant)) {
+    throw new PluginError("installation.grant_changed", `${declared.name} now asks for different access; review it again.`, {
+      currentRevision: installation.revision,
+    });
+  }
+  try {
+    await safeBatch(db, [
+      revisionGuard(db, pluginId, options.expectedRevision),
+      db.update(pluginInstallations).set({
+        grantJson: JSON.stringify(grant),
+        grantKey: pluginGrantKey(grant),
+        ...(options.enabled && options.actorUserId ? { activatedBy: options.actorUserId } : {}),
+        revision: sql`${pluginInstallations.revision} + 1`,
+        updatedAt: sql`unixepoch()`,
+      }).where(eq(pluginInstallations.pluginId, pluginId)),
+      db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
+      ...registrationInserts(db, pluginId, declared, features),
+    ] as never);
+  } catch (error) {
+    if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
+    throw error;
+  }
+  return { installation: await requirePluginInstallation(db, pluginId), changed: true };
 }
 
 export async function deactivatePlugin(
@@ -552,12 +660,16 @@ export async function updatePluginInstallation(
   const manifest = requireInstallableManifest(input.manifest, input.source);
   if (manifest.id !== pluginId) throw new PluginError("manifest.invalid", `The manifest is for ${manifest.id}, not ${pluginId}.`);
   const sha256 = requireSha256(input.bundleSha256);
-  const request = pluginGrantRequest(manifest);
+  // Features stay as they were (those the new manifest still declares); a new feature starts off.
+  const features = knownPluginFeatures(manifest, current.features);
+  const request = pluginGrantRequest(manifest, features);
   const wasRunning = current.status === "active" || (current.status === "failed" && current.grant !== null && current.activatedBy !== null);
   const needsApproval = wasRunning && (!current.grant || pluginGrantExpands(current.grant, request));
   const status: PluginInstallationStatus = wasRunning ? (needsApproval ? "installed" : "active") : current.status;
   const grant = wasRunning && !needsApproval ? request : current.grant;
   const settings = migrateStoredSettings(current.storedSettings, manifest.settings);
+  // While it waits for approval it keeps running nothing new: registrations follow the grant it has.
+  const registered = grant === request ? features : knownPluginFeatures(manifest, grant?.features ?? []);
 
   try {
     await safeBatch(db, [
@@ -577,7 +689,7 @@ export async function updatePluginInstallation(
         updatedAt: sql`unixepoch()`,
       }).where(eq(pluginInstallations.pluginId, pluginId)),
       db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
-      ...registrationInserts(db, pluginId, manifest),
+      ...registrationInserts(db, pluginId, manifest, registered),
       ...salesChannelStatements(db, pluginId, manifest.salesChannels, status === "active", current.manifest.salesChannels.length > 0),
     ] as never);
   } catch (error) {
@@ -607,6 +719,9 @@ export async function restorePluginRelease(
 ): Promise<PluginInstallation> {
   const pluginId = previous.pluginId;
   const current = await requirePluginInstallation(db, pluginId);
+  // A rollback point saved before features existed has only `manifest` (then the whole declaration).
+  const declared = previous.declaredManifest ?? previous.manifest;
+  const features = knownPluginFeatures(declared, previous.grant?.features ?? []);
   try {
     await safeBatch(db, [
       revisionGuard(db, pluginId, options.expectedRevision),
@@ -614,7 +729,7 @@ export async function restorePluginRelease(
         version: previous.version,
         source: previous.source,
         bundleSha256: previous.bundleSha256,
-        manifestJson: JSON.stringify(previous.manifest),
+        manifestJson: JSON.stringify(declared),
         status: previous.status,
         failureReason: options.reason.trim().slice(0, MAX_FAILURE_REASON) || null,
         grantJson: previous.grant ? JSON.stringify(previous.grant) : null,
@@ -625,14 +740,14 @@ export async function restorePluginRelease(
         updatedAt: sql`unixepoch()`,
       }).where(eq(pluginInstallations.pluginId, pluginId)),
       db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
-      ...registrationInserts(db, pluginId, previous.manifest),
-      ...salesChannelStatements(db, pluginId, previous.manifest.salesChannels, previous.status === "active", current.manifest.salesChannels.length > 0),
+      ...registrationInserts(db, pluginId, declared, features),
+      ...salesChannelStatements(db, pluginId, declared.salesChannels, previous.status === "active", current.manifest.salesChannels.length > 0),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
     throw error;
   }
-  for (const [collection, declaration] of Object.entries(previous.manifest.storage)) {
+  for (const [collection, declaration] of Object.entries(declared.storage)) {
     const after = current.manifest.storage[collection];
     if (after && JSON.stringify(after) === JSON.stringify(declaration)) continue;
     await reindexPluginCollection(db, pluginId, collection, declaration);
@@ -699,7 +814,7 @@ export async function uninstallPlugin(
 export function pluginNeedsApproval(installation: PluginInstallation): boolean {
   return installation.status !== "active"
     && installation.grant !== null
-    && pluginGrantExpands(installation.grant, pluginGrantRequest(installation.manifest));
+    && pluginGrantExpands(installation.grant, pluginGrantRequest(installation.declaredManifest, installation.features));
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────
@@ -717,6 +832,15 @@ export async function writePluginSettings(
 ): Promise<PluginInstallation> {
   const installation = await requirePluginInstallation(db, pluginId);
   const schema = installation.manifest.settings;
+  // A feature that is off has no settings to write: say which feature to turn on.
+  const live = new Set(schema.map((field) => field.key));
+  const dormant = Object.keys(values).find((key) => !live.has(key) && installation.declaredManifest.settings.some((field) => field.key === key));
+  if (dormant) {
+    const owner = pluginFeatureOwners(installation.declaredManifest).settings.get(dormant);
+    const feature = installation.declaredManifest.features.find((entry) => entry.id === owner);
+    const message = `Turn on ${feature?.name ?? "its feature"} first.`;
+    throw new PluginError("settings.invalid", `${dormant}: ${message}`, { errors: [{ key: dormant, message }] });
+  }
   const secretsSet = new Set(schema
     .filter((field) => field.type === "secret" && isSealedPluginSecret(installation.storedSettings[field.key]))
     .map((field) => field.key));
@@ -738,7 +862,12 @@ export async function writePluginSettings(
   }
   const writesSecret = schema.some((field) => field.type === "secret" && typeof checked.values[field.key] === "string");
   const key = writesSecret ? await derivePluginSettingsKey(options.credentialEncryptionKey) : null;
+  // The settings of features that are off are not in this document: they stay as stored.
   const next: Record<string, unknown> = {};
+  for (const field of installation.declaredManifest.settings) {
+    const stored = installation.storedSettings[field.key];
+    if (!live.has(field.key) && stored !== undefined && stored !== null) next[field.key] = stored;
+  }
   for (const field of schema) {
     const value = checked.values[field.key];
     if (field.type === "secret") {

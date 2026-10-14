@@ -2815,6 +2815,12 @@ export type AppTranslations = {
                 };
             };
         };
+        features?: {
+            [key: string]: {
+                name?: string;
+                description?: string;
+            };
+        };
     };
 } | null;
 
@@ -3030,6 +3036,10 @@ export type AppDetail = AppSummary & {
          */
         sensitive: boolean;
     }>;
+    /**
+     * Parts of the app turned on one at a time; each starts off. Off features' providers, settings, routes and jobs do not run and are not listed here.
+     */
+    features: Array<AppFeature>;
     activatedBy: {
         id: string;
         name: string;
@@ -3228,6 +3238,72 @@ export type AppGrant = {
      * Hosts the app's storefront islands reach from the buyer's browser.
      */
     storefrontConnect?: Array<string>;
+    /**
+     * The app's features that are on (apps that declare features).
+     */
+    features?: Array<string>;
+};
+
+export type AppFeature = {
+    id: string;
+    name: string;
+    description: string;
+    enabled: boolean;
+    /**
+     * Suggested during setup; it still starts off.
+     */
+    recommended: boolean;
+    /**
+     * What turning this feature on asks for: only the feature's own part, never the app's base.
+     */
+    request: {
+        /**
+         * Store access this feature adds, for its consent dialog.
+         */
+        scopes: Array<{
+            name: 'read_products' | 'write_products' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places';
+            /**
+             * The highest risk among the operations the scope lets this app call.
+             */
+            risk: 'read' | 'write' | 'destructive' | 'financial';
+            /**
+             * The scope reaches sensitive data or settings.
+             */
+            sensitive: boolean;
+        }>;
+        /**
+         * Outside services this feature talks to.
+         */
+        allowedHosts: Array<string>;
+        providers: Array<{
+            id: string;
+            kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+            name: string;
+            icon: string | null;
+        }>;
+        events: Array<string>;
+        functions: Array<string>;
+        /**
+         * Receives requests from outside the dashboard (webhooks, public routes).
+         */
+        publicRoutes: boolean;
+        /**
+         * Adds to the storefront.
+         */
+        storefront: boolean;
+        /**
+         * Adds pages, cards or actions to the dashboard.
+         */
+        admin: boolean;
+        /**
+         * Scheduled jobs it runs.
+         */
+        cron: Array<string>;
+    };
+    /**
+     * Send back to turn it on (the access shown); null while it is on.
+     */
+    grantKey: string | null;
 };
 
 export type AppLogLine = {
@@ -60115,6 +60191,190 @@ export type PostApiV1AdminAppsByIdDeactivateResponses = {
 };
 
 export type PostApiV1AdminAppsByIdDeactivateResponse = PostApiV1AdminAppsByIdDeactivateResponses[keyof PostApiV1AdminAppsByIdDeactivateResponses];
+
+export type GetApiV1AdminAppsByIdFeaturesData = {
+    body?: never;
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/features';
+};
+
+export type GetApiV1AdminAppsByIdFeaturesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+};
+
+export type GetApiV1AdminAppsByIdFeaturesError = GetApiV1AdminAppsByIdFeaturesErrors[keyof GetApiV1AdminAppsByIdFeaturesErrors];
+
+export type GetApiV1AdminAppsByIdFeaturesResponses = {
+    /**
+     * Features
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            status: 'installed' | 'active' | 'disabled' | 'failed';
+            features: Array<AppFeature>;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsByIdFeaturesResponse = GetApiV1AdminAppsByIdFeaturesResponses[keyof GetApiV1AdminAppsByIdFeaturesResponses];
+
+export type PostApiV1AdminAppsByIdFeaturesByFeatureIdEnableData = {
+    body: {
+        /**
+         * The app's current revision (every change advances it).
+         */
+        expectedRevision: number;
+        grantKey: string;
+    };
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+        /**
+         * The feature's id (manifest.features[].id).
+         */
+        featureId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/features/{featureId}/enable';
+};
+
+export type PostApiV1AdminAppsByIdFeaturesByFeatureIdEnableErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsByIdFeaturesByFeatureIdEnableError = PostApiV1AdminAppsByIdFeaturesByFeatureIdEnableErrors[keyof PostApiV1AdminAppsByIdFeaturesByFeatureIdEnableErrors];
+
+export type PostApiV1AdminAppsByIdFeaturesByFeatureIdEnableResponses = {
+    /**
+     * On
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+            /**
+             * False when the feature was already in that state.
+             */
+            changed: boolean;
+            hookError: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdFeaturesByFeatureIdEnableResponse = PostApiV1AdminAppsByIdFeaturesByFeatureIdEnableResponses[keyof PostApiV1AdminAppsByIdFeaturesByFeatureIdEnableResponses];
+
+export type PostApiV1AdminAppsByIdFeaturesByFeatureIdDisableData = {
+    body: {
+        /**
+         * The app's current revision (every change advances it).
+         */
+        expectedRevision: number;
+    };
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+        /**
+         * The feature's id (manifest.features[].id).
+         */
+        featureId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/features/{featureId}/disable';
+};
+
+export type PostApiV1AdminAppsByIdFeaturesByFeatureIdDisableErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsByIdFeaturesByFeatureIdDisableError = PostApiV1AdminAppsByIdFeaturesByFeatureIdDisableErrors[keyof PostApiV1AdminAppsByIdFeaturesByFeatureIdDisableErrors];
+
+export type PostApiV1AdminAppsByIdFeaturesByFeatureIdDisableResponses = {
+    /**
+     * Off
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+            /**
+             * False when the feature was already in that state.
+             */
+            changed: boolean;
+            hookError: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdFeaturesByFeatureIdDisableResponse = PostApiV1AdminAppsByIdFeaturesByFeatureIdDisableResponses[keyof PostApiV1AdminAppsByIdFeaturesByFeatureIdDisableResponses];
 
 export type PutApiV1AdminAppsByIdSettingsData = {
     body: {
