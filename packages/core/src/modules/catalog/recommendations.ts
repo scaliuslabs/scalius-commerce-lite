@@ -37,7 +37,7 @@ import {
 } from "../translations";
 import { productRecommendations, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
+import { asc, eq, sql, type SQL } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
 import {
   effectivePriceMinorSql,
@@ -55,7 +55,6 @@ import {
     buyerStateCardSku,
     buyerStateCardSkuJoin,
     buyerStatePricingSelection,
-    publicBuyerStateCondition,
 } from "./buyer-state";
 import { declareProductCards, declareRequestedProducts, deps } from "./declare-deps";
 
