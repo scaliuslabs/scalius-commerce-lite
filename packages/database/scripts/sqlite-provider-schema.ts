@@ -105,6 +105,41 @@ export async function createProviderSchemaDatabase(
   }
 }
 
+function sqliteLiteral(value: unknown): string {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "number" || typeof value === "bigint") return String(value);
+  if (value instanceof Uint8Array) return `X'${Buffer.from(value).toString("hex")}'`;
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+/**
+ * Statements that recreate `database` (its schema and rows) on an empty
+ * SQLite-dialect target: tables, their rows, indexes, then triggers, so the
+ * copied rows fire none. A fresh store gets the schema the migration chain
+ * ends in, with the chain's seed rows and ledger, without replaying its table
+ * rebuilds and backfills.
+ */
+export function sqliteSchemaStatements(database: DatabaseSync): string[] {
+  const objects = database.prepare(`
+    SELECT type, name, sql FROM sqlite_schema
+    WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'
+    ORDER BY rowid
+  `).all() as Array<{ type: string; name: string; sql: string }>;
+  const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
+  const tables = objects.filter((object) => object.type === "table");
+  const rows = tables.flatMap(({ name }) =>
+    (database.prepare(`SELECT * FROM ${quote(name)}`).all() as Array<Record<string, unknown>>).map((row) => {
+      const columns = Object.keys(row);
+      return `INSERT INTO ${quote(name)} (${columns.map(quote).join(", ")}) VALUES (${columns.map((column) => sqliteLiteral(row[column])).join(", ")})`;
+    }));
+  return [
+    ...tables.map((object) => object.sql),
+    ...rows,
+    ...objects.filter((object) => object.type === "index" || object.type === "view").map((object) => object.sql),
+    ...objects.filter((object) => object.type === "trigger").map((object) => object.sql),
+  ];
+}
+
 export function readFinalTriggerDefinitions(
   database: DatabaseSync,
 ): readonly SqliteTriggerDefinition[] {

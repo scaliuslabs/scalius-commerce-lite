@@ -15,6 +15,7 @@ import {
   type DatabaseSchemaState,
 } from "../src/schema-contract";
 import { compileSqliteMigrationForProvider } from "../src/migration-artifacts";
+import { createProviderSchemaDatabase, sqliteSchemaStatements } from "./sqlite-provider-schema";
 import {
   POSTGRES_MIGRATION_STATE_REGCLASS,
   POSTGRES_MIGRATION_STATE_TABLE,
@@ -240,17 +241,56 @@ function nextArtifact(
   return next;
 }
 
+/** A Turso target with no schema object at all: a fresh store. */
+export const EMPTY_SCHEMA_STATE: DatabaseSchemaState = { version: 0, name: "empty" };
+
+async function isEmptyTursoDatabase(executor: TursoSchemaExecutor): Promise<boolean> {
+  const rows = await executor.all(
+    "SELECT name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE 'libsql_%' LIMIT 1",
+  );
+  return rows.length === 0;
+}
+
 export async function inspectTursoSchemaUpgrade(
   connection: TursoSchemaConnection,
   artifacts: readonly SchemaUpgradeArtifact[],
 ): Promise<DatabaseSchemaState> {
+  if (await isEmptyTursoDatabase(connection)) return EMPTY_SCHEMA_STATE;
   return readTursoSchemaState(connection, artifacts);
+}
+
+/**
+ * A fresh Turso store gets the schema the migration chain ends in, its seed
+ * rows and its ledger, in one transaction. Replaying the chain does not run
+ * on the Turso engine: its table rebuilds (0143) make the engine re-parse the
+ * 0131 analytics triggers, whose materialized CTEs it cannot resolve, and two
+ * backfills (0065, 0091) use SQL it does not parse; on a fresh store they
+ * have no rows to change anyway.
+ */
+async function installFreshTursoSchema(connection: TursoSchemaConnection): Promise<void> {
+  const source = await createProviderSchemaDatabase("turso");
+  let statements: string[];
+  try {
+    statements = sqliteSchemaStatements(source);
+  } finally {
+    source.close();
+  }
+  await connection.transactionAsync(async (transaction) => {
+    if (!(await isEmptyTursoDatabase(transaction))) {
+      throw new Error("Turso target is no longer empty; inspect it before upgrading.");
+    }
+    await transaction.batch(statements);
+  }).immediate();
 }
 
 export async function applyTursoSchemaUpgrades(
   connection: TursoSchemaConnection,
   artifacts: readonly SchemaUpgradeArtifact[],
 ): Promise<{ before: DatabaseSchemaState; after: DatabaseSchemaState; applied: SchemaUpgradeArtifact[] }> {
+  if (await isEmptyTursoDatabase(connection)) {
+    await installFreshTursoSchema(connection);
+    return { before: EMPTY_SCHEMA_STATE, after: await readTursoSchemaState(connection, artifacts), applied: [...artifacts] };
+  }
   const before = await readTursoSchemaState(connection, artifacts);
   const legacyFence = before.version === DATABASE_SCHEMA_LEGACY_BASELINE.version
     ? await readTursoRawSchemaFence(connection)

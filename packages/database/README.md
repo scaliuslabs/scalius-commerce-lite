@@ -189,7 +189,7 @@ POSTGRES_DATABASE_URL='<target-url>' pnpm --filter @scalius/database upgrade:sch
   --provider postgres --acknowledge-target-host '<host>' --freeze-proof-sha256 '<proof>'
 ```
 
-`--require-current` is valid only with `--dry-run`. A dry run refuses `--freeze-proof-sha256`. A mutation requires it (64 hex characters). The TursoDB runner applies each release in one transaction. The PostgreSQL runner applies each sidecar in one serializable transaction under an advisory lock. A replay after a lost response is a safe no-op.
+`--require-current` is valid only with `--dry-run`. A dry run refuses `--freeze-proof-sha256`. A mutation requires it (64 hex characters). The TursoDB runner applies each release in one transaction. The PostgreSQL runner applies each sidecar in one serializable transaction under an advisory lock. A replay after a lost response is a safe no-op. An empty TursoDB target gets the current schema, seed rows and ledger in one transaction: replaying the chain does not run on the Turso engine (the 0143 table rebuilds re-parse the 0131 analytics triggers, and two backfills use SQL it does not parse).
 
 ### The D1 migration plan
 

@@ -7,7 +7,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { connect } from "@tursodatabase/database";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -24,7 +23,8 @@ import {
   MARKETING_CONSENT_SOURCE_VALUES,
   MARKETING_CONSENT_STATE_VALUES,
 } from "../src/schema/customer-marketing";
-import { compiledMigrationSql, createMigratedSqlite, execOnTursoEngine } from "../src/testing/sqlite-d1";
+import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
+import { freshTursoEngineStore } from "./turso-engine";
 
 const NAME = "0108_customer_marketing";
 const BREAKPOINT = "--> statement-breakpoint";
@@ -264,17 +264,7 @@ describe(`${NAME} over a populated 0107 database`, () => {
 
 describe(`${NAME} on the Turso engine`, () => {
   it("applies every 0108 statement and maintains statistics and the consent log", async () => {
-    const database = await connect(":memory:");
-    const own = new Set(compiledMigrationSql("turso", undefined, `${NAME}.sql`).split(BREAKPOINT).map((statement) => statement.trim()));
-    for (const statement of compiledMigrationSql("turso").split(BREAKPOINT)) {
-      if (!statement.trim()) continue;
-      try {
-        await execOnTursoEngine(database, statement);
-      } catch (error) {
-        // Two pre-0100 backfills use SQL the local engine does not parse yet.
-        if (own.has(statement.trim())) throw error;
-      }
-    }
+    const database = await freshTursoEngineStore();
     await database.exec("INSERT INTO customers (id, name, phone) VALUES ('cust_t', 'T', '+8801711111111')");
     await database.exec(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, customer_id, paid_amount_minor, created_at)
       VALUES ('ord_t', 'A', '+8801711111111', 'House', 'city', 'zone', 'pending', 'cust_t', 700, 1700000000)`);

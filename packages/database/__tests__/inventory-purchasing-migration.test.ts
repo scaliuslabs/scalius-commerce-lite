@@ -7,11 +7,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { connect } from "@tursodatabase/database";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { parseEventFacts, type EventTopic } from "../../shared/src/events";
-import { compiledMigrationSql, createMigratedSqlite, execOnTursoEngine } from "../src/testing/sqlite-d1";
+import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
+import { freshTursoEngineStore } from "./turso-engine";
 
 const NAME = "0109_inventory_purchasing";
 const BREAKPOINT = "--> statement-breakpoint";
@@ -227,17 +227,7 @@ describe(`${NAME} over a populated 0108 store`, () => {
 
 describe(`${NAME} on the Turso engine`, () => {
   it("applies every 0109 statement and enforces its movement, cost and line rules", async () => {
-    const database = await connect(":memory:");
-    const own = new Set(compiledMigrationSql("turso", undefined, `${NAME}.sql`).split(BREAKPOINT).map((statement) => statement.trim()));
-    for (const statement of compiledMigrationSql("turso").split(BREAKPOINT)) {
-      if (!statement.trim()) continue;
-      try {
-        await execOnTursoEngine(database, statement);
-      } catch (error) {
-        // A few pre-0100 backfills use SQL the local engine does not parse yet.
-        if (own.has(statement.trim())) throw error;
-      }
-    }
+    const database = await freshTursoEngineStore();
     await database.exec(`
       INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('prod_t', 'Kurta', 'kurta', 80000, 1);
       INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory, cost_minor)

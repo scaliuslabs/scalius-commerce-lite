@@ -32,10 +32,10 @@ import {
   renderCacheDepProjectionMigration,
   CACHE_DEP_PROJECTION_MIGRATION_PATHS,
 } from "../scripts/cache-dep-triggers";
-import { compiledMigrationSql, createMigratedSqlite, execOnTursoEngine } from "../src/testing/sqlite-d1";
+import { createMigratedSqlite } from "../src/testing/sqlite-d1";
+import { freshTursoEngineStore } from "./turso-engine";
 import { bumped, runCacheDepScenario, type CacheDepDriver } from "./cache-dep-scenario";
 
-const BREAKPOINT = "--> statement-breakpoint";
 
 function nodeDriver(provider: "d1" | "turso", foreignKeys = true): CacheDepDriver & { sqlite: ReturnType<typeof createMigratedSqlite> } {
   const sqlite = createMigratedSqlite({ provider, foreignKeys });
@@ -235,21 +235,7 @@ describe("0100_cache_dependencies", () => {
   });
 
   it("runs unchanged on the real Turso engine (0.7), including coarse mode and same-band stock", async () => {
-    const database = await connect(":memory:");
-    const migrations = compiledMigrationSql("turso").split(BREAKPOINT);
-    const own = new Set((compiledMigrationSql("turso", undefined, "0100_") + "\n" + compiledMigrationSql("turso", undefined, "0101_")).split(BREAKPOINT).map((statement) => statement.trim()));
-    const failures: string[] = [];
-    for (const statement of migrations) {
-      try {
-        await execOnTursoEngine(database, statement);
-      } catch (error) {
-        // Two pre-0100 backfills use SQL the local engine does not parse yet;
-        // hosted Turso applies them. Every 0100 statement must apply.
-        if (own.has(statement.trim())) throw error;
-        failures.push((error as Error).message);
-      }
-    }
-    expect(failures.length).toBeLessThanOrEqual(2);
+    const database = await freshTursoEngineStore();
     await runCacheDepScenario({
       exec: async (sql) => { await database.exec(sql); },
       rows: async (sql) => await database.prepare(sql).all() as Array<Record<string, unknown>>,
@@ -261,10 +247,7 @@ describe("0100_cache_dependencies", () => {
     const directory = mkdtempSync(join(tmpdir(), "scalius-cache-dep-"));
     try {
       const path = join(directory, "store.db");
-      const setup = await connect(path);
-      for (const statement of compiledMigrationSql("turso").split(BREAKPOINT)) {
-        await setup.exec(statement).catch(() => undefined);
-      }
+      const setup = await freshTursoEngineStore(path);
       await setup.exec("INSERT INTO categories (id, name, slug, status) VALUES ('cat_a', 'A', 'a', 'published'), ('cat_b', 'B', 'b', 'published')");
       await setup.exec("PRAGMA journal_mode=mvcc");
       await setup.close();

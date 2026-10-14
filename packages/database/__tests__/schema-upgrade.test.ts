@@ -31,10 +31,14 @@ import type { PostgresFullResult, PostgresHttpConnection } from "../src/postgres
 import {
   applyPostgresSchemaUpgrades,
   applyTursoSchemaUpgrades,
+  EMPTY_SCHEMA_STATE,
   inspectTursoSchemaUpgrade,
   loadSchemaUpgradeArtifacts,
   type TursoSchemaConnection,
 } from "../scripts/upgrade-provider-schema";
+import { connect } from "@tursodatabase/database";
+import { createProviderSchemaDatabase } from "../scripts/sqlite-provider-schema";
+import { tursoEngineConnection } from "./turso-engine";
 
 const migrationsDirectory = resolve(import.meta.dirname, "../migrations");
 
@@ -820,6 +824,41 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
   ])("rejects transaction-unsafe sidecar SQL: %s", (sql) => {
     expect(() => splitSchemaMigrationStatements(sql)).toThrow(/transaction/i);
   });
+
+  it("installs a fresh store on the Turso engine from 0001 to the current release, exactly the replayed chain", async () => {
+    const engine = await connect(":memory:");
+    const connection = tursoEngineConnection(engine);
+    const artifacts = await loadSchemaUpgradeArtifacts();
+    const replayed = await createProviderSchemaDatabase("turso");
+    try {
+      expect(await inspectTursoSchemaUpgrade(connection, artifacts)).toEqual(EMPTY_SCHEMA_STATE);
+      const fresh = await applyTursoSchemaUpgrades(connection, artifacts);
+      expect(fresh).toMatchObject({ before: EMPTY_SCHEMA_STATE, after: CURRENT_DATABASE_SCHEMA });
+      expect(fresh.applied).toHaveLength(artifacts.length);
+      // The same schema objects (the engine re-serializes their SQL), seed rows
+      // and ledger as the node:sqlite replay of every migration.
+      const catalog = "SELECT type, name, tbl_name AS tableName FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type, name";
+      expect(await engine.prepare(catalog).all()).toEqual(replayed.prepare(catalog).all().map((row) => ({ ...row })));
+      // Every seed row (the two builds differ only in their clock times) and the exact ledger.
+      const tables = replayed.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as Array<{ name: string }>;
+      for (const { name } of tables) {
+        const count = `SELECT count(*) AS n FROM "${name}"`;
+        expect(Number((await engine.prepare(count).get() as { n: number }).n), name).toBe(Number((replayed.prepare(count).get() as { n: number }).n));
+      }
+      const ledger = "SELECT version, name, source_sha256 FROM scalius_schema_migrations ORDER BY version";
+      expect((await engine.prepare(ledger).all()).map((row) => [(row as { version: number }).version, (row as { source_sha256: string }).source_sha256]))
+        .toEqual(replayed.prepare(ledger).all().map((row) => [row.version, row.source_sha256]));
+      // Its triggers run on the engine.
+      await engine.exec(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
+        VALUES ('ord_t', 'A', '+8801711111111', 'House', 'city', 'zone', 'pending')`);
+      expect((await engine.prepare("SELECT topic FROM event_outbox").all()).map((row) => (row as { topic: string }).topic)).toEqual(["order.created"]);
+      const replay = await applyTursoSchemaUpgrades(connection, artifacts);
+      expect(replay).toEqual({ before: CURRENT_DATABASE_SCHEMA, after: CURRENT_DATABASE_SCHEMA, applied: [] });
+    } finally {
+      replayed.close();
+      await engine.close();
+    }
+  }, 120_000);
 
   it("upgrades the exact Turso 0049 baseline atomically and is idempotent", async () => {
     const database = createLegacyTursoDatabase();
