@@ -2982,314 +2982,19 @@
                 "type": "object",
                 "properties": {
                   "header": {
-                    "type": "object",
-                    "properties": {
-                      "app": {
-                        "type": "string",
-                        "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                      },
-                      "values": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 5000
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "boolean"
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "maxLength": 64
-                              },
-                              "maxItems": 50
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "additionalProperties": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string",
-                                      "maxLength": 5000
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {
-                                      "type": "boolean"
-                                    },
-                                    {}
-                                  ]
-                                }
-                              },
-                              "maxItems": 24
-                            },
-                            {}
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "app",
-                      "values"
-                    ],
-                    "additionalProperties": false
+                    "$ref": "#/components/schemas/StorefrontSkinRef"
                   },
                   "footer": {
-                    "type": "object",
-                    "properties": {
-                      "app": {
-                        "type": "string",
-                        "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                      },
-                      "values": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 5000
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "boolean"
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "maxLength": 64
-                              },
-                              "maxItems": 50
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "additionalProperties": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string",
-                                      "maxLength": 5000
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {
-                                      "type": "boolean"
-                                    },
-                                    {}
-                                  ]
-                                }
-                              },
-                              "maxItems": 24
-                            },
-                            {}
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "app",
-                      "values"
-                    ],
-                    "additionalProperties": false
+                    "$ref": "#/components/schemas/StorefrontSkinRef"
                   },
                   "product-card": {
-                    "type": "object",
-                    "properties": {
-                      "app": {
-                        "type": "string",
-                        "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                      },
-                      "values": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 5000
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "boolean"
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "maxLength": 64
-                              },
-                              "maxItems": 50
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "additionalProperties": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string",
-                                      "maxLength": 5000
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {
-                                      "type": "boolean"
-                                    },
-                                    {}
-                                  ]
-                                }
-                              },
-                              "maxItems": 24
-                            },
-                            {}
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "app",
-                      "values"
-                    ],
-                    "additionalProperties": false
+                    "$ref": "#/components/schemas/StorefrontSkinRef"
                   },
                   "product-main": {
-                    "type": "object",
-                    "properties": {
-                      "app": {
-                        "type": "string",
-                        "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                      },
-                      "values": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 5000
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "boolean"
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "maxLength": 64
-                              },
-                              "maxItems": 50
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "additionalProperties": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string",
-                                      "maxLength": 5000
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {
-                                      "type": "boolean"
-                                    },
-                                    {}
-                                  ]
-                                }
-                              },
-                              "maxItems": 24
-                            },
-                            {}
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "app",
-                      "values"
-                    ],
-                    "additionalProperties": false
+                    "$ref": "#/components/schemas/StorefrontSkinRef"
                   },
                   "listing-main": {
-                    "type": "object",
-                    "properties": {
-                      "app": {
-                        "type": "string",
-                        "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                      },
-                      "values": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 5000
-                            },
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "boolean"
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "maxLength": 64
-                              },
-                              "maxItems": 50
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "additionalProperties": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string",
-                                      "maxLength": 5000
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {
-                                      "type": "boolean"
-                                    },
-                                    {}
-                                  ]
-                                }
-                              },
-                              "maxItems": 24
-                            },
-                            {}
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "app",
-                      "values"
-                    ],
-                    "additionalProperties": false
+                    "$ref": "#/components/schemas/StorefrontSkinRef"
                   }
                 },
                 "additionalProperties": false
@@ -3394,6 +3099,68 @@
           "brand",
           "blocks",
           "pages"
+        ],
+        "additionalProperties": false
+      },
+      "StorefrontSkinRef": {
+        "type": "object",
+        "properties": {
+          "app": {
+            "type": "string",
+            "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 5000
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "maxItems": 50
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 5000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {}
+                      ]
+                    }
+                  },
+                  "maxItems": 24
+                },
+                {}
+              ]
+            }
+          }
+        },
+        "required": [
+          "app",
+          "values"
         ],
         "additionalProperties": false
       },
@@ -3587,66 +3354,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -3765,66 +3473,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -3901,66 +3550,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4030,66 +3620,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4240,66 +3771,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4456,66 +3928,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4666,66 +4079,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -4898,66 +4252,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5044,66 +4339,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5185,66 +4421,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5404,66 +4581,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5559,66 +4677,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5679,66 +4738,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -5935,66 +4935,7 @@
                   ]
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -6075,66 +5016,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -6215,66 +5097,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -6350,66 +5173,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -6467,66 +5231,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -6579,66 +5284,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -6711,66 +5357,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [
@@ -6843,66 +5430,7 @@
                   "additionalProperties": false
                 },
                 "skin": {
-                  "type": "object",
-                  "properties": {
-                    "app": {
-                      "type": "string",
-                      "pattern": "^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\\/([a-z][a-z0-9-]{0,47})$"
-                    },
-                    "values": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "maxLength": 5000
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "maxLength": 64
-                            },
-                            "maxItems": 50
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "type": "object",
-                              "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "maxLength": 5000
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {}
-                                ]
-                              }
-                            },
-                            "maxItems": 24
-                          },
-                          {}
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "app",
-                    "values"
-                  ],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/StorefrontSkinRef"
                 }
               },
               "required": [

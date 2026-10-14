@@ -660,46 +660,11 @@ export type StorefrontThemeDocument = {
     };
     apps?: {
         skins?: {
-            header?: {
-                app: string;
-                values: {
-                    [key: string]: string | number | boolean | Array<string> | Array<{
-                        [key: string]: string | number | boolean | unknown;
-                    }> | unknown;
-                };
-            };
-            footer?: {
-                app: string;
-                values: {
-                    [key: string]: string | number | boolean | Array<string> | Array<{
-                        [key: string]: string | number | boolean | unknown;
-                    }> | unknown;
-                };
-            };
-            'product-card'?: {
-                app: string;
-                values: {
-                    [key: string]: string | number | boolean | Array<string> | Array<{
-                        [key: string]: string | number | boolean | unknown;
-                    }> | unknown;
-                };
-            };
-            'product-main'?: {
-                app: string;
-                values: {
-                    [key: string]: string | number | boolean | Array<string> | Array<{
-                        [key: string]: string | number | boolean | unknown;
-                    }> | unknown;
-                };
-            };
-            'listing-main'?: {
-                app: string;
-                values: {
-                    [key: string]: string | number | boolean | Array<string> | Array<{
-                        [key: string]: string | number | boolean | unknown;
-                    }> | unknown;
-                };
-            };
+            header?: StorefrontSkinRef;
+            footer?: StorefrontSkinRef;
+            'product-card'?: StorefrontSkinRef;
+            'product-main'?: StorefrontSkinRef;
+            'listing-main'?: StorefrontSkinRef;
         };
         template?: string;
     };
@@ -720,6 +685,15 @@ export type StorefrontThemeDocument = {
             cart: StorefrontPageTemplate;
             page: StorefrontPageTemplate;
         };
+    };
+};
+
+export type StorefrontSkinRef = {
+    app: string;
+    values: {
+        [key: string]: string | number | boolean | Array<string> | Array<{
+            [key: string]: string | number | boolean | unknown;
+        }> | unknown;
     };
 };
 
@@ -758,14 +732,7 @@ export type StorefrontSectionList = Array<{
         }>;
         phoneHeight?: 'screen' | 'compact';
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'usp-strip';
@@ -785,14 +752,7 @@ export type StorefrontSectionList = Array<{
             }>;
         };
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'category-tiles';
@@ -804,14 +764,7 @@ export type StorefrontSectionList = Array<{
         title: string;
         categoryIds: Array<string>;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'collections';
@@ -823,14 +776,7 @@ export type StorefrontSectionList = Array<{
         collectionIds: Array<string>;
         title?: string;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'product-rail';
@@ -854,14 +800,7 @@ export type StorefrontSectionList = Array<{
         };
         limit: number;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'product-grid';
@@ -886,14 +825,7 @@ export type StorefrontSectionList = Array<{
         columns: number;
         rows: number;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'deal-block';
@@ -917,14 +849,7 @@ export type StorefrontSectionList = Array<{
         };
         promotionId?: string | null;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'product-tabs';
@@ -952,14 +877,7 @@ export type StorefrontSectionList = Array<{
         }>;
         limit: number;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'shop-by';
@@ -975,14 +893,7 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'banner-mosaic';
@@ -997,14 +908,7 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'lookbook';
@@ -1029,14 +933,7 @@ export type StorefrontSectionList = Array<{
         };
         photo: 'tall' | 'square';
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'banner';
@@ -1053,14 +950,7 @@ export type StorefrontSectionList = Array<{
             href: string;
         } | null;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'brand-wall';
@@ -1071,14 +961,7 @@ export type StorefrontSectionList = Array<{
         title: string;
         style: 'grid' | 'rail';
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'editorial';
@@ -1111,14 +994,7 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'faq';
@@ -1133,14 +1009,7 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'utility-cards';
@@ -1155,14 +1024,7 @@ export type StorefrontSectionList = Array<{
             hidden?: boolean;
         }>;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'endless-grid';
@@ -1173,14 +1035,7 @@ export type StorefrontSectionList = Array<{
         title: string;
         pageSize: 12 | 24 | 36;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'seo-text';
@@ -1191,14 +1046,7 @@ export type StorefrontSectionList = Array<{
         heading: string;
         body: string;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'recently-viewed';
@@ -1208,14 +1056,7 @@ export type StorefrontSectionList = Array<{
     settings: {
         title: string;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'metaobjects';
@@ -1228,14 +1069,7 @@ export type StorefrontSectionList = Array<{
         layout: 'list' | 'grid' | 'accordion';
         limit: number;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'newsletter';
@@ -1249,14 +1083,7 @@ export type StorefrontSectionList = Array<{
         whatsapp?: boolean;
         buttonLabel?: string;
     };
-    skin?: {
-        app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
-    };
+    skin?: StorefrontSkinRef;
 } | {
     id: string;
     type: 'app';
