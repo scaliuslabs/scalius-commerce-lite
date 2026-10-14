@@ -6,9 +6,9 @@ import {
   hasPriorSalesOrderSql, merchantDaySql, scopeOffsets, orderIdentitySql,
   orderMeasuresSql, orderMetricsCtes, salesLinesCtes, salesOrdersCte,
   shopMinorSql, type SalesScope,
-} from "./overview.source-sales";
-import type { AnalyticsContext } from "./context";
-import { mapOverviewPeriod } from "./overview";
+} from "./source-sales";
+import type { AnalyticsContext } from "../../modules/analytics/reports/context";
+import { mapOverviewPeriod } from "../../modules/analytics/reports/overview";
 
 const OVERVIEW_FIELDS = [
   "kind",

@@ -18,8 +18,6 @@ export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
 export const PaymentMethod = {
     STRIPE: "stripe",
-    /** Retired: orders paid before SSLCommerz moved into the Bangladesh pack (`scalius.bangladesh:sslcommerz`). */
-    SSLCOMMERZ: "sslcommerz",
     COD: "cod",
 } as const;
 

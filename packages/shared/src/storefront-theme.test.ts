@@ -4,6 +4,7 @@ import {
   EMPTY_STORE_SHAPE,
   STOREFRONT_BLOCK_SLOTS,
   STOREFRONT_FONTS,
+  STOREFRONT_HEADER_VARIANTS,
   STOREFRONT_HEADER_TONES,
   STOREFRONT_SECTION_REGISTRY,
   STOREFRONT_SECTION_TYPES,
@@ -281,6 +282,15 @@ describe("storefront theme document v9", () => {
     expect(parseStoredStorefrontThemeDocument(null)).toBeNull();
     expect(parseStoredStorefrontThemeDocument("{not json")).toBeNull();
     expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 10 }))).toBeNull();
+  });
+
+  it("has exactly the three header layouts, each resolving on an empty store", () => {
+    expect(Object.keys(STOREFRONT_HEADER_VARIANTS)).toEqual(["inline-nav", "search-first", "centered-logo"]);
+    for (const variant of Object.keys(STOREFRONT_HEADER_VARIANTS)) {
+      const theme = clone();
+      theme.blocks.header = { variant, settings: { ...STOREFRONT_HEADER_VARIANTS[variant as keyof typeof STOREFRONT_HEADER_VARIANTS].defaults } } as never;
+      expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).blocks.header.variant).toBe(variant);
+    }
   });
 
   it("builds CSS tokens from constants and validated colours only", () => {

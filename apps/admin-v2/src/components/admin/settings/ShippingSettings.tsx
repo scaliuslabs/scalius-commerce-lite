@@ -136,15 +136,11 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
   }));
   const [draft, setDraft] = useState(saved);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const courierId = courier && courier.type === draft.type ? courier.courierId : draft.type;
-  const app = appCouriers.find((provider) => provider.id === courierId) ?? null;
-  // A row saved before its app took it over (`pathao`) is repointed when the app is activated.
-  const retired = Boolean(courier && courier.courierId !== courier.type);
-  const blockedReason = courier?.readiness?.issues.find((issue) => issue.code !== "inactive")?.message;
+  const app = appCouriers.find((provider) => provider.id === draft.type) ?? null;
   // A courier app is ready when the app says so; a saved one without the app's answer keeps the server's verdict.
-  const blocked = retired || (app
+  const blocked = app
     ? !app.readiness.usable
-    : (courier?.type === draft.type ? courier.readiness?.activationBlockers?.length ?? 0 : 1) > 0);
+    : (courier?.type === draft.type ? courier.readiness?.activationBlockers?.length ?? 0 : 1) > 0;
   const courierLabel = app?.name ?? courier?.courierName ?? draft.type;
   const refresh = () => refreshCheckout(queryClient, queryKeys.settings.deliveryProviders());
   const save = useMutation({
@@ -155,7 +151,7 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
     onSuccess: refresh,
   });
   const test = useMutation({
-    mutationFn: async () => apiData(postApiV1AdminSettingsProvidersByIdTest({ path: { id: courierId } })),
+    mutationFn: async () => apiData(postApiV1AdminSettingsProvidersByIdTest({ path: { id: draft.type } })),
     onSuccess: (result) => {
       if (result.ok) toast.success(t("testOk"));
       // The app's own answer is merchant-facing.
@@ -176,7 +172,7 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
     dirty: JSON.stringify(draft) !== JSON.stringify(saved),
     saving: save.isPending,
     // Fail closed: a courier can't be switched on until its app can book.
-    invalid: retired || !draft.name.trim() || !draft.type || (draft.isActive && blocked),
+    invalid: !draft.name.trim() || !draft.type || (draft.isActive && blocked),
     save: () => save.mutateAsync(),
     discard: () => setDraft(saved),
   });
@@ -208,13 +204,13 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
           <span className="block font-medium">{t("courierOn")}</span>
           {blocked ? (
             <span className="block text-muted-foreground">
-              {retired ? blockedReason ?? t("appCourierInactive", { app: courierLabel }) : app ? appCourierStatus(t, app) : t("appCourierInactive", { app: courierLabel })}
+              {app ? appCourierStatus(t, app) : t("appCourierInactive", { app: courierLabel })}
             </span>
           ) : null}
         </span>
         <Switch
           checked={draft.isActive}
-          disabled={retired || (!draft.isActive && blocked)}
+          disabled={!draft.isActive && blocked}
           onCheckedChange={(isActive) => setDraft({ ...draft, isActive })}
         />
       </label>
@@ -224,7 +220,7 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
           type="button"
           variant="outline"
           loading={test.isPending}
-          disabled={retired || !app?.canTestConnection || !canTestApps}
+          disabled={!app?.canTestConnection || !canTestApps}
           onClick={() => test.mutate()}
         >
           {t("test")}
@@ -305,7 +301,7 @@ export function CouriersCard() {
               label={
                 <span className="flex items-center gap-2">
                   {/* The courier's own mark, from its app's listing. */}
-                  <AppIcon src={appCouriers.find((provider) => provider.id === courier.courierId)?.icon} size="sm" />
+                  <AppIcon src={appCouriers.find((provider) => provider.id === courier.type)?.icon} size="sm" />
                   {courier.name}
                 </span>
               }

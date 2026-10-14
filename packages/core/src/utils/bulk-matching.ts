@@ -37,7 +37,3 @@ export function nextMatchingCursor(rows: ReadonlyArray<{ id: string }>, limit: n
     return rows.length >= limit ? rows[rows.length - 1]!.id : null;
 }
 
-/** A slice size inside `BULK_MATCHING_SLICE`, for actions that write per row. */
-export function matchingSliceSize(limit: number | undefined): number {
-    return Math.max(1, Math.min(BULK_MATCHING_SLICE, Math.trunc(limit ?? BULK_MATCHING_SLICE)));
-}

@@ -51,7 +51,7 @@ import {
 } from "./payment-provider-deadline";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
-  ApiError,
+  AppError,
   NotFoundError,
   ServiceUnavailableError,
   ValidationError,
@@ -345,7 +345,7 @@ async function createPaymentSessionForOrder(
     if (error instanceof PaymentProviderError) {
       throw error.timedOut
         ? createPaymentProviderTimeoutError(gateway.label)
-        : new ApiError(500, "PAYMENT_ERROR", error.message);
+        : new AppError(500, "PAYMENT_ERROR", error.message);
     }
     throw error;
   }

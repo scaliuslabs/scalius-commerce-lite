@@ -121,7 +121,7 @@ describe("createAuth", () => {
     expect(adapterOptions.schema?.twoFactor).toHaveProperty("lockedUntil");
   });
 
-  it("encrypts new recovery-code rows while retaining legacy plaintext reads", async () => {
+  it("encrypts recovery-code rows", async () => {
     createAuth({
       BETTER_AUTH_SECRET: "test-secret",
       BETTER_AUTH_URL: "http://localhost:4323",
@@ -147,9 +147,6 @@ describe("createAuth", () => {
     const encrypted = await storage!.encrypt('["new-code"]');
     expect(encrypted).not.toContain("new-code");
     await expect(storage!.decrypt(encrypted)).resolves.toBe('["new-code"]');
-    await expect(storage!.decrypt('["legacy-code"]')).resolves.toBe(
-      '["legacy-code"]',
-    );
   });
 
   it("revokes existing sessions after password reset", () => {

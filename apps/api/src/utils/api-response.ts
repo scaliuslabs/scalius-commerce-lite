@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { ApiError } from "./api-error";
+import { AppError } from "./api-error";
 import { logOpsEvent } from "./ops-log";
 
 /** Standard success response shape: { success: true, data: T } */
@@ -79,7 +79,7 @@ export function errorResponseFromError(err: unknown): {
   body: ApiErrorResponse;
   status: ErrorStatusCode;
 } {
-  if (err instanceof ApiError) {
+  if (err instanceof AppError) {
     return {
       body: {
         success: false,
@@ -109,7 +109,7 @@ export function logApiError(
   err: unknown,
   request?: { method?: string; path?: string; requestId?: string; cfRay?: string },
 ): void {
-  if (err instanceof ApiError) {
+  if (err instanceof AppError) {
     if (err.status < 500) return;
 
     const metadata = {

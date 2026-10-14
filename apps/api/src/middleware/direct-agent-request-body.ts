@@ -5,7 +5,7 @@ import {
   AgentRequestLengthMismatchError,
   bufferBoundedAgentRequest,
 } from "../agent-access/limits";
-import { ApiError } from "../utils/api-error";
+import { AppError } from "../utils/api-error";
 
 /**
  * Enforces the reviewed manifest byte ceiling before route validation parses
@@ -27,14 +27,14 @@ export async function enforceDirectAgentRequestBodyLimit(
     c.req.bodyCache = {};
   } catch (error) {
     if (error instanceof AgentPayloadTooLargeError) {
-      throw new ApiError(
+      throw new AppError(
         413,
         "PAYLOAD_TOO_LARGE",
         `Agent request body exceeds the ${operation.maxRequestBytes} byte operation limit`,
       );
     }
     if (error instanceof AgentRequestLengthMismatchError) {
-      throw new ApiError(
+      throw new AppError(
         400,
         "INVALID_REQUEST_BODY",
         "Agent request body does not match the declared Content-Length",

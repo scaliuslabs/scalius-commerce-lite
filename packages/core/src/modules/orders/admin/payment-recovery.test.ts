@@ -7,6 +7,7 @@ import { archiveOrders } from "./archive";
 import { getOrderDetails } from "./detail";
 import { listOrders } from "./list";
 import { previewOrderPaymentRecoveryLink } from "./recovery-link";
+import { createSslcommerzPackProviders } from "../../payments/gateways/testing";
 
 type Query = { sql: string; params: readonly unknown[] };
 
@@ -33,7 +34,7 @@ describe("admin order recovery lifecycle", () => {
       total_amount_minor, shipping_amount_minor, payment_method, status, payment_status,
       paid_amount_minor, balance_due_minor, currency_code, currency_decimal_places
     ) VALUES (?, 'Recovery buyer', '+8801700000000', 'Test address', 'city', 'zone',
-      10000, 0, 'sslcommerz', ?, ?, ?, ?, 'BDT', 2)`)
+      10000, 0, 'scalius.bangladesh:sslcommerz', ?, ?, ?, ?, 'BDT', 2)`)
       .run(id, status, paymentStatus, paidAmount, 100 - paidAmount);
   }
 
@@ -41,7 +42,7 @@ describe("admin order recovery lifecycle", () => {
     sqlite.prepare(`INSERT INTO payment_session_attempts (
       id, attempt_key, order_id, gateway, payment_type, amount_minor, currency,
       request_hash, status, attempts, claim_expires_at, created_at, updated_at
-    ) VALUES (?, ?, ?, 'sslcommerz', 'full', 10000, 'BDT', 'test-hash', ?, 1, ?, ?, ?)`)
+    ) VALUES (?, ?, ?, 'scalius.bangladesh:sslcommerz', 'full', 10000, 'BDT', 'test-hash', ?, 1, ?, ?, ?)`)
       .run(`attempt_${orderId}`, `key_${orderId}`, orderId, status, claimExpiresAt, now - 300, now - 100);
   }
 
@@ -102,7 +103,7 @@ describe("admin order recovery lifecycle", () => {
     const id = `payment_${orderId}_${paymentType}`;
     sqlite.prepare(`INSERT INTO order_payments
       (id, order_id, amount_minor, currency, payment_method, payment_type, status)
-      VALUES (?, ?, ?, 'BDT', 'sslcommerz', ?, ?)`).run(id, orderId, amount, paymentType, status);
+      VALUES (?, ?, ?, 'BDT', 'scalius.bangladesh:sslcommerz', ?, ?)`).run(id, orderId, amount, paymentType, status);
     return id;
   }
 
@@ -113,7 +114,7 @@ describe("admin order recovery lifecycle", () => {
       id, attempt_key, refund_group_id, order_id, source_payment_id, refund_payment_id,
       gateway, amount_minor, currency, reason, request_hash, provider_idempotency_key,
       refund_reference, status
-    ) VALUES (?, ?, ?, ?, ?, ?, 'sslcommerz', ?, 'BDT', 'test', 'test-hash', ?, ?, ?)`)
+    ) VALUES (?, ?, ?, ?, ?, ?, 'scalius.bangladesh:sslcommerz', ?, 'BDT', 'test', 'test-hash', ?, ?, ?)`)
       .run(`refund_${orderId}`, `refund_key_${orderId}`, `group_${orderId}`, orderId,
         source, target, amount, `provider_${orderId}`, `reference_${orderId}`, status);
   }
@@ -166,7 +167,7 @@ describe("admin order recovery lifecycle", () => {
     expect(first.orders[0]?.paymentRecovery.state).toBe("needs_attention");
     expect(second.orders[0]?.id).toBe("unpaid");
     expect(second.orders[0]?.paymentRecovery.state).toBe("awaiting_payment");
-    expect((await previewOrderPaymentRecoveryLink(db, "failed")).paymentRecovery.state).toBe("needs_attention");
+    expect((await previewOrderPaymentRecoveryLink(db, "failed", { paymentProviders: createSslcommerzPackProviders().providers })).paymentRecovery.state).toBe("needs_attention");
   });
 
   it.each([
@@ -218,7 +219,7 @@ describe("admin order recovery lifecycle", () => {
     for (let index = 0; index < 101; index++) order(`open_${index}`, "incomplete");
     const result = await listOrders(db, {
       paymentRecovery: "recoverable", search: "+8801700000000", limit: 1000, page: 0,
-      status: "incomplete", paymentStatus: "failed", paymentMethod: "sslcommerz",
+      status: "incomplete", paymentStatus: "failed", paymentMethod: "scalius.bangladesh:sslcommerz",
       fulfillmentStatus: "pending", startDate: new Date(0), endDate: new Date("2100-01-01"),
       sort: "relevance", order: "desc",
     });

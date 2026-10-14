@@ -21,7 +21,7 @@ export function platformErrorCode(error: unknown): string {
   return error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : "";
 }
 
-/** A multipart/form-data body, as `FormData` sent it before the move (ctx.http bodies are text). */
+/** A multipart/form-data body, (ctx.http bodies are text). */
 export function multipartForm(fields: Array<[string, string]>): { contentType: string; body: string } {
   const boundary = `----ScaliusFormBoundary${crypto.randomUUID().replace(/-/g, "")}`;
   const parts = fields.map(([name, value]) => `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`);

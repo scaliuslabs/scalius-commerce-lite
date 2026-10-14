@@ -190,9 +190,6 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/abandoned-checkouts/summaries": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
-  "/api/v1/admin/abandoned-checkouts/bulk-delete": {
-    POST: { permission: PERMISSIONS.ORDERS_DELETE },
-  },
   "/api/v1/admin/abandoned-checkouts/*": {
     DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
   },

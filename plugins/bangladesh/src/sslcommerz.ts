@@ -64,7 +64,7 @@ interface Account {
 
 function accountOf(ctx: PluginContext): Account {
   return {
-    // Anything but "live" is the sandbox, as before the move.
+    // Anything but "live" is the sandbox.
     environment: ctx.settings.sslcommerz_environment === "live" ? "live" : "sandbox",
     storeId: requireText(ctx, "sslcommerz_store_id", "SSLCommerz: store ID"),
     storePassword: requireText(ctx, "sslcommerz_store_password", "SSLCommerz: store password"),
@@ -369,7 +369,7 @@ export async function refund(input: PaymentRefundInput, ctx: PluginContext): Pro
     v: "1",
   }, true);
   if (data.status !== "success" && data.status !== "processing") {
-    // As before the move: a refusal is kept for reconciliation, never resent.
+    // A refusal is kept for reconciliation, never resent.
     const reason = clean(data.errorReason).slice(0, 200) || "Refund request failed";
     throw new ProviderError("retryable", reason, { uncertain: true, code: "sslcommerz.refund_refused" });
   }

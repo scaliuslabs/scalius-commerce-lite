@@ -27,10 +27,6 @@ export type CollectionProductOptionsPayload =
 export type CollectionProductOptionDto = CollectionProductOptionsPayload["products"][number];
 
 const EMPTY_COLLECTIONS_BY_IDS: CollectionsByIdsPayload = { collections: [] };
-const EMPTY_COLLECTION_FORM_OPTIONS: CollectionFormOptionsPayload = {
-  categories: [],
-  products: [],
-};
 const EMPTY_COLLECTION_CATEGORY_OPTIONS: CollectionCategoryOptionsPayload = {
   categories: [],
 };
@@ -93,14 +89,6 @@ export const collectionQueryOptions = (id: string) =>
     queryKey: queryKeys.collections.detail(id),
     queryFn: () => apiData(getApiV1AdminCollectionsById({ path: { id } })),
     staleTime: 0,
-  });
-
-export const collectionFormOptionsQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.collections.formOptions(),
-    queryFn: () => apiData(getApiV1AdminCollectionsFormOptions()),
-    placeholderData: EMPTY_COLLECTION_FORM_OPTIONS,
-    staleTime: LOOKUP_STALE_TIME_MS,
   });
 
 export const collectionCategoryOptionsQueryOptions = () =>

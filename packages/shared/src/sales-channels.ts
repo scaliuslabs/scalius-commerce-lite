@@ -46,19 +46,10 @@ export const CATALOG_SURFACE_CHANNELS = {
   agents: AGENTS_CHANNEL_ID,
 } as const satisfies Record<string, BuiltInSalesChannelId>;
 export type CatalogSurface = keyof typeof CATALOG_SURFACE_CHANNELS;
-export const CATALOG_SURFACES = Object.keys(CATALOG_SURFACE_CHANNELS) as CatalogSurface[];
 
 /** The channels a catalogue read may name (`/api/v1/products/feed?channel=`). */
 export const CATALOG_CHANNEL_IDS = [GOOGLE_CHANNEL_ID, META_CHANNEL_ID, AGENTS_CHANNEL_ID] as const;
 export type CatalogChannelId = (typeof CATALOG_CHANNEL_IDS)[number];
-
-export function isCatalogChannelId(value: unknown): value is CatalogChannelId {
-  return typeof value === "string" && (CATALOG_CHANNEL_IDS as readonly string[]).includes(value);
-}
-
-export function isBuiltInSalesChannelId(value: unknown): value is BuiltInSalesChannelId {
-  return typeof value === "string" && (BUILT_IN_SALES_CHANNEL_IDS as readonly string[]).includes(value);
-}
 
 /**
  * A channel id: a built-in `sc_<word>` or an app channel `<plugin id>:<id>`
@@ -77,9 +68,6 @@ export function isSalesChannelId(value: unknown): value is string {
 export function appSalesChannelId(pluginId: string, channelId: string): string {
   return `${pluginId}:${channelId}`;
 }
-
-/** A channel's name: 1 to 80 characters, trimmed. */
-export const SALES_CHANNEL_NAME_MAX_LENGTH = 80;
 
 /**
  * The sales channel an order sells from when its surface does not name one:

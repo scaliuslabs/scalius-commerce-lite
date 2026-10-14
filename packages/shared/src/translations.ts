@@ -101,10 +101,6 @@ export const SLUGGED_RESOURCE_TYPES = TRANSLATABLE_RESOURCE_TYPES.filter((type) 
 >;
 export type SluggedResourceType = (typeof SLUGGED_RESOURCE_TYPES)[number];
 
-export function isTranslatableResourceType(value: unknown): value is TranslatableResourceType {
-  return typeof value === "string" && Object.prototype.hasOwnProperty.call(TRANSLATABLE_RESOURCES, value);
-}
-
 export function isSluggedResourceType(value: unknown): value is SluggedResourceType {
   return (SLUGGED_RESOURCE_TYPES as readonly unknown[]).includes(value);
 }
@@ -317,5 +313,3 @@ export function parseTranslationFields(value: unknown): TranslationFields {
 // Machine translation (the `translation` provider port)
 // ---------------------------------------------------------------------------
 
-/** At most this many texts per machine translation request. */
-export const MAX_MACHINE_TRANSLATION_TEXTS = 100;

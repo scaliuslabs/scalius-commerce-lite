@@ -35,7 +35,6 @@ const providerRecord = {
   name: "FraudBD",
   isActive: true,
   providerType: "scalius.bangladesh:fraudbd",
-  retired: false,
 };
 
 function createTestApp() {
@@ -77,7 +76,7 @@ describe("admin fraud checker credential handling", () => {
 
   it("lists rows with the credential encryption key and no credential fields", async () => {
     const { app, env } = createTestApp();
-    mocks.getFraudProviders.mockResolvedValueOnce([{ ...providerRecord, apiKey: "must-not-leave" }, { ...providerRecord, id: "old", retired: true }]);
+    mocks.getFraudProviders.mockResolvedValueOnce([{ ...providerRecord, apiKey: "must-not-leave" }]);
 
     const response = await app.request("/api/v1/admin/fraud-checker", { method: "GET" }, env);
 
@@ -87,7 +86,7 @@ describe("admin fraud checker credential handling", () => {
     expect(body).toEqual({
       success: true,
       data: {
-        providers: [providerRecord, { ...providerRecord, id: "old", retired: true }],
+        providers: [providerRecord],
         pagination: { page: 1, limit: 20, hasMore: false },
       },
     });
@@ -247,7 +246,7 @@ describe("admin fraud checker credential handling", () => {
   it("saves an installed app's fraud provider as a row without credentials", async () => {
     const { app, env } = createTestApp();
     const appRow = { name: "Acme Radar", providerType: "acme.radar:radar", isActive: true };
-    mocks.saveFraudProvider.mockResolvedValueOnce({ id: "row_app", ...appRow, retired: false });
+    mocks.saveFraudProvider.mockResolvedValueOnce({ id: "row_app", ...appRow });
 
     const response = await app.request("/api/v1/admin/fraud-checker", {
       method: "POST",
@@ -258,7 +257,7 @@ describe("admin fraud checker credential handling", () => {
     expect(response.status, await response.clone().text()).toBe(201);
     expect(mocks.assertAppProviderInstalled).toHaveBeenCalledWith({ id: "db" }, "fraud", "acme.radar:radar");
     expect(mocks.saveFraudProvider).toHaveBeenCalledWith({ id: "db" }, appRow, "credential-key");
-    await expect(response.json()).resolves.toEqual({ success: true, data: { id: "row_app", ...appRow, retired: false } });
+    await expect(response.json()).resolves.toEqual({ success: true, data: { id: "row_app", ...appRow } });
 
     const withCredentials = await app.request("/api/v1/admin/fraud-checker", {
       method: "POST",

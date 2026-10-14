@@ -33,12 +33,6 @@ export function getMcpPath(resource: AgentResource): string {
   return resource === "dashboard" ? DASHBOARD_MCP_PATH : STOREFRONT_MCP_PATH;
 }
 
-export function getResourceForMcpPath(pathname: string): AgentResource | null {
-  if (pathname === DASHBOARD_MCP_PATH) return "dashboard";
-  if (pathname === STOREFRONT_MCP_PATH) return "storefront";
-  return null;
-}
-
 export function getOAuthCompletionRequestId(pathname: string): string | null {
   if (!pathname.startsWith(OAUTH_COMPLETION_PREFIX)) return null;
   const requestId = pathname.slice(OAUTH_COMPLETION_PREFIX.length);

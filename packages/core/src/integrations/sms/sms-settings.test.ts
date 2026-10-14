@@ -70,30 +70,12 @@ describe("SMS settings", () => {
     await expect(getSmsProviderReadiness(db)).resolves.toMatchObject({ status: "incomplete", activeProvider: APP_ID });
   });
 
-  it("reads a gateway chosen before the move as the Bangladesh pack's, failing closed until the pack is active", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const db = createSmsSettingsDb({ activeProvider: "bdbulksms", bdbulksmsToken: "enc:v1:legacy-ciphertext" });
-    const inactive = apps({ provider: null, issue: "Activate Bangladesh pack in Apps to use it." });
-
-    await expect(getActiveSmsProvider(db, undefined, inactive)).resolves.toBeNull();
-    expect(inactive.resolve).toHaveBeenCalledWith("sms", "scalius.bangladesh:bdbulksms");
-    await expect(getSmsSettings(db, undefined, inactive)).resolves.toMatchObject({
-      activeProvider: "scalius.bangladesh:bdbulksms",
-      activeProviderConfigured: false,
-      activeProviderError: "Activate Bangladesh pack in Apps to use it.",
-    });
-    for (const retired of ["smsnetbd", "mimsms", "gennet"]) {
-      db.sqlite.prepare("UPDATE settings SET value = json_set(value, '$.activeProvider', ?) WHERE category = 'sms'").run(retired);
-      await expect(getSmsProviderReadiness(db, undefined, inactive)).resolves.toMatchObject({ status: "incomplete", activeProvider: `scalius.bangladesh:${retired}` });
-    }
-  });
-
-  it("saves an app provider id as the choice, refuses anything else, and keeps a not-yet-moved gateway's keys", async () => {
-    const db = createSmsSettingsDb({ activeProvider: "bdbulksms", bdbulksmsToken: "enc:v1:legacy-ciphertext" });
+  it("saves an app provider id as the choice and refuses anything else", async () => {
+    const db = createSmsSettingsDb({ activeProvider: "" });
     await saveSmsSettings(db, { activeProvider: APP_ID }, undefined, { expectedRevision: 1 });
     await expect(getSmsSettings(db)).resolves.toMatchObject({ activeProvider: APP_ID, activeProviderConfigured: false, revision: 2 });
     const stored = db.sqlite.prepare("SELECT value FROM settings WHERE category = 'sms'").get() as { value: string };
-    expect(JSON.parse(stored.value)).toEqual({ activeProvider: APP_ID, bdbulksmsToken: "enc:v1:legacy-ciphertext" });
+    expect(JSON.parse(stored.value)).toEqual({ activeProvider: APP_ID });
     await expect(saveSmsSettings(db, { activeProvider: "acme.texts" })).rejects.toBeInstanceOf(ValidationError);
     await expect(saveSmsSettings(db, { activeProvider: "bdbulksms" })).rejects.toBeInstanceOf(ValidationError);
   });

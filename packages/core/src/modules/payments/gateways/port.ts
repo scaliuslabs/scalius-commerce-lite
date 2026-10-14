@@ -81,7 +81,7 @@ export class PaymentProviderError extends Error {
 }
 
 export interface PaymentGateway<S extends GatewaySettings = GatewaySettings> extends ProviderPort<"payment", GatewayCall<S>> {
-  /** `stripe`, or an app provider's `<plugin id>:<provider id>` (a retired built-in id resolves to one). */
+  /** `stripe`, or an app provider's `<plugin id>:<provider id>` */
   readonly id: string;
   /** Merchant-facing provider name. */
   readonly label: string;
@@ -130,16 +130,6 @@ export function isProviderTimeoutError(error: unknown, signal?: AbortSignal): bo
     .map((value) => typeof value === "string" ? value.toLowerCase() : "")
     .join(" ");
   return text.includes("timeout") || text.includes("timed out") || text.includes("abort");
-}
-
-/** Major-unit decimal string ("150.00") → integer minor units, exact for well-formed input. */
-export function majorStringToMinor(value: string, decimalPlaces: number): number | null {
-  const match = /^(\d+)(?:\.(\d+))?$/.exec(value.trim());
-  if (!match) return null;
-  const fraction = (match[2] ?? "").padEnd(decimalPlaces, "0");
-  if (fraction.length > decimalPlaces && /[^0]/.test(fraction.slice(decimalPlaces))) return null;
-  const minor = Number(`${match[1]}${fraction.slice(0, decimalPlaces)}`);
-  return Number.isSafeInteger(minor) ? minor : null;
 }
 
 export function minorToMajorString(amountMinor: number, decimalPlaces: number): string {

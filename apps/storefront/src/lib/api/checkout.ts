@@ -24,8 +24,6 @@ export interface GatewayConfig {
     min: number;
     max: number;
   };
-  /** @deprecated Transitional fallback for cached SSLCommerz config. */
-  sandbox?: boolean;
 }
 
 export interface CheckoutConfig {

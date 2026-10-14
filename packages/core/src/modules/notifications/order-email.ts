@@ -9,7 +9,6 @@ import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { asc, desc, eq, sql } from "drizzle-orm";
-import { getTrackingUrl } from "../delivery";
 import { MESSAGE_COPY, requestCopy, type MessageLanguage } from "./message-copy";
 import type { OrderNotificationType } from "./notification-types";
 import {
@@ -266,16 +265,14 @@ async function readShipment(db: Database, orderId: string, trackingId: string) {
   const shipment = shipments.find((row) => trackingId && row.trackingId === trackingId) ?? shipments[0];
   if (!shipment) return null;
   const tracking = trackingId || shipment.trackingId?.trim() || "";
-  const url = shipment.trackingUrl?.trim() || getTrackingUrl(shipment.providerType, tracking || null) || "";
+  const url = shipment.trackingUrl?.trim() || "";
   return {
     trackingId: tracking,
-    courierName: shipment.courierName?.trim() || COURIER_NAMES[shipment.providerType] || "",
+    courierName: shipment.courierName?.trim() || "",
     // Only a public http(s) page may become a link in the message.
     trackingUrl: /^https?:\/\/[^\s]+$/.test(url) ? url : "",
   };
 }
-
-const COURIER_NAMES: Record<string, string> = { pathao: "Pathao", steadfast: "Steadfast" };
 
 /**
  * The downloads still being prepared, by name: a "delivered" message about

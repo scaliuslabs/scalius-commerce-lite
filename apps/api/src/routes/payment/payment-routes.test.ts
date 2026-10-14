@@ -1,8 +1,8 @@
 // Behaviour tests for the gateway-agnostic payment routes on the migrated
 // SQLite schema: session creation, webhook and buyer-return claim-once (a
 // test-only app gateway in the request's providers), queue application that
-// credits an order exactly once, and a retired built-in id (`sslcommerz`)
-// failing closed until the app that replaced it is active.
+// credits an order exactly once, and an app gateway whose app is not active
+// failing closed.
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -175,12 +175,11 @@ describe("POST /payment/{provider}/session", () => {
     expect(fake.gateway.createSession).toHaveBeenCalledTimes(2);
   });
 
-  it("refuses a session for a retired SSLCommerz order until the Bangladesh pack is active, calling nothing", async () => {
+  it("refuses a session for an app gateway whose app is not active, calling nothing", async () => {
     requestProviders.current = null;
-    await seed({ paymentMethod: "sslcommerz", enabledMethods: ["sslcommerz", "cod"] });
-    const response = await post(createApp(), "/payment/sslcommerz/session", { orderId: "order_1", receiptToken: RECEIPT });
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({ error: { message: "SSLCommerz: Activate Bangladesh pack in Apps to use it." } });
+    await seed({ paymentMethod: "scalius.bangladesh:sslcommerz", enabledMethods: ["scalius.bangladesh:sslcommerz", "cod"] });
+    const response = await post(createApp(), "/payment/scalius.bangladesh:sslcommerz/session", { orderId: "order_1", receiptToken: RECEIPT });
+    expect(response.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(sqlite.prepare("SELECT count(*) AS n FROM payment_session_attempts").get()).toEqual({ n: 0 });
   });

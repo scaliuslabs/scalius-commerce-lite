@@ -704,13 +704,6 @@ export const categoryDetailSchema = z.object({
   }),
 });
 
-/** Category stats — returned by getCategoryStats (admin). */
-export const categoryStatsSchema = z.object({
-  totalCategories: z.number(),
-  categoriesWithImages: z.number(),
-  totalProducts: z.number(),
-});
-
 // ─────────────────────────────────────────
 // Customers
 // ─────────────────────────────────────────

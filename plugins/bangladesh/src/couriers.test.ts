@@ -1,9 +1,5 @@
 // Pathao and Steadfast over the SDK harness (the platform's runtime, inputs
-// and answers validated against the courier port). The cases are core's
-// tests from before the move (couriers/pathao.test.ts, the Pathao store
-// pages of delivery.service.test.ts, status-mapper, and the webhook route
-// and webhook-auth tests), so the couriers answer exactly as the built-ins
-// did. Courier HTTP is scripted.
+// and answers validated against the courier port). Courier HTTP is scripted.
 import { describe, expect, it } from "vitest";
 import type { CourierShipmentInput } from "@scalius/plugin-sdk";
 import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";

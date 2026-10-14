@@ -21,8 +21,6 @@ export type { CartItemOption } from "@/lib/cart/item-options";
  * saved under the v2 `cart` key are dropped, never read (Wave A §3.2).
  */
 export const CART_STORAGE_KEY = "cart:v3";
-const RETIRED_CART_STORAGE_KEYS = ["cart"] as const;
-const RETIRED_BUY_NOW_STASH_KEY = "cart:v3:buy-now";
 
 /**
  * One buyer input on a cart line, in the product's schema order. `key` and
@@ -441,17 +439,9 @@ function readCartFromStorage(resetWhenMissing: boolean): CartStore {
 
   hasHydratedFromStorage = true;
   try {
-    // A v2 cart is dropped at the v3 deploy (no legacy reader).
-    for (const retired of RETIRED_CART_STORAGE_KEYS) {
-      if (localStorage.getItem(retired) !== null) localStorage.removeItem?.(retired);
-    }
-  } catch {
-    // Storage that refuses a removal still reads the v3 cart below.
-  }
-  try {
     const storedCart = localStorage.getItem(CART_STORAGE_KEY);
     if (storedCart) {
-      const normalized = recoverRetiredBuyNowCart(normalizeStoredCart(JSON.parse(storedCart)));
+      const normalized = normalizeStoredCart(JSON.parse(storedCart));
       if (JSON.stringify(normalized) !== JSON.stringify(cartStore.get())) cartStore.set(normalized);
       const normalizedJson = JSON.stringify(normalized);
       if (normalizedJson !== storedCart) {
@@ -463,7 +453,7 @@ function readCartFromStorage(resetWhenMissing: boolean): CartStore {
       }
     } else {
       const current = resetWhenMissing ? { ...EMPTY_CART_STATE } : cartStore.get();
-      cartStore.set(recoverRetiredBuyNowCart(current));
+      cartStore.set(current);
     }
   } catch (error) {
     console.warn("Could not hydrate cart state.", error);
@@ -844,48 +834,8 @@ export function startBuyNow(item: NewCartLine, options: Pick<CartAddOptions, "on
   return addToCart(item, { ...options, requirePersistence: true });
 }
 
-/** Recover carts hidden by the retired single-item Buy now flow, once. */
-function recoverRetiredBuyNowCart(current: CartStore): CartStore {
-  let stashed: string | null = null;
-  try {
-    stashed = localStorage.getItem(RETIRED_BUY_NOW_STASH_KEY);
-    if (stashed === null) return current;
-    let saved: CartStore;
-    try {
-      saved = normalizeStoredCart(JSON.parse(stashed));
-    } catch {
-      localStorage.removeItem(RETIRED_BUY_NOW_STASH_KEY);
-      return current;
-    }
-    const items = { ...current.items };
-    for (const [key, item] of Object.entries(saved.items)) {
-      const existing = items[key];
-      items[key] = existing
-        ? { ...existing, quantity: Math.min(MAX_CART_QUANTITY, existing.quantity + item.quantity) }
-        : item;
-    }
-    const merged = normalizeCartTotals({
-      ...current,
-      items,
-      discountCodes: normalizeDiscountCodes([...saved.discountCodes, ...current.discountCodes]),
-    });
-    // Remove before writing so a later read cannot re-add a line the buyer removed.
-    localStorage.removeItem(RETIRED_BUY_NOW_STASH_KEY);
-    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(merged));
-    return merged;
-  } catch {
-    // A quota/write failure leaves both original snapshots available for a retry.
-    if (stashed !== null) {
-      try { localStorage.setItem(RETIRED_BUY_NOW_STASH_KEY, stashed); } catch { /* Storage is unavailable. */ }
-    }
-    return current;
-  }
-}
-
 export function clearCart(): void {
   ensureCartHydrated();
-  // Sign-out must not leave a hidden cart from the retired Buy now flow.
-  try { localStorage.removeItem(RETIRED_BUY_NOW_STASH_KEY); } catch { /* Storage is unavailable. */ }
   const current = cartStore.get();
   if (Object.keys(current.items).length === 0 && current.discountCodes.length === 0) return;
   const entries = Object.entries(current.items);

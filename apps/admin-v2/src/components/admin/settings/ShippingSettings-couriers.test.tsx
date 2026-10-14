@@ -51,7 +51,6 @@ function courierRow(isActive: boolean, ready: boolean, overrides: Record<string,
     id: "prov_parcel",
     name: "Acme Parcel",
     type: COURIER_ID,
-    courierId: COURIER_ID,
     courierName: "Acme Parcel",
     requiredLocations: [],
     canFindShipment: false,
@@ -141,20 +140,5 @@ describe("couriers are apps", () => {
 
     expect(document.body.textContent).toContain("Complete Acme Parcel's settings: secret.");
     expect(document.querySelector<HTMLButtonElement>("button[role='switch']")?.disabled).toBe(true);
-  });
-
-  it("keeps a courier saved before the Bangladesh pack off, with the pack's reason, until the pack takes it over", async () => {
-    const pathao = { ...appCourier({ enabled: false, usable: false }), id: "scalius.bangladesh:pathao", pluginId: "scalius.bangladesh", appName: "Bangladesh pack", name: "Pathao" };
-    const row = courierRow(true, false, {
-      id: "prov_pathao", name: "Pathao", type: "pathao", courierId: "scalius.bangladesh:pathao", courierName: "Pathao",
-      readiness: {
-        status: "incomplete", lifecycle: "blocked", configured: false, tested: false, active: false, canCreateShipment: false,
-        issues: [{ code: "unconfigured", message: "Activate Bangladesh pack in Apps to use it." }],
-        activationBlockers: [{ source: "config", key: "app", label: "Bangladesh pack", message: "Activate Bangladesh pack in Apps to use it." }],
-      },
-    });
-    await openCourier(row, pathao, "Activate Bangladesh pack in Apps to use it.");
-    expect(document.querySelector<HTMLButtonElement>("button[role='switch']")?.disabled).toBe(true);
-    expect(button("Test connection")?.disabled).toBe(true);
   });
 });

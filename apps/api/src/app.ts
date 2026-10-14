@@ -16,7 +16,7 @@ import { articleRoutes } from "./routes/articles";
 import { orderRoutes } from "./routes/storefront-orders";
 import { paymentRoutes } from "./routes/payment/payment-routes";
 import { paymentWebhookRoutes } from "./routes/webhooks/payments";
-import { courierWebhookRoutes, legacyCourierWebhookRoutes } from "./routes/webhooks/couriers";
+import { courierWebhookRoutes } from "./routes/webhooks/couriers";
 import { discountRoutes } from "./routes/discounts";
 import { analyticsRoutes } from "./routes/analytics";
 import { partytownProxyRoutes } from "./routes/partytown-proxy";
@@ -184,10 +184,7 @@ app.route("/__ptproxy", partytownProxyRoutes);
 // Webhook routes — NO auth middleware (signature verification IS the auth)
 // Must be registered BEFORE the auth middleware block
 app.use("/webhooks/*", webhookBodyLimitMiddleware);
-// Couriers: /webhooks/couriers/{provider}; the retired built-ins' URLs serve
-// the Bangladesh pack's couriers that replaced them (no reconfiguration).
-app.route("/webhooks/pathao", legacyCourierWebhookRoutes("pathao"));
-app.route("/webhooks/steadfast", legacyCourierWebhookRoutes("steadfast"));
+// Couriers: /webhooks/couriers/{provider}.
 app.route("/webhooks/couriers", courierWebhookRoutes);
 // Payment gateways: /webhooks/{provider}. Registered after the courier routes.
 app.route("/webhooks", paymentWebhookRoutes);

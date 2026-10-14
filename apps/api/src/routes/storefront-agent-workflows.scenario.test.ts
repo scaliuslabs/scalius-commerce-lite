@@ -215,7 +215,7 @@ describe("storefront agent buyer workflow scenarios", () => {
     expect(JSON.stringify([checkout, receipt])).not.toMatch(/chk_|cst_|receiptToken|clientSecret/);
   });
 
-  it.each(["stripe", "sslcommerz"])(
+  it.each(["stripe", "scalius.bangladesh:sslcommerz"])(
     "accepts the reviewed %s order method before the secure payment continuation",
     async (paymentMethod) => {
       mocks.submit.mockResolvedValueOnce({
@@ -232,7 +232,7 @@ describe("storefront agent buyer workflow scenarios", () => {
       const response = await request(`/storefront/agent-contexts/${contextId}/checkout/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...checkoutBody(`scenario_${paymentMethod}_0001`), paymentMethod }),
+        body: JSON.stringify({ ...checkoutBody(`scenario_${paymentMethod.replace(/\W/g, "_")}_0001`), paymentMethod }),
       });
       expect(response).toMatchObject({ success: true, data: { orderId, paymentMethod } });
       expect(mocks.submit).toHaveBeenCalledWith(

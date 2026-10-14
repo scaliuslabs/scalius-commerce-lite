@@ -510,7 +510,3 @@ export async function deleteMetaobjectEntry(db: Database, definitionId: string, 
   if (exists) throw new MetaobjectRevisionConflictError(entryId, expectedRevision);
 }
 
-/** Deletes an app's content types and their entries (its uninstall with delete-data). */
-export async function deleteAppMetaobjects(db: Database, pluginId: string): Promise<void> {
-  await db.delete(metaobjectDefinitions).where(eq(metaobjectDefinitions.namespace, pluginId));
-}

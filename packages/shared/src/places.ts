@@ -55,11 +55,6 @@ export function placeLevels(countryCode: string | null | undefined): readonly Pl
   return PLACE_LEVELS[code] ?? GENERIC_PLACE_LEVELS;
 }
 
-/** Whether `value` is a level the country has. */
-export function isPlaceLevel(countryCode: string | null | undefined, value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= placeLevels(countryCode).length;
-}
-
 /** One level's name in a dashboard language (`plural` for a list heading). */
 export function placeLevelName(
   countryCode: string | null | undefined,

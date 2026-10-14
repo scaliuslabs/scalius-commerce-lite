@@ -1,8 +1,7 @@
 import { isQualifiedProviderId, parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
-import { currentPaymentMethodId, RETIRED_PAYMENT_METHODS } from "@scalius/shared/plugins/providers/retired-payments";
 
-/** The Bangladesh pack's SSLCommerz (`sslcommerz` on orders paid before it moved there). */
-export const SSLCOMMERZ_GATEWAY_ID = RETIRED_PAYMENT_METHODS.sslcommerz!.replacement;
+/** The Bangladesh pack's SSLCommerz. */
+export const SSLCOMMERZ_GATEWAY_ID = "scalius.bangladesh:sslcommerz";
 
 export type GatewayPresentation = {
   buyerLabel: string;
@@ -28,9 +27,9 @@ export const GATEWAY_PRESENTATION: Record<string, GatewayPresentation> = {
     markKind: "wordmark",
     hosted: false,
   },
-  // The Bangladesh pack's SSLCommerz (also `sslcommerz`, its id before the
-  // move): its page offers cards, wallets and banking, so buyers read it as
-  // paying online; its mark is a copy of the one the pack declares.
+  // The Bangladesh pack's SSLCommerz: its page offers cards, wallets and
+  // banking, so buyers read it as paying online; its mark is a copy of the one
+  // the pack declares.
   [SSLCOMMERZ_GATEWAY_ID]: {
     buyerLabel: "Pay online",
     description: "bKash, Nagad, cards and more",
@@ -75,14 +74,9 @@ export const APP_PROVIDER_MARKS: Readonly<Record<string, string>> = {
   "scalius.nagad:nagad": "/payment-marks/nagad.svg",
 };
 
-/** The name a retired id's replacement had as a built-in gateway ("SSLCommerz"), or null. */
-function retiredProviderName(gatewayId: string): string | null {
-  return Object.values(RETIRED_PAYMENT_METHODS).find((entry) => entry.replacement === gatewayId)?.name ?? null;
-}
-
-/** A payment method an app provides: `<plugin id>:<provider id>`, or a retired built-in id one replaced. */
+/** A payment method an app provides: `<plugin id>:<provider id>`. */
 export function isAppGatewayId(gatewayId: string): boolean {
-  return isQualifiedProviderId(currentPaymentMethodId(gatewayId));
+  return isQualifiedProviderId(gatewayId);
 }
 
 /**
@@ -91,16 +85,13 @@ export function isAppGatewayId(gatewayId: string): boolean {
  * for `scalius.bkash:bkash`); never the stored id. Null for other methods.
  */
 export function appGatewayName(
-  storedId: string,
+  gatewayId: string,
   gateways?: readonly { id: string; name?: unknown }[] | null,
 ): string | null {
-  const gatewayId = currentPaymentMethodId(storedId);
   const app = parseQualifiedProviderId(gatewayId);
   if (!app) return null;
   const configured = gateways?.find((gateway) => gateway.id === gatewayId)?.name;
   if (typeof configured === "string" && configured.trim()) return configured.trim();
-  const known = retiredProviderName(gatewayId);
-  if (known) return known;
   const words = app.providerId.replace(/-/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -109,16 +100,15 @@ export function getGatewayPresentation(
   gatewayId: string,
   fallbackLabel: string,
 ): GatewayPresentation {
-  const known = GATEWAY_PRESENTATION[currentPaymentMethodId(gatewayId)];
+  const known = GATEWAY_PRESENTATION[gatewayId];
   if (known) return known;
   if (isAppGatewayId(gatewayId)) {
     // An app's hosted wallet: its own checkout name, and its provider's mark
     // or a neutral one. The name doubles as the provider in "Continue to …" copy.
-    const id = currentPaymentMethodId(gatewayId);
     const name = fallbackLabel.trim() && fallbackLabel !== gatewayId
       ? fallbackLabel.trim()
-      : appGatewayName(id) ?? fallbackLabel;
-    const logo = APP_PROVIDER_MARKS[id];
+      : appGatewayName(gatewayId) ?? fallbackLabel;
+    const logo = APP_PROVIDER_MARKS[gatewayId];
     return {
       buyerLabel: name,
       description: "",

@@ -41,7 +41,7 @@ export const MAX_MARKET_COUNTRIES = 250;
 
 /** The buyer's market choice, as Shopify names it: `<COUNTRY>:<presence>` (`IN:en-in`, `BD:`). */
 export const MARKET_SELECTION_COOKIE = "localization";
-export const MARKET_SELECTION_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
+
 /** The no-JavaScript market selector posts here (Shopify's `/localization`). */
 export const MARKET_SELECTION_PATH = "/localization";
 /** The non-blocking geo suggestion reads this (private, never cached). */

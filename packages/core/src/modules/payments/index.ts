@@ -22,12 +22,9 @@ export {
   isAppPaymentMethod,
   isOnlinePaymentMethod,
   isPaymentMethodId,
-  isRetiredPaymentMethod,
   onlinePaymentMethodCondition,
-  paymentMethodAliases,
   paymentMethodLabel,
   paymentProvidersFor,
-  RETIRED_PAYMENT_GATEWAY_IDS,
 } from "./gateways/registry";
 export type { CheckoutGatewayPrecommitInput, PaymentProviders, PaymentProvidersSource } from "./gateways/registry";
 
@@ -123,9 +120,3 @@ export type { HostedPaymentReturnResult } from "./hosted-payment-return";
 export type { PaymentSessionAttemptProcessingResult } from "./payment-session-attempts";
 export { createCODTrackingInsertValues, toCashOnDeliveryMinor, validateCODCollectionDetails } from "./cod";
 export { resolveActiveRefundOperationsForOrders, selectActiveRefundAttemptRowsForOrders } from "./refund-attempt-visibility";
-export {
-  readRetiredPaymentSettings,
-  repointRetiredPaymentChoice,
-  repointRetiredPaymentRows,
-} from "./retired-gateways";
-export type { RetiredPaymentSettings } from "./retired-gateways";

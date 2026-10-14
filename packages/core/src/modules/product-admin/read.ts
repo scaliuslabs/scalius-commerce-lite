@@ -768,29 +768,3 @@ export async function getProductStats(db: Database) {
         categoriesCount: categoriesCountArr[0]?.count ?? 0,
     };
 }
-
-/** Returns category-level stats for the categories admin page. */
-export async function getCategoryStats(db: Database) {
-    const [totalCategoriesArr, categoriesWithImagesArr, totalProductsArr] = await db.batch([
-        db
-            .select({ count: sql<number>`count(*)` })
-            .from(categories)
-            .where(sql`${categories.deletedAt} IS NULL`),
-        db
-            .select({ count: sql<number>`count(*)` })
-            .from(categories)
-            .where(
-                sql`${categories.deletedAt} IS NULL AND ${categories.imageUrl} IS NOT NULL`,
-            ),
-        db
-            .select({ count: sql<number>`count(*)` })
-            .from(products)
-            .where(sql`${products.deletedAt} IS NULL`),
-    ]);
-
-    return {
-        totalCategories: totalCategoriesArr[0]?.count ?? 0,
-        categoriesWithImages: categoriesWithImagesArr[0]?.count ?? 0,
-        totalProducts: totalProductsArr[0]?.count ?? 0,
-    };
-}

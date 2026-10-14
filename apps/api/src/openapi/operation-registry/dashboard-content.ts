@@ -99,10 +99,6 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   "dashboard.navigation.items_move_options": {},
   "dashboard.navigation.items_search": {},
   "dashboard.navigation.items_update": { revision: "required" },
-  "dashboard.navigation.legacy_items_list": {
-    exposure: "excluded",
-    reason: "Superseded by normalized reusable-menu and item operations.",
-  },
   "dashboard.navigation.menus_create": {},
   "dashboard.navigation.menus_get": {},
   "dashboard.navigation.menus_list": {},

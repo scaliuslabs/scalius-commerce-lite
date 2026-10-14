@@ -33,8 +33,7 @@ const db = { id: "db" };
 function createTestApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
     const env = {
-        CACHE: { id: "api-cache" },
-                CREDENTIAL_ENCRYPTION_KEY: "credential-key",
+        CREDENTIAL_ENCRYPTION_KEY: "credential-key",
     } as unknown as Env;
 
     app.use("*", async (c, next) => {

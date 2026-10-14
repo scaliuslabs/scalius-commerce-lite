@@ -11,7 +11,6 @@ import { normalizeProductFacets, normalizeRatingFacet, type ProductListOptions }
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData } from "./unwrap";
 import {
-  getApiV1Collections,
   getApiV1CollectionsById,
   getApiV1CollectionsSitemap,
   getApiV1CollectionsDirectory,
@@ -94,29 +93,6 @@ function normalizeCollectionDetail(payload: unknown): CollectionWithProducts | n
     facets: normalizeProductFacets(candidate.facets),
     ratingFacet: normalizeRatingFacet(candidate.ratingFacet),
   } as CollectionWithProducts;
-}
-
-/**
- * Fetches a list of all active collections.
- * Coalesced per request; the API caches it by cache generation.
- * @returns A promise resolving to an array of Collection objects or null on failure.
- */
-export async function getAllCollections(): Promise<Collection[] | null> {
-  return withEdgeCache(
-    "global_all_collections",
-    async () => {
-      try {
-        const { data } = await getApiV1Collections({
-          client: getConfiguredSdkClient(),
-        });
-        return unwrapData<{ collections: Collection[] }>(data)?.collections ?? null;
-      } catch (error: unknown) {
-        console.error("Error fetching all collections:", error);
-        return null;
-      }
-    },
-    { ttlSeconds: CACHE_TTL.LONG },
-  );
 }
 
 /** One card on `/collections`. */

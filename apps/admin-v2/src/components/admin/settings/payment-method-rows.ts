@@ -5,7 +5,6 @@
 
 import { parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { appPaymentMethodFallbackName } from "~/lib/app-payment-method";
-import { retiredPaymentMethod } from "~/lib/bangladesh-pack";
 import type { ChargeCurrencies, GatewayStatus } from "./payment-method-outcome";
 
 export const COD_METHOD = "cod";
@@ -53,11 +52,6 @@ export interface PaymentMethodRow {
   appIcon: string | null;
   /** False for a saved app method whose app is no longer installed. */
   installed: boolean;
-  /**
-   * A saved retired built-in gateway (`sslcommerz`) whose app is not active
-   * yet: it can only be turned off, and its app's page activates it.
-   */
-  retired: boolean;
   canTestConnection: boolean;
   chargeCurrencies: ChargeCurrencies;
   status: GatewayStatus | undefined;
@@ -111,7 +105,6 @@ export function paymentMethodRows(input: {
         appName: null,
         appIcon: null,
         installed: true,
-        retired: false,
         canTestConnection: false,
         chargeCurrencies: "any",
         status: input.gatewayStatus[id],
@@ -120,22 +113,6 @@ export function paymentMethodRows(input: {
     const gateway = gateways.get(id);
     const provider = providers.get(id);
     const app = parseQualifiedProviderId(id);
-    const retired = retiredPaymentMethod(id);
-    if (retired) {
-      return {
-        id,
-        kind: "app",
-        name: providers.get(retired.replacement)?.name ?? retired.name,
-        pluginId: parseQualifiedProviderId(retired.replacement)?.pluginId ?? null,
-        appName: providers.get(retired.replacement)?.appName ?? null,
-        appIcon: providers.get(retired.replacement)?.icon ?? null,
-        installed: false,
-        retired: true,
-        canTestConnection: false,
-        chargeCurrencies: "any",
-        status: input.gatewayStatus[id],
-      };
-    }
     if (gateway && gateway.pluginId === null && !app) {
       return {
         id,
@@ -145,7 +122,6 @@ export function paymentMethodRows(input: {
         appName: null,
         appIcon: null,
         installed: true,
-        retired: false,
         canTestConnection: false,
         chargeCurrencies: gateway.chargeCurrencies,
         status: input.gatewayStatus[id],
@@ -159,7 +135,6 @@ export function paymentMethodRows(input: {
       appName: provider?.appName ?? null,
       appIcon: provider?.icon ?? provider?.appIcon ?? null,
       installed: Boolean(gateway || provider) || !input.appProvidersKnown,
-      retired: false,
       canTestConnection: provider?.canTestConnection ?? false,
       chargeCurrencies: gateway?.chargeCurrencies ?? "any",
       // The checkout's own verdict (currency included) when the app is active.

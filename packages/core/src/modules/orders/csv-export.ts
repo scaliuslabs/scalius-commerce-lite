@@ -347,7 +347,7 @@ export function createOrdersCsvArtifactBuilder(
   /** The store's zone: dates are store time. */
   timeZone: string,
   maxBytes = ORDER_CSV_ARTIFACT_MAX_BYTES,
-  /** A payment method's name from its provider (an app's, or a retired built-in id's). */
+  /** A payment method's name from its provider (an app's). */
   paymentMethodName?: (id: string) => string,
 ) {
   if (format === "items") {

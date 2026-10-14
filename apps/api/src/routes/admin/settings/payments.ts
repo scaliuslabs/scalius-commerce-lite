@@ -15,7 +15,6 @@ import {
     COD_PAYMENT_METHOD,
     isAppPaymentMethod,
     isPaymentMethodId,
-    isRetiredPaymentMethod,
     paymentMethodLabel,
     publicAmountLimits,
     type GatewaySettings,
@@ -245,16 +244,6 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             providerEnabled: readiness.enabled,
             ...selection(gateway.id),
         };
-    }
-    // A saved choice of a retired built-in gateway whose app is not active
-    // (`sslcommerz` before the Bangladesh pack is activated): never usable,
-    // with the app's reason.
-    for (const method of rawConfig.enabledMethods) {
-        if (!isRetiredPaymentMethod(method) || gatewayStatus[method]) continue;
-        const gateway = providers.get(method);
-        if (!gateway || gateway.id !== method) continue;
-        const readiness = gateway.readiness(null);
-        gatewayStatus[method] = { ...readiness, environment: "unknown", providerEnabled: false, ...selection(method) };
     }
     gatewayStatus[COD_PAYMENT_METHOD] = {
         configured: true,

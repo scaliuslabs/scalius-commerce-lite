@@ -2,9 +2,7 @@
 // Admin OpenAPI routes for the fraud checkers: rows that name an installed
 // app's fraud provider (its credentials live in the app's settings), and the
 // order page's manual lookup through the first active one. Advice for the
-// merchant, never automatic blocking. A row saved before the Bangladesh
-// checkers moved into the Bangladesh pack reads as the pack's provider
-// (`retired: true`) until the pack's activation moves its keys.
+// merchant, never automatic blocking.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
@@ -84,17 +82,14 @@ const fraudProviderSchema = z.object({
     name: z.string().max(100),
     isActive: z.boolean(),
     providerType: appProviderTypeSchema,
-    /** The row still holds a retired built-in checker's keys: activating its app moves them. */
-    retired: z.boolean(),
 });
 
-function projectProvider(provider: { id: string; name: string; isActive: boolean; providerType: string; retired: boolean }) {
+function projectProvider(provider: { id: string; name: string; isActive: boolean; providerType: string }) {
     return {
         id: provider.id.slice(0, 100),
         name: provider.name.slice(0, 100),
         isActive: provider.isActive,
         providerType: provider.providerType,
-        retired: provider.retired,
     };
 }
 

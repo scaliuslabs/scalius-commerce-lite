@@ -456,9 +456,7 @@ export function PaymentMethodsCard() {
     // Only the built-in key forms name missing keys; an app explains itself (blockedReason).
     const needsKeys = keyForm !== null && outcome.state === "needs_setup" && missingKeys.length > 0;
     const unusable = outcome.state === "needs_setup" || outcome.state === "provider_off" || outcome.state === "blocked";
-    const detail = row.retired
-      ? t("activatePack")
-      : row.kind === "app" && !row.installed
+    const detail = row.kind === "app" && !row.installed
       ? t("appRemoved")
       : neededCurrencies
         ? currencyText(neededCurrencies)
@@ -491,12 +489,6 @@ export function PaymentMethodsCard() {
             {t("testConnection")}
           </Button>
         ) : null}
-        {/* A retired gateway's app waits for activation on its app page. */}
-        {canViewApps && row.retired && row.pluginId ? (
-          <Button asChild variant="outline" size="sm">
-            <Link to="/admin/apps/$pluginId" params={{ pluginId: row.pluginId }}>{t("openApp")}</Link>
-          </Button>
-        ) : null}
         {/* The provider's own keys open in its setup sheet, here; the app page holds its activation. */}
         {canViewApps && row.installed && row.pluginId ? (
           openProvider ? (
@@ -511,7 +503,7 @@ export function PaymentMethodsCard() {
         ) : null}
       </>
     ) : null;
-    const hasActions = reorderable || keyForm !== null || (row.kind === "app" && ((row.canTestConnection && status?.usable) || (canViewApps && (row.installed || row.retired) && row.pluginId)));
+    const hasActions = reorderable || keyForm !== null || (row.kind === "app" && ((row.canTestConnection && status?.usable) || (canViewApps && row.installed && row.pluginId)));
     return (
       <li key={method} data-method={method} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <MethodMark row={row} />

@@ -30,9 +30,3 @@ The merchant adds a courier under Settings, Shipping, Couriers. The courier's ke
 3. The app checks the push (Pathao's `X-PATHAO-Signature`, Steadfast's `Authorization: Bearer`, compared in constant time). A failed check answers 401. A missing secret answers 503, so the courier sends the push again after the merchant saves one.
 4. The platform finds the shipment by its booking id, scoped to the row and the courier. With the order number the courier echoes, it refuses a booking of another order and binds a booking that a lookup confirmed but whose id it never learned.
 5. It claims the push once in `webhook_events` (`courier.<status>`, `courier.note`), applies it through the shared pipeline (delivery README) and answers what the courier expects (the app's `reply`: Pathao's 202 and secret header, Steadfast's JSON).
-
-The old URLs `/api/v1/webhooks/pathao` and `/api/v1/webhooks/steadfast` are internal forwards to the same handler for `scalius.bangladesh:pathao` and `scalius.bangladesh:steadfast`. Merchants keep the URL they gave the courier. Until the Bangladesh pack is active, they answer 503 with "Activate Bangladesh pack in Apps to use it." (the courier retries).
-
-## Before the pack
-
-A store that set up Pathao or Steadfast in core keeps it. Until the Bangladesh pack is active, a row of type `pathao` or `steadfast` reads as blocked with "Activate Bangladesh pack in Apps to use it.", books and tracks nothing, and its shipments stay readable (their tracking pages come from `packages/core/src/integrations/retired-providers.ts`). Activation moves the saved keys into the pack's settings and repoints the rows and shipments ([pack README](../../plugins/bangladesh/README.md)).

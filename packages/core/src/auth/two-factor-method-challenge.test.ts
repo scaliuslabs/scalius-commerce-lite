@@ -149,11 +149,8 @@ describe("staged TOTP method challenge", () => {
     ).resolves.toBeNull();
   });
 
-  it("keeps legacy plaintext recovery rows readable while encrypting new rows", async () => {
+  it("encrypts recovery rows", async () => {
     const storage = createTwoFactorRecoveryCodeStorage(AUTH_SECRET);
-    const legacy = '["legacy-code"]';
-    await expect(storage.decrypt(legacy)).resolves.toBe(legacy);
-
     const encrypted = await storage.encrypt('["new-code"]');
     expect(encrypted).not.toContain("new-code");
     await expect(storage.decrypt(encrypted)).resolves.toBe('["new-code"]');

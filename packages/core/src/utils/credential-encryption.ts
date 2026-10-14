@@ -53,22 +53,6 @@ export async function decryptCredentials(
   return new TextDecoder().decode(plaintext);
 }
 
-/**
- * Try to decrypt. If decryption fails (plaintext data), return as-is.
- * Enables gradual migration from plaintext to encrypted.
- */
-export async function decryptCredentialsGraceful(
-  value: string,
-  keyBase64: string | undefined,
-): Promise<string> {
-  if (!keyBase64) return value;
-  try {
-    return await decryptCredentials(value, keyBase64);
-  } catch {
-    return value; // Not encrypted yet
-  }
-}
-
 export interface StrictCredentialReadResult {
   value: string;
   encrypted: boolean;

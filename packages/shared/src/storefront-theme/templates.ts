@@ -319,19 +319,6 @@ export const STOREFRONT_TEMPLATES: readonly StorefrontTemplate[] = deepFreeze(
   STOREFRONT_TEMPLATE_IDS.map((id) => TEMPLATES.find((template) => template.id === id)!),
 );
 
-/**
- * The template ids document v9 retired, as the preset each became. A product
- * may still name one as its own page template (`products.page_template`);
- * it renders that preset's product page.
- */
-export const STOREFRONT_RETIRED_TEMPLATE_IDS: Readonly<Record<string, StorefrontTemplateId>> = Object.freeze({
-  "spec-catalogue": "department-mall",
-  "rounded-tech": "department-mall",
-  "heritage-editorial": "boutique",
-  "fashion-value": "boutique",
-  "mass-retail": "marketplace",
-});
-
 export function storefrontTemplate(id: StorefrontTemplateId): StorefrontTemplate {
   return STOREFRONT_TEMPLATES.find((template) => template.id === id)!;
 }

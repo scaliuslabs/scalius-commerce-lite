@@ -1349,13 +1349,7 @@ async function loadTransitionLedgerContext(
         };
     }
 
-    const legacyGeneration = await loadTransitionMovementGeneration(
-        db,
-        orderId,
-        variantId,
-        operation,
-    );
-    return { reservationGeneration: Math.max(1, legacyGeneration), deductLocationId: null };
+    return { reservationGeneration: 1, deductLocationId: null };
 }
 
 function getTransitionMovementType(

@@ -10,7 +10,6 @@
  * Nothing here renders: the real pages do, with the fixture API (`api.ts`).
  */
 import {
-  DEFAULT_STOREFRONT_THEME,
   STOREFRONT_BLOCK_REGISTRY,
   STOREFRONT_CARD_ACTIONS,
   STOREFRONT_CARD_FACTS,
@@ -748,5 +747,3 @@ export function galleryEntry(id: string): GalleryEntry | null {
   return galleryEntries().find((entry) => entry.id === id) ?? null;
 }
 
-/** The theme a page kind reads it with (default theme for its own blocks). */
-export const GALLERY_DEFAULT_THEME = DEFAULT_STOREFRONT_THEME;

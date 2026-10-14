@@ -542,7 +542,7 @@ const steadfast = defineCourierProvider({
 
   /**
    * Steadfast sends `Authorization: Bearer <token>`: the webhook secret, else
-   * the API secret key (as before the move). `delivery_status` moves the
+   * the API secret key. `delivery_status` moves the
    * shipment; `tracking_update` adds its message. With the invoice (the
    * order number), the platform refuses a consignment of another order and
    * binds a booking recovered by lookup.

@@ -47,9 +47,7 @@ export function isAbandonedCheckoutEmpty(checkout: {
 
     try {
         const data = JSON.parse(checkout.checkoutData);
-        const currentCartItems = data?.cart?.items;
-        const legacyItems = data?.items;
-        const items = Array.isArray(currentCartItems) ? currentCartItems : legacyItems;
+        const items = data?.cart?.items;
         const customerInfo = data?.customerInfo && typeof data.customerInfo === "object"
             ? data.customerInfo
             : {};

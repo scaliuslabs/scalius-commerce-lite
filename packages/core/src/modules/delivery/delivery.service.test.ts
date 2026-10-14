@@ -18,7 +18,6 @@ import {
   checkShipmentStatus,
   createShipment,
   deleteShipmentRecord,
-  getDeliveryProviderActionReadiness,
   saveDeliveryProvider,
   testDeliveryProvider,
 } from "./delivery.service";
@@ -389,13 +388,6 @@ describe("saving a courier", () => {
       .rejects.toThrow("cannot be activated");
     expect(writes).toHaveLength(0);
   });
-
-  it("refuses a retired built-in courier until the Bangladesh pack is active", async () => {
-    const { db, writes } = createSaveProviderDb();
-    await expect(saveDeliveryProvider(db as never, { id: "provider_pathao", name: "Pathao", type: "pathao", isActive: true }, "key", createCourierProviders()))
-      .rejects.toMatchObject({ details: { blockers: [{ message: "Activate Bangladesh pack in Apps to use it." }] } });
-    expect(writes).toHaveLength(0);
-  });
 });
 
 describe("testing a courier", () => {
@@ -497,15 +489,6 @@ describe("delivery provider active-state authority", () => {
       message: expect.stringContaining("could not be opened"),
     });
     expect(courier.createShipment).not.toHaveBeenCalled();
-    expect(inserts).toHaveLength(0);
-  });
-
-  it("fails closed with the Bangladesh pack's reason for a retired courier until the pack is active", async () => {
-    const { db, inserts } = createSequentialSelectDb([[bdOrder], [parcelProvider({ id: "provider_pathao", type: "pathao" })]]);
-    await expect(createShipment(db as never, "order_1", "provider_pathao", undefined, "key", { couriers: createCourierProviders() })).resolves.toMatchObject({
-      success: false,
-      message: "Delivery provider provider_pathao is not ready for shipment creation: Activate Bangladesh pack in Apps to use it.",
-    });
     expect(inserts).toHaveLength(0);
   });
 

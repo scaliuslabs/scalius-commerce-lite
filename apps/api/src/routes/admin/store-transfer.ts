@@ -20,7 +20,7 @@ import { customerImportBatchSchema } from "@scalius/shared/store-transfer/custom
 import { inventoryImportBatchSchema } from "@scalius/shared/store-transfer/inventory";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ok } from "../../utils/api-response";
-import { ApiError } from "../../utils/api-error";
+import { AppError } from "../../utils/api-error";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { importMediaFromUrl } from "./media-url-import";
 import { notificationSender } from "../../background/notification-sender";
@@ -37,7 +37,7 @@ export function requireImportPermissions(c: Ctx, needed: readonly string[]): voi
   const granted = permissionsOf(c);
   const missing = needed.filter((permission) => !granted.has(permission));
   if (missing.length > 0) {
-    throw new ApiError(403, "FORBIDDEN", `This import needs the ${missing.join(" and ")} permission${missing.length > 1 ? "s" : ""}.`);
+    throw new AppError(403, "FORBIDDEN", `This import needs the ${missing.join(" and ")} permission${missing.length > 1 ? "s" : ""}.`);
   }
 }
 
@@ -55,7 +55,7 @@ const CUSTOMER_MODE_PERMISSIONS: Record<"create" | "upsert", readonly string[]> 
 function assertBodySize(c: Ctx): void {
   const length = Number(c.req.header("content-length") ?? "0");
   if (Number.isFinite(length) && length > IMPORT_REQUEST_MAX_BYTES) {
-    throw new ApiError(413, "PAYLOAD_TOO_LARGE", `Send at most ${IMPORT_REQUEST_MAX_BYTES} bytes per import request; split the batch.`);
+    throw new AppError(413, "PAYLOAD_TOO_LARGE", `Send at most ${IMPORT_REQUEST_MAX_BYTES} bytes per import request; split the batch.`);
   }
 }
 

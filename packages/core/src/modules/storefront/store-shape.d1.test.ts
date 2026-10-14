@@ -112,7 +112,7 @@ describe("store shape: reviews and digital lines", () => {
             expect(digitalPlan).toEqual(expect.arrayContaining([
                 expect.stringMatching(/^SEARCH p(?: EXISTS)? USING INDEX \S+ \(id=\?/),
             ]));
-            expect(digitalPlan.some((detail) => /products_public_newest_idx|product_variants_product_stock_idx/.test(detail))).toBe(false);
+            expect(digitalPlan.some((detail) => /products_public_newest_idx/.test(detail))).toBe(false);
         } finally {
             sqlite.close();
         }

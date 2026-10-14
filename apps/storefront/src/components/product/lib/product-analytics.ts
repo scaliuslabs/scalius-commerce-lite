@@ -115,35 +115,3 @@ export function convertVariantToAnalyticsData(
     price: variant.discountedPrice ?? variant.price,
   };
 }
-
-/**
- * Check if Facebook Pixel is loaded
- */
-export function isFacebookPixelLoaded(): boolean {
-  return typeof window !== "undefined" && typeof window.fbq === "function";
-}
-
-/**
- * Check if Google Analytics is loaded
- */
-export function isGoogleAnalyticsLoaded(): boolean {
-  return typeof window !== "undefined" && Array.isArray(window.dataLayer);
-}
-
-/**
- * Get current tracking readiness status
- */
-export function getTrackingStatus(): {
-  fbPixel: boolean;
-  googleAnalytics: boolean;
-  ready: boolean;
-} {
-  const fbPixel = isFacebookPixelLoaded();
-  const googleAnalytics = isGoogleAnalyticsLoaded();
-
-  return {
-    fbPixel,
-    googleAnalytics,
-    ready: fbPixel || googleAnalytics,
-  };
-}

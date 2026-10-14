@@ -8,7 +8,6 @@ import {
     checkoutDocument,
     currencyDocument,
     paymentMethodsDocument,
-    sslcommerzDocument,
     stripeDocument,
 } from "@scalius/core/modules/settings";
 
@@ -26,11 +25,9 @@ import { paymentSettingsRoutes } from "./payments";
 const CREDENTIAL_ENCRYPTION_KEY = btoa("p".repeat(32));
 const MASKED = "••••••••••••";
 const liveStripe = { secretKey: "sk_live_existing", publishableKey: "pk_live_existing", webhookSecret: "whsec_existing", enabled: true };
-const liveSsl = { storeId: "real_store_123", storePassword: "stored-real-password", sandbox: false, enabled: true };
 
 type Stored = {
     stripe?: Partial<typeof liveStripe>;
-    sslcommerz?: Partial<typeof liveSsl>;
     payment_methods?: { enabledMethods: string[]; defaultMethod: string };
     currency?: { currencyCode: string };
 };
@@ -50,7 +47,6 @@ async function createTestApp(stored: Stored = {}, site: { partialPaymentEnabled?
         partialPaymentAmount: site.partialPaymentEnabled ? 500 : 0,
     });
     if (stored.stripe) await stripeDocument.write(db, stored.stripe, ctx);
-    if (stored.sslcommerz) await sslcommerzDocument.write(db, stored.sslcommerz, ctx);
     if (stored.payment_methods) await paymentMethodsDocument.write(db, stored.payment_methods);
     if (stored.currency) await currencyDocument.write(db, stored.currency as never);
 
@@ -115,16 +111,13 @@ describe("payment settings", () => {
 
     describe("reads", () => {
         it("never returns stored gateway secrets from configuration reads", async () => {
-            const { request } = await createTestApp({ stripe: liveStripe, sslcommerz: liveSsl });
+            const { request } = await createTestApp({ stripe: liveStripe });
 
-            const [stripeResponse, sslResponse] = await Promise.all([request("/stripe"), request("/sslcommerz")]);
+            const stripeResponse = await request("/stripe");
 
             await expect(stripeResponse.json()).resolves.toMatchObject({
                 data: { secretKey: MASKED, publishableKey: "pk_live_existing", webhookSecret: MASKED },
             });
-            // SSLCommerz is the Bangladesh pack's now: its keys are the pack's settings, never served here.
-            expect(sslResponse.status).toBe(404);
-            expect(await sslResponse.text()).not.toContain("stored-real-password");
         });
 
         it("returns raw selected methods separately from effective active checkout methods", async () => {
@@ -171,30 +164,6 @@ describe("payment settings", () => {
                     gatewayStatus: {
                         stripe: { checkoutSelected: true, checkoutVisible: true, environment: "live" },
                         cod: { checkoutSelected: true, checkoutVisible: false, environment: "not_applicable" },
-                    },
-                },
-            });
-        });
-
-        it("shows a saved SSLCommerz choice as waiting for the Bangladesh pack and keeps it out of checkout", async () => {
-            const { request } = await createTestApp({
-                sslcommerz: liveSsl,
-                payment_methods: { enabledMethods: ["sslcommerz", "cod"], defaultMethod: "sslcommerz" },
-            });
-
-            await expect((await request("/payment-methods")).json()).resolves.toMatchObject({
-                data: {
-                    enabledMethods: ["sslcommerz", "cod"],
-                    activeMethods: ["cod"],
-                    activeDefaultMethod: "cod",
-                    gatewayStatus: {
-                        sslcommerz: {
-                            configured: false,
-                            usable: false,
-                            checkoutSelected: true,
-                            checkoutVisible: false,
-                            blockedReason: "SSLCommerz: Activate Bangladesh pack in Apps to use it.",
-                        },
                     },
                 },
             });
@@ -249,9 +218,9 @@ describe("payment settings", () => {
 
         it.each([
             ["duplicate methods", {}, {}, { enabledMethods: ["cod", "cod"], defaultMethod: "cod" }, undefined],
-            ["a retired SSLCommerz choice before the Bangladesh pack is active", { sslcommerz: liveSsl }, {},
-                { enabledMethods: ["sslcommerz", "cod"], defaultMethod: "sslcommerz" },
-                "SSLCommerz: Activate Bangladesh pack in Apps to use it."],
+            ["an app method whose app is not active", {}, {},
+                { enabledMethods: [PACK_SSLCOMMERZ, "cod"], defaultMethod: PACK_SSLCOMMERZ },
+                "Unsupported payment gateway: scalius.bangladesh:sslcommerz"],
             ["removing every online gateway under partial payments", {}, { partialPaymentEnabled: true },
                 { enabledMethods: ["cod"], defaultMethod: "cod" }, undefined],
             ["a default method hidden by the checkout flow", { stripe: liveStripe }, { partialPaymentEnabled: true },

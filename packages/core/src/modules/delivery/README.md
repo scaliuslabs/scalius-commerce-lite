@@ -4,7 +4,7 @@ The `delivery` domain owns the courier port, saved courier accounts (delivery pr
 
 ## Entries and layer
 
-- `index.ts` exports the services, the courier port and registry (`couriers/port.ts`, `couriers/registry.ts`), the retired-courier handoff reads (`retired-couriers.ts`), `getTrackingUrl()` (a retired courier's page for a parcel booked before the move), and re-exports `browser.ts` (`types.ts`, `zone-match.ts`, `provider-readiness.ts`). Core has no courier adapter: every courier is an app's.
+- `index.ts` exports the services, the courier port and registry (`couriers/port.ts`, `couriers/registry.ts`), and re-exports `browser.ts` (`types.ts`, `zone-match.ts`, `provider-readiness.ts`). Core has no courier adapter: every courier is an app's.
 - Layer L5. It imports `inventory`, `order-kernel` and `settings`. `checkout`, `fulfilment`, `notifications` and `orders` import it (`scripts/core-domain-graph.allow.json`).
 
 ## Owns
@@ -25,9 +25,8 @@ The `delivery` domain owns the courier port, saved courier accounts (delivery pr
 
 - Every courier implements the courier port (`@scalius/shared/plugins/providers/courier`). `couriers/port.ts` adds `setup()`, `preflight()` and `trackingUrl()`.
 - A delivery provider row names its courier in `type`: an installed app's `<plugin id>:<provider id>` (`scalius.bangladesh:pathao`). Delivery and fulfilment code never branch on the courier.
-- A row or shipment that still names a retired built-in courier (`pathao`, `steadfast`) resolves to the app courier that replaced it (`integrations/retired-providers.ts`). While that app is not active it resolves to a courier that fails closed: readiness blocked with "Activate Bangladesh pack in Apps to use it.", no booking, no tracking. Its shipments stay readable, with their tracking pages.
 - A courier states the countries it delivers to (`countries`: `"any"` or ISO codes; Pathao and Steadfast deliver to `["BD"]`). The provider list returns them. The order page offers a courier only for an order shipping to one of its countries and names the others with the reason; the bulk booking skips such orders. `createShipment()` refuses the country before any write, as a last guard (MARKETS-DESIGN step 3a).
-- `createCourierProviders(apps)` builds one request's catalog from the active courier apps. The API loads them only when a row names an app courier or a retired one (`requestCourierProviders()` in `apps/api/src/plugins/providers/courier.ts`). Without that source there is none.
+- `createCourierProviders(apps)` builds one request's catalog from the active courier apps. The API loads them only when a row names an app courier (`requestCourierProviders()` in `apps/api/src/plugins/providers/courier.ts`). Without that source there is none.
 - `Courier.setup(row, key)` reads the setup once: the call settings (null when unreadable: never call the courier) and the readiness summary. An app courier's settings are the app's, read strictly with `CREDENTIAL_ENCRYPTION_KEY`.
 - A courier that books by its own place ids declares `locations` (Pathao: `pathao`, city and zone, numeric). The adapter's `preflight()` refuses a booking without them before the shipment row, and `createShipment` passes them as `recipient.locationIds`. The provider list returns `requiredLocations` (the order page asks for them) and `canFindShipment`.
 - `ProviderError` decides the outcome of a booking. A certain refusal (`declined`, `misconfigured`, or `retryable` without `uncertain`) means nothing was booked. `uncertain`, or any other throw after the call started, keeps the booking for reconciliation.
@@ -80,7 +79,7 @@ Each courier maps its own statuses to the port's 14 shipment codes (Pathao and S
 
 ## Webhooks
 
-The API mounts `POST /api/v1/webhooks/couriers/{id}` (app couriers whose port implements `verifyWebhook`) and the retired couriers' URLs `POST /api/v1/webhooks/pathao` and `/webhooks/steadfast`, internal forwards to the app couriers that replaced them, without session auth: the app's verification is the auth (`apps/api/src/routes/webhooks/couriers.ts`; rules in [docs/delivery-providers](../../../../../docs/delivery-providers/README.md)). After verification, the route:
+The API mounts `POST /api/v1/webhooks/couriers/{id}` (app couriers whose port implements `verifyWebhook`), without session auth: the app's verification is the auth (`apps/api/src/routes/webhooks/couriers.ts`; rules in [docs/delivery-providers](../../../../../docs/delivery-providers/README.md)). After verification, the route:
 
 1. Finds the shipment by external id, scoped to the one active provider row and the courier. An old or inactive row, or another provider's colliding id, cannot match. With the order number the courier echoes, it refuses a booking of another order and binds a booking a lookup confirmed without its id.
 2. Claims the event once in `webhook_events`. A duplicate returns the earlier result.

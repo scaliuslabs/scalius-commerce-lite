@@ -1,7 +1,7 @@
 // src/modules/navigation/navigation.service.ts
 // All DB queries and business logic for the navigation domain.
 
-import { categories, collections, pages, products } from "@scalius/database/schema";
+import { categories, pages } from "@scalius/database/schema";
 import { and, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
@@ -12,7 +12,6 @@ import type {
     NavigationTargetItem,
     ResolvedNavigationItem,
 } from "@scalius/shared/navigation-target";
-import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 
 // ─────────────────────────────────────────
 // Types
@@ -33,97 +32,6 @@ export interface NavigationPreviewProductCountInput {
 // ─────────────────────────────────────────
 // Admin Queries
 // ─────────────────────────────────────────
-
-/** Get available categories + pages for the admin nav item picker.
- *  Called by admin route: apps/api/src/routes/admin/navigation.ts (listItemsRoute handler) */
-export async function getNavigationItems(db: Database) {
-    const categoriesData = await db
-        .select({
-            id: categories.id,
-            name: categories.name,
-            slug: categories.slug,
-            canonicalPath: categories.canonicalPath,
-            type: sql<string>`'category'`.as("type"),
-        })
-        .from(categories)
-        .where(and(...publicCategoryConditions()))
-        .orderBy(categories.name)
-        .limit(100);
-
-    const categoryItems = categoriesData.map((cat) => ({
-        id: cat.id,
-        name: cat.name,
-        slug: cat.slug,
-        type: cat.type,
-        url: normalizeResourceCanonicalPath("category", cat.canonicalPath)
-            ?? `/categories/${cat.slug}`,
-    }));
-
-    const pagesData = await db
-        .select({
-            id: pages.id,
-            title: pages.title,
-            slug: pages.slug,
-            type: sql<string>`'page'`.as("type"),
-            isPublished: pages.isPublished,
-        })
-        .from(pages)
-        .where(sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = true`)
-        .orderBy(pages.title)
-        .limit(100);
-
-    const pageItems = pagesData.map((page) => ({
-        id: page.id,
-        name: page.title,
-        slug: page.slug,
-        type: page.type,
-        url: `/${page.slug}`,
-    }));
-
-    const productsData = await db
-        .select({
-            id: products.id,
-            name: products.name,
-            slug: products.slug,
-            canonicalPath: products.canonicalPath,
-        })
-        .from(products)
-        .where(sql`${products.deletedAt} IS NULL AND ${products.isActive} = true`)
-        .orderBy(products.name)
-        .limit(100);
-
-    const collectionsData = await db
-        .select({
-            id: collections.id,
-            name: collections.name,
-            canonicalPath: collections.canonicalPath,
-        })
-        .from(collections)
-        .where(sql`${collections.deletedAt} IS NULL AND ${collections.isActive} = true`)
-        .orderBy(collections.name)
-        .limit(100);
-
-    return {
-        categories: categoryItems,
-        pages: pageItems,
-        products: productsData.map((product) => ({
-            id: product.id,
-            name: product.name,
-            slug: product.slug,
-            type: "product",
-            url: normalizeResourceCanonicalPath("product", product.canonicalPath)
-                ?? `/products/${product.slug}`,
-        })),
-        collections: collectionsData.map((collection) => ({
-            id: collection.id,
-            name: collection.name,
-            slug: collection.id,
-            type: "collection",
-            url: normalizeResourceCanonicalPath("collection", collection.canonicalPath)
-                ?? `/collections/${collection.id}`,
-        })),
-    };
-}
 
 export async function getNavigationPreviewProductCount(
     db: Database,

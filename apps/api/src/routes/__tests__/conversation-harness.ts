@@ -93,7 +93,6 @@ export async function createConversationHarness(): Promise<Harness> {
     JWT_SECRET: "conversation-test-secret-0123456789",
     CUSTOMER_SESSION_HASH_KEY: SESSION_KEY,
     PUBLIC_API_BASE_URL: "https://api.example.test",
-    CACHE: { get: async () => null, put: async () => undefined, delete: async () => undefined },
     BUCKET: bucket,
     IMAGES: images,
   } as Record<string, unknown>, {

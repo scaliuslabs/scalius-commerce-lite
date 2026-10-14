@@ -13,7 +13,7 @@ import { runReportPage, type ReportCell, type RowsReport } from "./engine";
 import { createReportCsvBuilder } from "./csv";
 import { getAnalyticsReportPage, exportAnalyticsReportCsv } from "./service";
 import { bucketStartSql } from "./sales-sql";
-import { merchantDaySql, orderMeasuresSql, orderMetricsCtes, salesLinesCtes, salesOrdersCte, scopeOffsets } from "./overview.source-sales";
+import { merchantDaySql, orderMeasuresSql, orderMetricsCtes, salesLinesCtes, salesOrdersCte, scopeOffsets } from "../../../testing/analytics-oracle/source-sales";
 import { sealEveryFactDay } from "./overview-rollup.assertions";
 
 const ACCESS = { customers: true, costs: true };

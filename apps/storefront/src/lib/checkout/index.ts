@@ -41,7 +41,6 @@ import {
   TaxQuoteUnavailableError,
 } from "./tax-quote-client";
 import { discountLineKey, type CheckoutTaxQuote } from "./tax-quote-contract";
-import { isGatewayTestMode } from "./gateway-environment";
 import {
   hideCheckoutLoadingOverlay,
   showCheckoutLoadingOverlay,
@@ -1109,7 +1108,7 @@ async function selectMethod(
   }
   testNotice?.classList.toggle(
     "hidden",
-    methodId === "cod" || !isGatewayTestMode(gw),
+    methodId === "cod" || gw.testMode !== true,
   );
   const redirectMessage = hostedRedirectMessage(methodId);
   if (redirectNote) {

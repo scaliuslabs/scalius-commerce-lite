@@ -55,8 +55,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "scalius-commerce",
-      "database_id": "2efcad0d-841e-4f8d-b8f6-5b735d881edc",
+      "database_name": "scalius-commerce-v2",
+      "database_id": "83f64596-fee8-4627-9d99-69b099add10c",
       "migrations_dir": "../../packages/database/migrations"
     }
   ],

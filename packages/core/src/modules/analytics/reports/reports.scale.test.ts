@@ -49,8 +49,8 @@ function bigTableOf(query: string, name: string): string | undefined {
 /**
  * Full scans of the big tables in the statements a run issued (temp b-trees
  * for small groups are fine): a table scan, by name or alias, or a walk of a
- * whole index of one (`SCAN oi USING INDEX order_items_order_id_idx`, with
- * no key constraint, reads every line in the store).
+ * whole index of one (`SCAN oi USING INDEX <index>` with no key constraint
+ * reads every line in the store).
  */
 function fullScans(): string[] {
   const scans = new Set<string>();

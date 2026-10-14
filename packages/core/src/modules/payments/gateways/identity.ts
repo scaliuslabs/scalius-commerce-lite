@@ -4,42 +4,13 @@
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import type { ProviderCountries } from "@scalius/shared/plugins/providers/common";
 import { sql, type AnyColumn, type SQL } from "drizzle-orm";
-import { RETIRED_PAYMENT_PROVIDERS } from "../../../integrations/retired-providers";
 
 /** The built-in gateways (registry.ts holds their adapters, in this order). */
 export const BUILT_IN_PAYMENT_GATEWAY_IDS = ["stripe"] as const;
 
-/**
- * Built-in gateway ids an app provider replaced (`sslcommerz`: the Bangladesh
- * pack's). Orders and payments made before the move keep them; the registry
- * resolves each to its app provider (retired-providers.ts).
- */
-export const RETIRED_PAYMENT_GATEWAY_IDS: readonly string[] = Object.keys(RETIRED_PAYMENT_PROVIDERS);
-
-/** Whether an id is a retired built-in gateway an app provider now serves. */
-export function isRetiredPaymentMethod(id: unknown): id is string {
-  return typeof id === "string" && RETIRED_PAYMENT_GATEWAY_IDS.includes(id);
-}
-
-/**
- * The stored ids that mean the same gateway: an app provider's id and the
- * retired built-in id it replaced (`scalius.bangladesh:sslcommerz` and
- * `sslcommerz`), so a filter by either finds orders from before and after
- * the move. Any other id is only itself.
- */
-export function paymentMethodAliases(id: string): string[] {
-  const retired = RETIRED_PAYMENT_PROVIDERS[id];
-  if (retired && Object.hasOwn(RETIRED_PAYMENT_PROVIDERS, id)) return [id, retired.replacement];
-  const replaced = Object.entries(RETIRED_PAYMENT_PROVIDERS).filter(([, entry]) => entry.replacement === id).map(([old]) => old);
-  return [id, ...replaced];
-}
-
-/**
- * Whether a gateway id needs the request's app providers to resolve: an app
- * provider's id, or a retired built-in id one of them replaced.
- */
+/** Whether a gateway id needs the request's app providers to resolve: an app provider's id. */
 export function isAppPaymentMethod(id: unknown): id is string {
-  return isQualifiedProviderId(id) || isRetiredPaymentMethod(id);
+  return isQualifiedProviderId(id);
 }
 
 export const COD_PAYMENT_METHOD = "cod";
@@ -78,8 +49,8 @@ export function isPaymentMethodId(id: unknown): id is string {
   return id === COD_PAYMENT_METHOD || isOnlinePaymentMethod(id);
 }
 
-/** SQL twin of `isOnlinePaymentMethod` for a stored column (built-in and retired ids never contain a colon). */
+/** SQL twin of `isOnlinePaymentMethod` for a stored column (built-in ids never contain a colon). */
 export function onlinePaymentMethodCondition(column: AnyColumn | SQL): SQL {
-  const builtIns = sql.join([...BUILT_IN_PAYMENT_GATEWAY_IDS, ...RETIRED_PAYMENT_GATEWAY_IDS].map((id) => sql`${id}`), sql`, `);
+  const builtIns = sql.join(BUILT_IN_PAYMENT_GATEWAY_IDS.map((id) => sql`${id}`), sql`, `);
   return sql`(${column} IN (${builtIns}) OR instr(${column}, ':') > 0)`;
 }

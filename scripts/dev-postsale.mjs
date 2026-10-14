@@ -55,10 +55,9 @@ const fixture = {
 };
 
 // SSLCommerz is a provider of the Bangladesh pack (`scalius.bangladesh`), so
-// its session route takes the qualified id. The retired built-in id `sslcommerz`
-// stays for orders placed before the move: it must keep failing closed until
-// the pack is active. With the pack not installed in the local store, the
-// qualified id is an unknown gateway (400); with it installed but unset up, 503.
+// its session route takes the qualified id. With the pack not installed in the
+// local store, the qualified id is an unknown gateway (400); with it installed
+// but unset up, 503.
 const bangladeshSslcommerzId = "scalius.bangladesh:sslcommerz";
 export const paymentReadinessGateways = [
   {
@@ -76,14 +75,6 @@ export const paymentReadinessGateways = [
     token: "chk_ops006_bd_sslcommerz",
     path: `/api/v1/payment/${encodeURIComponent(bangladeshSslcommerzId)}/session`,
     expectedStatuses: [400, 503],
-  },
-  {
-    gateway: "sslcommerz",
-    slug: "sslcommerz",
-    orderId: "ops006_order_sslcommerz",
-    token: "chk_ops006_sslcommerz",
-    path: "/api/v1/payment/sslcommerz/session",
-    expectedStatuses: [503],
   },
 ];
 
@@ -431,7 +422,7 @@ function seedOtpFixture(config) {
 
 export function buildPaymentReadinessFixtureSql() {
   const orderIds = paymentReadinessGateways.map((item) => sqlString(item.orderId)).join(", ");
-  const onlineMethods = ["stripe", bangladeshSslcommerzId, "sslcommerz", "cod"];
+  const onlineMethods = ["stripe", bangladeshSslcommerzId, "cod"];
 
   return [
     `DELETE FROM payment_session_attempts WHERE order_id IN (${orderIds})`,
@@ -440,7 +431,7 @@ export function buildPaymentReadinessFixtureSql() {
     `DELETE FROM order_items WHERE order_id IN (${orderIds})`,
     `DELETE FROM checkout_attempts WHERE order_id IN (${orderIds})`,
     `DELETE FROM orders WHERE id IN (${orderIds})`,
-    `DELETE FROM settings WHERE category IN ('stripe', 'sslcommerz')`,
+    `DELETE FROM settings WHERE category = 'stripe'`,
     patchSettingsDocument("checkout", {
       checkoutMode: "all",
       partialPaymentEnabled: true,

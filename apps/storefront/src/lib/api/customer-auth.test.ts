@@ -30,7 +30,7 @@ describe("customer auth API helpers", () => {
     await verifyCustomerOtp(input);
     expect(checkoutState.reconcileCheckoutAfterSignIn).not.toHaveBeenCalled();
     await verifyCustomerOtp(input);
-    expect(checkoutState.reconcileCheckoutAfterSignIn).toHaveBeenCalledExactlyOnceWith("cust_b", input.identifier);
+    expect(checkoutState.reconcileCheckoutAfterSignIn).toHaveBeenCalledExactlyOnceWith("cust_b");
   });
 
   it("passes a new buyer's latest-order suggestion through and sends only the save choice back", async () => {

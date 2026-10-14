@@ -245,7 +245,7 @@ const perRequest = new WeakMap<Request, Promise<CourierProviders>>();
 
 /**
  * The couriers one request can use, as a lazy source: delivery code calls it
- * only for a row that names an app courier (or a retired built-in one), so
+ * only for a row that names an app courier, so
  * other work reads no plugin table. Read at most once per request.
  */
 export function requestCourierProviders(c: RequestLike): CourierProvidersSource {

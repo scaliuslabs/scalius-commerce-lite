@@ -6,14 +6,8 @@
 // kernel branches on which kind a gateway is. Cash on delivery is not a
 // gateway: the kernel records it without a provider.
 //
-// An id that still names a retired built-in gateway (`sslcommerz`, on orders
-// and payments made before it moved into the Bangladesh pack) resolves to
-// the app provider that replaced it. While that app is not active, it
-// resolves to a gateway that fails closed with the app's reason ("Activate
-// Bangladesh pack in Apps to use it."): it creates, verifies and refunds
-// nothing, and checkout never offers it.
 
-import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { ValidationError } from "@scalius/core/errors";
 import { getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { cashOnDeliveryIncrementMinor, isWholeUnitIncrement } from "@scalius/shared/currency-policy";
 import { toMinor } from "@scalius/shared/money";
@@ -21,7 +15,6 @@ import type { ProviderAmountCodecs } from "@scalius/shared/plugins/providers";
 import { encodeProviderAmount, type EncodedProviderAmount } from "@scalius/shared/plugins/providers/amount";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { providerServesCountry, type ProviderCountries } from "@scalius/shared/plugins/providers/common";
-import { retiredPaymentGateway, retiredProviderReason } from "../../../integrations/retired-providers";
 import {
   COD_COUNTRIES,
   COD_LABEL,
@@ -47,42 +40,8 @@ export {
   isAppPaymentMethod,
   isOnlinePaymentMethod,
   isPaymentMethodId,
-  isRetiredPaymentMethod,
   onlinePaymentMethodCondition,
-  paymentMethodAliases,
-  RETIRED_PAYMENT_GATEWAY_IDS,
 } from "./identity";
-
-/**
- * A retired built-in gateway whose app is not active: its name and nothing
- * else. Its settings read as unusable with the app's reason, so a callback
- * answers 503 (the provider retries after activation), a refund or a status
- * check stops before any provider call, and checkout never offers it.
- */
-function inactiveRetiredGateway(id: string, label: string): PaymentGateway {
-  const reason = `${label}: ${retiredProviderReason()}`;
-  const unavailable = async (): Promise<never> => {
-    throw new ServiceUnavailableError(reason);
-  };
-  return {
-    id,
-    label,
-    checkoutName: label,
-    flow: "hosted",
-    chargeCurrencies: ["BDT"],
-    supportsRefund: true,
-    loadSettings: async () => ({ enabled: false, credentialErrors: [reason] }),
-    readiness: () => ({ configured: false, enabled: false, usable: false, missingFields: [], credentialErrors: [reason], blockedReason: reason }),
-    canVerify: () => false,
-    environment: () => "unknown",
-    createSession: unavailable,
-    verifyWebhook: async () => ({ status: "retry", reason }),
-    verifyReturn: async () => ({ status: "retry", reason }),
-    queryPayment: unavailable,
-    refund: unavailable,
-    refundStatus: async () => ({ outcome: "unknown", error: reason }),
-  };
-}
 
 // ── Gateways one request can use ────────────────────────────────────────────
 
@@ -199,24 +158,7 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
   }
   const gateways = [...byId.values()];
 
-  // A retired built-in id is its app provider, else the fail-closed stand-in.
-  const inactive = new Map<string, PaymentGateway>();
-  const get = (id: string | null | undefined): PaymentGateway | undefined => {
-    if (!id) return undefined;
-    const own = byId.get(id);
-    if (own) return own;
-    const retired = retiredPaymentGateway(id);
-    if (!retired) return undefined;
-    const replacement = byId.get(retired.replacement);
-    if (replacement) return replacement;
-    // One stand-in per id, so every lookup of it answers with the same gateway.
-    let standIn = inactive.get(id);
-    if (!standIn) {
-      standIn = inactiveRetiredGateway(id, retired.label);
-      inactive.set(id, standIn);
-    }
-    return standIn;
-  };
+  const get = (id: string | null | undefined): PaymentGateway | undefined => (id ? byId.get(id) : undefined);
 
   const label = (id: string): string => {
     if (id === GIFT_CARD_TENDER_METHOD) return GIFT_CARD_TENDER_LABEL;
@@ -295,8 +237,7 @@ export const BUILT_IN_PAYMENT_PROVIDERS: PaymentProviders = createPaymentProvide
 /**
  * Gateways for work that learns the gateway id from a row (refunds,
  * reconciliation, recovery links): the request's providers, or a loader
- * called only when the id names an app gateway (or a retired built-in id an
- * app replaced), so work on built-in gateways reads no plugin table. Absent:
+ * called only when the id names an app gateway, so work on built-in gateways reads no plugin table. Absent:
  * built-in gateways alone.
  */
 export type PaymentProvidersSource = PaymentProviders | (() => Promise<PaymentProviders>);

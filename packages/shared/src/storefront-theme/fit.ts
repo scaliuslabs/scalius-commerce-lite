@@ -123,7 +123,6 @@ export const atMost = (fact: StoreShapeCountFact, max: number): FitCondition => 
 export const between = (fact: StoreShapeCountFact, min: number, max: number): FitCondition => ({ fact, min, max });
 export const has = (fact: StoreShapeFlagFact): FitCondition => ({ fact, equals: true });
 export const anyOf = (...conditions: FitCondition[]): FitCondition => ({ anyOf: conditions });
-export const blockIs = (block: string, ...variants: string[]): FitCondition => ({ block, variants });
 
 export interface FitContext {
   facts: StorefrontFitFacts;

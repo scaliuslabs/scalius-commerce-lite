@@ -761,6 +761,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 13,
         postgresStatements: 13,
       },
+      {
+        version: 149,
+        name: "0149_strict_readers_reset",
+        sqliteStatements: 23,
+        postgresStatements: 23,
+      },
     ]);
   });
 
@@ -958,6 +964,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 146, name: "0146_order_write_path" },
           { version: 147, name: "0147_kv_retirement" },
           { version: 148, name: "0148_queue_retirement" },
+          { version: 149, name: "0149_strict_readers_reset" },
         ],
       });
     } finally {

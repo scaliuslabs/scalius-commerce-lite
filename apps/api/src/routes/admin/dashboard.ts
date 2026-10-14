@@ -14,7 +14,6 @@ import {
     getDailyActivityData,
 } from "@scalius/core/modules/analytics";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { BANGLADESH_PACK_ID } from "@scalius/core/integrations/retired-providers";
 import { getSetupGuideFacts, getStoreSetupStatus } from "@scalius/core/modules/onboarding";
 import { getPaymentGatewaySettingsSnapshot } from "@scalius/core/modules/payments";
 import { getPluginInstallation, pluginNeedsApproval } from "@scalius/core/modules/plugins";
@@ -30,6 +29,7 @@ import { successEnvelope } from "../../schemas/responses";
 import { timestampSchema } from "../../schemas/timestamps";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
 
+const BANGLADESH_PACK_ID = "scalius.bangladesh";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const DASHBOARD_RECENT_ORDER_LIMIT = 11;
 const DASHBOARD_ORDER_ID_MAX_LENGTH = 128;

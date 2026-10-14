@@ -101,7 +101,7 @@ describe("ShipmentCard recovery authority", () => {
 
   it("offers the courier's own lookup only for a courier that finds bookings by order number", async () => {
     const provider = (type: string, courierName: string, canFindShipment: boolean) => ({
-      id: `prov_${courierName}`, name: courierName, type, courierId: type, courierName, countries: "any", requiredLocations: [], canFindShipment, isActive: true,
+      id: `prov_${courierName}`, name: courierName, type, courierName, countries: "any", requiredLocations: [], canFindShipment, isActive: true,
       createdAt: 1, updatedAt: 1,
     });
     const lookup = en["courier.checkWith"].replace("{courier}", "Steadfast");

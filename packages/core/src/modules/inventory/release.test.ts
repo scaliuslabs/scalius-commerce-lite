@@ -44,6 +44,28 @@ async function createExpectedReleaseId(input: {
   return `release:${hex}`;
 }
 
+/** The ledger v2 rows that stand for a reservation of `reservedQuantity` units, `releasedQuantity` of them released. */
+function ledgerRows(stats: ReleaseStats) {
+  const rows: Array<Record<string, unknown>> = [];
+  let reserved = 0;
+  let version = 1;
+  const edge = (type: string, delta: number) => {
+    rows.push({
+      id: `${type}_${version}`, variantId: "var_a", orderId: "order_1", type, ledgerVersion: 2, pool: "regular",
+      reservationGeneration: Math.max(1, stats.reservationGenerations),
+      stockVersionBefore: version, stockVersionAfter: version + 1,
+      previousStock: 10, newStock: 10, stockDelta: 0,
+      previousReservedStock: reserved, newReservedStock: reserved + delta, reservedStockDelta: delta,
+      previousPreorderStock: 0, newPreorderStock: 0, preorderStockDelta: 0,
+    });
+    reserved += delta;
+    version += 1;
+  };
+  if (stats.reservedQuantity > 0) edge("reserved", stats.reservedQuantity);
+  if (stats.releasedQuantity > 0) edge("released", -stats.releasedQuantity);
+  return rows;
+}
+
 function createReleaseBatchDb(options: {
   stats?: ReleaseStats[];
   batchError?: Error;
@@ -74,6 +96,9 @@ function createReleaseBatchDb(options: {
             where() {
               return {
                 all: async () => {
+                  if ("ledgerVersion" in projection) {
+                    return ledgerRows(statsQueue.shift() ?? statsQueue.at(-1) ?? { reservedQuantity: 2, releasedQuantity: 0, reservationGenerations: 1 });
+                  }
                   if ("stockVersion" in projection) {
                     return [{
                       id: "var_a",
@@ -86,16 +111,7 @@ function createReleaseBatchDb(options: {
                   }
                   return options.existingMovements ?? [];
                 },
-                get: async () => {
-                  if ("reservedQuantity" in projection) {
-                    return statsQueue.shift() ?? statsQueue.at(-1) ?? {
-                      reservedQuantity: 2,
-                      releasedQuantity: 0,
-                      reservationGenerations: 1,
-                    };
-                  }
-                  return null;
-                },
+                get: async () => null,
               };
             },
           };

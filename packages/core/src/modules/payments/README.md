@@ -33,19 +33,7 @@ in either loader. Cash on delivery is not a gateway.
 - `gateways/identity.ts` says what a stored id means without loading any
   adapter: built-in ids, qualified app ids (still online after the app is
   removed, so recovery and refunds fail closed instead of misclassifying),
-  retired built-in ids, COD and the gift-card tender.
-- A retired built-in id (`sslcommerz`, on orders and payments made before
-  SSLCommerz moved into the Bangladesh pack;
-  `integrations/retired-providers.ts`) resolves to the app provider that
-  replaced it: `get()`, labels, refunds, reconciliation and the old callback
-  URLs (`/webhooks/sslcommerz`, `/payment/sslcommerz/*`) reach the pack's
-  gateway. While the app is not active it resolves to a stand-in that fails
-  closed with "Activate Bangladesh pack in Apps to use it." (never offered,
-  callbacks answer 503, refunds stop before any provider call).
-  `paymentMethodAliases()` lets an order filter find both ids. The pack's
-  activation moves the old `sslcommerz` document into its settings and
-  repoints the checkout choice and the payments still under way
-  (`retired-gateways.ts`); settled orders keep the old id.
+  COD and the gift-card tender.
 
 ### Adding a built-in gateway
 

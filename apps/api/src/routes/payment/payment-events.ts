@@ -128,7 +128,6 @@ export async function reconcileOrderPayment(input: {
   if (!order) throw new NotFoundError("Order not found");
   const providers = await paymentProvidersFor(input.providers, order.paymentMethod);
   const gateway = providers.get(order.paymentMethod);
-  // The caller may name the order's gateway by a retired built-in id (`sslcommerz`): the same gateway.
   if (!gateway?.queryPayment || !order.paymentIntentId || (input.provider && providers.get(input.provider) !== gateway)) {
     throw new ValidationError("This order does not have an online payment to verify.");
   }

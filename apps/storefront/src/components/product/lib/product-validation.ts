@@ -95,37 +95,6 @@ export function isStockAvailable(
   };
 }
 
-/**
- * Get stock status category
- */
-export function getStockStatus(stock: number): {
-  status: "in_stock" | "low_stock" | "out_of_stock";
-  text: string;
-  canOrder: boolean;
-} {
-  if (stock > 50) {
-    return {
-      status: "in_stock",
-      text: "In Stock",
-      canOrder: true,
-    };
-  }
-
-  if (stock > 0) {
-    return {
-      status: "low_stock",
-      text: "Low Stock",
-      canOrder: true,
-    };
-  }
-
-  return {
-    status: "out_of_stock",
-    text: "Out of Stock",
-    canOrder: false,
-  };
-}
-
 export interface ProductData {
   id: string;
   slug: string;
@@ -181,16 +150,6 @@ export function isValidImageUrl(url: string | null | undefined): boolean {
   } catch {
     return false;
   }
-}
-
-/**
- * Get fallback image if invalid
- */
-export function getFallbackImage(
-  url: string | null | undefined,
-  fallback: string = "/placeholder-product.svg",
-): string {
-  return isValidImageUrl(url) ? url! : fallback;
 }
 
 /**

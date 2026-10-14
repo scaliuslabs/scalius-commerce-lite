@@ -7,9 +7,7 @@
 // Every courier is an app's: a merchant uses one through a
 // `delivery_providers` row whose `type` is `<plugin id>:<provider id>`
 // (`scalius.bangladesh:pathao`). Its credentials live in the app's own
-// settings; the row carries none. A row that still names a retired built-in
-// courier (`pathao`, `steadfast`) resolves to the app courier that replaced
-// it, or fails closed with the app's reason (./registry.ts).
+// settings; the row carries none.
 //
 // Port failures are the port's `ProviderError`: a certain refusal (declined,
 // misconfigured, or retryable without `uncertain`) means the courier booked
@@ -57,7 +55,7 @@ export interface CourierSetup<S = unknown> {
 }
 
 export interface Courier<S = unknown> extends ProviderPort<"courier", CourierCall<S>> {
-  /** `<plugin id>:<provider id>`, or a retired built-in id until its app takes it over. */
+  /** `<plugin id>:<provider id>`. */
   readonly id: string;
   /** Merchant-facing courier name. */
   readonly label: string;

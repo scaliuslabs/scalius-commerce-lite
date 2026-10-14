@@ -31,13 +31,6 @@ const checkoutTransferKeys = [
   "scalius_checkout_payment_method",
 ] as const;
 
-const legacyAnalyticsKeys = [
-  "scalius_user_phone",
-  "scalius_user_email",
-  "scalius_user_name",
-  "scalius_user_city",
-] as const;
-
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();
   return {
@@ -138,19 +131,10 @@ describe("checkout session state", () => {
     expect(sessionStorage.getItem("scalius_checkout_data")).toBeNull();
   });
 
-  it("recognizes the same account's legacy email owner without rotating its attempt", () => {
-    setCheckoutFormDraftOwner("buyer@example.test");
-    writeCheckoutFormDraft({ customerName: "Buyer" });
-    sessionStorage.setItem("checkoutId", "uncertain_attempt");
-    expect(reconcileCheckoutAfterSignIn("cust_a", "buyer@example.test")).toBe(false);
-    expect(sessionStorage.getItem("checkoutId")).toBe("uncertain_attempt");
-  });
-
   it("clears cart-to-checkout transfer state without rotating the active checkout id", () => {
     const keys = [
       ...checkoutTransferKeys,
       "checkoutId",
-      ...legacyAnalyticsKeys,
     ];
 
     for (const key of keys) {
@@ -159,17 +143,16 @@ describe("checkout session state", () => {
 
     clearCheckoutTransferSession();
 
-    for (const key of [...checkoutTransferKeys, ...legacyAnalyticsKeys]) {
+    for (const key of checkoutTransferKeys) {
       expect(sessionStorage.getItem(key)).toBeNull();
     }
     expect(sessionStorage.getItem("checkoutId")).toBe("checkoutId-value");
   });
 
-  it("removes checkout transfer state, active checkout id, and legacy analytics PII keys", () => {
+  it("removes checkout transfer state and the active checkout id", () => {
     const keys = [
       ...checkoutTransferKeys,
       "checkoutId",
-      ...legacyAnalyticsKeys,
     ];
 
     for (const key of keys) {

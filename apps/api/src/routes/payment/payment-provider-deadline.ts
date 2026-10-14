@@ -13,10 +13,6 @@ export function createPaymentProviderTimeoutError(providerName: string): Service
   return new ServiceUnavailableError(`${providerName} did not respond in time. Please try again shortly.`);
 }
 
-export function isPaymentProviderTimedOut(result: TimeoutAwarePaymentResult): boolean {
-  return result.timedOut === true;
-}
-
 function isAbortLikeError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const maybeError = error as { name?: unknown; message?: unknown };

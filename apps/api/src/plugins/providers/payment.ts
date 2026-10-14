@@ -200,7 +200,7 @@ const perRequest = new WeakMap<Request, Promise<PaymentProviders>>();
  * The gateways one request can use, read once per request. Built-in ids
  * never need the read: `forId` names the gateway the request is about, and
  * when it is a built-in one the built-in gateways answer without touching
- * the plugin tables. A retired built-in id (`sslcommerz`) is an app's now.
+ * the plugin tables.
  */
 export function requestPaymentProviders(c: RequestLike, forId?: string | null): Promise<PaymentProviders> {
   if (forId !== undefined && !isAppPaymentMethod(forId)) return Promise.resolve(BUILT_IN_PAYMENT_PROVIDERS);

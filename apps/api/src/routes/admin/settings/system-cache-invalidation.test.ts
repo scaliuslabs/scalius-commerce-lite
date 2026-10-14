@@ -115,15 +115,8 @@ function providerBlocks(database: TestDatabase): string[] {
 }
 
 async function createTestApp(setup?: (database: TestDatabase) => Promise<void> | void) {
-  const kv = {
-    id: "api-cache-kv",
-    delete: vi.fn(),
-    put: vi.fn(async () => undefined),
-    get: vi.fn(async () => null),
-  };
   const mirror = stubSettingsMirror();
   const env = {
-    CACHE: kv,
     CF_VERSION_METADATA: { id: TEST_WORKER_VERSION },
     CREDENTIAL_ENCRYPTION_KEY: CREDENTIAL_KEY,
   } as unknown as Env;
@@ -253,7 +246,7 @@ async function createTestApp(setup?: (database: TestDatabase) => Promise<void> |
   });
   app.route("/admin/settings", systemSettingsRoutes);
 
-  return { app, database, env, executionCtx, kv, mirror };
+  return { app, database, env, executionCtx, mirror };
 }
 
 function requestGet(
@@ -330,7 +323,7 @@ describe("system settings write behavior", () => {
   });
 
   it("returns success after a versioned checkout settings save", async () => {
-    const { app, env, executionCtx, kv } = await createTestApp();
+    const { app, env, executionCtx } = await createTestApp();
 
     const response = await requestJson(app, env, executionCtx, "/checkout-flow", {
       guestCheckoutEnabled: true,
@@ -341,7 +334,6 @@ describe("system settings write behavior", () => {
     }, "PUT");
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(kv.delete).not.toHaveBeenCalled();
 
   });
 

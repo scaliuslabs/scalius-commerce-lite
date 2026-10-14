@@ -181,7 +181,7 @@ describe("local post-sale smoke CLI", () => {
 
     expect(sql).toContain("DELETE FROM payment_session_attempts");
     expect(sql).toContain("DELETE FROM payment_plans");
-    expect(sql).toContain("DELETE FROM settings WHERE category IN ('stripe', 'sslcommerz')");
+    expect(sql).toContain("DELETE FROM settings WHERE category = 'stripe'");
     expect(sql).toContain("\"partialPaymentEnabled\":true");
     expect(sql).toContain("\"partialPaymentAmount\":150");
     expect(sql).toContain("currency_code, currency_decimal_places");
@@ -190,9 +190,8 @@ describe("local post-sale smoke CLI", () => {
     // Same-currency money chain: shop amounts equal the presentment amounts.
     expect(sql).toContain("'BDT', 2, 120000, 8000, 0, 0, 128000, 'BDT', 120000, 8000, 128000, 'incomplete'");
     expect(sql).toContain("'ops006_order_stripe'");
-    expect(sql).toContain("'ops006_order_sslcommerz'");
     // The Bangladesh pack's provider: orders, checkout attempts and the enabled
-    // methods carry the qualified id; the retired id stays for older orders.
+    // methods carry the qualified id.
     expect(sql).toContain("'ops006_order_bd_sslcommerz'");
     expect(sql).toContain("'scalius.bangladesh:sslcommerz'");
     expect(sql).toContain("ops006-bd_sslcommerz@example.com");
@@ -200,7 +199,6 @@ describe("local post-sale smoke CLI", () => {
     expect(sql).toContain("'committed'");
     expect(sql).toContain("'payment_methods'");
     expect(sql).toContain("stripe");
-    expect(sql).toContain("sslcommerz");
   });
 
   it("calls the Bangladesh pack's SSLCommerz session route by its qualified id", () => {

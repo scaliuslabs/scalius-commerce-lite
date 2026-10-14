@@ -10,7 +10,6 @@ import {
     getNavigationMenuMoveOptions,
     getNavigationMenuAuthority,
     getNavigationPlacementManifest,
-    getNavigationItems,
     getNavigationPreviewProductCount,
     listNavigationResources,
     listNavigationMenuItems,
@@ -35,15 +34,6 @@ import {
     conflictResponse,
     errorResponses,
 } from "../../schemas/responses";
-
-// Navigation items returned by getNavigationItems service
-const navSourceItemSchema = z.object({
-    id: z.string(),
-    name: z.string(),
-    slug: z.string(),
-    type: z.string(),
-    url: z.string(),
-});
 
 const navigationResourceTypeSchema = z.enum([
     "page",
@@ -146,40 +136,6 @@ function decodeCursor<T>(value: string | undefined): T | undefined {
         throw new ValidationError("Invalid navigation cursor.");
     }
 }
-
-// ── List Navigation Items ──
-
-const listItemsRoute = createRoute({
-    method: "get",
-    path: "/items",
-    tags: ["Admin - Navigation"],
-    summary: "Get navigation items",
-    operationId: "dashboard.navigation.legacy_items_list",
-    responses: {
-        200: {
-            description: "Navigation items list",
-            content: {
-                "application/json": {
-                    schema: successEnvelope(z.object({
-                        items: z.object({
-                            categories: z.array(navSourceItemSchema),
-                            pages: z.array(navSourceItemSchema),
-                            products: z.array(navSourceItemSchema),
-                            collections: z.array(navSourceItemSchema),
-                        }),
-                    })),
-                },
-            },
-        },
-        ...errorResponses,
-    }
-});
-
-app.openapi(listItemsRoute, async (c) => {
-    const db = c.get("db");
-    const items = await getNavigationItems(db);
-    return ok(c, { items });
-});
 
 // ── Search Navigation Resources ──
 

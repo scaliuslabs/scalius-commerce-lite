@@ -14,8 +14,7 @@ import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
 import { DEFAULT_CUSTOMER_IDENTITY } from "@scalius/shared/customer-auth-policy";
 
-import { encodeEncryptedCredential, encryptCredentials, readStoredCredentialStrict } from "../../utils/credential-encryption";
-import { selectSettingsDocuments } from "../../settings-store";
+import { encodeEncryptedCredential, encryptCredentials } from "../../utils/credential-encryption";
 import { getEmailRuntimeSettings } from "../../integrations/email/settings";
 import { readFirebaseSettings } from "../../integrations/firebase/settings";
 import { getSmsSettings } from "../../integrations/sms/sms-settings";
@@ -25,11 +24,10 @@ import {
   getPaymentMethodPreferences,
   getStripeSettings,
 } from "../payments/gateway-settings";
-import { readRetiredPaymentSettings } from "../payments/retired-gateways";
 import { getBusinessSettings } from "./business-settings.service";
 import { getCheckoutFlowSettingsDocument } from "../checkout/flow-settings";
 import { getCustomerRequestPolicy } from "./customer-request-policy";
-import { customerAuthDocument, securityDocument, smsDocument } from "./documents";
+import { customerAuthDocument, securityDocument } from "./documents";
 import { getPlatformSettings } from "../platform/platform-settings.service";
 import {
   getAdminNotificationChannels,
@@ -246,14 +244,6 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
       enabled: true,
       credentialErrors: [],
     });
-    // SSLCommerz moved into the Bangladesh pack: its document is read for the pack's activation.
-    expect(await readRetiredPaymentSettings(db, KEY)).toEqual([expect.objectContaining({
-      id: "sslcommerz",
-      values: { sslcommerz_store_id: "shop01", sslcommerz_store_password: "store-pass-xyz", sslcommerz_environment: "live" },
-      unreadable: [],
-      enabled: false,
-      stored: true,
-    })]);
     expect(await getPaymentMethodPreferences(db)).toEqual({
       enabledMethods: ["cod", "stripe"],
       defaultMethod: "stripe",
@@ -297,7 +287,6 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
     expect(await customerAuthDocument.read(db)).toEqual(DEFAULT_CUSTOMER_IDENTITY);
     // All keys and no saved switch: the dashboard showed Stripe enabled.
     expect((await getStripeSettings(db, KEY))?.enabled).toBe(true);
-    expect(await readRetiredPaymentSettings(db, KEY)).toEqual([expect.objectContaining({ id: "sslcommerz", values: {}, stored: false })]);
     expect(await getPaymentMethodPreferences(db)).toEqual({
       enabledMethods: ["cod"],
       defaultMethod: "cod",
@@ -369,17 +358,8 @@ async function expectCommonSettings(db: Parameters<typeof getBusinessSettings>[0
   expect((await getAdminNotificationChannels(db)).order_created).toEqual([]);
   expect((await getAdminNotificationChannels(db)).order_cancelled).toEqual(["push"]);
   expect(await getOrderWhatsAppTemplateSettings(db)).toEqual({ templateName: "order_update", languageCode: "bn" });
-  // SMS.net.bd is the Bangladesh pack's now: the choice reads as the pack's
-  // provider, and its key and sender wait in the document, encrypted, for the
-  // pack's activation to move them.
-  expect(await getSmsSettings(db, KEY)).toMatchObject({
-    activeProvider: "scalius.bangladesh:smsnetbd",
-    activeProviderConfigured: false,
-  });
-  const [sms] = await selectSettingsDocuments(db, [smsDocument]);
-  const kept = JSON.parse(sms!.value) as Record<string, string>;
-  expect(kept.smsnetbdSenderId).toBe("SHOP");
-  await expect(readStoredCredentialStrict(kept.smsnetbdApiKey, KEY)).resolves.toMatchObject({ value: "sms-live-key-8841" });
+  // A gateway id that is not an app provider selects nothing.
+  expect(await getSmsSettings(db, KEY)).toMatchObject({ activeProvider: null, activeProviderConfigured: false });
 }
 
 function expectOnlyDocumentRows(sqlite: DatabaseSync) {

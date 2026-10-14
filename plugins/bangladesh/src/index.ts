@@ -22,9 +22,7 @@
 //   "Refresh from Pathao" (pathao-places.ts) re-reads Pathao's live list.
 //
 // Each provider names the settings it needs (`providers.*[].settings`), so
-// the dashboard shows each one ready or not on its own. The stores that set
-// these up in core before the move keep them: activating the pack moves the
-// saved keys into its settings (apps/api/src/plugins/provider-handoff.ts).
+// the dashboard shows each one ready or not on its own.
 
 import {
   adminLocale,
@@ -92,7 +90,7 @@ const SETTINGS = [
   secret("steadfast", "steadfast_api_key", "API key"),
   secret("steadfast", "steadfast_secret_key", "Secret key"),
   secret("steadfast", "steadfast_webhook_secret", "Webhook token", "The Bearer token Steadfast sends with its updates. Left empty, the secret key is used."),
-  // No default: a store chooses test or live payments itself (activation moves a choice saved before the move).
+  // No default: a store chooses test or live payments itself.
   {
     key: "sslcommerz_environment",
     label: "Environment",
@@ -167,7 +165,7 @@ export const manifest = {
         id: "sslcommerz",
         name: "SSLCommerz",
         icon: "assets/sslcommerz.png",
-        // The name buyers saw before the move: SSLCommerz's page offers cards, wallets and banking.
+        // SSLCommerz's page offers cards, wallets and banking.
         checkoutName: "Online Payment",
         flow: "hosted",
         chargeCurrencies: ["BDT"],

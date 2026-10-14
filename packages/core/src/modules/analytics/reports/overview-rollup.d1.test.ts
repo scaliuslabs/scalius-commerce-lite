@@ -6,7 +6,7 @@ import { createAnalyticsFixture, type AnalyticsFixture, type FixtureOrder } from
 import { AUGUST, seedKnownAnswerStore } from "./metrics.fixture-store";
 import { createAnalyticsContext } from "./context";
 import { getAnalyticsOverview, rollUpDays } from "./overview";
-import { sourceOverviewPeriod } from "./overview.source-oracle";
+import { sourceOverviewPeriod } from "../../../testing/analytics-oracle/source-oracle";
 import { assertRollupProjection, sealEveryFactDay } from "./overview-rollup.assertions";
 
 let f: AnalyticsFixture;

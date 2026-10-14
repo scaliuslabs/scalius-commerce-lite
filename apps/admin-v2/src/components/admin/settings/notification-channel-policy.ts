@@ -48,9 +48,6 @@ const ORDER_EVENT_GROUPS = [
   },
 ] as const satisfies ReadonlyArray<{ key: string; events: readonly OrderNotificationType[] }>;
 
-/** The order events, grouped for display; labels come from `notificationEventMessages`. */
-export const NOTIFICATION_EVENT_GROUPS = ORDER_EVENT_GROUPS;
-
 export type NotificationEventGroup = {
   key:
     | "groupOrders"

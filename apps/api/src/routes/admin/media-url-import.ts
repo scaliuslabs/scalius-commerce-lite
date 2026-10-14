@@ -179,8 +179,3 @@ export async function importMediaFromUrl(input: {
     }
 }
 
-export const mediaImportUrlSchema = {
-    sourceUrl: "sourceUrl",
-    filename: "filename",
-    folderId: "folderId",
-} as const;

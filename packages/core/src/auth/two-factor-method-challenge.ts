@@ -66,12 +66,7 @@ export function createTwoFactorRecoveryCodeStorage(authSecret: string) {
   return {
     encrypt: (value: string) =>
       symmetricEncrypt({ key: authSecret, data: value }),
-    decrypt: (value: string) => {
-      // Better Auth stored recovery-code JSON in plaintext before encrypted
-      // storage was enabled. Read that legacy shape, but encrypt every write.
-      if (value.trimStart().startsWith("[")) return Promise.resolve(value);
-      return symmetricDecrypt({ key: authSecret, data: value });
-    },
+    decrypt: (value: string) => symmetricDecrypt({ key: authSecret, data: value }),
   };
 }
 

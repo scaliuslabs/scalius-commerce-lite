@@ -1,20 +1,12 @@
 // The Bangladesh pack's SSLCommerz end to end through the platform (bundled
 // loader, migrated schema, the Worker's own payment routes and queue
-// consumer, a simulated SSLCommerz): a store that took SSLCommerz payments in
-// core before the move.
+// consumer, a simulated SSLCommerz).
 //
-// - Until the pack is active, SSLCommerz is never offered, a session is
-//   refused, the old IPN URL answers 503 (SSLCommerz retries) and a refund
-//   stops before any provider call, all with the pack's reason.
-// - Activation moves the saved keys into the pack's sealed settings (only
-//   empty ones; the old sandbox flag becomes the environment), replaces the
-//   checkout choice in place, clears the old document, and repoints the
-//   payments still under way. Settled orders keep `sslcommerz`. A second
-//   handoff changes nothing.
-// - Then the URLs SSLCommerz already holds keep working: an IPN at
-//   /webhooks/sslcommerz is validated by the pack and credits the order once
-//   (a repeat is a duplicate, a tampered one changes nothing), a cancel at
-//   /payment/sslcommerz/cancel releases its attempt, and the old settled
+// - Until the pack is active, SSLCommerz is never offered, the IPN URL
+//   answers 404 and a refund stops before any provider call.
+// - Then the IPN at /webhooks/{provider} is validated by the pack and credits
+//   the order once (a repeat is a duplicate, a tampered one changes nothing),
+//   a cancel at /payment/{provider}/cancel releases its attempt, and a settled
 //   payment refunds through the pack.
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
@@ -23,14 +15,13 @@ import { getDb, type Database } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { getActivePaymentMethods, processRefund } from "@scalius/core/modules/payments";
-import { installPlugin, readPluginRuntimeSettings, requirePluginInstallation } from "@scalius/core/modules/plugins";
-import { checkoutDocument, currencyDocument, paymentMethodsDocument, sslcommerzDocument } from "@scalius/core/modules/settings";
+import { installPlugin, requirePluginInstallation, writePluginSettings } from "@scalius/core/modules/plugins";
+import { checkoutDocument, currencyDocument, paymentMethodsDocument } from "@scalius/core/modules/settings";
 import { errorResponseFromError } from "../utils/api-response";
 import { paymentRoutes } from "../routes/payment/payment-routes";
 import { paymentWebhookRoutes } from "../routes/webhooks/payments";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { activatePluginWithHooks } from "./lifecycle";
-import { handOffRetiredProviders } from "./provider-handoff";
 import { appPaymentProvidersLoader } from "./providers/payment";
 import { pluginTestCtx, settleBackground } from "./testing/fixtures";
 import { manifest as packManifest } from "../../../../plugins/bangladesh/src/index";
@@ -61,7 +52,7 @@ function fakeSslcommerz() {
   return { fetch, calls, validations };
 }
 
-describe("the Bangladesh pack takes over a store's SSLCommerz", () => {
+describe("the Bangladesh pack's SSLCommerz", () => {
   let sqlite: DatabaseSync;
   let db: Database;
   let env: Env;
@@ -86,30 +77,32 @@ describe("the Bangladesh pack takes over a store's SSLCommerz", () => {
     for (const level of ["info", "warn", "error", "log"] as const) vi.spyOn(console, level).mockImplementation(() => undefined);
 
     sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1)").run();
-    // Saved in core before the move: live SSLCommerz, on, and offered first.
+    // Live SSLCommerz, on, and offered first.
     await currencyDocument.write(db, { currencyCode: "BDT" });
     await checkoutDocument.write(db, { checkoutMode: "all", partialPaymentEnabled: false, partialPaymentAmount: 0 });
-    await sslcommerzDocument.write(db, { storeId: "shop01live", storePassword: "store-pass-xyz", sandbox: false, enabled: true }, { encryptionKey: KEY });
-    await paymentMethodsDocument.write(db, { enabledMethods: ["sslcommerz", "cod"], defaultMethod: "sslcommerz" });
+    await paymentMethodsDocument.write(db, { enabledMethods: [METHOD, "cod"], defaultMethod: METHOD });
     const order = (id: string, values: Partial<typeof schema.orders.$inferInsert>) => db.insert(schema.orders).values({
       id, customerName: "Buyer", customerPhone: "+8801712345678", shippingAddress: "House 1", city: "Dhaka", zone: "Gulshan",
       totalAmountMinor: 16_000, subtotalAmountMinor: 16_000, balanceDueMinor: 16_000, currencyCode: "BDT", currencyDecimalPlaces: 2,
-      paymentMethod: "sslcommerz", paymentStatus: "unpaid", status: "incomplete", ...values,
+      paymentMethod: METHOD, paymentStatus: "unpaid", status: "incomplete", ...values,
     });
-    // Two checkouts on SSLCommerz's page at the deploy, and one order paid long ago.
+    // Two checkouts on SSLCommerz's page, and one order paid long ago.
     await order("ORDFLY", {});
     await order("ORDQUIT", {});
     await order("ORDPAID", { status: "delivered", paymentStatus: "paid", paidAmountMinor: 16_000, balanceDueMinor: 0 });
     const attempt = (id: string, orderId: string) => ({
-      id, attemptKey: `key_${id}`, orderId, gateway: "sslcommerz", paymentType: "full", amountMinor: 16_000, currency: "BDT",
+      id, attemptKey: `key_${id}`, orderId, gateway: METHOD, paymentType: "full", amountMinor: 16_000, currency: "BDT",
       requestHash: "h", status: "created", providerSessionId: `SESS${id}`, providerCorrelationId: `${orderId}_full_ABC12345`,
     });
     await db.insert(schema.paymentSessionAttempts).values([attempt("psa1", "ORDFLY"), attempt("psa2", "ORDQUIT")]);
     await db.insert(schema.orderPayments).values({
-      id: "pay_old", orderId: "ORDPAID", amountMinor: 16_000, currency: "BDT", settlementAmountMinor: 16_000, paymentMethod: "sslcommerz",
+      id: "pay_old", orderId: "ORDPAID", amountMinor: 16_000, currency: "BDT", settlementAmountMinor: 16_000, paymentMethod: METHOD,
       paymentType: "full", status: "succeeded", providerRef: "val_old", providerSecondaryRef: "bank_old",
     });
-    await installPlugin(db, { manifest: packManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS[PACK]!.sha256, actorUserId: "owner" });
+    const installed = await installPlugin(db, { manifest: packManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS[PACK]!.sha256, actorUserId: "owner" });
+    await writePluginSettings(db, PACK, {
+      sslcommerz_store_id: "shop01live", sslcommerz_store_password: "store-pass-xyz", sslcommerz_environment: "live",
+    }, { expectedRevision: installed.revision, credentialEncryptionKey: KEY });
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -149,42 +142,24 @@ describe("the Bangladesh pack takes over a store's SSLCommerz", () => {
     bank_tran_id: `bank_${valId}`, value_a: "full", value_b: orderId, card_type: "VISA-Dutch Bangla",
   });
 
-  it("fails closed until activation, then moves the setup, repoints the open payments and keeps SSLCommerz's URLs", { timeout: 60_000 }, async () => {
-    // Before activation: never offered, the IPN asks SSLCommerz to retry, a refund stops before any call.
+  it("fails closed until activation, then serves the IPN, cancel and refund URLs", { timeout: 60_000 }, async () => {
+    // Before activation: never offered, the IPN finds no gateway, a refund stops before any call.
     await expect(getActivePaymentMethods(db, KEY, providers())).resolves.toEqual({ enabledMethods: ["cod"], defaultMethod: "cod" });
     validated("ORDFLY", "val_fly");
-    const early = await form("/webhooks/sslcommerz", { val_id: "val_fly", tran_id: "ORDFLY_full_ABC12345" });
-    expect(early.status).toBe(503);
+    const early = await form(`/webhooks/${METHOD}`, { val_id: "val_fly", tran_id: "ORDFLY_full_ABC12345" });
+    expect(early.status).toBe(404);
     await expect(processRefund(db, { orderId: "ORDPAID", amount: 50, reason: "requested_by_customer" }, KEY, providers()))
-      .rejects.toThrow("Activate Bangladesh pack in Apps");
+      .rejects.toThrow();
     expect(gateway.calls).toEqual([]);
 
     expect((await activate()).hookError).toBeNull();
-
-    // The keys moved, sealed; the old sandbox flag (off) is the live environment.
-    const installation = await requirePluginInstallation(db, PACK);
-    const settings = await readPluginRuntimeSettings(installation, KEY);
-    expect(settings.values).toMatchObject({
-      sslcommerz_store_id: "shop01live", sslcommerz_store_password: "store-pass-xyz", sslcommerz_environment: "live",
-    });
-    expect(JSON.stringify(installation.storedSettings)).not.toContain("store-pass-xyz");
-    // The choice is replaced in place, the old document cleared.
-    expect(await paymentMethodsDocument.read(db)).toEqual({ enabledMethods: [METHOD, "cod"], defaultMethod: METHOD });
-    expect(await sslcommerzDocument.read(db, { encryptionKey: KEY })).toMatchObject({ storeId: "", storePassword: "", enabled: false });
-    // Open payments name the pack's gateway; a settled order keeps the old id.
-    expect(row("SELECT payment_method FROM orders WHERE id = 'ORDFLY'")).toEqual({ payment_method: METHOD });
-    expect(row("SELECT gateway FROM payment_session_attempts WHERE id = 'psa1'")).toEqual({ gateway: METHOD });
-    expect(row("SELECT payment_method FROM orders WHERE id = 'ORDPAID'")).toEqual({ payment_method: "sslcommerz" });
-    expect(row("SELECT payment_method FROM order_payments WHERE id = 'pay_old'")).toEqual({ payment_method: "sslcommerz" });
-    // A second handoff finds nothing left to move.
-    await expect(handOffRetiredProviders(db, PACK, KEY)).resolves.toEqual({ moved: [], skipped: [], repointed: [] });
     await expect(getActivePaymentMethods(db, KEY, providers())).resolves.toEqual({ enabledMethods: [METHOD, "cod"], defaultMethod: METHOD });
 
-    // The IPN URL SSLCommerz holds: validated server to server, credited once.
-    const ipn = await form("/webhooks/sslcommerz", { val_id: "val_fly", tran_id: "ORDFLY_full_ABC12345", amount: "1.00" });
+    // The IPN: validated server to server, credited once.
+    const ipn = await form(`/webhooks/${METHOD}`, { val_id: "val_fly", tran_id: "ORDFLY_full_ABC12345", amount: "1.00" });
     expect([ipn.status, await ipn.json()]).toEqual([200, { received: true }]);
     expect(gateway.calls.at(-1)?.pathname).toBe("/validator/api/validationserverAPI.php");
-    const repeat = await form("/webhooks/sslcommerz", { val_id: "val_fly" });
+    const repeat = await form(`/webhooks/${METHOD}`, { val_id: "val_fly" });
     expect(await repeat.json()).toMatchObject({ duplicate: true });
     // Applied after the IPN's response, once.
     await settleBackground();
@@ -195,35 +170,21 @@ describe("the Bangladesh pack takes over a store's SSLCommerz", () => {
     // A tampered IPN (the validation answers for another payment) changes nothing.
     const eventsBefore = row("SELECT count(*) AS n FROM webhook_events");
     gateway.validations.set("val_fake", { ...gateway.validations.get("val_fly")!, val_id: "val_other" });
-    const tampered = await form("/webhooks/sslcommerz", { val_id: "val_fake" });
+    const tampered = await form(`/webhooks/${METHOD}`, { val_id: "val_fake" });
     expect(tampered.status).toBe(200);
     await settleBackground();
     expect(row("SELECT count(*) AS n FROM webhook_events")).toEqual(eventsBefore);
 
-    // The cancel URL sent with the old session releases its attempt.
-    const cancelled = await form("/payment/sslcommerz/cancel", { tran_id: "ORDQUIT_full_ABC12345", status: "CANCELLED" });
+    // The cancel URL sent with the session releases its attempt.
+    const cancelled = await form(`/payment/${METHOD}/cancel`, { tran_id: "ORDQUIT_full_ABC12345", status: "CANCELLED" });
     expect(cancelled.status).toBe(302);
     expect(cancelled.headers.get("location")).toContain("orderId=ORDQUIT");
     expect(row("SELECT status FROM payment_session_attempts WHERE id = 'psa2'")).toEqual({ status: "failed" });
 
-    // The payment taken before the move refunds through the pack.
+    // The settled payment refunds through the pack.
     const refund = await processRefund(db, { orderId: "ORDPAID", amount: 50, reason: "requested_by_customer" }, KEY, providers());
-    expect(refund).toMatchObject({ success: true, gateway: "sslcommerz", refundId: "REFE2E1" });
+    expect(refund).toMatchObject({ success: true, gateway: METHOD, refundId: "REFE2E1" });
     const refundCall = gateway.calls.find((url) => url.searchParams.has("refund_amount"))!;
     expect(Object.fromEntries(refundCall.searchParams)).toMatchObject({ bank_tran_id: "bank_old", refund_amount: "50.00", store_id: "shop01live" });
-  });
-
-  it("drops a choice the merchant had turned off and never overwrites a key already set in the pack", { timeout: 30_000 }, async () => {
-    await sslcommerzDocument.write(db, { enabled: false }, { encryptionKey: KEY });
-    const { writePluginSettings } = await import("@scalius/core/modules/plugins");
-    const current = await requirePluginInstallation(db, PACK);
-    await writePluginSettings(db, PACK, { sslcommerz_store_id: "packstore" }, { expectedRevision: current.revision, credentialEncryptionKey: KEY });
-
-    expect((await activate()).hookError).toBeNull();
-
-    const settings = await readPluginRuntimeSettings(await requirePluginInstallation(db, PACK), KEY);
-    expect(settings.values).toMatchObject({ sslcommerz_store_id: "packstore", sslcommerz_store_password: "store-pass-xyz", sslcommerz_environment: "live" });
-    // It was off: checkout offered only cash, and still does.
-    expect(await paymentMethodsDocument.read(db)).toEqual({ enabledMethods: ["cod"], defaultMethod: "cod" });
   });
 });

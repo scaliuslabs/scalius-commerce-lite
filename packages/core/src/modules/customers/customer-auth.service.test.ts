@@ -137,7 +137,6 @@ async function placeGuestOrder(contact: { phone: string; email: string | null; n
     checkoutRequestId: `request-${++orderCounter}`,
     requestKey: `checkout_submit:v1:${String(orderCounter).padEnd(64, "0")}`,
     requestHash: "b".repeat(64),
-    legacyRequestHash: "b".repeat(64),
     customerWhatsapp: null,
     statusToken: `cst_${String(orderCounter).padEnd(64, "0")}`,
   });

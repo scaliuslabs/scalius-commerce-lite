@@ -35,7 +35,6 @@ import {
   compareThemeDocuments,
   storefrontTemplateTheme,
   storefrontSectionDefault,
-  upgradeThemeDocument,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 
@@ -152,22 +151,6 @@ describe("versioned storefront theme settings", () => {
     sqlite.prepare("UPDATE theme_settings_versions SET theme = ?").run(JSON.stringify({ meta: { changes: [], moreChanges: 0, note: null }, theme: { version: 99 } }));
     await expect(getThemeVersion(db, 1)).rejects.toMatchObject({ status: 503 });
     await expect(getThemeSettings(db)).resolves.toEqual({ theme: DEFAULT_STOREFRONT_THEME, revision: 1 });
-  });
-
-  it("upgrades older live, draft and version documents in memory without replacing stored merchant content", async () => {
-    for (const serialized of [V1_THEME, V3_THEME, V4_THEME]) {
-      const expected = upgradeThemeDocument(JSON.parse(serialized));
-      sqlite.exec("DELETE FROM theme_settings; DELETE FROM theme_settings_drafts; DELETE FROM theme_settings_versions");
-      sqlite.prepare("INSERT INTO theme_settings (id,colors,revision) VALUES ('default',?,1)").run(serialized);
-      sqlite.prepare("INSERT INTO theme_settings_drafts (id,theme,revision,base_published_revision) VALUES ('default',?,1,1)").run(serialized);
-      sqlite.prepare("INSERT INTO theme_settings_versions (id,published_revision,theme,source) VALUES ('old',1,?,'publish')").run(serialized);
-      expect((await getThemeWorkspace(db)).draft.theme).toEqual(expected);
-      expect((await getThemeSettings(db)).theme).toEqual(expected);
-      // A bare document is a version from before history metadata: no changes, no note.
-      expect(await listThemeVersions(db)).toMatchObject([{ revision: 1, changes: [], moreChanges: 0, note: null }]);
-      expect((await getThemeVersion(db, 1)).theme).toEqual(expected);
-      expect(sqlite.prepare("SELECT colors FROM theme_settings").get()).toEqual({ colors: serialized });
-    }
   });
 
   it("rejects invalid writes with the first issue message and stores nothing", async () => {
@@ -662,41 +645,6 @@ describe("theme document resets (0093 to version 5, 0106 to version 6)", () => {
       await saveThemeDraft(db, DEFAULT_STOREFRONT_THEME, 0, 0);
       await expect(publishThemeDraft(db, 0, 1))
         .resolves.toMatchObject({ published: { revision: 1 } });
-    } finally {
-      sqlite.close();
-    }
-  });
-
-  it("keeps a version 6 published theme through 0106 and drops only its older history", async () => {
-    const boutique = storefrontTemplateTheme("boutique");
-    // As stored at v6: the boutique card was a variant of its own, which reads as the one card without facts or an action.
-    const storedCard = { variant: "boutique", settings: { hoverImage: true, quickAction: false } };
-    const serialized = JSON.stringify({
-      ...boutique, version: 6, blocks: { ...boutique.blocks, card: storedCard }, pages: { home: boutique.pages.home, homeMode: boutique.pages.homeMode },
-    });
-    const currentTheme = { ...boutique, blocks: { ...boutique.blocks, card: { variant: "standard", settings: { facts: "none", action: "none", hoverImage: true } } } };
-    const sqlite = createMigratedSqlite({ beforeMigration: "0106_" });
-    sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 3, 1, 1)").run(serialized);
-    sqlite.prepare(`
-      INSERT INTO theme_settings_drafts (id, theme, revision, base_published_revision, updated_by, created_at, updated_at)
-      VALUES ('default', ?, 4, 3, NULL, 1, 1)
-    `).run(serialized);
-    sqlite.prepare(`
-      INSERT INTO theme_settings_versions (id, published_revision, theme, source, source_revision, published_by, created_at)
-      VALUES ('themev_old', 2, ?, 'publish', NULL, NULL, 1), ('themev_current', 3, ?, 'publish', NULL, NULL, 1)
-    `).run(V3_THEME, serialized);
-    sqlite.exec(compiledMigrationSql("d1", "0107_", "0106_"));
-    const { db } = createSqliteD1Database({ sqlite });
-    try {
-      await expect(getThemeSettings(db)).resolves.toEqual({ theme: currentTheme, revision: 3 });
-      await expect(getThemeWorkspace(db)).resolves.toMatchObject({
-        published: { theme: currentTheme, revision: 3 },
-        draft: { theme: currentTheme, revision: 4, basePublishedRevision: 3 },
-      });
-      await expect(listThemeVersions(db)).resolves.toEqual([
-        expect.objectContaining({ id: "themev_current", revision: 3 }),
-      ]);
-      await expect(getThemeVersion(db, 3)).resolves.toMatchObject({ theme: currentTheme });
     } finally {
       sqlite.close();
     }

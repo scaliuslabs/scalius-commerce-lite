@@ -1,6 +1,5 @@
 import { PAYMENT_STATUSES as ORDER_PAYMENT_STATUSES } from "@scalius/shared/order-state";
 import { ORDER_CHANNELS, type OrderChannel } from "@scalius/shared/order-channel";
-import { retiredPaymentMethod } from "~/lib/bangladesh-pack";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import {
   createListSearchValidator,
@@ -79,8 +78,6 @@ export function validateOrderSearch(search: SearchValidatorInput<OrderListSearch
     status: normalizeOptionalSearchString(search.status),
     paymentStatus: normalizeOptionalEnumSearchParam(search.paymentStatus, PAYMENT_STATUSES),
     paymentMethod: normalizeOptionalEnumSearchParam(search.paymentMethod, PAYMENT_METHODS)
-      // An old link's retired id (`sslcommerz`) filters by the provider that replaced it.
-      ?? (typeof search.paymentMethod === "string" ? retiredPaymentMethod(search.paymentMethod)?.replacement : undefined)
       ?? (isQualifiedProviderId(search.paymentMethod) ? search.paymentMethod : undefined),
     fulfillmentStatus: normalizeOptionalEnumSearchParam(search.fulfillmentStatus, FULFILLMENT_STATUSES),
     deliveryMethod: normalizeOptionalEnumSearchParam(search.deliveryMethod, DELIVERY_METHODS),
