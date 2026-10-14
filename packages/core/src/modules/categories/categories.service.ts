@@ -4,7 +4,7 @@
 
 import { categories, products, collections } from "@scalius/database/schema";
 import { sql, and, isNull, isNotNull, eq, ne, desc, asc, type SQL } from "drizzle-orm";
-import { ftsMatch } from "../../search/fts5";
+import { searchMatch } from "../../search";
 import { insertWithDerivedHandle } from "../../utils/derived-handle";
 import { nanoid } from "nanoid";
 import { CATEGORY_TREE_MAX_DEPTH } from "@scalius/shared/catalog-tree";
@@ -297,7 +297,7 @@ export async function listCategories(
     }
 
     if (search) {
-        const cond = ftsMatch(db, "categories_fts", "categories", search);
+        const cond = searchMatch(db, "categories", search);
         if (cond) whereConditions.push(cond);
     }
     if (status) whereConditions.push(eq(categories.status, status));
@@ -404,7 +404,7 @@ export async function listCategoryAgentSummaries(
     const conditions: (SQL | undefined)[] = [
         showTrashed ? isNotNull(categories.deletedAt) : isNull(categories.deletedAt),
     ];
-    if (search) conditions.push(ftsMatch(db, "categories_fts", "categories", search));
+    if (search) conditions.push(searchMatch(db, "categories", search));
     if (status) conditions.push(eq(categories.status, status));
     const where = and(...conditions);
     const sortField = sort === "name"

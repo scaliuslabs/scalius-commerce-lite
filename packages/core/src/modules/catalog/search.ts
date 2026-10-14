@@ -11,7 +11,7 @@ import {
 } from "../products";
 import { products, productVariants } from "@scalius/database/schema";
 import { and, sql, desc, isNull, inArray, type SQL } from "drizzle-orm";
-import { ftsMatch } from "../../search/fts5";
+import { searchMatch } from "../../search";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type { Database } from "@scalius/database/client";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
@@ -134,7 +134,7 @@ export async function searchStorefrontProducts(
     deps.listMembership("all");
 
     const conditions: SQL[] = publicProductBaseConditions();
-    const searchCondition = search ? ftsMatch(db, "products_fts", "products", search) : null;
+    const searchCondition = search ? searchMatch(db, "products", search) : null;
     if (search) {
         conditions.push(searchCondition ?? sql`0 = 1`);
     }
@@ -156,7 +156,8 @@ export async function searchStorefrontProducts(
             })
             .from(products)
             .where(and(...conditions))
-            .orderBy(desc(products.updatedAt))
+            // Ties (one write stamps many rows) read in id order on every provider.
+            .orderBy(desc(products.updatedAt), products.id)
             .limit(limit)
             .offset(offset)
             .all(),

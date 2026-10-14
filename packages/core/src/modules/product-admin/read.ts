@@ -18,7 +18,7 @@ import {
     planKeysetPage,
 } from "../../utils/keyset";
 import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
-import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../search/fts5";
+import { searchKeyColumn, searchKeys, searchRank } from "../../search";
 import { anySetIsSmall } from "../../utils/list-lead";
 import { ValidationError } from "@scalius/core/errors";
 import {
@@ -93,25 +93,25 @@ export interface ProductListFilter {
 }
 
 /**
- * With SQLite (FTS5), the rowids of the products a search finds: a word of
- * the product, a word of one of its live SKUs, or a SKU's exact barcode.
- * Index lookups only, never a probe of every product's SKUs.
+ * The keys (`searchKeyColumn`) of the products a search finds: a word of the
+ * product, a word of one of its live SKUs, or a SKU's exact barcode. Index
+ * lookups only, never a probe of every product's SKUs.
  */
-function productSearchRowids(db: Database, search: string): SQL | undefined {
-    if (!isFts5SearchEnabled(db)) return undefined;
+function productSearchKeys(db: Database, search: string): SQL | undefined {
+    const key = sql.raw(searchKeyColumn(db));
     const sources: SQL[] = [];
-    const words = sanitizeFtsQuery(search);
-    if (words) {
-        sources.push(sql`SELECT rowid FROM products_fts WHERE products_fts MATCH ${words}`);
-        sources.push(sql`SELECT matched_product.rowid FROM product_variants_fts
-            CROSS JOIN ${productVariants} ON ${productVariants}.rowid = product_variants_fts.rowid
-            CROSS JOIN ${products} AS matched_product ON matched_product.id = ${productVariants.productId}
-            WHERE product_variants_fts MATCH ${words} AND ${productVariants.deletedAt} IS NULL`);
+    const productKeys = searchKeys(db, "products", search);
+    const variantKeys = searchKeys(db, "product_variants", search);
+    if (productKeys) sources.push(productKeys);
+    if (variantKeys) {
+        sources.push(sql`SELECT matched_product.${key} FROM ${productVariants}
+            INNER JOIN ${products} AS matched_product ON matched_product.id = ${productVariants.productId}
+            WHERE ${productVariants}.${key} IN (${variantKeys}) AND ${productVariants.deletedAt} IS NULL`);
     }
     const barcodeKey = getBarcodeIdentityKey(search);
     if (barcodeKey) {
-        sources.push(sql`SELECT matched_product.rowid FROM ${productVariants}
-            CROSS JOIN ${products} AS matched_product ON matched_product.id = ${productVariants.productId}
+        sources.push(sql`SELECT matched_product.${key} FROM ${productVariants}
+            INNER JOIN ${products} AS matched_product ON matched_product.id = ${productVariants.productId}
             WHERE ${productVariantBarcodeIdentityEquals(barcodeKey)} AND ${productVariants.deletedAt} IS NULL`);
     }
     return sources.length > 0 ? sql.join(sources, sql` UNION `) : undefined;
@@ -120,31 +120,17 @@ function productSearchRowids(db: Database, search: string): SQL | undefined {
 /** Whether the list should read the search's matches first: they are few (`utils/list-lead.ts`). */
 export async function productListLeads(db: Database, filter: Pick<ProductListFilter, "search">): Promise<boolean> {
     const search = filter.search?.trim();
-    const rowids = search ? productSearchRowids(db, search) : undefined;
-    return rowids ? anySetIsSmall(db, [rowids]) : false;
+    const keys = search ? productSearchKeys(db, search) : undefined;
+    return keys ? anySetIsSmall(db, [keys]) : false;
 }
 
 /**
- * The list's WHERE conditions and, for a text search, its relevance order.
+ * The list's WHERE conditions and, for a text search, its relevance order:
+ * each product match's FTS5 rank (`product_rank`, read once as a derived
+ * table the list left-joins; products matched only through a SKU rank last).
  * The same conditions pick the rows of an "all matching" bulk action, so it
  * acts on exactly what the list shows.
  */
-/**
- * A text search's relevance: each product match's FTS5 rank, read once as a
- * derived table the list left-joins on rowid (`product_rank`). A correlated
- * `(SELECT rank ... WHERE rowid = products.rowid AND MATCH ...)` re-ran the
- * match for every candidate row: 2.8 s for a common word over 50,000
- * products. Products matched only through a SKU rank last (0).
- */
-function productRankJoin(sanitized: string): { join: SQL; on: SQL; order: SQL } {
-    return {
-        // `LIMIT -1` keeps SQLite from flattening it back into a per-row MATCH (FTS5 is SQLite-only).
-        join: sql`(SELECT rowid AS fts_rowid, rank AS fts_rank FROM products_fts WHERE products_fts MATCH ${sanitized} LIMIT -1) AS product_rank`,
-        on: sql`product_rank.fts_rowid = ${products}.rowid`,
-        order: sql`COALESCE(product_rank.fts_rank, 0) ASC`,
-    };
-}
-
 export function productListConditions(db: Database, filter: ProductListFilter): { conditions: SQL[]; rankExpression: SQL | undefined; rankJoin: { join: SQL; on: SQL } | undefined } {
     const {
         search,
@@ -170,57 +156,13 @@ export function productListConditions(db: Database, filter: ProductListFilter): 
 
     let rankExpression: SQL | undefined;
     let rankJoin: { join: SQL; on: SQL } | undefined;
-    const searchRowids = search ? productSearchRowids(db, search) : undefined;
-    if (search && searchRowids) {
-        whereConditions.push(sql`products.rowid IN (${searchRowids})`);
-        const sanitized = sanitizeFtsQuery(search);
-        if (sanitized) {
-            const rank = productRankJoin(sanitized);
-            rankExpression = rank.order;
-            rankJoin = rank;
-        }
-    } else if (search) {
-        const barcodeKey = getBarcodeIdentityKey(search);
-
-        const sanitized = sanitizeFtsQuery(search);
-        if (sanitized) {
-            const productSearch = ftsMatch(
-                db,
-                "products_fts",
-                "products",
-                search,
-            );
-            const variantSearch = ftsMatch(
-                db,
-                "product_variants_fts",
-                "product_variants",
-                search,
-            );
-            const ftsCondition = or(
-                productSearch,
-                variantSearch
-                    ? sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL AND ${variantSearch})`
-                    : undefined,
-            );
-
-            if (barcodeKey) {
-                // Also match by exact barcode value
-                const barcodeCondition = sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariantBarcodeIdentityEquals(barcodeKey)} AND ${productVariants.deletedAt} IS NULL)`;
-                whereConditions.push(ftsCondition
-                    ? sql`(${ftsCondition} OR ${barcodeCondition})`
-                    : barcodeCondition);
-            } else if (ftsCondition) {
-                whereConditions.push(ftsCondition);
-            }
-            if (isFts5SearchEnabled(db)) {
-                const rank = productRankJoin(sanitized);
-                rankExpression = rank.order;
-                rankJoin = rank;
-            }
-        } else if (barcodeKey) {
-            // FTS sanitized to nothing but it's a barcode — search by barcode only
-            const barcodeCondition = sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariantBarcodeIdentityEquals(barcodeKey)} AND ${productVariants.deletedAt} IS NULL)`;
-            whereConditions.push(barcodeCondition);
+    const searchKeySet = search ? productSearchKeys(db, search) : undefined;
+    if (search && searchKeySet) {
+        whereConditions.push(sql`products.${sql.raw(searchKeyColumn(db))} IN (${searchKeySet})`);
+        const rank = searchRank(db, "products", search, { alias: "product_rank" });
+        if (rank) {
+            rankExpression = sql`${rank.score} ASC`;
+            rankJoin = rank.join && { join: rank.join.table, on: rank.join.on };
         }
     }
 

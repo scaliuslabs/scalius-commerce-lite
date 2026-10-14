@@ -18,7 +18,7 @@ import {
     promotionCodes,
     promotions,
 } from "@scalius/database/schema";
-import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "@scalius/core/search";
+import { searchMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "@scalius/core/search";
 import { containsText } from "@scalius/core/utils/text-match";
 import { parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import { toLatinDigits } from "@scalius/shared/phone-input";
@@ -111,7 +111,7 @@ async function searchOrders(db: Database, term: string): Promise<GlobalSearchRes
         orderNumber === null ? undefined : eq(orders.orderNumber, orderNumber),
         phones.length ? inArray(orders.customerPhone, phones) : undefined,
         email ? sql`lower(trim(${orders.customerEmail})) = ${email}` : undefined,
-        textCondition(db, rowids, () => ftsMatch(db, "orders_fts", "orders", term), "orders"),
+        textCondition(db, rowids, () => searchMatch(db, "orders", term), "orders"),
     ]);
     if (!match) return [];
     return db.select({ id: orders.id, orderNumber: orders.orderNumber, customerName: orders.customerName, status: orders.status })
@@ -128,7 +128,7 @@ async function searchCustomers(db: Database, term: string): Promise<GlobalSearch
     const match = anyOf([
         phones.length ? inArray(customers.phone, phones) : undefined,
         email ? inArray(customers.email, [...new Set([term, email])]) : undefined,
-        textCondition(db, rowids, () => ftsMatch(db, "customers_fts", "customers", term), "customers"),
+        textCondition(db, rowids, () => searchMatch(db, "customers", term), "customers"),
     ]);
     if (!match) return [];
     const rows = await db.select({
@@ -178,7 +178,7 @@ async function searchProducts(db: Database, term: string): Promise<GlobalSearchR
     const rowids = await ftsRowids(db, "products_fts", term, "name");
     const match = anyOf([
         skuByProduct.size ? inArray(products.id, [...skuByProduct.keys()]) : undefined,
-        textCondition(db, rowids, () => ftsMatch(db, "products_fts", "products", term, { column: "name" }), "products"),
+        textCondition(db, rowids, () => searchMatch(db, "products", term, { column: "name" }), "products"),
     ]);
     if (!match) return [];
     const rows = await db.select({ id: products.id, name: products.name, isActive: products.isActive })
@@ -234,7 +234,7 @@ async function searchCollections(db: Database, term: string): Promise<GlobalSear
 
 async function searchCategories(db: Database, term: string): Promise<GlobalSearchResult["categories"]> {
     const rowids = await ftsRowids(db, "categories_fts", term, "name");
-    const match = textCondition(db, rowids, () => ftsMatch(db, "categories_fts", "categories", term, { column: "name" }), "categories");
+    const match = textCondition(db, rowids, () => searchMatch(db, "categories", term, { column: "name" }), "categories");
     if (!match) return [];
     return db.select({ id: categories.id, name: categories.name })
         .from(categories)
@@ -244,7 +244,7 @@ async function searchCategories(db: Database, term: string): Promise<GlobalSearc
 
 async function searchPages(db: Database, term: string): Promise<GlobalSearchResult["pages"]> {
     const rowids = await ftsRowids(db, "pages_fts", term, "title");
-    const match = textCondition(db, rowids, () => ftsMatch(db, "pages_fts", "pages", term, { column: "title" }), "pages");
+    const match = textCondition(db, rowids, () => searchMatch(db, "pages", term, { column: "title" }), "pages");
     if (!match) return [];
     return db.select({ id: pages.id, title: pages.title, contentType: pages.contentType })
         .from(pages)

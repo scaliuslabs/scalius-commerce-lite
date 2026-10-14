@@ -11,11 +11,11 @@ D1 is the default and needs no provisioning. Provider differences stay in shared
 | | D1 | TursoDB | PostgreSQL |
 |---|---|---|---|
 | Concurrent writes | no | yes | yes |
-| FTS5 | yes | no | no |
+| Text search | FTS5 tables | search index (`search_fts_terms`) | search index (`search_fts_terms`) |
 | Write retries | none | busy and conflict failures only (8 attempts) | serialization and deadlock failures only |
 | Write isolation | D1 batch | `turso://`: concurrent batch. `libsql://` or `https://`: immediate transaction | every write `SERIALIZABLE` |
 
-`getDatabaseProviderCapabilities` in `packages/database/src/provider.ts` holds the full capability rows. Where a provider lacks FTS5, search takes a bounded `instr()` fallback (`packages/core/src/search/fts5.ts`). Each D1 request uses one `first-primary` session (`packages/database/src/client.ts`): the first operation reads the primary, and later reads may use a replica.
+`getDatabaseProviderCapabilities` in `packages/database/src/provider.ts` holds the full capability rows. Text search gives the same results on every provider (see "Text search"). Each D1 request uses one `first-primary` session (`packages/database/src/client.ts`): the first operation reads the primary, and later reads may use a replica.
 
 ## Runtime contract
 
@@ -34,6 +34,23 @@ D1 is the default and needs no provisioning. Provider differences stay in shared
 - A Hyperdrive configuration must have query caching disabled. By default Hyperdrive caches plain reads for 60 s plus 15 s stale-while-revalidate. Cache validation, idempotency rows and checkout authority are plain reads, so a cached read can serve a stale page for up to 75 s or replay a stale checkout decision. Create the configuration with `wrangler hyperdrive create <name> --connection-string <url> --caching-disabled`, or fix an existing one with `wrangler hyperdrive update <id> --caching-disabled`.
 - `GET /api/v1/readyz` proves this for PostgreSQL. It reads a private probe row (`rate_limit`, key `__scalius:readyz:read-freshness`), writes a new random value, and sends the same read again. If the second read returns the old value, `checks.postgres` is `error` and readiness answers 503. During `DATABASE_MIGRATION_FREEZE` the probe does not write, and the detail says that freshness is unchecked (`packages/database/src/read-freshness.ts`).
 - These names are API Worker secrets or bindings, not Wrangler `vars`. The storefront Worker has no database.
+
+## Text search
+
+Every search read (storefront and site search, listings, the dashboard lists of products, orders, customers, categories, pages, reviews, navigation and abandoned checkouts) goes through `@scalius/core/search`. A query word matches every token it starts, all words are required, and results rank by FTS5's bm25. The providers return the same rows in the same order (`packages/core/src/search/search-parity.test.ts`).
+
+- D1 matches its FTS5 tables (`<source>_fts`, migrations 0000 to 0128). Nothing changed for D1.
+- TursoDB and PostgreSQL match `search_fts_terms` (migration 0152, `packages/database/src/search-index.ts`): one row per distinct term of each indexed column with its count, and one row per source row with its token count. Generated triggers maintain it from the same columns as the FTS5 tables: a staged `replace()` chain on SQLite (TursoDB parses an expression at most 100 levels deep) and one `translate()` pass on PostgreSQL. A query word is one range of the term index `(source, term, col, doc_id, tf)`. The bm25 formula runs over the same counts as FTS5, so scores are equal: the per-query constants (each word's idf, the average row length) are one joined row, and each candidate row costs one seek of the doc index `(source, doc_id, term, col, tf)` per word and one for its length. A derived table of every match's score is not used: PostgreSQL estimated a prefix range over millions of terms at one row and joined it in a quadratic loop. SQLite reads name their index (`INDEXED BY`; PostgreSQL drops the hint), and PostgreSQL keeps 10,000 histogram buckets for `term`.
+- Migration 0152 fills the index in its upgrade transaction and builds the indexes after the rows. On a store with 50,000 products and 1,000,000 orders (14.2M index rows) the backfill took about 150 s on local PostgreSQL, 246 s on local SQLite and about 12 min on the local TursoDB engine. The index added 3.3 GB to a 4.6 GB PostgreSQL store.
+- TursoDB's own FTS index (`USING fts`) is not used: it needs an experimental flag, and it has no single-term prefix query (`shir*` finds nothing).
+- An import that bypasses triggers rebuilds the index (`searchIndexRebuildStatements`): the TursoDB data-export envelope, the D1 export normalizer and PostgreSQL's post-data phase.
+
+Differences from FTS5, by design:
+
+- Case and accents fold for ASCII and Latin-1 letters only (FTS5 folds every script). The listed Unicode spaces, punctuation and joiners split words (`SEARCH_FOLD_MAP`); other symbols, such as emoji, stay inside a term, so a prefix still finds the word before them.
+- A term keeps its first 100 characters.
+- A query word that a separator splits (`ord_c`, `t’shirt`) is an FTS5 phrase. The index requires its terms in one column, without their adjacency, and scores each term as its own phrase.
+- `product_variants_fts` and `abandoned_checkouts_fts` keep FTS5's default tokenizer, which splits Bangla words at their vowel signs. The index keeps those words whole.
 
 ## Release ledger and schema upgrades
 

@@ -31,7 +31,7 @@ import {
   deleteNavigationMenuItem,
   listNavigationMenuItems,
 } from "@scalius/core/modules/navigation";
-import { ftsMatch } from "@scalius/core/search";
+import { searchMatch } from "@scalius/core/search";
 import { and, eq, sql } from "drizzle-orm";
 import { pathToFileURL } from "node:url";
 import { assertDisposableDatabaseTarget } from "../../database/scripts/live-checkout-load-core";
@@ -440,13 +440,8 @@ async function main(): Promise<void> {
   assert(!failedAttemptRow, "Failed checkout leaked an idempotency row.");
   assert(unchangedVariant?.reservedStock === 2, "Failed checkout leaked an inventory reservation.");
 
-  const searchCondition = ftsMatch(
-    db,
-    "products_fts",
-    "products",
-    "disposable turso",
-  );
-  assert(searchCondition, "Turso fallback search did not produce a condition.");
+  const searchCondition = searchMatch(db, "products", "disposable turso");
+  assert(searchCondition, "Turso search did not produce a condition.");
   const searchRows = await db
     .select({ id: products.id })
     .from(products)

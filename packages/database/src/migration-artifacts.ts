@@ -2,6 +2,7 @@ import {
   getDatabaseProviderCapabilities,
   type DatabaseProvider,
 } from "./provider";
+import { SEARCH_INDEX_TABLE, searchIndexRebuildStatements, searchIndexSqliteMigrationStatements } from "./search-index";
 
 export const DRIZZLE_STATEMENT_BREAKPOINT = "--> statement-breakpoint";
 
@@ -94,9 +95,18 @@ export function isLegacyNavigationRecursiveBackfill(
 }
 
 /**
+ * The statement of migration 0152 that a provider without FTS5 expands into
+ * its search index (`search-index.ts`); D1 runs it as a no-op.
+ */
+export function isSearchIndexMarker(statement: string): boolean {
+  return /^SELECT\s+'search_fts_terms'\s*;?\s*$/i.test(stripLeadingSqlComments(statement).trim());
+}
+
+/**
  * Compile one canonical SQLite migration for a concrete provider capability
  * set. D1 receives the byte-identical migration. Turso MVCC omits only FTS5
- * virtual-table maintenance, which its current engine rejects.
+ * virtual-table maintenance, which its current engine rejects, and gets the
+ * search index in its place.
  */
 export function compileSqliteMigrationForProvider(
   migrationSql: string,
@@ -113,6 +123,9 @@ export function compileSqliteMigrationForProvider(
 
   const statements = migrationSql.split(DRIZZLE_STATEMENT_BREAKPOINT);
   return statements
+    .flatMap((statement) => !capabilities.fts5 && isSearchIndexMarker(statement)
+      ? searchIndexSqliteMigrationStatements().map((compiled) => `${compiled};`)
+      : [statement])
     .filter(
       (statement) =>
         statement.trim() &&
@@ -184,8 +197,12 @@ export function createSqliteDataExportEnvelopeForProvider(
     ),
     "",
   ].join("\n");
+  // The imported rows bypassed the search index triggers (a D1 export has no
+  // index rows to copy): a target with the index rebuilds it.
+  const searchIndexed = triggers.some((trigger) => trigger.name.startsWith(`${SEARCH_INDEX_TABLE}_`));
   const suffix = [
     ...triggers.map((trigger) => `${trigger.sql};`),
+    ...(searchIndexed ? searchIndexRebuildStatements("sqlite").map((statement) => `${statement};`) : []),
     "COMMIT;",
     "PRAGMA foreign_keys=ON;",
     "",

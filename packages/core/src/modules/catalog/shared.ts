@@ -1,7 +1,7 @@
 // Helpers shared by the catalogue reads. Not exported from the domain entry.
 import { products, categories, productReviewStats } from "@scalius/database/schema";
 import { and, sql, eq, or, type AnyColumn, type SQL } from "drizzle-orm";
-import { ftsMatch } from "../../search/fts5";
+import { searchMatch } from "../../search";
 import { productCategoryNameMatch } from "./search-relevance";
 import { declareProductCards } from "./declare-deps";
 import {
@@ -211,7 +211,7 @@ export function buildStorefrontBuyerStateConditions(
     if (params.search) {
         needsProducts = true;
         conditions.push(
-            or(ftsMatch(db, "products_fts", "products", params.search), productCategoryNameMatch(db, params.search))
+            or(searchMatch(db, "products", params.search), productCategoryNameMatch(db, params.search))
                 ?? sql`0 = 1`,
         );
     }
@@ -251,7 +251,7 @@ export function storefrontProductSetConditions(
     if (params.category) conditions.push(buildCategoryLookupCondition(params.category));
     if (params.search) {
         conditions.push(
-            or(ftsMatch(db, "products_fts", "products", params.search), productCategoryNameMatch(db, params.search))
+            or(searchMatch(db, "products", params.search), productCategoryNameMatch(db, params.search))
                 ?? sql`0 = 1`,
         );
     }

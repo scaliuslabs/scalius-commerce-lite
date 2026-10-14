@@ -16,10 +16,10 @@ import type { Database } from "@scalius/database/client";
 import { products, categories, pages } from "@scalius/database/schema";
 import { eq, sql, and, or, type SQL } from "drizzle-orm";
 import {
-  ftsMatch,
-  isFts5SearchEnabled,
   sanitizeFtsQuery,
-} from "../../search/fts5";
+  searchMatch,
+  searchRank,
+} from "../../search";
 import {
   buildBuyerCatalogPricingProjection,
   buyerCatalogHasSkuInPriceRange,
@@ -32,7 +32,7 @@ import { marketPriceContextOf, priceProductCards, type MarketPricing } from "../
 import { loadProductCardImages, priceFilterBoundsMinor } from "./shared";
 import { fromMinor } from "@scalius/shared/money";
 import { suggestSearchCorrection } from "./search-correction";
-import { productCategoryNameMatch, productSearchRankJoin, productSearchRelevanceOrder } from "./search-relevance";
+import { productCategoryNameMatch, productSearchRank, productSearchRelevanceOrder } from "./search-relevance";
 
 // Types for search results
 export type ProductSearchResult = {
@@ -118,9 +118,7 @@ async function runSearch(
   const searchPages = options?.searchPages !== false;
   const searchCategories = options?.searchCategories !== false;
   const hasValidQuery = query && query.trim() !== "";
-  const sanitizedQuery = hasValidQuery ? sanitizeFtsQuery(query) : "";
-  const fts5Enabled = isFts5SearchEnabled(db);
-  if (hasValidQuery && !sanitizedQuery) {
+  if (hasValidQuery && !sanitizeFtsQuery(query)) {
     return { products: [], pages: [], categories: [] };
   }
 
@@ -142,7 +140,7 @@ async function runSearch(
       declareRequestedProducts(options!.productIds!.slice(0, 50));
       setConditions.push(sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ranked}))`);
     } else if (hasValidQuery) {
-      const cond = or(ftsMatch(db, "products_fts", "products", query), productCategoryNameMatch(db, query));
+      const cond = or(searchMatch(db, "products", query), productCategoryNameMatch(db, query));
       if (cond) setConditions.push(cond);
     }
     if (options?.categoryId) {
@@ -208,7 +206,7 @@ async function runSearch(
         ...publicCategoryConditions(),
       ))
       .$dynamic();
-    const rankJoin = hasValidQuery && !ranked ? productSearchRankJoin(db, query) : undefined;
+    const rankJoin = hasValidQuery && !ranked ? productSearchRank(db, query)?.join : undefined;
     if (rankJoin) productQuery.leftJoin(rankJoin.table, rankJoin.on);
     productQuery
       .where(and(...productConditions))
@@ -220,50 +218,47 @@ async function runSearch(
     // Build Pages Query
     const pageConditions = [sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = 1`];
     if (hasValidQuery) {
-      const pageCond = ftsMatch(db, "pages_fts", "pages", query);
+      const pageCond = searchMatch(db, "pages", query);
       if (pageCond) pageConditions.push(pageCond);
     }
-    const pageQuery = searchPages
-      ? db
-        .select({
-          id: pages.id,
-          title: pages.title,
-          slug: pages.slug,
-          ...translationColumns(translation, "page", pages.id),
-        })
-        .from(pages)
-        .where(and(...pageConditions))
-        .orderBy(
-          hasValidQuery && fts5Enabled
-            ? sql`COALESCE((SELECT rank FROM pages_fts WHERE rowid = pages.rowid AND pages_fts MATCH ${sanitizedQuery}), 0) ASC`
-            : pages.title,
-        )
-        .limit(limit)
-      : db.select({ id: sql`NULL` }).from(pages).where(sql`1 = 0`); // Dummy query
+    // Best match first (FTS5 rank), then by title.
+    const pageRank = hasValidQuery && searchPages ? searchRank(db, "pages", query, { alias: "page_rank" }) : undefined;
+    const pageQuery = db
+      .select({
+        id: pages.id,
+        title: pages.title,
+        slug: pages.slug,
+        ...translationColumns(translation, "page", pages.id),
+      })
+      .from(pages)
+      .$dynamic();
+    if (pageRank?.join) pageQuery.leftJoin(pageRank.join.table, pageRank.join.on);
+    pageQuery
+      .where(searchPages ? and(...pageConditions) : sql`1 = 0`)
+      .orderBy(...(pageRank ? [pageRank.score] : []), pages.title, pages.id)
+      .limit(limit);
 
     // Build Categories Query
     const categoryConditions = publicCategoryConditions();
     if (hasValidQuery) {
-      const catCond = ftsMatch(db, "categories_fts", "categories", query);
+      const catCond = searchMatch(db, "categories", query);
       if (catCond) categoryConditions.push(catCond);
     }
-    const categoryQuery = searchCategories
-      ? db
-        .select({
-          id: categories.id,
-          name: categories.name,
-          slug: categories.slug,
-          ...translationColumns(translation, "category", categories.id),
-        })
-        .from(categories)
-        .where(and(...categoryConditions))
-        .orderBy(
-          hasValidQuery && fts5Enabled
-            ? sql`COALESCE((SELECT rank FROM categories_fts WHERE rowid = categories.rowid AND categories_fts MATCH ${sanitizedQuery}), 0) ASC`
-            : categories.name,
-        )
-        .limit(limit)
-      : db.select({ id: sql`NULL` }).from(categories).where(sql`1 = 0`); // Dummy query
+    const categoryRank = hasValidQuery && searchCategories ? searchRank(db, "categories", query, { alias: "category_rank" }) : undefined;
+    const categoryQuery = db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        slug: categories.slug,
+        ...translationColumns(translation, "category", categories.id),
+      })
+      .from(categories)
+      .$dynamic();
+    if (categoryRank?.join) categoryQuery.leftJoin(categoryRank.join.table, categoryRank.join.on);
+    categoryQuery
+      .where(searchCategories ? and(...categoryConditions) : sql`1 = 0`)
+      .orderBy(...(categoryRank ? [categoryRank.score] : []), categories.name, categories.id)
+      .limit(limit);
 
     // Execute searches in a single Turso batch
     const [productsResult, pagesResult, categoriesResult] = await db.batch([

@@ -3,7 +3,7 @@
 // see `last4` only; the code is shown once, at manual issue.
 import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
 import { containsText } from "../../utils/text-match";
-import { ftsMatch } from "../../search/fts5";
+import { searchMatch } from "../../search";
 import { COUNT_PROBE_COLUMN, cappedCountQuery } from "../../utils/keyset";
 import { capTotal } from "@scalius/shared/pagination";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -153,7 +153,7 @@ export async function listGiftCardsForStaff(
         } else {
             // The buyer's name, phone or email words through the customer search
             // index (a scan of every customer otherwise, 200,000 in a large store).
-            const customerMatch = ftsMatch(db, "customers_fts", "customers", q) ?? sql`(${containsText(customers.name, q)}
+            const customerMatch = searchMatch(db, "customers", q) ?? sql`(${containsText(customers.name, q)}
                    OR ${containsText(customers.phone, q)}
                    OR ${containsText(customers.email, q)})`;
             conditions.push(sql`${giftCards.customerId} IN (

@@ -7,7 +7,7 @@
 import { products, categories } from "@scalius/database/schema";
 import { and, sql, desc, eq, type SQL, type SQLWrapper } from "drizzle-orm";
 import { suggestSearchCorrection } from "./search-correction";
-import { productSearchRankJoin, productSearchRelevanceOrder } from "./search-relevance";
+import { productSearchRank, productSearchRelevanceOrder } from "./search-relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
 import { planLimits } from "@scalius/shared/plan-limits";
@@ -331,17 +331,17 @@ async function readStorefrontCatalogResults(
     ` : null;
 
     const rankJoin = !scope.orderBy && sort === "relevance" && search
-        ? productSearchRankJoin(db, search)
+        ? productSearchRank(db, search)
         : undefined;
     // Rank the matching IDs before reading card-only SKU, rating and translation
     // fields, which are then read for the page's rows alone.
     const relevancePageIds = !scope.orderBy && sort === "relevance" && search ? sql`
             SELECT ${buyerState.productId} AS page_product_id,
                 ${orderBy[0]!} AS relevance_tier,
-                ${rankJoin ? sql.raw("COALESCE(search_rank.rank_score, 0)") : sql`0`} AS relevance_score
+                ${rankJoin ? rankJoin.score : sql`0`} AS relevance_score
             FROM ${buyerState}
             INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}
-            ${rankJoin ? sql`LEFT JOIN ${rankJoin.table} ON ${rankJoin.on}` : sql``}
+            ${rankJoin?.join ? sql`LEFT JOIN ${rankJoin.join.table} ON ${rankJoin.join.on}` : sql``}
             WHERE ${and(...conditions)}
             ORDER BY relevance_tier, relevance_score, ${products.name},
                 ${buyerState.productCreatedAt} DESC, ${buyerState.productId}

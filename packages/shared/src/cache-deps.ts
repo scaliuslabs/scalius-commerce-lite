@@ -1049,6 +1049,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   recommendation_order_products: "Derived order/product popularity; source orders and order_items advance recommendation-signals in the same transaction, which every live ranking declares.",
   categories_fts: FTS,
   pages_fts: "FTS index maintained by triggers from pages title and content, which advance pg:<id> and pg:*.",
+  search_fts_terms: "The FTS index of Turso and PostgreSQL, maintained by triggers from the same columns as the FTS5 tables, whose rules advance srch and pg:<id>/pg:*.",
   cache_clock: MACHINERY,
   cache_dep: MACHINERY,
   cache_generation: MACHINERY,

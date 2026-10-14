@@ -47,7 +47,7 @@ Capabilities (`getDatabaseProviderCapabilities()`):
 | TursoDB | Yes | No | No | No |
 | PostgreSQL | Yes | No | Yes | No |
 
-Provider-aware helpers supply bounded alternatives where a feature is missing (for example `@scalius/core/search`). Do not add provider checks to domain code. Migration and cutover work never runs on a request path.
+Provider-aware helpers supply the alternative where a feature is missing (for example `@scalius/core/search`, the search index without FTS5). Do not add provider checks to domain code. Migration and cutover work never runs on a request path.
 
 Raw `db.all(sql)` and `db.get(sql)` return named objects on every provider, including inside `safeBatch()`. The remote adapters map transport column metadata through `remote-raw-rows.ts`; mapped builders and `db.values(sql)` keep positional transport rows.
 
@@ -117,7 +117,7 @@ Constraints, triggers and indexes protect these rules. Do not work around them i
 | Customers | `customer_order_stats` is a trigger projection of orders. |
 | Search | Listing indexes such as `products_public_newest_idx`, `products_public_category_newest_idx` and `product_attribute_values_attr_value_product_idx` are measured. Do not change them without `EXPLAIN QUERY PLAN` evidence on D1. |
 
-D1 holds FTS5 virtual tables (with sync triggers and a `unicode61` tokenizer) for search. They are raw SQL in the migrations, queried through `@scalius/core/search`. The TursoDB and PostgreSQL targets skip them, and the portability tools ignore derived FTS objects.
+D1 holds FTS5 virtual tables (with sync triggers and a `unicode61` tokenizer) for search. They are raw SQL in the migrations, queried through `@scalius/core/search`. The TursoDB and PostgreSQL targets skip them and keep `search_fts_terms` instead (migration 0152, `src/search-index.ts`), with the same matches and bm25 ranks ([Text search](../../docs/DATABASE-PORTABILITY.md#text-search)). The portability tools ignore both as derived; an import rebuilds `search_fts_terms` with `searchIndexRebuildStatements`.
 
 ### Generated triggers
 

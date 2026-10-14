@@ -14,7 +14,6 @@ import {
 } from "@scalius/database/schema";
 import { sql, isNull, asc, desc, eq, and, or, inArray, type SQL, type SQLWrapper } from "drizzle-orm";
 import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
-import { containsText } from "../../utils/text-match";
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
@@ -29,8 +28,8 @@ import {
     type MarketingChannel,
 } from "@scalius/shared/customer-marketing";
 import { listCustomerTags } from "./customer-tags";
-import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../search/fts5";
-import { buildPhoneSearchTerms, isLikelyPhoneSearch, phonePrefixFtsQuery } from "../../utils/phone-search";
+import { searchKeyColumn, searchKeys, searchPrefixKeys } from "../../search";
+import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "../../utils/phone-search";
 import { anySetIsSmall } from "../../utils/list-lead";
 import type { CursorValueKind } from "@scalius/shared/pagination";
 import {
@@ -135,20 +134,17 @@ export interface CustomerListFilter {
 }
 
 /**
- * With SQLite (FTS5), the rowids of the customers a search finds: a word
- * of the name, phone or email, or the phone in any of its forms as a prefix
+ * The keys (`searchKeyColumn`) of the customers a search finds: a word of
+ * the name, phone or email, or the phone in any of its forms as a prefix
  * ("01712" finds +8801712…). Index lookups only, never a scan of every
  * customer.
  */
-function customerSearchRowids(db: Database, term: string): SQL | undefined {
-    if (!isFts5SearchEnabled(db)) return undefined;
+function customerSearchKeys(db: Database, term: string): SQL | undefined {
     const sources: SQL[] = [];
-    const words = sanitizeFtsQuery(term);
-    if (words) sources.push(sql`SELECT rowid FROM customers_fts WHERE customers_fts MATCH ${words}`);
+    const words = searchKeys(db, "customers", term);
+    if (words) sources.push(words);
     const phoneTerms = isLikelyPhoneSearch(term) ? buildPhoneSearchTerms(term) : [];
-    if (phoneTerms.length > 0) {
-        sources.push(sql`SELECT rowid FROM customers_fts WHERE customers_fts MATCH ${phonePrefixFtsQuery("phone", phoneTerms)}`);
-    }
+    if (phoneTerms.length > 0) sources.push(searchPrefixKeys(db, "customers", "phone", phoneTerms));
     return sources.length > 0 ? sql.join(sources, sql` UNION `) : undefined;
 }
 
@@ -185,7 +181,7 @@ function customerFilterSets(filters: CustomerListFilters = {}): SQL[] {
 export async function customerListLeads(db: Database, filter: CustomerListFilter): Promise<boolean> {
     if (getDatabaseProviderForClient(db) === "postgres") return false;
     const term = filter.search?.trim();
-    const searchRowids = term ? customerSearchRowids(db, term) : undefined;
+    const searchRowids = term ? customerSearchKeys(db, term) : undefined;
     return anySetIsSmall(db, [...(searchRowids ? [searchRowids] : []), ...customerFilterSets(filter.filters)]);
 }
 
@@ -207,18 +203,8 @@ export function customerListConditions(db: Database, filter: CustomerListFilter)
         whereConditions.push(sql`${deletedAt} IS NULL`);
     }
     const term = search.trim();
-    if (term) {
-        const rowids = customerSearchRowids(db, term);
-        if (rowids) {
-            whereConditions.push(sql`customers.rowid IN (${rowids})`);
-        } else {
-            const digitsOnly = term.replace(/[^0-9]/g, "");
-            const ftsCondition = ftsMatch(db, "customers_fts", "customers", term);
-            const phoneCondition = isLikelyPhoneSearch(term) ? containsText(customers.phone, digitsOnly) : undefined;
-            const matches = [ftsCondition, phoneCondition].filter((condition): condition is SQL => condition !== undefined);
-            if (matches.length > 0) whereConditions.push(sql`(${sql.join(matches, sql` OR `)})`);
-        }
-    }
+    const keys = term ? customerSearchKeys(db, term) : undefined;
+    if (keys) whereConditions.push(sql`customers.${sql.raw(searchKeyColumn(db))} IN (${keys})`);
 
     whereConditions.push(...customerListFilterSql(filter.filters));
     if (getDatabaseProviderForClient(db) !== "postgres") {
