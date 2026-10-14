@@ -1,10 +1,13 @@
-// Where an app appears and how search finds it, checked against the real
-// first-party manifests: the Bangladesh pack (providers on four capability
-// pages, a settings page) and Hello (every dashboard and storefront surface).
+// An app's services, where it appears and how search finds it, checked
+// against the real first-party manifests: the Bangladesh pack (fourteen
+// features over four kinds of service and a places page) and Hello (every
+// dashboard and storefront surface).
 import { describe, expect, it } from "vitest";
 import {
   appSettingsSections,
   parsePluginManifest,
+  pluginFeatureOwners,
+  pluginFeatureRequest,
   providerOwnSettingKeys,
   providerSettingKeys,
   type PluginManifest,
@@ -15,6 +18,7 @@ import { SETTINGS_NAV } from "../settings/settings-nav";
 import { SETTINGS_CARDS } from "../settings/settings-search";
 import { APP_PROVIDER_KINDS, PROVIDER_CAPABILITY, providerFromHash, providerHash } from "./app-capabilities";
 import { searchAppSurfaces } from "./app-search";
+import { itemSettingKeys, serviceGroups, serviceSettingKeys } from "./app-services";
 import { appearsEntries } from "./AppWhereItAppears";
 import type { AppSurfaces } from "./ui/surfaces";
 
@@ -29,13 +33,38 @@ async function manifestOf(plugin: string): Promise<PluginManifest> {
   return parsed.manifest;
 }
 
-/** The parts of `GET /admin/apps/{id}` "Where this app appears" reads, as the API builds them. */
-function detailOf(manifest: PluginManifest, status: AppDetail["status"] = "active"): AppDetail {
+/**
+ * The parts of `GET /admin/apps/{id}` the page's services and "Where this
+ * app appears" read, as the API builds them: every feature off unless
+ * listed in `on` (an off feature's providers and fields are not listed).
+ */
+function detailOf(manifest: PluginManifest, status: AppDetail["status"] = "active", on: readonly string[] = []): AppDetail {
+  const owners = pluginFeatureOwners(manifest);
+  const running = (owner: string | undefined) => owner === undefined || on.includes(owner);
   return {
     id: manifest.id,
     name: manifest.name,
     status,
-    providers: manifest.providers.map((provider) => ({
+    features: manifest.features.map((feature) => {
+      const request = pluginFeatureRequest(manifest, feature.id)!;
+      return {
+        id: feature.id,
+        name: feature.name,
+        description: feature.description,
+        enabled: on.includes(feature.id),
+        recommended: feature.recommended,
+        request: {
+          ...request,
+          scopes: [],
+          providers: request.providers.map((provider) => ({ ...provider, id: qualifiedProviderId(manifest.id, provider.id), icon: null })),
+        },
+        grantKey: null,
+        settings: [...owners.settings].filter(([, owner]) => owner === feature.id).map(([key]) => key),
+        pages: feature.admin.filter((id) => manifest.admin.pages.some((page) => page.id === id)),
+      };
+    }),
+    cron: [],
+    providers: manifest.providers.filter((provider) => running(owners.providers.get(provider.id))).map((provider) => ({
       id: qualifiedProviderId(manifest.id, provider.id),
       providerId: provider.id,
       kind: provider.kind,
@@ -45,7 +74,13 @@ function detailOf(manifest: PluginManifest, status: AppDetail["status"] = "activ
       own: providerOwnSettingKeys(manifest, provider.id).length > 0,
       required: provider.settings ?? [],
     })),
-    settings: { fields: [], values: {}, secrets: {}, missing: [], sections: appSettingsSections(manifest) },
+    settings: {
+      fields: manifest.settings.filter((field) => running(owners.settings.get(field.key))).map((field) => ({ key: field.key, label: field.label, type: field.type })),
+      values: {},
+      secrets: {},
+      missing: [],
+      sections: appSettingsSections(manifest),
+    },
     admin: {
       pages: manifest.admin.pages.map((page) => ({ ...page, tabs: page.tabs ?? null })),
       cards: manifest.admin.cards.map(({ id, target, title }) => ({ id, target, title })),
@@ -62,34 +97,51 @@ function detailOf(manifest: PluginManifest, status: AppDetail["status"] = "activ
   } as unknown as AppDetail;
 }
 
-describe("where an app appears", () => {
-  it("links every Bangladesh pack provider to its capability's setup sheet, and its settings page", async () => {
+describe("an app's services", () => {
+  it("groups the Bangladesh pack's fourteen features by service, the group with the recommended one first", async () => {
     const manifest = await manifestOf("bangladesh");
-    const entries = appearsEntries(detailOf(manifest));
-    // Every provider, each on its capability page with its sheet open.
-    expect(manifest.providers).toHaveLength(13);
-    for (const provider of manifest.providers) {
-      const id = qualifiedProviderId(manifest.id, provider.id);
-      const entry = entries.find((candidate) => candidate.key === `provider:${id}`);
-      expect(entry, provider.id).toMatchObject({ group: "settings", label: provider.name, to: PROVIDER_CAPABILITY[provider.kind].to });
-      expect(providerFromHash(`#${entry!.hash}`)).toBe(id);
-    }
-    expect(entries.find((entry) => entry.key === "provider:scalius.bangladesh:smsnetbd")?.to).toBe("/admin/settings/notifications");
-    expect(entries.find((entry) => entry.key === "provider:scalius.bangladesh:pathao")?.to).toBe("/admin/settings/shipping");
-    expect(entries.find((entry) => entry.key === "provider:scalius.bangladesh:fraudbd")?.to).toBe("/admin/settings/integrations");
-    expect(entries.find((entry) => entry.key === "provider:scalius.bangladesh:sslcommerz")?.to).toBe("/admin/settings/payments");
-    // Its places page is a settings page; it has no app-wide settings, so no "App settings" entry.
-    expect(entries.find((entry) => entry.key === "page:places")).toMatchObject({ group: "settings", to: "/admin/apps/scalius.bangladesh/pages/places" });
-    expect(entries.some((entry) => entry.key === "settings")).toBe(false);
-    expect(entries).toHaveLength(manifest.providers.length + manifest.admin.pages.length);
+    const groups = serviceGroups(detailOf(manifest));
+    expect(groups.map(({ group, items }) => [group, items.map((item) => item.id)])).toEqual([
+      ["other", ["feature:places"]],
+      ["payment", ["feature:bkash", "feature:nagad", "feature:sslcommerz"]],
+      ["courier", ["feature:pathao", "feature:steadfast"]],
+      ["sms", ["feature:smsnetbd", "feature:bdbulksms", "feature:mimsms", "feature:gennet"]],
+      ["fraud", ["feature:fraudbd", "feature:fraudguard", "feature:ecourier", "feature:fraudchecker"]],
+    ]);
+    expect(groups.flatMap((group) => group.items)).toHaveLength(14);
   });
 
-  it("lists every Hello surface: pages, cards, actions, Home card, theme section and product block, and its settings", async () => {
+  it("shows a feature's own fields with it only while it is on, and none as the app's own settings", async () => {
+    const manifest = await manifestOf("bangladesh");
+    const off = detailOf(manifest);
+    const pathaoOff = serviceGroups(off).flatMap((group) => group.items).find((item) => item.id === "feature:pathao")!;
+    expect(itemSettingKeys(off, pathaoOff)).toEqual([]);
+    const on = detailOf(manifest, "active", ["pathao"]);
+    const pathao = serviceGroups(on).flatMap((group) => group.items).find((item) => item.id === "feature:pathao")!;
+    expect(itemSettingKeys(on, pathao)).toEqual(providerSettingKeys(manifest, "pathao"));
+    // Every pack field belongs to a feature; the places feature brings its page.
+    const all = detailOf(manifest, "active", manifest.features.map((feature) => feature.id));
+    expect(serviceSettingKeys(all)).toEqual(new Set(manifest.settings.map((field) => field.key)));
+    expect(on.features.find((feature) => feature.id === "places")?.pages).toEqual(["places"]);
+  });
+
+  it("lists a provider no feature owns as a row of its own", async () => {
+    const manifest = await manifestOf("hello");
+    const rows = serviceGroups(detailOf(manifest)).flatMap((group) => group.items);
+    expect(rows.map((row) => row.id).sort()).toEqual(manifest.providers.map((provider) => `provider:${qualifiedProviderId(manifest.id, provider.id)}`).sort());
+  });
+});
+
+describe("where an app appears", () => {
+  it("leaves the Bangladesh pack's providers and places page to its service rows", async () => {
+    const manifest = await manifestOf("bangladesh");
+    expect(appearsEntries(detailOf(manifest, "active", manifest.features.map((feature) => feature.id)))).toEqual([]);
+  });
+
+  it("lists every Hello surface: pages, cards, actions, Home card, theme section and product block", async () => {
     const manifest = await manifestOf("hello");
     const entries = appearsEntries(detailOf(manifest));
-    const keys = entries.map((entry) => entry.key);
-    expect(keys).toEqual([
-      "settings",
+    expect(entries.map((entry) => entry.key)).toEqual([
       ...manifest.admin.pages.map((page) => `page:${page.id}`),
       ...manifest.admin.cards.map((card) => `card:${card.id}`),
       ...manifest.admin.actions.map((action) => `action:${action.id}`),
@@ -99,14 +151,12 @@ describe("where an app appears", () => {
     ]);
     expect(entries.find((entry) => entry.key === "card:greeting")).toMatchObject({ group: "resources", to: "/admin/orders", detail: { message: "card", target: "order" } });
     expect(entries.find((entry) => entry.key === "action:wave")).toMatchObject({ to: "/admin/products", detail: { message: "bulkAction", target: "product" } });
-    expect(entries.find((entry) => entry.key === "settings")).toMatchObject({ to: "/admin/apps/acme.hello", search: { tab: "settings" } });
   });
 
-  it("names an inactive app's pages and sections without linking them; its providers still link", async () => {
+  it("names an inactive app's pages and sections without linking them", async () => {
     const hello = appearsEntries(detailOf(await manifestOf("hello"), "installed"));
-    expect(hello.filter((entry) => entry.key !== "settings").every((entry) => entry.to === null)).toBe(true);
-    const pack = appearsEntries(detailOf(await manifestOf("bangladesh"), "installed"));
-    expect(pack.filter((entry) => entry.key.startsWith("provider:")).every((entry) => entry.to !== null)).toBe(true);
+    expect(hello.length).toBeGreaterThan(0);
+    expect(hello.every((entry) => entry.to === null)).toBe(true);
   });
 });
 

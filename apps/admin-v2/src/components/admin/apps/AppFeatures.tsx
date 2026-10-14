@@ -1,12 +1,17 @@
-// An app's features (`manifest.features`): the parts a merchant turns on one
-// at a time. Each starts off. Turning one on is a Super Admin's consent to
-// that feature's own access, listed in plain words and sent back with its
-// grant key; turning one off revokes it (anyone who manages apps). The
-// Permissions tab reuses the access list to show what each feature could
-// reach. Everything comes from the API's description of the app.
-import { useState, type ReactNode } from "react";
+// An app's services on its page, one card per kind (Shopify's payment
+// providers card): each feature with its switch, and each provider that runs
+// with the app. A row says what it does and what access it needs; while it
+// runs, its own settings sit under it (saved with the page's save bar), with
+// where it is chosen, its pages and how it is doing. Turning a feature on is
+// a Super Admin's consent to that feature's access alone (its grant key goes
+// back with it); turning one off says what stops. Everything comes from the
+// API's description of the app; no app code runs here.
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { formatList } from "@scalius/shared/locale-words";
 import { toast } from "~/lib/toast";
+import { ListDate } from "~/components/admin/data-table/ListDate";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -18,111 +23,94 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { FieldGroup, Inset } from "~/components/ui/field";
 import { Switch } from "~/components/ui/switch";
-import { useMessages } from "~/i18n";
+import { getLocale, useMessages } from "~/i18n";
 import { appFeaturesMessages } from "~/i18n/app-features";
 import { appScopeMessages } from "~/i18n/app-scopes";
 import { installedAppsMessages } from "~/i18n/apps";
-import { disableAppFeature, enableAppFeature, type AppDetail, type AppFeature } from "~/lib/api-query-options/apps";
+import { settingsNavMessages } from "~/i18n/settings";
+import { APP_FUNCTION_POINTS, disableAppFeature, enableAppFeature, type AppDetail, type AppFeature } from "~/lib/api-query-options/apps";
 import { topicLabel } from "../settings/webhooks/webhook-format";
+import { PROVIDER_CAPABILITY, isAppProviderKind } from "./app-capabilities";
+import {
+  featureGroup,
+  featureProviders,
+  itemSettingKeys,
+  lastJobRun,
+  serviceGroups,
+  serviceHealth,
+  type ServiceHealth,
+  type ServiceItem,
+} from "./app-services";
 import { useAppMutationResult } from "./AppDialogs";
-import { RISK_VARIANT } from "./app-status";
+import { AppIcon } from "./AppIcon";
+import { AppSettingControl, settingFieldId, type AppSettingsDraftApi } from "./AppSettingsForm";
+import { appPagePath } from "./ui/surfaces";
 
-/** The groups features are listed in, by the kind of service they provide. */
-const FEATURE_GROUPS = ["payment", "courier", "sms", "fraud", "other"] as const;
-type FeatureGroup = (typeof FEATURE_GROUPS)[number];
+const HEALTH_VARIANT = { ready: "success", setup: "warning", error: "destructive" } as const;
 
-export function featureGroup(feature: Pick<AppFeature, "request">): FeatureGroup {
-  const kind = feature.request.providers[0]?.kind;
-  return kind === "payment" || kind === "courier" || kind === "sms" || kind === "fraud" ? kind : "other";
+function isFunctionPoint(point: string): point is (typeof APP_FUNCTION_POINTS)[number] {
+  return (APP_FUNCTION_POINTS as readonly string[]).includes(point);
 }
 
-/** Features by group, in group order; recommended ones first within a group. */
-export function groupedFeatures(features: readonly AppFeature[]): Array<{ group: FeatureGroup; features: AppFeature[] }> {
-  return FEATURE_GROUPS
-    .map((group) => ({
-      group,
-      features: features
-        .filter((feature) => featureGroup(feature) === group)
-        .sort((left, right) => Number(right.recommended) - Number(left.recommended)),
-    }))
-    .filter((entry) => entry.features.length > 0);
+/** One line of what a feature needs beyond the app, in plain words ("Connects to 2 websites"). */
+function useAccessLine(feature: AppFeature): string {
+  const t = useMessages(appFeaturesMessages);
+  const scopeText = useMessages(appScopeMessages);
+  const { request } = feature;
+  const parts = [
+    ...request.scopes.map((scope) => scopeText(`scope_${scope.name}`)),
+    ...(request.allowedHosts.length > 2
+      ? [t("accessHostCount", { count: request.allowedHosts.length })]
+      : request.allowedHosts.length > 0 ? [t("accessHosts", { hosts: formatList(request.allowedHosts, getLocale()) })] : []),
+    ...(request.functions.length > 0 ? [t("accessCheckout")] : []),
+    ...(request.events.length > 0 ? [t("accessEvents", { count: request.events.length })] : []),
+  ];
+  return parts.length > 0 ? parts.join(" · ") : t("accessNone");
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="space-y-1.5">
-      <h4 className="text-caption font-medium text-muted-foreground">{title}</h4>
-      <ul className="space-y-1">{children}</ul>
-    </section>
-  );
-}
-
-/** What one feature asks for, in plain words: only its own part, never the app's base. */
+/** Everything turning a feature on allows, as the consent list: only its own part, never the app's base. */
 export function FeatureAccess({ feature }: { feature: AppFeature }) {
   const t = useMessages(appFeaturesMessages);
   const apps = useMessages(installedAppsMessages);
   const scopeText = useMessages(appScopeMessages);
   const { request } = feature;
-  const sections: ReactNode[] = [];
-  if (request.scopes.length > 0) {
-    sections.push(
-      <Section key="data" title={t("access_data")}>
-        {request.scopes.map((scope) => (
-          <li key={scope.name} className="flex items-start justify-between gap-3 text-body">
-            <span className="min-w-0 space-y-0.5">
-              <span className="block">{scopeText(`scope_${scope.name}`)}</span>
-              <span className="block text-caption text-muted-foreground">{scopeText(`scope_${scope.name}_help`)}</span>
-            </span>
-            <span className="flex shrink-0 flex-wrap justify-end gap-1">
-              {scope.sensitive ? <Badge variant="attention">{apps("sensitive")}</Badge> : null}
-              <Badge variant={RISK_VARIANT[scope.risk]}>{apps(`risk_${scope.risk}`)}</Badge>
-            </span>
-          </li>
-        ))}
-      </Section>,
-    );
-  }
-  const does = [
-    ...request.providers.map((provider) => ({ key: provider.id, text: apps(`provider_${provider.kind}`) })),
-    ...(request.publicRoutes ? [{ key: "public", text: t("access_publicRoutes") }] : []),
-    ...(request.cron.length > 0 ? [{ key: "cron", text: t("access_jobs") }] : []),
-    ...(request.admin ? [{ key: "admin", text: t("access_admin") }] : []),
-    ...(request.storefront ? [{ key: "storefront", text: t("access_storefront") }] : []),
+  const kinds = [...new Set(request.providers.map((provider) => provider.kind))];
+  const items: Array<{ key: string; content: ReactNode }> = [
+    ...request.scopes.map((scope) => ({
+      key: `scope:${scope.name}`,
+      content: (
+        <span className="flex flex-col gap-0.5">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {scopeText(`scope_${scope.name}`)}
+            {scope.sensitive ? <Badge variant="attention">{apps("sensitive")}</Badge> : null}
+          </span>
+          <span className="text-muted-foreground">{scopeText(`scope_${scope.name}_help`)}</span>
+        </span>
+      ),
+    })),
+    ...kinds.map((kind) => ({ key: `kind:${kind}`, content: apps(`provider_${kind}`) })),
+    ...request.functions.map((point) => ({ key: `fn:${point}`, content: isFunctionPoint(point) ? apps(`function_${point}`) : point })),
+    ...(request.events.length > 0 ? [{ key: "events", content: t("access_events", { topics: formatList(request.events.map(topicLabel), getLocale()) }) }] : []),
+    ...(request.publicRoutes ? [{ key: "public", content: t("access_publicRoutes") }] : []),
+    ...(request.cron.length > 0 ? [{ key: "cron", content: t("access_jobs") }] : []),
+    ...(request.admin ? [{ key: "admin", content: t("access_admin") }] : []),
+    ...(request.storefront ? [{ key: "storefront", content: t("access_storefront") }] : []),
+    ...request.allowedHosts.map((host) => {
+      // "Connect to {host}", with the host as code wherever the language puts it.
+      const [before, after] = t("access_host", { host: "\u0000" }).split("\u0000");
+      return { key: `host:${host}`, content: <span className="wrap-anywhere">{before}<code>{host}</code>{after}</span> };
+    }),
   ];
-  const uniqueDoes = does.filter((entry, index) => does.findIndex((other) => other.text === entry.text) === index);
-  if (uniqueDoes.length > 0) {
-    sections.push(
-      <Section key="does" title={t("access_services")}>
-        {uniqueDoes.map((entry) => <li key={entry.key} className="text-body">{entry.text}</li>)}
-      </Section>,
-    );
-  }
-  if (request.events.length > 0) {
-    sections.push(
-      <Section key="events" title={t("access_events")}>
-        {request.events.map((topic) => <li key={topic} className="text-body">{topicLabel(topic)}</li>)}
-      </Section>,
-    );
-  }
-  if (request.functions.length > 0) {
-    sections.push(
-      <Section key="checkout" title={t("access_checkout")}>
-        {request.functions.map((point) => <li key={point} className="font-mono text-body">{point}</li>)}
-      </Section>,
-    );
-  }
-  if (request.allowedHosts.length > 0) {
-    sections.push(
-      <Section key="hosts" title={t("access_hosts")}>
-        {request.allowedHosts.map((host) => <li key={host} dir="ltr" translate="no" className="break-all font-mono text-body">{host}</li>)}
-      </Section>,
-    );
-  }
-  if (sections.length === 0) return <p className="text-body text-muted-foreground">{t("noExtraAccess")}</p>;
-  return <div className="space-y-3">{sections}</div>;
+  if (items.length === 0) return <p className="text-body text-muted-foreground">{t("noExtraAccess")}</p>;
+  return (
+    <ul className="flex list-disc flex-col gap-1.5 ps-5 text-body">
+      {items.map((item) => <li key={item.key}>{item.content}</li>)}
+    </ul>
+  );
 }
 
 interface FeatureDialogProps {
@@ -132,16 +120,16 @@ interface FeatureDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/** A Super Admin's consent to one feature's access. */
-function EnableFeatureDialog({ app, feature, open, onOpenChange }: FeatureDialogProps) {
+/** A Super Admin's consent to one feature: what it does, what it may then do, and Turn on. */
+function EnableFeatureDialog({ app, feature, open, onOpenChange, onEnabled }: FeatureDialogProps & { onEnabled: () => void }) {
   const t = useMessages(appFeaturesMessages);
   const result = useAppMutationResult(app);
   const enable = useMutation({
     mutationFn: () => enableAppFeature(app, feature),
     onSuccess: ({ app: next, hookError }) => {
       result.applied(next, hookError, t("enabled", { name: feature.name }));
-      if (feature.request.providers.length > 0) toast.info(t("setUpNext"));
       onOpenChange(false);
+      onEnabled();
     },
     onError: (error) => {
       if (result.changed(error)) return;
@@ -150,13 +138,16 @@ function EnableFeatureDialog({ app, feature, open, onOpenChange }: FeatureDialog
   });
   return (
     <Dialog open={open} onOpenChange={(next) => (enable.isPending ? undefined : onOpenChange(next))}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("enableTitle", { name: feature.name })}</DialogTitle>
-          <DialogDescription>{t("enableIntro", { app: app.name, name: feature.name })}</DialogDescription>
+          <DialogDescription>{feature.description}</DialogDescription>
         </DialogHeader>
-        <FeatureAccess feature={feature} />
-        <p className="text-body">{t("enableConsent", { app: app.name, name: feature.name })}</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-body font-medium">{t("enableWill", { app: app.name, name: feature.name })}</p>
+          <FeatureAccess feature={feature} />
+        </div>
+        <p className="text-body text-muted-foreground">{t("enableConsent", { app: app.name, name: feature.name })}</p>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={enable.isPending} onClick={() => onOpenChange(false)}>
             {t("cancel")}
@@ -170,9 +161,11 @@ function EnableFeatureDialog({ app, feature, open, onOpenChange }: FeatureDialog
   );
 }
 
+/** Turning a feature off, with what stops for the store. */
 function DisableFeatureDialog({ app, feature, open, onOpenChange }: FeatureDialogProps) {
   const t = useMessages(appFeaturesMessages);
   const result = useAppMutationResult(app);
+  const group = featureGroup(feature);
   const disable = useMutation({
     mutationFn: () => disableAppFeature(app, feature.id),
     onSuccess: ({ app: next, hookError }) => {
@@ -189,7 +182,10 @@ function DisableFeatureDialog({ app, feature, open, onOpenChange }: FeatureDialo
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("disableTitle", { name: feature.name })}</AlertDialogTitle>
-          <AlertDialogDescription>{t("disableBody", { app: app.name, name: feature.name })}</AlertDialogDescription>
+          <AlertDialogDescription>
+            {group === "other" ? null : `${t(`disableEffect_${group}`)} `}
+            {t("disableBody", { app: app.name, name: feature.name })}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={disable.isPending}>{t("cancel")}</AlertDialogCancel>
@@ -202,102 +198,177 @@ function DisableFeatureDialog({ app, feature, open, onOpenChange }: FeatureDialo
   );
 }
 
-function FeatureRow({ feature, canTurnOn, canTurnOff, onToggle }: {
-  feature: AppFeature;
+function HealthBadge({ health }: { health: ServiceHealth }) {
+  const t = useMessages(appFeaturesMessages);
+  if (!health) return null;
+  return <Badge variant={HEALTH_VARIANT[health.status]}>{t(`status_${health.status}`)}</Badge>;
+}
+
+/** What a running row shows under it: its settings, where it is chosen, its pages and its last run. */
+function RunningDetail({ app, item, form, canManage, health }: {
+  app: AppDetail;
+  item: ServiceItem;
+  form: AppSettingsDraftApi;
+  canManage: boolean;
+  health: ServiceHealth;
+}) {
+  const t = useMessages(appFeaturesMessages);
+  const settingsPage = useMessages(settingsNavMessages);
+  const keys = itemSettingKeys(app, item);
+  const fields = app.settings.fields.filter((field) => keys.includes(field.key));
+  const providers = item.kind === "feature" ? featureProviders(app, item.feature) : [item.provider];
+  const capabilities = [...new Map(providers.flatMap((provider) => (isAppProviderKind(provider.kind) ? [[provider.kind, PROVIDER_CAPABILITY[provider.kind]] as const] : []))).values()];
+  const pages = item.kind === "feature" ? app.admin.pages.filter((page) => item.feature.pages.includes(page.id)) : [];
+  const lastRun = item.kind === "feature" ? lastJobRun(app, item.feature) : null;
+  const active = app.status === "active";
+  const links = [
+    ...capabilities.map((capability) => (
+      <Link key={capability.to} to={capability.to} className="text-link hover:underline">{t("chooseIn", { page: settingsPage(capability.page) })}</Link>
+    )),
+    ...(active ? pages.map((page) => (
+      <Link key={page.id} to={appPagePath(app.id, page.id)} className="text-link hover:underline">{t("openPage", { title: page.title })}</Link>
+    )) : []),
+  ];
+  return (
+    <Inset className="mt-3 sm:ms-11">
+      <div className="flex flex-col gap-3">
+        {fields.length > 0 ? (
+          <FieldGroup inset>
+            {fields.map((field) => <AppSettingControl key={field.key} app={app} field={field} form={form} canManage={canManage} />)}
+          </FieldGroup>
+        ) : links.length === 0 ? <p className="text-body text-muted-foreground">{t("noSettings")}</p> : null}
+        {links.length > 0 ? <div className="flex flex-col items-start gap-1 text-body">{links}</div> : null}
+        {health?.status === "error" ? (
+          <p className="text-body text-destructive wrap-anywhere">
+            {t("failedRun")} <ListDate value={health.at} className="text-destructive" />{health.error ? `: ${health.error}` : null}
+          </p>
+        ) : lastRun ? (
+          <p className="text-body text-muted-foreground">{t("lastRan")} <ListDate value={lastRun} /></p>
+        ) : null}
+      </div>
+    </Inset>
+  );
+}
+
+function ServiceRow({ app, item, form, canManage, canTurnOn, focus, onToggle }: {
+  app: AppDetail;
+  item: ServiceItem;
+  form: AppSettingsDraftApi;
+  canManage: boolean;
   canTurnOn: boolean;
-  canTurnOff: boolean;
+  /** Just turned on: its first setting takes the focus. */
+  focus: boolean;
   onToggle: () => void;
 }) {
   const t = useMessages(appFeaturesMessages);
-  const enabled = feature.enabled;
-  const allowed = enabled ? canTurnOff : canTurnOn;
-  const describedBy = `app-feature-${feature.id}-description`;
+  const feature = item.kind === "feature" ? item.feature : null;
+  const running = feature ? feature.enabled : app.status === "active";
+  const name = feature ? feature.name : item.kind === "provider" ? item.provider.name : "";
+  const icon = feature ? feature.request.providers[0]?.icon ?? app.icon : item.kind === "provider" ? item.provider.icon : null;
+  const health = serviceHealth(app, item);
+  const describedBy = `app-service-${item.id.replace(/[^a-z0-9-]/gi, "-")}`;
+  const firstKey = itemSettingKeys(app, item)[0];
+  useEffect(() => {
+    if (focus && running && firstKey) document.getElementById(settingFieldId(firstKey))?.focus();
+  }, [focus, running, firstKey]);
   return (
-    <li className="flex items-start justify-between gap-4 border-t border-border px-4 py-3 first:border-t-0">
-      <div className="min-w-0 space-y-0.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-body font-medium">{feature.name}</span>
-          {feature.recommended && !enabled ? <Badge variant="info">{t("recommended")}</Badge> : null}
-          <Badge variant={enabled ? "success" : "secondary"}>{t(enabled ? "on" : "off")}</Badge>
+    <li className="border-t border-border px-4 py-3">
+      <div className="flex items-start gap-3">
+        <AppIcon src={icon} size="sm" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-body font-medium">{name}</span>
+            {feature?.recommended && !feature.enabled ? <Badge variant="info">{t("recommended")}</Badge> : null}
+            <HealthBadge health={health} />
+          </div>
+          {feature ? <FeatureText feature={feature} describedBy={describedBy} /> : null}
         </div>
-        <p id={describedBy} className="text-caption text-muted-foreground">{feature.description}</p>
+        {feature ? (
+          <span className="flex h-lh items-center text-body">
+            <Switch
+              checked={feature.enabled}
+              disabled={feature.enabled ? !canManage : !canTurnOn}
+              onCheckedChange={onToggle}
+              aria-label={t("toggleLabel", { name })}
+              aria-describedby={describedBy}
+            />
+          </span>
+        ) : null}
       </div>
-      <Switch
-        checked={enabled}
-        disabled={!allowed}
-        onCheckedChange={onToggle}
-        aria-label={t("toggleLabel", { name: feature.name })}
-        aria-describedby={describedBy}
-      />
+      {running ? <RunningDetail app={app} item={item} form={form} canManage={canManage} health={health} /> : null}
     </li>
   );
 }
 
-/**
- * The features card on the app page. `canManage`: may turn features off;
- * `isSuperAdmin`: may also turn them on (consent). Turning on needs the app
- * to be active.
- */
-export function AppFeatures({ app, canManage, isSuperAdmin }: { app: AppDetail; canManage: boolean; isSuperAdmin: boolean }) {
+function FeatureText({ feature, describedBy }: { feature: AppFeature; describedBy: string }) {
   const t = useMessages(appFeaturesMessages);
-  const [dialog, setDialog] = useState<{ feature: AppFeature; turn: "on" | "off" } | null>(null);
-  if (app.features.length === 0) return null;
-  const active = app.status === "active";
-  const canTurnOn = active && isSuperAdmin && app.runtimeAvailable;
-  const note = !active ? t("activateFirst") : canManage && !isSuperAdmin ? t("superAdminTurnsOn") : null;
-  const close = (open: boolean) => {
-    if (!open) setDialog(null);
-  };
+  const access = useAccessLine(feature);
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("title")}</CardTitle>
-        <CardDescription>{t("description")}</CardDescription>
-      </CardHeader>
-      {note ? <CardContent><p role="status" className="rounded-lg bg-muted px-4 py-2 text-body text-muted-foreground">{note}</p></CardContent> : null}
-      {groupedFeatures(app.features).map(({ group, features }) => (
-        <section key={group} aria-labelledby={`app-features-${group}`} className="border-t border-border">
-          <h3 id={`app-features-${group}`} className="px-4 pt-3 text-caption font-medium text-muted-foreground">{t(`group_${group}`)}</h3>
-          <ul>
-            {features.map((feature) => (
-              <FeatureRow
-                key={feature.id}
-                feature={feature}
-                canTurnOn={canTurnOn}
-                canTurnOff={canManage}
-                onToggle={() => setDialog({ feature, turn: feature.enabled ? "off" : "on" })}
-              />
-            ))}
-          </ul>
-        </section>
-      ))}
-      {dialog?.turn === "on" ? <EnableFeatureDialog app={app} feature={dialog.feature} open onOpenChange={close} /> : null}
-      {dialog?.turn === "off" ? <DisableFeatureDialog app={app} feature={dialog.feature} open onOpenChange={close} /> : null}
-    </Card>
+    <>
+      <p id={describedBy} className="text-body text-muted-foreground">{feature.description}</p>
+      <p className="text-body text-muted-foreground wrap-anywhere">
+        <span className="font-medium">{t("accessLabel")}</span> {access}
+      </p>
+    </>
   );
 }
 
-/** The Permissions tab's part: what every feature could reach, on or off. */
-export function AppFeatureAccess({ app }: { app: AppDetail }) {
+/**
+ * The app's services, one card per kind. `form` is the page's settings
+ * draft (the rows' fields save with the page). `canManage`: may change
+ * settings and turn features off; `isSuperAdmin`: may also turn them on.
+ */
+export function AppFeatures({ app, form, canManage, isSuperAdmin }: {
+  app: AppDetail;
+  form: AppSettingsDraftApi;
+  canManage: boolean;
+  isSuperAdmin: boolean;
+}) {
   const t = useMessages(appFeaturesMessages);
-  if (app.features.length === 0) return null;
+  // The last feature asked about stays in its dialog while the dialog closes.
+  const [target, setTarget] = useState<AppFeature | null>(null);
+  const [turn, setTurn] = useState<"on" | "off" | null>(null);
+  const [focused, setFocused] = useState<string | null>(null);
+  const groups = serviceGroups(app);
+  if (groups.length === 0) return null;
+  const active = app.status === "active";
+  const canTurnOn = active && isSuperAdmin && app.runtimeAvailable;
+  const note = app.features.length === 0 ? null : !active ? t("activateFirst") : canManage && !isSuperAdmin ? t("superAdminTurnsOn") : null;
+  const close = (open: boolean) => {
+    if (!open) setTurn(null);
+  };
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("permissionsTitle")}</CardTitle>
-        <CardDescription>{t("permissionsDescription")}</CardDescription>
-      </CardHeader>
-      <ul className="border-t border-border">
-        {app.features.map((feature) => (
-          <li key={feature.id} className="space-y-2 border-t border-border px-4 py-3 first:border-t-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-body font-medium">{feature.name}</span>
-              <Badge variant={feature.enabled ? "success" : "secondary"}>{t(feature.enabled ? "on" : "off")}</Badge>
-            </div>
-            <FeatureAccess feature={feature} />
-          </li>
-        ))}
-      </ul>
-    </Card>
+    <>
+      {groups.map(({ group, items }, index) => (
+        <Card key={group}>
+          <CardHeader>
+            <CardTitle>{t(`group_${group}`)}</CardTitle>
+            {index === 0 && note ? <CardDescription role="status">{note}</CardDescription> : null}
+          </CardHeader>
+          <ul>
+            {items.map((item) => (
+              <ServiceRow
+                key={item.id}
+                app={app}
+                item={item}
+                form={form}
+                canManage={canManage}
+                canTurnOn={canTurnOn}
+                focus={item.kind === "feature" && focused === item.feature.id}
+                onToggle={() => {
+                  if (item.kind !== "feature") return;
+                  setTarget(item.feature);
+                  setTurn(item.feature.enabled ? "off" : "on");
+                }}
+              />
+            ))}
+          </ul>
+        </Card>
+      ))}
+      {target ? (
+        <EnableFeatureDialog app={app} feature={target} open={turn === "on"} onOpenChange={close} onEnabled={() => setFocused(target.id)} />
+      ) : null}
+      {target ? <DisableFeatureDialog app={app} feature={target} open={turn === "off"} onOpenChange={close} /> : null}
+    </>
   );
 }

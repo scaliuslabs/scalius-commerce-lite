@@ -275,6 +275,10 @@ describe("admin app routes", () => {
       providers: [{ id: "scalius.bangladesh:bkash", kind: "payment", name: "bKash", icon: expect.stringContaining("/assets/provider-bkash?v=") }],
     });
     expect(detail.translations.bn.features.places.name).toBe("বাংলাদেশের এলাকা");
+    // Each feature names its own settings and pages, and the app counts them.
+    expect(bkash.settings).toEqual(["bkash_environment", "bkash_app_key", "bkash_app_secret", "bkash_username", "bkash_password"]);
+    expect(places).toMatchObject({ settings: [], pages: ["places"] });
+    expect(detail.featureCount).toEqual({ on: 0, total: 14 });
 
     // Turning a feature on before the app runs is refused.
     expect((await call("POST", "/apps/scalius.bangladesh/features/bkash/enable", { expectedRevision: detail.revision, grantKey: bkash.grantKey })).status).toBe(409);
@@ -291,6 +295,7 @@ describe("admin app routes", () => {
     expect(on.json.data).toMatchObject({ changed: true, hookError: null });
     expect(on.json.data.app.granted).toMatchObject({ features: ["bkash"], providers: ["payment"], allowedHosts: ["tokenized.pay.bka.sh", "tokenized.sandbox.bka.sh"] });
     expect(on.json.data.app.providers.map((provider: Json) => provider.id)).toEqual(["scalius.bangladesh:bkash"]);
+    expect(on.json.data.app.featureCount).toEqual({ on: 1, total: 14 });
     expect(on.json.data.app.settings.fields.map((field: Json) => field.key)).toEqual(["bkash_environment", "bkash_app_key", "bkash_app_secret", "bkash_username", "bkash_password"]);
 
     const listed = (await call("GET", "/apps/scalius.bangladesh/features")).json.data;

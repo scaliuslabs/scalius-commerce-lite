@@ -44,6 +44,8 @@ import {
   PLUGIN_FUNCTION_POINTS,
   PLUGIN_NAV_PLACEMENTS,
   PLUGIN_SCOPE_NAMES,
+  knownPluginFeatures,
+  pluginFeatureOwners,
   pluginFeatureRequest,
   pluginGrantAdditions,
   pluginGrantKey,
@@ -189,6 +191,10 @@ const appSummarySchema = z.object({
   installedAt: z.string(),
   activatedAt: z.string().nullable(),
   updatedAt: z.string(),
+  featureCount: z.object({
+    on: z.number().int(),
+    total: z.number().int(),
+  }).openapi({ description: "How many of the app's features are on, of how many it declares (0 of 0: an app without features)." }),
   functions: z.array(z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
     priority: z.number().int().openapi({ description: "Lower runs first among apps at the same point." }),
@@ -247,6 +253,8 @@ const appFeatureSchema = z.object({
     cron: z.array(z.string()).openapi({ description: "Scheduled jobs it runs." }),
   }).openapi({ description: "What turning this feature on asks for: only the feature's own part, never the app's base." }),
   grantKey: z.string().nullable().openapi({ description: "Send back to turn it on (the access shown); null while it is on." }),
+  settings: z.array(z.string()).openapi({ description: "The setting keys that belong to this feature (its providers' and settings groups' fields); the app lists them in `settings.fields` only while it is on." }),
+  pages: z.array(z.string()).openapi({ description: "The ids of the dashboard pages (`admin.pages`) this feature adds while it is on." }),
 }).openapi("AppFeature");
 
 const appDetailSchema = appSummarySchema.extend({
@@ -370,6 +378,10 @@ function summary(installation: PluginInstallation) {
     installedAt: iso(installation.installedAt),
     activatedAt: isoOrNull(installation.activatedAt),
     updatedAt: iso(installation.updatedAt),
+    featureCount: {
+      on: knownPluginFeatures(installation.declaredManifest, installation.features).length,
+      total: installation.declaredManifest.features.length,
+    },
     functions: manifest.functions.map((fn) => ({
       point: fn.point,
       priority: fn.priority,
@@ -435,6 +447,9 @@ function runtimeAvailable(c: Context<{ Bindings: Env }>, installation: PluginIns
 /** Each declared feature with its state and what turning it on asks for. */
 async function featureRows(installation: PluginInstallation) {
   const declared = installation.declaredManifest;
+  const owners = pluginFeatureOwners(declared);
+  const owned = (map: Map<string, string>, id: string) => [...map].filter(([, owner]) => owner === id).map(([key]) => key);
+  const pageIds = new Set(declared.admin.pages.map((page) => page.id));
   return Promise.all(declared.features.map(async (feature) => {
     const enabled = installation.features.includes(feature.id);
     const request = pluginFeatureRequest(declared, feature.id)!;
@@ -455,6 +470,8 @@ async function featureRows(installation: PluginInstallation) {
         })),
       },
       grantKey: enabled ? null : pluginGrantKey(pluginGrantRequest(declared, [...installation.features, feature.id])),
+      settings: owned(owners.settings, feature.id),
+      pages: feature.admin.filter((id) => pageIds.has(id)),
     };
   }));
 }

@@ -53,11 +53,11 @@ export function AppScreenshots({ app }: { app: Pick<ListingFields, "name" | "scr
 }
 
 /** Developer, version, categories, countries, platform floor and links: only what the app declares. */
-export function AppListingFacts({ app, children }: { app: ListingFields; children?: ReactNode }) {
+export function AppListingFacts({ app, columns = 2, children }: { app: ListingFields; columns?: 1 | 2; children?: ReactNode }) {
   const t = useMessages(installedAppsMessages);
   const { support } = app;
   return (
-    <dl className="grid gap-4 sm:grid-cols-2">
+    <dl className={columns === 2 ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
       <Fact label={t("developer")}>
         {app.author.url ? <ExternalLink href={app.author.url}>{app.author.name}</ExternalLink> : app.author.name}
       </Fact>

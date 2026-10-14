@@ -2731,6 +2731,13 @@ export type AppSummary = {
     activatedAt: string | null;
     updatedAt: string;
     /**
+     * How many of the app's features are on, of how many it declares (0 of 0: an app without features).
+     */
+    featureCount: {
+        on: number;
+        total: number;
+    };
+    /**
      * The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk).
      */
     functions: Array<{
@@ -3285,6 +3292,14 @@ export type AppFeature = {
      * Send back to turn it on (the access shown); null while it is on.
      */
     grantKey: string | null;
+    /**
+     * The setting keys that belong to this feature (its providers' and settings groups' fields); the app lists them in `settings.fields` only while it is on.
+     */
+    settings: Array<string>;
+    /**
+     * The ids of the dashboard pages (`admin.pages`) this feature adds while it is on.
+     */
+    pages: Array<string>;
 };
 
 export type AppLogLine = {

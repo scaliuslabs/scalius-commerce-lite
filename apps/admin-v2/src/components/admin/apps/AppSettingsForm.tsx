@@ -363,17 +363,3 @@ export function AppSettingControl({ app, field, form, canManage, idPrefix }: {
       );
   }
 }
-
-/** Whether a field is set (a secret: saved; anything else: a value or default). Status only, never the value. */
-export function settingIsSet(app: AppDetail, key: string): boolean {
-  const field = app.settings.fields.find((entry) => entry.key === key);
-  if (!field) return false;
-  if (field.type === "secret") return app.settings.secrets[key] === true;
-  const value = app.settings.values[key] ?? field.default;
-  return !(value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0));
-}
-
-/** A provider is configured when every key its readiness needs is set (status only, never a value). */
-export function providerConfigured(app: AppDetail, provider: Pick<AppDetail["providers"][number], "required">): boolean {
-  return provider.required.every((key) => settingIsSet(app, key));
-}

@@ -16,8 +16,12 @@ import { BangladeshPackStep } from "./BangladeshPackStep";
 const sdk = vi.hoisted(() => ({
   getApiV1AdminApps: vi.fn(),
   getApiV1AdminAppsById: vi.fn(),
+  postApiV1AdminAppsByIdFeaturesByFeatureIdEnable: vi.fn(),
 }));
 vi.mock("@scalius/api-client/sdk", async (importOriginal) => ({ ...(await importOriginal<object>()), ...sdk }));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ to, children }: { to: string; children: import("react").ReactNode }) => <a href={to}>{children}</a>,
+}));
 
 const ok = (data: unknown) => Promise.resolve({ data: { success: true, data }, response: { status: 200 } });
 const t = (key: keyof (typeof storeSetupMessages)["en"]) => translate(storeSetupMessages, key);
@@ -82,5 +86,49 @@ describe("Bangladesh pack step", () => {
     await render({ superAdmin: false, permissions: [] });
     expect(host.textContent).toContain(t("bdPackNoAccess"));
     expect(sdk.getApiV1AdminApps).not.toHaveBeenCalled();
+  });
+  it("ticks the recommended features, reviews the chosen ones' access once and turns each on with its own key", async () => {
+    const request = (overrides: Record<string, unknown>) => ({
+      scopes: [], allowedHosts: [], providers: [], events: [], functions: [], publicRoutes: false, storefront: false, admin: false, cron: [], ...overrides,
+    });
+    const feature = (id: string, overrides: Record<string, unknown> = {}) => ({
+      id, name: id, description: `${id} description`, enabled: false, recommended: false, request: request({}), grantKey: `key-${id}`, settings: [], pages: [], ...overrides,
+    });
+    const app = (features: unknown[], revision: number) => ({
+      ...pack, status: "active", revision, runtimeAvailable: true, translations: null, features,
+      settings: { fields: [], values: {}, secrets: {}, missing: [], sections: [] }, providers: [], cron: [], admin: { pages: [], cards: [], actions: [], widgets: [] },
+    });
+    const places = feature("places", { recommended: true, request: request({ scopes: [{ name: "write_places", risk: "write", sensitive: false }], cron: ["places-sync"] }) });
+    const bkash = feature("bkash", { request: request({ allowedHosts: ["tokenized.pay.bka.sh"], providers: [{ id: "scalius.bangladesh:bkash", kind: "payment", name: "bKash", icon: null }] }) });
+    sdk.getApiV1AdminApps.mockImplementation(() => ok({ apps: [{ ...pack, status: "active" }], available: [], sandboxAvailable: false }));
+    sdk.getApiV1AdminAppsById.mockImplementation(() => ok({ app: app([places, bkash], 3) }));
+    sdk.postApiV1AdminAppsByIdFeaturesByFeatureIdEnable.mockImplementation(({ path }: { path: { featureId: string } }) => ok({
+      app: path.featureId === "places"
+        ? app([{ ...places, enabled: true, grantKey: null }, { ...bkash, grantKey: "key-bkash-after-places" }], 4)
+        : app([{ ...places, enabled: true, grantKey: null }, { ...bkash, enabled: true, grantKey: null }], 5),
+      changed: true,
+      hookError: null,
+    }));
+    await render({ superAdmin: true, permissions: ["apps.view", "apps.manage"] });
+    await vi.waitFor(() => expect(host.querySelector("#setup-feature-places")).not.toBeNull());
+
+    const box = (id: string) => host.querySelector<HTMLButtonElement>(`#setup-feature-${id}`)!;
+    expect(box("places").getAttribute("aria-checked")).toBe("true");
+    expect(box("bkash").getAttribute("aria-checked")).toBe("false");
+    await act(async () => box("bkash").click());
+    const review = [...host.querySelectorAll("button")].find((button) => button.textContent === "Review 2 features")!;
+    await act(async () => review.click());
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog.textContent).toContain("Turn on 2 features?");
+    expect(dialog.textContent).toContain("tokenized.pay.bka.sh");
+    expect(dialog.textContent).toContain("Run scheduled jobs");
+    const turnOn = [...dialog.querySelectorAll("button")].find((button) => button.textContent === "Turn on")!;
+    await act(async () => turnOn.click());
+    await vi.waitFor(() => expect(sdk.postApiV1AdminAppsByIdFeaturesByFeatureIdEnable).toHaveBeenCalledTimes(2));
+    // Each feature with its own key, the second with the key the first answer carried.
+    expect(sdk.postApiV1AdminAppsByIdFeaturesByFeatureIdEnable.mock.calls.map(([call]) => call)).toEqual([
+      { path: { id: "scalius.bangladesh", featureId: "places" }, body: { expectedRevision: 3, grantKey: "key-places" } },
+      { path: { id: "scalius.bangladesh", featureId: "bkash" }, body: { expectedRevision: 4, grantKey: "key-bkash-after-places" } },
+    ]);
   });
 });
