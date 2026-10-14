@@ -18,7 +18,7 @@ import { listOrders } from "../modules/orders/admin/list";
 import { listProducts } from "../modules/product-admin/read";
 import { rebuildCatalogProjections } from "../modules/products";
 import { searchTerms } from "@scalius/database/search-index";
-import { sanitizeSearchTokens, searchKeyColumn, searchMatch, searchPrefixKeys, searchRankJoin, type SearchSource } from "./text-search";
+import { sanitizeSearchTokens, searchKeyColumn, searchMatch, searchPrefixKeys, searchRank, type SearchSource } from "./text-search";
 
 const products: Array<[id: string, name: string, description: string | null, category: string | null, active?: 0]> = [
   ["p01", "Leather Wallet", "Genuine leather bifold wallet with a coin pocket", "cat_bags"],
@@ -99,10 +99,10 @@ async function indexReads(db: Database): Promise<Record<string, string[]>> {
   for (const [source, queries] of sources) {
     for (const query of queries) {
       const match = searchMatch(db, source, query);
-      const rank = searchRankJoin(db, source, query, { alias: "parity_rank", weights: source === "products" ? [10, 1] : undefined });
+      const rank = searchRank(db, source, query, { alias: "parity_rank", weights: source === "products" ? [10, 1] : undefined });
       if (!match || !rank) continue;
       const rows = await db.all<{ id: string; score: number }>(sql`SELECT ${sql.raw(`"${source}"`)}.id AS id, ${rank.score} AS score FROM ${sql.raw(`"${source}"`)}
-        LEFT JOIN ${rank.table} ON ${rank.on} WHERE ${match} ORDER BY ${rank.score}, ${sql.raw(`"${source}"`)}.id`);
+        ${rank.join ? sql`LEFT JOIN ${rank.join.table} ON ${rank.join.on}` : sql``} WHERE ${match} ORDER BY ${rank.score}, ${sql.raw(`"${source}"`)}.id`);
       const phrase = sanitizeSearchTokens(query).some((token) => searchTerms(token).length > 1);
       results[`${source} ${query}`] = rows.map((row) => phrase ? row.id : `${row.id} ${Number(row.score).toPrecision(10)}`);
     }

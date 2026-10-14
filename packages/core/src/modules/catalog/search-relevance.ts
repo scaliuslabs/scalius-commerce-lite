@@ -3,7 +3,7 @@ import { categories, products } from "@scalius/database/schema";
 import { and, eq, or, sql, type SQL } from "drizzle-orm";
 
 import { publicCategoryConditions } from "../categories";
-import { searchMatch, searchRankJoin } from "../../search";
+import { searchMatch, searchRank } from "../../search";
 
 const MAX_CATEGORY_SLUG_SEARCH_LENGTH = 160;
 
@@ -38,7 +38,7 @@ export function productCategoryNameMatch(db: Database, query: string): SQL | und
  * Relevance order for product search (Baymard: title and product-type matches
  * first). Tier 0 = every term in the product title, tier 1 = the category name
  * matches, tier 2 = description-only. Inside a tier, FTS5's bm25 with the
- * title weighted 10x the description (`productSearchRankJoin`, on every
+ * title weighted 10x the description (`productSearchRank`, on every
  * provider), then the title.
  */
 export function productSearchRelevanceOrder(db: Database, query: string): SQL[] {
@@ -50,17 +50,17 @@ export function productSearchRelevanceOrder(db: Database, query: string): SQL[] 
     ELSE 2
   END`;
   const title = sql`${products.name}`;
-  const rank = productSearchRankJoin(db, query);
+  const rank = productSearchRank(db, query);
   return rank ? [tier, rank.score, title] : [tier, title];
 }
 
 /**
- * The bm25 score of every product matching the query (`search_rank`), one
- * set the caller LEFT JOINs to `products` whenever it orders by
- * productSearchRelevanceOrder. A correlated per-row score re-ran the search
- * for every candidate: 3 s of D1 time for a query such as "gaming" whose
- * category match brings in thousands of products.
+ * The bm25 score of each product for the query. On D1 it is one set
+ * (`search_rank`) the caller LEFT JOINs (`join`) to `products` whenever it
+ * orders by productSearchRelevanceOrder: a correlated per-row MATCH re-ran
+ * the search for every candidate, 3 s of D1 time for a query such as
+ * "gaming" whose category match brings in thousands of products.
  */
-export function productSearchRankJoin(db: Database, query: string) {
-  return searchRankJoin(db, "products", query, { alias: "search_rank", weights: [10, 1] });
+export function productSearchRank(db: Database, query: string) {
+  return searchRank(db, "products", query, { alias: "search_rank", weights: [10, 1] });
 }

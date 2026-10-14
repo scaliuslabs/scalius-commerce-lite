@@ -76,6 +76,8 @@ describe.runIf(postgresUrl)("0152 search index on PostgreSQL", { timeout: 300_00
     await upgraded.query("COMMIT");
     const [expected, actual] = await Promise.all([catalog(freshClient), catalog(upgraded)]);
     expect(actual).toEqual(expected);
+    const statistics = "SELECT attstattarget FROM pg_attribute WHERE attrelid = 'search_fts_terms'::regclass AND attname = 'term'";
+    for (const client of [freshClient, upgraded]) expect((await client.query(statistics)).rows).toEqual([{ attstattarget: 10000 }]);
     expect((await upgraded.query(TERMS)).rows).toEqual((await freshClient.query(TERMS)).rows);
     expect((await upgraded.query("SELECT term FROM search_fts_terms WHERE doc_id = 'p1' AND col = 1 ORDER BY term")).rows.map((row) => row.term))
       .toEqual(["100", "cotton", "জামা", "প্রোডাক্ট", "৫০০"]);

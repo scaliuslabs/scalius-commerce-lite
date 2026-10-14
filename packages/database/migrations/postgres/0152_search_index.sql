@@ -10,6 +10,8 @@ CREATE TABLE search_fts_terms (
   tf bigint NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE search_fts_terms ALTER COLUMN term SET STATISTICS 10000;
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."search_fts_terms_products_insert_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -417,6 +419,6 @@ WITH words AS (SELECT src.id AS doc_id, 0 AS col, substr(value, 1, 100) AS term 
 --> statement-breakpoint
 CREATE INDEX search_fts_terms_term_idx ON search_fts_terms (source, term, col, doc_id, tf);
 --> statement-breakpoint
-CREATE INDEX search_fts_terms_doc_idx ON search_fts_terms (source, doc_id, tf);
+CREATE INDEX search_fts_terms_doc_idx ON search_fts_terms (source, doc_id, term, col, tf);
 --> statement-breakpoint
 INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (152, '0152_search_index', '32c542b59fa136f6dbb7ec51231204dbebced72504c0f15ea7e2ff2a2316e13a');

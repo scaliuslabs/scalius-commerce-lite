@@ -18,7 +18,7 @@ import {
     planKeysetPage,
 } from "../../utils/keyset";
 import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
-import { searchKeyColumn, searchKeys, searchRankJoin } from "../../search";
+import { searchKeyColumn, searchKeys, searchRank } from "../../search";
 import { anySetIsSmall } from "../../utils/list-lead";
 import { ValidationError } from "@scalius/core/errors";
 import {
@@ -159,10 +159,10 @@ export function productListConditions(db: Database, filter: ProductListFilter): 
     const searchKeySet = search ? productSearchKeys(db, search) : undefined;
     if (search && searchKeySet) {
         whereConditions.push(sql`products.${sql.raw(searchKeyColumn(db))} IN (${searchKeySet})`);
-        const rank = searchRankJoin(db, "products", search, { alias: "product_rank" });
+        const rank = searchRank(db, "products", search, { alias: "product_rank" });
         if (rank) {
             rankExpression = sql`${rank.score} ASC`;
-            rankJoin = { join: rank.table, on: rank.on };
+            rankJoin = rank.join && { join: rank.join.table, on: rank.join.on };
         }
     }
 

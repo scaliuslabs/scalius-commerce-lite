@@ -217,8 +217,8 @@ export const SEARCH_INDEX_TABLE_STATEMENTS: readonly string[] = [
   `CREATE TABLE ${SEARCH_INDEX_TABLE} (\n  source text NOT NULL,\n  doc_id text NOT NULL,\n  col integer NOT NULL,\n  term text NOT NULL,\n  tf integer NOT NULL\n)`,
   // Term lookups and prefix ranges read only this index (tf included for bm25).
   `CREATE INDEX ${SEARCH_INDEX_TABLE}_term_idx ON ${SEARCH_INDEX_TABLE} (source, term, col, doc_id, tf)`,
-  // A row's terms (deletes) and its token count (tf: the document rows sum it from this index alone).
-  `CREATE INDEX ${SEARCH_INDEX_TABLE}_doc_idx ON ${SEARCH_INDEX_TABLE} (source, doc_id, tf)`,
+  // A row's terms: its deletes, its document row (term '', col -1) and its count sum, and bm25's per-row seeks.
+  `CREATE INDEX ${SEARCH_INDEX_TABLE}_doc_idx ON ${SEARCH_INDEX_TABLE} (source, doc_id, term, col, tf)`,
 ];
 
 /** Migration 0152 on Turso: the table, its triggers, the term rows, the document index and rows, then the term index. */

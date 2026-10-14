@@ -439,7 +439,10 @@ export function compileSqliteTriggerForPostgres(
 export function searchIndexPostgresSql(): { table: string[]; indexes: string[]; triggers: ReadonlyMap<string, string>; rebuild: string[] } {
   const [table, ...indexes] = SEARCH_INDEX_TABLE_STATEMENTS.map((statement) => `${collatePostgresTextColumns(compileSqliteDdlForPostgres(statement))};`);
   return {
-    table: [table!],
+    // A prefix range over 14M terms estimated at 1 row (default statistics):
+    // the rank join then ran as a nested loop, 38 s. 10,000 histogram buckets
+    // keep the estimate within an order of magnitude.
+    table: [table!, `ALTER TABLE ${SEARCH_INDEX_TABLE} ALTER COLUMN term SET STATISTICS 10000;`],
     indexes,
     triggers: new Map(searchIndexTriggers("postgres").map((trigger) => [trigger.name, compileSqliteTriggerForPostgres(trigger)])),
     rebuild: searchIndexRebuildStatements("postgres").map((statement) => `${statement};`),

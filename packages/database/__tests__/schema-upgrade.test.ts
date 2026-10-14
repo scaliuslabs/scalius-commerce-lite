@@ -787,7 +787,7 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         version: 152,
         name: "0152_search_index",
         sqliteStatements: 63,
-        postgresStatements: 40,
+        postgresStatements: 41,
       },
     ]);
   });

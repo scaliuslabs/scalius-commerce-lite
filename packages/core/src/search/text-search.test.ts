@@ -8,7 +8,7 @@ import {
   searchKeys,
   searchMatch,
   searchPrefixKeys,
-  searchRankJoin,
+  searchRank,
 } from "./text-search";
 import { productSearchRelevanceOrder } from "../modules/catalog/search-relevance";
 
@@ -27,8 +27,8 @@ describe("provider-aware text search", () => {
       .toEqual(["name : (men* clothing*)"]);
     expect(dialect.sqlToQuery(searchPrefixKeys(db, "customers", "phone", ["01712", "1712"])).params)
       .toEqual(["phone : (01712* OR 1712*)"]);
-    const rank = searchRankJoin(db, "products", "blue", { alias: "search_rank", weights: [10, 1] })!;
-    expect(dialect.sqlToQuery(rank.table).sql).toContain("bm25(products_fts, 10.0, 1.0)");
+    const rank = searchRank(db, "products", "blue", { alias: "search_rank", weights: [10, 1] })!;
+    expect(dialect.sqlToQuery(rank.join!.table).sql).toContain("bm25(products_fts, 10.0, 1.0)");
   });
 
   it("reads the search index on Turso and PostgreSQL: one index range per word", () => {
@@ -36,7 +36,7 @@ describe("provider-aware text search", () => {
     expect(isFts5SearchEnabled(db)).toBe(false);
     const query = dialect.sqlToQuery(searchMatch(db, "products", "Blue T-Shirt")!);
     expect(query.sql).not.toContain("products_fts");
-    expect(query.sql).toMatch(/^products\.id IN \(SELECT doc_id FROM search_fts_terms WHERE source = \? AND term >= \? AND term < \? INTERSECT /);
+    expect(query.sql).toMatch(/^products\.id IN \(SELECT doc_id FROM search_fts_terms AS t INDEXED BY search_fts_terms_term_idx WHERE source = \? AND term >= \? AND term < \? INTERSECT /);
     // "T-Shirt" is two FTS5 tokens; each word is a prefix of a stored term.
     expect(query.params).toEqual(["products", "blue", "bluf", "products", "t", "u", "products", "shirt", "shiru"]);
   });
@@ -54,10 +54,12 @@ describe("provider-aware text search", () => {
       .map((term) => dialect.sqlToQuery(term).sql)
       .join(" ");
     expect(order).not.toContain("_fts ");
-    expect(order).toContain("COALESCE(search_rank.rank_score, 0)");
-    const rank = dialect.sqlToQuery(searchRankJoin(turso(), "products", "bag", { alias: "search_rank", weights: [10, 1] })!.table).sql;
+    expect(order).toContain("doc_id = \"products\".id");
+    const ranked = searchRank(turso(), "products", "bag", { alias: "search_rank", weights: [10, 1] })!;
+    expect(dialect.sqlToQuery(ranked.join!.table).sql).toContain("count(DISTINCT doc_id)");
+    const rank = dialect.sqlToQuery(ranked.score).sql;
     expect(rank).toContain("CASE col WHEN 0 THEN 10.0 WHEN 1 THEN 1.0 ELSE 1.0 END * tf");
-    expect(rank).toContain("ln(");
+    expect(rank).toContain("search_rank.idf0");
   });
 
   it("caps user search terms below SQLite's bind limit", () => {

@@ -9,6 +9,6 @@ export {
   searchKeys,
   searchMatch,
   searchPrefixKeys,
-  searchRankJoin,
+  searchRank,
   type SearchSource,
 } from "./text-search";

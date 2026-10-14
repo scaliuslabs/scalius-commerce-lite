@@ -65,7 +65,7 @@ import {
     resolveNavigationItemsForPublic,
     type NavigationResourceSnapshotMap,
 } from "./navigation.resolver";
-import { searchMatch, searchRankJoin } from "../../search";
+import { searchMatch, searchRank } from "../../search";
 
 const NAVIGATION_REVISION_GUARD = "NAVIGATION_REVISION_CONFLICT";
 const NAVIGATION_PAGE_LIMIT = 100;
@@ -690,9 +690,9 @@ export async function searchNavigationMenuItems(
     }
     const limit = normalizeLimit(input.limit ?? 50);
     const searchCondition = searchMatch(db, "navigation_menu_items", query);
-    const rank = searchRankJoin(db, "navigation_menu_items", query, { alias: "item_rank" });
+    const rank = searchRank(db, "navigation_menu_items", query, { alias: "item_rank" });
     if (!searchCondition || !rank) return { items: [] };
-    const matches = await db
+    const itemsQuery = db
         .select({
             item: navigationMenuItems,
             childCount: sql<number>`(
@@ -702,7 +702,9 @@ export async function searchNavigationMenuItems(
             )`,
         })
         .from(navigationMenuItems)
-        .leftJoin(rank.table, rank.on)
+        .$dynamic();
+    if (rank.join) itemsQuery.leftJoin(rank.join.table, rank.join.on);
+    const matches = await itemsQuery
         .where(and(
             eq(navigationMenuItems.menuId, menuId),
             searchCondition,

@@ -107,10 +107,14 @@ function termCondition({ term, prefix }: IndexTerm): SQL {
 }
 
 const INDEX = sql.raw(SEARCH_INDEX_TABLE);
+// SQLite reads a term range or a row's terms through the index named here: inside an IN or a
+// UNION it would scan a whole source on the doc index for its doc id order. PostgreSQL drops the hint.
+const BY_TERM = sql.raw(`${SEARCH_INDEX_TABLE} AS t INDEXED BY ${SEARCH_INDEX_TABLE}_term_idx`);
+const BY_DOC = sql.raw(`${SEARCH_INDEX_TABLE} AS d INDEXED BY ${SEARCH_INDEX_TABLE}_doc_idx`);
 
 /** The rows of the index in one term's range (one index range scan each). */
 function termRows(columns: SQL, source: SearchSource, term: IndexTerm, col: number | undefined): SQL {
-  return sql`SELECT ${columns} FROM ${INDEX} WHERE source = ${source}${col === undefined ? sql`` : sql` AND col = ${col}`} AND ${termCondition(term)}`;
+  return sql`SELECT ${columns} FROM ${BY_TERM} WHERE source = ${source}${col === undefined ? sql`` : sql` AND col = ${col}`} AND ${termCondition(term)}`;
 }
 
 /**
@@ -168,76 +172,71 @@ export function searchMatch(db: Database, source: SearchSource, query: string, o
 }
 
 /**
- * Every row of `source` matching `query`, with its FTS5 bm25 score
- * (`rank_score`, lower is better; `weights` per column, else 1 each), as one
- * derived table `alias` the caller LEFT JOINs on `on`. Undefined when the
- * query has no word.
+ * The FTS5 bm25 score (lower is better; `weights` per column, else 1 each)
+ * of each row of `source` that matches every word of `query`, 0 for any
+ * other row: `score`, an expression over the row. Undefined when the query
+ * has no word.
  *
- * D1: FTS5's own bm25; `LIMIT -1` keeps SQLite from flattening the set back
- * into a per-row MATCH. Search index: the same formula over the same counts
- * (k1 1.2, b 0.75; idf from the rows each word matches, the row count and
- * the average row length), read in one pass over each word's term range.
+ * D1: FTS5's own bm25, as one derived table the caller LEFT JOINs (`join`;
+ * `LIMIT -1` keeps SQLite from flattening it back into a per-row MATCH).
+ *
+ * Search index: the same formula over the same counts (k1 1.2, b 0.75; idf
+ * from the rows each word matches, the row count and the average row
+ * length). The per-query constants are one row the caller LEFT JOINs
+ * (`join`, on 1 = 1); per row, one doc-index seek per word and for its
+ * length. A derived table of every match's score left PostgreSQL to
+ * estimate its rows (a prefix range over millions of terms), and a 1-row
+ * estimate planned a quadratic nested loop (2.3 s).
  */
-export function searchRankJoin(
+export function searchRank(
   db: Database,
   source: SearchSource,
   query: string,
   options: { alias: string; weights?: readonly number[] },
-): { table: SQL; on: SQL; score: SQL } | undefined {
-  const alias = sql.raw(options.alias);
-  const score = sql.raw(`COALESCE(${options.alias}.rank_score, 0)`);
-  const keyColumn = sql.raw(`${options.alias}.rank_key = "${source}".${searchKeyColumn(db)}`);
+): { join?: { table: SQL; on: SQL }; score: SQL } | undefined {
   if (isFts5SearchEnabled(db)) {
     const sanitized = sanitizeFtsQuery(query);
     if (!sanitized) return undefined;
     const fts = sql.raw(`${source}_fts`);
     const bm25 = options.weights ? sql.raw(`bm25(${source}_fts, ${options.weights.map((weight) => weight.toFixed(1)).join(", ")})`) : sql.raw("rank");
     return {
-      table: sql`(SELECT rowid AS rank_key, ${bm25} AS rank_score FROM ${fts} WHERE ${fts} MATCH ${sanitized} LIMIT -1) AS ${alias}`,
-      on: keyColumn,
-      score,
+      join: {
+        table: sql`(SELECT rowid AS rank_key, ${bm25} AS rank_score FROM ${fts} WHERE ${fts} MATCH ${sanitized} LIMIT -1) AS ${sql.raw(options.alias)}`,
+        on: sql.raw(`${options.alias}.rank_key = "${source}".rowid`),
+      },
+      score: sql.raw(`COALESCE(${options.alias}.rank_score, 0)`),
     };
   }
   const words = indexQuery(query);
   if (!words) return undefined;
   // Each term of a split word scores as its own phrase (FTS5 scores the phrase).
-  const terms = words.flat().map((term) => [term]);
-  if (terms.length === 0) {
-    return { table: sql`(SELECT NULL AS rank_key, 0 AS rank_score WHERE 0 = 1) AS ${alias}`, on: keyColumn, score };
-  }
+  const terms = words.flat();
+  // No term (a word of separators only) matches nothing; a bare 0 would read as an ORDER BY position.
+  if (terms.length === 0) return { score: sql`CAST(0 AS float)` };
+  const row = sql.raw(`"${source}".id`);
   const weights = options.weights;
-  const weighted = weights && weights.some((value) => value !== 1)
+  const weighted = sql.raw(weights && weights.some((value) => value !== 1)
     ? `CASE col ${weights.map((value, column) => `WHEN ${column} THEN ${value.toFixed(1)}`).join(" ")} ELSE 1.0 END * tf`
-    : "tf";
-  // One range scan per word: its weighted count in its own column, 0 in the others.
-  const instances = sql.join(terms.map((word, position) => termRows(
-    sql.raw(["doc_id", ...terms.map((_, other) => `${other === position ? weighted : "0"} AS f${other}`)].join(", ")),
-    source,
-    word[0]!,
-    undefined,
-  )), sql` UNION ALL `);
-  const sums = terms.map((_, position) => `CAST(sum(f${position}) AS float) AS f${position}`).join(", ");
-  const hits = terms.map((_, position) => `sum(CASE WHEN f${position} > 0 THEN 1 ELSE 0 END) OVER () AS h${position}`).join(", ");
+    : "tf");
+  const alias = sql.raw(options.alias);
+  const constant = (name: string) => sql.raw(`${options.alias}.${name}`);
+  const documents = sql`FROM ${BY_TERM} WHERE source = ${source} AND term = '' AND col = -1`;
+  const length = sql`(SELECT tf FROM ${BY_DOC} WHERE source = ${source} AND doc_id = ${row} AND term = '' AND col = -1)`;
   // FTS5: score = -sum(idf * (f * (k1 + 1)) / (f + k1 * (1 - b + b * D / avgdl))), idf = ln((N - n + 0.5) / (n + 0.5)) or 1e-6.
-  const bm25 = terms.map((_, position) => {
-    const idf = `max(ln(CAST(stats.row_count - m.h${position} + 0.5 AS float) / (m.h${position} + 0.5)), 0.000001)`;
-    return `${idf} * (m.f${position} * (1.2 + 1.0)) / (m.f${position} + 1.2 * (1 - 0.75 + 0.75 * doc.tf / stats.avgdl))`;
-  }).join(" + ");
-  return {
-    table: sql`(
-      SELECT m.doc_id AS rank_key, ${sql.raw(`-(${bm25})`)} AS rank_score
-      FROM (
-        SELECT matched.*, ${sql.raw(hits)}
-        FROM (SELECT doc_id, ${sql.raw(sums)} FROM (${instances}) AS instances GROUP BY doc_id) AS matched
-      ) AS m
-      INNER JOIN ${INDEX} AS doc ON doc.source = ${source} AND doc.term = '' AND doc.col = -1 AND doc.doc_id = m.doc_id
-      CROSS JOIN (
-        SELECT count(*) AS row_count, CAST(sum(tf) AS float) / count(*) AS avgdl
-        FROM ${INDEX} WHERE source = ${source} AND term = '' AND col = -1
-      ) AS stats
-      WHERE ${sql.raw(terms.map((_, position) => `m.f${position} > 0`).join(" AND "))}
-    ) AS ${alias}`,
-    on: keyColumn,
-    score,
-  };
+  // The per-query constants (each word's idf, the average row length) are one row, read once
+  // (`LIMIT 1` keeps SQLite from inlining it, where a nested evaluation reran them per row).
+  const counts = sql.join([
+    sql`(SELECT CAST(count(*) AS float) ${documents}) AS n`,
+    sql`(SELECT CAST(sum(tf) AS float) / count(*) ${documents}) AS avgdl`,
+    ...terms.map((term, position) => sql`(SELECT count(DISTINCT doc_id) FROM ${BY_TERM} WHERE source = ${source} AND ${termCondition(term)}) AS ${sql.raw(`h${position}`)}`),
+  ], sql`, `);
+  const idfs = sql.raw(terms.map((_, position) => `max(ln((counts.n - counts.h${position} + 0.5) / (counts.h${position} + 0.5)), 0.000001) AS idf${position}`).join(", "));
+  const constants = sql`(SELECT ${idfs}, counts.avgdl AS avgdl FROM (SELECT ${counts} LIMIT 1) AS counts LIMIT 1) AS ${alias}`;
+  // Per row, written (k1 + 1) / (1 + k1 * K / f) so each count is read once: one doc-index seek
+  // per word and for the length. f 0 (a row that misses a word) makes the score NULL, then 0.
+  const parts = terms.map((term, position) => {
+    const frequency = sql`(SELECT nullif(CAST(sum(${weighted}) AS float), 0) FROM ${BY_DOC} WHERE source = ${source} AND doc_id = ${row} AND ${termCondition(term)})`;
+    return sql`${constant(`idf${position}`)} * (1.2 + 1.0) / (1 + 1.2 * (1 - 0.75 + 0.75 * ${length} / ${constant("avgdl")}) / ${frequency})`;
+  });
+  return { join: { table: constants, on: sql`1 = 1` }, score: sql`COALESCE(-(${sql.join(parts, sql` + `)}), 0)` };
 }

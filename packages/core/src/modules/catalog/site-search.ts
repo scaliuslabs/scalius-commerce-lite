@@ -18,7 +18,7 @@ import { eq, sql, and, or, type SQL } from "drizzle-orm";
 import {
   sanitizeFtsQuery,
   searchMatch,
-  searchRankJoin,
+  searchRank,
 } from "../../search";
 import {
   buildBuyerCatalogPricingProjection,
@@ -32,7 +32,7 @@ import { marketPriceContextOf, priceProductCards, type MarketPricing } from "../
 import { loadProductCardImages, priceFilterBoundsMinor } from "./shared";
 import { fromMinor } from "@scalius/shared/money";
 import { suggestSearchCorrection } from "./search-correction";
-import { productCategoryNameMatch, productSearchRankJoin, productSearchRelevanceOrder } from "./search-relevance";
+import { productCategoryNameMatch, productSearchRank, productSearchRelevanceOrder } from "./search-relevance";
 
 // Types for search results
 export type ProductSearchResult = {
@@ -206,7 +206,7 @@ async function runSearch(
         ...publicCategoryConditions(),
       ))
       .$dynamic();
-    const rankJoin = hasValidQuery && !ranked ? productSearchRankJoin(db, query) : undefined;
+    const rankJoin = hasValidQuery && !ranked ? productSearchRank(db, query)?.join : undefined;
     if (rankJoin) productQuery.leftJoin(rankJoin.table, rankJoin.on);
     productQuery
       .where(and(...productConditions))
@@ -222,7 +222,7 @@ async function runSearch(
       if (pageCond) pageConditions.push(pageCond);
     }
     // Best match first (FTS5 rank), then by title.
-    const pageRank = hasValidQuery && searchPages ? searchRankJoin(db, "pages", query, { alias: "page_rank" }) : undefined;
+    const pageRank = hasValidQuery && searchPages ? searchRank(db, "pages", query, { alias: "page_rank" }) : undefined;
     const pageQuery = db
       .select({
         id: pages.id,
@@ -232,7 +232,7 @@ async function runSearch(
       })
       .from(pages)
       .$dynamic();
-    if (pageRank) pageQuery.leftJoin(pageRank.table, pageRank.on);
+    if (pageRank?.join) pageQuery.leftJoin(pageRank.join.table, pageRank.join.on);
     pageQuery
       .where(searchPages ? and(...pageConditions) : sql`1 = 0`)
       .orderBy(...(pageRank ? [pageRank.score] : []), pages.title, pages.id)
@@ -244,7 +244,7 @@ async function runSearch(
       const catCond = searchMatch(db, "categories", query);
       if (catCond) categoryConditions.push(catCond);
     }
-    const categoryRank = hasValidQuery && searchCategories ? searchRankJoin(db, "categories", query, { alias: "category_rank" }) : undefined;
+    const categoryRank = hasValidQuery && searchCategories ? searchRank(db, "categories", query, { alias: "category_rank" }) : undefined;
     const categoryQuery = db
       .select({
         id: categories.id,
@@ -254,7 +254,7 @@ async function runSearch(
       })
       .from(categories)
       .$dynamic();
-    if (categoryRank) categoryQuery.leftJoin(categoryRank.table, categoryRank.on);
+    if (categoryRank?.join) categoryQuery.leftJoin(categoryRank.join.table, categoryRank.join.on);
     categoryQuery
       .where(searchCategories ? and(...categoryConditions) : sql`1 = 0`)
       .orderBy(...(categoryRank ? [categoryRank.score] : []), categories.name, categories.id)
