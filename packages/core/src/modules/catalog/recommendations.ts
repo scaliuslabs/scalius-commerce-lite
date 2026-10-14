@@ -49,7 +49,7 @@ import {
 } from "../products";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { marketPriceContextOf, priceProductCards, type MarketPricing } from "../price-lists";
-import { presentCardRating, reviewStats, reviewStatsJoin, type CardRating } from "./shared";
+import { presentCardRating, publishedCategoryIdSet, reviewStats, reviewStatsJoin, type CardRating } from "./shared";
 import {
     buyerState,
     buyerStateCardSku,
@@ -242,7 +242,7 @@ export async function rankRecommendationRows(
     const rows = await db.all<Omit<RankedRecommendationRow, "id"> & {
         id: string | null; popularAt: number | null; alsoBoughtAt: number | null;
     }>(sql`
-        WITH rec_source AS (
+        WITH rec_source AS MATERIALIZED (
             SELECT DISTINCT CAST(value AS TEXT) AS product_id FROM json_each(${JSON.stringify(sourceIds)})
         ),
         -- The source products' latest order lines (order_items_product_recent_idx),
@@ -260,12 +260,12 @@ export async function rankRecommendationRows(
             LEFT JOIN recommendation_order_products AS source_pair
                 ON source_pair.order_id = source_line.order_id AND source_pair.product_id = source_line.product_id
         ),
-        rec_source_orders AS (
+        rec_source_orders AS MATERIALIZED (
             SELECT order_id, created_at, buyer FROM rec_source_lines
             WHERE created_at >= ${now} - ${n(ALSO_BOUGHT_WINDOW_SECONDS)}
         ),
         -- An order's pairs share its buyer.
-        rec_co AS (
+        rec_co AS MATERIALIZED (
             SELECT peer.product_id, COUNT(DISTINCT peer.buyer) AS buyers
             FROM recommendation_order_products AS peer
             WHERE peer.order_id IN (SELECT order_id FROM rec_source_orders)
@@ -273,14 +273,14 @@ export async function rankRecommendationRows(
             GROUP BY peer.product_id
         ),
         -- The popularity window's latest order/product pairs.
-        rec_popular_sample AS (
+        rec_popular_sample AS MATERIALIZED (
             SELECT sample.product_id, sample.buyer, sample.created_at
             FROM recommendation_order_products AS sample
             WHERE sample.created_at >= ${now} - ${n(POPULAR_WINDOW_SECONDS)}
-            ORDER BY sample.created_at DESC, sample.order_id DESC
+            ORDER BY sample.created_at DESC, sample.product_id DESC, sample.buyer DESC
             LIMIT ${n(POPULAR_SAMPLE_PAIRS)}
         ),
-        rec_popular AS (
+        rec_popular AS MATERIALIZED (
             SELECT popular.product_id, COUNT(DISTINCT popular.buyer) AS buyers,
                 MIN(buyer_state.product_created_at) AS created_at
             FROM rec_popular_sample AS popular
@@ -289,14 +289,14 @@ export async function rankRecommendationRows(
             GROUP BY popular.product_id
         ),
         -- Popularity orders the tail only when it can fill at least half the list.
-        rec_switch AS (
+        rec_switch AS MATERIALIZED (
             SELECT CASE WHEN 2 * (SELECT COUNT(*) FROM (
                 SELECT 1 FROM rec_popular WHERE buyers >= ${n(MIN_POPULAR_BUYERS)} LIMIT ${n(Math.ceil(limit / 2))}
             ) AS witness) >= (SELECT COUNT(*) FROM (
                 SELECT 1 FROM product_buyer_state AS population WHERE ${eligible("population")} LIMIT ${n(limit)}
             ) AS population_sample) THEN 1 ELSE 0 END AS popular
         ),
-        rec_band AS (
+        rec_band AS MATERIALIZED (
             SELECT MIN(${bandPrice}) AS min_price, MAX(${bandPrice}) AS max_price
             FROM product_variants AS band_sku
             INNER JOIN products AS band_product ON band_product.id = band_sku.product_id
@@ -304,15 +304,14 @@ export async function rankRecommendationRows(
               AND band_sku.deleted_at IS NULL AND band_sku.id <> 'default'
               AND ${operationalSkuRowPredicate("band_sku")}
         ),
-        rec_categories AS (
+        rec_categories AS MATERIALIZED (
             SELECT DISTINCT source_product.category_id AS id
             FROM products AS source_product
-            INNER JOIN categories AS category ON category.id = source_product.category_id
-                AND category.status = 'published' AND category.deleted_at IS NULL
             WHERE source_product.id IN (SELECT product_id FROM rec_source)
+              AND source_product.category_id IN ${publishedCategoryIdSet(sql`1 = 1`)}
         ),
         -- Each active collection holding a source: its manual ids, or its published rule categories.
-        rec_collection_links AS (
+        rec_collection_links AS MATERIALIZED (
             SELECT collection.id AS collection_id, CAST(member.value AS TEXT) AS product_id, CAST(NULL AS TEXT) AS category_id
             FROM collections AS collection
             CROSS JOIN ${collectionIdList("collection.config", "productIds")} AS member
@@ -330,7 +329,7 @@ export async function rankRecommendationRows(
               AND EXISTS (SELECT 1 FROM ${collectionIdList("collection.config", "categoryIds")} AS hit
                   WHERE CAST(hit.value AS TEXT) IN (SELECT id FROM rec_categories))
         ),
-        rec_values AS (
+        rec_values AS MATERIALIZED (
             SELECT DISTINCT source_value.attribute_id, source_value.value
             FROM product_attribute_values AS source_value
             INNER JOIN product_attributes AS attribute
@@ -358,14 +357,18 @@ export async function rankRecommendationRows(
                      AND cutoff.product_id NOT IN (SELECT product_id FROM rec_source)
                    ORDER BY cutoff.product_created_at DESC LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
                ) AS newest)
-            UNION SELECT peer_value.product_id FROM rec_values AS source_value
-            LEFT JOIN product_attribute_values AS peer_value
-                ON peer_value.attribute_id = source_value.attribute_id AND peer_value.value = source_value.value
-               AND peer_value.product_id <= (SELECT MAX(first_value.product_id) FROM (
-                   SELECT cutoff.product_id FROM product_attribute_values AS cutoff
-                   WHERE cutoff.attribute_id = source_value.attribute_id AND cutoff.value = source_value.value
-                   ORDER BY cutoff.product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
-               ) AS first_value)
+            UNION SELECT product_id FROM (
+                SELECT peer_value.product_id FROM rec_values AS source_value
+                LEFT JOIN product_attribute_values AS peer_value
+                    ON peer_value.attribute_id = source_value.attribute_id AND peer_value.value = source_value.value
+                   AND peer_value.product_id <= (SELECT MAX(first_value.product_id) FROM (
+                       SELECT cutoff.product_id FROM product_attribute_values AS cutoff
+                       WHERE cutoff.attribute_id = source_value.attribute_id AND cutoff.value = source_value.value
+                       ORDER BY cutoff.product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
+                   ) AS first_value)
+                GROUP BY peer_value.product_id
+                ORDER BY COUNT(*) DESC, peer_value.product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
+            ) AS attribute_peer
         ),
         rec_tail AS (
             SELECT product_id FROM (

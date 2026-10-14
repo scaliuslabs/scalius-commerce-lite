@@ -233,7 +233,10 @@ describe("product recommendations", () => {
         const plan = rankingPlan();
         expect(plan).toContain("SEARCH line USING COVERING INDEX order_items_product_recent_idx (product_id=? AND created_at>?)");
         expect(plan).toMatch(/SEARCH source_pair USING (COVERING )?INDEX sqlite_autoindex_recommendation_order_products_1 \(order_id=\? AND product_id=\?\)/);
-        expect(plan).toContain("SEARCH sample USING INDEX recommendation_order_products_created_idx (created_at>?)");
+        expect(plan).toContain("SEARCH sample USING COVERING INDEX recommendation_order_products_created_idx (created_at>?)");
+        // The source products drive their category lookup, never every product of every category.
+        expect(plan).toMatch(/SEARCH source_product USING INDEX sqlite_autoindex_products_1 \(id=\?\)/);
+        expect(plan).not.toContain("SEARCH source_product USING INDEX products_category_id_idx");
         expect(plan).toMatch(/SEARCH peer USING (COVERING )?INDEX sqlite_autoindex_recommendation_order_products_1 \(order_id=\?\)/);
         expect(plan).toContain("SEARCH candidate USING INDEX sqlite_autoindex_product_buyer_state_1 (product_id=?)");
         expect(plan).toMatch(/SEARCH peer USING (COVERING )?INDEX product_buyer_state_category_newest_idx \(is_public=\? AND category_id=\? AND product_created_at/);
