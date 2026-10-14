@@ -66,6 +66,29 @@ describe("event outbox dispatch", () => {
     await expect(dispatchPendingEvents({ db, targets: EVENT_FAN_OUT_TARGETS })).resolves.toMatchObject({ scanned: 0 });
   });
 
+  it("reads and settles a backlog by bounded index walks, never every due row", async () => {
+    const queries: Array<{ sql: string; params: unknown[] }> = [];
+    sqlite.close();
+    ({ sqlite, db } = createSqliteD1Database({ onQuery: (sql, params) => queries.push({ sql, params: [...params] }) }));
+    for (let index = 0; index < 60; index += 1) insertOrder(sqlite, `ord_${index}`);
+    queries.length = 0;
+    const result = await dispatchPendingEvents({ db, targets: EVENT_FAN_OUT_TARGETS, limit: 2 });
+    // A settle is one statement whatever it takes: a full batch, not the fan-out limit.
+    expect(result.settledWithoutSubscribers).toBe(50);
+    const outbox = queries.filter((query) => query.sql.includes("event_outbox"));
+    expect(outbox).toHaveLength(2);
+    for (const query of outbox) {
+      const plan = (sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...(query.params as never[])) as Array<{ detail: string }>)
+        .map((step) => step.detail.replace("USING COVERING INDEX", "USING INDEX"));
+      expect(plan.filter((step) => /^(SCAN|SEARCH) event_outbox\b/.test(step))).toEqual([
+        "SEARCH event_outbox USING INDEX sqlite_autoindex_event_outbox_1 (id=?)",
+        "SEARCH event_outbox USING INDEX event_outbox_due_idx (status=? AND next_attempt_at<?)",
+        "SEARCH event_outbox USING INDEX event_outbox_due_idx (status=? AND next_attempt_at<?)",
+        "SEARCH event_outbox USING INDEX event_outbox_claim_idx (status=? AND claim_expires_at<?)",
+      ]);
+    }
+  });
+
   it("dispatches due events, fans out once per subscription and event, and is idempotent on redelivery", async () => {
     const { subscription } = await createWebhookSubscription(db, {
       url: "https://hooks.example.com/orders",

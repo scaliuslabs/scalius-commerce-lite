@@ -182,7 +182,9 @@ export async function dispatchPendingEvents(options: {
         dispatchedAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
       })
-      .where(and(sql`${eventOutbox.id} IN (${dueEventIds(EVENT_FLUSH_BATCH_SIZE)})`, claimableCondition()))
+      // The due set is read in this statement, so it needs no second claimable
+      // test (one beside it let SQLite walk every due row's status index).
+      .where(sql`${eventOutbox.id} IN (${dueEventIds(EVENT_FLUSH_BATCH_SIZE)})`)
       .returning(flushedColumns());
     for (const row of settled) {
       const event = toOutboxEvent(row);
