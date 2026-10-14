@@ -77,12 +77,14 @@ async function namedRows<T extends Record<string, unknown>>(
 /**
  * The clock row as one source `clock` (columns `s`, `floor`): S is null
  * without the row, so a missing authority row never mints a zero proof.
+ * The newest seq is a scalar subquery: SQLite answers a scalar `MAX` with one
+ * index seek, but a `MAX` in a joined derived table with a full index scan
+ * (every render and admin write read all of `cache_dep`).
  */
 const CLOCK = sql`(
   SELECT CASE WHEN k."m" > c."seq" THEN k."m" ELSE c."seq" END AS s, COALESCE(c."floor", 0) AS floor
-  FROM (SELECT 1 AS one) base
+  FROM (SELECT (SELECT MAX("seq") FROM "cache_dep") AS m) k
   LEFT JOIN "cache_clock" c ON c."id" = 1
-  LEFT JOIN (SELECT MAX("seq") AS m FROM "cache_dep") k ON 1 = 1
 ) clock`;
 
 /** Change rows as (dep, seq), each key once at its largest seq, ascending. */
