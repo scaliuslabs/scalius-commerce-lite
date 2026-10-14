@@ -433,11 +433,14 @@ export function compileSqliteTriggerForPostgres(
  * The search index in PostgreSQL form (search-index.ts): its table and
  * indexes, its triggers by name (one translate() pass per column instead of
  * SQLite's staged replace() chains), and its rebuild from the source rows.
- * It is derived, so it is created after the rows are loaded.
+ * It is derived, so it is created after the rows are loaded, and its indexes
+ * after its rebuild.
  */
-export function searchIndexPostgresSql(): { table: string[]; triggers: ReadonlyMap<string, string>; rebuild: string[] } {
+export function searchIndexPostgresSql(): { table: string[]; indexes: string[]; triggers: ReadonlyMap<string, string>; rebuild: string[] } {
+  const [table, ...indexes] = SEARCH_INDEX_TABLE_STATEMENTS.map((statement) => `${collatePostgresTextColumns(compileSqliteDdlForPostgres(statement))};`);
   return {
-    table: SEARCH_INDEX_TABLE_STATEMENTS.map((statement) => `${collatePostgresTextColumns(compileSqliteDdlForPostgres(statement))};`),
+    table: [table!],
+    indexes,
     triggers: new Map(searchIndexTriggers("postgres").map((trigger) => [trigger.name, compileSqliteTriggerForPostgres(trigger)])),
     rebuild: searchIndexRebuildStatements("postgres").map((statement) => `${statement};`),
   };
@@ -590,6 +593,7 @@ export async function compileCanonicalPostgresSchema(
       ...compiledTriggers,
       ...changeLog,
       ...(searchIndex?.rebuild ?? []),
+      ...(searchIndex?.indexes ?? []),
       "COMMIT;",
       "",
     ].join("\n\n");

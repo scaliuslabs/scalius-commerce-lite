@@ -18,7 +18,8 @@ type All = (sql: string, ...params: unknown[]) => Promise<unknown[]>;
 
 /** The schema runner's connection surface over a local Turso engine database. */
 export function tursoEngineConnection(database: TursoEngineDatabase) {
-  const all: All = async (sql, ...params) => await database.prepare(sql).all(...params as never[]) as unknown[];
+  // The engine prepares synchronously; its typings declare a promise.
+  const all: All = async (sql, ...params) => await (await database.prepare(sql)).all(...params as never[]) as unknown[];
   return {
     all,
     transactionAsync<T>(callback: (transaction: { all: All; batch(statements: string[]): Promise<unknown> }) => Promise<T>) {
@@ -97,13 +98,13 @@ export function createTursoEngineDatabase(engine: TursoEngineDatabase): Database
               const sql = typeof entry === "string" ? entry : entry.sql;
               const args = typeof entry === "string" || entry.args === undefined ? [] : entry.args;
               if (!Array.isArray(args)) throw new Error("The Turso engine harness accepts positional arguments only.");
-              const prepared = engine.prepare(sql);
+              const prepared = await engine.prepare(sql);
               if (!prepared.reader) {
                 const result = await prepared.run(...args as never[]);
                 results.push({ rows: [], rowsAffected: Number(result.changes) });
               } else {
                 const rows = await prepared.raw(true).all(...args as never[]) as unknown[];
-                results.push({ columns: prepared.columns().map((column) => column.name), rows, rowsAffected: 0 });
+                results.push({ columns: prepared.columns().map((column: { name: string }) => column.name), rows, rowsAffected: 0 });
               }
             }
             return results;

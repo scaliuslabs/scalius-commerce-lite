@@ -5,6 +5,7 @@
  * timestamp, JSON). CHECK constraints and triggers stay opaque: the generator
  * proposes values and the database is the judge.
  */
+import { SEARCH_INDEX_TABLE } from "@scalius/database/search-index";
 import type { DatabaseSync } from "node:sqlite";
 import { is } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
@@ -95,9 +96,9 @@ function checkJsonColumns(createSql: string): Set<string> {
   return columns;
 }
 
-/** FTS5 virtual tables and their shadow tables are maintained by triggers, never written directly. */
+/** FTS5 virtual tables, their shadow tables and the search index are maintained by triggers, never written directly. */
 function isDerivedStorage(name: string, virtualTables: ReadonlySet<string>): boolean {
-  if (virtualTables.has(name)) return true;
+  if (virtualTables.has(name) || name === SEARCH_INDEX_TABLE) return true;
   return [...virtualTables].some((base) => name.startsWith(`${base}_`));
 }
 

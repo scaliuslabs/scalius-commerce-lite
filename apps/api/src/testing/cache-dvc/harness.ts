@@ -252,7 +252,8 @@ export class DvcHarness {
 
   static async create(config: DvcHarnessConfig): Promise<DvcHarness> {
     const rng = new Rng(config.seed);
-    const sqlite = createMigratedSqlite();
+    // Turso runs on its own schema (no FTS5; the search index instead).
+    const sqlite = createMigratedSqlite({ provider: config.provider === "turso" ? "turso" : "d1" });
     let harnessNow = () => DVC_SEED_EPOCH * 1000;
     // SQL publication guards and JS deadlines must advance on the same clock.
     sqlite.function("unixepoch", () => Math.floor(harnessNow() / 1000));

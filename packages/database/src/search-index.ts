@@ -191,30 +191,45 @@ export function searchIndexTriggers(dialect: SearchIndexDialect): SearchIndexTri
   });
 }
 
+const SOURCES = Object.keys(SEARCH_SOURCES) as SearchSource[];
+
+/** SQLite: every source's term rows, then (`documents`) every source's document rows, read from the term rows. */
+const sqliteRebuild = {
+  terms: () => SOURCES.flatMap((source) => SEARCH_SOURCES[source].map((_, index) => sqliteTermRows(source, index, true))),
+  documents: () => SOURCES.map((source) =>
+    `${INSERT} SELECT ${quote(source)}, src.id, -1, '', coalesce(terms.tokens, 0) FROM ${source} AS src LEFT JOIN (SELECT doc_id, sum(tf) AS tokens FROM ${SEARCH_INDEX_TABLE} WHERE source = ${quote(source)} GROUP BY doc_id) AS terms ON terms.doc_id = src.id`),
+};
+
 /** Rebuilds the whole index from its sources (the migration backfill, and after an import). */
 export function searchIndexRebuildStatements(dialect: SearchIndexDialect): string[] {
   return [
     `DELETE FROM ${SEARCH_INDEX_TABLE}`,
-    ...(Object.keys(SEARCH_SOURCES) as SearchSource[]).flatMap((source) => dialect === "postgres" ? [postgresIndexStatement(source, true)] : [
-      ...SEARCH_SOURCES[source].map((_, index) => sqliteTermRows(source, index, true)),
-      `${INSERT} SELECT ${quote(source)}, src.id, -1, '', coalesce(terms.tokens, 0) FROM ${source} AS src LEFT JOIN (SELECT doc_id, sum(tf) AS tokens FROM ${SEARCH_INDEX_TABLE} WHERE source = ${quote(source)} GROUP BY doc_id) AS terms ON terms.doc_id = src.id`,
-    ]),
+    ...(dialect === "postgres" ? SOURCES.map((source) => postgresIndexStatement(source, true)) : [...sqliteRebuild.terms(), ...sqliteRebuild.documents()]),
   ];
 }
 
-/** The table and its two indexes (SQLite DDL; the PostgreSQL schema compiles it). */
+/**
+ * The table, then its two indexes (SQLite DDL; the PostgreSQL schema compiles
+ * it). A backfill builds an index once, sorted, after its rows: far cheaper
+ * than millions of inserts into it in term order.
+ */
 export const SEARCH_INDEX_TABLE_STATEMENTS: readonly string[] = [
   `CREATE TABLE ${SEARCH_INDEX_TABLE} (\n  source text NOT NULL,\n  doc_id text NOT NULL,\n  col integer NOT NULL,\n  term text NOT NULL,\n  tf integer NOT NULL\n)`,
   // Term lookups and prefix ranges read only this index (tf included for bm25).
   `CREATE INDEX ${SEARCH_INDEX_TABLE}_term_idx ON ${SEARCH_INDEX_TABLE} (source, term, col, doc_id, tf)`,
-  `CREATE INDEX ${SEARCH_INDEX_TABLE}_doc_idx ON ${SEARCH_INDEX_TABLE} (source, doc_id)`,
+  // A row's terms (deletes) and its token count (tf: the document rows sum it from this index alone).
+  `CREATE INDEX ${SEARCH_INDEX_TABLE}_doc_idx ON ${SEARCH_INDEX_TABLE} (source, doc_id, tf)`,
 ];
 
-/** Migration 0152 on Turso: the table, its triggers and its backfill. */
+/** Migration 0152 on Turso: the table, its triggers, the term rows, the document index and rows, then the term index. */
 export function searchIndexSqliteMigrationStatements(): string[] {
+  const [table, termIndex, documentIndex] = SEARCH_INDEX_TABLE_STATEMENTS;
   return [
-    ...SEARCH_INDEX_TABLE_STATEMENTS,
+    table!,
     ...searchIndexTriggers("sqlite").map((trigger) => trigger.sql),
-    ...searchIndexRebuildStatements("sqlite").slice(1),
+    ...sqliteRebuild.terms(),
+    documentIndex!,
+    ...sqliteRebuild.documents(),
+    termIndex!,
   ];
 }
