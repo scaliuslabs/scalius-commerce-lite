@@ -304,7 +304,7 @@ export interface StorefrontProductPage {
     rating: { average: number; count: number } | null;
     /** The merchant's option axes, in order, with their values. */
     options: Array<{ name: string; values: Array<{ label: string; swatch: string | null }> }>;
-    /** Purchasable SKUs (100 at most), each with its value of every option, in option order. */
+    /** The buyer's SKUs (100 at most; sold-out ones `available: false`), each with its value of every option, in option order. */
     variants: Array<{
       id: string;
       title: string;
