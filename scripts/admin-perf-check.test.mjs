@@ -99,6 +99,14 @@ describe("admin perf check: route bundles", () => {
     expect(report.routes.find((route) => route.route === "scanner.tsx").lazyOnly).toEqual([]);
   });
 
+  it("allows a route up to the headroom over its budget and fails it beyond", () => {
+    const report = measureRoutes({ chunks: fixtureChunks(), parentByFile: parseRouteTree(ROUTE_TREE), routesDir: ROUTES, brotliBytes });
+    const over = (budget) => validateBundleReport(report, { ...BUNDLE_BUDGETS, entry: 1000, routes: { "admin/orders/_list/index.tsx": budget } })
+      .some((failure) => failure.includes("admin/orders/_list/index.tsx needs"));
+    expect(over(248.5)).toBe(false);
+    expect(over(247.9)).toBe(true);
+  });
+
   it("fails a route over budget, a lazy-only library on first render, and a stale budget entry", () => {
     const chunks = fixtureChunks();
     chunks.find((item) => item.fileName === "list.js").imports.push("qr.js");
