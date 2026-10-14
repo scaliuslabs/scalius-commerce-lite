@@ -10,6 +10,8 @@ import { getPluginInstallation, getPluginKv, installPlugin, setPluginKv } from "
 import { syncBundledPlugins } from "./bundled-sync";
 import { FIXTURE_APPS, HELLO_BUNDLED } from "./testing/fixture-apps";
 import { manifest as helloManifest } from "./testing/apps/hello/src/index";
+import { BUNDLED_PLUGINS } from "./bundled.gen";
+import noorStored from "./testing/noor-1.1.0.stored.json";
 
 describe("bundled plugin sync", () => {
   let sqlite: DatabaseSync;
@@ -36,6 +38,22 @@ describe("bundled plugin sync", () => {
     // Added back, it installs again (waiting for approval) and finds its data.
     expect((await syncBundledPlugins(db, { "acme.hello": HELLO_BUNDLED })).installed).toEqual(["acme.hello"]);
     expect(await getPluginKv(db, "acme.hello", "paid_count")).toBe(3);
+  });
+
+  it("updates the demo's stored Noor 1.1.0 to the bundled Noor in place, still active (presentation needs no new approval)", async () => {
+    // The live row as the deploy found it: stored before route-drawn sections
+    // were retired, so every section carries `reads: []`.
+    sqlite.prepare(`INSERT INTO plugin_installations
+      (plugin_id, version, source, bundle_sha256, manifest_json, grant_json, grant_key, status, activated_at, revision)
+      VALUES ('scalius.noor', '1.1.0', 'bundled', ?, ?, ?, ?, 'active', unixepoch(), 9)`)
+      .run("ab".repeat(32), JSON.stringify(noorStored.manifest), JSON.stringify(noorStored.grant), JSON.stringify(noorStored.grant));
+    expect(await getPluginInstallation(db, "scalius.noor")).toMatchObject({ version: "1.1.0", status: "active" });
+    const noor = BUNDLED_PLUGINS["scalius.noor"]!;
+    const result = await syncBundledPlugins(db, { "scalius.noor": noor });
+    expect(result).toMatchObject({ updated: ["scalius.noor"], failed: [] });
+    // If a later Noor asks for scopes, hosts or providers, this expectation is
+    // the one to change: it then waits for approval (`needsApproval`).
+    expect(await getPluginInstallation(db, "scalius.noor")).toMatchObject({ version: noor.version, bundleSha256: noor.sha256, status: "active" });
   });
 
   it("never touches an app installed from a registry or an upload", async () => {

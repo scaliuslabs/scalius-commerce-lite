@@ -85,3 +85,36 @@ describe("rows stored before scopes", () => {
     expect(parseStoredPluginGrant(JSON.stringify({ ...flags, scopes: ["orders.view"] }))).toBeNull();
   });
 });
+
+describe("rows stored before route-drawn sections were retired", () => {
+  // As every row stored then: the schema filled `reads: []` on each section and product block.
+  const stored = {
+    id: "acme.sections",
+    name: "Sections",
+    version: "1.0.0",
+    apiVersion: PLUGIN_API_VERSION,
+    description: "Draws sections.",
+    author: { name: "Acme" },
+    scopes: [],
+    routes: { admin: [], public: [{ name: "note", methods: ["GET"] }], webhooks: [] },
+    storage: { notes: {} },
+    storefront: {
+      sections: [
+        { type: "hero", name: "Hero", settings: [], reads: [] },
+        { type: "reviews", name: "Reviews", settings: [], route: "note", reads: ["notes"] },
+      ],
+      productBlocks: [{ type: "badge", name: "Badge", placement: "below", settings: [], reads: [] }],
+      blocks: [{ type: "note", name: "Note", target: "purchase.thank-you.customer-information.render-after", route: "note", reads: ["notes"] }],
+    },
+  };
+
+  it("reads them: components drop the empty reads, route-drawn ones are gone, checkout blocks keep theirs", () => {
+    expect(parsePluginManifest(stored).ok).toBe(false);
+    const parsed = parsePluginManifest(upgradeStoredPluginManifest(stored));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.manifest.storefront.sections.map((section) => section.type)).toEqual(["hero"]);
+    expect(parsed.manifest.storefront.productBlocks.map((block) => block.type)).toEqual(["badge"]);
+    expect(parsed.manifest.storefront.blocks[0]).toMatchObject({ route: "note", reads: ["notes"] });
+  });
+});

@@ -155,12 +155,25 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
 }
 
 /**
- * A manifest stored before scopes, read as the scopes it asked for: each RBAC
- * permission becomes the first scope that confers it (`legacyPermissionScope`),
- * an admin route's `permission` gate its `scope`. Only the stored row's read
- * shape changes; its grant still needs approval (`parseStoredPluginGrant`).
+ * A stored manifest read in the shape this release parses. Stored manifests
+ * always read (the rule for stored theme documents too): when the manifest
+ * schema retires a shape, its stored rows get a read mapping here, with a
+ * test, so an installed app never drops off the store because its saved row
+ * no longer parses. The next update rewrites the row from the app's code.
+ * Only the read shape changes; what the app may do still comes from its
+ * approved grant (`parseStoredPluginGrant`).
  */
 export function upgradeStoredPluginManifest(manifest: Record<string, unknown>): Record<string, unknown> {
+  return withoutRouteDrawnComponents(withScopes(manifest));
+}
+
+/**
+ * A manifest stored before scopes, read as the scopes it asked for: each RBAC
+ * permission becomes the first scope that confers it (`legacyPermissionScope`),
+ * an admin route's `permission` gate its `scope`. Its grant still needs
+ * approval (`parseStoredPluginGrant`).
+ */
+function withScopes(manifest: Record<string, unknown>): Record<string, unknown> {
   if (manifest.scopes !== undefined || !Array.isArray(manifest.permissions)) return manifest;
   const { permissions, ...rest } = manifest;
   const scopes = [...new Set((permissions as unknown[])
@@ -179,6 +192,38 @@ export function upgradeStoredPluginManifest(manifest: Record<string, unknown>): 
     };
   }
   return { ...rest, scopes };
+}
+
+/**
+ * A manifest stored while app sections and product blocks could be drawn by
+ * a public route: every stored section and block carries `reads` (a schema
+ * default) and route-drawn ones a `route`. Route drawing is retired (only
+ * checkout and account blocks keep a route), so a route-drawn section or
+ * block reads as gone (nothing can draw it), and a component's empty
+ * `reads` is dropped.
+ */
+function withoutRouteDrawnComponents(manifest: Record<string, unknown>): Record<string, unknown> {
+  const storefront = manifest.storefront;
+  if (!storefront || typeof storefront !== "object" || Array.isArray(storefront)) return manifest;
+  const components = (value: unknown) => {
+    if (!Array.isArray(value)) return value;
+    return value
+      .filter((item) => !(item && typeof item === "object" && (item as { route?: unknown }).route !== undefined))
+      .map((item) => {
+        if (!item || typeof item !== "object" || !("reads" in item)) return item;
+        const { reads: _reads, ...rest } = item as { reads: unknown };
+        return rest;
+      });
+  };
+  const { sections, productBlocks } = storefront as { sections?: unknown; productBlocks?: unknown };
+  return {
+    ...manifest,
+    storefront: {
+      ...storefront,
+      ...(sections !== undefined ? { sections: components(sections) } : {}),
+      ...(productBlocks !== undefined ? { productBlocks: components(productBlocks) } : {}),
+    },
+  };
 }
 
 /** A row as the runtime reads it; a manifest that no longer parses yields null (the plugin cannot run). */
