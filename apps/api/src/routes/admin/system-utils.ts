@@ -6,7 +6,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { sql, inArray, desc, asc, and, count } from "drizzle-orm";
 import { containsText } from "@scalius/core/utils/text-match";
 import { abandonedCheckouts, adminFcmTokens } from "@scalius/database/schema";
-import { ftsMatch } from "@scalius/core/search";
+import { searchMatch } from "@scalius/core/search";
 import { projectAbandonedCheckoutAgentSummary } from "@scalius/core/modules/checkout";
 
 import { ok, noContent } from "../../utils/api-response";
@@ -55,7 +55,7 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
         if (search) {
             const digitsOnly = search.replace(/[^0-9]/g, "");
             const looksLikePhone = digitsOnly.length >= 4 && digitsOnly.length / search.replace(/\s/g, "").length > 0.5;
-            const ftsCondition = ftsMatch(db, "abandoned_checkouts_fts", "abandoned_checkouts", search);
+            const ftsCondition = searchMatch(db, "abandoned_checkouts", search);
 
             if (looksLikePhone && ftsCondition) {
                 whereConditions.push(sql`(${ftsCondition} OR ${containsText(abandonedCheckouts.customerPhone, digitsOnly)})`);
@@ -152,7 +152,7 @@ app.openapi(listAbandonedCheckoutSummariesRoute, async (c) => {
         const looksLikePhone = digitsOnly.length >= 4
             && compactSearch.length > 0
             && digitsOnly.length / compactSearch.length > 0.5;
-        const ftsCondition = ftsMatch(db, "abandoned_checkouts_fts", "abandoned_checkouts", search);
+        const ftsCondition = searchMatch(db, "abandoned_checkouts", search);
         if (looksLikePhone && ftsCondition) {
             whereConditions.push(sql`(${ftsCondition} OR ${containsText(abandonedCheckouts.customerPhone, digitsOnly)})`);
         } else if (looksLikePhone) {

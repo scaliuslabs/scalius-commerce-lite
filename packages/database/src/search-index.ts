@@ -13,11 +13,11 @@
  * reads a term prefix as an index range, and ranks with FTS5's bm25 over the
  * same counts (core `search/`).
  *
- * Known differences from FTS5 (docs/platform/SEARCH.md): case and accents of
- * letters outside ASCII and Latin-1 are kept, other Unicode punctuation and
- * symbols stay inside a term, a term holds at most 100 characters, and the
- * words of one query word split by a non-ASCII separator are matched without
- * their adjacency.
+ * Known differences from FTS5 (docs/DATABASE-PORTABILITY.md, Text search):
+ * case and accents of letters outside ASCII and Latin-1 are kept, other
+ * Unicode punctuation and symbols stay inside a term, a term holds at most
+ * 100 characters, and the terms of one query word that a separator splits
+ * match in one column without their adjacency.
  *
  * The table name matches `_fts`, so every tool that treats FTS5 tables as
  * derived (exports, imports, schema fingerprints) treats it the same way; an

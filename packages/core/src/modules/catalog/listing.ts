@@ -338,7 +338,7 @@ async function readStorefrontCatalogResults(
     const relevancePageIds = !scope.orderBy && sort === "relevance" && search ? sql`
             SELECT ${buyerState.productId} AS page_product_id,
                 ${orderBy[0]!} AS relevance_tier,
-                ${rankJoin ? sql.raw("COALESCE(search_rank.rank_score, 0)") : sql`0`} AS relevance_score
+                ${rankJoin ? rankJoin.score : sql`0`} AS relevance_score
             FROM ${buyerState}
             INNER JOIN ${products} ON ${products.id} = ${buyerState.productId}
             ${rankJoin ? sql`LEFT JOIN ${rankJoin.table} ON ${rankJoin.on}` : sql``}

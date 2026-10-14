@@ -12,7 +12,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
 import { categoryScope } from "@scalius/shared/cache-deps";
 import { deps } from "../../cache-deps";
-import { ftsMatch } from "../../search/fts5";
+import { searchMatch } from "../../search";
 import { collectionMembershipForConfig, normalizeCollectionConfig } from "../collections";
 import {
   buildBuyerCatalogPricingProjection,
@@ -124,7 +124,7 @@ export async function listCollectionProductOptions(
 
     const whereConditions: SQL[] = [isNull(products.deletedAt)];
     const searchCondition = search
-        ? ftsMatch(db, "products_fts", "products", search)
+        ? searchMatch(db, "products", search)
         : undefined;
     if (searchCondition) whereConditions.push(searchCondition);
     if (categoryIds.length > 0) {

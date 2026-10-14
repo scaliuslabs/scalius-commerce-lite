@@ -6,7 +6,7 @@
 // buyer can see.
 import { nanoid } from "nanoid";
 import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
-import { ftsMatch } from "../../search/fts5";
+import { searchMatch } from "../../search";
 import type { Database } from "@scalius/database/client";
 import {
   conversations,
@@ -213,10 +213,10 @@ export async function listAdminReviews(db: Database, filters: AdminReviewFilters
   const q = filters.q?.trim().slice(0, 100);
   if (q) {
     // The review's words (title, text, author) and its product's name, each
-    // through its FTS index (migration 0128), never a scan of every review.
-    // Without FTS5 (Turso, PostgreSQL) both fall back to the text match.
-    const reviewMatch = ftsMatch(db, "product_reviews_fts", "product_reviews", q);
-    const productMatch = ftsMatch(db, "products_fts", "products", q, { column: "name" });
+    // through the text index (FTS5 since migration 0128, the search index on
+    // Turso and PostgreSQL), never a scan of every review.
+    const reviewMatch = searchMatch(db, "product_reviews", q);
+    const productMatch = searchMatch(db, "products", q, { column: "name" });
     const matches = [
       reviewMatch,
       productMatch

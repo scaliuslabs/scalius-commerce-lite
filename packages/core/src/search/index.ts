@@ -1,4 +1,14 @@
-// Full-text search primitives over the SQLite FTS5 tables (D1, TursoDB):
-// query sanitizing and the MATCH condition. Domain search lives with its
-// domain (catalogue search and the site search in modules/catalog).
-export { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "./fts5";
+// Text search on every provider: D1's FTS5 tables, or the search index of
+// Turso and PostgreSQL, with the same matches and ranks. Domain search lives
+// with its domain (catalogue search and the site search in modules/catalog).
+export {
+  isFts5SearchEnabled,
+  sanitizeFtsQuery,
+  sanitizeSearchTokens,
+  searchKeyColumn,
+  searchKeys,
+  searchMatch,
+  searchPrefixKeys,
+  searchRankJoin,
+  type SearchSource,
+} from "./text-search";

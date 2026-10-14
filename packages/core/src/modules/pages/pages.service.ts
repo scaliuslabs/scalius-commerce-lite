@@ -18,7 +18,7 @@ import {
   getTableColumns,
   type SQL,
 } from "drizzle-orm";
-import { ftsMatch } from "../../search/fts5";
+import { searchMatch } from "../../search";
 import { insertWithDerivedHandle } from "../../utils/derived-handle";
 import { nanoid } from "nanoid";
 import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
@@ -231,7 +231,7 @@ export function pageListConditions(db: Database, filter: PageListFilter): (SQL |
   const conditions: (SQL | undefined)[] = [];
   conditions.push(eq(pages.contentType, contentType));
   if (search) {
-    const cond = ftsMatch(db, "pages_fts", "pages", search);
+    const cond = searchMatch(db, "pages", search);
     if (cond) conditions.push(cond);
   }
   if (showTrashed) {

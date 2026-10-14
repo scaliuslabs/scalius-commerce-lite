@@ -3,7 +3,7 @@ import { categories, products } from "@scalius/database/schema";
 import { and, desc, eq } from "drizzle-orm";
 
 import { publicCategoryConditions } from "../categories";
-import { sanitizeSearchTokens } from "../../search/fts5";
+import { sanitizeSearchTokens } from "../../search";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
 import { deps } from "./declare-deps";
 

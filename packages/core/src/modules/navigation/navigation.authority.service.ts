@@ -65,11 +65,7 @@ import {
     resolveNavigationItemsForPublic,
     type NavigationResourceSnapshotMap,
 } from "./navigation.resolver";
-import {
-    ftsMatch,
-    isFts5SearchEnabled,
-    sanitizeFtsQuery,
-} from "../../search/fts5";
+import { searchMatch, searchRankJoin } from "../../search";
 
 const NAVIGATION_REVISION_GUARD = "NAVIGATION_REVISION_CONFLICT";
 const NAVIGATION_PAGE_LIMIT = 100;
@@ -692,17 +688,10 @@ export async function searchNavigationMenuItems(
     if (query.length < 2 || query.length > 100) {
         throw new ValidationError("Search with 2–100 characters.");
     }
-    const sanitized = sanitizeFtsQuery(query);
-    if (!sanitized) return { items: [] };
     const limit = normalizeLimit(input.limit ?? 50);
-    const fts5Enabled = isFts5SearchEnabled(db);
-    const searchCondition = ftsMatch(
-        db,
-        "navigation_menu_items_fts",
-        "navigation_menu_items",
-        query,
-    );
-    if (!searchCondition) return { items: [] };
+    const searchCondition = searchMatch(db, "navigation_menu_items", query);
+    const rank = searchRankJoin(db, "navigation_menu_items", query, { alias: "item_rank" });
+    if (!searchCondition || !rank) return { items: [] };
     const matches = await db
         .select({
             item: navigationMenuItems,
@@ -713,21 +702,12 @@ export async function searchNavigationMenuItems(
             )`,
         })
         .from(navigationMenuItems)
+        .leftJoin(rank.table, rank.on)
         .where(and(
             eq(navigationMenuItems.menuId, menuId),
             searchCondition,
         ))
-        .orderBy(
-            fts5Enabled
-                ? sql`(
-                    SELECT rank FROM navigation_menu_items_fts
-                    WHERE rowid = ${sql.raw("navigation_menu_items")}.rowid
-                      AND navigation_menu_items_fts MATCH ${sanitized}
-                ) ASC`
-                : asc(navigationMenuItems.label),
-            asc(navigationMenuItems.position),
-            asc(navigationMenuItems.id),
-        )
+        .orderBy(rank.score, asc(navigationMenuItems.position), asc(navigationMenuItems.id))
         .limit(limit)
         .all();
 

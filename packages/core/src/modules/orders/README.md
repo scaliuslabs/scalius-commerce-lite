@@ -205,7 +205,7 @@ Payment events (one handler for every gateway) call `processPaymentConfirmed()` 
 
 | Method | Path | Handler | Purpose |
 |--------|------|---------|---------|
-| GET | `/` | `listOrders()` | Paginated list with FTS5 search, status/channel/date filters, shipment summary |
+| GET | `/` | `listOrders()` | Paginated list with text-index search, status/channel/date filters, shipment summary |
 | POST | `/` | `createOrder()` | Manual order creation with reserve-then-deduct inventory |
 | GET | `/:id` | `getOrderDetails()` | Full order with items, variant info, images |
 | PUT | `/:id/details` | `updateOrderDetails()` | Customer and delivery details before shipment |
@@ -274,7 +274,7 @@ Cross-browser guest hosted-payment recovery is buyer-verified, not bearer-link b
 - `payments` module -- COD collection/return, refund service
 - `delivery` module -- `DeliveryService`, `ShipmentTracker`
 - `notifications` module -- `sendOrderNotificationEmail()`, `sendOrderNotification()` (FCM push)
-- `@scalius/core/search` -- FTS5 for order search
+- `@scalius/core/search` -- the text index for order search
 - `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ConflictError`
 - `@scalius/shared/money` -- `toMinor`, `fromMinor`, `discountedPriceMinor` (all order money is integer minor units of the order currency)
 - `@scalius/shared/order-utils` -- `generateOrderId`

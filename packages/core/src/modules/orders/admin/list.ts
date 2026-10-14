@@ -28,14 +28,14 @@ import {
     planKeysetPage,
     resolveReferencedBoundary,
 } from "../../../utils/keyset";
-import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../../search/fts5";
+import { searchKeyColumn, searchKeys, searchPrefixKeys } from "../../../search";
 import { fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/utils";
 import type { OrderChannel } from "@scalius/shared/order-channel";
 import type { OrderBillingAddressFields, OrderPaymentRecoveryFilter, OrderShipmentSummary } from "../types";
 import { orderBillingAddressFields, orderBillingAddressSelection } from "../billing-address";
 import { orderNumberSearchCondition } from "../number";
-import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch, phonePrefixFtsQuery } from "../../../utils/phone-search";
+import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "../../../utils/phone-search";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
 import { formatOrderCsvLineProperties } from "../csv-export";
 import {
@@ -262,86 +262,42 @@ function normalizeListPositiveInteger(value: number | undefined, fallback: numbe
 
 /**
  * The orders a search finds: the order number, a word of the buyer's name,
- * phone or email (`orders_fts`), a whole email, a phone written any way, or
- * the courier's consignment or tracking id. Every source is an index lookup,
- * so a search reads its matches only, never every order (a million-order
- * store). With FTS5 the sources are one union of rowids; a phone matches
- * from its start (with or without the country code), as Shopify's search does.
+ * phone or email (the text index), a whole email, a phone written any way,
+ * or the courier's consignment or tracking id. Every source is an index
+ * lookup, so a search reads its matches only, never every order (a
+ * million-order store); a phone matches from its start (with or without the
+ * country code), as Shopify's search does.
  */
 function orderSearchCondition(db: Database, term: string): SQL {
-    const rowids = orderSearchRowids(db, term);
-    if (rowids) return sql`orders.rowid IN (${rowids})`;
-    const parts = orderSearchParts(term);
-    const matches = [
-        parts.orderNumberCondition,
-        parts.emailCondition ?? ftsMatch(db, "orders_fts", "orders", term),
-        buildPhoneSearchCondition(parts.phoneTerms),
-        parts.courierCondition,
-    ].filter((condition): condition is SQL => condition !== undefined);
-    return sql`(${sql.join(matches, sql` OR `)})`;
+    return sql`orders.${sql.raw(searchKeyColumn(db))} IN (${orderSearchKeys(db, term)})`;
 }
 
-function orderSearchParts(term: string) {
+/** The search's matching keys (`searchKeyColumn`): one union of index lookups. */
+function orderSearchKeys(db: Database, term: string): SQL {
+    const key = sql.raw(searchKeyColumn(db));
     // A full email finds that address only: "rahim@x.com" must not also
     // find "rahima@x.com" through word matching (R2-ORD-14).
     const emailCondition = isEmailSearch(term)
         ? sql`lower(trim(${orders.customerEmail})) = lower(trim(${term}))`
         : undefined;
-    return {
-        orderNumberCondition: orderNumberSearchCondition(term),
-        phoneTerms: isLikelyPhoneSearch(term) ? buildPhoneSearchTerms(term) : [],
-        emailCondition,
-        // Merchants also look orders up by the courier's consignment or tracking id.
-        courierCondition: sql`${orders.id} IN (
-            SELECT ${deliveryShipments.orderId} FROM ${deliveryShipments}
-            WHERE lower(${deliveryShipments.trackingId}) = lower(${term})
-              OR lower(${deliveryShipments.externalId}) = lower(${term})
-        )`,
-    };
-}
-
-/** With FTS5, the search's matching rowids: one union of index lookups. */
-function orderSearchRowids(db: Database, term: string): SQL | undefined {
-    if (!isFts5SearchEnabled(db)) return undefined;
-    const { orderNumberCondition, phoneTerms, emailCondition, courierCondition } = orderSearchParts(term);
+    const orderNumberCondition = orderNumberSearchCondition(term);
+    const phoneTerms = isLikelyPhoneSearch(term) ? buildPhoneSearchTerms(term) : [];
     const sources: SQL[] = [];
-    if (orderNumberCondition) sources.push(sql`SELECT rowid FROM ${orders} WHERE ${orderNumberCondition}`);
+    if (orderNumberCondition) sources.push(sql`SELECT ${key} FROM ${orders} WHERE ${orderNumberCondition}`);
     if (emailCondition) {
-        sources.push(sql`SELECT rowid FROM ${orders} WHERE ${emailCondition}`);
+        sources.push(sql`SELECT ${key} FROM ${orders} WHERE ${emailCondition}`);
     } else {
-        const words = sanitizeFtsQuery(term);
-        if (words) sources.push(sql`SELECT rowid FROM orders_fts WHERE orders_fts MATCH ${words}`);
+        const words = searchKeys(db, "orders", term);
+        if (words) sources.push(words);
     }
-    if (phoneTerms.length > 0) {
-        const phoneQuery = phonePrefixFtsQuery("customer_phone", phoneTerms);
-        sources.push(sql`SELECT rowid FROM orders_fts WHERE orders_fts MATCH ${phoneQuery}`);
-    }
-    sources.push(sql`SELECT rowid FROM ${orders} WHERE ${courierCondition}`);
+    if (phoneTerms.length > 0) sources.push(searchPrefixKeys(db, "orders", "customer_phone", phoneTerms));
+    // Merchants also look orders up by the courier's consignment or tracking id.
+    sources.push(sql`SELECT ${key} FROM ${orders} WHERE ${orders.id} IN (
+        SELECT ${deliveryShipments.orderId} FROM ${deliveryShipments}
+        WHERE lower(${deliveryShipments.trackingId}) = lower(${term})
+          OR lower(${deliveryShipments.externalId}) = lower(${term})
+    )`);
     return sql.join(sources, sql` UNION `);
-}
-
-
-function buildPhoneSearchCondition(searchTerms: string[]): SQL | undefined {
-    if (searchTerms.length === 0) return undefined;
-
-    const normalizedCustomerPhone = sql<string>`
-        replace(
-            replace(
-                replace(
-                    replace(
-                        replace(
-                            replace(${orders.customerPhone}, '+', ''),
-                        ' ', ''),
-                    '-', ''),
-                '(', ''),
-            ')', ''),
-        '.', '')
-    `;
-
-    return sql`(${sql.join(
-        searchTerms.map((term) => containsText(normalizedCustomerPhone, term)),
-        sql` OR `,
-    )})`;
 }
 
 /** The order list's filters, shared by the list, its export and its "all matching" bulk actions. */
@@ -381,7 +337,7 @@ export async function orderListLeads(
     if (filter.ids || getDatabaseProviderForClient(db) === "postgres") return false;
     const sets: SQL[] = [];
     const term = filter.search?.trim();
-    const searchRowids = term ? orderSearchRowids(db, term) : undefined;
+    const searchRowids = term ? orderSearchKeys(db, term) : undefined;
     if (searchRowids) sets.push(searchRowids);
     if (filter.openRequest) sets.push(openRequestOrderIds());
     if (filter.view === "cod_to_collect") sets.push(codTrackingOrderIds(COD_TO_COLLECT_STATUSES));

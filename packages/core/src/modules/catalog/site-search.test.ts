@@ -146,13 +146,17 @@ describe("search ranked by a search app", () => {
 });
 
 // A strict scope fails on any table no declared key covers. Each provider
-// reads through its own path (FTS5 on D1, the text fallback on Turso and
+// reads through its own path (FTS5 on D1, the search index on Turso and
 // PostgreSQL), and the reader's own keys must cover every one.
 describe("site search dependency coverage", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
   afterAll(closeNativePostgres);
   const providers: Array<[string, () => Promise<Database>]> = [
     ["d1", async () => setup().db],
-    ["turso", async () => createSqliteTursoDatabase(setup().sqlite)],
+    ["turso", async () => {
+      const { sqlite } = createSqliteD1Database({ provider: "turso" });
+      sqlite.exec(SEARCH_FIXTURE);
+      return createSqliteTursoDatabase(sqlite);
+    }],
   ];
   if (nativePostgresUrl()) {
     providers.push(["postgres", async () => {
