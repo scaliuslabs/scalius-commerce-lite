@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sleep, startGroup, killTree } from "./proc.mjs";
+import { sizeWindow } from "../../storefront-perf.mjs";
 
 export const PROFILES = Object.freeze({
   phone: {
@@ -132,6 +133,9 @@ export class Page {
 
   async profile(name, { throttle = false, width, height } = {}) {
     const p = PROFILES[name];
+    // The preload scanner reads `media` and `imagesizes` against the window,
+    // not the emulated viewport (scripts/storefront-perf.mjs): size both.
+    await sizeWindow((method, params) => this.send(method, params), width ?? p.width, height ?? p.height);
     await this.send("Emulation.setDeviceMetricsOverride", { width: width ?? p.width, height: height ?? p.height, deviceScaleFactor: p.deviceScaleFactor, mobile: p.mobile });
     await this.send("Emulation.setTouchEmulationEnabled", { enabled: p.mobile });
     await this.send("Network.setUserAgentOverride", { userAgent: p.ua });

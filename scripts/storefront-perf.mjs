@@ -268,10 +268,32 @@ const COLLECT_METRICS = `new Promise((resolve) => {
   }, 1500);
 })`;
 
+/**
+ * Sizes the browser window like the emulated viewport. Chrome's preload
+ * scanner reads a preload's `media` and `imagesizes` against the window, not
+ * the emulated viewport: in the default 800 px headless window a phone run
+ * also fetched the desktop hero and the heading font (about 200 ms of phone
+ * LCP on slow 4G), and a desktop run the phone ones. Chrome keeps a window at
+ * least 500 px wide, still a phone to every breakpoint from 640 px. Waits
+ * until the page sees the new width.
+ */
+export async function sizeWindow(send, width, height) {
+  const { windowId } = await send("Browser.getWindowForTarget");
+  await send("Browser.setWindowBounds", { windowId, bounds: { width, height } });
+  const { bounds } = await send("Browser.getWindowBounds", { windowId });
+  for (let i = 0; i < 100; i += 1) {
+    const { result } = await send("Runtime.evaluate", { expression: "outerWidth", returnByValue: true });
+    if (result.value === bounds.width) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`the browser window did not resize to ${bounds.width} px`);
+}
+
 export async function measureInBrowser(port, url, profileName) {
   const profile = PROFILES[profileName];
   const { send, close } = await openTarget(port);
   try {
+    await sizeWindow(send, profile.metrics.width, profile.metrics.height);
     await send("Page.enable");
     await send("Network.enable");
     await send("Network.setCacheDisabled", { cacheDisabled: true });
