@@ -313,11 +313,20 @@ A numbered page deeper than `maxOffset` is an empty page, reads no rows and gets
 
 ## Cold start
 
-A cache miss on a fresh API isolate pays module start-up on top of the render. A page is one batch, so a render pays for at most one isolate start, and API placement keeps isolates warm more often. The API loads route families lazily (`classifyPublicRuntimePath` in `apps/api/src/runtime/public-app.ts`): `config`, `catalog`, `content`, `buyer` and `proxy`. A render must not load the `buyer` family (orders, customer auth, agent contexts), so every batchable read, including `checkout/config`, lives in a read-only family. The generated payloads (`apps/api/src/generated/openapi-contract.gen.ts`, `agent-operations.gen.ts`) stay unevaluated outside their own routes. Splitting the API into more bundles does not help ([experiments](./PERFORMANCE-RELEASE.md#cold-start-experiments)), so the API stays one script.
+A cache miss on a fresh API isolate pays module start-up on top of the render. A page is one batch, so a render pays for at most one isolate start, and API placement keeps isolates warm more often. The API loads route families lazily (`classifyPublicRuntimePath` in `apps/api/src/runtime/public-app.ts`): `config`, `catalog`, `content`, `buyer` and `proxy`. A render must not load the `buyer` family (orders, customer auth, agent contexts), so every batchable read, including `checkout/config`, lives in a read-only family. Splitting the API into more bundles does not help ([experiments](./PERFORMANCE-RELEASE.md#cold-start-experiments)), so the API stays one script.
 
-workerd compiles every uploaded byte when an isolate starts, and a large object or array literal costs far more than the same bytes as a string. Rules that keep the first view after a deploy fast:
+workerd compiles every JavaScript module when an isolate starts, whatever the request runs. A Text module is a string and is not compiled. Large data is in Text modules:
 
-- Bundle a large dataset as text and parse it where it is used (`import(..., { with: { type: "text" } })`, as the Bangladesh pack loads its place directory). A JSON import becomes one literal that every API isolate compiles.
+- The OpenAPI contract and the agent operation manifest: `apps/api/src/generated/*.gen.txt` (Wrangler's default `*.txt` rule). Their generated `.gen.ts` loaders parse the manifest when an agent route first loads it and serve the contract on the first `/openapi.json` request.
+- The Bangladesh places dataset: a `rules` entry in `apps/api/wrangler.jsonc` makes `places/places.json` a Text module. The pack parses it when a seed runs.
+
+This took the JavaScript that a new API isolate compiles from 14.6 MiB to 7.7 MiB (2026-10-14). In workerd on one host, the compile before the first request went from 235 ms to 153 ms. `pnpm check:api-bundle` fails above 9 MiB of JavaScript (`API_SCRIPT_BUDGET_BYTES`). Vitest (`vitest.config.ts`) and Node scripts (`scripts/text-module-hooks.mjs`) load a `*.txt` import as its text, as Wrangler does.
+
+A database client is made per call, so no binding outlives its request. Its relational schema (the `db.query` API) comes from the schema module only, so `packages/database/src/drizzle-clients.ts` derives it once per isolate. `drizzle(client, { schema })` derived it on every call: about 1.3 ms of CPU (15 ms the first time), and a batch makes one client per part. In the workerd harness (`FREE_PLAN_WORKERD=1`), a warm product page batch went from 6 ms to 4 ms of CPU, and the first product page of a fresh isolate from 145 ms to 136 ms.
+
+Rules that keep the first view after a deploy fast:
+
+- Put a large dataset in a Text module and parse it where it is used. A JSON or object literal is code that every API isolate compiles.
 - The storefront server build is minified (`vite.build.rolldownOptions.output.minify` in `apps/storefront/astro.config.mjs`); Astro turns `build.minify` off for it.
 
 ## Images
