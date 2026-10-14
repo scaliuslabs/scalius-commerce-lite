@@ -101,7 +101,7 @@
     "jose": "^6.2.12",
     "nanoid": "^6.0.2",
     "stripe": "^22.6.0",
-    "zod": "^4.5.4"
+    "zod": "^4.6.7"
   },
   "scripts": {
     "lint": "oxlint -c ../../.oxlintrc.json src/",

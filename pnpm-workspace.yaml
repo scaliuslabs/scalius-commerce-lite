@@ -52,10 +52,6 @@ overrides:
   brace-expansion: "5.0.12"
   "nanoid@<3.3.17": "3.3.17"
   hono: "4.13.13"
-  # One zod for the whole graph (Better Auth's types are re-exported by core).
-  # 4.6 leaves `_zod.bag` empty, which the dashboard's schema-form introspection
-  # reads (apps/admin-v2/.../schema-form/introspect.ts); move both together.
-  zod: "4.5.4"
   # The dashboard's Radix primitives stay on one release line; a newer dialog
   # under cmdk alone duplicates the shared primitives in every route bundle.
   "cmdk>@radix-ui/react-dialog": "1.1.23"

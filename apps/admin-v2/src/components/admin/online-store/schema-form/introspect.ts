@@ -9,7 +9,16 @@
  */
 
 interface ZodInternals {
-  _zod: { def: Record<string, unknown> & { type: string }; bag: Record<string, unknown> };
+  _zod: { def: Record<string, unknown> & { type: string } };
+}
+
+/** The public length and range getters of a zod string or number schema (null or infinite when unset). */
+interface Bounded {
+  minLength?: number | null;
+  maxLength?: number | null;
+  minValue?: number | null;
+  maxValue?: number | null;
+  isInt?: boolean;
 }
 
 type Base = { optional?: boolean; nullable?: boolean };
@@ -45,6 +54,18 @@ const BLOCK_HIDDEN_KEY = "hidden";
 const finite = (value: unknown, fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
+const bound = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
+
+/** An array's item bounds, from its `min_length` and `max_length` checks (zod has no getter for them). */
+function itemBounds(schema: unknown): { min: number; max: number | null } {
+  const checks = (schema as { def: { checks?: Array<{ _zod: { def: { check: string; minimum?: number; maximum?: number } } }> } }).def.checks ?? [];
+  const defs = checks.map((check) => check._zod.def);
+  return {
+    min: finite(defs.find((each) => each.check === "min_length")?.minimum, 0),
+    max: bound(defs.find((each) => each.check === "max_length")?.maximum),
+  };
+}
+
 function literalValue(schema: unknown): string | number {
   const { def } = internals(schema);
   if (def.type !== "literal") throw new Error(`Expected a literal, found ${def.type}`);
@@ -58,7 +79,8 @@ function literalValue(schema: unknown): string | number {
 
 /** The spec of a zod schema. Throws on a shape the form cannot draw. */
 export function describeSetting(schema: unknown): SettingSpec {
-  const { def, bag } = internals(schema);
+  const { def } = internals(schema);
+  const bounded = schema as Bounded;
   switch (def.type) {
     case "optional":
       return { ...describeSetting(def.innerType), optional: true };
@@ -68,13 +90,13 @@ export function describeSetting(schema: unknown): SettingSpec {
     case "prefault":
       return describeSetting(def.innerType);
     case "string":
-      return { kind: "text", min: finite(bag.minimum, 0), max: typeof bag.maximum === "number" ? bag.maximum : null };
+      return { kind: "text", min: finite(bounded.minLength, 0), max: bound(bounded.maxLength) };
     case "number":
       return {
         kind: "number",
-        min: finite(bag.minimum, Number.MIN_SAFE_INTEGER),
-        max: finite(bag.maximum, Number.MAX_SAFE_INTEGER),
-        int: bag.format === "safeint" || bag.format === "int32" || bag.format === "uint32",
+        min: finite(bounded.minValue, Number.MIN_SAFE_INTEGER),
+        max: finite(bounded.maxValue, Number.MAX_SAFE_INTEGER),
+        int: bounded.isInt === true,
       };
     case "boolean":
       return { kind: "boolean" };
@@ -94,8 +116,7 @@ export function describeSetting(schema: unknown): SettingSpec {
       return {
         kind: "list",
         item: describeSetting(def.element),
-        min: finite(bag.minimum, 0),
-        max: typeof bag.maximum === "number" ? bag.maximum : null,
+        ...itemBounds(schema),
       };
     case "union": {
       const options = def.options as unknown[];
