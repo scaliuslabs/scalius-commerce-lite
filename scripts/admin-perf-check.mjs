@@ -55,7 +55,10 @@ export const BUNDLE_BUDGETS = {
     // variant diff and in-flight-save rebase (edits typed while saving stay dirty).
     // +2 (catalogue dashboard): the same category paths and section-save code as the edit
     // page, and the shared icon and SDK chunks the new catalogue screens regrouped.
-    "admin/products/new.tsx": 365.7,
+    // +0.3: the local "Bengali System" fallback face that keeps the Taka sign off the platform font search.
+    "admin/products/new.tsx": 366,
+    // +0.3 over the default: the type preview's "Bengali System" fallback face.
+    "admin/online-store/theme_.editor.tsx": 360.3,
     "admin/inventory/index.tsx": 255,
     // The customer page's own copy is apart from the list's (list UX).
     "admin/customers/index.tsx": 245,
