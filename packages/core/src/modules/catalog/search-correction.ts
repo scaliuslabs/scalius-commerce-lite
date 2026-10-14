@@ -1,10 +1,11 @@
 import type { Database } from "@scalius/database/client";
 import { categories, products } from "@scalius/database/schema";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { publicCategoryConditions } from "../categories";
 import { sanitizeSearchTokens } from "../../search/fts5";
-import { deps } from "../../cache-deps";
+import { buyerState, publicBuyerStateCondition } from "./buyer-state";
+import { deps } from "./declare-deps";
 
 // The vocabulary is read only after a search returned nothing, and is bounded
 // so a zero-result query costs at most this many short name rows.
@@ -241,20 +242,25 @@ export function correctSearchQuery(query: string, catalogNames: readonly string[
  */
 export async function suggestSearchCorrection(db: Database, query: string): Promise<string | null> {
   if (sanitizeSearchTokens(query).length === 0) return null;
-  // The vocabulary is the most recently updated products, by a column no key
-  // tracks: a corrected answer cannot be proved current.
-  deps.uncacheable("order-by-untracked-column");
+  // The vocabulary: the newest public products (the public set and its
+  // newest order, `lm:all`; their names, `srch`) and the published categories
+  // (`c:*`), so a corrected answer stays cacheable.
+  deps.search();
+  deps.listMembership("all");
+  deps.anyCategory();
   const [productNames, categoryNames] = await Promise.all([
     db
       .select({ name: products.name })
-      .from(products)
-      .where(and(eq(products.isActive, true), isNull(products.deletedAt)))
-      .orderBy(desc(products.updatedAt))
+      .from(buyerState)
+      .innerJoin(products, eq(products.id, buyerState.productId))
+      .where(publicBuyerStateCondition())
+      .orderBy(desc(buyerState.productCreatedAt), desc(buyerState.productId))
       .limit(VOCABULARY_PRODUCT_LIMIT),
     db
       .select({ name: categories.name })
       .from(categories)
       .where(and(...publicCategoryConditions()))
+      .orderBy(categories.id)
       .limit(VOCABULARY_CATEGORY_LIMIT),
   ]);
   return correctSearchQuery(query, [...productNames, ...categoryNames].map(({ name }) => name));

@@ -3,6 +3,7 @@ import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_PO
 import type { Database } from "@scalius/database/client";
 import { afterAll, describe, expect, it } from "vitest";
 import { withDependencyScope } from "../../cache-deps";
+import { rebuildCatalogProjections } from "../products";
 import { search } from "./site-search";
 
 const RELEVANCE_FIXTURE = `
@@ -19,9 +20,10 @@ const RELEVANCE_FIXTURE = `
     ('v_kettle', 'p_kettle', 'KETTLE-1', 1000, 0, 0, 1, 0);
 `;
 
-function relevanceDb() {
+async function relevanceDb() {
   const { sqlite, db } = createSqliteD1Database();
   sqlite.exec(RELEVANCE_FIXTURE);
+  await rebuildCatalogProjections(db);
   return db;
 }
 
@@ -86,13 +88,13 @@ describe("public search", () => {
 
 describe("public search relevance and correction", () => {
   it("ranks title matches, then category matches, above description-only matches", async () => {
-    const result = await search(relevanceDb(), "bag", { searchPages: false, searchCategories: false });
+    const result = await search(await relevanceDb(), "bag", { searchPages: false, searchCategories: false });
 
     expect(result.products.map((product) => product.id)).toEqual(["p_belt", "p_tote", "p_mouse"]);
   });
 
   it("answers a misspelled or Bangla query with the corrected catalog word", async () => {
-    const db = relevanceDb();
+    const db = await relevanceDb();
 
     for (const query of ["kettel", "ketle", "কেতলি", "চায়ের কেতলি"]) {
       const result = await search(db, query, { correctTypos: true, searchPages: false });
@@ -111,6 +113,7 @@ describe("public search relevance and correction", () => {
       INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory) VALUES
         ('v_slipon', 'p_slipon', 'SLIPON-1', 1000, 0, 0, 1, 0);
     `);
+    await rebuildCatalogProjections(db);
 
     for (const query of ["জুতা", "shoes"]) {
       const result = await search(db, query, { correctTypos: true, searchPages: false });
@@ -122,7 +125,7 @@ describe("public search relevance and correction", () => {
   });
 
   it("corrects only buyer searches that found nothing", async () => {
-    const db = relevanceDb();
+    const db = await relevanceDb();
 
     expect(await search(db, "kettel")).toMatchObject({ products: [], correctedQuery: null });
     expect(await search(db, "kettle", { correctTypos: true })).toMatchObject({ correctedQuery: null });
@@ -132,7 +135,7 @@ describe("public search relevance and correction", () => {
 
 describe("search ranked by a search app", () => {
   it("shows the app's products in its order, only public and buyable, and matches pages by the words", async () => {
-    const db = relevanceDb();
+    const db = await relevanceDb();
     const ranked = await search(db, "anything", { productIds: ["p_kettle", "p_unknown", "p_tote", "p_mouse"] });
     expect(ranked.products.map((product) => product.id)).toEqual(["p_kettle", "p_tote", "p_mouse"]);
     expect(ranked.products[0]).toMatchObject({ discountedPrice: 10, availableForSale: true });
