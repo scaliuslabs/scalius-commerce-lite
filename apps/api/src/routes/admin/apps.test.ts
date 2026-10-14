@@ -196,22 +196,22 @@ describe("admin app routes", () => {
   });
 
   it("carries Nagad choice translations in the response and the API contract", async () => {
-    const detail = await call("GET", "/apps/scalius.nagad");
+    const detail = await call("GET", "/apps/scalius.bangladesh");
     expect(detail.status).toBe(200);
-    expect(detail.json.data.app.translations.bn.settings.environment.options).toEqual({ sandbox: "স্যান্ডবক্স (পরীক্ষা)", live: "লাইভ" });
+    expect(detail.json.data.app.translations.bn.settings.nagad_environment.options).toEqual({ sandbox: "স্যান্ডবক্স (পরীক্ষা)", live: "লাইভ" });
     const document = app.getOpenAPIDocument({ openapi: "3.0.0", info: { title: "App translations", version: "1.0.0" } });
     expect(document.components?.schemas?.AppTranslations).toMatchObject({ additionalProperties: { properties: { settings: { additionalProperties: { properties: { options: { additionalProperties: { type: "string" } } } } } } } });
   });
 
   it("lists each app's listing and serves its checked icon, cached by fingerprint", async () => {
     const { apps, available } = (await call("GET", "/apps")).json.data;
-    const bkash = apps.find((entry: Json) => entry.id === "scalius.bkash");
-    const sha = BUNDLED_PLUGINS["scalius.bkash"]!.sha256;
+    const bkash = apps.find((entry: Json) => entry.id === "scalius.bangladesh");
+    const sha = BUNDLED_PLUGINS["scalius.bangladesh"]!.sha256;
     expect(bkash).toMatchObject({
-      tagline: "Take bKash payments at checkout",
-      categories: ["payments"],
+      tagline: "bKash, Nagad, SSLCommerz, couriers, SMS, fraud checks and places",
+      categories: ["payments", "shipping", "notifications"],
       countries: ["BD"],
-      icon: `/api/v1/admin/apps/scalius.bkash/assets/icon?v=${sha.slice(0, 16)}`,
+      icon: `/api/v1/admin/apps/scalius.bangladesh/assets/icon?v=${sha.slice(0, 16)}`,
       translations: { bn: { tagline: expect.any(String) } },
     });
     // A first-party app not bundled here waits to be added with its command.
@@ -224,7 +224,7 @@ describe("admin app routes", () => {
     })]);
     const giftIcon = await app.request(available[0].icon, {}, env, pluginTestCtx());
     expect([giftIcon.status, await giftIcon.text()]).toEqual([200, GIFT_ICON]);
-    const detail = (await call("GET", "/apps/scalius.bkash")).json.data.app;
+    const detail = (await call("GET", "/apps/scalius.bangladesh")).json.data.app;
     expect(detail).toMatchObject({ screenshots: [], support: { url: expect.stringMatching(/^https:/), email: null }, minPlatformVersion: "1.0.0" });
     expect(apps.find((entry: Json) => entry.id === "acme.hello")).toMatchObject({ icon: null, countries: null });
 
@@ -236,10 +236,10 @@ describe("admin app routes", () => {
     expect(image.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(await image.text()).toMatch(/^<svg/);
     // Another fingerprint is served but never cached; an app without the image has none.
-    expect((await app.request("/api/v1/admin/apps/scalius.bkash/assets/icon?v=0000000000000000", {}, env, pluginTestCtx())).headers.get("Cache-Control")).toBe("private, no-cache");
-    expect((await app.request("/api/v1/admin/apps/scalius.bkash/assets/screenshot-1", {}, env, pluginTestCtx())).status).toBe(404);
+    expect((await app.request("/api/v1/admin/apps/scalius.bangladesh/assets/icon?v=0000000000000000", {}, env, pluginTestCtx())).headers.get("Cache-Control")).toBe("private, no-cache");
+    expect((await app.request("/api/v1/admin/apps/scalius.bangladesh/assets/screenshot-1", {}, env, pluginTestCtx())).status).toBe(404);
     expect((await app.request("/api/v1/admin/apps/acme.hello/assets/icon", {}, env, pluginTestCtx())).status).toBe(404);
-    expect((await app.request("/api/v1/admin/apps/scalius.bkash/assets/../plugin.js", {}, env, pluginTestCtx())).status).not.toBe(200);
+    expect((await app.request("/api/v1/admin/apps/scalius.bangladesh/assets/../plugin.js", {}, env, pluginTestCtx())).status).not.toBe(200);
   });
 
   it("serves a provider's own mark beside the app icon, with the same checks and caching", async () => {
@@ -259,11 +259,45 @@ describe("admin app routes", () => {
     expect((await app.request("/api/v1/admin/apps/scalius.bangladesh/assets/provider-..%2Fplugin.js", {}, env, pluginTestCtx())).status).not.toBe(200);
   });
 
-  it("asks for the Bangladesh pack's place import without anything that deletes", async () => {
+  it("activates the Bangladesh pack asking for nothing, then each feature asks for its own access", async () => {
     await call("GET", "/apps");
     const detail = (await call("GET", "/apps/scalius.bangladesh")).json.data.app;
-    expect(detail.scopes).toEqual([{ name: "write_places", risk: "write", sensitive: false }]);
-    expect(detail.request.providers).toEqual(expect.arrayContaining(["courier", "sms", "fraud"]));
+    // Every service is a feature, off by default: the base asks for nothing.
+    expect(detail.scopes).toEqual([]);
+    expect(detail.request).toMatchObject({ scopes: [], providers: [], allowedHosts: [], features: [] });
+    expect(detail.providers).toEqual([]);
+    expect(detail.features.every((feature: Json) => feature.enabled === false)).toBe(true);
+    const places = detail.features.find((feature: Json) => feature.id === "places");
+    expect(places).toMatchObject({ recommended: true, request: { scopes: [{ name: "write_places", risk: "write", sensitive: false }], allowedHosts: [], providers: [] } });
+    const bkash = detail.features.find((feature: Json) => feature.id === "bkash");
+    expect(bkash.request).toMatchObject({
+      scopes: [], allowedHosts: ["tokenized.pay.bka.sh", "tokenized.sandbox.bka.sh"],
+      providers: [{ id: "scalius.bangladesh:bkash", kind: "payment", name: "bKash", icon: expect.stringContaining("/assets/provider-bkash?v=") }],
+    });
+    expect(detail.translations.bn.features.places.name).toBe("বাংলাদেশের এলাকা");
+
+    // Turning a feature on before the app runs is refused.
+    expect((await call("POST", "/apps/scalius.bangladesh/features/bkash/enable", { expectedRevision: detail.revision, grantKey: bkash.grantKey })).status).toBe(409);
+    const active = (await call("POST", "/apps/scalius.bangladesh/activate", { expectedRevision: detail.revision, grantKey: detail.grantKey })).json.data.app;
+    expect(active).toMatchObject({ status: "active", granted: { scopes: [], providers: [], features: [] } });
+
+    // Only a Super Admin approves a feature's access.
+    const fresh = active.features.find((feature: Json) => feature.id === "bkash");
+    actor = { id: "owner", isSuperAdmin: false };
+    expect((await call("POST", "/apps/scalius.bangladesh/features/bkash/enable", { expectedRevision: active.revision, grantKey: fresh.grantKey })).status).toBe(403);
+    actor = { id: "owner", isSuperAdmin: true };
+    const on = await call("POST", "/apps/scalius.bangladesh/features/bkash/enable", { expectedRevision: active.revision, grantKey: fresh.grantKey });
+    expect(on.status).toBe(200);
+    expect(on.json.data).toMatchObject({ changed: true, hookError: null });
+    expect(on.json.data.app.granted).toMatchObject({ features: ["bkash"], providers: ["payment"], allowedHosts: ["tokenized.pay.bka.sh", "tokenized.sandbox.bka.sh"] });
+    expect(on.json.data.app.providers.map((provider: Json) => provider.id)).toEqual(["scalius.bangladesh:bkash"]);
+    expect(on.json.data.app.settings.fields.map((field: Json) => field.key)).toEqual(["bkash_environment", "bkash_app_key", "bkash_app_secret", "bkash_username", "bkash_password"]);
+
+    const listed = (await call("GET", "/apps/scalius.bangladesh/features")).json.data;
+    expect(listed.features.filter((feature: Json) => feature.enabled).map((feature: Json) => feature.id)).toEqual(["bkash"]);
+    const off = await call("POST", "/apps/scalius.bangladesh/features/bkash/disable", { expectedRevision: listed.revision });
+    expect(off.json.data.app).toMatchObject({ granted: { features: [], providers: [], allowedHosts: [] }, providers: [] });
+    expect((await call("POST", "/apps/scalius.bangladesh/features/ghost/disable", { expectedRevision: off.json.data.app.revision })).status).toBe(404);
   });
 
   it("lists what active apps add to the dashboard: pages by placement, cards, actions, widgets and their admin routes", async () => {
@@ -300,10 +334,17 @@ describe("admin app routes", () => {
 
   it("describes where an app's settings and surfaces show: sections, services and every surface", async () => {
     await call("GET", "/apps");
+    const installed = (await call("GET", "/apps/scalius.bangladesh")).json.data.app;
+    const activated = (await call("POST", "/apps/scalius.bangladesh/activate", { expectedRevision: installed.revision, grantKey: installed.grantKey })).json.data.app;
+    let revision = activated.revision as number;
+    for (const id of ["sslcommerz", "pathao"]) {
+      const feature = (await call("GET", "/apps/scalius.bangladesh/features")).json.data.features.find((entry: Json) => entry.id === id);
+      revision = (await call("POST", `/apps/scalius.bangladesh/features/${id}/enable`, { expectedRevision: revision, grantKey: feature.grantKey })).json.data.app.revision;
+    }
     const pack = (await call("GET", "/apps/scalius.bangladesh")).json.data.app;
-    // Every pack field is a service's: none on the app page itself.
+    // Every pack field is a service's: none on the app page itself; only the features that are on show.
     expect(pack.settings.sections).toEqual([]);
-    expect(pack.providers).toHaveLength(11);
+    expect(pack.providers.map((provider: Json) => provider.providerId)).toEqual(["sslcommerz", "pathao"]);
     expect(pack.providers.find((provider: Json) => provider.providerId === "sslcommerz")).toMatchObject({
       id: "scalius.bangladesh:sslcommerz",
       kind: "payment",

@@ -167,7 +167,7 @@ describe("PaymentCard", () => {
     });
 
     it("words an app's hosted payment by its provider, never the stored id, and offers its payment link", async () => {
-      const app = "scalius.bkash:bkash";
+      const app = "scalius.bangladesh:bkash";
       await renderSession({ gateway: app }, {
         paymentMethod: app,
         paymentRecovery: { ...recovery, gateway: app, canIssueRecoveryLink: true },
@@ -179,7 +179,7 @@ describe("PaymentCard", () => {
     });
 
     it("names an app's method from the installed apps when the merchant can read them", async () => {
-      const app = "scalius.bkash:bkash";
+      const app = "scalius.bangladesh:bkash";
       client.setQueryData(["settings", "app-providers", "payment"], [{ id: app, name: "bKash" }]);
       client.setQueryData(["payments", order.id], { ...emptyPayments, paymentSessionAttempts: [{ ...attempt, gateway: app }] });
       await act(async () => root.render(

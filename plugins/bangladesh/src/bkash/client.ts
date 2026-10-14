@@ -122,14 +122,14 @@ function settingText(settings: Settings, key: string): string {
 /** The saved settings; fails closed when any credential is missing. Anything but "live" is the sandbox. */
 export function credentialsOf(settings: Settings): BkashCredentials {
   const credentials: BkashCredentials = {
-    environment: settings.environment === "live" ? "live" : "sandbox",
-    appKey: settingText(settings, "app_key"),
-    appSecret: settingText(settings, "app_secret"),
-    username: settingText(settings, "username"),
-    password: settingText(settings, "password"),
+    environment: settings.bkash_environment === "live" ? "live" : "sandbox",
+    appKey: settingText(settings, "bkash_app_key"),
+    appSecret: settingText(settings, "bkash_app_secret"),
+    username: settingText(settings, "bkash_username"),
+    password: settingText(settings, "bkash_password"),
   };
   if (!credentials.appKey || !credentials.appSecret || !credentials.username || !credentials.password) {
-    throw new ProviderError("misconfigured", "Enter the bKash app key, app secret, username and password in the app's settings.", { code: "bkash.settings" });
+    throw new ProviderError("misconfigured", "Enter the bKash app key, app secret, username and password in the bKash settings.", { code: "bkash.settings" });
   }
   return credentials;
 }
@@ -187,7 +187,7 @@ export function createBkashClient(ctx: PluginContext, timeBudgetMs: number): Bka
   // Keyed by environment, app key and username (never a secret), so new credentials get a new token.
   async function tokenKey(): Promise<string> {
     const account = await sha256Hex(`${credentials.appKey}\n${credentials.username}`);
-    return `token:${credentials.environment}:${account.slice(0, 32)}`;
+    return `bkash:token:${credentials.environment}:${account.slice(0, 32)}`;
   }
 
   /** One POST. "unauthorized" when bKash refused the token or credentials outright (HTTP 401/403). */

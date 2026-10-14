@@ -77,15 +77,15 @@ function textSetting(settings: Settings, key: string): string {
 // ── Settings ────────────────────────────────────────────────────────────────
 
 export function nagadEndpoint(settings: Settings): NagadEndpoint {
-  const environment = textSetting(settings, "environment") || "sandbox";
+  const environment = textSetting(settings, "nagad_environment") || "sandbox";
   if (environment !== "sandbox" && environment !== "live") {
     throw misconfigured("Choose the Nagad environment: sandbox or live.", "nagad.environment");
   }
-  const merchantId = textSetting(settings, "merchant_id");
+  const merchantId = textSetting(settings, "nagad_merchant_id");
   if (!MERCHANT_ID.test(merchantId)) {
     throw misconfigured("Enter your Nagad merchant ID (letters and digits) in the Nagad settings.", "nagad.merchant_id");
   }
-  const serverIp = textSetting(settings, "server_ip") || DEFAULT_SERVER_IP;
+  const serverIp = textSetting(settings, "nagad_server_ip") || DEFAULT_SERVER_IP;
   if (!IPV4.test(serverIp)) {
     throw misconfigured("The server IP in the Nagad settings must be an IPv4 address, such as 203.0.113.10.", "nagad.server_ip");
   }
@@ -133,11 +133,11 @@ async function importKey<T>(owner: keyof typeof KEY_PROBLEMS, text: string, load
 export async function nagadCredentials(settings: Settings): Promise<NagadCredentials> {
   const endpoint = nagadEndpoint(settings);
   // Accepted with or without the +88 country prefix; Nagad's accountNumber is the local form.
-  const merchantNumber = textSetting(settings, "merchant_number").replace(/^\+?88/, "") || null;
+  const merchantNumber = textSetting(settings, "nagad_merchant_number").replace(/^\+?88/, "") || null;
   if (merchantNumber !== null && !MERCHANT_NUMBER.test(merchantNumber)) {
     throw misconfigured("The merchant number must be the 11-digit Nagad wallet number (01XXXXXXXXX), or empty.", "nagad.merchant_number");
   }
-  const merchantKey = await importKey("merchant", textSetting(settings, "merchant_private_key"), importRsaPrivateKey);
+  const merchantKey = await importKey("merchant", textSetting(settings, "nagad_merchant_private_key"), importRsaPrivateKey);
   const nagadKey = await importKey("nagad", textSetting(settings, "nagad_public_key"), importRsaPublicKey);
   // The most likely key mix-up: the merchant's own public key pasted where Nagad's belongs.
   if (nagadKey.modulus === merchantKey.modulus) {

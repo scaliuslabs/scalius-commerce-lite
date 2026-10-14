@@ -71,6 +71,8 @@ export type {
   TaxCalculationLine,
 } from "@scalius/shared/plugins/providers";
 export type {
+  PluginFeature,
+  PluginFeatureInput,
   PluginManifest,
   PluginManifestInput,
   PluginRenderContext,
@@ -121,6 +123,10 @@ export interface PluginDefinition {
     deactivate?: PluginLifecycleHandler;
     /** `keepData` is false when the merchant chose to delete the plugin's data. */
     uninstall?: (ctx: PluginContext, options: { keepData: boolean }) => Promise<void> | void;
+    /** A person turned one of the app's features on; it runs with the feature's access. */
+    enable?: (ctx: PluginContext, options: { feature: string }) => Promise<void> | void;
+    /** A person turned one of the app's features off; it runs with the access the app keeps. */
+    disable?: (ctx: PluginContext, options: { feature: string }) => Promise<void> | void;
   };
   /**
    * Data updates keyed by the manifest's `migrations[].version`. Each runs

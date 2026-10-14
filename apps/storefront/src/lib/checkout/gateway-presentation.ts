@@ -70,8 +70,8 @@ export const APP_GATEWAY_MARK_SRC = "/payment-marks/wallet.svg";
  */
 export const APP_PROVIDER_MARKS: Readonly<Record<string, string>> = {
   [SSLCOMMERZ_GATEWAY_ID]: "/payment-marks/sslcommerz.png",
-  "scalius.bkash:bkash": "/payment-marks/bkash.svg",
-  "scalius.nagad:nagad": "/payment-marks/nagad.svg",
+  "scalius.bangladesh:bkash": "/payment-marks/bkash.svg",
+  "scalius.bangladesh:nagad": "/payment-marks/nagad.svg",
 };
 
 /** A payment method an app provides: `<plugin id>:<provider id>`. */
@@ -82,7 +82,7 @@ export function isAppGatewayId(gatewayId: string): boolean {
 /**
  * The name buyers read for an app's method: the checkout name the store
  * serves (`GET /checkout/config`), else the provider id in words ("Bkash"
- * for `scalius.bkash:bkash`); never the stored id. Null for other methods.
+ * for `scalius.bangladesh:bkash`); never the stored id. Null for other methods.
  */
 export function appGatewayName(
   gatewayId: string,

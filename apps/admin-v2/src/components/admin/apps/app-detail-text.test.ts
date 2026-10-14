@@ -4,7 +4,7 @@ import { localizedAppDetail } from "./app-detail-text";
 
 it("translates setting choices without changing values, saved selections, defaults or English fallbacks", () => {
   const app = {
-    name: "Example", description: "Example app", providers: [],
+    name: "Example", description: "Example app", providers: [], features: [],
     admin: { pages: [], cards: [], actions: [], widgets: [] },
     settings: {
       fields: [

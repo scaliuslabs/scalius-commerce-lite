@@ -35,8 +35,8 @@ import { PaymentMethodsCard } from "./PaymentsSettings";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const envelope = <T,>(data: T) => Promise.resolve({ data: { success: true, data } });
-const BKASH = "scalius.bkash:bkash";
-const NAGAD = "scalius.nagad:nagad";
+const BKASH = "scalius.bangladesh:bkash";
+const NAGAD = "scalius.bangladesh:nagad";
 
 const ready = { configured: true, enabled: true, usable: true, missingFields: [], providerEnabled: true, environment: "live" };
 

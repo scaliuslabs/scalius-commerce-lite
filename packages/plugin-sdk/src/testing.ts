@@ -10,6 +10,7 @@ import {
   isPluginHostAllowed,
   parsePluginManifest,
   pluginHandlerInventory,
+  pluginManifestWithFeatures,
   pluginScopePermissions,
   pluginSettingDefaults,
   resolvePluginSettingValues,
@@ -44,6 +45,12 @@ export { fixtures } from "./fixtures";
 
 export interface PluginTestHarnessOptions {
   settings?: Record<string, PluginSettingValue>;
+  /**
+   * The app's features that are on (`manifest.features`); by default every
+   * declared one. An off feature's providers, routes, jobs, events, settings,
+   * scopes and hosts do not exist, as on the platform.
+   */
+  features?: string[];
   store?: Partial<PluginStoreInfo>;
   /** Answers `ctx.api.call`; by default every operation is unknown (404). */
   api?: (operationId: string, input: PluginApiCallInput | undefined) => PluginApiResult | Promise<PluginApiResult>;
@@ -78,7 +85,9 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const definition = (module as { default?: { manifest?: unknown } })?.default ?? (module as { manifest?: unknown });
   const parsed = parsePluginManifest(definition?.manifest);
   if (!parsed.ok) throw new Error(`Invalid manifest: ${parsed.issues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
-  const manifest: PluginManifest = parsed.manifest;
+  const declared: PluginManifest = parsed.manifest;
+  const features = options.features ?? declared.features.map((feature) => feature.id);
+  const manifest: PluginManifest = pluginManifestWithFeatures(declared, features);
   const records = new Map<string, Map<string, Record<string, unknown>>>(Object.keys(manifest.storage).map((name) => [name, new Map()]));
   const kv = new Map<string, unknown>();
   // Revisions, as the platform keeps them: every write advances one.
@@ -254,7 +263,8 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     store: { name: "Test store", url: "https://shop.test", currency: "BDT", decimalPlaces: 2, timezone: "Asia/Dhaka", locale: "en", ...options.store },
     settings: { ...pluginSettingDefaults(manifest.settings), ...options.settings },
     collections: Object.keys(manifest.storage),
-    inventory: pluginHandlerInventory(manifest),
+    inventory: pluginHandlerInventory(manifest, declared),
+    features: declared.features.map((feature) => feature.id).filter((id) => features.includes(id)),
   };
 
   const run = async (
@@ -406,5 +416,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     },
     cron: (name: string, scheduledAt = new Date().toISOString()) => run({ kind: "cron", name, scheduledAt }),
     lifecycle: (hook: "install" | "activate" | "deactivate" | "uninstall", keepData = true) => run({ kind: "lifecycle", hook, keepData }),
+    /** Runs the `enable` or `disable` hook for one feature, as the platform does when a person turns it on or off. */
+    feature: (hook: "enable" | "disable", feature: string) => run({ kind: "lifecycle", hook, feature }),
   };
 }

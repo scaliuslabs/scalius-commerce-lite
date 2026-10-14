@@ -34,7 +34,7 @@ import { createHostedGatewayHandler } from "./hosted";
 
 const sslcommerzHandler = createHostedGatewayHandler("sslcommerz", "SSLCommerz");
 /** An app's hosted wallet (`<plugin id>:<provider id>`) runs through the same handler. */
-const BKASH = "scalius.bkash:bkash";
+const BKASH = "scalius.bangladesh:bkash";
 const bkashHandler = createHostedGatewayHandler(BKASH, "bKash");
 import { resetStripePaymentElement, stripeHandler } from "./stripe";
 import type { CheckoutConfig, PaymentContext } from "../types";

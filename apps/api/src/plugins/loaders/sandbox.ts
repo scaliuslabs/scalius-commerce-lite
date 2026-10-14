@@ -33,7 +33,7 @@ interface SandboxEntrypoint {
   invokeProvider(bridge: unknown, seed: unknown, provider: string, operation: string, input: unknown): Promise<PluginInvocationResult>;
   invokeRoute(bridge: unknown, seed: unknown, surface: string, name: string, request: unknown): Promise<PluginInvocationResult>;
   invokeCron(bridge: unknown, seed: unknown, name: string, scheduledAt: string): Promise<PluginInvocationResult>;
-  invokeLifecycle(bridge: unknown, seed: unknown, hook: string, options: { keepData?: boolean }): Promise<PluginInvocationResult>;
+  invokeLifecycle(bridge: unknown, seed: unknown, hook: string, options: { keepData?: boolean; feature?: string }): Promise<PluginInvocationResult>;
   invokeMigration(bridge: unknown, seed: unknown, version: number): Promise<PluginInvocationResult>;
   invokeCheck(seed: unknown): Promise<PluginInvocationResult>;
 }
@@ -118,7 +118,7 @@ export class SandboxLoader implements PluginLoader {
       case "cron":
         return entrypoint.invokeCron(bridge, seed, invocation.name, invocation.scheduledAt);
       case "lifecycle":
-        return entrypoint.invokeLifecycle(bridge, seed, invocation.hook, { keepData: invocation.keepData });
+        return entrypoint.invokeLifecycle(bridge, seed, invocation.hook, { keepData: invocation.keepData, feature: invocation.feature });
       case "migration":
         return entrypoint.invokeMigration(bridge, seed, invocation.version);
       case "check":

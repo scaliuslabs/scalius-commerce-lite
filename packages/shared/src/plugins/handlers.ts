@@ -19,6 +19,21 @@ export interface PluginHandlerInventory {
   providers: PluginProviderInventory[];
   /** Declared data updates, by version (`migrations: { "1": handler }`); absent in seeds from before they existed. */
   migrations?: string[];
+  /**
+   * Handlers of features that are off (`manifest.features`): the module must
+   * still export exactly them, but none of them runs. Absent when every
+   * declared handler is live.
+   */
+  dormant?: PluginDormantInventory;
+}
+
+/** The handlers of features that are off, by kind. */
+export interface PluginDormantInventory {
+  events: string[];
+  functions: string[];
+  routes: { admin: string[]; public: string[]; webhooks: string[] };
+  cron: string[];
+  providers: PluginProviderInventory[];
 }
 
 export interface PluginProviderInventory {
@@ -28,8 +43,12 @@ export interface PluginProviderInventory {
   operations: string[];
 }
 
-/** Lifecycle hooks are optional and need no declaration. */
-export const PLUGIN_LIFECYCLE_HOOKS = ["install", "activate", "deactivate", "uninstall"] as const;
+/**
+ * Lifecycle hooks are optional and need no declaration. `enable` and
+ * `disable` run when a person turns one of the app's features on or off
+ * (`{ feature }`), with the access the app has after the change.
+ */
+export const PLUGIN_LIFECYCLE_HOOKS = ["install", "activate", "deactivate", "uninstall", "enable", "disable"] as const;
 export type PluginLifecycleHook = (typeof PLUGIN_LIFECYCLE_HOOKS)[number];
 
 /** The manifest fields the inventory reads (a parsed `PluginManifest` satisfies it). */
@@ -46,7 +65,33 @@ export interface PluginHandlerManifest {
   migrations?: ReadonlyArray<{ version: number }>;
 }
 
-export function pluginHandlerInventory(manifest: PluginHandlerManifest): PluginHandlerInventory {
+/**
+ * The handlers a module must export. With `declared` (the manifest as
+ * declared) and `manifest` the running one (features off removed), the
+ * handlers of off features are listed as `dormant`: present, never run.
+ */
+export function pluginHandlerInventory(manifest: PluginHandlerManifest, declared?: PluginHandlerManifest): PluginHandlerInventory {
+  const live = liveInventory(manifest);
+  if (!declared || declared === manifest) return live;
+  const all = liveInventory(declared);
+  const minus = (values: readonly string[], present: readonly string[]) => values.filter((value) => !present.includes(value));
+  const dormant: PluginDormantInventory = {
+    events: minus(all.events, live.events),
+    functions: minus(all.functions, live.functions),
+    routes: {
+      admin: minus(all.routes.admin, live.routes.admin),
+      public: minus(all.routes.public, live.routes.public),
+      webhooks: minus(all.routes.webhooks, live.routes.webhooks),
+    },
+    cron: minus(all.cron, live.cron),
+    providers: all.providers.filter((provider) => !live.providers.some((entry) => entry.id === provider.id)),
+  };
+  const empty = dormant.events.length + dormant.functions.length + dormant.routes.admin.length + dormant.routes.public.length
+    + dormant.routes.webhooks.length + dormant.cron.length + dormant.providers.length === 0;
+  return empty ? live : { ...live, dormant };
+}
+
+function liveInventory(manifest: PluginHandlerManifest): PluginHandlerInventory {
   return {
     events: [...manifest.events],
     functions: manifest.functions.map((fn) => fn.point),
@@ -79,9 +124,25 @@ export function pluginDefinitionOf(module: unknown): Record<string, unknown> | n
 /**
  * Every way a plugin definition disagrees with its manifest: a declared
  * handler that is missing or not a function, an undeclared handler, or an
- * unknown definition key. Empty means the module may run.
+ * unknown definition key. Empty means the module may run. Dormant handlers
+ * (features that are off) count as declared.
  */
-export function checkPluginHandlers(inventory: PluginHandlerInventory, definition: unknown): string[] {
+export function checkPluginHandlers(live: PluginHandlerInventory, definition: unknown): string[] {
+  const dormant = live.dormant;
+  const inventory: PluginHandlerInventory = dormant
+    ? {
+      events: [...live.events, ...dormant.events],
+      functions: [...live.functions, ...dormant.functions],
+      routes: {
+        admin: [...live.routes.admin, ...dormant.routes.admin],
+        public: [...live.routes.public, ...dormant.routes.public],
+        webhooks: [...live.routes.webhooks, ...dormant.routes.webhooks],
+      },
+      cron: [...live.cron, ...dormant.cron],
+      providers: [...live.providers, ...dormant.providers],
+      ...(live.migrations ? { migrations: live.migrations } : {}),
+    }
+    : live;
   const issues: string[] = [];
   const plugin = pluginDefinitionOf(definition);
   if (!plugin) return ["The plugin module must export a plugin definition (definePlugin) as its default export."];

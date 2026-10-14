@@ -50,11 +50,12 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
     env = pluginTestEnv(binding, { CREDENTIAL_ENCRYPTION_KEY: key });
     sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1)").run();
     const installed = await installPlugin(db, { manifest: packManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS[PACK]!.sha256, actorUserId: "owner" });
-    const configured = await writePluginSettings(db, PACK, providerType === "pathao" ? {
+    // The courier's feature on with the activation, then its keys.
+    const active = await activatePlugin(db, PACK, { actorUserId: "owner", expectedRevision: installed.revision, features: [providerType] });
+    await writePluginSettings(db, PACK, providerType === "pathao" ? {
       pathao_client_id: "synthetic-client-924", pathao_client_secret: "synthetic-secret-924",
       pathao_username: "synthetic-user-924", pathao_password: "synthetic-password-924", pathao_store_id: "924",
-    } : { steadfast_api_key: "synthetic-api-924", steadfast_secret_key: "synthetic-secret-924" }, { expectedRevision: installed.revision, credentialEncryptionKey: key });
-    await activatePlugin(db, PACK, { actorUserId: "owner", expectedRevision: configured.revision });
+    } : { steadfast_api_key: "synthetic-api-924", steadfast_secret_key: "synthetic-secret-924" }, { expectedRevision: active.revision, credentialEncryptionKey: key });
     await db.insert(schema.deliveryProviders).values({
       id: "provider_local", name: "Synthetic provider", type: `${PACK}:${providerType}`, isActive: true, credentials: "{}", config: "{}",
     });

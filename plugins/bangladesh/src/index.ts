@@ -2,13 +2,19 @@
 // needs that a store elsewhere does not, as one first-party app built only on
 // the public plugin contract. A store outside Bangladesh carries none of it.
 //
+// Every service is a feature (`manifest.features`) the merchant turns on by
+// itself: the pack asks for nothing at activation, and each feature asks
+// only for its own hosts and scopes when it is turned on. An off feature's
+// provider, settings, routes and jobs do not exist for the running app.
+//
 // - SMS (sms.ts): SMS.net.bd, BDBulkSMS, MIM SMS and GenNet iSMS as SMS
 //   providers. The merchant chooses one in Settings → Notifications; order
 //   messages and sign-in codes go through it.
 // - Fraud checks (fraud.ts): FraudBD, FraudGuard, eCourier Fraud Alert and
 //   the custom fraudchecker.link API on the order page (advice, never
 //   blocking), for Bangladesh buyers only.
-// - Payments (sslcommerz.ts): SSLCommerz as a hosted payment provider
+// - Payments: bKash (bkash/) and Nagad (nagad/, unverified) as hosted
+//   wallet payment providers, and SSLCommerz (sslcommerz.ts) as a hosted payment provider
 //   (cards, mobile wallets, internet banking): sessions, IPN and return
 //   validation through SSLCommerz's validation API, refunds. The old
 //   /webhooks/sslcommerz and /payment/sslcommerz/* URLs keep reaching it.
@@ -18,7 +24,7 @@
 //   /webhooks/steadfast URLs). Pathao books by its own place ids, which the
 //   platform reads from the places (`locations`).
 // - Places (places.ts): the City/Thana/Area directory, loaded through the
-//   place import on activation and kept current by the hourly `places-sync`;
+//   place import when the places feature is turned on and kept current by the hourly `places-sync`;
 //   "Refresh from Pathao" (pathao-places.ts) re-reads Pathao's live list.
 //
 // Each provider names the settings it needs (`providers.*[].settings`), so
@@ -30,6 +36,7 @@ import {
   PLUGIN_API_VERSION,
   ui,
   type PluginContext,
+  type PluginFeatureInput,
   type PluginManifestInput,
   type PluginRouteRequest,
 } from "@scalius/plugin-sdk";
@@ -39,6 +46,8 @@ import { continuePathaoRefresh, pathaoRefreshRunning, readPathaoRefresh, startPa
 import { PLACES_TOTAL, PLACES_VERSION, placesCurrent, readPlacesState, seedPlaces, type PlacesState } from "./places";
 import { SMS_HOSTS, smsProviders } from "./sms";
 import { SSLCOMMERZ_AMOUNT_LIMITS, SSLCOMMERZ_HOSTS, paymentProviders } from "./sslcommerz";
+import { BKASH_HOSTS, BKASH_PROVIDER, BKASH_SETTINGS, BKASH_STORAGE, bkashProviders } from "./bkash";
+import { NAGAD_HOSTS, NAGAD_PROVIDER, NAGAD_SETTINGS, NAGAD_SETTINGS_BN, NAGAD_STORAGE, nagadProviders } from "./nagad";
 
 // Each field belongs to one provider (`group: <provider id>`): the dashboard
 // shows it only in that provider's setup sheet, where the provider is in
@@ -101,6 +110,8 @@ const SETTINGS = [
   },
   text("sslcommerz", "sslcommerz_store_id", "Store ID", 200, "From the store credentials SSLCommerz sent you."),
   secret("sslcommerz", "sslcommerz_store_password", "Store password"),
+  ...BKASH_SETTINGS,
+  ...NAGAD_SETTINGS,
 ];
 
 /** The field labels in Bangla (the dashboard's other language); help stays English. */
@@ -109,6 +120,8 @@ const BN_LABELS: Record<string, string> = {
   "API token": "এপিআই টোকেন",
   "API secret": "এপিআই সিক্রেট",
   "API URL": "এপিআই ইউআরএল",
+  "App key": "অ্যাপ কী",
+  "App secret": "অ্যাপ সিক্রেট",
   "API address": "এপিআই ঠিকানা",
   "Account address": "অ্যাকাউন্টের ঠিকানা",
   "Bearer token": "বেয়ারার টোকেন",
@@ -133,34 +146,147 @@ const BN_LABELS: Record<string, string> = {
   "Webhook token": "ওয়েবহুক টোকেন",
 };
 
+/** Each service's own hosts (a feature reaches only these). */
+const FRAUD_HOSTS = (id: keyof typeof FRAUD_CHECKERS) => [...FRAUD_CHECKERS[id].hosts];
+const SMS_HOST = (index: number) => [SMS_HOSTS[index]!];
+
+type FeatureCopy = { name: string; description: string; bn: { name: string; description: string } };
+
+/** The pack's features: one per service, every one off until the merchant turns it on. */
+const FEATURES = {
+  places: {
+    name: "Bangladesh places",
+    description: "The City, Thana and Area list (Pathao's delivery places) for addresses and shipping zones. Loads about 11,500 places through the place import; it adds and updates places, never deletes one.",
+    bn: { name: "বাংলাদেশের এলাকা", description: "ঠিকানা ও শিপিং জোনের জন্য শহর, থানা ও এলাকার তালিকা (Pathao-র ডেলিভারি এলাকা)। প্লেস ইমপোর্ট দিয়ে প্রায় ১১,৫০০ এলাকা লোড করে; এলাকা যোগ ও হালনাগাদ করে, কখনো মোছে না।" },
+  },
+  sslcommerz: {
+    name: "SSLCommerz",
+    description: "Take card, mobile wallet and internet banking payments on SSLCommerz's page.",
+    bn: { name: "SSLCommerz", description: "SSLCommerz-এর পেজে কার্ড, মোবাইল ওয়ালেট ও ইন্টারনেট ব্যাংকিং পেমেন্ট নিন।" },
+  },
+  bkash: {
+    name: "bKash",
+    description: "Take bKash payments at checkout. An order is paid only after bKash confirms the payment to Scalius directly. Refund from the order page.",
+    bn: { name: "বিকাশ", description: "চেকআউটে বিকাশ পেমেন্ট নিন। বিকাশ সরাসরি Scalius-কে নিশ্চিত করার পরই অর্ডার পেইড হয়। অর্ডার পেজ থেকে রিফান্ড করুন।" },
+  },
+  nagad: {
+    name: "Nagad (unverified)",
+    description: "Nagad online checkout, built from Nagad's published API without sandbox access. Confirm it with a live Nagad merchant account before taking real payments.",
+    bn: { name: "নগদ (যাচাই করা হয়নি)", description: "স্যান্ডবক্স ছাড়া নগদের প্রকাশিত API দেখে তৈরি নগদ অনলাইন চেকআউট। আসল পেমেন্ট নেওয়ার আগে একটি লাইভ নগদ মার্চেন্ট অ্যাকাউন্টে যাচাই করে নিন।" },
+  },
+  pathao: {
+    name: "Pathao",
+    description: "Book, track and follow Pathao deliveries. It also reads Pathao's live City, Thana and Area list into your places (Refresh from Pathao).",
+    bn: { name: "Pathao", description: "Pathao ডেলিভারি বুক, ট্র্যাক ও অনুসরণ করুন। Pathao-র হালনাগাদ শহর, থানা ও এলাকার তালিকাও আপনার এলাকায় আনে (Pathao থেকে হালনাগাদ)।" },
+  },
+  steadfast: {
+    name: "Steadfast",
+    description: "Book, track and follow Steadfast deliveries, and find a parcel by order number.",
+    bn: { name: "Steadfast", description: "Steadfast ডেলিভারি বুক, ট্র্যাক ও অনুসরণ করুন, আর অর্ডার নম্বর দিয়ে পার্সেল খুঁজুন।" },
+  },
+  smsnetbd: {
+    name: "SMS.net.bd",
+    description: "Send order messages and sign-in codes by SMS through SMS.net.bd.",
+    bn: { name: "SMS.net.bd", description: "SMS.net.bd দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড এসএমএসে পাঠান।" },
+  },
+  bdbulksms: {
+    name: "BDBulkSMS (GreenWeb)",
+    description: "Send order messages and sign-in codes by SMS through BDBulkSMS.",
+    bn: { name: "BDBulkSMS (GreenWeb)", description: "BDBulkSMS দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড এসএমএসে পাঠান।" },
+  },
+  mimsms: {
+    name: "MIM SMS",
+    description: "Send order messages and sign-in codes by SMS through MIM SMS.",
+    bn: { name: "MIM SMS", description: "MIM SMS দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড এসএমএসে পাঠান।" },
+  },
+  gennet: {
+    name: "GenNet iSMS",
+    description: "Send order messages and sign-in codes by SMS through your GenNet iSMS account.",
+    bn: { name: "GenNet iSMS", description: "আপনার GenNet iSMS অ্যাকাউন্ট দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড এসএমএসে পাঠান।" },
+  },
+  fraudbd: {
+    name: "FraudBD",
+    description: "Check a Bangladesh buyer's courier history with FraudBD from the order page. Advice only: it never blocks an order.",
+    bn: { name: "FraudBD", description: "অর্ডার পেজ থেকে FraudBD দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন। শুধু পরামর্শ: কোনো অর্ডার আটকায় না।" },
+  },
+  fraudguard: {
+    name: "FraudGuard",
+    description: "Check a Bangladesh buyer's courier history with FraudGuard from the order page. Advice only: it never blocks an order.",
+    bn: { name: "FraudGuard", description: "অর্ডার পেজ থেকে FraudGuard দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন। শুধু পরামর্শ: কোনো অর্ডার আটকায় না।" },
+  },
+  ecourier: {
+    name: "eCourier Fraud Alert",
+    description: "Check a Bangladesh buyer's courier history with eCourier from the order page. Advice only: it never blocks an order.",
+    bn: { name: "eCourier Fraud Alert", description: "অর্ডার পেজ থেকে eCourier দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন। শুধু পরামর্শ: কোনো অর্ডার আটকায় না।" },
+  },
+  fraudchecker: {
+    name: "FraudChecker (custom API)",
+    description: "Check a Bangladesh buyer's courier history with the fraudchecker.link API from the order page. Advice only: it never blocks an order.",
+    bn: { name: "FraudChecker (কাস্টম API)", description: "অর্ডার পেজ থেকে fraudchecker.link API দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন। শুধু পরামর্শ: কোনো অর্ডার আটকায় না।" },
+  },
+} satisfies Record<string, FeatureCopy>;
+
+const feature = (id: keyof typeof FEATURES, parts: Omit<PluginFeatureInput, "id" | "name" | "description">): PluginFeatureInput => ({
+  id,
+  name: FEATURES[id].name,
+  description: FEATURES[id].description,
+  ...parts,
+});
+
 export const manifest = {
   id: "scalius.bangladesh",
   name: "Bangladesh pack",
-  version: "1.3.0",
+  version: "2.0.0",
   apiVersion: PLUGIN_API_VERSION,
-  description: "Everything a store in Bangladesh needs in one app: take online payments (cards, bKash, Nagad, Rocket and internet banking) with SSLCommerz; book, track and follow deliveries with Pathao and Steadfast; send order messages and sign-in codes through SMS.net.bd, BDBulkSMS, MIM SMS or GenNet; check a buyer's courier history with FraudBD, FraudGuard, eCourier or FraudChecker from the order page; and load the City, Thana and Area list (Pathao's delivery places) for addresses and shipping zones.",
+  description: "Everything a store in Bangladesh needs in one app, each service turned on by itself: take payments with bKash, Nagad or SSLCommerz (cards, wallets and internet banking); book, track and follow deliveries with Pathao and Steadfast; send order messages and sign-in codes through SMS.net.bd, BDBulkSMS, MIM SMS or GenNet; check a buyer's courier history with FraudBD, FraudGuard, eCourier or FraudChecker from the order page; and load the City, Thana and Area list for addresses and shipping zones.",
   author: { name: "Scalius" },
   icon: "assets/icon.svg",
-  tagline: "Bangladesh pack: SSLCommerz, couriers, SMS, fraud checks, places",
+  tagline: "bKash, Nagad, SSLCommerz, couriers, SMS, fraud checks and places",
   categories: ["payments", "shipping", "notifications"],
   countries: ["BD"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
   documentationUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/blob/mono-repo/plugins/bangladesh/README.md",
   changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/bangladesh",
   minPlatformVersion: "1.0.0",
-  // The place import (dashboard.delivery_locations.import): it adds and updates places, never deletes.
-  scopes: ["write_places"],
-  allowedHosts: [
-    ...SMS_HOSTS,
-    ...new Set(Object.values(FRAUD_CHECKERS).flatMap((checker) => checker.hosts)),
-    ...PATHAO_HOSTS,
-    ...STEADFAST_HOSTS,
-    SSLCOMMERZ_HOSTS.sandbox,
-    SSLCOMMERZ_HOSTS.live,
-  ],
+  // The base asks for nothing: every service is a feature with its own access.
+  scopes: [],
+  allowedHosts: [],
   settings: SETTINGS,
+  storage: { ...BKASH_STORAGE, ...NAGAD_STORAGE },
+  features: [
+    // The place import (dashboard.delivery_locations.import): it adds and updates places, never deletes.
+    feature("places", {
+      recommended: true,
+      scopes: ["write_places"],
+      routes: { admin: ["places", "load-places"] },
+      admin: ["places"],
+      cron: ["places-sync"],
+    }),
+    feature("bkash", { providers: ["bkash"], allowedHosts: [BKASH_HOSTS.sandbox, BKASH_HOSTS.live] }),
+    feature("nagad", { providers: ["nagad"], allowedHosts: NAGAD_HOSTS }),
+    feature("sslcommerz", { providers: ["sslcommerz"], allowedHosts: [SSLCOMMERZ_HOSTS.sandbox, SSLCOMMERZ_HOSTS.live] }),
+    // Refresh from Pathao writes Pathao's ids onto the places, through the place import.
+    feature("pathao", {
+      providers: ["pathao"],
+      allowedHosts: PATHAO_HOSTS,
+      scopes: ["write_places"],
+      routes: { admin: ["refresh-pathao-places"] },
+      cron: ["pathao-places"],
+    }),
+    feature("steadfast", { providers: ["steadfast"], allowedHosts: STEADFAST_HOSTS }),
+    feature("smsnetbd", { providers: ["smsnetbd"], allowedHosts: SMS_HOST(0) }),
+    feature("bdbulksms", { providers: ["bdbulksms"], allowedHosts: SMS_HOST(1) }),
+    feature("mimsms", { providers: ["mimsms"], allowedHosts: SMS_HOST(2) }),
+    feature("gennet", { providers: ["gennet"], allowedHosts: SMS_HOST(3) }),
+    feature("fraudbd", { providers: ["fraudbd"], allowedHosts: FRAUD_HOSTS("fraudbd") }),
+    feature("fraudguard", { providers: ["fraudguard"], allowedHosts: FRAUD_HOSTS("fraudguard") }),
+    feature("ecourier", { providers: ["ecourier"], allowedHosts: FRAUD_HOSTS("ecourier") }),
+    feature("fraudchecker", { providers: ["fraudchecker"], allowedHosts: FRAUD_HOSTS("fraudchecker") }),
+  ],
   providers: {
     payment: [
+      BKASH_PROVIDER,
+      NAGAD_PROVIDER,
       {
         id: "sslcommerz",
         name: "SSLCommerz",
@@ -232,10 +358,14 @@ export const manifest = {
   translations: {
     bn: {
       name: "বাংলাদেশ প্যাক",
-      tagline: "বাংলাদেশ প্যাক: SSLCommerz, কুরিয়ার, এসএমএস, ফ্রড চেক, এলাকা",
-      description: "বাংলাদেশের দোকানের যা দরকার, এক অ্যাপে: SSLCommerz দিয়ে অনলাইন পেমেন্ট নিন (কার্ড, বিকাশ, নগদ, রকেট ও ইন্টারনেট ব্যাংকিং); Pathao আর Steadfast দিয়ে ডেলিভারি বুক করুন ও ট্র্যাক করুন; SMS.net.bd, BDBulkSMS, MIM SMS বা GenNet দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড পাঠান; অর্ডার পেজ থেকে FraudBD, FraudGuard, eCourier বা FraudChecker দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন; আর ঠিকানা ও শিপিং জোনের জন্য শহর, থানা ও এলাকার তালিকা (Pathao-র ডেলিভারি এলাকা) লোড করুন।",
+      tagline: "বিকাশ, নগদ, SSLCommerz, কুরিয়ার, এসএমএস, ফ্রড চেক ও এলাকা",
+      description: "বাংলাদেশের দোকানের যা দরকার, এক অ্যাপে, প্রতিটি সেবা আলাদা করে চালু হয়: বিকাশ, নগদ বা SSLCommerz দিয়ে পেমেন্ট নিন (কার্ড, ওয়ালেট ও ইন্টারনেট ব্যাংকিং); Pathao আর Steadfast দিয়ে ডেলিভারি বুক করুন ও ট্র্যাক করুন; SMS.net.bd, BDBulkSMS, MIM SMS বা GenNet দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড পাঠান; অর্ডার পেজ থেকে FraudBD, FraudGuard, eCourier বা FraudChecker দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন; আর ঠিকানা ও শিপিং জোনের জন্য শহর, থানা ও এলাকার তালিকা লোড করুন।",
       pages: { places: "বাংলাদেশের এলাকা" },
-      settings: Object.fromEntries(SETTINGS.flatMap((field) => (BN_LABELS[field.label] ? [[field.key, { label: BN_LABELS[field.label] }]] : []))),
+      features: Object.fromEntries(Object.entries(FEATURES).map(([id, copy]) => [id, copy.bn])),
+      settings: {
+        ...Object.fromEntries(SETTINGS.flatMap((field) => (BN_LABELS[field.label] ? [[field.key, { label: BN_LABELS[field.label] }]] : []))),
+        ...NAGAD_SETTINGS_BN,
+      },
     },
   },
 } satisfies PluginManifestInput;
@@ -260,7 +390,7 @@ const COPY = {
     loadedToast: "The Bangladesh places are loaded.",
     partialToast: "Some places are loaded. The rest load within the hour.",
     keep: "Removing the app keeps every place: zones, tax regions and addresses use them.",
-    next: "Next: set up SSLCommerz in Settings → Payments, add Pathao or Steadfast in Settings → Shipping → Couriers, choose your SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations. Each one's keys are entered where you set it up.",
+    next: "Turn on each service you use under Features on this app's page. Then enter its keys where it is set up: payments in Settings → Payments, couriers in Settings → Shipping → Couriers, SMS in Settings → Notifications, fraud checkers in Settings → Apps and integrations.",
     pathaoTitle: "Pathao's live places",
     pathaoDescription: "Reads Pathao's current cities, thanas and areas into your places, a few dozen at a time, and links them for Pathao bookings. It needs Pathao's keys (Settings → Shipping → Couriers).",
     pathaoIdle: "Not refreshed",
@@ -291,7 +421,7 @@ const COPY = {
     loadedToast: "বাংলাদেশের এলাকা লোড হয়েছে।",
     partialToast: "কিছু এলাকা লোড হয়েছে। বাকিগুলো এক ঘণ্টার মধ্যে লোড হবে।",
     keep: "অ্যাপ সরালেও সব এলাকা থাকে: জোন, ট্যাক্স অঞ্চল আর ঠিকানা এগুলো ব্যবহার করে।",
-    next: "এরপর: Settings → Payments-এ SSLCommerz চালু করুন, Settings → Shipping → Couriers-এ Pathao বা Steadfast যোগ করুন, Settings → Notifications-এ আপনার এসএমএস গেটওয়ে বাছুন, আর Settings → Apps and integrations-এ একটি ফ্রড চেকার চালু করুন। যেখানে চালু করবেন, সেখানেই তার কী দিন।",
+    next: "এই অ্যাপের পেজে Features-এ আপনি যে সেবাগুলো ব্যবহার করেন সেগুলো চালু করুন। তারপর যেখানে সেটি সেট আপ হয় সেখানে তার কী দিন: পেমেন্ট Settings → Payments-এ, কুরিয়ার Settings → Shipping → Couriers-এ, এসএমএস Settings → Notifications-এ, ফ্রড চেকার Settings → Apps and integrations-এ।",
     pathaoTitle: "Pathao-র হালনাগাদ এলাকা",
     pathaoDescription: "Pathao-র বর্তমান শহর, থানা ও এলাকা অল্প অল্প করে আপনার এলাকায় আনে, আর Pathao বুকিংয়ের জন্য যুক্ত করে। এর জন্য Pathao-র কী লাগবে (Settings → Shipping → Couriers)।",
     pathaoIdle: "হালনাগাদ হয়নি",
@@ -327,7 +457,7 @@ function pathaoCard(request: PluginRouteRequest, refresh: PathaoRefreshState | n
   ]);
 }
 
-function placesPage(request: PluginRouteRequest, state: PlacesState | null, refresh: PathaoRefreshState | null) {
+function placesPage(request: PluginRouteRequest, state: PlacesState | null, refresh: PathaoRefreshState | null, pathao: boolean) {
   const t = COPY[adminLocale(request)];
   const current = placesCurrent(state);
   const status = current ? ui.badge(t.loaded, "success") : state && state.version === PLACES_VERSION ? ui.badge(t.loading, "warning") : ui.badge(t.notLoaded, "warning");
@@ -345,7 +475,8 @@ function placesPage(request: PluginRouteRequest, state: PlacesState | null, refr
       ]),
       ui.text(t.keep, { tone: "neutral", size: "sm" }),
     ]),
-    pathaoCard(request, refresh),
+    // Refresh from Pathao is the Pathao feature's: shown only while it is on.
+    ...(pathao ? [pathaoCard(request, refresh)] : []),
     ui.text(t.next),
   ], {
     title: t.title,
@@ -358,10 +489,13 @@ const seed = (ctx: PluginContext) => seedPlaces(ctx, { budgetMs: SEED_BUDGET_MS 
 
 export default definePlugin({
   manifest,
-  providers: { ...paymentProviders, ...courierProviders, ...smsProviders, ...fraudProviders },
+  providers: { ...paymentProviders, ...bkashProviders, ...nagadProviders, ...courierProviders, ...smsProviders, ...fraudProviders },
   routes: {
     admin: {
-      places: async (request, ctx) => ({ body: placesPage(request, await readPlacesState(ctx), await readPathaoRefresh(ctx)) }),
+      places: async (request, ctx) => {
+        const pathao = ctx.features.includes("pathao");
+        return { body: placesPage(request, await readPlacesState(ctx), pathao ? await readPathaoRefresh(ctx) : null, pathao) };
+      },
       "load-places": async (request, ctx) => {
         const t = COPY[adminLocale(request)];
         const state = await seed(ctx);
@@ -389,7 +523,9 @@ export default definePlugin({
     },
   },
   lifecycle: {
-    activate: async (ctx) => {
+    // Turning the places on loads them; the hourly places-sync finishes a load that did not complete.
+    enable: async (ctx, { feature: id }) => {
+      if (id !== "places") return;
       const state = await seed(ctx);
       if (state.error) throw new Error(state.error);
     },

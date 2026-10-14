@@ -99,10 +99,7 @@ describe("the Bangladesh pack's SSLCommerz", () => {
       id: "pay_old", orderId: "ORDPAID", amountMinor: 16_000, currency: "BDT", settlementAmountMinor: 16_000, paymentMethod: METHOD,
       paymentType: "full", status: "succeeded", providerRef: "val_old", providerSecondaryRef: "bank_old",
     });
-    const installed = await installPlugin(db, { manifest: packManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS[PACK]!.sha256, actorUserId: "owner" });
-    await writePluginSettings(db, PACK, {
-      sslcommerz_store_id: "shop01live", sslcommerz_store_password: "store-pass-xyz", sslcommerz_environment: "live",
-    }, { expectedRevision: installed.revision, credentialEncryptionKey: KEY });
+    await installPlugin(db, { manifest: packManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS[PACK]!.sha256, actorUserId: "owner" });
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -111,14 +108,23 @@ describe("the Bangladesh pack's SSLCommerz", () => {
   });
 
   const providers = () => appPaymentProvidersLoader(env, db, pluginTestCtx());
+  // The pack's features this store uses; each is off until approved, and its keys are written once it is on.
+  const FEATURES = ["sslcommerz"];
   const activate = async () => {
     const current = await requirePluginInstallation(db, PACK);
     const { pluginGrantKey, pluginGrantRequest } = await import("@scalius/shared/plugins/manifest");
-    return activatePluginWithHooks({ db, env, ctx: pluginTestCtx() }, PACK, {
+    const result = await activatePluginWithHooks({ db, env, ctx: pluginTestCtx() }, PACK, {
       actorUserId: "owner",
       expectedRevision: current.revision,
-      expectedGrantKey: pluginGrantKey(pluginGrantRequest(current.manifest)),
+      expectedGrantKey: pluginGrantKey(pluginGrantRequest(current.declaredManifest, FEATURES)),
+      features: FEATURES,
     });
+    if (result.installation.storedSettings.sslcommerz_store_id === undefined) {
+      await writePluginSettings(db, PACK, {
+      sslcommerz_store_id: "shop01live", sslcommerz_store_password: "store-pass-xyz", sslcommerz_environment: "live",
+    }, { expectedRevision: result.installation.revision, credentialEncryptionKey: KEY });
+    }
+    return { ...result, installation: await requirePluginInstallation(db, PACK) };
   };
   function api() {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");

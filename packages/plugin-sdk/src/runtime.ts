@@ -30,6 +30,8 @@ export interface PluginContextSeed {
   settings: Record<string, PluginSettingValue>;
   collections: string[];
   inventory: PluginHandlerInventory;
+  /** The app's features that are on (`manifest.features`); absent from hosts before features: none. */
+  features?: string[];
 }
 
 export type PluginInvocation =
@@ -39,7 +41,8 @@ export type PluginInvocation =
   | { kind: "provider"; provider: string; operation: string; input: unknown }
   | { kind: "route"; surface: "admin" | "public" | "webhooks"; name: string; request: PluginRouteRequest }
   | { kind: "cron"; name: string; scheduledAt: string }
-  | { kind: "lifecycle"; hook: PluginLifecycleHook; keepData?: boolean }
+  /** `feature`: the feature an `enable` or `disable` hook is for. */
+  | { kind: "lifecycle"; hook: PluginLifecycleHook; keepData?: boolean; feature?: string }
   /** One declared data update (`migrations[version]`); the host runs each once, in order. */
   | { kind: "migration"; version: number }
   /** Loads the module and checks it against the manifest; runs no app code (an update's load check). */
@@ -223,6 +226,7 @@ function createContext(seed: PluginContextSeed, bridge: PluginRuntimeBridge, log
     plugin: Object.freeze({ ...seed.plugin }),
     store: Object.freeze({ ...seed.store }),
     settings: Object.freeze({ ...seed.settings }),
+    features: Object.freeze([...(seed.features ?? [])]),
     api: Object.freeze({
       call: (operationId: string, input?: unknown) => call(() => bridge.apiCall(operationId, input)),
     }),
@@ -332,7 +336,8 @@ export async function invokePluginDefinition(
         return result(true, await handler(invocation.input, createContext(seed, requireBridge(bridge), logs)), null);
       }
       case "function": {
-        const handler = handlerIn(definition.functions, invocation.point);
+        // Only a live point runs: a feature that is off runs nothing.
+        const handler = seed.inventory.functions.includes(invocation.point) ? handlerIn(definition.functions, invocation.point) : null;
         if (!handler) return result(false, null, { code: "plugin.no_handler", message: `No function handler for ${invocation.point}.` });
         return result(true, await handler(invocation.input, Object.freeze({ ...seed.settings })), null);
       }
@@ -345,12 +350,13 @@ export async function invokePluginDefinition(
       }
       case "route": {
         const routes = definition.routes as Record<string, unknown> | undefined;
-        const handler = handlerIn(routes?.[invocation.surface], invocation.name);
+        const live = (seed.inventory.routes[invocation.surface] ?? []).includes(invocation.name);
+        const handler = live ? handlerIn(routes?.[invocation.surface], invocation.name) : null;
         if (!handler) return result(false, null, { code: "plugin.no_handler", message: `No ${invocation.surface} route ${invocation.name}.` });
         return result(true, await handler(invocation.request, createContext(seed, requireBridge(bridge), logs)), null);
       }
       case "cron": {
-        const handler = handlerIn(definition.cron, invocation.name);
+        const handler = seed.inventory.cron.includes(invocation.name) ? handlerIn(definition.cron, invocation.name) : null;
         if (!handler) return result(false, null, { code: "plugin.no_handler", message: `No cron handler ${invocation.name}.` });
         await handler(createContext(seed, requireBridge(bridge), logs), { name: invocation.name, scheduledAt: invocation.scheduledAt });
         return result(true, null, null);
@@ -359,7 +365,9 @@ export async function invokePluginDefinition(
         const handler = handlerIn(definition.lifecycle, invocation.hook);
         if (!handler) return result(true, null, null);
         const ctx = createContext(seed, requireBridge(bridge), logs);
-        await (invocation.hook === "uninstall" ? handler(ctx, { keepData: invocation.keepData !== false }) : handler(ctx));
+        if (invocation.hook === "uninstall") await handler(ctx, { keepData: invocation.keepData !== false });
+        else if (invocation.hook === "enable" || invocation.hook === "disable") await handler(ctx, { feature: invocation.feature ?? "" });
+        else await handler(ctx);
         return result(true, null, null);
       }
       case "check":

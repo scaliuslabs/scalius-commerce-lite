@@ -162,9 +162,17 @@ export const pluginSettingFieldSchema = z.discriminatedUnion("type", [
 ]);
 export type PluginSettingField = z.infer<typeof pluginSettingFieldSchema>;
 
-export const pluginSettingsSchemaSchema = z
+/** The most fields one storefront section, block or skin declares. */
+export const PLUGIN_SURFACE_SETTINGS_MAX = 40;
+/**
+ * The most fields of an app's own settings: a pack with many features (each
+ * service with its own keys) declares more than one section does.
+ */
+export const PLUGIN_APP_SETTINGS_MAX = 80;
+
+const settingsArray = (max: number) => z
   .array(pluginSettingFieldSchema)
-  .max(40)
+  .max(max)
   .superRefine((fields, context) => {
     const seen = new Set<string>();
     fields.forEach((field, index) => {
@@ -182,6 +190,9 @@ export const pluginSettingsSchemaSchema = z
       }
     });
   });
+export const pluginSettingsSchemaSchema = settingsArray(PLUGIN_SURFACE_SETTINGS_MAX);
+/** An app's own settings (`manifest.settings`). */
+export const pluginAppSettingsSchemaSchema = settingsArray(PLUGIN_APP_SETTINGS_MAX);
 export type PluginSettingsSchema = z.infer<typeof pluginSettingsSchemaSchema>;
 
 /** One item of a `list` setting: its fields' values by key. */

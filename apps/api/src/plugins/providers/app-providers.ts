@@ -81,7 +81,16 @@ async function resolveChoice(
   deps.plugin(parsed.pluginId);
   const installation = await getPluginInstallation(runtime.db, parsed.pluginId);
   const declaration = installation?.manifest.providers.find((provider) => provider.kind === kind && provider.id === parsed.providerId);
-  if (!installation || !declaration) return notInstalled;
+  if (!installation) return notInstalled;
+  if (!declaration) {
+    // A provider of a feature that is off: say which switch turns it on.
+    const declared = installation.declaredManifest.providers.find((provider) => provider.kind === kind && provider.id === parsed.providerId);
+    if (!declared) return notInstalled;
+    const name = installation.manifest.name;
+    if (installation.status !== "active") return { provider: null, issue: `Activate ${name} in Apps to use it.` };
+    const feature = installation.declaredManifest.features.find((entry) => entry.providers.includes(declared.id));
+    return { provider: null, issue: `Turn on ${feature?.name ?? declared.name} in ${name}'s features to use it.` };
+  }
   const settings = await readAppProviderSettings(runtime, installation, declaration, encryptionKey);
   if (!settings.enabled || settings.missingFields.length > 0 || settings.credentialErrors.length > 0) {
     return { provider: null, issue: settings.blockedReason ?? `${declaration.name} is not ready.` };

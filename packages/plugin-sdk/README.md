@@ -116,11 +116,12 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 - `storage` (20 collections): `indexes` (4) and `unique` (2), each with up to 4 fields.
 - `customFields` (50): fields in the app's namespace on a product, variant, customer, order, category, collection, brand or page.
 - `salesChannels` (3): sales channels the app sells through (`{ id, name }`), Shopify's sales-channel apps. Each becomes the channel `<plugin id>:<id>`, active while the app is. Merchants publish products to it; the app pages them from `GET /api/v1/admin/settings/sales-channels/<channel id>/products` (`products.view`) and follows `product.publication_changed`.
-- `settings` (40): the merchant's form. Types: `text`, `textarea`, `number`, `boolean`, `select`, `multiselect`, `secret`, `url` (https), `email`, `color`.
+- `features` (24): parts of the app the merchant turns on one at a time (see "Features").
+- `settings` (80; 40 for a storefront surface): the merchant's form. Types: `text`, `textarea`, `number`, `boolean`, `select`, `multiselect`, `secret`, `url` (https), `email`, `color`.
 - `admin`: `pages` (10), `cards` (20), `actions` (20), `widgets` (5), each naming an admin route; `listColumns` (see "List columns").
 - `storefront`: `sections` (20), `productBlocks` (10), `blocks` (checkout and account targets), `scripts` (5, https; `pages` is `all`, `home`, `product`, `listing` or `cart`: app JavaScript never runs on checkout, the receipt or an account page; their hosts join the storefront CSP), `head` and `proxy` flags.
 - `limits`: `cpuMs` 5-200 (default 50), `wallMs` 100-30,000 (default 10,000).
-- `translations`: text by BCP 47 tag (`bn`, `fr`, `pt-BR`; up to 20) for `name`, `tagline`, `description` and the admin titles.
+- `translations`: text by BCP 47 tag (`bn`, `fr`, `pt-BR`; up to 20) for `name`, `tagline`, `description`, the admin titles and `features.<id>.{name, description}`.
 
 ### Listing
 
@@ -142,6 +143,31 @@ Paths are relative to the app package, in lower case, without `..`. The packer r
 
 The packer adds the digests of the images to the end of the bundle as a comment. Thus the bundle SHA-256 changes when only an image changes. The API serves the images to the dashboard at `/api/v1/admin/apps/<id>/assets/<icon | screenshot-N>` on the dashboard origin. It checks each image again, and sends it with `nosniff` and `Content-Security-Policy: sandbox`. An address with the current fingerprint (`?v=`) is cached for one year. A bundled app's images are compiled into the Worker (`assets.gen.ts`). A sandboxed app's images are in R2 at `private/plugins/<id>/<version>/<sha256>/assets/<path>`; `pnpm plugin` writes them to `dist/assets/` beside `dist/plugin.js`.
 
+### Features
+
+An app with several services (a regional pack: payment gateways, couriers, SMS gateways) declares each one as a feature. A feature claims items the manifest declares elsewhere, by name, and adds its own access:
+
+```ts
+features: [{
+  id: "bkash", name: "bKash", description: "Take bKash payments at checkout.",
+  providers: ["bkash"],                       // its fields (group: "bkash") go with it
+  allowedHosts: ["tokenized.pay.bka.sh"],     // beyond the app's own allowedHosts
+  scopes: [],                                 // beyond the app's own scopes
+  // also: settingsGroups, routes { admin, public, webhooks }, cron, events, functions,
+  // admin (page, card, action, widget ids), storefront { sections, productBlocks, blocks, skins }
+  recommended: false,                         // a setup screen may tick it; it still starts off
+}]
+```
+
+- Every feature starts **off**. What no feature claims is the app's base and runs whenever the app runs. The top-level `scopes` and `allowedHosts` are the base; the consent screen shows the union with each feature's part beside it.
+- Turning a feature on asks a Super Admin to approve **that feature's** scopes and hosts only (`dashboard.apps.feature_enable`, a person's step, never an agent's). Turning it off revokes them at once (`dashboard.apps.feature_disable`; agents may). `dashboard.apps.features_list` lists them with their state and request.
+- An off feature costs nothing: its providers, routes, cron jobs, event subscriptions and functions are not registered, its settings are hidden and not in `ctx.settings`, and its scopes and hosts are not granted. Its handlers must still be in the module; the runtime refuses to run them. Its saved settings stay for when it is turned on again.
+- `ctx.features` lists the features that are on; use it to leave an off feature's parts out of a shared screen.
+- `lifecycle.enable(ctx, { feature })` runs after a feature is turned on, with its access; `lifecycle.disable(ctx, { feature })` runs before it is turned off, while it still has it.
+- An item belongs to at most one feature, and may point only at items of its own feature or of the base (an admin page at its feature's route, a provider at its feature's settings).
+- An update keeps the features that are on and starts new ones off. It needs approval again when an on feature (or the base) asks for more.
+- `createPluginTestHarness(module, { features })` runs with those features on (default: all).
+
 Activation shows a Super Admin everything the manifest asks for. An update that asks for more access stays inactive until a Super Admin approves it.
 
 A `secret` setting is encrypted with a key derived from `CREDENTIAL_ENCRYPTION_KEY` and masked everywhere. It appears decrypted only in `ctx.settings`. A secret that cannot be opened reads as `null`.
@@ -155,7 +181,7 @@ Definition keys match the manifest. The host rejects an undeclared handler, and 
 - `routes.admin.<name>`, `routes.public.<name>`, `routes.webhooks.<name>`: `(request, ctx) => { status?, headers?, body? }`.
 - `cron.<name>`: `(ctx, { name, scheduledAt })`.
 - `providers.<id>`: `definePaymentProvider`, `defineCourierProvider`, `defineSmsProvider`, `defineEmailProvider`, `defineFraudProvider`, `defineTaxProvider`, `defineTranslationProvider`, `defineAiProvider`, `defineMessagingProvider`, `definePushProvider`, `defineSearchProvider`, `defineAddressProvider`, `defineFxProvider` or `defineIdentityProvider`.
-- `lifecycle.install`, `activate`, `deactivate`, `uninstall`: `(ctx)`. `uninstall` also gets `{ keepData }`. No declaration needed.
+- `lifecycle.install`, `activate`, `deactivate`, `uninstall`, `enable`, `disable`: `(ctx)`. `uninstall` also gets `{ keepData }`; `enable` and `disable` get `{ feature }`. No declaration needed.
 - `migrations["1"]`, `["2"]`: `(ctx)`. One for each `manifest.migrations[].version` (see "Data updates").
 
 **Events.** `EVENT_TOPICS` in `packages/shared/src/events.ts` lists the 16 topics. The catalogue changes only by addition. An event carries ids, states and quantities, never contact data or money. Read the resource with `ctx.api`.
@@ -168,6 +194,7 @@ Definition keys match the manifest. The host rejects an undeclared handler, and 
 
 ## `ctx`
 
+- `features`: the app's features that are on.
 - `plugin`, `store`, `settings`: app id and version; store `name`, `url` (null until the merchant sets Settings > Store details > Web addresses), `currency`, `decimalPlaces`, `timezone`, `locale`; the installation's settings with secrets decrypted.
 - `api.call(operationId, input)`: calls a stable app-API operation by id (`dashboard.orders.get`) with the dashboard's validation, the scopes' RBAC and audit. Stable operations carry `x-scalius-agent.stability: "stable"` in the OpenAPI contract; their schemas change only additively. Any other operation refuses with `api.operation_not_stable` (bundled first-party apps may also call `beta` ones). Returns `{ ok, status, data, error }`. A mutating call needs `idempotencyKey` (8-200 characters). 60 calls a minute.
 - `http.fetch(url, init)`: https only, to `allowedHosts`. Each redirect hop (at most 5) is checked again. Request and response are at most 1 MiB. `timeoutMs` is 1-30,000 (default 10,000). 60 requests a minute. `Set-Cookie` is dropped.

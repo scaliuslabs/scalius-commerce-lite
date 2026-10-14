@@ -76,8 +76,11 @@ describe("the Bangladesh pack's courier declarations", () => {
       }),
       expect.objectContaining({ id: "steadfast", countries: ["BD"], icon: "assets/steadfast.svg", trackingUrl: "https://steadfast.com.bd/t/{trackingId}" }),
     ]);
-    expect(manifest.scopes).toEqual(["write_places"]);
-    expect(manifest.allowedHosts).toEqual(expect.arrayContaining(["api-hermes.pathao.com", "courier-api-sandbox.pathao.com", "portal.packzy.com"]));
+    // Each courier is its own feature: off by default, reaching only its own hosts.
+    const feature = (id: string) => manifest.features.find((entry) => entry.id === id);
+    expect(manifest.scopes).toEqual([]);
+    expect(feature("pathao")).toMatchObject({ providers: ["pathao"], scopes: ["write_places"], allowedHosts: ["api-hermes.pathao.com", "courier-api-sandbox.pathao.com"] });
+    expect(feature("steadfast")).toMatchObject({ providers: ["steadfast"], allowedHosts: ["portal.packzy.com"] });
   });
 });
 

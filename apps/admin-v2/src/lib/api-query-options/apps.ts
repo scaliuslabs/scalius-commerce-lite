@@ -13,6 +13,8 @@ import {
   postApiV1AdminAppsByIdActivate,
   postApiV1AdminAppsByIdDeactivate,
   postApiV1AdminAppsByIdDeliveriesByDeliveryIdRetry,
+  postApiV1AdminAppsByIdFeaturesByFeatureIdDisable,
+  postApiV1AdminAppsByIdFeaturesByFeatureIdEnable,
   postApiV1AdminAppsByIdUninstall,
   putApiV1AdminAppsByIdSettings,
 } from "@scalius/api-client/sdk";
@@ -20,6 +22,7 @@ import type {
   AppAdminSurfaces,
   AppDetail,
   AppEventDelivery,
+  AppFeature,
   AppGrant,
   AppListing,
   AppLogLine,
@@ -30,7 +33,7 @@ import { AdminApiResponseError } from "../admin-api-error";
 import { apiData } from "../api";
 import { queryKeys } from "../query-keys";
 
-export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppGrant, AppListing, AppLogLine, AppSettingField, AppSummary };
+export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppFeature, AppGrant, AppListing, AppLogLine, AppSettingField, AppSummary };
 
 /** The categories an app lists itself under (the manifest's enum). */
 export type AppCategory = AppSummary["categories"][number];
@@ -115,6 +118,25 @@ export function activateApp(app: Pick<AppDetail, "id" | "revision" | "grantKey">
   return apiData(postApiV1AdminAppsByIdActivate({
     path: { id: app.id },
     body: { expectedRevision: app.revision, grantKey: app.grantKey },
+  }));
+}
+
+/**
+ * Super Admin only: turns one feature on and approves its access. `grantKey`
+ * is the feature's, as the page showed it; a changed request answers 409.
+ */
+export function enableAppFeature(app: Pick<AppDetail, "id" | "revision">, feature: Pick<AppFeature, "id" | "grantKey">) {
+  return apiData(postApiV1AdminAppsByIdFeaturesByFeatureIdEnable({
+    path: { id: app.id, featureId: feature.id },
+    body: { expectedRevision: app.revision, grantKey: feature.grantKey ?? "" },
+  }));
+}
+
+/** Turns one feature off: its access is revoked at once (no approval). */
+export function disableAppFeature(app: Pick<AppDetail, "id" | "revision">, featureId: string) {
+  return apiData(postApiV1AdminAppsByIdFeaturesByFeatureIdDisable({
+    path: { id: app.id, featureId },
+    body: { expectedRevision: app.revision },
   }));
 }
 

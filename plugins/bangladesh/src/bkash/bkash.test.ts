@@ -1,11 +1,11 @@
-// The bKash app over the SDK harness (the platform's runtime, inputs and
+// The pack's bKash feature over the SDK harness (the platform's runtime, inputs and
 // answers validated against the payment port) and a small simulation of
 // bKash's Tokenized Checkout API: payments are created Initiated, complete
 // only on Execute after the buyer authorised them, and refunds are kept per
 // payment. Individual answers can be scripted to replace the simulation.
 import { describe, expect, it } from "vitest";
 import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
-import bkash from "./index";
+import bkash from "../index";
 
 const BASES = {
   sandbox: "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/",
@@ -112,11 +112,11 @@ class FakeBkash {
   }
 }
 
-const settings = { environment: "sandbox", app_key: APP_KEY, app_secret: APP_SECRET, username: USERNAME, password: PASSWORD };
+const settings = { bkash_environment: "sandbox", bkash_app_key: APP_KEY, bkash_app_secret: APP_SECRET, bkash_username: USERNAME, bkash_password: PASSWORD };
 
 function setup(overrides: Record<string, string> = {}) {
   const bank = new FakeBkash();
-  const harness = createPluginTestHarness(bkash, { settings: { ...settings, ...overrides }, fetch: bank.fetch });
+  const harness = createPluginTestHarness(bkash, { settings: { ...settings, ...overrides }, fetch: bank.fetch, features: ["bkash"] });
   /** Runs one provider operation and checks that nothing it returned, raised or logged carries a secret or the buyer's wallet. */
   const run = async (operation: string, input: unknown) => {
     const result = await harness.provider("bkash", operation, input);
@@ -128,7 +128,7 @@ function setup(overrides: Record<string, string> = {}) {
 }
 
 const sessionInput = (overrides: Json = {}) => ({
-  attemptKey: "payment_session:scalius.bkash:bkash:4b1d0c",
+  attemptKey: "payment_session:scalius.bangladesh:bkash:4b1d0c",
   correlationId: "ORD1_full_ABCD1234",
   orderId: "ORD1",
   paymentType: "full",
@@ -137,10 +137,10 @@ const sessionInput = (overrides: Json = {}) => ({
   wireAmount: { minor: 12_550, decimal: "125.50" },
   buyer: { name: "Rahim", phone: "+880 1712-345678" },
   urls: {
-    success: "https://api.shop.test/api/v1/payment/scalius.bkash:bkash/success?order_id=ORD1",
-    fail: "https://api.shop.test/api/v1/payment/scalius.bkash:bkash/fail?order_id=ORD1",
-    cancel: "https://api.shop.test/api/v1/payment/scalius.bkash:bkash/cancel?order_id=ORD1",
-    webhook: "https://api.shop.test/api/v1/webhooks/scalius.bkash:bkash",
+    success: "https://api.shop.test/api/v1/payment/scalius.bangladesh:bkash/success?order_id=ORD1",
+    fail: "https://api.shop.test/api/v1/payment/scalius.bangladesh:bkash/fail?order_id=ORD1",
+    cancel: "https://api.shop.test/api/v1/payment/scalius.bangladesh:bkash/cancel?order_id=ORD1",
+    webhook: "https://api.shop.test/api/v1/webhooks/scalius.bangladesh:bkash",
   },
   requestTimeoutMs: 15_000,
   ...overrides,
@@ -181,7 +181,7 @@ async function paidPayment() {
   return { ...context, trxID: verified.event.secondaryRef };
 }
 
-describe("scalius.bkash: sessions", () => {
+describe("bKash: sessions", () => {
   it("creates one bKash payment per attempt, with a cached token, and replays it without calling bKash", async () => {
     const { bank, harness, run } = setup();
     const created = await run("createSession", sessionInput());
@@ -210,16 +210,16 @@ describe("scalius.bkash: sessions", () => {
 
     // The token is cached under a key that names no credential, for a little less than bKash's hour.
     const tokenKeys = [...harness.kv.keys()];
-    expect(tokenKeys).toEqual([expect.stringMatching(/^token:sandbox:[0-9a-f]{32}$/)]);
+    expect(tokenKeys).toEqual([expect.stringMatching(/^bkash:token:sandbox:[0-9a-f]{32}$/)]);
     expect(harness.kv.get(tokenKeys[0]!)).toBe(ID_TOKEN);
-    expect(harness.records.get("payments")?.get("TR00111A")).toMatchObject({ orderId: "ORD1", correlationId: "ORD1_full_ABCD1234", amountMinor: 12_550, closedAs: null });
+    expect(harness.records.get("bkash-payments")?.get("TR00111A")).toMatchObject({ orderId: "ORD1", correlationId: "ORD1_full_ABCD1234", amountMinor: 12_550, closedAs: null });
 
     // A retry of the same attempt: the same session, nothing sent.
     expect((await run("createSession", sessionInput())).value).toEqual(created.value);
     expect(bank.calls).toHaveLength(2);
 
     // Another attempt reuses the cached token and gets its own payment.
-    expect((await run("createSession", sessionInput({ attemptKey: "payment_session:scalius.bkash:bkash:second" }))).value)
+    expect((await run("createSession", sessionInput({ attemptKey: "payment_session:scalius.bangladesh:bkash:second" }))).value)
       .toMatchObject({ providerRef: "TR00112A" });
     expect(bank.paths()).toEqual(["token/grant", "create", "create"]);
   });
@@ -239,7 +239,7 @@ describe("scalius.bkash: sessions", () => {
     expect((await declined.run("createSession", sessionInput())).error)
       .toMatchObject({ category: "declined", uncertain: false, code: "bkash.2006", message: "bKash did not start the payment (bKash code 2006: Invalid Amount)." });
     // Nothing was stored, so a retry creates the payment.
-    expect(declined.harness.records.get("payments")?.size).toBe(0);
+    expect(declined.harness.records.get("bkash-payments")?.size).toBe(0);
 
     const badCredentials = setup();
     badCredentials.bank.script("token/grant", fail("2079", "Invalid username and password"));
@@ -251,7 +251,7 @@ describe("scalius.bkash: sessions", () => {
     unauthorized.bank.script("token/grant", { status: 403, body: { message: "Forbidden" } });
     expect((await unauthorized.run("createSession", sessionInput())).error).toMatchObject({ category: "misconfigured", code: "bkash.credentials" });
 
-    const unset = setup({ password: "" });
+    const unset = setup({ bkash_password: "" });
     expect((await unset.run("createSession", sessionInput())).error).toMatchObject({ category: "misconfigured", code: "bkash.settings" });
     expect(unset.bank.calls).toHaveLength(0);
   });
@@ -262,11 +262,11 @@ describe("scalius.bkash: sessions", () => {
     expect((await run("createSession", sessionInput())).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash.timeout" });
     bank.script("create", { status: 502, body: "<html>Bad gateway</html>" });
     expect((await run("createSession", sessionInput())).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash.unavailable" });
-    expect(harness.records.get("payments")?.size).toBe(0);
+    expect(harness.records.get("bkash-payments")?.size).toBe(0);
   });
 });
 
-describe("scalius.bkash: buyer returns", () => {
+describe("bKash: buyer returns", () => {
   it("executes a success return and confirms the exact amount, without the buyer's wallet", async () => {
     const { bank, run, paymentID } = await createdPayment();
     const verified = await run("verifyReturn", buyerReturn(paymentID, "success"));
@@ -319,7 +319,7 @@ describe("scalius.bkash: buyer returns", () => {
       },
     });
     expect(bank.calls.at(-1)).toMatchObject({ path: "payment/status", body: { paymentID } });
-    expect(harness.records.get("payments")?.get(paymentID)).toMatchObject({ closedAs: "cancelled" });
+    expect(harness.records.get("bkash-payments")?.get(paymentID)).toMatchObject({ closedAs: "cancelled" });
 
     // A success return for the released payment is not executed: the same cancellation again.
     expect((await run("verifyReturn", buyerReturn(paymentID, "success"))).value).toEqual(cancelled.value);
@@ -384,7 +384,7 @@ describe("scalius.bkash: buyer returns", () => {
   });
 });
 
-describe("scalius.bkash: status queries", () => {
+describe("bKash: status queries", () => {
   it("reports Initiated without an event, and Completed with the same event as the return", async () => {
     const { run, paymentID } = await createdPayment();
     const query = { providerRef: paymentID, orderId: "ORD1", requestTimeoutMs: 5_000 };
@@ -396,7 +396,7 @@ describe("scalius.bkash: status queries", () => {
   });
 });
 
-describe("scalius.bkash: refunds", () => {
+describe("bKash: refunds", () => {
   it("refunds in full and in part, once per idempotency key", async () => {
     const { bank, harness, run, paymentID, trxID } = await paidPayment();
     const full = await run("refund", refundInput({ providerRef: paymentID, secondaryRef: trxID }));
@@ -424,7 +424,7 @@ describe("scalius.bkash: refunds", () => {
     expect(partial.value).toEqual({ refundId: "RTX4C" });
     expect(bank.paths().slice(-2)).toEqual(["payment/status", "payment/refund"]);
     expect(bank.calls.at(-1)!.body).toMatchObject({ amount: "50.00", trxID, reason: "Refund" });
-    expect([...harness.records.get("refunds")!.values()]).toEqual([
+    expect([...harness.records.get("bkash-refunds")!.values()]).toEqual([
       { paymentId: paymentID, trxId: trxID, amountMinor: 12_550, state: "completed", refundTrxId: "RTX3C" },
       { paymentId: paymentID, trxId: trxID, amountMinor: 5_000, state: "completed", refundTrxId: "RTX4C" },
     ]);
@@ -472,16 +472,16 @@ describe("scalius.bkash: refunds", () => {
     bank.script("payment/refund", fail("2023", "Insufficient Balance"));
     expect((await run("refund", refundInput({ providerRef: paymentID, secondaryRef: trxID, idempotencyKey: "refused" }))).error)
       .toMatchObject({ category: "declined", code: "bkash.2023", message: "bKash refused the refund (bKash code 2023: Insufficient Balance)." });
-    expect(harness.records.get("refunds")?.size).toBe(1);
+    expect(harness.records.get("bkash-refunds")?.size).toBe(1);
   });
 });
 
-describe("scalius.bkash: connection", () => {
+describe("bKash: connection", () => {
   it("tests the saved credentials without echoing them", async () => {
     const working = setup();
     expect((await working.run("testConnection", {})).value).toEqual({ ok: true, message: "Connected to bKash sandbox." });
 
-    const refused = setup({ environment: "live" });
+    const refused = setup({ bkash_environment: "live" });
     refused.bank.script("token/grant", { status: 401, body: { message: "Unauthorized" } });
     expect((await refused.run("testConnection", {})).value)
       .toEqual({ ok: false, message: "bKash rejected the app key, app secret, username or password." });

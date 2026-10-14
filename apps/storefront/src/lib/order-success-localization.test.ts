@@ -23,7 +23,7 @@ describe("order receipt localization boundaries", () => {
   });
 
   it("names an app wallet on the receipt by the store's checkout name, never its stored id", () => {
-    const bkash = "scalius.bkash:bkash";
+    const bkash = "scalius.bangladesh:bkash";
     const gateways = [{ id: bkash, name: "bKash" }];
     expect(formatOrderSuccessPaymentMethod(bkash, BANGLA_CHECKOUT_LANGUAGE_DATA, undefined, gateways)).toBe("bKash");
     // The app was turned off since: its provider id in words.

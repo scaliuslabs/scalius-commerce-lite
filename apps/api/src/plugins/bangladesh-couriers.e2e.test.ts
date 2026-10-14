@@ -74,13 +74,7 @@ describe("the Bangladesh pack's couriers", () => {
         metadata: JSON.stringify({ unknownOutcomeResolution: { outcome: "confirmed_existing" } }),
       },
     ]);
-    const installed = await installPlugin(db, { manifest: packManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS[PACK]!.sha256, actorUserId: "owner" });
-    await writePluginSettings(db, PACK, {
-      pathao_base_url: "https://api-hermes.pathao.com", pathao_client_id: "pathao-client-4821", pathao_client_secret: PATHAO_SECRET,
-      pathao_username: "merchant@shop.test", pathao_password: "pathao-password-9931", pathao_webhook_secret: PATHAO_HOOK,
-      pathao_store_id: "924", pathao_delivery_type: "48", pathao_item_type: "2", pathao_item_weight: 0.5,
-      steadfast_base_url: "https://portal.packzy.com/api/v1", steadfast_api_key: "steadfast-api-3391", steadfast_secret_key: STEADFAST_SECRET,
-    }, { expectedRevision: installed.revision, credentialEncryptionKey: KEY });
+    await installPlugin(db, { manifest: packManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS[PACK]!.sha256, actorUserId: "owner" });
     requests.length = 0;
     orderPosts = 0;
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -104,14 +98,26 @@ describe("the Bangladesh pack's couriers", () => {
   });
 
   const couriers = () => loadCourierProviders(createAppProviderRuntime({ env, db, ctx: pluginTestCtx() }));
+  // The pack's features this store uses; each is off until approved, and its keys are written once it is on.
+  const FEATURES = ["pathao", "steadfast"];
   const activate = async () => {
     const current = await requirePluginInstallation(db, PACK);
     const { pluginGrantKey, pluginGrantRequest } = await import("@scalius/shared/plugins/manifest");
-    return activatePluginWithHooks({ db, env, ctx: pluginTestCtx() }, PACK, {
+    const result = await activatePluginWithHooks({ db, env, ctx: pluginTestCtx() }, PACK, {
       actorUserId: "owner",
       expectedRevision: current.revision,
-      expectedGrantKey: pluginGrantKey(pluginGrantRequest(current.manifest)),
+      expectedGrantKey: pluginGrantKey(pluginGrantRequest(current.declaredManifest, FEATURES)),
+      features: FEATURES,
     });
+    if (result.installation.storedSettings.pathao_client_id === undefined) {
+      await writePluginSettings(db, PACK, {
+      pathao_base_url: "https://api-hermes.pathao.com", pathao_client_id: "pathao-client-4821", pathao_client_secret: PATHAO_SECRET,
+      pathao_username: "merchant@shop.test", pathao_password: "pathao-password-9931", pathao_webhook_secret: PATHAO_HOOK,
+      pathao_store_id: "924", pathao_delivery_type: "48", pathao_item_type: "2", pathao_item_weight: 0.5,
+      steadfast_base_url: "https://portal.packzy.com/api/v1", steadfast_api_key: "steadfast-api-3391", steadfast_secret_key: STEADFAST_SECRET,
+    }, { expectedRevision: result.installation.revision, credentialEncryptionKey: KEY });
+    }
+    return { ...result, installation: await requirePluginInstallation(db, PACK) };
   };
   function webhookApp() {
     const app = new OpenAPIHono<{ Bindings: Env }>();

@@ -40,7 +40,7 @@ interface DialogProps {
 }
 
 /** Shared outcome handling: the fresh app, the list, and an app hook that failed without stopping the change. */
-function useAppMutationResult(app: AppDetail) {
+export function useAppMutationResult(app: Pick<AppDetail, "id" | "name">) {
   const t = useMessages(installedAppsMessages);
   const queryClient = useQueryClient();
   return {

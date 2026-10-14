@@ -13,11 +13,18 @@ import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
 import { PLUGIN_HOST_PATTERN, PLUGIN_NAME_PATTERN } from "./manifest-patterns";
 import { PLUGIN_SCOPE_NAMES, type PluginScope } from "./scopes";
 import { storefrontComponentsManifestSchema } from "./storefront-components";
-import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
+import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { PLUGIN_BLOCK_TARGETS } from "./storefront";
 import { metaobjectDefinitionInputSchema } from "../metaobjects";
 import { PROVIDER_KINDS } from "./providers/kinds";
+import {
+  PLUGIN_FEATURES_MAX,
+  pluginFeatureIssues,
+  pluginFeatureSchema,
+  pluginFeatureTranslationSchema,
+  pluginManifestWithFeatures,
+} from "./features";
 
 /** Date-versioned like the event catalog; a manifest names the version it was built for. */
 export { PLUGIN_API_VERSION, SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERSIONS, type PluginApiVersion } from "./api-version";
@@ -36,6 +43,17 @@ export {
   type PluginScope,
   type PluginScopeDefinition,
 } from "./scopes";
+/** App features: parts a merchant turns on one at a time (in ./features.ts). */
+export {
+  PLUGIN_FEATURES_MAX,
+  knownPluginFeatures,
+  pluginFeatureOwners,
+  pluginFeatureRequest,
+  pluginManifestWithFeatures,
+  type PluginFeature,
+  type PluginFeatureInput,
+  type PluginFeatureRequest,
+} from "./features";
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]{1,40})?$/;
 const name = z.string().regex(PLUGIN_NAME_PATTERN);
 const title = z.string().trim().min(1).max(80);
@@ -420,6 +438,8 @@ const pluginTranslationSchema = z.object({
     help: z.string().trim().min(1).max(280).optional(),
     options: z.record(z.string().min(1).max(64), z.string().trim().min(1).max(80)).optional(),
   }).strict()).optional(),
+  /** Feature names and descriptions by feature id. */
+  features: z.record(name, pluginFeatureTranslationSchema).optional(),
 }).strict();
 export type PluginTranslation = z.infer<typeof pluginTranslationSchema>;
 
@@ -458,7 +478,8 @@ export const pluginManifestSchema = z.object({
   /**
    * Store data and actions the app asks for (`PLUGIN_SCOPES`): every
    * `ctx.api` call, timeline write and customer message is checked against
-   * the approved ones.
+   * the approved ones. These are the base scopes; a feature asks for its own
+   * when a person turns it on (`features[].scopes`).
    */
   scopes: z.array(scopeName).max(PLUGIN_SCOPE_NAMES.length).default([])
     .refine((scopes) => new Set(scopes).size === scopes.length, "Scopes must be unique."),
@@ -536,7 +557,13 @@ export const pluginManifestSchema = z.object({
    */
   salesChannels: z.array(z.object({ id: name, name: title }).strict()).max(3).default([])
     .refine((channels) => new Set(channels.map((channel) => channel.id)).size === channels.length, "Sales channel ids must be unique."),
-  settings: pluginSettingsSchemaSchema.default([]),
+  settings: pluginAppSettingsSchemaSchema.default([]),
+  /**
+   * Parts of the app a merchant turns on one at a time (features.ts). Each
+   * starts off; turning one on asks consent for its own scopes and hosts, and
+   * only then do its providers, routes, jobs, events and surfaces run.
+   */
+  features: z.array(pluginFeatureSchema).max(PLUGIN_FEATURES_MAX).default([]),
   /** App-wide settings sections (`settings[].group`); additive, presentation only. */
   settingsGroups: z.array(settingsGroupSchema).max(PLUGIN_SETTINGS_GROUPS_MAX).default([]),
 
@@ -553,11 +580,13 @@ export const pluginManifestSchema = z.object({
     wallMs: z.number().int().min(100).max(30_000).default(10_000),
   }).strict().default({ cpuMs: 50, wallMs: 10_000 }),
 }).strict().superRefine((manifest, context) => {
+  const featureScopes = new Set(manifest.features.flatMap((feature) => feature.scopes));
   manifest.routes.admin.forEach((route, index) => {
-    if (route.scope && !manifest.scopes.includes(route.scope)) {
+    if (route.scope && !manifest.scopes.includes(route.scope) && !featureScopes.has(route.scope)) {
       context.addIssue({ code: "custom", path: ["routes", "admin", index, "scope"], message: "An admin route scope must be among the app's scopes." });
     }
   });
+  for (const issue of pluginFeatureIssues(manifest)) context.addIssue({ code: "custom", path: issue.path, message: issue.message });
   const routes = new Set([...manifest.routes.admin, ...manifest.routes.public].map((route) => route.name));
   const adminRoutes = new Set(manifest.routes.admin.map((route) => route.name));
   const publicRoutes = new Set(manifest.routes.public.map((route) => route.name));
@@ -605,6 +634,10 @@ export const pluginManifestSchema = z.object({
           context.addIssue({ code: "custom", path: ["translations", locale, "tabs", pageId, tabId], message: `No tab ${tabId} on page ${pageId} to translate.` });
         }
       }
+    }
+    const featureIds = new Set(manifest.features.map((feature) => feature.id));
+    for (const id of Object.keys(translation.features ?? {})) {
+      if (!featureIds.has(id)) context.addIssue({ code: "custom", path: ["translations", locale, "features", id], message: `No feature ${id} to translate.` });
     }
     const groups = new Set(manifest.settingsGroups.map((group) => group.id));
     for (const id of Object.keys(translation.settingsGroups ?? {})) {
@@ -849,10 +882,24 @@ export interface PluginGrantRequest {
   storefrontCode?: true;
   /** Hosts the app's islands reach from the buyer's browser. Present only when not empty. */
   storefrontConnect?: string[];
+  /**
+   * The features turned on (`manifest.features`), sorted. Present only when
+   * the app declares features, so the grants of apps without keep their key.
+   * Everything else in the request already includes these features' parts.
+   */
+  features?: string[];
 }
 
-export function pluginGrantRequest(manifest: PluginManifest): PluginGrantRequest {
+/**
+ * What the app asks for with `features` on (default: none, the base). Pass the
+ * manifest as declared, or the running manifest with the same features it
+ * runs with (`pluginManifestWithFeatures` is idempotent for a given set).
+ */
+export function pluginGrantRequest(declared: PluginManifest, features: Iterable<string> = []): PluginGrantRequest {
   const sorted = <T extends string>(values: Iterable<T>) => [...new Set(values)].sort();
+  const wanted = new Set(features);
+  const enabled = sorted(declared.features.map((feature) => feature.id).filter((id) => wanted.has(id)));
+  const manifest = pluginManifestWithFeatures(declared, enabled);
   return {
     scopes: sorted(manifest.scopes),
     allowedHosts: sorted(manifest.allowedHosts),
@@ -869,6 +916,7 @@ export function pluginGrantRequest(manifest: PluginManifest): PluginGrantRequest
       ? { storefrontCode: true as const }
       : {}),
     ...(manifest.storefront.connect.length > 0 ? { storefrontConnect: sorted(manifest.storefront.connect) } : {}),
+    ...(declared.features.length > 0 ? { features: enabled } : {}),
   };
 }
 
@@ -891,7 +939,8 @@ export function pluginGrantExpands(granted: PluginGrantRequest, next: PluginGran
     || (!granted.storefrontSurfaces && next.storefrontSurfaces)
     || grows(granted.customFieldOwners, next.customFieldOwners)
     || (!granted.storefrontCode && next.storefrontCode === true)
-    || grows(granted.storefrontConnect ?? [], next.storefrontConnect ?? []);
+    || grows(granted.storefrontConnect ?? [], next.storefrontConnect ?? [])
+    || grows(granted.features ?? [], next.features ?? []);
 }
 
 /**
@@ -917,6 +966,7 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
     ...(added(granted.storefrontConnect ?? [], next.storefrontConnect ?? []).length > 0
       ? { storefrontConnect: added(granted.storefrontConnect ?? [], next.storefrontConnect ?? []) }
       : {}),
+    ...(next.features !== undefined ? { features: added(granted.features ?? [], next.features) } : {}),
   };
 }
 

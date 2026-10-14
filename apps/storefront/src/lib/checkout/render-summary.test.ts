@@ -243,7 +243,7 @@ describe("checkout attempt recovery", () => {
         requests.push(url);
         return url === "/api/checkout/create-order"
           ? new Response(JSON.stringify({ success: false, errorCode, error: "Old checkout", details: {
-            orderId: "existing_order", paymentMethod: "scalius.bkash:bkash",
+            orderId: "existing_order", paymentMethod: "scalius.bangladesh:bkash",
           } }), { status: 409 })
           : new Response(JSON.stringify({ success: true, data: taxQuote() }));
       }));
@@ -253,7 +253,7 @@ describe("checkout attempt recovery", () => {
       const action = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement;
       const expired = errorCode === "CHECKOUT_ATTEMPT_EXPIRED";
       expect(action.getAttribute("href")).toBe(expired ? "/cart"
-        : "/order-success?orderId=existing_order&payment=scalius.bkash%3Abkash");
+        : "/order-success?orderId=existing_order&payment=scalius.bangladesh%3Abkash");
       expect(action.textContent).toBe(expired ? "Return to cart" : "Review existing checkout");
       expect(document.getElementById("paymentMethods")!.children).toHaveLength(0);
       expect(sessionStorage.getItem("checkoutId")).toBe(expired ? null : "checkout_stripe_fixture_123456");
@@ -1750,7 +1750,7 @@ describe("payment page with store app checkout functions", () => {
 });
 
 describe("an app's wallet at checkout", () => {
-  const BKASH = "scalius.bkash:bkash";
+  const BKASH = "scalius.bangladesh:bkash";
 
   it("shows its checkout name with its logo and tells the buyer they leave the store to pay", async () => {
     let finishOrder: (response: Response) => void = () => undefined;

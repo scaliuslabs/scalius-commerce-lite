@@ -1,11 +1,11 @@
 // Payment methods that come from apps: orders, payments, attempts and refunds
-// store them as `<plugin id>:<provider id>` (`scalius.bkash:bkash`). The
+// store them as `<plugin id>:<provider id>` (`scalius.bangladesh:bkash`). The
 // dashboard names them by the provider's name when it can read the installed
 // apps, and otherwise by the provider id in words, never by the stored id.
 
 import { parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 
-/** "Bkash" for `scalius.bkash:bkash`, null for cash, built-in gateways or anything malformed. */
+/** "Bkash" for `scalius.bangladesh:bkash`, null for cash, built-in gateways or anything malformed. */
 export function appPaymentMethodFallbackName(id: string): string | null {
   const app = parseQualifiedProviderId(id);
   if (!app) return null;
