@@ -347,11 +347,6 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   hideFooter
 >
   <CheckoutHeader layoutData={layoutData} copy={copy} />
-  {/* Hidden checkout meta for client-side JS */}
-  <script
-    is:inline
-    set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}
-  />
   {
     codCartRepairState && (
       <script
@@ -1072,6 +1067,13 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 <CheckoutLoadingOverlay
   title={copy.processingOrderTitle}
   message={copy.processingOrderMessage}
+/>
+
+{/* The page scripts' config and copy (about 40 KB), after the content so the
+    cart paints without waiting for it; only the module scripts read it. */}
+<script
+  is:inline
+  set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}
 />
 
 <script>
