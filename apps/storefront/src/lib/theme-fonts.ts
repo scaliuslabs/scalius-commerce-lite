@@ -19,6 +19,7 @@ import hindSiliguri400 from "@fontsource/hind-siliguri/files/hind-siliguri-benga
 import hindSiliguri700 from "@fontsource/hind-siliguri/files/hind-siliguri-bengali-700-normal.woff2?url";
 import {
   STOREFRONT_BANGLA_FONTS,
+  STOREFRONT_BENGALI_SYSTEM_FONT,
   STOREFRONT_FONTS,
   storefrontPairingFonts,
   type StorefrontFontKey,
@@ -53,6 +54,9 @@ const LATIN_EXT_RANGE =
  */
 const BENGALI_RANGE =
   "U+0951-0952,U+0964-0965,U+0980-09F2,U+09F4-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+25CC,U+A8F1";
+
+/** The whole Bengali block, Taka sign included, for the local system face. */
+const BENGALI_SYSTEM_RANGE = "U+0980-09FF";
 
 /**
  * Only the Latin (and Inter's Latin Extended) subsets ship: store copy is
@@ -109,6 +113,28 @@ function fallbackFace(family: string, metrics: FallbackMetrics): string {
   return `@font-face{font-family:"${family} Fallback";src:local("${metrics.local}");size-adjust:${metrics.sizeAdjust};ascent-override:${metrics.ascentOverride};descent-override:${metrics.descentOverride};line-gap-override:${metrics.lineGapOverride};}`;
 }
 
+/**
+ * The installed system Bengali font under one family name
+ * (STOREFRONT_BENGALI_SYSTEM_FONT, right after the Bengali web family in the
+ * stack). The Taka sign of every price sits outside the web font's range, and
+ * Bangla text waits for it to load. With no named system face in the stack,
+ * both took the platform's font search on the first layout: 35-40 ms of the
+ * main thread on a laptop, 4x that on a phone, before the first paint. A
+ * named `local()` face resolves at once; a device that has none of these
+ * fonts falls through the stack as before. The bold face lists bold cuts
+ * first, then the regular ones (synthesized bold).
+ */
+const BENGALI_SYSTEM_FACES = [
+  { weights: "100 500", names: ["Bangla Sangam MN", "Kohinoor Bangla", "Nirmala UI", "Noto Sans Bengali", "Noto Sans Bengali UI", "Vrinda"] },
+  { weights: "600 900", names: ["Bangla Sangam MN Bold", "Kohinoor Bangla Bold", "Nirmala UI Bold", "Noto Sans Bengali Bold", "Noto Sans Bengali UI Bold", "Vrinda Bold", "Bangla Sangam MN", "Kohinoor Bangla", "Nirmala UI", "Noto Sans Bengali", "Noto Sans Bengali UI", "Vrinda"] },
+] as const;
+
+function bengaliSystemFaces(): string {
+  return BENGALI_SYSTEM_FACES.map(({ weights, names }) =>
+    `@font-face{font-family:"${STOREFRONT_BENGALI_SYSTEM_FONT}";font-style:normal;font-weight:${weights};src:${names.map((name) => `local("${name}")`).join(",")};unicode-range:${BENGALI_SYSTEM_RANGE};}`,
+  ).join("");
+}
+
 export interface ThemeFontAssets {
   /** `@font-face` rules for the pairing's installed families. */
   css: string;
@@ -137,6 +163,7 @@ export function themeFontAssets(pairing: StorefrontTypePairing): ThemeFontAssets
   }
   const bengali = BANGLA_FILES[bangla];
   for (const file of bengali.files) rules.push(fontFace(STOREFRONT_BANGLA_FONTS[bangla].family, bengali.weights, file));
+  rules.push(bengaliSystemFaces());
   const assets = { css: rules.join(""), preload };
   cache.set(pairing, assets);
   return assets;

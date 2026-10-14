@@ -249,10 +249,19 @@ export function storefrontPairingFonts(pairing: StorefrontTypePairing): {
   return { fonts: [...new Set<StorefrontFontKey>([spec.heading, spec.body])], bangla: spec.bangla, heading: spec.heading };
 }
 
+/**
+ * The storefront's local Bengali face (`apps/storefront/src/lib/theme-fonts.ts`):
+ * the installed system Bengali font under one name, right after the Bengali
+ * web family. Without it, the Taka sign of every price (outside the web
+ * font's range) and Bangla text while that font loads fall to the platform's
+ * font search on the first layout: about 35 ms on a laptop, 4x on a phone.
+ */
+export const STOREFRONT_BENGALI_SYSTEM_FONT = "Bengali System";
+
 function fontStack(font: StorefrontFontKey, bangla: keyof typeof STOREFRONT_BANGLA_FONTS): string {
   const latin = STOREFRONT_FONTS[font];
   const bengali = STOREFRONT_BANGLA_FONTS[bangla];
-  return `"${latin.family}", "${bengali.family}", ${latin.fallback}, ${bengali.fallback}`;
+  return `"${latin.family}", "${bengali.family}", "${STOREFRONT_BENGALI_SYSTEM_FONT}", ${latin.fallback}, ${bengali.fallback}`;
 }
 
 // ─── Palettes ─────────────────────────────────────────────────────────────
