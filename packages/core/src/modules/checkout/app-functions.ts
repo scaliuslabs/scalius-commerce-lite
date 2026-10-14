@@ -27,9 +27,9 @@
 // 9. Tax is calculated after every discount: the tax quote takes the
 //    platform and app allocations together.
 
-import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
+import { DELIVERY_HIERARCHY_COUNTRY, MARKET_COUNTRY_PATTERN } from "@scalius/shared/markets";
 import type { Database } from "@scalius/database/client";
-import { categoryClosure, collections, customers, orders, productVariants, products } from "@scalius/database/schema";
+import { BACKUP_MARKET_ID, categoryClosure, collections, customerTagLinks, customers, orders, productVariants, products } from "@scalius/database/schema";
 import {
   functionCartSchema,
   type FunctionCart,
@@ -40,6 +40,7 @@ import {
 import { floorToIncrementMinor, percentOfMinor, roundToIncrementMinor } from "@scalius/shared/money";
 import { and, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { collectionMembershipForConfig } from "../collections";
+import { orderMarketIdSql } from "../markets";
 import { allocateMinorAmount, type TaxDiscountAllocationInput } from "../tax";
 import type { AppDiscountTarget, AppliedAppDiscount, AppStorageCommit, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
 export type { AppDiscountTarget, AppliedAppDiscount, AppStorageCommit, CheckoutRateOption };
@@ -99,6 +100,34 @@ export interface AppFunctionCartFacts {
   products: Map<string, { categoryIds: string[]; collectionIds: string[]; brandId: string | null }>;
   skus: Map<string, string | null>;
   customer: FunctionCart["customer"];
+  market: FunctionCart["market"];
+}
+
+/** Where the cart ships, as the checkout knows it (the country is absent in Bangladesh's delivery hierarchy). */
+export interface AppCartDestinationSource {
+  country?: string | null;
+  city: string | null;
+  zone: string | null;
+}
+
+/** The destination an app sees: regions only, or null when nothing ships. */
+function appCartDestination(source: AppCartDestinationSource | null): FunctionCart["destination"] {
+  if (!source || !(source.city || source.zone || source.country)) return null;
+  return {
+    country: source.country ?? DELIVERY_HIERARCHY_COUNTRY,
+    city: source.city?.slice(0, 120) ?? null,
+    zone: source.zone?.slice(0, 120) ?? null,
+  };
+}
+
+/**
+ * The country that places the order in a market: the shipping country, else
+ * (an order that ships nothing) the billing country, else none. Same rule as
+ * the order insert (`orderMarketIdSql`).
+ */
+export function appCartMarketCountry(destination: AppCartDestinationSource | null, billingCountry?: string | null): string | null {
+  const country = (appCartDestination(destination)?.country ?? billingCountry ?? "").trim().toUpperCase();
+  return MARKET_COUNTRY_PATTERN.test(country) ? country : null;
 }
 
 function idList(column: AnyColumn, ids: readonly string[]): SQL {
@@ -108,12 +137,18 @@ function idList(column: AnyColumn, ids: readonly string[]): SQL {
 /**
  * The catalog and customer facts an app cart needs, in one read batch: each
  * product's category (with its ancestors), collections and brand, each SKU,
- * and the signed-in customer's order count and spend. Called only when an
- * active app implements a point.
+ * and the signed-in customer's tags, order count and spend, and the market
+ * of the order's country. Called only when an active app implements a point.
  */
 export async function loadAppFunctionCartFacts(
   db: Database,
-  input: { productIds: readonly string[]; variantIds: readonly string[]; customerId?: string | null },
+  input: {
+    productIds: readonly string[];
+    variantIds: readonly string[];
+    customerId?: string | null;
+    /** `appCartMarketCountry()` of the cart: names its market (null: the backup market). */
+    marketCountry: string | null;
+  },
 ): Promise<AppFunctionCartFacts> {
   const productIds = [...new Set(input.productIds)];
   const variantIds = [...new Set(input.variantIds)];
@@ -138,15 +173,22 @@ export async function loadAppFunctionCartFacts(
       totalSpentMinor: sql<number>`(SELECT COALESCE(SUM(${orders.totalAmountMinor}), 0) FROM ${orders}
         WHERE ${orders.accountOwnerCustomerId} = ${customers.id}
         AND ${orders.deletedAt} IS NULL AND ${orders.status} NOT IN ('cancelled', 'incomplete'))`,
+      // Tags never contain a comma (customer_tag_links_tag_shape), so the join is lossless.
+      tags: sql<string | null>`(SELECT group_concat(tag_link.tag, ',') FROM (
+        SELECT ${customerTagLinks.tag} AS tag FROM ${customerTagLinks}
+        WHERE ${customerTagLinks.customerId} = ${customers.id} ORDER BY ${customerTagLinks.tag} LIMIT 50) AS tag_link)`,
     }).from(customers).where(and(eq(customers.id, customerId ?? ""), isNull(customers.deletedAt))),
+    // The order's market, in the same batch: one more statement, no more waves.
+    db.select({ id: orderMarketIdSql(input.marketCountry) }).from(sql`(SELECT 1) AS order_market_scope`),
   ];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle batch tuple typing
-  const [productRows, ancestorRows, collectionRows, variantRows, customerRows] = await db.batch(statements as any) as [
+  const [productRows, ancestorRows, collectionRows, variantRows, customerRows, marketRows] = await db.batch(statements as any) as [
     Array<{ id: string; categoryId: string | null; brandId: string | null }>,
     Array<{ productId: string; ancestorId: string; depth: number }>,
     Array<{ id: string; config: unknown }>,
     Array<{ id: string; sku: string | null }>,
-    Array<{ id: string; orderCount: number; totalSpentMinor: number }>,
+    Array<{ id: string; orderCount: number; totalSpentMinor: number; tags: string | null }>,
+    Array<{ id: string }>,
   ];
 
   const ancestors = new Map<string, Array<{ id: string; depth: number }>>();
@@ -156,7 +198,12 @@ export async function loadAppFunctionCartFacts(
     ancestors.set(row.productId, list);
   }
   const memberships = collectionRows.map((row) => ({ id: row.id, ...collectionMembershipForConfig(row.config) }));
-  const facts: AppFunctionCartFacts = { products: new Map(), skus: new Map(), customer: null };
+  const facts: AppFunctionCartFacts = {
+    products: new Map(),
+    skus: new Map(),
+    customer: null,
+    market: { id: marketRows[0]?.id ?? BACKUP_MARKET_ID, country: input.marketCountry },
+  };
   for (const row of productRows) {
     // The product's own category first, then its ancestors nearest first.
     const categoryIds = (ancestors.get(row.id) ?? [])
@@ -175,8 +222,7 @@ export async function loadAppFunctionCartFacts(
   if (customer) {
     facts.customer = {
       id: customer.id,
-      // Customer tags do not exist yet: apps always see an empty list.
-      tags: [],
+      tags: (customer.tags ?? "").split(",").filter(Boolean).slice(0, 50),
       orderCount: Math.max(0, Number(customer.orderCount) || 0),
       totalSpentMinor: Math.max(0, Number(customer.totalSpentMinor) || 0),
     };
@@ -207,7 +253,7 @@ export function buildAppFunctionCart(input: {
    * The shipping country (absent: Bangladesh) and its city and (in Bangladesh)
    * thana names; null when nothing ships (pickup, digital, service).
    */
-  destination: { country?: string | null; city: string | null; zone: string | null } | null;
+  destination: AppCartDestinationSource | null;
   discountCodes: readonly string[];
 }): FunctionCart {
   const lines = input.lines.map((line) => {
@@ -242,16 +288,13 @@ export function buildAppFunctionCart(input: {
     customer: input.facts.customer,
     // Regions only, never an address: the country, its city and, in
     // Bangladesh's delivery hierarchy, the thana.
-    destination: input.destination && (input.destination.city || input.destination.zone || input.destination.country)
-      ? {
-        country: input.destination.country ?? DELIVERY_HIERARCHY_COUNTRY,
-        city: input.destination.city?.slice(0, 120) ?? null,
-        zone: input.destination.zone?.slice(0, 120) ?? null,
-      }
-      : null,
+    destination: appCartDestination(input.destination),
     discountCodes: [...new Set(input.discountCodes.map((code) => code.trim().toUpperCase()).filter(Boolean))]
       .slice(0, 10)
       .map((code) => code.slice(0, 64)),
+    market: input.facts.market,
+    // Checkout attributes arrive with the apps that declare them.
+    attributes: {},
   };
   // A cart that fails its own schema is a platform bug, not an app's.
   return functionCartSchema.parse(cart);

@@ -20,6 +20,8 @@ function cart(options: { codes?: string[]; signedIn?: boolean; itemsMinor?: numb
     customer: options.signedIn === false ? null : { id: "cust_1", tags: [], orderCount: 2, totalSpentMinor: 0 },
     destination: null,
     discountCodes: options.codes ?? ["points"],
+    market: { id: "mkt_backup", country: null },
+    attributes: {},
   };
 }
 

@@ -118,9 +118,9 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 - `salesChannels` (3): sales channels the app sells through (`{ id, name }`), Shopify's sales-channel apps. Each becomes the channel `<plugin id>:<id>`, active while the app is. Merchants publish products to it; the app pages them from `GET /api/v1/admin/settings/sales-channels/<channel id>/products` (`products.view`) and follows `product.publication_changed`.
 - `settings` (40): the merchant's form. Types: `text`, `textarea`, `number`, `boolean`, `select`, `multiselect`, `secret`, `url` (https), `email`, `color`.
 - `admin`: `pages` (10), `cards` (20), `actions` (20), `widgets` (5), each naming an admin route; `listColumns` (see "List columns").
-- `storefront`: `sections` (20), `productBlocks` (10), `blocks` (checkout and account targets), `scripts` (5, https; their hosts join the storefront CSP), `head` and `proxy` flags.
+- `storefront`: `sections` (20), `productBlocks` (10), `blocks` (checkout and account targets), `scripts` (5, https; `pages` is `all`, `home`, `product`, `listing` or `cart`: app JavaScript never runs on checkout, the receipt or an account page; their hosts join the storefront CSP), `head` and `proxy` flags.
 - `limits`: `cpuMs` 5-200 (default 50), `wallMs` 100-30,000 (default 10,000).
-- `translations.bn`: Bangla text for `name`, `tagline`, `description` and the admin titles.
+- `translations`: text by BCP 47 tag (`bn`, `fr`, `pt-BR`; up to 20) for `name`, `tagline`, `description` and the admin titles.
 
 ### Listing
 
@@ -200,7 +200,7 @@ await ctx.storage.balances.put(customerId, next, { expectedRevision: current?.re
 
 ## Checkout functions
 
-A function is pure: `(input, settings) => output`, with no I/O. The host stops it after the smaller of `limits.wallMs` and 1.5 s, validates the output and merges it (schemas: `@scalius/shared/plugins/functions`). Points, in checkout order: `cart.transform`, `cart.line_prices`, `cart.validate`, `checkout.discounts`, `checkout.shipping_rates`, `checkout.payment_methods`, then `order.risk` after the commit. They run for the online store and buyer agents; staff orders run all but `cart.transform` and `cart.line_prices` (staff set lines and prices). `cart.customer.tags` is always empty.
+A function is pure: `(input, settings) => output`, with no I/O. The host stops it after the smaller of `limits.wallMs` and 1.5 s, validates the output and merges it (schemas: `@scalius/shared/plugins/functions`). Points, in checkout order: `cart.transform`, `cart.line_prices`, `cart.validate`, `checkout.discounts`, `checkout.shipping_rates`, `checkout.payment_methods`, then `order.risk` after the commit. They run for the online store and buyer agents; staff orders run all but `cart.transform` and `cart.line_prices` (staff set lines and prices). `cart.customer.tags` lists the signed-in customer's tags. `cart.market` is `{ id, country }`: the market the order is placed in and the country that chose it (null before an address is known). `cart.attributes` holds the buyer's checkout attributes by `<app id>.<key>`; it is empty until apps can declare them.
 
 - **`cart.transform`** answers `{ operations: [{ expand: { lineId, title?, components: [{ variantId, quantity }] } } | { merge: { lineIds, title } }] }`. A bundle's components become real order lines (stock, tax and refunds per SKU); the buyer sees one line at their summed price. Lines with buyer inputs, gift cards and carts above 99 lines are never changed.
 - **`cart.line_prices`** answers `{ prices: [{ lineId, unitPriceMinor }] }` for B2B, tiered or member prices (with `snapshot`). It prices a line only when no price list does: sale > segment > market list > your price > FX > base. The first app by priority wins a line.

@@ -51,6 +51,7 @@ export const functionCartSchema = z.object({
   /** The buyer's segment facts when signed in; null for guests. */
   customer: z.object({
     id,
+    /** The customer's tags (Customers → Tags), sorted; at most 50. */
     tags: z.array(z.string().max(64)).max(50),
     orderCount: z.number().int().min(0),
     totalSpentMinor: nonNegativeMinor,
@@ -62,6 +63,21 @@ export const functionCartSchema = z.object({
     zone: z.string().max(120).nullable(),
   }).strict().nullable(),
   discountCodes: z.array(z.string().max(64)).max(10),
+  /**
+   * The market the order will be placed in: the market selling to the
+   * shipping country (the billing country for an order that ships nothing),
+   * else the backup market. `country` is the ISO country that chose it, or
+   * null when no country is known yet (then the id is the backup market's).
+   */
+  market: z.object({
+    id,
+    country: z.string().length(2).nullable(),
+  }).strict(),
+  /**
+   * Checkout attributes the buyer entered, by `<app id>.<key>`. Empty until
+   * apps can declare checkout attributes.
+   */
+  attributes: z.record(z.string().max(128), z.string().max(500)),
 }).strict();
 export type FunctionCart = z.infer<typeof functionCartSchema>;
 
