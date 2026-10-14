@@ -30,18 +30,22 @@ Free profile, measured on a seeded store (3-line orders; the others as listed). 
 | 3-line order: checkout commit + after-response work | 34 | 100 | 100 | 68 | 26 |
 | 20-line order | 38 | 480 | 563 | 205 | 56 |
 | 99-line order | 34 | 2,146 | 2,547 | 843 | 205 |
-| Order status change (pending to confirmed) | 71 | 80 | 99 | 94 | 27 |
-| Order refund (cash, partly) | 80 | 51 | 64 | 100 | 28 |
-| Product edit (admin save) | 24 | 35 | 522 | 154 | 27 |
-| SKU stock change (+1 received) | 13 | 27 | 50 | 21 | 7 |
-| Customer sign-up (code verify, new buyer) | 27 | 16 | 17 | 29 | 5 |
+| Order status change (pending to confirmed) | 71 | 79 | 97 | 92 | 27 |
+| Order refund (cash, partly) | 80 | 60 | 73 | 109 | 28 |
+| Product edit (admin save) | 24 | 34 | 521 | 152 | 27 |
+| SKU stock change (+1 received) | 13 | 26 | 49 | 19 | 7 |
+| Customer sign-up (code verify, new buyer) | 27 | 15 | 16 | 27 | 5 |
 | Product page, cache miss | 21 | 0 | 0 | 129 | 15 |
 | Category listing, cache miss | 5 | 0 | 0 | 110 | 6 |
-| Search, cache miss | 6 | 0 | 0 | 828 | 17 |
+| Search, cache miss | 6 | 0 | 0 | 726 | 17 |
 | Product page, cache hit | 2 | 0 | 0 | 2 | 0 |
-| Cron tick, idle store | 24 | 2 | 105 | 7,191 | 10 |
+| Cron tick, idle store | 21 | 0 | 103 | 7,187 | 10 |
 
-Read the cron row with care. A Free store ticks 1,440 times a day, so two rows a tick is 2,880 rows written a day per store before any order: a platform with 100,000 stores pays for 288 million rows a day, about $288, on idle alone (index entries extra). The Paid profile's idle mean is 0.
+Read the cron row with care. A Free store ticks 1,440 times a day, so a row a tick is 1,440 rows written a day per store before any order: 100,000 stores would pay for 144 million rows a day, about $144, on idle alone. An idle tick writes 0 rows on both profiles; the worst run is the first tick of the hour, which pays the hourly and daily work. Until 2026-10-14 the Free tick wrote 2 rows a minute: Free's drain took two events at a time even when nobody subscribes, so any backlog (here the seed's 1,000 order events) trickled out over later ticks. A drain now settles up to 50 subscriber-less events in its one statement, and the seed settles its own history.
+
+The refund's rows written rose from 64 to 73 with that change: its own events now settle in its invocation instead of on the next tick. The total is unchanged.
+
+The rows-read column is an estimate (see the counter table), and it found a real regression on 2026-10-14: every render, validation snapshot and admin commit read the dependency clock with a full index scan of `cache_dep` (a `MAX` in a joined derived table; SQLite seeks only a scalar `MAX`), which added the table's row count to every page and write. The clock read is now a scalar subquery.
 
 The 3-line order writes 100 table rows; D1 bills the scale proof's measured figure below, which includes index entries.
 
@@ -62,7 +66,7 @@ Notes on the method. The API runs in-process (`fetchRuntimeApiApp`), so network 
 <!-- scale-proof:start -->
 ### 1,000,000 orders, 156,244 SKUs
 
-Measured 2026-10-14 at commit `a38969b7d` on Apple M1, 8 cores, 16 GB RAM, darwin 25.5.0, Node v24.21.0.
+Measured 2026-10-14 at commit `590fcbbbd` on Apple M1, 8 cores, 16 GB RAM, darwin 25.5.0, Node v24.21.0, 1-minute load average 3 to 6 during the runs.
 Engines: D1 (Miniflare, workerd SQLite).
 
 Store: 1,000,000 orders, 1,928,791 order lines, 50,000 products, 156,244 SKUs, 200,000 customers.
@@ -71,84 +75,81 @@ Storefront reads, in-process API, warm modules, 20 timed runs each (milliseconds
 
 | Read | d1 p50 | d1 p95 | d1 rows read |
 | --- | ---: | ---: | ---: |
-| home page (storefront homepage) | 34 | 38 | 907 |
-| product page | 84 | 95 | 118,252 |
-| category listing, page 1 | 41 | 47 | 10,209 |
-| category listing, page 40 | 27 | 32 | 8,434 |
-| all products, newest, page 1 | 71 | 88 | 183,734 |
-| search | 65 | 66 | 52,133 |
-| product feed page | 88 | 136 | 12,654 |
+| home page (storefront homepage) | 39 | 48 | 908 |
+| product page | 100 | 135 | 118,253 |
+| category listing, page 1 | 50 | 72 | 10,210 |
+| category listing, page 40 | 33 | 37 | 8,435 |
+| all products, newest, page 1 | 76 | 88 | 183,735 |
+| search | 69 | 85 | 52,134 |
+| product feed page | 103 | 247 | 12,655 |
 
 Checkout (tax quote, commit and after-response work), orders per second of the orders that succeeded:
 
 | Engine | Scenario | Clients | Orders | Orders/s | p50 ms | p95 ms | Failed | Serialization retries |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| d1 | 3 lines over many SKUs | 1 | 150 | 1.1 | 746 | 1,694 | 0 | n/a |
-| d1 | 1 hot SKU | 1 | 150 | 1.2 | 710 | 1,436 | 0 | n/a |
+| d1 | 3 lines over many SKUs | 1 | 150 | 4.5 | 213 | 314 | 0 | 0 (0 Miniflare resets retried) |
+| d1 | 3 lines over many SKUs | 16 | 600 | 4.7 | 3,414 | 3,658 | 0 | 0 (0 Miniflare resets retried) |
+| d1 | 1 hot SKU | 1 | 150 | 5.2 | 183 | 253 | 0 | 0 (0 Miniflare resets retried) |
+| d1 | 1 hot SKU | 16 | 600 | 5.4 | 2,930 | 3,317 | 0 | 0 (0 Miniflare resets retried) |
 
 Rows one 3-line checkout reads and writes (quote, commit, after-response work):
 
 | Engine | Rows read | Rows written | Counted as |
 | --- | ---: | ---: | --- |
-| d1 | 559,849 | 229 | D1 `rows_read`/`rows_written`, index entries included (what D1 bills) |
+| d1 | 21,379 | 373 | D1 `rows_read`/`rows_written`, index entries included (what D1 bills) |
 
-### 250,000 orders, 156,244 SKUs
+### 252,128 orders, 156,244 SKUs
 
-Measured 2026-10-14 at commit `a227e141f` on Apple M1, 8 cores, 16 GB RAM, darwin 25.5.0, Node v24.21.0, 1-minute load average 4.4 at the end of the run (D1); PostgreSQL measured at fde9155bd, 1-minute load average 6.1 at the end of the run.
-Engines: D1 (Miniflare, workerd SQLite); PostgreSQL 15.17 (Homebrew).
+Measured 2026-10-14 at commit `590fcbbbd` on Apple M1, 8 cores, 16 GB RAM, darwin 25.5.0, Node v24.21.0, 1-minute load average 3 to 6 during the runs.
+Engines: PostgreSQL 15.17 (Homebrew).
 
-Store: 250,000 orders, 482,682 order lines, 50,000 products, 156,244 SKUs, 200,000 customers.
+Store: 252,128 orders, 486,938 order lines, 50,000 products, 156,244 SKUs, 201,465 customers.
 
 Storefront reads, in-process API, warm modules, 20 timed runs each (milliseconds):
 
-| Read | d1 p50 | d1 p95 | d1 rows read | postgres p50 | postgres p95 | postgres rows read |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| home page (storefront homepage) | 49 | 61 | 902 | 19 (HTTP 500) | 20 | 165 |
-| product page | 127 | 164 | 115,877 | 211 | 227 | 118,660 |
-| category listing, page 1 | 52 | 68 | 10,205 | 38 | 39 | 3,437 |
-| category listing, page 40 | 36 | 56 | 8,436 | 28 | 37 | 2,119 |
-| all products, newest, page 1 | 88 | 104 | 183,727 | 115 | 124 | 161,832 |
-| search | 78 | 96 | 52,129 | 386 | 415 | 244,139 |
-| product feed page | 107 | 167 | 12,654 | 4,943 | 5,011 | 1,347,991 |
+| Read | postgres p50 | postgres p95 | postgres rows read |
+| --- | ---: | ---: | ---: |
+| home page (storefront homepage) | 19 | 20 | 484 |
+| product page | 169 | 192 | 122,897 |
+| category listing, page 1 | 24 | 25 | 2,223 |
+| category listing, page 40 | 17 | 19 | 1,701 |
+| all products, newest, page 1 | 59 | 75 | 160,566 |
+| search | 149 | 169 | 194,209 |
+| product feed page | 1,109 | 1,243 | 1,348,107 |
 
 Checkout (tax quote, commit and after-response work), orders per second of the orders that succeeded:
 
 | Engine | Scenario | Clients | Orders | Orders/s | p50 ms | p95 ms | Failed | Serialization retries |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| d1 | 3 lines over many SKUs | 1 | 100 | 0.2 | 5,528 | 11,053 | 0 | 0 (0 Miniflare resets retried) |
-| d1 | 3 lines over many SKUs | 16 | 400 | 0.7 | 17,285 | 67,123 | 0 | 0 (168 Miniflare resets retried) |
-| d1 | 1 hot SKU | 1 | 100 | 0.5 | 768 | 7,157 | 0 | 0 (0 Miniflare resets retried) |
-| d1 | 1 hot SKU | 16 | 400 | 0.5 | 20,518 | 93,335 | 0 | 0 (292 Miniflare resets retried) |
-| postgres | 3 lines over many SKUs | 1 | 100 | 5.4 | 178 | 202 | 0 | 0 |
-| postgres | 3 lines over many SKUs | 16 | 218 | 8.0 | 601 | 1,448 | 182 (HTTP 500) | 1785 |
-| postgres | 1 hot SKU | 1 | 100 | 6.0 | 166 | 185 | 0 | 0 |
-| postgres | 1 hot SKU | 16 | 98 | 6.1 | 658 | 923 | 302 (HTTP 500) | 154 |
+| postgres | 3 lines over many SKUs | 1 | 150 | 13.4 | 70 | 102 | 0 | 0 |
+| postgres | 3 lines over many SKUs | 16 | 574 | 16.7 | 323 | 2,701 | 26 (HTTP 503) | 4490 |
+| postgres | 1 hot SKU | 1 | 150 | 14.2 | 65 | 99 | 0 | 0 |
+| postgres | 1 hot SKU | 16 | 577 | 22.3 | 223 | 2,127 | 23 (HTTP 503) | 3911 |
 
 Rows one 3-line checkout reads and writes (quote, commit, after-response work):
 
 | Engine | Rows read | Rows written | Counted as |
 | --- | ---: | ---: | --- |
-| d1 | 559,866 | 229 | D1 `rows_read`/`rows_written`, index entries included (what D1 bills) |
-| postgres | 376,197 | 54 | heap tuples read, inserted, updated, deleted; index entries not counted |
+| postgres | 47,387 | 45 | heap tuples read, inserted, updated, deleted; index entries not counted |
 <!-- scale-proof:end -->
 
 ## Reading the results
 
 How far to trust the numbers:
 
-- **Rows read and written are exact and repeatable.** The same 3-line checkout reads 559,866 rows on the 250,000-order store and 559,849 on the 1,000,000-order store: its reads follow the customers (200,000) and SKUs (156,244), not the orders.
-- **Orders per second and latency are indicative.** The runs share a 16 GB laptop with the clients and with other jobs (the load average is in each block). The same D1 checkout ran at 1.1 orders per second on a quiet machine and at 0.2 on a loaded one. Compare engines within one block, and compare blocks by rows, not by seconds.
-- **D1 here is Miniflare.** Its binding reaches workerd over HTTP, and a kept-alive connection the server has closed fails the next call with `ECONNRESET`; the harness retries it and counts it in the table. Real D1 does not do this. D1 serializes writes, so 16 clients wait on one writer, and an order on a hot SKU also retries on the stock version check.
-- **PostgreSQL here is a local server** with a connection pool standing in for Hyperdrive, analyzed after the load (a bulk load leaves no planner statistics; a running store has autovacuum's). The 1,000,000-order copy needs more disk than the proof's host had, so PostgreSQL ran on the 250,000-order store, beside D1 on the same store.
+- **Rows read and written are exact and repeatable.** A checkout's reads follow the customers (200,000) and SKUs (156,244), not the orders.
+- **Orders per second and latency are indicative.** The runs share a 16 GB laptop with the clients and with other jobs (the load average is in each block). Compare engines within one block, and compare blocks by rows, not by seconds.
+- **D1 here is Miniflare, and the harness is most of a D1 checkout's time.** Its binding reaches workerd through the platform proxy, which costs about 2.6 ms of Node CPU per D1 call (measured: 3.1 ms a call, 200 calls). A checkout makes about 50 D1 calls, so about 150 ms of its 210 ms (one client) is the proxy; D1 itself spent 17 ms on the statements (D1 `meta.duration`) and the API about 45 ms of JS. Workers bindings have no such cost. A kept-alive connection the server has closed fails the next call with `ECONNRESET`; the harness retries it and counts it. D1 serializes writes, so 16 clients wait on one writer, and an order on a hot SKU also retries on the stock version check.
+- **PostgreSQL here is a local server** with a connection pool standing in for Hyperdrive, analyzed after the load (a bulk load leaves no planner statistics; a running store has autovacuum's). The 1,000,000-order copy needs more disk than the proof's host had, so PostgreSQL runs on the 250,000-order store (`--profile huge --orders 250000`; the store holds the proof's own orders from earlier runs too).
 
-## Open findings
+## Findings
 
-The proof and the gates found these. They are open until fixed; the gates hold each from getting worse.
+The proof and the gates found these. Fixed ones keep their before and after; open ones are held by the gates from getting worse.
 
-1. **A checkout reads 559,866 rows on D1 (about 2.4 times the cost of the 229 rows it writes at $1 against $0.001 a million).** Three statements are scans: the variant availability read (`product_variants` joined to `products` on `id IN (SELECT ... FROM json_each(?))`, 240,925 rows), the customer lookup by phone (an `OR` of two `phone = ?` predicates with different extra conditions, 200,384 rows: a full scan of `customers`), and the product pricing read (47,047 rows, twice). These are why one writer cannot do more than about one checkout a second at this size. The budget gate counts 26 full scans for a 3-line order in the small seed.
+1. **Fixed: a checkout read 559,849 rows on D1 at 1,000,000 orders; it now reads 21,379 (26 times fewer).** Three reads scanned because SQLite plans without statistics on D1: the cart's product read and the reservation counter read walked the `(is_active, deleted_at)` product index (every live product, and every live product's SKUs) instead of the cart's id set, and the contact lookup put `deleted_at IS NULL` beside an `OR` of phone matches, so D1 walked a `deleted_at` index over all 200,000 customers. The event drain read every due outbox row before taking a few (the 1,000,000-order store carries a backlog of about 700,000 seed events: 695,000 rows a drain, 1,000,000 for the settle). Each is now index-driven, with plan guards (`checkout-read-plans.d1.test.ts`, `events.d1.test.ts`). The heaviest remaining reads are the automatic-promotion reads (1,390 rows each; the seed has 400 automatic promotions). One client: 1.1 to 4.5 orders a second, bounded by the Miniflare proxy (above). On PostgreSQL the cart's SKU read (`product_id IN (...) OR id IN (...)`) was a sequential scan of every SKU; a checkout read 376,197 tuples and now 47,387, and one client went from 5.4 to 13.4 orders a second.
 2. **The product page reads about 118,000 rows, the all-products listing 184,000 and a search 52,000 on D1** (category pages 8,000 to 10,000). The caches hide this for repeat visitors; a cache miss pays it.
-3. **PostgreSQL checkout is not safe at 16 concurrent clients.** Of the orders sent, 45% (spread over SKUs) and 75% (one hot SKU) failed with HTTP 500, after about 1,800 and 150 serialization retries. The retry loop retries only `40001` and `40P01`; a concurrent insert of the next `inventory_movements` version for the same SKU raises `23505` on `inventory_movements_variant_version_uidx` and is not retried, and the rest exhaust the eight attempts. D1 and Turso do the same work with a compare-and-set.
-4. **The storefront homepage returns HTTP 500 on PostgreSQL** (`subquery in FROM must have an alias`).
-5. **The idle cron tick writes 2 rows on the Free profile** (2,880 rows a day per store). Paid writes none.
-6. **An order status change and a refund run 71 and 80 D1 queries in their first invocation**, over Free's 50. The new `order-status-change` and `order-refund` budgets are exempt from the per-invocation ceiling so the gate can hold them at today's count.
+3. **Fixed, with a limit: PostgreSQL checkout at 16 concurrent clients answered HTTP 500 for 45% (spread SKUs) and 75% (one hot SKU) of orders.** Two writers claiming the next stock version of one SKU collided as a unique violation (`23505`) the adapter could not retry: every ledger movement insert now reads its own `(variant, version)` key first, so PostgreSQL reports the race as a serialization failure (`40001`) and the adapter retries it on a fresh snapshot, where the stock-version check answers. The rest exhausted eight retries: checkouts still serialize on PostgreSQL (each takes the next order number with `max(order_number) + 1`, and SERIALIZABLE's page-level read locks make appends to the same index pages conflict), so the budget is now 32 attempts with the backoff capped at 50 ms, and a write that still loses is answered 503 `SERVICE_UNAVAILABLE` (retry-safe; checkout is idempotent by its request id), never 500. Now: 0 failed with 500; 4.3% (spread) and 3.8% (hot SKU) answered 503, at 16.7 and 22.3 orders a second; no oversell, no stock-version gaps, one order number per order. Open: an order-number sequence on PostgreSQL (a migration) would remove the main conflict.
+4. **Fixed: the storefront homepage returned HTTP 500 on PostgreSQL** (`subquery in FROM must have an alias`: the card facts embedded a list's id query as an unaliased derived table). `homepage.postgres-native.test.ts` reads every homepage section kind on PostgreSQL.
+5. **Fixed: the idle cron tick wrote 2 rows on the Free profile** (2,880 rows a day per store); it writes 0 (see Recorded budgets).
+6. **An order status change and a refund run 71 and 80 D1 queries in their first invocation**, over Free's 50. The `order-status-change` and `order-refund` budgets are exempt from the per-invocation ceiling so the gate can hold them at today's count.
 7. **The seed's order insert rate fell from about 700 to 185 a second as the table grew to 1,000,000 orders**: an insert does work that grows with the table (the plan of an `orders` insert scans `order_holds`).
