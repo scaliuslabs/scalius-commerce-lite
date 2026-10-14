@@ -570,8 +570,11 @@ export function renderCatalogGen(packedPlugins) {
     .sort((left, right) => left.id.localeCompare(right.id))
     .map((packed) => {
       const listing = Object.fromEntries(LISTING_FIELDS.filter((key) => packed.manifest[key] !== undefined).map((key) => [key, packed.manifest[key]]));
-      const bn = packed.manifest.translations?.bn;
-      if (bn) listing.translations = { bn: Object.fromEntries(["name", "tagline", "description"].filter((key) => bn[key] !== undefined).map((key) => [key, bn[key]])) };
+      const translated = Object.entries(packed.manifest.translations ?? {}).map(([locale, text]) => [
+        locale,
+        Object.fromEntries(["name", "tagline", "description"].filter((key) => text[key] !== undefined).map((key) => [key, text[key]])),
+      ]);
+      if (translated.length > 0) listing.translations = Object.fromEntries(translated);
       return `  ${JSON.stringify({ id: packed.id, source: packed.source, sha256: packed.sha256, listing })},`;
     });
   return [

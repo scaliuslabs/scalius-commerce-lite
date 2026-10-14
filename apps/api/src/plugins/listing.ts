@@ -28,7 +28,7 @@ type ListingFields =
 
 /** The manifest's listing, as the catalog carries it. */
 export type PluginListingManifest = Pick<PluginManifest, ListingFields> & {
-  translations?: { bn?: Pick<PluginTranslation, "name" | "tagline" | "description"> };
+  translations?: Record<string, Pick<PluginTranslation, "name" | "tagline" | "description">>;
 };
 
 /** A first-party plugin this deployment does not bundle. */

@@ -1,15 +1,26 @@
 // An app's own words in the dashboard's language. The manifest is English;
-// its `translations` carry the name, description and surface titles in
-// Bangla (what is missing stays English). The app's screens themselves come
+// its `translations` carry the name, description and surface titles by
+// BCP 47 tag (what is missing stays English). The app's screens themselves come
 // in the dashboard's language from the app (`adminContext().locale`).
 import type { Locale } from "~/i18n";
 import type { AppAdminSurfaces, AppSummary } from "~/lib/api-query-options/apps";
 
 type Translations = AppSummary["translations"];
-type Translation = NonNullable<NonNullable<Translations>["bn"]>;
+type Translation = NonNullable<Translations>[string];
 
-export function translationFor(translations: Translations | undefined, locale: Locale): Translation | null {
-  return locale === "bn" ? translations?.bn ?? null : null;
+/**
+ * The app's text in the dashboard's language: the exact tag (`pt-BR`), then
+ * its language (`pt`). English is the manifest itself, so it has no entry.
+ */
+export function translationFor(translations: Translations | undefined, locale: string): Translation | null {
+  if (!translations || locale === "en") return null;
+  const wanted = locale.toLowerCase();
+  const tags = Object.keys(translations);
+  const exact = tags.find((tag) => tag.toLowerCase() === wanted);
+  if (exact) return translations[exact] ?? null;
+  const language = wanted.split("-")[0]!;
+  const base = tags.find((tag) => tag.toLowerCase() === language);
+  return base ? translations[base] ?? null : null;
 }
 
 /** An app's name, tagline and description (the Apps list, its page). */

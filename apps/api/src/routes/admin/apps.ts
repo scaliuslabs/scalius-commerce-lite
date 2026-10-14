@@ -115,9 +115,8 @@ const grantSchema = z.object({
   storefrontConnect: z.array(z.string()).optional().openapi({ description: "Hosts the app's storefront islands reach from the buyer's browser." }),
 }).openapi("AppGrant", { description: "What an app may do; the consent screen lists it in plain words." });
 
-/** The manifest's text in other dashboard languages; the dashboard picks its own. */
-const appTranslationsSchema = z.object({
-  bn: z.object({
+/** The manifest's text in other languages (BCP 47 tag → text); the dashboard picks its own. */
+const appTranslationsSchema = z.record(z.string(), z.object({
     name: z.string().optional(),
     tagline: z.string().optional(),
     description: z.string().optional(),
@@ -130,8 +129,7 @@ const appTranslationsSchema = z.object({
     tabs: z.record(z.string(), z.record(z.string(), z.string())).optional(),
     settingsGroups: z.record(z.string(), z.object({ title: z.string().optional(), description: z.string().optional() })).optional(),
     settings: z.record(z.string(), z.object({ label: z.string().optional(), help: z.string().optional(), options: z.record(z.string(), z.string()).optional() })).optional(),
-  }).optional(),
-}).nullable().openapi("AppTranslations", { description: "Name, tagline, description and surface titles in other dashboard languages (null: English only)." });
+  })).nullable().openapi("AppTranslations", { description: "Name, tagline, description and surface titles by BCP 47 language tag (null: English only)." });
 
 /** What every app card shows besides its name, before and after install. */
 const listingSummaryFields = {

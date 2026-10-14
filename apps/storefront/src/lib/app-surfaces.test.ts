@@ -106,10 +106,7 @@ describe("app scripts", () => {
       expect(storefrontAppPage(path), path).toBe("listing");
     }
     expect(storefrontAppPage("/cart")).toBe("cart");
-    expect(storefrontAppPage("/checkout")).toBe("checkout");
-    expect(storefrontAppPage("/checkout/quick")).toBe("checkout");
-    expect(storefrontAppPage("/order-success")).toBe("order-success");
-    for (const path of ["/account", "/account/profile", "/account/orders/ord_1", "/payment-recovery", "/track-order", "/newsletter/confirm"]) {
+    for (const path of ["/checkout", "/checkout/", "/checkout/quick", "/order-success", "/account", "/account/profile", "/account/orders/ord_1", "/payment-recovery", "/track-order", "/newsletter/confirm"]) {
       expect(storefrontAppPage(path), path).toBe("private");
     }
     for (const path of ["/about-us", "/apps/acme.wishlist/wishlist", "/blog", "/accounts"]) expect(storefrontAppPage(path), path).toBeNull();
@@ -123,14 +120,16 @@ describe("app scripts", () => {
     expect(appScriptsForPage(undefined, "home")).toEqual([]);
   });
 
-  it("never loads an \"all\" script on checkout, order or account pages: only a script naming the page", () => {
+  it("loads no app script on checkout, order or account pages, not even one that names them", () => {
+    // A stale payload (from before manifests lost "checkout" and "order-success") cannot bring a script back.
     const buyer = [
       ...scripts,
       { pluginId: "acme.pay", src: "https://pay.example/p.js", placement: "body-end", pages: ["checkout", "order-success"] },
     ];
-    expect(appScriptsForPage(buyer, "checkout").map((script) => script.pluginId)).toEqual(["acme.pay"]);
-    expect(appScriptsForPage(buyer, "order-success").map((script) => script.pluginId)).toEqual(["acme.pay"]);
-    expect(appScriptsForPage(buyer, "private")).toEqual([]);
+    expect(readAppScripts(buyer).map((script) => script.pluginId)).not.toContain("acme.pay");
+    for (const path of ["/checkout", "/checkout/quick", "/order-success", "/account/orders/ord_1", "/payment-recovery", "/track-order"]) {
+      expect(appScriptsForPage(buyer, storefrontAppPage(path)), path).toEqual([]);
+    }
     expect(appScriptsForPage(buyer, "cart").map((script) => script.pluginId)).toEqual(["acme.chat"]);
   });
 
