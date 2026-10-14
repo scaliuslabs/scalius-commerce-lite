@@ -1,4 +1,4 @@
-// An app's activity: the store events sent to it (status filter, "Load more",
+// An app's activity: the store events sent to it ("Load more",
 // a row that opens to the error; failed ones can be sent again by managers)
 // and its log, newest first. Shown only once there is something to show.
 import { Fragment, useState, type ReactNode } from "react";
@@ -9,7 +9,6 @@ import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardHeader, CardTitle } from "~/components/ui/card";
-import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -20,15 +19,12 @@ import {
   appDeliveriesQueryOptions,
   appLogsQueryOptions,
   retryAppDelivery,
-  type AppDeliveryStatus,
   type AppLogLine,
 } from "~/lib/api-query-options/apps";
 import { queryKeys } from "~/lib/query-keys";
 import { deliveryStatusVariant, formatDuration, formatWhen, topicLabel } from "../settings/webhooks/webhook-format";
 import { LOG_LEVEL_VARIANT } from "./app-status";
 
-/** The statuses a merchant filters by. */
-const FILTERS = ["succeeded", "failed", "exhausted", "cancelled", "pending", "processing"] as const satisfies readonly AppDeliveryStatus[];
 const COLUMNS = 6;
 
 /** A failed read, the first load, or the end of the list: shared by both tabs. */
@@ -64,9 +60,8 @@ function LoadMore({ show, loading, onClick }: { show: boolean; loading: boolean;
 function Deliveries({ appId, canManage }: { appId: string; canManage: boolean }) {
   const t = useMessages(installedAppsMessages);
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<AppDeliveryStatus | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const log = useInfiniteQuery(appDeliveriesQueryOptions(appId, status));
+  const log = useInfiniteQuery(appDeliveriesQueryOptions(appId, null));
   const deliveries = log.data?.pages.flatMap((page) => page.deliveries) ?? [];
   const retry = useMutation({
     mutationFn: (deliveryId: string) => retryAppDelivery(appId, deliveryId),
@@ -82,7 +77,7 @@ function Deliveries({ appId, canManage }: { appId: string; canManage: boolean })
         isError={log.isError}
         retrying={log.isRefetching}
         onRetry={() => void log.refetch()}
-        empty={log.data ? t(status ? "noFilteredDeliveries" : "noDeliveries") : null}
+        empty={log.data ? t("noDeliveries") : null}
       />
     );
   } else {
@@ -169,22 +164,6 @@ function Deliveries({ appId, canManage }: { appId: string; canManage: boolean })
 
   return (
     <>
-      <div className="px-4 pb-3">
-        <SearchableSelect
-          id="app-delivery-status"
-          ariaLabel={t("statusFilter")}
-          triggerClassName="w-full sm:w-56"
-          value={status ?? "all"}
-          onValueChange={(value) => {
-            setExpanded(null);
-            setStatus(value === "all" ? null : (value as AppDeliveryStatus));
-          }}
-          options={[
-            { value: "all", label: t("allStatuses") },
-            ...FILTERS.map((value) => ({ value, label: t(`delivery_${value}`) })),
-          ]}
-        />
-      </div>
       <div className="border-t border-border">{body}</div>
       <LoadMore show={log.hasNextPage} loading={log.isFetchingNextPage} onClick={() => void log.fetchNextPage()} />
     </>
