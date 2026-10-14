@@ -122,6 +122,8 @@ export function OrderView({ order }: { order: Order }) {
   const primaryPending = (primary === "confirm" && statusMutation.isPending)
     || (primary === "markDelivered" && deliveredMutation.isPending)
     || (primary === "markReadyForPickup" && pickupReady.isPending);
+  // The page's one primary (C3): the header on desktop, the bottom bar on
+  // phones. The cards' own buttons for the same steps stay secondary.
   const primaryButton = primary ? (
     <Button onClick={runPrimary} loading={primaryPending}>
       {primaryLabel}
