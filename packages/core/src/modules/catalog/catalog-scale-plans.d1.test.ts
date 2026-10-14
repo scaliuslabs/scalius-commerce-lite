@@ -453,7 +453,7 @@ describe("catalogue-scale query plans", () => {
         const joined = plans(readsBuyerState).join("\n");
         // Either facet index answers (product, axis, value) with three equalities.
         expect(joined).toMatch(/SEARCH option_sku (EXISTS )?USING INDEX product_facet_values_(product_idx \(product_id=\? AND facet_key=\? AND value_key=\?|value_idx \(facet_key=\? AND value_key=\? AND product_id=\?)\)/);
-        expect(joined).toMatch(/SEARCH option_row USING INDEX product_facet_values_product_idx \(product_id=\?\)/);
+        expect(joined).toMatch(/SEARCH option_row USING COVERING INDEX product_facet_values_product_idx \(product_id=\?\)/);
         expect(joined).not.toMatch(/SCAN (product_facet_values|option_row|option_sku|option_selected_row|product_variant_option_values)\b/);
     });
 
@@ -746,9 +746,9 @@ describe("catalogue-scale query plans", () => {
         expect(sorted.products.map((product) => product.id)).toEqual(expected);
         expect(sorted.ratingFacet.map((value) => value.min)).toEqual([4, 3, 2]);
         expect(shopAll.products).toHaveLength(20);
-        // Plain shop-all: maintained value counts plus the rating facet over every public product.
+        // Plain shop-all: maintained value counts, brands and categories; no rating facet.
         expect(shopAll.facets.map((facet) => facet.slug)).not.toContain("maker");
-        expect(shopAll.ratingFacet.map((value) => value.min)).toEqual([4, 3, 2]);
+        expect(shopAll.ratingFacet).toEqual([]);
         for (const plan of categoryPlans) {
             expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
             expectBuyerStateListing(plan);

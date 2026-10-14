@@ -496,7 +496,9 @@ export interface CatalogFacetCountInput {
     /**
      * The scope is every public product and nothing is selected (the plain
      * shop-all page): attribute and option values come from the maintained
-     * public counts, whatever the catalogue's size.
+     * public counts, brands and categories from the buyer state's own indexes,
+     * whatever the catalogue's size. It has no rating facet (that would read
+     * every product's review stats).
      */
     allPublic?: boolean;
     filters: readonly CatalogFacetFilter[] | undefined;
@@ -725,7 +727,7 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
                     ${sql.join(ratingStars.map((_, index) => sql`
                         WHEN ${sql.raw(String(index))} THEN rating_counts.${sql.raw(`rating_count_${index}`)}`), sql` `)}
                 END`;
-    const ratingBranch = input.ratingFacet
+    const ratingBranch = input.ratingFacet && !input.allPublic
         ? sql`
             UNION ALL
             SELECT 'rating', 'rating', CAST(rating_min.value AS TEXT),
@@ -770,66 +772,69 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
     const valueLimit = boundedLimit(input.valueLimit, FACET_VALUE_LIMIT);
     const brandValueLimit = input.valueLimit === undefined ? BRAND_FACET_VALUE_LIMIT : valueLimit;
 
-    // Attribute and option values: each scoped product's own facet rows, only
-    // while the scope is within the limit (a one-time check on every engine).
-    // The scope drives: a LEFT JOIN keeps it outer, where a planner without
-    // statistics would rather walk every facet row in GROUP BY order; the
-    // product without rows forms one NULL group, which HAVING drops.
-    const scopedValueCounts = sql`
+    // A value of a selected filter (shown even when nothing in scope has it).
+    const isSelectedValue = (facetId: SQL, valueKey: SQL) => sql`EXISTS (
+        SELECT 1 FROM json_each(${selected}) AS facet_selected
+        WHERE CAST(json_extract(facet_selected.value, '$.id') AS TEXT) = ${facetId}
+          AND ${valueKey} IN (SELECT CAST(value AS TEXT) FROM json_each(json_extract(facet_selected.value, '$.keys')))
+    )`;
+    // Attribute and option value counts: the plain shop-all page reads the
+    // maintained public counts; any other scope counts its products' own facet
+    // rows through product_facet_values_product_idx alone (a NULL variant is
+    // an attribute row), only while it holds at most FACET_SCOPE_PRODUCT_LIMIT
+    // products (a one-time check on every engine). The scope drives: a LEFT
+    // JOIN keeps it outer, where a planner without statistics would rather walk
+    // every facet row in GROUP BY order; HAVING drops the NULL group.
+    const valueCounts = input.allPublic ? sql`
+            SELECT facet_kind, facet_key AS facet_id, value_key, product_count AS value_count
+            FROM product_facet_public_counts WHERE product_count > 0` : sql`
             SELECT 'attribute' AS facet_kind, attribute_row.facet_key AS facet_id, attribute_row.value_key AS value_key,
-                SUM(CASE WHEN ${attributeMatch(sql.raw("attribute_row.facet_key"))} AND ${optionMatch} AND ${brandMatch}${ratingMatch} THEN 1 ELSE 0 END) AS value_count,
-                MIN(attribute_row.value_label) AS value_label,
-                MIN(attribute_row.sort_order) AS value_sort,
-                MIN(attribute_row.value_number) AS value_number,
-                NULL AS sample_sku
+                SUM(CASE WHEN ${attributeMatch(sql.raw("attribute_row.facet_key"))} AND ${optionMatch} AND ${brandMatch}${ratingMatch} THEN 1 ELSE 0 END) AS value_count
             FROM facet_scope
-            LEFT JOIN product_facet_values AS attribute_row ON attribute_row.owner_id = facet_scope.product_id
-                AND attribute_row.facet_kind = 'attribute'
+            LEFT JOIN product_facet_values AS attribute_row ON attribute_row.product_id = facet_scope.product_id
+                AND attribute_row.variant_id IS NULL
             WHERE (SELECT products FROM facet_size) <= ${sql.raw(String(FACET_SCOPE_PRODUCT_LIMIT))}
             GROUP BY attribute_row.facet_key, attribute_row.value_key
             HAVING attribute_row.facet_key IS NOT NULL
             UNION ALL
             SELECT 'option', option_row.facet_key, option_row.value_key,
                 COUNT(DISTINCT CASE
-                    WHEN ${truth(skuMatchesOptionFilters(sql.raw("option_row.owner_id"), sets.options, sql.raw("option_row.facet_key")))}
+                    WHEN ${truth(skuMatchesOptionFilters(sql.raw("option_row.variant_id"), sets.options, sql.raw("option_row.facet_key")))}
                      AND ${attributeMatch()} AND ${brandMatch}${ratingMatch}
                     THEN option_row.product_id
-                END),
-                MIN(option_row.value_label), MIN(option_row.sort_order), NULL, MIN(option_row.variant_id)
+                END)
             FROM facet_scope
             LEFT JOIN product_facet_values AS option_row ON option_row.product_id = facet_scope.product_id
-                AND option_row.facet_kind = 'option'
+                AND option_row.variant_id IS NOT NULL
             WHERE (SELECT products FROM facet_size) <= ${sql.raw(String(FACET_SCOPE_PRODUCT_LIMIT))}
             GROUP BY option_row.facet_key, option_row.value_key
-            HAVING option_row.facet_key IS NOT NULL
-    `;
-    // Every public product with nothing selected: the maintained counts. Only
-    // values that can be shown (every count tie within the value cap, and
-    // every value of a number attribute, for its range) read their label,
-    // order and sample SKU, from their first public row.
-    const publicValueCounts = sql`
-            SELECT public_value.facet_kind AS facet_kind, public_value.facet_key AS facet_id,
-                public_value.value_key AS value_key, public_value.product_count AS value_count,
-                sample_row.value_label AS value_label, sample_row.sort_order AS value_sort,
-                sample_row.value_number AS value_number, sample_row.variant_id AS sample_sku
+            HAVING option_row.facet_key IS NOT NULL`;
+    // Only values that can be shown (every count tie within the value cap, a
+    // selected value, every value of a number attribute for its range) read
+    // their label, order, number and sample SKU, from the value's first public row.
+    const shownValues = sql`
+            SELECT counted.facet_kind, counted.facet_id, counted.value_key, counted.value_count,
+                sample_row.value_label, sample_row.sort_order AS value_sort,
+                sample_row.value_number, sample_row.variant_id AS sample_sku
             FROM (
-                SELECT counted.facet_kind, counted.facet_key, counted.value_key, counted.product_count,
-                    RANK() OVER (PARTITION BY counted.facet_kind, counted.facet_key ORDER BY counted.product_count DESC) AS count_rank
-                FROM product_facet_public_counts AS counted
-                WHERE counted.product_count > 0
-            ) AS public_value
-            LEFT JOIN ${productAttributes} AS public_attribute
-                ON public_value.facet_kind = 'attribute' AND public_attribute.id = public_value.facet_key
+                SELECT value_counts.*, RANK() OVER (
+                    PARTITION BY value_counts.facet_kind, value_counts.facet_id ORDER BY value_counts.value_count DESC
+                ) AS count_rank
+                FROM value_counts
+            ) AS counted
+            LEFT JOIN ${productAttributes} AS counted_attribute
+                ON counted.facet_kind = 'attribute' AND counted_attribute.id = counted.facet_id
             INNER JOIN product_facet_values AS sample_row
-                ON sample_row.facet_key = public_value.facet_key
+                ON sample_row.facet_key = counted.facet_id
                AND sample_row.owner_id = (
                    SELECT first_row.owner_id FROM product_facet_values AS first_row
                    INNER JOIN product_buyer_state AS first_buyer
                        ON first_buyer.product_id = first_row.product_id AND first_buyer.is_public = 1
-                   WHERE first_row.facet_key = public_value.facet_key AND first_row.value_key = public_value.value_key
+                   WHERE first_row.facet_key = counted.facet_id AND first_row.value_key = counted.value_key
                    ORDER BY first_row.product_id, first_row.owner_id LIMIT 1
                )
-            WHERE public_value.count_rank <= ${sql.raw(String(valueLimit))} OR public_attribute.value_type = 'number'
+            WHERE counted.count_rank <= ${sql.raw(String(valueLimit))} OR counted_attribute.value_type = 'number'
+               OR ${isSelectedValue(sql.raw("counted.facet_id"), sql.raw("counted.value_key"))}
     `;
     const scopeSummary = sql`
         SELECT COUNT(*) AS listing_count, MIN(listing_from_minor) AS listing_min, MAX(listing_to_minor) AS listing_max
@@ -838,10 +843,15 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
           AND ${input.minRating === undefined ? sql`1 = 1`
                 : productMinRatingCondition(sql`facet_scope.product_id`, input.minRating)}`;
     return namedRows<FacetResultRow>(db.all(sql`
-        WITH facet_scope AS MATERIALIZED (${scopeQuery}),
+        WITH facet_scope AS ${input.allPublic ? sql`NOT MATERIALIZED (
+            SELECT product_id, brand_id, category_id, '' AS attribute_miss, 1 AS option_match, 1 AS brand_match,
+                NULL AS rating_centi, 1 AS rating_match
+            FROM ${buyerState} WHERE ${publicBuyerStateCondition()}
+        )` : sql`MATERIALIZED (${scopeQuery})`},
         facet_size AS (SELECT COUNT(*) AS products FROM facet_scope),
+        value_counts AS (${valueCounts}),
         facet_counts AS (
-            ${input.allPublic ? publicValueCounts : scopedValueCounts}
+            ${shownValues}
             ${brandBranch}${ratingBranch}${categoryBranch}
         ),
         facet_resolved AS (
@@ -887,13 +897,8 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
                     ELSE facet_counts.value_sort
                 END AS display_sort,
                 facet_enum.swatch_hex AS swatch,
-                CASE WHEN EXISTS (
-                    SELECT 1 FROM json_each(${selected}) AS facet_selected
-                    WHERE CAST(json_extract(facet_selected.value, '$.id') AS TEXT) = facet_counts.facet_id
-                      AND facet_counts.value_key IN (
-                          SELECT CAST(value AS TEXT) FROM json_each(json_extract(facet_selected.value, '$.keys'))
-                      )
-                ) THEN 1 ELSE 0 END AS is_selected
+                CASE WHEN ${isSelectedValue(sql.raw("facet_counts.facet_id"), sql.raw("facet_counts.value_key"))}
+                    THEN 1 ELSE 0 END AS is_selected
             FROM facet_counts
             LEFT JOIN ${productAttributes} AS facet_attribute
                 ON facet_counts.facet_kind = 'attribute' AND facet_attribute.id = facet_counts.facet_id
