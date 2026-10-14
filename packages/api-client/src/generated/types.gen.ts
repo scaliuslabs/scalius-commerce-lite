@@ -2757,10 +2757,10 @@ export type AppSummary = {
 };
 
 /**
- * Name, tagline, description and surface titles in other dashboard languages (null: English only).
+ * Name, tagline, description and surface titles by BCP 47 language tag (null: English only).
  */
 export type AppTranslations = {
-    bn?: {
+    [key: string]: {
         name?: string;
         tagline?: string;
         description?: string;
@@ -6330,7 +6330,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 pluginId: string;
                 src: string;
                 placement: 'head' | 'body-end';
-                pages: Array<'all' | 'home' | 'product' | 'listing' | 'cart' | 'checkout' | 'order-success'>;
+                pages: Array<'all' | 'home' | 'product' | 'listing' | 'cart'>;
             }>;
             /**
              * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections and slots their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
