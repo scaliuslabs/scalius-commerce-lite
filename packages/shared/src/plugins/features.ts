@@ -332,8 +332,6 @@ export function pluginFeatureIssues(manifest: PluginManifest): Issue[] {
   ];
   for (const surface of surfaces) refer(surface.path, surface.owner, owners.adminRoutes.get(surface.route), `Admin route ${surface.route}`);
   const publicSurfaces = [
-    ...manifest.storefront.sections.map((section, index) => ({ owner: owners.sections.get(section.type), route: section.route, path: ["storefront", "sections", index, "route"] })),
-    ...manifest.storefront.productBlocks.map((block, index) => ({ owner: owners.productBlocks.get(block.type), route: block.route, path: ["storefront", "productBlocks", index, "route"] })),
     ...manifest.storefront.blocks.map((block, index) => ({ owner: owners.blocks.get(block.type), route: block.route, path: ["storefront", "blocks", index, "route"] })),
   ];
   for (const surface of publicSurfaces) {
