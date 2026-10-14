@@ -28,6 +28,7 @@ Product photos are `product_media` rows that point at `media` with `restrict`. O
 - One R2 bucket (binding `BUCKET`, name `scalius-media`). Public objects use `media/<id>.<ext>`. Renditions use `media/<id>.<ext>/<width>.webp`. The same bucket holds private prefixes that no public route serves: `private/digital/`, `private/conversations/` and `private/agent-artifacts/`.
 - D1 stores the object key. A public URL derives from the current media base URL and is never durable authority.
 - The base URL is `mediaUrl` in the `platform` settings document (dashboard: Settings > Store details > Web addresses > Image address; served at `GET /api/v1/platform`). The API Worker resolves it to `env.R2_PUBLIC_URL` at entry. On localhost it is `<origin>/api/v1/media`, served by `apps/api/src/routes/media-server.ts` (mounted only when `NODE_ENV` is `development`; it refuses `private/`).
+- The API serves `GET /api/v1/media/<key>` (`routes/media-server.ts`) from R2 for `media/` keys only. It answers local development and the storefront Worker's service binding (`https://api.internal`); a public address gets 404. The storefront serves the same keys at `/media/<key>` on its own origin and rewrites the media address to that origin in its HTML (`apps/storefront/src/lib/media-proxy.ts`, `media-url.ts`); the dashboard keeps the media address.
 - `withPublicMediaUrl()` wraps each API request in `AsyncLocalStorage` with only the normalized base URL, and deep media projections read it through `getCurrentMediaUrl()`.
 
 ## Uploads
