@@ -9,6 +9,7 @@ import type {
     AgentOperationMetadata,
     AgentOperationPrincipal,
     AgentOperationRisk,
+    AgentOperationStability,
     AgentOperationSurface,
 } from "../agent-operation-manifest";
 import { DASHBOARD_ORDER_OPERATIONS } from "./dashboard-orders";
@@ -21,7 +22,7 @@ import { DASHBOARD_MARKETING_OPERATIONS } from "./dashboard-marketing";
 import { DASHBOARD_CONTENT_OPERATIONS } from "./dashboard-content";
 import { DASHBOARD_HOME_OPERATIONS } from "./dashboard-home";
 import { DASHBOARD_SETTINGS_OPERATIONS } from "./dashboard-settings";
-import { DASHBOARD_STAFF_OPERATIONS } from "./dashboard-staff";
+import { DASHBOARD_STAFF_OPERATIONS as STAFF_ROWS } from "./dashboard-staff";
 import { STOREFRONT_ORDER_OPERATIONS } from "./storefront-orders";
 import { STOREFRONT_CONVERSATION_OPERATIONS } from "./storefront-conversations";
 import { STOREFRONT_CATALOG_OPERATIONS } from "./storefront-catalog";
@@ -41,7 +42,7 @@ import { DASHBOARD_WARRANTY_OPERATIONS } from "./dashboard-warranty";
 import { DASHBOARD_WEBHOOK_OPERATIONS } from "./dashboard-webhooks";
 import { DASHBOARD_CUSTOM_FIELD_OPERATIONS } from "./dashboard-custom-fields";
 import { DASHBOARD_METAOBJECT_OPERATIONS } from "./dashboard-metaobjects";
-import { DASHBOARD_APP_OPERATIONS } from "./dashboard-apps";
+import { DASHBOARD_APP_OPERATIONS as APP_ROWS } from "./dashboard-apps";
 import { DASHBOARD_STORE_TRANSFER_OPERATIONS } from "./dashboard-store-transfer";
 import { STOREFRONT_REVIEW_OPERATIONS } from "./storefront-reviews";
 import { STOREFRONT_GIFT_CARD_OPERATIONS } from "./storefront-gift-cards";
@@ -61,6 +62,21 @@ const DEFAULT_PRINCIPALS: Readonly<
   storefront: ["visitor", "customer"],
   system: ["admin"],
 };
+
+/**
+ * Areas no app ever calls, whatever its grant: staff accounts, team, agent
+ * access and security (people and credentials), and app management itself.
+ */
+function internalArea<T extends Record<string, OperationRegistryEntry>>(
+  rows: T,
+): { [K in keyof T]: T[K] & { stability: "internal" } } {
+  return Object.fromEntries(
+    Object.entries(rows).map(([operationId, entry]) => [operationId, { ...entry, stability: "internal" }]),
+  ) as { [K in keyof T]: T[K] & { stability: "internal" } };
+}
+
+const DASHBOARD_STAFF_OPERATIONS = internalArea(STAFF_ROWS);
+const DASHBOARD_APP_OPERATIONS = internalArea(APP_ROWS);
 
 /**
  * Every agent operation row, merged from one file per domain and surface.
@@ -181,6 +197,8 @@ export function operationMetadata(
 ): AgentOperationMetadata {
   const surface = operationSurface(operationId);
   const exposure: AgentOperationExposure = entry.exposure ?? "execute";
+  const stability: AgentOperationStability =
+    entry.stability ?? (exposure === "execute" && surface !== "system" ? "beta" : "internal");
   const risk = entry.risk ?? methodRisk(method);
   const batch: AgentOperationBatch =
     entry.batch ??
@@ -188,6 +206,7 @@ export function operationMetadata(
   return {
     surface,
     exposure,
+    stability,
     principals: [...(entry.principals ?? DEFAULT_PRINCIPALS[surface])],
     risk,
     openWorld: entry.openWorld ?? false,

@@ -24,7 +24,7 @@ export function AppStatusBadge({ app }: { app: Pick<AppSummary, "status" | "need
   return <Badge variant={variant}>{t(key)}</Badge>;
 }
 
-export const RISK_VARIANT: Record<AppDetail["permissions"][number]["risk"], BadgeVariant> = {
+export const RISK_VARIANT: Record<AppDetail["scopes"][number]["risk"], BadgeVariant> = {
   read: "secondary",
   write: "info",
   destructive: "destructive",

@@ -66,7 +66,7 @@ describe("pnpm plugin", () => {
         tagline: "Wrap it",
         categories: ["orders"],
         screenshots: [],
-        permissions: ["orders.view"],
+        scopes: ["read_orders"],
         translations: { bn: { name: "গিফট র‍্যাপ", tagline: "মুড়ে দিন", pages: { x: "y" } } },
       },
     }]);
@@ -105,7 +105,7 @@ describe("scaffolded plugin", () => {
       expect(formatChecks(outcome.checks)).not.toContain("✗");
       expect(outcome).toMatchObject({ ok: true, id: "acme.loyalty" });
       expect(outcome.checks.map((check) => check.label)).toEqual([
-        "Plugin entry", "Bundles", "Plugin definition", "Manifest", "Compatibility", "Handlers match the manifest", "Permissions", "Listing images", "Bundle size",
+        "Plugin entry", "Bundles", "Plugin definition", "Manifest", "Compatibility", "Handlers match the manifest", "Scopes", "Listing images", "Bundle size",
       ]);
 
       // The same steps as its generated test, against the packed bundle.
@@ -128,11 +128,10 @@ describe("scaffolded plugin", () => {
 });
 
 describe("pnpm plugin validate", () => {
-  it("reports every problem in one run: manifest issues, a missing handler, a permission a plugin cannot hold and a missing image", async () => {
+  it("reports every problem in one run: a missing handler and a missing image", async () => {
     const plugin = makeTempPlugin({ id: "acme.broken" });
     try {
       editSource(plugin.dir, (source) => source
-        .replace('permissions: ["orders.view"]', 'permissions: ["orders.view", "team.manage", "nonsense.do"]')
         .replace('categories: ["marketing"],', 'categories: ["marketing"],\n  icon: "assets/missing.svg",')
         .replace('"checkout.discounts": () => ({ discounts: [] }),', ""));
       const outcome = await validatePlugin(plugin.dir);
@@ -140,9 +139,7 @@ describe("pnpm plugin validate", () => {
       expect(outcome.ok).toBe(false);
       expect(report).toContain("✗ Handlers: ");
       expect(report).toContain("checkout.discounts");
-      expect(report).toContain("✗ Permissions: nonsense.do is not a Scalius permission.");
       expect(report).toContain("✗ Listing images: assets/missing.svg is declared in the manifest but missing.");
-      expect(report).toMatch(/✗ Permissions: team\.\w+ cannot be granted/);
     } finally {
       plugin.cleanup();
     }
@@ -152,12 +149,15 @@ describe("pnpm plugin validate", () => {
     const bad = makeTempPlugin({ id: "acme.bad" });
     const empty = makeTempPlugin({ id: "acme.empty" });
     try {
-      editSource(bad.dir, (source) => source.replace('apiVersion: PLUGIN_API_VERSION,', "").replace('version: "0.1.0"', 'version: "one"'));
+      editSource(bad.dir, (source) => source.replace('apiVersion: PLUGIN_API_VERSION,', "").replace('version: "0.1.0"', 'version: "one"')
+        .replace('scopes: ["read_orders"]', 'scopes: ["read_orders", "orders.view"]'));
       const outcome = await validatePlugin(bad.dir);
       const report = formatChecks(outcome.checks);
       expect(outcome.ok).toBe(false);
       expect(report).toMatch(/✗ Manifest: version/);
       expect(report).toMatch(/✗ Manifest: apiVersion/);
+      // Raw RBAC names are not scopes (PLUGIN_SCOPES).
+      expect(report).toMatch(/✗ Manifest: scopes\.1/);
 
       editSource(empty.dir, () => "export const nothing = 1;\n");
       expect(formatChecks((await validatePlugin(empty.dir)).checks)).toContain("✗ Plugin definition: The module has no default export from definePlugin() with a manifest.");

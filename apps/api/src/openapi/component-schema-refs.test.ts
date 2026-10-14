@@ -47,6 +47,7 @@ function resolvesIn(root: unknown, ref: string): boolean {
 const reviewed = {
   surface: "dashboard",
   exposure: "execute",
+  stability: "beta",
   principals: ["admin"],
   risk: "read",
   openWorld: false,

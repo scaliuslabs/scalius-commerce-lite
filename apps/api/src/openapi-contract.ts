@@ -243,6 +243,7 @@ function excludedMetadata(path: string, method: string): AgentOperationMetadata 
   return {
     surface,
     exposure: "excluded",
+    stability: "internal",
     principals: internalStorefrontContinuation
       ? ["internal"]
       : surface === "storefront"

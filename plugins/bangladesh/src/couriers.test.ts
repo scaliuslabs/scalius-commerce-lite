@@ -76,7 +76,7 @@ describe("the Bangladesh pack's courier declarations", () => {
       }),
       expect.objectContaining({ id: "steadfast", countries: ["BD"], icon: "assets/steadfast.svg", trackingUrl: "https://steadfast.com.bd/t/{trackingId}" }),
     ]);
-    expect(manifest.permissions).toEqual(["settings.delivery_locations.import"]);
+    expect(manifest.scopes).toEqual(["write_places"]);
     expect(manifest.allowedHosts).toEqual(expect.arrayContaining(["api-hermes.pathao.com", "courier-api-sandbox.pathao.com", "portal.packzy.com"]));
   });
 });

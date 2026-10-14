@@ -22,6 +22,7 @@ function operation(
     tags: ["Admin - Agent Access"],
     surface: "dashboard",
     exposure: "execute",
+    stability: "beta",
     principals: ["admin"],
     risk: "security",
     openWorld: false,

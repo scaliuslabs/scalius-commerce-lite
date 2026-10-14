@@ -39,7 +39,7 @@ function manifest(overrides: Partial<PluginManifestInput> = {}): PluginManifestI
     apiVersion: PLUGIN_API_VERSION,
     description: "Points for orders.",
     author: { name: "Acme" },
-    permissions: ["orders.view"],
+    scopes: ["read_orders"],
     storage: { ledger: { indexes: ["customerId"] } },
     ...overrides,
   };

@@ -15,6 +15,8 @@ import { user as userTable, PLUGIN_EVENT_DELIVERY_STATUSES } from "@scalius/data
 import {
   PLUGIN_DELIVERY_LIST_MAX_LIMIT,
   describePluginSettings,
+  effectivePluginPermissions,
+  isFirstPartyBundledPlugin,
   isOfficialPluginKey,
   isThirdPartyPlugin,
   pluginRegistrySettingsDocument,
@@ -39,6 +41,7 @@ import {
   PLUGIN_ID_PATTERN,
   PLUGIN_FUNCTION_POINTS,
   PLUGIN_NAV_PLACEMENTS,
+  PLUGIN_SCOPE_NAMES,
   pluginGrantAdditions,
   pluginGrantKey,
   pluginGrantRequest,
@@ -101,7 +104,7 @@ function noStore(c: { header(name: string, value: string): void }) {
 // ── Schemas ──
 
 const grantSchema = z.object({
-  permissions: z.array(z.string()),
+  scopes: z.array(z.enum(PLUGIN_SCOPE_NAMES)).openapi({ description: "Access scopes: store data and actions the app may read or change." }),
   allowedHosts: z.array(z.string()),
   events: z.array(z.string()),
   functions: z.array(z.string()),
@@ -220,11 +223,11 @@ const appDetailSchema = appSummarySchema.extend({
   request: grantSchema,
   granted: grantSchema.nullable(),
   added: grantSchema.openapi({ description: "What the request adds to the approved grant (everything before the first approval)." }),
-  permissions: z.array(z.object({
-    name: z.string(),
-    risk: z.enum(["read", "write", "destructive", "financial"]),
-    sensitive: z.boolean(),
-  })),
+  scopes: z.array(z.object({
+    name: z.enum(PLUGIN_SCOPE_NAMES),
+    risk: z.enum(["read", "write", "destructive", "financial"]).openapi({ description: "The highest risk among the operations the scope lets this app call." }),
+    sensitive: z.boolean().openapi({ description: "The scope reaches sensitive data or settings." }),
+  })).openapi({ description: "The requested scopes, for the consent screen." }),
   activatedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
   runtime: z.enum(["bundled", "sandbox"]),
   runtimeAvailable: z.boolean(),
@@ -380,18 +383,17 @@ function missingSettings(installation: PluginInstallation, described: ReturnType
     .map((field) => field.key);
 }
 
-/** Each requested permission with the highest risk among the operations it lets the app call. */
-async function permissionRows(request: PluginGrantRequest) {
+/** Each requested scope with the highest risk among the operations it lets this app (in its tier) call. */
+async function scopeRows(installation: PluginInstallation, request: PluginGrantRequest) {
   const { derivePluginRiskCeiling } = await import("../../plugins/authority");
-  return request.permissions.map((name) => {
-    const metadata = Object.prototype.hasOwnProperty.call(PERMISSION_METADATA, name)
-      ? (PERMISSION_METADATA as Record<string, { isSensitive: boolean }>)[name]
-      : undefined;
-    const risk = derivePluginRiskCeiling(new Set([name]));
+  const firstParty = isFirstPartyBundledPlugin(installation);
+  return request.scopes.map((name) => {
+    const permissions = effectivePluginPermissions({ scopes: [name] });
+    const risk = derivePluginRiskCeiling(permissions, firstParty);
     return {
       name,
       risk: (risk === "security" ? "financial" : risk) as "read" | "write" | "destructive" | "financial",
-      sensitive: metadata?.isSensitive ?? false,
+      sensitive: [...permissions].some((permission) => (PERMISSION_METADATA as Record<string, { isSensitive?: boolean }>)[permission]?.isSensitive === true),
     };
   });
 }
@@ -407,12 +409,12 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
   const request = pluginGrantRequest(manifest);
   const described = describePluginSettings(installation);
   const caps = planLimits().plugins;
-  const [approver, lastRuns, permissions, registrySettings] = await Promise.all([
+  const [approver, lastRuns, scopes, registrySettings] = await Promise.all([
     installation.activatedBy
       ? db.select({ id: userTable.id, name: userTable.name }).from(userTable).where(eq(userTable.id, installation.activatedBy)).get()
       : Promise.resolve(undefined),
     latestPluginCronRuns(db, installation.pluginId, manifest.cron.map((job) => job.name)),
-    permissionRows(request),
+    scopeRows(installation, request),
     installation.signerKeyId ? pluginRegistrySettingsDocument.read(db) : Promise.resolve({ registries: [], trustedKeys: [] }),
   ]);
   const available = runtimeAvailable(c, installation);
@@ -423,7 +425,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     request,
     granted: installation.grant,
     added: pluginGrantAdditions(installation.grant, request),
-    permissions,
+    scopes,
     activatedBy: approver ? { id: approver.id, name: approver.name } : null,
     runtime: installation.source === "bundled" ? "bundled" as const : "sandbox" as const,
     runtimeAvailable: available,

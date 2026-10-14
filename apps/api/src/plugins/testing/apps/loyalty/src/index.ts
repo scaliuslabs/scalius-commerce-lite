@@ -30,7 +30,7 @@ export const manifest = {
   categories: ["loyalty",  "marketing"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
   minPlatformVersion: "1.0.0",
-  permissions: ["orders.view"],
+  scopes: ["read_orders"],
   events: ["order.paid"],
   functions: [{ point: "checkout.discounts", priority: 200, snapshot: { collection: "balances" } }],
   storage: {

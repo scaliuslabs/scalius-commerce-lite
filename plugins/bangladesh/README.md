@@ -23,7 +23,7 @@ A store that picks Bangladesh in the new-store setup (`/admin/welcome`) sees the
 
 A Super Admin selects **Review and activate** in Apps. The pack asks for:
 
-- `settings.delivery_locations.import`: to load the places through the place import. It adds and updates places only; it cannot delete one;
+- the `write_places` scope: to load the places through the place import. It reads and adds and updates places only; it cannot delete one;
 - network access to the payment gateway's, couriers', SMS gateways' and checkers' hosts only;
 - the payment, courier, SMS and fraud check provider ports.
 

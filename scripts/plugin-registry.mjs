@@ -83,38 +83,6 @@ export async function loadRegistryContract() {
   return registryContract;
 }
 
-let permissionCheck;
-
-/**
- * Which permissions exist and which a plugin may hold (packages/core grants).
- * Null when that module cannot be loaded from a script; callers then say so.
- */
-export async function loadPermissionCheck() {
-  if (permissionCheck !== undefined) return permissionCheck;
-  try {
-    const esbuild = await loadEsbuild();
-    const grants = join(root, "packages/core/src/modules/plugins/grants.ts");
-    const result = await esbuild.build({
-      stdin: {
-        contents: `export { isKnownPermission, isPluginGrantablePermission } from ${JSON.stringify(grants)};`,
-        resolveDir: root,
-        loader: "ts",
-      },
-      bundle: true,
-      write: false,
-      format: "esm",
-      platform: "node",
-      target: "node22",
-      logLevel: "silent",
-    });
-    const loaded = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
-    permissionCheck = { isKnownPermission: loaded.isKnownPermission, isPluginGrantablePermission: loaded.isPluginGrantablePermission };
-  } catch {
-    permissionCheck = null;
-  }
-  return permissionCheck;
-}
-
 const sha256Of = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 // ── Keys ─────────────────────────────────────────────────────────────────

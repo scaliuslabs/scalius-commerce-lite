@@ -9,24 +9,34 @@
 //     artifact, continuation or client-action transport;
 //   - guarded by RBAC permissions (not super-admin-only, public or unmapped),
 //     every one of them plugin-grantable (no team, agent access, webhook or
-//     plugin management: `PLUGIN_RESERVED_PERMISSION_RESOURCES`).
-// Within that set the installation's grant (∩ the live catalog) decides, and
-// the risk ceiling is the highest risk the grant unlocks.
+//     plugin management: `PLUGIN_RESERVED_PERMISSION_RESOURCES`);
+//   - in the app's tier (`x-scalius-agent.stability`): a third-party app
+//     calls `stable` operations only, a bundled first-party app also `beta`,
+//     no app `internal`.
+// Within that set the installation's grant (its scopes, expanded to RBAC by
+// `PLUGIN_SCOPES`) decides, and the risk ceiling is the highest risk the
+// grant unlocks.
 
 import type { Database } from "@scalius/database/client";
 import { user } from "@scalius/database/schema";
 import {
   effectivePluginPermissions,
   getActivePluginInstallation,
+  isFirstPartyBundledPlugin,
   isPluginGrantablePermission,
 } from "@scalius/core/modules/plugins";
 import { eq } from "drizzle-orm";
 import { AGENT_OPERATIONS } from "../generated/agent-operations.gen";
-import type { AgentOperationManifestEntry, AgentOperationRbac } from "../openapi/agent-operation-manifest";
+import type { AgentOperationManifestEntry, AgentOperationRbac, AgentOperationStability } from "../openapi/agent-operation-manifest";
 import { isAgentRiskAllowed, type AgentRisk, type PluginPrincipal } from "../agent-access/types";
 import { isWithinRateLimit } from "../utils/rate-limit";
 
 const RISK_ORDER: readonly AgentRisk[] = ["read", "write", "destructive", "financial", "security"];
+
+/** Whether an app of this tier may call an operation of this stability. */
+export function pluginTierAllows(firstParty: boolean, stability: AgentOperationStability): boolean {
+  return stability === "stable" || (stability === "beta" && firstParty);
+}
 
 function rbacPermissions(rbac: AgentOperationRbac): string[] | null {
   switch (rbac.type) {
@@ -40,8 +50,12 @@ function rbacPermissions(rbac: AgentOperationRbac): string[] | null {
   }
 }
 
-/** Whether a plugin may ever call this operation, whatever its grant. */
+/**
+ * Whether some app may ever call this operation, whatever its grant and tier
+ * (a third-party app further needs it `stable`: `isOperationAvailableToPlugin`).
+ */
 export function isOperationAvailableToPlugins(operation: AgentOperationManifestEntry): boolean {
+  if (operation.stability === "internal") return false;
   if (operation.surface !== "dashboard" || operation.exposure !== "execute") return false;
   if (!operation.pathTemplate.startsWith("/api/v1/admin/")) return false;
   if (!operation.principals.includes("admin")) return false;
@@ -49,6 +63,11 @@ export function isOperationAvailableToPlugins(operation: AgentOperationManifestE
   if (operation.risk === "security" || operation.sensitiveOutput || operation.oneTimeSecretOutput) return false;
   const permissions = rbacPermissions(operation.rbac);
   return permissions !== null && permissions.length > 0 && permissions.every(isPluginGrantablePermission);
+}
+
+/** Whether an app of this tier may ever call this operation, whatever its grant. */
+export function isOperationAvailableToPlugin(operation: AgentOperationManifestEntry, firstParty: boolean): boolean {
+  return pluginTierAllows(firstParty, operation.stability) && isOperationAvailableToPlugins(operation);
 }
 
 export function pluginRbacSatisfied(rbac: AgentOperationRbac, permissions: ReadonlySet<string>): boolean {
@@ -65,24 +84,25 @@ export function pluginRbacSatisfied(rbac: AgentOperationRbac, permissions: Reado
 }
 
 /**
- * The highest risk among the plugin-available operations the permissions
- * unlock (`read` when they unlock none). Never `security`.
+ * The highest risk among the operations an app of this tier may call that the
+ * permissions unlock (`read` when they unlock none). Never `security`.
  */
 export function derivePluginRiskCeiling(
   permissions: ReadonlySet<string>,
+  firstParty: boolean,
   operations: readonly AgentOperationManifestEntry[] = AGENT_OPERATIONS,
 ): AgentRisk {
   let ceiling = 0;
   for (const operation of operations) {
-    if (!isOperationAvailableToPlugins(operation) || !pluginRbacSatisfied(operation.rbac, permissions)) continue;
+    if (!isOperationAvailableToPlugin(operation, firstParty) || !pluginRbacSatisfied(operation.rbac, permissions)) continue;
     ceiling = Math.max(ceiling, RISK_ORDER.indexOf(operation.risk));
   }
   return RISK_ORDER[Math.min(ceiling, RISK_ORDER.indexOf("financial"))]!;
 }
 
-/** Availability, risk ceiling and grant, in that order. */
+/** Tier and availability, risk ceiling and grant, in that order. */
 export function authorizePluginOperation(principal: PluginPrincipal, operation: AgentOperationManifestEntry): boolean {
-  return isOperationAvailableToPlugins(operation)
+  return isOperationAvailableToPlugin(operation, principal.firstParty)
     && isAgentRiskAllowed(principal.riskCeiling, operation.risk)
     && pluginRbacSatisfied(operation.rbac, principal.permissions);
 }
@@ -101,14 +121,16 @@ export async function resolvePluginPrincipal(db: Database, pluginId: string): Pr
   if (!actor) return null;
   if (actor.banned && !(actor.banExpires && actor.banExpires.getTime() <= Date.now())) return null;
   const permissions = effectivePluginPermissions(installation.grant);
+  const firstParty = isFirstPartyBundledPlugin(installation);
   return {
     kind: "plugin",
     pluginId: installation.pluginId,
     version: installation.version,
     pluginName: installation.manifest.name,
     actorUserId: actor.id,
+    firstParty,
     permissions,
-    riskCeiling: derivePluginRiskCeiling(permissions),
+    riskCeiling: derivePluginRiskCeiling(permissions, firstParty),
   };
 }
 

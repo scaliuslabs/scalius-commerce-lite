@@ -149,7 +149,7 @@ export const manifest = {
   changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/bangladesh",
   minPlatformVersion: "1.0.0",
   // The place import (dashboard.delivery_locations.import): it adds and updates places, never deletes.
-  permissions: ["settings.delivery_locations.import"],
+  scopes: ["write_places"],
   allowedHosts: [
     ...SMS_HOSTS,
     ...new Set(Object.values(FRAUD_CHECKERS).flatMap((checker) => checker.hosts)),

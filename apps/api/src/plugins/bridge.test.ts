@@ -224,8 +224,8 @@ describe("plugin messaging", () => {
 
   it("requires marketing.send for marked marketing without weakening transactional access", async () => {
     const bridge = bridgeWith(["customers.view"]);
-    await expect(bridge.messagingEmail({ customerId: "cus_1", subject: "Offer", html: "Offer", marketing: true })).rejects.toThrow(/marketing.send/);
-    await expect(bridge.messagingSms({ customerId: "cus_1", text: "Offer", marketing: true })).rejects.toThrow(/marketing.send/);
+    await expect(bridge.messagingEmail({ customerId: "cus_1", subject: "Offer", html: "Offer", marketing: true })).rejects.toThrow(/write_marketing/);
+    await expect(bridge.messagingSms({ customerId: "cus_1", text: "Offer", marketing: true })).rejects.toThrow(/write_marketing/);
   });
 
   it("sends marketing only to a current subscription, with the unsubscribe footer and list headers", async () => {

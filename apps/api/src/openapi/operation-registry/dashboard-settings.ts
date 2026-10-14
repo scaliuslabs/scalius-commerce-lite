@@ -2,7 +2,7 @@
 import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_SETTINGS_OPERATIONS = {
-  "dashboard.cache.purge_all": { limits: { request: 16_384, response: 8_192 } },
+  "dashboard.cache.purge_all": { stability: "internal", limits: { request: 16_384, response: 8_192 } },
   "dashboard.checkout_languages.active_get": {},
   "dashboard.checkout_languages.create": { limits: { request: 65_536, response: 16_384 } },
   "dashboard.checkout_languages.delete_permanently": {
@@ -34,7 +34,7 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     batch: "forbidden",
   },
   "dashboard.delivery_locations.get": {},
-  "dashboard.delivery_locations.import": { batch: "forbidden" },
+  "dashboard.delivery_locations.import": { stability: "stable", batch: "forbidden" },
   "dashboard.delivery_locations.list": {},
   "dashboard.delivery_locations.trash": { risk: "destructive" },
   "dashboard.delivery_locations.update": {},
@@ -90,13 +90,13 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   // Languages (MARKETS-DESIGN D9): the store's languages, publishing and the default one.
   "dashboard.languages.create": {},
   "dashboard.languages.delete": { risk: "destructive" },
-  "dashboard.languages.list": {},
+  "dashboard.languages.list": { stability: "stable" },
   "dashboard.languages.update": {},
   "dashboard.markets.create": {},
   "dashboard.markets.currencies": {},
   "dashboard.markets.delete": { risk: "destructive", revision: "required" },
-  "dashboard.markets.get": {},
-  "dashboard.markets.list": {},
+  "dashboard.markets.get": { stability: "stable" },
+  "dashboard.markets.list": { stability: "stable" },
   "dashboard.markets.update": { revision: "required" },
   // Personal bell state is a staff browser surface, not a merchant-agent action.
   "dashboard.notifications.feed": {
@@ -194,7 +194,7 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   "dashboard.policies.update": { revision: "required" },
   "dashboard.sales_channels.get": {},
   "dashboard.sales_channels.list": {},
-  "dashboard.sales_channels.products": {},
+  "dashboard.sales_channels.products": { stability: "stable" },
   "dashboard.sales_channels.update": {},
   "dashboard.seo.feed_diagnostics": { limits: { request: 16_384 } },
   "dashboard.seo.feed_row_preview": {
@@ -236,7 +236,7 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     revision: "required",
     limits: { request: 16_384, response: 8_192 },
   },
-  "dashboard.settings.business_get": { limits: { request: 16_384, response: 16_384 } },
+  "dashboard.settings.business_get": { stability: "stable", limits: { request: 16_384, response: 16_384 } },
   "dashboard.settings.business_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
   "dashboard.settings.currency_get": { limits: { request: 16_384, response: 8_192 } },
   "dashboard.settings.currency_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
@@ -264,7 +264,7 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   },
   "dashboard.settings.media_delivery_get": { limits: { request: 16_384, response: 16_384 } },
   "dashboard.settings.media_delivery_update": { revision: "required", limits: { request: 16_384, response: 16_384 } },
-  "dashboard.settings.platform_get": { limits: { request: 16_384, response: 16_384 } },
+  "dashboard.settings.platform_get": { stability: "stable", limits: { request: 16_384, response: 16_384 } },
   // Public origins, CORS, cookie domain and identity handoff decide who can
   // sign in: the same tier as email delivery and the team.
   "dashboard.settings.platform_update": {

@@ -70,10 +70,10 @@ describe("plugin grant additions", () => {
   };
 
   it("lists exactly what an update adds and nothing when it narrows", () => {
-    const before = manifest({ permissions: ["orders.view"], events: ["order.*"], allowedHosts: ["api.acme.example"] });
-    const after = manifest({ permissions: ["orders.view", "customers.view"], events: ["order.paid", "customer.created"], allowedHosts: ["api.acme.example"] });
+    const before = manifest({ scopes: ["read_orders"], events: ["order.*"], allowedHosts: ["api.acme.example"] });
+    const after = manifest({ scopes: ["read_orders", "read_customers"], events: ["order.paid", "customer.created"], allowedHosts: ["api.acme.example"] });
     expect(pluginGrantExpands(before, after)).toBe(true);
-    expect(pluginGrantAdditions(before, after)).toMatchObject({ permissions: ["customers.view"], events: ["customer.created"], allowedHosts: [] });
+    expect(pluginGrantAdditions(before, after)).toMatchObject({ scopes: ["read_customers"], events: ["customer.created"], allowedHosts: [] });
     const narrower = manifest({ events: ["order.paid"] });
     expect(pluginGrantExpands(before, narrower)).toBe(false);
     expect(Object.values(pluginGrantAdditions(before, narrower)).every((value) => value === false || (Array.isArray(value) && value.length === 0))).toBe(true);

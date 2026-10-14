@@ -1,9 +1,10 @@
 // The plugin principal: ctx.api.call dispatches through the agent dispatcher
 // and the real admin auth middleware as the plugin. Granted operations run
 // (writes recorded as the approving Super Admin, audited under the plugin),
-// ungranted ones are refused, and operations outside the plugin-available set
-// (security risk, reserved RBAC areas) are refused even when the permission
-// is granted or forged into the principal.
+// ungranted ones are refused, a third-party app reaches only the stable app
+// API (a bundled first-party app also beta operations), and operations
+// outside the plugin-available set (security risk, reserved RBAC areas) are
+// refused even when forged into the principal.
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
@@ -25,7 +26,7 @@ const manifest: PluginManifestInput = {
   apiVersion: PLUGIN_API_VERSION,
   description: "Exercises the plugin principal.",
   author: { name: "Acme" },
-  permissions: ["orders.view", "orders.edit", "orders.create", "settings.general.view"],
+  scopes: ["write_orders", "read_settings"],
 };
 
 describe("plugin-available operations (operation metadata)", () => {
@@ -51,17 +52,23 @@ describe("plugin-available operations (operation metadata)", () => {
   });
 
   it("derives the risk ceiling from what the grant unlocks, never security", () => {
-    expect(derivePluginRiskCeiling(new Set())).toBe("read");
-    expect(derivePluginRiskCeiling(new Set(["orders.view"]))).toBe("read");
-    expect(derivePluginRiskCeiling(new Set(["products.delete"]))).toBe("destructive");
-    expect(derivePluginRiskCeiling(new Set(["orders.refund"]))).toBe("financial");
-    expect(derivePluginRiskCeiling(new Set(["team.manage_roles", "agent_access.manage"]))).toBe("read");
+    expect(derivePluginRiskCeiling(new Set(), false)).toBe("read");
+    expect(derivePluginRiskCeiling(new Set(["orders.view"]), false)).toBe("read");
+    expect(derivePluginRiskCeiling(new Set(["products.delete"]), false)).toBe("destructive");
+    // Refunds are not in the stable app API: only a first-party app reaches them.
+    expect(derivePluginRiskCeiling(new Set(["orders.refund"]), false)).toBe("read");
+    expect(derivePluginRiskCeiling(new Set(["orders.refund"]), true)).toBe("financial");
+    expect(derivePluginRiskCeiling(new Set(["team.manage_roles", "agent_access.manage"]), true)).toBe("read");
     const get = AGENT_OPERATIONS.find((operation) => operation.operationId === "dashboard.orders.get")!;
     const principal = (permissions: string[], riskCeiling: PluginPrincipal["riskCeiling"]): PluginPrincipal => ({
-      kind: "plugin", pluginId: "acme.rbac", version: "1.0.0", pluginName: "x", actorUserId: "owner", permissions: new Set(permissions), riskCeiling,
+      kind: "plugin", pluginId: "acme.rbac", version: "1.0.0", pluginName: "x", actorUserId: "owner", firstParty: false, permissions: new Set(permissions), riskCeiling,
     });
     expect(authorizePluginOperation(principal(["orders.view"], "read"), get)).toBe(true);
     expect(authorizePluginOperation(principal(["customers.view"], "read"), get)).toBe(false);
+    const invoice = AGENT_OPERATIONS.find((operation) => operation.operationId === "dashboard.orders.invoice_get")!;
+    expect(invoice.stability).toBe("beta");
+    expect(authorizePluginOperation(principal(["orders.view"], "read"), invoice)).toBe(false);
+    expect(authorizePluginOperation({ ...principal(["orders.view"], "read"), firstParty: true }, invoice)).toBe(true);
   });
 });
 
@@ -106,15 +113,29 @@ describe("ctx.api.call as a plugin principal", () => {
     expect(audit()).toEqual([{ plugin_id: "acme.rbac", operation_id: "dashboard.customers.list", outcome: "denied", http_status: 403, error_class: "operation_forbidden" }]);
   });
 
-  it("refuses security-risk and reserved-area operations even when the permission is granted", async () => {
-    // settings.general.view is granted; the credential read it guards is security risk.
-    expect(await call("dashboard.settings.email_get")).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_forbidden" } });
-    // A grant edited to include reserved permissions confers none of them.
-    sqlite.prepare(`UPDATE plugin_installations SET grant_json = json_set(grant_json, '$.permissions', json('["orders.view","team.view","webhooks.view","agent_access.view"]'))`).run();
-    expect(await call("dashboard.team.users.list")).toMatchObject({ ok: false, status: 403 });
-    expect(await call("dashboard.webhooks.list")).toMatchObject({ ok: false, status: 403 });
-    expect(await call("dashboard.agent_access.connections.list")).toMatchObject({ ok: false, status: 403 });
-    expect((await call("dashboard.orders.get", { path: { id: "ord_rbac1" } })).ok).toBe(true);
+  it("keeps a third-party app on the stable app API, whatever its scopes cover", async () => {
+    // read_settings covers both; the invoice read is beta and the credential read security risk.
+    const invoice = await call("dashboard.orders.invoice_get", { path: { id: "ord_rbac1" } });
+    expect(invoice).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_not_stable" } });
+    expect(await call("dashboard.settings.email_get")).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_not_stable" } });
+    expect(await call("dashboard.team.users.list")).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_not_stable" } });
+    expect(audit()).toContainEqual({ plugin_id: "acme.rbac", operation_id: "dashboard.orders.invoice_get", outcome: "denied", http_status: 403, error_class: "operation_forbidden" });
+    expect((await call("dashboard.settings.business_get")).ok).toBe(true);
+  });
+
+  it("lets a bundled first-party app call beta operations, never internal or security ones", async () => {
+    await installPlugin(db, { manifest: { ...manifest, id: "scalius.rbac" }, source: "bundled", bundleSha256: "f".repeat(64), actorUserId: "owner" });
+    await activatePlugin(db, "scalius.rbac", { actorUserId: "owner", expectedRevision: 1 });
+    const first = (operationId: string, input?: unknown) =>
+      callPluginOperation({ pluginId: "scalius.rbac", version: "1.0.0", operationId, input, db, env, ctx: pluginTestCtx() });
+    expect((await first("dashboard.orders.invoice_get", { path: { id: "ord_rbac1" } })).error?.code).not.toBe("api.operation_not_stable");
+    expect(await first("dashboard.settings.email_get")).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_forbidden" } });
+    expect(await first("dashboard.team.users.list")).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_not_stable" } });
+  });
+
+  it("grants nothing from a tampered grant that names anything but scopes", async () => {
+    sqlite.prepare(`UPDATE plugin_installations SET grant_json = json_set(grant_json, '$.scopes', json('["read_orders","team.view","webhooks.view"]'))`).run();
+    expect(await call("dashboard.orders.get", { path: { id: "ord_rbac1" } })).toMatchObject({ ok: false, status: 401, error: { code: "installation.inactive" } });
   });
 
   it("refuses a forged principal at the admin auth middleware, whatever it claims", async () => {
@@ -124,6 +145,7 @@ describe("ctx.api.call as a plugin principal", () => {
       version: "1.0.0",
       pluginName: "Acme RBAC",
       actorUserId: "owner",
+      firstParty: true,
       permissions: new Set(["team.view", "team.manage", "orders.view"]),
       riskCeiling: "financial",
     };

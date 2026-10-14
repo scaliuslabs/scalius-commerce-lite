@@ -3003,9 +3003,18 @@ export type AppDetail = AppSummary & {
     request: AppGrant;
     granted: AppGrant & unknown;
     added: AppGrant & unknown;
-    permissions: Array<{
-        name: string;
+    /**
+     * The requested scopes, for the consent screen.
+     */
+    scopes: Array<{
+        name: 'read_products' | 'write_products' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places';
+        /**
+         * The highest risk among the operations the scope lets this app call.
+         */
         risk: 'read' | 'write' | 'destructive' | 'financial';
+        /**
+         * The scope reaches sensitive data or settings.
+         */
         sensitive: boolean;
     }>;
     activatedBy: {
@@ -3182,7 +3191,10 @@ export type AppDetail = AppSummary & {
  * What an app may do; the consent screen lists it in plain words.
  */
 export type AppGrant = {
-    permissions: Array<string>;
+    /**
+     * Access scopes: store data and actions the app may read or change.
+     */
+    scopes: Array<'read_products' | 'write_products' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places'>;
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;

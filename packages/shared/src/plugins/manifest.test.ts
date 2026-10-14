@@ -28,7 +28,7 @@ const FULL: PluginManifestInput = {
   apiVersion: PLUGIN_API_VERSION,
   description: "Points for every order, redeemable at checkout.",
   author: { name: "Acme", url: "https://acme.example" },
-  permissions: ["orders.view", "customers.view"],
+  scopes: ["read_orders", "read_customers"],
   allowedHosts: ["api.acme.example", "*.cdn.acme.example"],
   events: ["order.paid", "order.refunded"],
   functions: [{ point: "checkout.discounts" }],
@@ -59,14 +59,20 @@ const FULL: PluginManifestInput = {
 };
 
 describe("plugin manifest", () => {
-  it("declares real-staff route permissions within the approved app grant, on admin routes only", () => {
-    const route = { name: "adjust", methods: ["POST"], permission: "marketing.send" };
-    const manifest = { ...FULL, permissions: [...FULL.permissions!, "marketing.send"], routes: { ...FULL.routes, admin: [...FULL.routes!.admin!.filter((item) => item.name !== "adjust"), route] } };
+  it("gates real-staff admin routes with one of the app's own scopes, on admin routes only", () => {
+    const route = { name: "adjust", methods: ["POST"], scope: "write_marketing" };
+    const manifest = { ...FULL, scopes: [...FULL.scopes!, "write_marketing"], routes: { ...FULL.routes, admin: [...FULL.routes!.admin!.filter((item) => item.name !== "adjust"), route] } };
     const parsed = parsePluginManifest(manifest);
     expect(parsed.ok).toBe(true);
-    if (parsed.ok) expect(parsed.manifest.routes.admin.find((item) => item.name === "adjust")?.permission).toBe("marketing.send");
-    expect(parsePluginManifest({ ...manifest, permissions: FULL.permissions }).ok).toBe(false);
-    expect(parsePluginManifest({ ...FULL, routes: { ...FULL.routes, public: [{ name: "balance", methods: ["GET"], permission: "customers.view" }] } }).ok).toBe(false);
+    if (parsed.ok) expect(parsed.manifest.routes.admin.find((item) => item.name === "adjust")?.scope).toBe("write_marketing");
+    expect(parsePluginManifest({ ...manifest, scopes: FULL.scopes }).ok).toBe(false);
+    expect(parsePluginManifest({ ...FULL, routes: { ...FULL.routes, public: [{ name: "balance", methods: ["GET"], scope: "read_customers" }] } }).ok).toBe(false);
+  });
+
+  it("takes access scopes, never raw RBAC permission names", () => {
+    expect(parsePluginManifest({ ...FULL, scopes: ["orders.view"] }).ok).toBe(false);
+    expect(parsePluginManifest({ ...FULL, scopes: ["read_orders", "read_orders"] }).ok).toBe(false);
+    expect(parsePluginManifest({ ...FULL, scopes: undefined, permissions: ["orders.view"] }).ok).toBe(false);
   });
 
   it("translates only declared select and multiselect values, leaving stored defaults unchanged", () => {
@@ -215,12 +221,12 @@ describe("plugin manifest", () => {
       return pluginGrantRequest(result.manifest);
     };
     const granted = parse({ ...FULL, events: ["order.*"] });
-    // A covered exact topic, the same grant reordered, or fewer permissions: no new approval.
+    // A covered exact topic, the same grant reordered, or fewer scopes: no new approval.
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.paid"] }))).toBe(false);
-    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], permissions: ["customers.view", "orders.view"] }))).toBe(false);
-    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], permissions: ["orders.view"] }))).toBe(false);
+    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], scopes: ["read_customers", "read_orders"] }))).toBe(false);
+    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], scopes: ["read_orders"] }))).toBe(false);
     // New data, hosts, topics or scripts need approval.
-    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], permissions: ["orders.view", "orders.edit"] }))).toBe(true);
+    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], scopes: ["read_orders", "write_orders"] }))).toBe(true);
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*", "product.created"] }))).toBe(true);
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["*"] }))).toBe(true);
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], allowedHosts: ["api.other.example"] }))).toBe(true);
@@ -231,8 +237,8 @@ describe("plugin manifest", () => {
     expect(pluginGrantExpands(validating, blocking)).toBe(true);
     expect(pluginGrantExpands(blocking, validating)).toBe(false);
     // The key is order-independent.
-    expect(pluginGrantKey(parse({ ...FULL, permissions: ["customers.view", "orders.view"] })))
-      .toBe(pluginGrantKey(parse({ ...FULL, permissions: ["orders.view", "customers.view"] })));
+    expect(pluginGrantKey(parse({ ...FULL, scopes: ["read_customers", "read_orders"] })))
+      .toBe(pluginGrantKey(parse({ ...FULL, scopes: ["read_orders", "read_customers"] })));
   });
 });
 

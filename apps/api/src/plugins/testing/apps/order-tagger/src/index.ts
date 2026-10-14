@@ -23,7 +23,7 @@ export const manifest = {
   categories: ["orders",  "operations"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
   minPlatformVersion: "1.0.0",
-  permissions: ["orders.view", "orders.edit"],
+  scopes: ["write_orders"],
   events: ["order.paid"],
   routes: {
     admin: [{ name: "summary", methods: ["GET"] }],

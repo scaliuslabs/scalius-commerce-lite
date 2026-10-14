@@ -10,6 +10,7 @@ import {
   isPluginHostAllowed,
   parsePluginManifest,
   pluginHandlerInventory,
+  pluginScopePermissions,
   pluginSettingDefaults,
   resolvePluginSettingValues,
   type PluginManifest,
@@ -235,13 +236,13 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     messagingSms: async (input) => (sent.sms.push(copy(input)), { queued: true }),
     messagingNotifyStaff: async (input) => void sent.notices.push(copy(input)),
     messagingPush: async (input) => {
-      if (!manifest.permissions.includes("customers.view")) refuse("messaging.not_allowed", "Sending to customers needs the customers.view permission.");
+      if (!pluginScopePermissions(manifest.scopes).has("customers.view")) refuse("messaging.not_allowed", "Sending to customers needs the read_customers scope.");
       sent.pushes.push(copy(input));
       return { delivered: true };
     },
     timelineAdd: async (input) => {
       const entry = copy(input) as { kind?: unknown };
-      if (!manifest.permissions.includes("orders.edit")) refuse("timeline.not_allowed", "Writing to order timelines needs the orders.edit permission.");
+      if (!pluginScopePermissions(manifest.scopes).has("orders.edit")) refuse("timeline.not_allowed", "Writing to order timelines needs the write_orders scope.");
       if (!manifest.timeline.some((declared) => declared.kind === entry.kind)) refuse("timeline.undeclared", `Timeline kind ${String(entry.kind)} is not declared in the manifest.`);
       sent.timeline.push(entry);
       return { id: `oev_test${sent.timeline.length}` };

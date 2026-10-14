@@ -42,7 +42,7 @@ describe("plugin registry signatures", () => {
     const signature = await signPluginRelease(release, privateKey, key.id);
     expect(await verifyPluginSignature(release, signature, [key])).toEqual({ ok: true, key });
     expect(await verifyPluginSignature({ ...release, sha256: "d".repeat(64) }, signature, [key])).toEqual({ ok: false, reason: "bad_signature" });
-    expect(await verifyPluginSignature({ ...release, manifest: { ...manifest, permissions: ["orders.edit"] } }, signature, [key]))
+    expect(await verifyPluginSignature({ ...release, manifest: { ...manifest, scopes: ["write_orders"] } }, signature, [key]))
       .toEqual({ ok: false, reason: "bad_signature" });
     expect(await verifyPluginSignature({ ...release, version: "1.2.1" }, signature, [key])).toEqual({ ok: false, reason: "bad_signature" });
   });

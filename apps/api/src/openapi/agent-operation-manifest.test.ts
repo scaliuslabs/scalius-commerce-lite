@@ -13,6 +13,7 @@ import { assertNoGenericPendingAgentOperations } from "./generate-agent-operatio
 const reviewedRead: AgentOperationMetadata = {
   surface: "dashboard",
   exposure: "execute",
+  stability: "beta",
   principals: ["admin"],
   risk: "read",
   openWorld: false,
@@ -173,6 +174,7 @@ describe("manifest release classification", () => {
           get: manifestOperation("dashboard.pending.get", {
             ...reviewedRead,
             exposure: "excluded",
+            stability: "internal",
             batch: "forbidden",
             exclusionReason,
           }),
@@ -191,6 +193,7 @@ describe("manifest release classification", () => {
           get: manifestOperation("dashboard.legacy.get", {
             ...reviewedRead,
             exposure: "excluded",
+            stability: "internal",
             batch: "forbidden",
             exclusionReason:
               "Legacy duplicate; use dashboard.products.get_section.",
@@ -229,6 +232,7 @@ describe("device operation metadata", () => {
 const reviewedOneTimeSecret: AgentOperationMetadata = {
   surface: "dashboard",
   exposure: "execute",
+  stability: "beta",
   principals: ["admin"],
   risk: "security",
   openWorld: false,
@@ -522,6 +526,7 @@ describe("merchant resource risk policy", () => {
       {
         ...reviewedRead,
         exposure: "excluded",
+        stability: "internal",
         risk: "write",
         batch: "forbidden",
         exclusionReason: "Legacy route retained for compatibility.",
@@ -749,5 +754,33 @@ describe("sensitive continuation operation metadata", () => {
       },
     });
     expect(() => inlineComponentSchemaRefs({ $ref: "#/components/schemas/Missing" }, schemas)).toThrowError(/Missing/);
+  });
+});
+
+describe("app-API stability metadata", () => {
+  it("requires a known stability on every operation", () => {
+    const { stability: _stability, ...missing } = reviewedRead;
+    expect(() => parseAgentOperationMetadata(missing, "dashboard.orders.get")).toThrowError(/stability/);
+    expect(() => parseAgentOperationMetadata({ ...reviewedRead, stability: "frozen" }, "dashboard.orders.get")).toThrowError(/stability/);
+    expect(parseAgentOperationMetadata({ ...reviewedRead, stability: "stable" }, "dashboard.orders.get")).toMatchObject({ stability: "stable" });
+  });
+
+  it("keeps the stable tier to plain JSON dashboard execution without secrets or security risk", () => {
+    const stable = { ...reviewedRead, stability: "stable" };
+    for (const overrides of [
+      { surface: "storefront", principals: ["visitor"] },
+      { exposure: "continuation", transport: "continuation" },
+      { risk: "security", batch: "forbidden" },
+      { sensitiveOutput: true },
+    ]) {
+      expect(() => parseAgentOperationMetadata({ ...stable, ...overrides }, "dashboard.orders.get"), JSON.stringify(overrides)).toThrowError();
+    }
+  });
+
+  it("makes every excluded operation internal", () => {
+    expect(() => parseAgentOperationMetadata(
+      { ...reviewedRead, exposure: "excluded", stability: "beta", batch: "forbidden", exclusionReason: "Browser projection only." },
+      "dashboard.legacy.get",
+    )).toThrowError(/must be internal/);
   });
 });

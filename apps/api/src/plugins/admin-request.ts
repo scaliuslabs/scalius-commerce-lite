@@ -1,6 +1,6 @@
 // The admin auth branch for an in-process plugin dispatch (middleware/
 // admin-auth.ts). The plugin's authority is resolved again from the database,
-// the request must be a plugin-available operation within the risk ceiling,
+// the request must be an operation of the app's tier within the risk ceiling,
 // and the route's own RBAC mapping must be satisfied by the plugin's grant.
 
 import type { Context } from "hono";
@@ -11,7 +11,7 @@ import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import { resolveDirectAgentOperation } from "../agent-access/direct-operation";
 import { isAgentRiskAllowed, type PluginPrincipal } from "../agent-access/types";
 import { ForbiddenError, UnauthorizedError } from "../utils/api-error";
-import { isOperationAvailableToPlugins, resolvePluginPrincipal } from "./authority";
+import { isOperationAvailableToPlugin, resolvePluginPrincipal } from "./authority";
 
 function adminPathname(url: string): string {
   const pathname = new URL(url).pathname;
@@ -26,7 +26,7 @@ export async function authorizePluginAdminRequest(c: Context, dispatched: Plugin
   const pathname = adminPathname(c.req.url);
   const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   const operation = resolveDirectAgentOperation(method, pathname);
-  if (!operation || !isOperationAvailableToPlugins(operation) || !isAgentRiskAllowed(principal.riskCeiling, operation.risk)) {
+  if (!operation || !isOperationAvailableToPlugin(operation, principal.firstParty) || !isAgentRiskAllowed(principal.riskCeiling, operation.risk)) {
     throw new ForbiddenError("This dashboard operation is not available to plugins");
   }
   const routePermission = getRoutePermission(pathname, method);

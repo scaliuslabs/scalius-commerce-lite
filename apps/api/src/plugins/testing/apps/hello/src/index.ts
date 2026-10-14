@@ -29,7 +29,7 @@ export const manifest = {
   categories: ["marketing"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
   minPlatformVersion: "1.0.0",
-  permissions: ["orders.view"],
+  scopes: ["read_orders"],
   events: ["order.paid", "order.created"],
   functions: [{ point: "checkout.discounts", priority: 100 }],
   routes: {

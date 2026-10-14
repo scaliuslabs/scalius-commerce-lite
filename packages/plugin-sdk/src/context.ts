@@ -35,7 +35,12 @@ export interface PluginApiResult<T = unknown> {
 }
 
 export interface PluginApi {
-  /** Calls an operation by its stable id (`dashboard.orders.get`). Denied unless the grant covers its permission. */
+  /**
+   * Calls a stable app-API operation by id (`dashboard.orders.get`):
+   * `x-scalius-agent.stability: "stable"` in the OpenAPI contract. Any other
+   * operation refuses with `api.operation_not_stable`, and one the approved
+   * scopes do not cover with `api.operation_forbidden`.
+   */
   call<T = unknown>(operationId: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
 }
 

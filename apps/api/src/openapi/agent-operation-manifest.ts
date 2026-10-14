@@ -33,6 +33,12 @@ export type AgentOperationExposure =
   | "continuation"
   | "device"
   | "excluded";
+/**
+ * The app-API tier (operation-registry/entry.ts): third-party apps call
+ * `stable` operations only, bundled first-party apps also `beta`, no app
+ * ever `internal`. Agents ignore it.
+ */
+export type AgentOperationStability = "stable" | "beta" | "internal";
 export type AgentOperationPrincipal =
   | "admin"
   | "visitor"
@@ -71,6 +77,7 @@ export type AgentContinuationOutput = {
 export type AgentOperationMetadata = {
   surface: AgentOperationSurface;
   exposure: AgentOperationExposure;
+  stability: AgentOperationStability;
   principals: AgentOperationPrincipal[];
   risk: AgentOperationRisk;
   openWorld: boolean;
@@ -148,6 +155,11 @@ const AGENT_OPERATION_EXPOSURES = new Set<AgentOperationExposure>([
   "continuation",
   "device",
   "excluded",
+]);
+const AGENT_OPERATION_STABILITIES = new Set<AgentOperationStability>([
+  "stable",
+  "beta",
+  "internal",
 ]);
 const AGENT_OPERATION_PRINCIPALS = new Set<AgentOperationPrincipal>([
   "admin",
@@ -438,6 +450,12 @@ export function parseAgentOperationMetadata(
       operationLabel,
     ),
     exposure,
+    stability: asEnum(
+      value.stability,
+      AGENT_OPERATION_STABILITIES,
+      "stability",
+      operationLabel,
+    ),
     principals: asPrincipals(value.principals, operationLabel),
     risk: asEnum(value.risk, AGENT_OPERATION_RISKS, "risk", operationLabel),
     openWorld: asBoolean(value.openWorld, "openWorld", operationLabel),
@@ -529,6 +547,27 @@ export function parseAgentOperationMetadata(
   ) {
     throw new Error(
       `${operationLabel} has invalid x-scalius-agent device operation policy.`,
+    );
+  }
+  if (metadata.exposure === "excluded" && metadata.stability !== "internal") {
+    throw new Error(`${operationLabel} is excluded, so its x-scalius-agent.stability must be internal.`);
+  }
+  if (
+    metadata.stability === "stable" &&
+    (
+      metadata.surface !== "dashboard" ||
+      metadata.exposure !== "execute" ||
+      metadata.transport !== "json" ||
+      metadata.risk === "security" ||
+      metadata.sensitiveOutput ||
+      metadata.oneTimeSecretOutput ||
+      metadata.requiredClientAction !== undefined ||
+      metadata.artifactOutput !== undefined ||
+      metadata.continuationOutput !== undefined
+    )
+  ) {
+    throw new Error(
+      `${operationLabel} cannot be stable: the app API is plain JSON dashboard execution without security risk or secret output.`,
     );
   }
   if (metadata.risk !== "read" && metadata.batch === "parallel") {
@@ -945,6 +984,7 @@ export function buildAgentOperationManifest(
         tags: [...((operation.tags as string[] | undefined) ?? [])].sort(),
         surface: metadata.surface,
         exposure: metadata.exposure,
+        stability: metadata.stability,
         principals: metadata.principals,
         risk: metadata.risk,
         openWorld: metadata.openWorld,

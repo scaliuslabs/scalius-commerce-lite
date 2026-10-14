@@ -25,6 +25,8 @@ import { isCustomFieldType } from "@scalius/shared/custom-fields";
 import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
 import {
   FIRST_PARTY_PLUGIN_VENDOR,
+  isPluginScope,
+  legacyPermissionScope,
   parsePluginManifest,
   pluginCompatibility,
   pluginGrantExpands,
@@ -41,7 +43,6 @@ import {
 import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { appSalesChannelId } from "@scalius/shared/sales-channels";
 import { PluginError } from "./errors";
-import { isKnownPermission, isPluginGrantablePermission } from "./grants";
 import {
   derivePluginSettingsKey,
   isSealedPluginSecret,
@@ -97,17 +98,26 @@ function stringList(value: unknown): string[] | null {
   return Array.isArray(value) && value.every((item) => typeof item === "string") ? [...value] : null;
 }
 
-/** A stored grant, or null when absent or malformed (a malformed grant grants nothing). */
+/**
+ * A stored grant, or null when absent or malformed (a malformed grant grants
+ * nothing). A grant approved before scopes (RBAC `permissions`) is not
+ * translated: scopes are not a one-to-one renaming, so the app waits for a
+ * Super Admin to approve its scopes. One that granted no permissions grants
+ * no scopes.
+ */
 export function parseStoredPluginGrant(value: string | null): PluginGrantRequest | null {
-  const raw = parseJsonObject(value);
-  if (!raw) return null;
-  const lists = ["permissions", "allowedHosts", "events", "functions", "blockingFunctions", "providers", "storefrontScripts", "customFieldOwners"] as const;
+  const stored = parseJsonObject(value);
+  if (!stored) return null;
+  const { permissions: legacy, ...current } = stored;
+  const raw = current.scopes === undefined && Array.isArray(legacy) && legacy.length === 0 ? { ...current, scopes: [] } : stored;
+  const lists = ["scopes", "allowedHosts", "events", "functions", "blockingFunctions", "providers", "storefrontScripts", "customFieldOwners"] as const;
   const parsed: Partial<Record<(typeof lists)[number], string[]>> = {};
   for (const key of lists) {
     const list = stringList(raw[key]);
     if (!list) return null;
     parsed[key] = list;
   }
+  if (!parsed.scopes!.every(isPluginScope)) return null;
   if (typeof raw.publicRoutes !== "boolean" || typeof raw.storefrontSurfaces !== "boolean") return null;
   // Storefront components (added later): absent on grants that never asked.
   if (raw.storefrontCode !== undefined && raw.storefrontCode !== true) return null;
@@ -122,9 +132,37 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
   } as PluginGrantRequest;
 }
 
+/**
+ * A manifest stored before scopes, read as the scopes it asked for: each RBAC
+ * permission becomes the first scope that confers it (`legacyPermissionScope`),
+ * an admin route's `permission` gate its `scope`. Only the stored row's read
+ * shape changes; its grant still needs approval (`parseStoredPluginGrant`).
+ */
+export function upgradeStoredPluginManifest(manifest: Record<string, unknown>): Record<string, unknown> {
+  if (manifest.scopes !== undefined || !Array.isArray(manifest.permissions)) return manifest;
+  const { permissions, ...rest } = manifest;
+  const scopes = [...new Set((permissions as unknown[])
+    .map((permission) => (typeof permission === "string" ? legacyPermissionScope(permission) : null))
+    .filter((scope): scope is NonNullable<typeof scope> => scope !== null))];
+  const routes = rest.routes;
+  if (routes && typeof routes === "object" && Array.isArray((routes as { admin?: unknown }).admin)) {
+    rest.routes = {
+      ...routes,
+      admin: ((routes as { admin: unknown[] }).admin).map((route) => {
+        if (!route || typeof route !== "object" || typeof (route as { permission?: unknown }).permission !== "string") return route;
+        const { permission, ...routeRest } = route as { permission: string };
+        const scope = legacyPermissionScope(permission);
+        return scope ? { ...routeRest, scope } : route;
+      }),
+    };
+  }
+  return { ...rest, scopes };
+}
+
 /** A row as the runtime reads it; a manifest that no longer parses yields null (the plugin cannot run). */
 export function toPluginInstallation(row: PluginInstallationRow): PluginInstallation | null {
-  const manifestJson = parseJsonObject(row.manifestJson);
+  const storedManifest = parseJsonObject(row.manifestJson);
+  const manifestJson = storedManifest ? upgradeStoredPluginManifest(storedManifest) : null;
   const parsed = manifestJson ? parsePluginManifest(manifestJson) : null;
   if (!parsed?.ok || parsed.manifest.id !== row.pluginId) return null;
   return {
@@ -182,18 +220,6 @@ export function requireInstallableManifest(value: unknown, source: PluginInstall
     });
   }
   const manifest = parsed.manifest;
-  const unknown = manifest.permissions.filter((permission) => !isKnownPermission(permission));
-  if (unknown.length > 0) {
-    throw new PluginError("manifest.permission_unknown", `Unknown permission ${unknown[0]}.`, { permissions: unknown });
-  }
-  const reserved = manifest.permissions.filter((permission) => !isPluginGrantablePermission(permission));
-  if (reserved.length > 0) {
-    throw new PluginError(
-      "manifest.permission_reserved",
-      `Plugins cannot hold ${reserved[0]}: staff, agent access, webhook and plugin management stay with people.`,
-      { permissions: reserved },
-    );
-  }
   const badType = manifest.customFields.find((field) => !isCustomFieldType(field.type));
   if (badType) {
     throw new PluginError("manifest.custom_field_type", `Unknown custom field type ${badType.type}.`);

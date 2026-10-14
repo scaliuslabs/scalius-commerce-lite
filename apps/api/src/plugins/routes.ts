@@ -21,8 +21,8 @@
 
 import { Hono, type Context } from "hono";
 import type { Database } from "@scalius/database/client";
-import { effectivePluginPermissions, getActivePluginInstallation, maskPluginLogText, type PluginInstallation } from "@scalius/core/modules/plugins";
-import { PLUGIN_ID_PATTERN, PLUGIN_NAME_PATTERN } from "@scalius/shared/plugins";
+import { getActivePluginInstallation, maskPluginLogText, type PluginInstallation } from "@scalius/core/modules/plugins";
+import { PLUGIN_ID_PATTERN, PLUGIN_NAME_PATTERN, PLUGIN_SCOPES } from "@scalius/shared/plugins";
 import type { PluginRouteRequest } from "@scalius/plugin-sdk";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
 import { dashboardOriginGuardMiddleware } from "../middleware/cookie-origin-guard";
@@ -246,11 +246,12 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
     return jsonError(405, "METHOD_NOT_ALLOWED", `Use ${methods.join(", ")}.`, { Allow: methods.join(", ") });
   }
   if (target.surface === "admin") {
-    const permission = installation.manifest.routes.admin.find((route) => route.name === target.name)?.permission;
-    // The app's approved grant cannot elevate the operator opening its UI.
+    const scope = installation.manifest.routes.admin.find((route) => route.name === target.name)?.scope;
+    // The app's approved grant cannot elevate the operator opening its UI:
+    // a scope-gated route needs the scope granted and its staff permission.
     // This runs before reading the body or invoking either plugin loader.
     const staffPermissions = c.get("adminPermissions") as ReadonlySet<string> | undefined;
-    if (permission && (!effectivePluginPermissions(installation.grant).has(permission) || !staffPermissions?.has(permission))) {
+    if (scope && (!installation.grant.scopes.includes(scope) || !staffPermissions?.has(PLUGIN_SCOPES[scope].staff))) {
       return jsonError(403, "FORBIDDEN", "You do not have permission to perform this action.");
     }
   }

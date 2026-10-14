@@ -53,7 +53,7 @@ const refused = (status: number, details: Record<string, unknown>) =>
   Promise.resolve({ error: { success: false, error: { code: "PLUGIN_ERROR", message: "Refused.", details } }, response: { status } });
 
 const grant = (overrides: Record<string, unknown> = {}) => ({
-  permissions: ["customers.view", "orders.view"],
+  scopes: ["read_customers", "read_orders"],
   allowedHosts: ["api.acme.example"],
   events: ["order.created"],
   functions: ["checkout.discounts"],
@@ -118,9 +118,9 @@ function detail(overrides: Record<string, unknown> = {}) {
     request: grant(),
     granted: null,
     added: grant(),
-    permissions: [
-      { name: "customers.view", risk: "read", sensitive: true },
-      { name: "orders.view", risk: "read", sensitive: false },
+    scopes: [
+      { name: "read_customers", risk: "read", sensitive: true },
+      { name: "read_orders", risk: "read", sensitive: false },
     ],
     activatedBy: null,
     runtime: "bundled",
@@ -463,6 +463,8 @@ describe("App page", () => {
 
     expect(text()).toContain("View customers");
     expect(text()).toContain("View orders");
+    // Each scope says what it lets the app do.
+    expect(text()).toContain("Orders include buyers' names, phone numbers and addresses.");
     expect(text()).toContain("Sensitive");
     expect(text()).toContain("Read");
     expect(text()).toContain("Order created");
@@ -479,7 +481,7 @@ describe("App page", () => {
       detail({
         request: grant({ storefrontCode: true, storefrontConnect: ["cdn.acme.example", "reviews.acme.example"] }),
         granted: grant({ storefrontCode: true, storefrontConnect: ["cdn.acme.example"] }),
-        added: grant({ permissions: [], allowedHosts: [], events: [], functions: [], publicRoutes: false, customFieldOwners: [], storefrontConnect: ["reviews.acme.example"] }),
+        added: grant({ scopes: [], allowedHosts: [], events: [], functions: [], publicRoutes: false, customFieldOwners: [], storefrontConnect: ["reviews.acme.example"] }),
       }),
       VIEWER,
     );
@@ -552,8 +554,8 @@ describe("App page", () => {
     await renderApp(
       detail({
         needsApproval: true,
-        granted: grant({ permissions: ["orders.view"] }),
-        added: grant({ permissions: ["customers.view"], allowedHosts: [], events: [], functions: [], publicRoutes: false, customFieldOwners: [] }),
+        granted: grant({ scopes: ["read_orders"] }),
+        added: grant({ scopes: ["read_customers"], allowedHosts: [], events: [], functions: [], publicRoutes: false, customFieldOwners: [] }),
       }),
       MANAGER,
     );

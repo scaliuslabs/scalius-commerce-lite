@@ -55,6 +55,7 @@ function artifactOperation(
     tags: ["Admin - Orders"],
     surface: "dashboard",
     exposure: "execute",
+    stability: "beta",
     principals: ["admin"],
     risk: "read",
     openWorld: false,

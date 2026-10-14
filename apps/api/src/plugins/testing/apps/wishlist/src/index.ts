@@ -37,7 +37,7 @@ export const manifest = {
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
   minPlatformVersion: "1.0.0",
   // Product names, links and images for the wishlist page and the dashboard.
-  permissions: ["products.view"],
+  scopes: ["read_products"],
   events: ["product.updated", "product.deleted"],
   routes: {
     admin: [

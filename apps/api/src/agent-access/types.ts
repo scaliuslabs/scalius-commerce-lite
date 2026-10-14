@@ -33,6 +33,9 @@ export interface PluginPrincipal {
   pluginName: string;
   /** The approving Super Admin: the acting user of every route write. */
   actorUserId: string;
+  /** A bundled first-party app (`scalius.*`): it may also call `beta` operations. */
+  firstParty: boolean;
+  /** The RBAC permissions its granted scopes confer (`PLUGIN_SCOPES`). */
   permissions: Set<string>;
   riskCeiling: AgentRisk;
   /** Host-attested staff initiating this invocation; absent for background jobs. */
