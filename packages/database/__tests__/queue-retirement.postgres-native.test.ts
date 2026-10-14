@@ -51,7 +51,8 @@ describe.runIf(server)("0148 queue retirement on native PostgreSQL", () => {
     expect((await upgraded.query("SELECT status, attempts::integer AS attempts, payload, next_attempt_at FROM webhook_events")).rows)
       .toEqual([{ status: "failed", attempts: 0, payload: null, next_attempt_at: null }]);
 
-    const fresh = await database((await compileCanonicalPostgresSchema()).sql);
+    // The fresh schema as of the migration under test: later migrations change it again.
+    const fresh = await database((await compileCanonicalPostgresSchema({ beforeMigration: "0149_" })).sql);
     expect(await catalog(upgraded)).toEqual(await catalog(fresh));
   }, 180_000);
 });

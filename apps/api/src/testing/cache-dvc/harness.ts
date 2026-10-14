@@ -309,6 +309,14 @@ export class DvcHarness {
     const sqlite = this.sqlite as DatabaseSync & { prepare: DatabaseSync["prepare"] };
     const original = sqlite.prepare.bind(sqlite);
     const tableNames = this.tableNames;
+    // The walk runs the same statements thousands of times and SQLite compiles
+    // each one (with the trigger programs of every table it writes) on every
+    // prepare: about a quarter of a seed's time. A prepared statement is reused
+    // (SQLite re-prepares it itself after a schema change); the capture below
+    // still runs on every call, so table observation and race injection count
+    // statements exactly as before. The D1 shim switches a statement to array
+    // rows for `raw()` only; every reuse starts from the default.
+    const prepared = new Map<string, ReturnType<DatabaseSync["prepare"]>>();
     sqlite.prepare = ((query: string) => {
       const context = this.suppressCapture ? undefined : this.capture.getStore();
       const observed = context?.tables;
@@ -326,7 +334,15 @@ export class DvcHarness {
           this.injectRaceWrite();
         }
       }
-      return original(query);
+      let statement = prepared.get(query);
+      if (statement) {
+        statement.setReturnArrays(false);
+        return statement;
+      }
+      statement = original(query);
+      if (prepared.size >= 4096) prepared.clear();
+      prepared.set(query, statement);
+      return statement;
     }) as DatabaseSync["prepare"];
   }
 

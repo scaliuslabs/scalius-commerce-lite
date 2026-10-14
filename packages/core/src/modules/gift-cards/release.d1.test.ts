@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { archiveStaleIncompleteOrders } from "../orders/stale-incomplete";
 import { updateOrderStatus } from "../orders/status/lifecycle";
+import { createSslcommerzPackProviders, PACK_SSLCOMMERZ_ID } from "../payments/gateways/testing";
 import {
     DELIVERY,
     createGiftCardCheckoutFixture,
@@ -31,10 +32,10 @@ describe("G4: gift-card holds are released exactly once", () => {
         const result = await store.checkout({
             ...DELIVERY,
             items: [line("p_mug", "v_mug", 1, 300)],
-            paymentMethod: "sslcommerz",
+            paymentMethod: PACK_SSLCOMMERZ_ID,
             giftCards: [{ handle: card.handle }],
             expectedAmountDueMinor: MUG_ORDER_TOTAL - cardMinor,
-        });
+        }, { paymentProviders: createSslcommerzPackProviders().providers });
         // Abandoned long ago.
         store.sqlite.exec(`UPDATE orders SET created_at = created_at - 86400 WHERE id = '${result.orderId}'`);
         return { card, orderId: result.orderId };
@@ -110,7 +111,7 @@ describe("G4: gift-card holds are released exactly once", () => {
         const mixed = await gatewayRemainderOrder();
         store.sqlite.exec(`
             INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status, provider_ref)
-            VALUES ('pay_gw', '${mixed.orderId}', 26000, 'BDT', 'sslcommerz', 'balance', 'succeeded', 'val_paid');
+            VALUES ('pay_gw', '${mixed.orderId}', 26000, 'BDT', '${PACK_SSLCOMMERZ_ID}', 'balance', 'succeeded', 'val_paid');
             UPDATE orders SET status = 'cancelled', payment_status = 'paid', paid_amount_minor = 36000, balance_due_minor = 0 WHERE id = '${mixed.orderId}';
             UPDATE orders SET updated_at = updated_at - 3600;
         `);
@@ -139,7 +140,7 @@ describe("G4: gift-card holds are released exactly once", () => {
         const { card, orderId } = await gatewayRemainderOrder();
         store.sqlite.exec(`
             INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status, provider_ref)
-            VALUES ('pay_gw', '${orderId}', 26000, 'BDT', 'sslcommerz', 'balance', 'pending', 'val_pending');
+            VALUES ('pay_gw', '${orderId}', 26000, 'BDT', '${PACK_SSLCOMMERZ_ID}', 'balance', 'pending', 'val_pending');
         `);
         expect(await archiveStaleIncompleteOrders(store.db, now())).toMatchObject({ found: 0, archived: 0 });
         expect(store.balance(card.giftCardId)).toBe(0);
@@ -201,7 +202,7 @@ describe("G4: gift-card holds are released exactly once", () => {
         const { card, orderId } = await gatewayRemainderOrder();
         store.sqlite.exec(`
             INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status, provider_ref)
-            VALUES ('pay_gw', '${orderId}', 26000, 'BDT', 'sslcommerz', 'balance', 'succeeded', 'val_paid');
+            VALUES ('pay_gw', '${orderId}', 26000, 'BDT', '${PACK_SSLCOMMERZ_ID}', 'balance', 'succeeded', 'val_paid');
             UPDATE orders SET status = 'pending', payment_status = 'paid', paid_amount_minor = 36000, balance_due_minor = 0 WHERE id = '${orderId}';
         `);
         await expect(updateOrderStatus(store.db, orderId, "cancelled")).rejects.toThrow("Refund the payment first");

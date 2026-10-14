@@ -51,7 +51,8 @@ describe.runIf(server)("0147 KV retirement on native PostgreSQL", () => {
     await upgraded.query("INSERT INTO system_kv(key,value,expires_at) VALUES ('oauth:grant:u:g','{}',NULL)");
     await expect(upgraded.query("INSERT INTO system_kv(key,value) VALUES ('','x')")).rejects.toThrow(/system_kv_key_length/);
 
-    const fresh = await database((await compileCanonicalPostgresSchema()).sql);
+    // The fresh schema as of the migration under test: later migrations change it again.
+    const fresh = await database((await compileCanonicalPostgresSchema({ beforeMigration: "0148_" })).sql);
     expect(await catalog(upgraded)).toEqual(await catalog(fresh));
   }, 180_000);
 });

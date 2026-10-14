@@ -121,13 +121,13 @@ describe("gift cards as a checkout tender", () => {
         const result = await store.checkout({
             ...DELIVERY,
             items: [line("p_mug", "v_mug", 1, 300)],
-            paymentMethod: "sslcommerz",
+            paymentMethod: PACK_SSLCOMMERZ_ID,
             giftCards: [{ handle: card.handle }],
             expectedAmountDueMinor: 26_000,
-        }, { partialPaymentEnabled: true });
+        }, { partialPaymentEnabled: true, paymentProviders: createSslcommerzPackProviders().providers });
         expect(order(result.orderId)).toEqual({
             status: "incomplete",
-            payment_method: "sslcommerz",
+            payment_method: PACK_SSLCOMMERZ_ID,
             payment_status: "partial",
             paid_amount_minor: 10_000,
             balance_due_minor: 26_000,
@@ -186,10 +186,10 @@ describe("gift cards as a checkout tender", () => {
         // Only gift cards in the cart: the card applies nothing, and says why.
         const only = await store.prepare({
             items: [line("p_gc", "v_gc", 1, 500)],
-            paymentMethod: "sslcommerz",
+            paymentMethod: PACK_SSLCOMMERZ_ID,
             giftCards: [{ handle: card.handle }],
             expectedAmountDueMinor: 50_000,
-        });
+        }, { paymentProviders: createSslcommerzPackProviders().providers });
         expect(only.result.giftCardTender).toMatchObject({ appliedTotalMinor: 0, amountDueMinor: 50_000 });
         expect(only.result.giftCardTender.issues).toEqual([
             expect.objectContaining({ handle: card.handle, code: "GIFT_CARD_NOT_ELIGIBLE" }),

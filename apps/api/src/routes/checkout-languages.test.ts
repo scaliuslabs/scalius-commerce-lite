@@ -160,7 +160,7 @@ describe("checkout language route boundaries", () => {
     expect(body.data?.language?.id).toBe("fallback");
   });
 
-  it("upgrades untouched English defaults for an active Bangla locale", async () => {
+  it("keeps a stored value as the merchant's own wording and fills unset copy from the Bangla preset", async () => {
     const banglaData = JSON.stringify({
       pageTitle: "Cart & Checkout",
       paymentStepText: "Payment",
@@ -180,10 +180,11 @@ describe("checkout language route boundaries", () => {
     };
 
     expect(response.status).toBe(200);
+    // Stored text is the merchant's override, even when it is English; only unset or blank fields take the preset.
     expect(body.data?.language?.languageData).toMatchObject({
-      pageTitle: "কার্ট ও চেকআউট",
-      paymentStepText: "পেমেন্ট",
-      checkoutSectionTitle: "চেকআউটের তথ্য",
+      pageTitle: "Cart & Checkout",
+      paymentStepText: "Payment",
+      checkoutSectionTitle: "Checkout Information",
       customerNameLabel: "ক্রেতার নাম",
       paymentPageTitle: "পেমেন্ট",
       phoneCountryLabelText: "ফোন নম্বরের দেশ",

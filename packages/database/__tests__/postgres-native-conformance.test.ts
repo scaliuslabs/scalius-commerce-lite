@@ -11,6 +11,7 @@ import {
   createPostgresDatabase,
 } from "../src/postgres-adapter";
 import { customers, customerSessions } from "../src/schema";
+import { NATIVE_POSTGRES_TEST_TIMEOUT } from "../src/testing/postgres-native";
 
 // Opt-in: point SCALIUS_TEST_POSTGRES_URL at a disposable server. The suite
 // creates its own database with the fresh schema there and drops it after.
@@ -36,7 +37,7 @@ async function freshDatabaseUrl(): Promise<{ url: string; drop: () => Promise<vo
   };
 }
 
-describe.runIf(serverUrl)("native PostgreSQL adapter conformance", () => {
+describe.runIf(serverUrl)("native PostgreSQL adapter conformance", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
   it("executes a generated function and trigger as one rowless transaction result", async () => {
     const target = await freshDatabaseUrl();
     try {
