@@ -1031,8 +1031,6 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
           { version: 150, name: "0150_facet_engine" },
           { version: 151, name: "0151_postgres_scale" },
           { version: 152, name: "0152_search_index" },
-      },
-      {
           { version: 153, name: "0153_theme_skins" },
         ],
       });
