@@ -48,8 +48,10 @@ function isoMinor(wireMinor: number, currency: string): number {
 /**
  * The Stripe API version every request carries. A new `stripe` package must not
  * move it silently: change it here, after reading the version's changelog.
+ * The package's types describe its own latest version (`2026-09-30.endive` in
+ * stripe 23); this is the version the payment flows were built and tested on.
  */
-const STRIPE_API_VERSION = "2026-08-26.dahlia";
+const STRIPE_API_VERSION = "2026-08-26.dahlia" as Stripe.LatestApiVersion;
 
 function stripeClient(secretKey: string): Stripe {
   // The client holds credentials and transport state: keep it per request.
