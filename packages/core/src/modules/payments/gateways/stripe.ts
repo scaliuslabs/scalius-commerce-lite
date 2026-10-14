@@ -45,9 +45,15 @@ function isoMinor(wireMinor: number, currency: string): number {
   return decodeProviderAmount(wireMinor, currency, STRIPE_AMOUNT_CODECS) ?? Number.NaN;
 }
 
+/**
+ * The Stripe API version every request carries. A new `stripe` package must not
+ * move it silently: change it here, after reading the version's changelog.
+ */
+const STRIPE_API_VERSION = "2026-08-26.dahlia";
+
 function stripeClient(secretKey: string): Stripe {
   // The client holds credentials and transport state: keep it per request.
-  return new Stripe(secretKey);
+  return new Stripe(secretKey, { apiVersion: STRIPE_API_VERSION });
 }
 
 function providerError(error: unknown, fallback: string): PaymentProviderError {
