@@ -11,7 +11,11 @@ import { pluginBridgeFactory } from "./sandbox-availability";
 import type { PluginInvocationResult } from "@scalius/plugin-sdk/runtime";
 import { PluginLoadError, type PluginLoader, type PluginLoadTarget } from "./types";
 
-/** The plugin isolate's compatibility date; the platform moves it, plugins do not choose it. */
+/**
+ * The plugin isolate's compatibility date; the platform moves it, plugins do not choose it.
+ * Held at 2026-07-30: from 2026-08-04 `nodejs_compat` is on by default, which would give
+ * every plugin isolate a `process` global (the sandbox test pins "no globals").
+ */
 export const PLUGIN_SANDBOX_COMPATIBILITY_DATE = "2026-07-30";
 /** Bridge calls (each is a subrequest) one invocation may make: the plan's ceiling (`planLimits().plugins.subrequests`). */
 export function pluginSandboxSubrequests(): number {

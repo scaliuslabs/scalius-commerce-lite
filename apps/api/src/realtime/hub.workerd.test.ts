@@ -12,7 +12,7 @@ import { MAX_SOCKETS_PER_USER } from "./hub";
 
 const apiDir = resolve(import.meta.dirname, "../..");
 const HARNESS = resolve(import.meta.dirname, "../testing/realtime-hub-harness.worker.ts");
-const COMPATIBILITY_DATE = "2026-07-30";
+const COMPATIBILITY_DATE = "2026-10-01";
 
 interface Client {
   messages: unknown[];

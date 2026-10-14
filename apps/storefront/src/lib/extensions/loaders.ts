@@ -32,7 +32,10 @@ export interface BundledStorefrontExtension {
   files: () => Promise<{ FILES: Readonly<Record<string, { type: string; text?: string; base64?: string }>> }>;
 }
 
-/** The isolates' compatibility date: the platform moves it, apps do not choose it. */
+/**
+ * The isolates' compatibility date: the platform moves it, apps do not choose it.
+ * Held at 2026-07-30 with the plugin isolates (`nodejs_compat` would default on from 2026-08-04).
+ */
 export const STOREFRONT_ISOLATE_COMPATIBILITY_DATE = "2026-07-30";
 
 /** The main module of every storefront isolate: the RPC entry around the app's module. */

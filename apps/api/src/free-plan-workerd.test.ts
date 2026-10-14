@@ -37,7 +37,7 @@ const enabled = process.env.FREE_PLAN_WORKERD === "1";
 const PLAN: WorkersPlan = process.env.FREE_PLAN_WORKERD_PLAN === "paid" ? "paid" : "free";
 const apiDir = resolve(import.meta.dirname, "..");
 const HARNESS = resolve(import.meta.dirname, "testing/workerd-harness.worker.ts");
-const COMPATIBILITY_DATE = "2026-07-30";
+const COMPATIBILITY_DATE = "2026-10-01";
 const COMPATIBILITY_FLAGS = ["nodejs_compat", "global_fetch_strictly_public", "disable_nodejs_process_v2"];
 const CREDENTIAL_KEY = btoa("0123456789abcdef0123456789abcdef");
 

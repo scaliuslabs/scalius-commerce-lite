@@ -34,7 +34,7 @@ beforeAll(async () => {
     write: false,
     logLevel: "silent",
   });
-  mf = new Miniflare(convertV4MiniflareOptions({ modules: true, script: bundle.outputFiles[0]!.text, compatibilityDate: "2026-07-30" }));
+  mf = new Miniflare(convertV4MiniflareOptions({ modules: true, script: bundle.outputFiles[0]!.text, compatibilityDate: "2026-10-01" }));
 }, 60_000);
 
 afterAll(async () => {
