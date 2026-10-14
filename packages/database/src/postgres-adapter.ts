@@ -11,6 +11,7 @@ import { observeStatement } from "./read-observer";
 import { withNamedRawRows } from "./remote-raw-rows";
 import * as schema from "./schema";
 import {
+  compilePostgresJsonEachRowCounts,
   compileSqliteStatementForPostgres,
   normalizePostgresParameters,
   normalizePostgresResultRows,
@@ -319,11 +320,17 @@ function wrapMutationToCaptureChanges(sql: string): string {
     + "value AS __scalius_changes FROM scalius_change_count";
 }
 
+/** One SQLite-profile statement in PostgreSQL syntax, its JSON lookup sets sized by their bound values. */
+function compileStatement(sql: string, params: readonly unknown[]) {
+  const statement = compileSqliteStatementForPostgres(sql, params.length);
+  return { ...statement, sql: compilePostgresJsonEachRowCounts(statement.sql, params) };
+}
+
 function compileBatchStatements(
   statements: Parameters<AsyncBatchRemoteCallback>[0],
 ): CompiledBatchStatement[] {
   const compiled: CompiledBatchStatement[] = statements.map(({ sql, params, method }) => {
-    const statement = compileSqliteStatementForPostgres(sql, params.length);
+    const statement = compileStatement(sql, params);
     return {
       sql: statement.sql,
       params: normalizePostgresParameters(params),
@@ -426,7 +433,7 @@ export function createPostgresDatabase(
 
   const executeOne = async (...[sql, params, method]: Parameters<AsyncRemoteCallback>) => {
     observeStatement(sql, params);
-    const statement = compileSqliteStatementForPostgres(sql, params.length);
+    const statement = compileStatement(sql, params);
     const normalizedParams = normalizePostgresParameters(params);
     const mode = statement.readOnly ? "read" : "serializable";
     const execute = async (): Promise<PostgresFullResult> => {

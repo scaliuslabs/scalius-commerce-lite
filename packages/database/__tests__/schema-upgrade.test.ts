@@ -777,7 +777,7 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         version: 151,
         name: "0151_postgres_scale",
         sqliteStatements: 2,
-        postgresStatements: 10,
+        postgresStatements: 12,
       },
     ]);
   });

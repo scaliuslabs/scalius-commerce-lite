@@ -66,7 +66,7 @@ async function catalog(client: Client) {
   const query = async (sql: string) => (await client.query(sql)).rows;
   return {
     columns: await query(`
-      SELECT table_name, column_name, data_type, is_nullable, column_default FROM information_schema.columns
+      SELECT table_name, column_name, data_type, collation_name, is_nullable, column_default FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name <> 'scalius_schema_migrations' ORDER BY table_name, column_name`),
     constraints: await query(`
       SELECT conrelid::regclass::text AS table_name, conname, pg_get_constraintdef(oid) AS definition
@@ -164,7 +164,7 @@ describe.runIf(postgresUrl)("0100 cache dependencies on PostgreSQL", () => {
       .toEqual([{ dep: "pg:*", n: 1, seq: keys.at(-1) }, { dep: "t:pages", n: 1, seq: keys.at(-1) }]);
   }, 180_000);
 
-  it("0151 turns an existing store's rows into the change log, exactly the fresh schema, continuing its clock", async () => {
+  it("0151 turns an existing store's rows into the change log and its text bytewise, exactly the fresh schema, continuing its clock", async () => {
     const [fresh, before] = await Promise.all([
       compileCanonicalPostgresSchema(),
       compileCanonicalPostgresSchema({ beforeMigration: "0151_" }),
@@ -181,12 +181,19 @@ describe.runIf(postgresUrl)("0100 cache dependencies on PostgreSQL", () => {
     await upgraded.client.query("COMMIT");
     const [expected, actual] = await Promise.all([catalog(freshDatabase.client), catalog(upgraded.client)]);
     expect(actual.columns).toEqual(expected.columns);
-    expect(actual.constraints).toEqual(expected.constraints);
+    // A column type change re-deparses its CHECK constraints with nested ANDs flattened.
+    const flat = (rows: Array<Record<string, unknown>>) => rows.map((row) => ({ ...row, definition: String(row.definition).replace(/[()]/g, "") }));
+    expect(flat(actual.constraints)).toEqual(flat(expected.constraints));
     expect(actual.indexes).toEqual(expected.indexes);
     expect(actual.triggers).toEqual(expected.triggers);
     expect(actual.functions).toEqual(expected.functions);
+    const textCollations = new Set(actual.columns.filter((column) => column.data_type === "text").map((column) => column.collation_name));
+    expect([...textCollations]).toEqual(["C"]);
     await upgraded.client.query("INSERT INTO pages (id, title, slug, content) VALUES ('pg_new', 'P', 'p-new', 'x')");
     expect((await upgraded.client.query("SELECT dep, seq FROM cache_dep WHERE dep IN ('pg:pg_old', 'pg:pg_new') ORDER BY seq")).rows)
       .toEqual([{ dep: "pg:pg_old", seq: oldClock }, { dep: "pg:pg_new", seq: oldClock + 1 }]);
+    // Text ids order bytewise, as on SQLite (en_US would put `pg_Z` last).
+    await upgraded.client.query("INSERT INTO pages (id, title, slug, content) VALUES ('pg_Z', 'P', 'p-z', 'x')");
+    expect((await upgraded.client.query("SELECT id FROM pages ORDER BY id")).rows.map((row) => row.id)).toEqual(["pg_Z", "pg_new", "pg_old"]);
   }, 180_000);
 });

@@ -301,9 +301,6 @@ BEGIN
 END
 $cache_dep_bump$`;
 
-/** The migration that turns PostgreSQL's `cache_dep` into an insert-only change log. */
-export const CACHE_DEP_POSTGRES_LOG_MIGRATION = "0151_postgres_scale";
-
 /**
  * PostgreSQL from 0151: the 0100 bump made every writer update the clock row
  * and each key's row, so concurrent SERIALIZABLE checkouts failed on those

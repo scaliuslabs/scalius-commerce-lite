@@ -1,4 +1,5 @@
--- PostgreSQL: the cache dependency change log (cache-dep-triggers.ts, CACHE_DEP_POSTGRES_LOG_SQL).
+-- PostgreSQL: the cache dependency change log (cache-dep-triggers.ts, CACHE_DEP_POSTGRES_LOG_SQL)
+-- bytewise text (postgres-schema.ts, POSTGRES_TEXT_COLLATION_SQL) and JSON row estimates (POSTGRES_JSON_EACH_ROWS_SQL).
 INSERT INTO "cache_clock" ("id", "seq", "floor", "coarse") VALUES (1, 0, 0, 0) ON CONFLICT ("id") DO NOTHING;
 --> statement-breakpoint
 ALTER TABLE "cache_dep" DROP CONSTRAINT "cache_dep_pkey";
@@ -74,4 +75,47 @@ BEGIN
 END
 $cache_dep_compact$;
 --> statement-breakpoint
-INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (151, '0151_postgres_scale', '7a7aba5c17a87178440dd453a8712ebebeddb52b32ac58f578e2273faf9be1d4');
+DO $collate_text$
+DECLARE
+  item record;
+  triggers text[] := ARRAY[]::text[];
+  definition text;
+BEGIN
+  FOR item IN
+    SELECT t.tgname, t.tgrelid::regclass AS relation, pg_get_triggerdef(t.oid) AS definition
+    FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+    WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace
+    ORDER BY t.oid
+  LOOP
+    triggers := triggers || item.definition;
+    EXECUTE format('DROP TRIGGER %I ON %s', item.tgname, item.relation);
+  END LOOP;
+  FOR item IN
+    SELECT a.attrelid::regclass AS relation,
+      string_agg(format('ALTER COLUMN %I TYPE text COLLATE "C"', a.attname), ', ' ORDER BY a.attnum) AS changes
+    FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped
+      AND a.atttypid = 'text'::regtype AND a.attcollation <> '"C"'::regcollation
+    GROUP BY a.attrelid
+  LOOP
+    EXECUTE format('ALTER TABLE %s %s', item.relation, item.changes);
+  END LOOP;
+  FOREACH definition IN ARRAY triggers LOOP
+    EXECUTE definition;
+  END LOOP;
+END
+$collate_text$;
+--> statement-breakpoint
+DO $json_each_rows$
+DECLARE
+  name text;
+BEGIN
+  FOREACH name IN ARRAY ARRAY['public.json_each(text, text)', 'scalius_compat.json_each_jsonb(jsonb, text)', 'scalius_compat.json_each_jsonb(text, text)'] LOOP
+    IF to_regprocedure(name) IS NOT NULL THEN
+      EXECUTE format('ALTER FUNCTION %s ROWS 10', to_regprocedure(name));
+    END IF;
+  END LOOP;
+END
+$json_each_rows$;
+--> statement-breakpoint
+INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (151, '0151_postgres_scale', '959ce66f33eab4b3ecc54e59371b3a4e6b621198f0bd8f5f6504acebe99ab234');

@@ -535,7 +535,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 151,
     name: "0151_postgres_scale",
-    sourceSha256: "7a7aba5c17a87178440dd453a8712ebebeddb52b32ac58f578e2273faf9be1d4",
+    sourceSha256: "959ce66f33eab4b3ecc54e59371b3a4e6b621198f0bd8f5f6504acebe99ab234",
   },
 ] as const;
 

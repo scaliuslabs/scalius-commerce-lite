@@ -16,7 +16,6 @@ import {
 } from "./sqlite-provider-schema";
 import {
   CACHE_DEP_POSTGRES_BUMP_FUNCTION,
-  CACHE_DEP_POSTGRES_LOG_MIGRATION,
   CACHE_DEP_POSTGRES_LOG_SQL,
   cacheDepPostgresTrigger,
 } from "./cache-dep-triggers";
@@ -152,6 +151,57 @@ function compileInstrCalls(sql: string): string {
   }
   return output;
 }
+
+/** From this migration PostgreSQL text compares bytewise and the dependency clock is a change log. */
+export const POSTGRES_SCALE_MIGRATION = "0151_postgres_scale";
+
+/**
+ * SQLite compares text bytewise (BINARY); PostgreSQL under a locale such as
+ * en_US orders `prod_aB` and `prod_Ab` (or `-` and `_`) differently, so ties
+ * broken by text ids, keyset cursors and ranges disagreed between providers.
+ * From 0151 every PostgreSQL text column is `COLLATE "C"`: one byte order
+ * on every provider, and cheaper comparisons than a locale's.
+ */
+export function collatePostgresTextColumns(ddl: string): string {
+  if (!/^\s*CREATE\s+TABLE\b/i.test(ddl)) return ddl;
+  return ddl.replace(/([(,]\s*(?:"(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_]*)\s+text)(?=[\s,)])(?!\s+COLLATE\b)/gi, '$1 COLLATE "C"');
+}
+
+/**
+ * 0151 on an existing PostgreSQL store: every public text column becomes
+ * `COLLATE "C"`. A column a trigger's WHEN names cannot change type, so every
+ * trigger is dropped and recreated from its own definition around it.
+ */
+export const POSTGRES_TEXT_COLLATION_SQL = `DO $collate_text$
+DECLARE
+  item record;
+  triggers text[] := ARRAY[]::text[];
+  definition text;
+BEGIN
+  FOR item IN
+    SELECT t.tgname, t.tgrelid::regclass AS relation, pg_get_triggerdef(t.oid) AS definition
+    FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+    WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace
+    ORDER BY t.oid
+  LOOP
+    triggers := triggers || item.definition;
+    EXECUTE format('DROP TRIGGER %I ON %s', item.tgname, item.relation);
+  END LOOP;
+  FOR item IN
+    SELECT a.attrelid::regclass AS relation,
+      string_agg(format('ALTER COLUMN %I TYPE text COLLATE "C"', a.attname), ', ' ORDER BY a.attnum) AS changes
+    FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped
+      AND a.atttypid = 'text'::regtype AND a.attcollation <> '"C"'::regcollation
+    GROUP BY a.attrelid
+  LOOP
+    EXECUTE format('ALTER TABLE %s %s', item.relation, item.changes);
+  END LOOP;
+  FOREACH definition IN ARRAY triggers LOOP
+    EXECUTE definition;
+  END LOOP;
+END
+$collate_text$`;
 
 /** Compile trusted canonical SQLite DDL/body SQL into the Postgres profile. */
 export function compileSqliteDdlForPostgres(sql: string): string {
@@ -485,11 +535,12 @@ export async function compileCanonicalPostgresSchema(
       if (cacheDep === null) return [];
       return [cacheDep ?? eventOutboxPostgresTrigger(definition.name, definition.sql) ?? compileSqliteTriggerForPostgres(definition)];
     });
+    const since0151 = !options.beforeMigration || options.beforeMigration > POSTGRES_SCALE_MIGRATION;
     const preDataSql = [
       "BEGIN;",
       POSTGRES_SQLITE_PROFILE_BOOTSTRAP_SQL.trim(),
       ...tableObjects.flatMap((object) => [
-        `${compileSqliteDdlForPostgres(object.sql)};`,
+        `${since0151 ? collatePostgresTextColumns(compileSqliteDdlForPostgres(object.sql)) : compileSqliteDdlForPostgres(object.sql)};`,
         ...allIndexObjects
           .filter((index) => index.tableName === object.name && foreignKeyTargets.has(index.name))
           .map((index) => `${compileSqliteDdlForPostgres(index.sql)};`),
@@ -498,8 +549,7 @@ export async function compileCanonicalPostgresSchema(
       "",
     ].join("\n\n");
     // From 0151 the change log replaces the clock-row bump (cache-dep-triggers.ts).
-    const changeLog = cacheDepFunction.length > 0
-      && (!options.beforeMigration || options.beforeMigration > CACHE_DEP_POSTGRES_LOG_MIGRATION)
+    const changeLog = cacheDepFunction.length > 0 && since0151
       ? CACHE_DEP_POSTGRES_LOG_SQL.map((statement) => `${statement};`)
       : [];
     const postDataSql = [

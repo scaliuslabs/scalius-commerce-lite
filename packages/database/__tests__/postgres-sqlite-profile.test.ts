@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  compilePostgresJsonEachRowCounts,
   compileSqliteConflictTargets,
   compileSqliteStatementForPostgres,
   normalizePostgresParameters,
@@ -310,5 +311,32 @@ describe("PostgreSQL ON CONFLICT targets", () => {
     const text = "select 'on conflict (\"t\".\"a\")', \"on conflict (x.y)\" from t /* on conflict (a.b) */ -- on conflict (a.b)\n";
     expect(compileSqliteConflictTargets(text)).toBe(text);
     expect(compileSqliteConflictTargets("select non_conflict (t.a) from t")).toBe("select non_conflict (t.a) from t");
+  });
+});
+
+describe("PostgreSQL json_each row counts", () => {
+  const ids = JSON.stringify(["a", "b", "c"]);
+
+  it("caps a bound JSON lookup set at its element count, keeping or naming its alias", () => {
+    expect(compilePostgresJsonEachRowCounts("SELECT id FROM t WHERE id IN (SELECT value FROM json_each($1))", [ids]))
+      .toBe("SELECT id FROM t WHERE id IN (SELECT value FROM (SELECT * FROM json_each($1) LIMIT 3) AS json_each)");
+    expect(compilePostgresJsonEachRowCounts("SELECT e.value FROM json_each($2) AS e JOIN t ON t.id = e.value", ["x", ids]))
+      .toBe("SELECT e.value FROM (SELECT * FROM json_each($2) LIMIT 3) AS e JOIN t ON t.id = e.value");
+    expect(compilePostgresJsonEachRowCounts("SELECT d.key FROM json_each($1) d WHERE d.value = 'b'", ['{"k":1,"l":2}']))
+      .toBe("SELECT d.key FROM (SELECT * FROM json_each($1) LIMIT 2) d WHERE d.value = 'b'");
+    expect(compilePostgresJsonEachRowCounts("SELECT value FROM scalius_compat.json_each_jsonb($1) WHERE 1 = 1", ["[]"]))
+      .toBe("SELECT value FROM (SELECT * FROM scalius_compat.json_each_jsonb($1) LIMIT 0) AS json_each_jsonb WHERE 1 = 1");
+  });
+
+  it("leaves paths, expressions, non-JSON values and literal text alone", () => {
+    for (const [sql, params] of [
+      ["SELECT value FROM json_each($1, '$.ids')", [ids]],
+      ["SELECT value FROM json_each(t.doc)", []],
+      ["SELECT value FROM json_each($1)", ["not json"]],
+      ["SELECT 'json_each($1)' FROM t", [ids]],
+      ["SELECT value FROM my_json_each($1)", [ids]],
+    ] as Array<[string, unknown[]]>) {
+      expect(compilePostgresJsonEachRowCounts(sql, params)).toBe(sql);
+    }
   });
 });
