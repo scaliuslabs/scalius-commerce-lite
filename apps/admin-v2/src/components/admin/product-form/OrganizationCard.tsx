@@ -176,6 +176,7 @@ function CategoryCombobox({
   const pathOf = (category: Category) => categoryPathLabel(category.id, byId);
   const selected = categories.find((category) => category.id === selectedId);
   const selectedStatus = selected ? categoryStatusLabel(t, selected) : null;
+  const selectedLabel = selected ? (selectedStatus ? `${pathOf(selected)} · ${selectedStatus}` : pathOf(selected)) : undefined;
   const filtered = ordered.filter((category) => pathOf(category).toLowerCase().includes(search.toLowerCase()));
   // The trigger is the Category field's control: its label names it.
   const control = useFieldControl({});
@@ -184,8 +185,8 @@ function CategoryCombobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" role="combobox" {...control} aria-invalid={invalid || control["aria-invalid"] || undefined} className="w-full justify-between">
-          <span className={cn("truncate", !selected && "text-muted-foreground")}>
-            {selected ? (selectedStatus ? `${pathOf(selected)} · ${selectedStatus}` : pathOf(selected)) : t(selectedId ? "savedValueUnavailable" : "chooseCategory")}
+          <span className={cn("truncate", !selected && "text-muted-foreground")} title={selectedLabel}>
+            {selectedLabel ?? t(selectedId ? "savedValueUnavailable" : "chooseCategory")}
           </span>
           <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>

@@ -44,7 +44,7 @@ describe("generated runtime payload boundaries", () => {
     },
   );
 
-  it("docs initialize only the OpenAPI payload", async () => {
+  it("docs load only the OpenAPI payload, with the first request for it", async () => {
     let agentOperationsLoaded = false;
     let openApiLoaded = false;
     vi.doMock("../generated/agent-operations.gen", () => {
@@ -57,7 +57,15 @@ describe("generated runtime payload boundaries", () => {
     });
 
     await import("./docs-app");
+    expect(openApiLoaded).toBe(false);
+    const { Hono } = await import("hono");
+    const { registerDocRoutes } = await import("./register-doc-routes");
+    const routes = new Hono();
+    registerDocRoutes(routes as never);
+    const response = await routes.request("/openapi.json");
 
+    expect(await response.text()).toBe("{}");
+    expect(response.headers.get("ETag")).toBe('"test"');
     expect(agentOperationsLoaded).toBe(false);
     expect(openApiLoaded).toBe(true);
   });

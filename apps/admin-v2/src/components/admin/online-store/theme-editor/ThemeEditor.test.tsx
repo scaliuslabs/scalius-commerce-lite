@@ -2,7 +2,7 @@
 // @vitest-environment-options {"settings":{"disableIframePageLoading":true}}
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, useEffect, type AnchorHTMLAttributes, type ReactNode } from "react";
+import { act, StrictMode, useEffect, type AnchorHTMLAttributes, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -199,17 +199,22 @@ function render(theme: StorefrontThemeDocument = themeWith(HOME), options: {
   permissions?: string[];
   refetch?: () => Promise<{ data?: ThemeWorkspaceDocument }>;
   apps?: ThemeWorkspaceDocument["apps"];
+  /** A store that never saved a draft (revision 0). */
+  noDraft?: boolean;
+  strict?: boolean;
 } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   const workspace = workspaceOf(theme, options.published, options.apps);
+  if (options.noDraft) (workspace.draft as { revision: number }).revision = 0;
+  const editor = (
+    <QueryClientProvider client={queryClient}>
+      <PermissionProvider permissions={options.permissions ?? ["settings.general.view", "settings.general.edit"]}>
+        <ThemeEditor workspace={workspace} refetch={options.refetch ?? (async () => ({ data: workspace }))} />
+      </PermissionProvider>
+    </QueryClientProvider>
+  );
   act(() => {
-    root.render(
-      <QueryClientProvider client={queryClient}>
-        <PermissionProvider permissions={options.permissions ?? ["settings.general.view", "settings.general.edit"]}>
-          <ThemeEditor workspace={workspace} refetch={options.refetch ?? (async () => ({ data: workspace }))} />
-        </PermissionProvider>
-      </QueryClientProvider>,
-    );
+    root.render(options.strict ? <StrictMode>{editor}</StrictMode> : editor);
   });
 }
 
@@ -497,6 +502,22 @@ describe("theme editor: live preview and saving", () => {
     await autosaved(2);
     expect(lastSaved().expectedDraftRevision).toBe(5);
     expect(lastSaved().theme.pages.home.map((each) => each.id)).toEqual(["faq", "rail", "story"]);
+  });
+
+  it("creates a store's first draft once on open, with no conflict, even when effects run twice", async () => {
+    // The server answers 409 to a stale revision, as the real one does.
+    let current = 0;
+    api.draft.mockImplementation(async ({ body }: { body: { expectedDraftRevision: number } }) => {
+      await Promise.resolve();
+      if (body.expectedDraftRevision !== current) throw new AdminApiResponseError("Theme draft changed", 409, "CONFLICT");
+      return { revision: (current += 1), basePublishedRevision: 1, updatedAt: null };
+    });
+    render(themeWith(HOME), { noDraft: true, strict: true });
+    await autosaved(1);
+    await settle();
+    expect(api.draft).toHaveBeenCalledTimes(1);
+    expect(lastSaved().expectedDraftRevision).toBe(0);
+    expect(status()).not.toBe("conflict");
   });
 
   it("saves now with Ctrl+S", async () => {

@@ -203,9 +203,14 @@ describe("API bundle size gate", () => {
       writeFileSync(join(directory, "worker.js"), "export default {};".repeat(100));
       writeFileSync(join(directory, "worker.js.map"), "x".repeat(10_000));
       writeFileSync(join(directory, "README.md"), "notes");
+      writeFileSync(join(directory, "bundle-meta.json"), "{}");
+      writeFileSync(join(directory, "abc-places.json"), "[1]");
+      writeFileSync(join(directory, "abc-contract.gen.txt"), "{}");
       const measured = measureWorkerOutput(directory);
-      expect(measured.files).toEqual(["worker.js"]);
-      expect(measured.raw).toBe(1800);
+      expect(measured.files.sort()).toEqual(["abc-contract.gen.txt", "abc-places.json", "worker.js"]);
+      expect(measured.raw).toBe(1805);
+      // Only JavaScript counts against the startup budget: Text modules are strings.
+      expect(measured.script).toBe(1800);
       expect(measured.gzip).toBeGreaterThan(0);
       expect(measured.gzip).toBeLessThan(measured.raw);
     } finally {

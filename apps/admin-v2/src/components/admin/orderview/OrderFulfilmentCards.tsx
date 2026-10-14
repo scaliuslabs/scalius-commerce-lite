@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { MoreHorizontal, Package } from "lucide-react";
 import { toast } from "~/lib/toast";
-import { couriersForCountry } from "~/lib/courier-countries";
 import type { FulfillmentType } from "@scalius/shared/fulfilment";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { canTransitionTo } from "@scalius/shared/order-state";
@@ -244,8 +243,6 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
   const canAct = permissions.canManageOrderShipments && canHandOver(order) && isManualGroup(group.type);
   const ready = group.type === "pickup" && isReadyForPickup(order);
   const providers = order.deliveryProviders ?? [];
-  // A courier left out for the order's country still shows why (BookCourier says so).
-  const servedProviders = couriersForCountry(providers, order.shippingCountryCode).served;
   const couriersKnown = (order.operationalReads?.deliveryProviders.status ?? "ready") !== "unavailable";
   const canBook = canAct && group.type === "ship" && status === "confirmed"
     && order.fulfillmentStatus !== "complete" && canTransitionTo("order", order.status, "shipped");
@@ -281,7 +278,7 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
           <BookCourier order={order} guard={(run) => cancelRequest.guard("send", run)} focusRequest={request?.action === "bookCourier" ? request.id : undefined} />
         ) : null}
         <div className="flex justify-end">
-          <Button type="button" variant={servedProviders.length > 0 && canBook ? "outline" : "default"} onClick={() => cancelRequest.guard("send", () => setDialog("ship"))}>
+          <Button type="button" variant="outline" onClick={() => cancelRequest.guard("send", () => setDialog("ship"))}>
             {t("fulfill.submit")}
           </Button>
         </div>
@@ -293,17 +290,17 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
         {!ready && status === "confirmed" ? (
           <>
             <Button type="button" variant="outline" onClick={() => setDialog("pickup")}>{t("pickup.submit")}</Button>
-            <Button type="button" loading={pickupReady.isPending} onClick={pickupReady.run}>{t("primary.markReadyForPickup")}</Button>
+            <Button type="button" variant="outline" loading={pickupReady.isPending} onClick={pickupReady.run}>{t("primary.markReadyForPickup")}</Button>
           </>
         ) : (
-          <Button type="button" onClick={() => setDialog("pickup")}>{t("pickup.submit")}</Button>
+          <Button type="button" variant="outline" onClick={() => setDialog("pickup")}>{t("pickup.submit")}</Button>
         )}
       </div>
     );
   } else if (canAct && group.type === "service") {
     footer = (
       <div className="flex w-full justify-end">
-        <Button type="button" onClick={() => setDialog("service")}>{t("service.submit")}</Button>
+        <Button type="button" variant="outline" onClick={() => setDialog("service")}>{t("service.submit")}</Button>
       </div>
     );
   }

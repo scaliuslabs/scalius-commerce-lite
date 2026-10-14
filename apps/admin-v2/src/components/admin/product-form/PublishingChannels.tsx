@@ -34,7 +34,7 @@ export function PublishingChannels({ form, readOnly }: {
   const everywhere = channels.length > 0 && channels.every((channel) => published.has(channel.id) && channel.status === "active");
   const availableSomewhere = channels.some((channel) => published.has(channel.id) && channel.status === "active");
   const manageLink = (
-    <Link to="/admin/settings/sales-channels" className="inline-block text-body text-primary hover:underline">
+    <Link to="/admin/settings/sales-channels" className="inline-flex min-h-11 items-center text-body text-primary hover:underline sm:min-h-6">
       {t("manageChannels")}
     </Link>
   );

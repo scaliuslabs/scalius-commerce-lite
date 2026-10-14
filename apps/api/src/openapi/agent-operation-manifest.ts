@@ -994,14 +994,48 @@ export function buildAgentComponentSchemas(
   );
 }
 
+/** The manifest's data, as the generated Text module holds it. */
+export type AgentOperationManifestData = {
+  /** Shared schemas, referenced from operations as `#/components/schemas/<name>`. */
+  componentSchemas: Readonly<Record<string, unknown>>;
+  operations: readonly AgentOperationManifestEntry[];
+  workflowCatalog: AgentWorkflowCatalog;
+};
+
 /**
- * The generated module. Values are compact JSON: the manifest is data read
- * by code and agents, and indentation only adds bytes to the Worker bundle.
+ * The generated Text module (`generated/agent-operations.gen.txt`): compact
+ * JSON, parsed by `generated/agent-operations.gen.ts` when an agent route
+ * first needs it. workerd compiles every JavaScript module of the Worker at
+ * isolate start; a Text module is only a string.
  */
 export function renderAgentOperationManifestModule(
   entries: readonly AgentOperationManifestEntry[],
   workflowCatalog: AgentWorkflowCatalog,
   componentSchemas: Readonly<Record<string, unknown>> = {},
 ): string {
-  return `// This file is generated from the finalized /api/v1 OpenAPI contract.\n// Do not edit by hand.\n\nimport type { AgentWorkflowCatalog } from "../agent-access/workflows/types";\nimport type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";\n\n/** Shared schemas, referenced from operations as \`#/components/schemas/<name>\`. */\nexport const AGENT_COMPONENT_SCHEMAS: Readonly<Record<string, unknown>> = ${JSON.stringify(componentSchemas)};\n\nexport const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = ${JSON.stringify(entries)};\n\nexport const AGENT_OPERATIONS_BY_ID: Readonly<Record<string, AgentOperationManifestEntry>> = Object.freeze(\n  Object.fromEntries(AGENT_OPERATIONS.map((operation) => [operation.operationId, operation])),\n);\n\nexport const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = ${JSON.stringify(workflowCatalog)};\n`;
+  const data: AgentOperationManifestData = { componentSchemas, operations: entries, workflowCatalog };
+  return `${JSON.stringify(data)}\n`;
 }
+
+/** The generated loader (`generated/agent-operations.gen.ts`) of the Text module. */
+export const AGENT_OPERATION_MANIFEST_LOADER_SOURCE = `// This file is generated from the finalized /api/v1 OpenAPI contract.
+// Do not edit by hand.
+
+import type { AgentOperationManifestData, AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
+import manifest from "./agent-operations.gen.txt";
+
+// A Text module (a string, not compiled at isolate start), parsed when an
+// agent route first loads this module. Vitest hands over the same text.
+const data = JSON.parse(manifest) as AgentOperationManifestData;
+
+/** Shared schemas, referenced from operations as \`#/components/schemas/<name>\`. */
+export const AGENT_COMPONENT_SCHEMAS = data.componentSchemas;
+
+export const AGENT_OPERATIONS = data.operations;
+
+export const AGENT_OPERATIONS_BY_ID: Readonly<Record<string, AgentOperationManifestEntry>> = Object.freeze(
+  Object.fromEntries(AGENT_OPERATIONS.map((operation) => [operation.operationId, operation])),
+);
+
+export const AGENT_WORKFLOW_CATALOG = data.workflowCatalog;
+`;
