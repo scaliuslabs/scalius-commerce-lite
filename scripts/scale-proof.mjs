@@ -73,7 +73,7 @@ export function renderResults(results) {
     for (const row of r.checkout ?? []) {
       const failed = Object.values(row.failures ?? {}).reduce((sum, count) => sum + count, 0);
       const codes = Object.keys(row.failures ?? {}).join("/");
-      lines.push(`| ${r.provider} | ${row.scenario} | ${row.clients} | ${fmt(row.orders)} | ${fmt(row.ordersPerSecond, 1)} | ${fmt(row.p50)} | ${fmt(row.p95)} | ${failed ? `${failed} (HTTP ${codes})` : "0"} | ${row.retries ?? "n/a"} |`);
+      lines.push(`| ${r.provider} | ${row.scenario} | ${row.clients} | ${fmt(row.orders)} | ${fmt(row.ordersPerSecond, 1)} | ${fmt(row.p50)} | ${fmt(row.p95)} | ${failed ? `${failed} (HTTP ${codes})` : "0"} | ${row.retries ?? (row.transportRetries === undefined ? "n/a" : `0 (${row.transportRetries} Miniflare resets retried)`)} |`);
     }
   }
   lines.push("", "Rows one 3-line checkout reads and writes (quote, commit, after-response work):", "");
@@ -195,6 +195,8 @@ async function measurePostgres(options, scratch) {
     const url = `postgres://postgres@127.0.0.1:${port}/scale_proof`;
     run("pnpm", ["--dir", "apps/api", "exec", "tsx", "../../packages/database/scripts/migrate-sqlite-to-postgres.ts", "--sqlite", plain, "--checkpoint", join(scratch, "pg-checkpoint.json"), "--ack-target-host", "127.0.0.1"], { env: { ...env, POSTGRES_DATABASE_URL: url } });
     rmSync(plain, { force: true });
+    // A bulk load leaves no planner statistics; a running store has autovacuum's. Measure with them.
+    run("psql", ["-h", "127.0.0.1", "-p", String(port), "-U", "postgres", "-d", "scale_proof", "-c", "ANALYZE"], { env });
     const out = join(scratch, "pg.json");
     vitest("scripts/scale-proof.test.ts", { SCALE_PROOF_POSTGRES_URL: url, SCALE_PROOF_ORDERS: String(options.orders), SCALE_PROOF_OUT: out });
     return JSON.parse(readFileSync(out, "utf8"));

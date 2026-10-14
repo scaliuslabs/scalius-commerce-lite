@@ -60,7 +60,76 @@ It measures:
 Notes on the method. The API runs in-process (`fetchRuntimeApiApp`), so network and the Worker runtime are not in the figures; PostgreSQL goes through a connection pool that stands in for Hyperdrive, and both engines run on one machine with the clients. Compare engines and runs on the same machine, not against production latency.
 
 <!-- scale-proof:start -->
-Not measured yet.
+### 1,000,000 orders, 156,244 SKUs
+
+Measured 2026-10-14 at commit `a38969b7d` on Apple M1, 8 cores, 16 GB RAM, darwin 25.5.0, Node v24.21.0.
+Engines: D1 (Miniflare, workerd SQLite); PostgreSQL 15.17.
+
+Store: 1,000,000 orders, 1,928,791 order lines, 50,000 products, 156,244 SKUs, 200,000 customers.
+
+Storefront reads, in-process API, warm modules, 20 timed runs each (milliseconds):
+
+| Read | d1 p50 | d1 p95 | d1 rows read | postgres p50 | postgres p95 | postgres rows read |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| home page (storefront homepage) | 34 | 38 | 907 | 19 (HTTP 500) | 20 | 169 |
+| product page | 84 | 95 | 118,252 | 239 | 255 | 119,099 |
+| category listing, page 1 | 41 | 47 | 10,209 | 38 | 39 | 3,868 |
+| category listing, page 40 | 27 | 32 | 8,434 | 28 | 29 | 2,118 |
+| all products, newest, page 1 | 71 | 88 | 183,734 | 118 | 128 | 162,276 |
+| search | 65 | 66 | 52,133 | 395 | 414 | 244,531 |
+| product feed page | 88 | 136 | 12,654 | 5,003 | 5,082 | 1,347,987 |
+
+Checkout (tax quote, commit and after-response work), orders per second of the orders that succeeded:
+
+| Engine | Scenario | Clients | Orders | Orders/s | p50 ms | p95 ms | Failed | Serialization retries |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| d1 | 3 lines over many SKUs | 1 | 150 | 1.1 | 746 | 1,694 | 0 | n/a |
+| d1 | 1 hot SKU | 1 | 150 | 1.2 | 710 | 1,436 | 0 | n/a |
+
+Rows one 3-line checkout reads and writes (quote, commit, after-response work):
+
+| Engine | Rows read | Rows written | Counted as |
+| --- | ---: | ---: | --- |
+| d1 | 559,849 | 229 | D1 `rows_read`/`rows_written`, index entries included (what D1 bills) |
+
+### 250,000 orders, 156,244 SKUs
+
+Measured 2026-10-14 at commit `a227e141f` on Apple M1, 8 cores, 16 GB RAM, darwin 25.5.0, Node v24.21.0, 1-minute load average 4.4 at the end of the run.
+Engines: D1 (Miniflare, workerd SQLite); PostgreSQL 15.17 (Homebrew).
+
+Store: 250,000 orders, 482,682 order lines, 50,000 products, 156,244 SKUs, 200,000 customers.
+
+Storefront reads, in-process API, warm modules, 20 timed runs each (milliseconds):
+
+| Read | d1 p50 | d1 p95 | d1 rows read | postgres p50 | postgres p95 | postgres rows read |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| home page (storefront homepage) | 49 | 61 | 902 | 20 (HTTP 500) | 26 | 165 |
+| product page | 127 | 164 | 115,877 | 230 | 251 | 118,764 |
+| category listing, page 1 | 52 | 68 | 10,205 | 39 | 40 | 4,663 |
+| category listing, page 40 | 36 | 56 | 8,436 | 29 | 30 | 2,919 |
+| all products, newest, page 1 | 88 | 104 | 183,727 | 118 | 123 | 162,269 |
+| search | 78 | 96 | 52,129 | 392 | 417 | 244,575 |
+| product feed page | 107 | 167 | 12,654 | 4,865 | 4,994 | 1,347,987 |
+
+Checkout (tax quote, commit and after-response work), orders per second of the orders that succeeded:
+
+| Engine | Scenario | Clients | Orders | Orders/s | p50 ms | p95 ms | Failed | Serialization retries |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| d1 | 3 lines over many SKUs | 1 | 100 | 0.2 | 5,528 | 11,053 | 0 | 0 (0 Miniflare resets retried) |
+| d1 | 3 lines over many SKUs | 16 | 400 | 0.7 | 17,285 | 67,123 | 0 | 0 (168 Miniflare resets retried) |
+| d1 | 1 hot SKU | 1 | 100 | 0.5 | 768 | 7,157 | 0 | 0 (0 Miniflare resets retried) |
+| d1 | 1 hot SKU | 16 | 400 | 0.5 | 20,518 | 93,335 | 0 | 0 (292 Miniflare resets retried) |
+| postgres | 3 lines over many SKUs | 1 | 100 | 5.6 | 174 | 196 | 0 | 0 |
+| postgres | 3 lines over many SKUs | 16 | 217 | 7.9 | 596 | 1,571 | 183 (HTTP 500) | 1778 |
+| postgres | 1 hot SKU | 1 | 100 | 6.0 | 165 | 179 | 0 | 0 |
+| postgres | 1 hot SKU | 16 | 232 | 13.0 | 347 | 1,009 | 168 (HTTP 500) | 1648 |
+
+Rows one 3-line checkout reads and writes (quote, commit, after-response work):
+
+| Engine | Rows read | Rows written | Counted as |
+| --- | ---: | ---: | --- |
+| d1 | 559,866 | 229 | D1 `rows_read`/`rows_written`, index entries included (what D1 bills) |
+| postgres | 376,835 | 54 | heap tuples read, inserted, updated, deleted; index entries not counted |
 <!-- scale-proof:end -->
 
 ## Reading the results
