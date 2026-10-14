@@ -1,24 +1,21 @@
 // Ranked product recommendations for the product page, cart, search dead
 // ends, 404 and order confirmation.
 //
-// One ranking statement scores eligible public, buyable products against the
-// source products with the signals the store really has:
-//   1. also bought — other products in the same real orders (placed, not
-//      cancelled/refunded/returned/unfinished) within a year, counted by
-//      distinct buyer phone; two or more buyers rank a product first. Only
-//      the source products' latest ALSO_BOUGHT_SOURCE_LINES lines are read;
+// One ranking statement scores a bounded pool of eligible (public, buyable,
+// buyer-state.ts) products against the source products:
+//   1. also bought — other products in the source products' latest
+//      ALSO_BOUGHT_SOURCE_ORDERS real orders (placed, not cancelled,
+//      refunded, returned or unfinished) within a year, counted by distinct
+//      buyer; two or more buyers rank a product first;
 //   2. similarity — same published category, same active collection (manual
-//      list or dynamic category rule), shared attribute values, and an
-//      effective buyer price within 60–140% of the source price band;
-//   3. popularity — distinct buyers in the last 30 days, used only when enough
-//      of the list can be filled that way, otherwise newest first.
-// Ties break by newest then id, so the order is deterministic. Card images
-// come from one bounded media read. A recorded live fallback carries its
-// next semantic ranking-window boundary in the ranking statement.
-//
-// Candidates are the stored buyer state's public, buyable products
-// (buyer-state.ts), so the statement never evaluates eligibility or ranks
-// SKUs per product.
+//      list or dynamic category rule) and shared attribute values; a related
+//      product also scores when its buyer price is within 60–140% of the
+//      source price band;
+//   3. popularity — distinct buyers among the latest POPULAR_SAMPLE_PAIRS
+//      order/product pairs of the last 30 days, used only when enough of the
+//      list can be filled that way, otherwise newest first.
+// Ties break by newest then id, so the order is deterministic. Every read is
+// an index range with a fixed cap, the same SQL on D1, Turso and PostgreSQL.
 //
 // Precomputed (Design B): a single product's list (the product page) is read
 // from its stored `product_recommendations` rows (up to 24, written off the
@@ -28,8 +25,8 @@
 // confirmation) or none (404, search dead ends).
 //
 // Freshness: stored lists declare rec:<source>; live fallback declares the
-// recommendation-signals key and the next included order's ranking-window
-// exit. No arbitrary age limit applies to a quiet store's recommendations.
+// recommendation-signals key and the moment its oldest sampled order leaves
+// a window. No arbitrary age limit applies to a quiet store's recommendations.
 import {
     translationScopeOf,
     PRODUCT_CARD_FIELDS,
@@ -73,16 +70,13 @@ export const MIN_ALSO_BOUGHT_BUYERS = 2;
 /** Distinct buyers in the popularity window before a product counts as popular. */
 export const MIN_POPULAR_BUYERS = 2;
 const ALSO_BOUGHT_WINDOW_SECONDS = 365 * 86_400;
-/**
- * "Also bought" reads the source products' latest order lines in the window,
- * at most this many (newest first, through order_items_product_recent_idx).
- * A best seller sits in tens of thousands of orders: reading them all, and
- * every line of each, made one product page take a minute on a
- * million-order store. The latest thousand orders carry the same signal.
- */
-export const ALSO_BOUGHT_SOURCE_LINES = 1_000;
+/** "Also bought" reads the source products' latest real orders in the window, at most this many. */
+export const ALSO_BOUGHT_SOURCE_ORDERS = 1_000;
 const POPULAR_WINDOW_SECONDS = 30 * 86_400;
-
+/** Popularity reads the window's latest order/product pairs, at most this many. */
+export const POPULAR_SAMPLE_PAIRS = 5_000;
+/** Candidates per category, per collection rule category and per source attribute value. */
+export const RELATED_CANDIDATES_PER_SIGNAL = 200;
 
 export type ProductRecommendationReason = "also_bought" | "similar" | "popular" | "new_arrivals";
 
@@ -150,68 +144,6 @@ function activeCollectionSql(collection: string, dynamic: boolean): string {
     return `${collection}.is_active = 1 AND ${collection}.deleted_at IS NULL AND ${source} ${dynamic ? "=" : "<>"} 'dynamic'`;
 }
 
-/**
- * Every (collection, product) membership of the given active collections,
- * manual or dynamic. The CROSS JOINs fix the join order (SQLite never
- * reorders across them): collection, then its rules, then the rule's
- * category, then that category's products. Left to the planner, it started
- * from every published category and every product in the store and parsed
- * each collection's rules once per product (1.3 s at 30k products).
- */
-function collectionMembersSql(prefix: string, collectionIds: SQL): SQL {
-    const collection = `${prefix}_collection`;
-    const manual = `${prefix}_manual`;
-    const categoryRule = `${prefix}_rule`;
-    const product = `${prefix}_product`;
-    const category = `${prefix}_category`;
-    return sql.raw(`
-        SELECT ${collection}.id AS collection_id, CAST(${manual}.value AS TEXT) AS product_id
-        FROM collections AS ${collection}
-        CROSS JOIN `).append(collectionIdList(`${collection}.config`, "productIds")).append(sql.raw(` AS ${manual}
-        WHERE ${activeCollectionSql(collection, false)} AND ${collection}.id IN `)).append(collectionIds).append(sql.raw(`
-        UNION ALL
-        SELECT ${collection}.id AS collection_id, ${product}.id AS product_id
-        FROM collections AS ${collection}
-        CROSS JOIN `)).append(collectionIdList(`${collection}.config`, "categoryIds")).append(sql.raw(` AS ${categoryRule}
-        CROSS JOIN categories AS ${category}
-        CROSS JOIN products AS ${product}
-        WHERE ${activeCollectionSql(collection, true)} AND ${collection}.id IN `)).append(collectionIds).append(sql.raw(`
-          AND ${category}.id = CAST(${categoryRule}.value AS TEXT)
-          AND ${category}.status = 'published'
-          AND ${category}.deleted_at IS NULL
-          AND ${product}.category_id = ${category}.id
-    `));
-}
-
-/**
- * The active collections that contain any source product, found without
- * expanding any collection: manual lists name the product, dynamic rules
- * name its published category.
- */
-function sourceCollectionIdsSql(sourceSet: SQL): SQL {
-    return sql`(
-        SELECT rec_source_collection.id
-        FROM collections AS rec_source_collection
-        CROSS JOIN ${collectionIdList("rec_source_collection.config", "productIds")} AS rec_source_manual
-        WHERE ${sql.raw(activeCollectionSql("rec_source_collection", false))}
-          AND CAST(rec_source_manual.value AS TEXT) IN ${sourceSet}
-        UNION
-        SELECT rec_source_collection.id
-        FROM collections AS rec_source_collection
-        CROSS JOIN ${collectionIdList("rec_source_collection.config", "categoryIds")} AS rec_source_rule
-        WHERE ${sql.raw(activeCollectionSql("rec_source_collection", true))}
-          AND CAST(rec_source_rule.value AS TEXT) IN (
-              SELECT rec_source_product.category_id
-              FROM products AS rec_source_product
-              CROSS JOIN categories AS rec_source_category
-              WHERE rec_source_product.id IN ${sourceSet}
-                AND rec_source_category.id = rec_source_product.category_id
-                AND rec_source_category.status = 'published'
-                AND rec_source_category.deleted_at IS NULL
-          )
-    )`;
-}
-
 type RecommendationCardRow = {
     id: string;
     name: string;
@@ -260,12 +192,18 @@ export async function rankProductRecommendations(
     return { reason: recommendationReason(rows, sourceIds.length > 0), rows };
 }
 
+
 /**
  * The ranking statement for up to `limit` rows (the request path caps it at
- * 12; the refresh job stores 24). It reads only buyer state and signal sets,
- * narrowing to the complete leading co-buy tier when its bounds prove that
- * no other product can win. Card columns are read afterwards for the few
- * rows kept (`loadRecommendationCards`). Internal to the catalog domain.
+ * 12; the refresh job stores 24). It scores only a bounded candidate pool:
+ * the co-buy peers of the source's latest orders, the newest eligible
+ * products of the source and collection-rule categories, manual collection
+ * members and the first products sharing each source attribute value
+ * (RELATED_CANDIDATES_PER_SIGNAL each), plus the `limit` most popular and
+ * newest eligible products. The unrelated tail orders by popularity, then
+ * newest, so those last two parts make it exact. Card columns are read
+ * afterwards for the few rows kept (`loadRecommendationCards`). Internal to
+ * the catalog domain.
  */
 export async function rankRecommendationRows(
     db: Database,
@@ -282,368 +220,188 @@ export async function rankRecommendationRows(
     deps.anyCategory();
     deps.anyCollection();
     deps.anyAttribute();
-    const sourceJson = JSON.stringify(sourceIds);
-    const sourceSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${sourceJson}))`;
-    // The source products' latest lines in the window (ALSO_BOUGHT_SOURCE_LINES),
-    // read newest first from (product_id, created_at, order_id). Older lines
-    // never re-enter: anything older leaves the window first.
-    const sourceLines = (alias: string) => sql`(
-        SELECT ${sql.raw(alias)}_sample.order_id AS order_id, ${sql.raw(alias)}_sample.product_id AS product_id
-        FROM order_items AS ${sql.raw(alias)}_sample
-        WHERE ${sourceIds.length === 1
-            // Equality lets the index stop at LIMIT without sorting a bestseller's entire history.
-            ? sql`${sql.raw(alias)}_sample.product_id = ${sourceIds[0]}`
-            : sql`${sql.raw(alias)}_sample.product_id IN ${sourceSet}`}
-          AND ${sql.raw(alias)}_sample.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))}
-        ORDER BY ${sql.raw(alias)}_sample.created_at DESC, ${sql.raw(alias)}_sample.order_id DESC
-        LIMIT ${sql.raw(String(ALSO_BOUGHT_SOURCE_LINES))}
-    ) AS ${sql.raw(alias)}`;
-
-    const recordBoundary = deps.active();
-    // Materialize the bounded sample once for both co-buy scores and its
-    // freshness deadline; preserve duplicate source lines after LIMIT.
-    const sourceOrders = sql`
-        SELECT rec_source_pair.order_id, rec_source_pair.created_at, rec_source_pair.buyer
-        FROM ${sourceLines("rec_source_line")}
-        CROSS JOIN recommendation_order_products AS rec_source_pair
-        WHERE rec_source_pair.order_id = rec_source_line.order_id
-          AND rec_source_pair.product_id = rec_source_line.product_id
-          AND rec_source_pair.created_at >= unixepoch() - ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS))}
-    `;
-    const coPurchaseRows = sql`
-        SELECT rec_peer_line.product_id AS product_id,
-               COUNT(DISTINCT rec_co_order.buyer) AS buyers
-               ${sourceIds.length > 0 ? sql`, COUNT(DISTINCT CASE
-                   WHEN rec_co_order.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-                   THEN rec_co_order.buyer END) AS recent_buyers` : sql``}
-        FROM ${sourceIds.length > 0 ? sql`rec_source_orders` : sql`(${sourceOrders})`} AS rec_co_order
-        CROSS JOIN order_items AS rec_peer_line
-        WHERE rec_peer_line.order_id = rec_co_order.order_id
-          AND rec_peer_line.product_id NOT IN ${sourceSet}
-        GROUP BY rec_peer_line.product_id
-    `;
-    const coPurchase = sourceIds.length > 0
-        ? sql`rec_co_purchase`
-        : sql`(${coPurchaseRows}) AS rec_co_purchase`;
-
-    const collectionPeerRows = sql`
-        SELECT rec_member.product_id AS product_id, COUNT(DISTINCT rec_member.collection_id) AS shared
-        FROM (${collectionMembersSql("rec_peer", sourceCollectionIdsSql(sourceSet))}) AS rec_member
-        GROUP BY rec_member.product_id
-    `;
-    const collectionPeers = sourceIds.length > 0
-        ? sql`rec_collection_peer`
-        : sql`(${collectionPeerRows}) AS rec_collection_peer`;
-
-    const attributePeerRows = sql`
-        SELECT rec_peer_value.product_id AS product_id,
-               COUNT(DISTINCT rec_peer_value.attribute_id) AS shared
-        FROM product_attribute_values AS rec_source_value
-        INNER JOIN product_attributes AS rec_attribute
-            ON rec_attribute.id = rec_source_value.attribute_id
-           AND rec_attribute.deleted_at IS NULL
-        INNER JOIN product_attribute_values AS rec_peer_value
-            ON rec_peer_value.attribute_id = rec_source_value.attribute_id
-           AND rec_peer_value.value = rec_source_value.value
-        WHERE rec_source_value.product_id IN ${sourceSet}
-        GROUP BY rec_peer_value.product_id
-    `;
-    const attributePeers = sourceIds.length > 0
-        ? sql`rec_attribute_peer`
-        : sql`(${attributePeerRows}) AS rec_attribute_peer`;
-
-    // One maintained row per eligible order/product pair keeps the canonical
-    // order timestamp and buyer; popularity no longer joins every recent line.
-    const popularRows = sql`
-        SELECT rec_popular_projection.product_id AS product_id,
-               COUNT(DISTINCT rec_popular_projection.buyer) AS buyers
-        FROM recommendation_order_products AS rec_popular_projection
-        WHERE rec_popular_projection.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-          ${sourceIds.length > 0 ? sql`AND rec_popular_projection.product_id IN (SELECT product_id FROM rec_candidates)` : sql``}
-        GROUP BY rec_popular_projection.product_id
-    `;
-    const popular = sourceIds.length > 0
-        ? sql`rec_popular`
-        : sql`(${popularRows}) AS rec_popular`;
-
+    const n = (value: number) => sql.raw(String(value));
+    const now = sql`unixepoch()`;
+    // `+`: where an id set drives (the pool), the public flag stays a filter (buyer-state.ts).
+    const eligible = (alias: string, drivenByIdSet = false) => sql.raw(`${drivenByIdSet ? "+" : ""}${alias}.is_public = 1
+        AND ${alias}.available_for_sale = 1 AND ${alias}.product_id NOT IN (SELECT product_id FROM rec_source)`);
     const bandPrice = effectivePriceMinorSql({
-        priceMinor: sql.raw("rec_band_sku.price_minor"),
-        discountType: sql.raw("rec_band_sku.discount_type"),
-        discountBps: sql.raw("rec_band_sku.discount_bps"),
-        discountAmountMinor: sql.raw("rec_band_sku.discount_amount_minor"),
+        priceMinor: sql.raw("band_sku.price_minor"),
+        discountType: sql.raw("band_sku.discount_type"),
+        discountBps: sql.raw("band_sku.discount_bps"),
+        discountAmountMinor: sql.raw("band_sku.discount_amount_minor"),
     }, {
-        discountType: sql.raw("rec_band_product.discount_type"),
-        discountBps: sql.raw("rec_band_product.discount_bps"),
-        discountAmountMinor: sql.raw("rec_band_product.discount_amount_minor"),
+        discountType: sql.raw("band_product.discount_type"),
+        discountBps: sql.raw("band_product.discount_bps"),
+        discountAmountMinor: sql.raw("band_product.discount_amount_minor"),
     });
-    const sourceBandRows = sql`
-        SELECT MIN(${bandPrice}) AS min_price, MAX(${bandPrice}) AS max_price
-        FROM product_variants AS rec_band_sku
-        INNER JOIN products AS rec_band_product ON rec_band_product.id = rec_band_sku.product_id
-        WHERE rec_band_sku.product_id IN ${sourceSet}
-          AND rec_band_sku.deleted_at IS NULL
-          AND rec_band_sku.id <> 'default'
-          AND ${operationalSkuRowPredicate("rec_band_sku")}
-    `;
-    const sourceBand = sourceIds.length > 0
-        ? sql`rec_source_band`
-        : sql`(${sourceBandRows}) AS rec_source_band`;
-
-    // CROSS JOIN keeps the source products as the driver; the planner
-    // otherwise walked every product of every published category.
-    const sourceCategoryIds = sql`
-        SELECT rec_source_product.category_id
-        FROM products AS rec_source_product
-        CROSS JOIN categories AS rec_source_category
-        WHERE rec_source_product.id IN ${sourceSet}
-          AND rec_source_category.id = rec_source_product.category_id
-          AND rec_source_category.status = 'published'
-          AND rec_source_category.deleted_at IS NULL
-    `;
-    const sameCategory = sql`CASE WHEN ${buyerState.categoryId} IN (
-        ${sourceIds.length > 0 ? sql`SELECT category_id FROM rec_source_categories` : sourceCategoryIds}
-    ) THEN 1 ELSE 0 END`;
-    const alsoBoughtBuyers = sql<number>`COALESCE(rec_co_purchase.buyers, 0)`;
-    const collectionShared = sql`COALESCE(rec_collection_peer.shared, 0)`;
-    const attributeShared = sql`COALESCE(rec_attribute_peer.shared, 0)`;
-    // Category, collection and attribute evidence, plus a single co-purchase
-    // that is too thin to claim "also bought" on its own.
-    const relatedScore = sql<number>`(
-        40 * ${sameCategory}
-        + 25 * MIN(${collectionShared}, 2)
-        + 10 * MIN(${attributeShared}, 5)
-        + CASE WHEN ${alsoBoughtBuyers} = 1 THEN 20 ELSE 0 END
-    )`;
-    const inPriceBand = sql`CASE
-        WHEN rec_source_band.min_price IS NOT NULL
-         AND ${buyerState.fromMinor} * 100 >= rec_source_band.min_price * 60
-         AND ${buyerState.fromMinor} * 100 <= rec_source_band.max_price * 140
-        THEN 1 ELSE 0
-    END`;
-    const alsoBoughtTier = sql`CASE WHEN ${alsoBoughtBuyers} >= ${sql.raw(String(MIN_ALSO_BOUGHT_BUYERS))} THEN ${alsoBoughtBuyers} ELSE 0 END`;
-    const popularBuyers = sql<number>`COALESCE(rec_popular.buyers, 0)`;
-    // Popularity orders the tail only when it can fill at least half the
-    // list; otherwise the tail is plainly newest first ("New arrivals").
-    const popularOrdering = sql<number>`CASE
-        WHEN (${sourceIds.length > 0 ? sql`(SELECT qualifies FROM rec_popularity_guard) = 1` : sql`
-              SUM(CASE WHEN ${popularBuyers} >= ${sql.raw(String(MIN_POPULAR_BUYERS))} THEN 1 ELSE 0 END) OVER () * 2
-              >= MIN(COUNT(*) OVER (), ${sql.raw(String(limit))})`})
-         AND ${popularBuyers} >= ${sql.raw(String(MIN_POPULAR_BUYERS))}
-        THEN ${popularBuyers} ELSE 0
-    END`;
-    const candidateCondition = and(
-        publicBuyerStateCondition(),
-        sql`${buyerState.availableForSale} = 1`,
-        sql`${buyerState.productId} NOT IN ${sourceSet}`,
-    );
-    const ranking = db
-        .select({
-            id: sql<string>`${buyerState.productId}`.as("id"),
-            alsoBoughtBuyers: alsoBoughtBuyers.as("alsoBoughtBuyers"),
-            relatedScore: relatedScore.as("relatedScore"),
-            popularBuyers: popularBuyers.as("popularBuyers"),
-            popularOrdering: popularOrdering.as("popularOrdering"),
-            ...(recordBoundary ? {
-                _priceBand: inPriceBand.as("_price_band"),
-                _createdAt: sql`${buyerState.productCreatedAt}`.as("_created_at"),
-            } : {}),
-        })
-        .from(sourceIds.length > 0 ? sql`rec_candidates AS product_buyer_state` : buyerState)
-        .leftJoin(coPurchase, sql`rec_co_purchase.product_id = ${buyerState.productId}`)
-        .leftJoin(collectionPeers, sql`rec_collection_peer.product_id = ${buyerState.productId}`)
-        .leftJoin(attributePeers, sql`rec_attribute_peer.product_id = ${buyerState.productId}`)
-        .leftJoin(popular, sql`rec_popular.product_id = ${buyerState.productId}`)
-        .crossJoin(sourceBand)
-        .where(sourceIds.length > 0 ? undefined : candidateCondition)
-        .orderBy(
-            desc(alsoBoughtTier),
-            desc(sql`${relatedScore} + 15 * ${inPriceBand}`),
-            desc(popularOrdering),
-            desc(buyerState.productCreatedAt),
-            buyerState.productId,
-        )
-        .limit(limit);
-
-    // Enough eligible co-buy peers exclude the zero-co-buy tier from the top
-    // list. Recent co-buyers are a subset of global recent buyers, so half a
-    // list of witnesses proves the existing popularity switch is on. Score
-    // every peer at or above the list's annual-buyer cutoff, including all
-    // ties, with exact popularity. The full witness set keeps the global
-    // popularity switch on even if its witnesses fall below that cutoff.
-    // Otherwise the same statement narrows the full eligible set by affinity
-    // and proves popularity against the original population independently.
-    const candidateColumns = sql`${buyerState.productId} AS product_id,
-        ${buyerState.fromMinor} AS from_minor, ${buyerState.categoryId} AS category_id,
-        ${buyerState.productCreatedAt} AS product_created_at`;
-    // Outside the union of category, collection, attribute and co-buy peers,
-    // a candidate has co-buy tier zero and at most the 15-point price score.
-    // A related-set cutoff strictly above (0, 15) therefore contains every
-    // possible winner. Otherwise compute affinity over the full eligible set.
-    // Shared peer aggregates also serve the final bounded rows without re-reading
-    // their underlying collection, attribute and SKU data.
-    const affinityQuery = (relatedOnly: boolean) => db.select({
-        productId: sql`${buyerState.productId}`.as("product_id"),
-        fromMinor: sql`${buyerState.fromMinor}`.as("from_minor"),
-        categoryId: sql`${buyerState.categoryId}`.as("category_id"),
-        productCreatedAt: sql`${buyerState.productCreatedAt}`.as("product_created_at"),
-        alsoBoughtTier: alsoBoughtTier.as("also_bought_tier"),
-        affinity: sql`${relatedScore} + 15 * ${inPriceBand}`.as("affinity"),
-    })
-        .from(relatedOnly
-            ? sql`rec_guard AS rec_affinity_guard CROSS JOIN rec_related_ids CROSS JOIN ${buyerState}`
-            : sql`rec_guard AS rec_affinity_guard CROSS JOIN ${buyerState}`)
-        .leftJoin(coPurchase, sql`rec_co_purchase.product_id = ${buyerState.productId}`)
-        .leftJoin(collectionPeers, sql`rec_collection_peer.product_id = ${buyerState.productId}`)
-        .leftJoin(attributePeers, sql`rec_attribute_peer.product_id = ${buyerState.productId}`)
-        .crossJoin(sourceBand)
-        .where(and(sql`rec_affinity_guard.qualifies = 0`, relatedOnly
-            ? and(publicBuyerStateCondition({ drivenByIdSet: true }),
-                sql`${buyerState.availableForSale} = 1`, sql`${buyerState.productId} NOT IN ${sourceSet}`,
-                sql`${buyerState.productId} = rec_related_ids.product_id`)
-            : and(candidateCondition,
-                // These IDs came from eligible buyer-state PKs, so the set
-                // cannot contain NULL (unlike raw collection JSON members).
-                sql`${buyerState.productId} NOT IN (SELECT product_id FROM rec_related_affinity)`)));
-    const unrelatedAffinityLimit = sql`(
-        SELECT CASE WHEN rec_guard.qualifies = 0 AND rec_related_guard.qualifies = 0
-            THEN 9223372036854775807 ELSE 0 END
-        FROM rec_guard CROSS JOIN rec_related_guard
-    )`;
-    const rankingCtes = sourceIds.length === 0 ? sql`` : sql`
-        WITH rec_source_orders AS MATERIALIZED (${sourceOrders}),
-        rec_co_purchase AS MATERIALIZED (${coPurchaseRows}),
-        rec_eligible_co AS MATERIALIZED (
-            SELECT ${candidateColumns}, rec_co_purchase.buyers, rec_co_purchase.recent_buyers
-            FROM rec_co_purchase
-            CROSS JOIN ${buyerState}
-            WHERE ${buyerState.productId} = rec_co_purchase.product_id
-              AND ${publicBuyerStateCondition({ drivenByIdSet: true })}
-              AND ${buyerState.availableForSale} = 1
-              AND rec_co_purchase.buyers >= ${sql.raw(String(MIN_ALSO_BOUGHT_BUYERS))}
-        ),
-        rec_guard AS MATERIALIZED (
-            SELECT CASE WHEN COUNT(*) >= ${sql.raw(String(limit))}
-                AND COALESCE(SUM(CASE WHEN recent_buyers >= ${sql.raw(String(MIN_POPULAR_BUYERS))}
-                    THEN 1 ELSE 0 END), 0) * 2 >= ${sql.raw(String(limit))}
-                THEN 1 ELSE 0 END AS qualifies
-            FROM rec_eligible_co
-        ),
-        rec_winning_co AS MATERIALIZED (
-            SELECT rec_eligible_co.*
-            FROM rec_guard AS rec_winning_guard
-            CROSS JOIN rec_eligible_co
-            WHERE rec_winning_guard.qualifies = 1
-              AND buyers >= (SELECT buyers FROM rec_eligible_co ORDER BY buyers DESC
-                  LIMIT 1 OFFSET ${sql.raw(String(limit - 1))})
-        ),
-        rec_collection_peer AS MATERIALIZED (${collectionPeerRows}),
-        rec_attribute_peer AS MATERIALIZED (${attributePeerRows}),
-        rec_source_band AS MATERIALIZED (${sourceBandRows}),
-        rec_source_categories AS MATERIALIZED (${sourceCategoryIds}),
-        rec_related_ids AS MATERIALIZED (
-            SELECT ${buyerState.productId} AS product_id
-            FROM ${buyerState}
-            WHERE ${publicBuyerStateCondition()}
-              AND ${buyerState.categoryId} IN (SELECT category_id FROM rec_source_categories)
-            UNION SELECT product_id FROM rec_collection_peer
-            UNION SELECT product_id FROM rec_attribute_peer
-            UNION SELECT product_id FROM rec_co_purchase
-            LIMIT (SELECT CASE WHEN qualifies = 0 THEN 9223372036854775807 ELSE 0 END FROM rec_guard)
-        ),
-        rec_related_affinity AS MATERIALIZED (${affinityQuery(true).getSQL()}),
-        rec_related_guard AS MATERIALIZED (
-            SELECT COALESCE((
-                SELECT CASE WHEN also_bought_tier > 0 OR affinity > 15 THEN 1 ELSE 0 END
-                FROM rec_related_affinity
-                ORDER BY also_bought_tier DESC, affinity DESC
-                LIMIT 1 OFFSET ${sql.raw(String(limit - 1))}
-            ), 0) AS qualifies
-        ),
-        rec_fallback_affinity AS MATERIALIZED (
-            SELECT * FROM rec_related_affinity
-            UNION ALL
-            SELECT * FROM (${affinityQuery(false).getSQL()} LIMIT ${unrelatedAffinityLimit}) AS rec_full_affinity_enabled
-        ),
-        rec_affinity_cutoff AS MATERIALIZED (
-            SELECT also_bought_tier, affinity
-            FROM rec_fallback_affinity
-            ORDER BY also_bought_tier DESC, affinity DESC
-            LIMIT 1 OFFSET ${sql.raw(String(limit - 1))}
-        ),
-        rec_candidates AS (
-            SELECT ${candidateColumns}
-            FROM rec_guard AS rec_candidate_guard
-            CROSS JOIN rec_winning_co AS product_buyer_state
-            WHERE rec_candidate_guard.qualifies = 1
-            UNION ALL
-            SELECT ${candidateColumns}
-            FROM rec_guard AS rec_candidate_guard
-            CROSS JOIN rec_fallback_affinity AS product_buyer_state
-            LEFT JOIN rec_affinity_cutoff ON 1 = 1
-            WHERE rec_candidate_guard.qualifies = 0
-              AND (rec_affinity_cutoff.also_bought_tier IS NULL
-                OR product_buyer_state.also_bought_tier > rec_affinity_cutoff.also_bought_tier
-                OR (product_buyer_state.also_bought_tier = rec_affinity_cutoff.also_bought_tier
-                    AND product_buyer_state.affinity >= rec_affinity_cutoff.affinity))
-        ),
-        rec_popular AS MATERIALIZED (${popularRows}),
-        rec_popularity_guard AS MATERIALIZED (
-            SELECT CASE WHEN rec_guard.qualifies = 1 THEN 1 ELSE (
-                SELECT CASE WHEN COUNT(*) * 2 >= (
-                    -- The related guard proves at least limit eligible products;
-                    -- otherwise affinity still contains the full population.
-                    SELECT COUNT(*) FROM (SELECT 1 FROM rec_fallback_affinity LIMIT ${sql.raw(String(limit))}) AS rec_population_sample
-                ) THEN 1 ELSE 0 END
-                FROM (
-                    SELECT 1
-                    FROM ${buyerState}
-                    WHERE ${candidateCondition}
-                      -- The switch uses the full eligible population even
-                      -- when exact scores are needed only for finalists.
-                      -- Scalar form preserves DISTINCT; SQLite drops it in EXISTS.
-                      AND (
-                          SELECT DISTINCT rec_quorum_projection.buyer
-                          FROM recommendation_order_products AS rec_quorum_projection
-                          WHERE rec_quorum_projection.product_id = ${buyerState.productId}
-                            AND rec_quorum_projection.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-                            AND rec_quorum_projection.buyer IS NOT NULL
-                          LIMIT 1 OFFSET ${sql.raw(String(MIN_POPULAR_BUYERS - 1))}
-                      ) IS NOT NULL
-                    LIMIT ${sql.raw(String(Math.ceil(limit / 2)))}
-                ) AS rec_popular_witnesses
-            ) END AS qualifies
-            FROM rec_guard
-        )
-    `;
-    if (!recordBoundary) {
-        return sourceIds.length === 0
-            ? await ranking.all() as RankedRecommendationRow[]
-            : await db.all<RankedRecommendationRow>(sql`${rankingCtes} ${ranking.getSQL()}`);
-    }
-
-    // Keep the boundary even when no product ranks, in the same SQL snapshot.
-    // Reapply the existing order only to the already limited (at most 24) rows.
+    const affinity = (row: string) => sql.raw(`${row}.related
+        + CASE WHEN ${row}.related > 0 OR ${row}.also_bought > 0 THEN 15 * ${row}.in_band ELSE 0 END`);
+    const ranking = (row: string) => sql`CASE WHEN ${sql.raw(row)}.also_bought >= ${n(MIN_ALSO_BOUGHT_BUYERS)}
+            THEN ${sql.raw(row)}.also_bought ELSE 0 END DESC,
+        ${affinity(row)} DESC, ${sql.raw(row)}.popular_ordering DESC, ${sql.raw(row)}.created_at DESC, ${sql.raw(row)}.id`;
     const rows = await db.all<Omit<RankedRecommendationRow, "id"> & {
         id: string | null; popularAt: number | null; alsoBoughtAt: number | null;
-    }>(sql`${rankingCtes}${sourceIds.length > 0 ? sql`,` : sql`WITH`}
-        rec_ranked AS MATERIALIZED (${ranking.getSQL()}),
-        rec_boundary AS MATERIALIZED (
-            SELECT (SELECT rec_popular_first.created_at + ${sql.raw(String(POPULAR_WINDOW_SECONDS + 1))}
-                FROM recommendation_order_products AS rec_popular_first
-                WHERE rec_popular_first.created_at >= unixepoch() - ${sql.raw(String(POPULAR_WINDOW_SECONDS))}
-                ORDER BY rec_popular_first.created_at ASC LIMIT 1) AS popular_at,
-                ${sourceIds.length > 0 ? sql`(SELECT MIN(created_at) + ${sql.raw(String(ALSO_BOUGHT_WINDOW_SECONDS + 1))}
-                    FROM rec_source_orders)` : sql`NULL`} AS also_bought_at
+    }>(sql`
+        WITH rec_source AS (
+            SELECT DISTINCT CAST(value AS TEXT) AS product_id FROM json_each(${JSON.stringify(sourceIds)})
+        ),
+        -- The source products' latest real orders in the window.
+        rec_source_orders AS (
+            SELECT source_order.order_id, source_order.created_at, source_order.buyer
+            FROM recommendation_order_products AS source_order
+            WHERE source_order.product_id IN (SELECT product_id FROM rec_source)
+              AND source_order.created_at >= ${now} - ${n(ALSO_BOUGHT_WINDOW_SECONDS)}
+            ORDER BY source_order.created_at DESC, source_order.order_id DESC
+            LIMIT ${n(ALSO_BOUGHT_SOURCE_ORDERS)}
+        ),
+        -- An order's pairs share its buyer.
+        rec_co AS (
+            SELECT peer.product_id, COUNT(DISTINCT peer.buyer) AS buyers
+            FROM recommendation_order_products AS peer
+            WHERE peer.order_id IN (SELECT order_id FROM rec_source_orders)
+              AND peer.product_id NOT IN (SELECT product_id FROM rec_source)
+            GROUP BY peer.product_id
+        ),
+        -- The popularity window's latest order/product pairs.
+        rec_popular_sample AS (
+            SELECT sample.product_id, sample.buyer, sample.created_at
+            FROM recommendation_order_products AS sample
+            WHERE sample.created_at >= ${now} - ${n(POPULAR_WINDOW_SECONDS)}
+            ORDER BY sample.created_at DESC, sample.order_id DESC
+            LIMIT ${n(POPULAR_SAMPLE_PAIRS)}
+        ),
+        rec_popular AS (
+            SELECT popular.product_id, COUNT(DISTINCT popular.buyer) AS buyers,
+                MIN(buyer_state.product_created_at) AS created_at
+            FROM rec_popular_sample AS popular
+            INNER JOIN product_buyer_state AS buyer_state ON buyer_state.product_id = popular.product_id
+            WHERE ${eligible("buyer_state", true)}
+            GROUP BY popular.product_id
+        ),
+        -- Popularity orders the tail only when it can fill at least half the list.
+        rec_switch AS (
+            SELECT CASE WHEN 2 * (SELECT COUNT(*) FROM (
+                SELECT 1 FROM rec_popular WHERE buyers >= ${n(MIN_POPULAR_BUYERS)} LIMIT ${n(Math.ceil(limit / 2))}
+            ) AS witness) >= (SELECT COUNT(*) FROM (
+                SELECT 1 FROM product_buyer_state AS population WHERE ${eligible("population")} LIMIT ${n(limit)}
+            ) AS population_sample) THEN 1 ELSE 0 END AS popular
+        ),
+        rec_band AS (
+            SELECT MIN(${bandPrice}) AS min_price, MAX(${bandPrice}) AS max_price
+            FROM product_variants AS band_sku
+            INNER JOIN products AS band_product ON band_product.id = band_sku.product_id
+            WHERE band_sku.product_id IN (SELECT product_id FROM rec_source)
+              AND band_sku.deleted_at IS NULL AND band_sku.id <> 'default'
+              AND ${operationalSkuRowPredicate("band_sku")}
+        ),
+        rec_categories AS (
+            SELECT DISTINCT source_product.category_id AS id
+            FROM products AS source_product
+            INNER JOIN categories AS category ON category.id = source_product.category_id
+                AND category.status = 'published' AND category.deleted_at IS NULL
+            WHERE source_product.id IN (SELECT product_id FROM rec_source)
+        ),
+        -- Each active collection holding a source: its manual ids, or its published rule categories.
+        rec_collection_links AS (
+            SELECT collection.id AS collection_id, CAST(member.value AS TEXT) AS product_id, CAST(NULL AS TEXT) AS category_id
+            FROM collections AS collection
+            CROSS JOIN ${collectionIdList("collection.config", "productIds")} AS member
+            WHERE ${sql.raw(activeCollectionSql("collection", false))}
+              AND EXISTS (SELECT 1 FROM ${collectionIdList("collection.config", "productIds")} AS hit
+                  WHERE CAST(hit.value AS TEXT) IN (SELECT product_id FROM rec_source))
+            UNION ALL
+            SELECT collection.id, CAST(NULL AS TEXT), CAST(rule.value AS TEXT)
+            FROM collections AS collection
+            CROSS JOIN ${collectionIdList("collection.config", "categoryIds")} AS rule
+            WHERE ${sql.raw(activeCollectionSql("collection", true))}
+              AND CAST(rule.value AS TEXT) IN (
+                  SELECT id FROM categories WHERE status = 'published' AND deleted_at IS NULL
+              )
+              AND EXISTS (SELECT 1 FROM ${collectionIdList("collection.config", "categoryIds")} AS hit
+                  WHERE CAST(hit.value AS TEXT) IN (SELECT id FROM rec_categories))
+        ),
+        rec_values AS (
+            SELECT DISTINCT source_value.attribute_id, source_value.value
+            FROM product_attribute_values AS source_value
+            INNER JOIN product_attributes AS attribute
+                ON attribute.id = source_value.attribute_id AND attribute.deleted_at IS NULL
+            WHERE source_value.product_id IN (SELECT product_id FROM rec_source)
+        ),
+        rec_pool AS (
+            SELECT product_id FROM rec_co
+            UNION SELECT product_id FROM rec_collection_links WHERE product_id IS NOT NULL
+            -- The small source sets drive (a LEFT JOIN keeps them outer; a NULL
+            -- id joins no candidate): each category's newest public products
+            -- and their created-time ties, then each value's first products,
+            -- one covering index range each (buyability is checked when scored).
+            UNION SELECT peer.product_id FROM (
+                SELECT id FROM rec_categories UNION SELECT category_id FROM rec_collection_links
+            ) AS peer_category
+            LEFT JOIN product_buyer_state AS peer
+                ON peer.is_public = 1 AND peer.category_id = peer_category.id
+               AND peer.product_id NOT IN (SELECT product_id FROM rec_source)
+               AND peer.product_created_at >= (SELECT MIN(newest.product_created_at) FROM (
+                   SELECT cutoff.product_created_at FROM product_buyer_state AS cutoff
+                   WHERE cutoff.is_public = 1 AND cutoff.category_id = peer_category.id
+                     AND cutoff.product_id NOT IN (SELECT product_id FROM rec_source)
+                   ORDER BY cutoff.product_created_at DESC LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
+               ) AS newest)
+            UNION SELECT peer_value.product_id FROM rec_values AS source_value
+            LEFT JOIN product_attribute_values AS peer_value
+                ON peer_value.attribute_id = source_value.attribute_id AND peer_value.value = source_value.value
+               AND peer_value.product_id <= (SELECT MAX(first_value.product_id) FROM (
+                   SELECT cutoff.product_id FROM product_attribute_values AS cutoff
+                   WHERE cutoff.attribute_id = source_value.attribute_id AND cutoff.value = source_value.value
+                   ORDER BY cutoff.product_id LIMIT ${n(RELATED_CANDIDATES_PER_SIGNAL)}
+               ) AS first_value)
+        ),
+        rec_tail AS (
+            SELECT product_id FROM (
+                SELECT product_id FROM rec_popular ORDER BY buyers DESC, created_at DESC, product_id LIMIT ${n(limit)}
+            ) AS popular_tail
+            UNION SELECT product_id FROM (
+                SELECT newest.product_id FROM product_buyer_state AS newest WHERE ${eligible("newest")}
+                ORDER BY newest.product_created_at DESC, newest.product_id LIMIT ${n(limit)}
+            ) AS newest_tail
+        ),
+        rec_scored AS (
+            SELECT candidate.product_id AS id, candidate.product_created_at AS created_at,
+                COALESCE(co.buyers, 0) AS also_bought,
+                40 * CASE WHEN candidate.category_id IN (SELECT id FROM rec_categories) THEN 1 ELSE 0 END
+                + 25 * MIN((SELECT COUNT(DISTINCT link.collection_id) FROM rec_collection_links AS link
+                    WHERE link.product_id = candidate.product_id OR link.category_id = candidate.category_id), 2)
+                + 10 * MIN((SELECT COUNT(DISTINCT shared.attribute_id) FROM product_attribute_values AS shared
+                    INNER JOIN rec_values ON rec_values.attribute_id = shared.attribute_id AND rec_values.value = shared.value
+                    WHERE shared.product_id = candidate.product_id), 5)
+                + CASE WHEN co.buyers = 1 THEN 20 ELSE 0 END AS related,
+                CASE WHEN rec_band.min_price IS NOT NULL
+                    AND candidate.from_minor * 100 >= rec_band.min_price * 60
+                    AND candidate.from_minor * 100 <= rec_band.max_price * 140 THEN 1 ELSE 0 END AS in_band,
+                COALESCE(popular.buyers, 0) AS popular_buyers,
+                CASE WHEN rec_switch.popular = 1 AND popular.buyers >= ${n(MIN_POPULAR_BUYERS)}
+                    THEN popular.buyers ELSE 0 END AS popular_ordering
+            FROM (SELECT product_id FROM rec_pool UNION SELECT product_id FROM rec_tail) AS pool
+            INNER JOIN product_buyer_state AS candidate ON candidate.product_id = pool.product_id
+            CROSS JOIN rec_band
+            CROSS JOIN rec_switch
+            LEFT JOIN rec_co AS co ON co.product_id = candidate.product_id
+            LEFT JOIN rec_popular AS popular ON popular.product_id = candidate.product_id
+            WHERE ${eligible("candidate", true)}
+        ),
+        rec_ranked AS (
+            SELECT * FROM rec_scored ORDER BY ${ranking("rec_scored")} LIMIT ${n(limit)}
+        ),
+        rec_boundary AS (
+            SELECT (SELECT MIN(created_at) FROM rec_popular_sample) + ${n(POPULAR_WINDOW_SECONDS + 1)} AS popular_at,
+                (SELECT MIN(created_at) FROM rec_source_orders) + ${n(ALSO_BOUGHT_WINDOW_SECONDS + 1)} AS also_bought_at
         )
-        SELECT rec_ranked.id AS "id", rec_ranked."alsoBoughtBuyers" AS "alsoBoughtBuyers",
-            rec_ranked."relatedScore" AS "relatedScore", rec_ranked."popularBuyers" AS "popularBuyers",
-            rec_ranked."popularOrdering" AS "popularOrdering",
-            rec_boundary.popular_at AS popularAt, rec_boundary.also_bought_at AS alsoBoughtAt
+        SELECT rec_ranked.id AS "id", rec_ranked.also_bought AS "alsoBoughtBuyers",
+            rec_ranked.related AS "relatedScore", rec_ranked.popular_buyers AS "popularBuyers",
+            rec_ranked.popular_ordering AS "popularOrdering",
+            rec_boundary.popular_at AS "popularAt", rec_boundary.also_bought_at AS "alsoBoughtAt"
         FROM rec_boundary LEFT JOIN rec_ranked ON 1 = 1
-        ORDER BY CASE WHEN rec_ranked."alsoBoughtBuyers" >= ${sql.raw(String(MIN_ALSO_BOUGHT_BUYERS))}
-                THEN rec_ranked."alsoBoughtBuyers" ELSE 0 END DESC,
-            rec_ranked."relatedScore" + 15 * rec_ranked._price_band DESC,
-            rec_ranked."popularOrdering" DESC, rec_ranked._created_at DESC, rec_ranked.id ASC
+        ORDER BY ${ranking("rec_ranked")}
     `);
     // Inclusive windows stop including an order one second after its boundary.
     // An empty, quiet store has no deadline, never a routine TTL.
@@ -651,8 +409,8 @@ export async function rankRecommendationRows(
         .filter((at): at is number => at !== null && at !== undefined).map(Number);
     if (exits.length > 0) deps.validUntil(Math.min(...exits) * 1000);
     return rows.flatMap((row) => row.id === null ? [] : [{
-        id: row.id, alsoBoughtBuyers: row.alsoBoughtBuyers, relatedScore: row.relatedScore,
-        popularBuyers: row.popularBuyers, popularOrdering: row.popularOrdering,
+        id: row.id, alsoBoughtBuyers: Number(row.alsoBoughtBuyers), relatedScore: Number(row.relatedScore),
+        popularBuyers: Number(row.popularBuyers), popularOrdering: Number(row.popularOrdering),
     }]);
 }
 

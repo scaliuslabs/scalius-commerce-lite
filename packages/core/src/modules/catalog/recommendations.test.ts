@@ -5,6 +5,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+    ALSO_BOUGHT_SOURCE_ORDERS,
     getStorefrontProductRecommendations,
     MAX_RECOMMENDATION_SOURCE_IDS,
     rankProductRecommendations,
@@ -97,11 +98,6 @@ async function recommend(productIds: string[], limit = 12) {
     return getStorefrontProductRecommendations(db, { productIds, limit });
 }
 
-const scoreRows = (rows: Array<Record<string, unknown>>) => rows.filter((row) => row.id !== null).map((row) => ({
-    id: row.id, alsoBoughtBuyers: row.alsoBoughtBuyers, relatedScore: row.relatedScore,
-    popularBuyers: row.popularBuyers, popularOrdering: row.popularOrdering,
-}));
-
 function originalOrderPopularity(query: string): string {
     // Independent source oracle: duplicate lines remain here, and neither
     // eligibility, parent time nor normalized buyer comes from the projection.
@@ -119,56 +115,30 @@ function originalOrderPopularity(query: string): string {
     return source;
 }
 
-function fullUniverseRanking(query: string, limit: number): string {
-    // Check optimization equivalence with shared scoring formulas: disable
-    // cutoffs and restore full affinity and full-population popularity reads.
-    const noCoBuyCutoff = query.replace("SELECT CASE WHEN COUNT(*) >=", "SELECT CASE WHEN 0 AND COUNT(*) >=");
-    expect(noCoBuyCutoff).not.toBe(query);
-    const noRelatedCutoff = noCoBuyCutoff.replace(
-        "SELECT CASE WHEN also_bought_tier > 0 OR affinity > 15 THEN", "SELECT CASE WHEN 0 THEN",
-    );
-    expect(noRelatedCutoff).not.toBe(noCoBuyCutoff);
-    const noRelatedReuse = noRelatedCutoff.replace(
-        /SELECT \* FROM rec_related_affinity(\s+UNION ALL)/, "SELECT * FROM rec_related_affinity WHERE 0 = 1$1",
-    );
-    expect(noRelatedReuse).not.toBe(noRelatedCutoff);
-    const fullAffinity = noRelatedReuse.replace(
-        '"product_buyer_state"."product_id" NOT IN (SELECT product_id FROM rec_related_affinity)', "1 = 1",
-    );
-    expect(fullAffinity).not.toBe(noRelatedReuse);
-    const noAffinityCutoff = fullAffinity.replace(
-        /AND \(rec_affinity_cutoff\.also_bought_tier IS NULL[\s\S]*?product_buyer_state\.affinity >= rec_affinity_cutoff\.affinity\)\)/,
-        "",
-    );
-    expect(noAffinityCutoff).not.toBe(fullAffinity);
-    const allPopularity = noAffinityCutoff.replace(
-        "AND rec_popular_projection.product_id IN (SELECT product_id FROM rec_candidates)", "",
-    );
-    expect(allPopularity).not.toBe(noAffinityCutoff);
-    const originalPopularity = `SUM(CASE WHEN COALESCE(rec_popular.buyers, 0) >= 2 THEN 1 ELSE 0 END) OVER () * 2 >= MIN(COUNT(*) OVER (), ${limit})`;
-    const canonical = allPopularity.replaceAll("(SELECT qualifies FROM rec_popularity_guard) = 1", originalPopularity);
-    expect(canonical).not.toBe(allPopularity);
-    return originalOrderPopularity(canonical);
-}
-
-function affinityVisits(query: string, params: readonly SQLInputValue[]) {
-    const seen = { guard: [] as number[], scored: [[], []] as [string[], string[]] };
-    sqlite.function("observe_related_guard", value => { seen.guard.push(Number(value)); return value; });
-    for (const branch of [0, 1]) {
-        sqlite.function(`observe_affinity_${branch}`, value => { seen.scored[branch]!.push(String(value)); return value; });
-    }
-    let branch = 0;
-    const observed = query
-        .replace(/(rec_related_guard AS MATERIALIZED\s*\(\s*SELECT )COALESCE/, "$1observe_related_guard(COALESCE")
-        .replace(/\), 0\) AS qualifies(\s*\),\s*rec_fallback_affinity)/, "), 0)) AS qualifies$1")
-        .replace(/(select )("product_buyer_state"\."product_id")( as "product_id")/gi,
-            (_match, select, id, alias) => `${select}observe_affinity_${branch++}(${id})${alias}`);
-    expect(branch).toBe(2);
-    expect(sqlite.prepare(observed).all(...params)).toEqual(sqlite.prepare(query).all(...params));
-    return seen;
-}
-
 const ids = (result: { products: Array<{ id: string }> }) => result.products.map((item) => item.id);
+
+/** The ranking statement's plan, one line per step. */
+function rankingPlan(): string {
+    const index = statements.findIndex((query) => query.includes("rec_pool"));
+    expect(index).toBeGreaterThanOrEqual(0);
+    return sqlite.prepare(`EXPLAIN QUERY PLAN ${statements[index]}`).all(...statementParams[index]!)
+        .map((step) => String(step.detail)).join("\n");
+}
+
+/** Ranks once in a strict dependency scope, asserting one statement and the source-order oracle. */
+async function rankStrict(productIds: string[], limit: number) {
+    statements = [];
+    statementParams = [];
+    const result = await withDependencyScope(
+        () => rankProductRecommendations(db, { productIds, limit }), { strict: true, log: () => {} },
+    );
+    expect(statements).toHaveLength(1);
+    expect(sqlite.prepare(statements[0]!).all(...statementParams[0]!))
+        .toEqual(sqlite.prepare(originalOrderPopularity(statements[0]!)).all(...statementParams[0]!));
+    expect(result.dependencies.uncacheable).toEqual([]);
+    expect(result.dependencies.coarseTables).toEqual([]);
+    return result;
+}
 
 beforeEach(() => {
     statements = [];
@@ -227,66 +197,14 @@ describe("product recommendations", () => {
         const createdAt = NOW - days * 86400 + 100;
         order("buyer", ["source"], "completed", createdAt);
         await rebuildCatalogProjections(db);
-        statements = [];
-        const { value, dependencies } = await withDependencyScope(
-            () => rankProductRecommendations(db, { productIds: ["source"] }), { strict: true, log: () => {} },
-        );
+        const { value, dependencies } = await rankStrict(["source"], 8);
         expect(value.rows).toEqual([]);
         expect(dependencies.validUntil).toBe((createdAt + days * 86400 + 1) * 1000);
-        expect(statements).toHaveLength(1);
         if (days === 30) {
-            statements = [];
-            const emptySource = await withDependencyScope(
-                () => rankProductRecommendations(db, { productIds: [] }), { strict: true, log: () => {} },
-            );
+            const emptySource = await rankStrict([], 8);
             expect(emptySource.value.rows).toEqual([]);
             expect(emptySource.dependencies.validUntil).toBe(dependencies.validUntil);
-            expect(statements).toHaveLength(1);
         }
-    });
-
-    it("preserves price-band, timestamp and id ties through the recorded ranking wrapper", async () => {
-        product({ id: "source" });
-        product({ id: "far_new", priceMinor: 900000, createdAt: NOW - 10 });
-        product({ id: "near_old", createdAt: NOW - 100 });
-        product({ id: "near_b", createdAt: NOW - 50 });
-        product({ id: "near_a", createdAt: NOW - 50 });
-        await rebuildCatalogProjections(db);
-        const direct = await rankProductRecommendations(db, { productIds: ["source"], limit: 4 });
-        expect(direct.rows.map((row) => row.id)).toEqual(["near_a", "near_b", "near_old", "far_new"]);
-        statements = [];
-        const recorded = await withDependencyScope(
-            () => rankProductRecommendations(db, { productIds: ["source"], limit: 4 }), { strict: true, log: () => {} },
-        );
-        expect(recorded.value).toEqual(direct);
-        expect(recorded.dependencies.validUntil).toBeNull();
-        expect(statements).toHaveLength(1);
-    });
-
-    it("reads the live ranking deadline from bounded index reads, never every order of the year", async () => {
-        product({ id: "source", categoryId: "cat_shirts" });
-        product({ id: "peer", categoryId: "cat_shirts" });
-        order("01711000001", ["source", "peer"], "completed", NOW - 40 * 86400);
-        await rebuildCatalogProjections(db);
-        statements = [];
-        statementParams = [];
-        const { dependencies } = await recordedRecommendations(["source"]);
-        expect(dependencies.validUntil).not.toBeNull();
-        const index = statements.findIndex((query) => query.includes("rec_popular_first"));
-        expect(index).toBeGreaterThanOrEqual(0);
-        const steps = sqlite.prepare(`EXPLAIN QUERY PLAN ${statements[index]}`).all(...statementParams[index]!);
-        const plan = steps.map((step) => String(step.detail));
-        // It scanned every live order, probing each for a source line: minutes on a million orders.
-        expect(plan.filter((detail) => /^SCAN rec_(popular_first|source_order)|USING (COVERING )?INDEX orders_\w+ \(deleted_at=\?\)$/.test(detail))).toEqual([]);
-        expect(plan.filter((detail) => detail.startsWith("SEARCH rec_source_line_sample "))).toHaveLength(1);
-        expect(plan.filter((detail) => detail === "MATERIALIZE rec_source_orders")).toHaveLength(1);
-        expect(plan.join("\n")).toMatch(/SEARCH rec_source_line_sample USING COVERING INDEX order_items_product_recent_idx/);
-        expect(plan.join("\n")).toContain("SEARCH rec_popular_first USING COVERING INDEX recommendation_order_products_created_idx (created_at>?)");
-        expect(sqlite.prepare(statements[index]!).all(...statementParams[index]!))
-            .toEqual(sqlite.prepare(originalOrderPopularity(statements[index]!)).all(...statementParams[index]!));
-        const sample = steps.find((step) => String(step.detail).startsWith("SEARCH rec_source_line_sample "))!;
-        expect(steps.filter((step) => step.parent === sample.parent).map((step) => String(step.detail)).join("\n"))
-            .not.toMatch(/USE TEMP B-TREE FOR .*ORDER BY/);
     });
 
     it("ignores old and cancelled orders when selecting a live ranking deadline", async () => {
@@ -298,6 +216,28 @@ describe("product recommendations", () => {
         const { dependencies } = await recordedRecommendations(["source"]);
         expect(dependencies.validUntil).toBeNull();
         expect(dependencies.softMaxAgeSeconds).toBeNull();
+    });
+
+    it("reads bounded index ranges only, never every order, line or product of the store", async () => {
+        product({ id: "source", categoryId: "cat_shirts" });
+        product({ id: "peer", categoryId: "cat_trousers" });
+        attribute("source", "attr_colour", "Red");
+        attribute("peer", "attr_colour", "Red");
+        collection("col_menswear", { source: "dynamic", categoryIds: ["cat_shirts", "cat_trousers"] });
+        collection("col_pick", { source: "manual", productIds: ["source", "peer"] });
+        order("01711000001", ["source", "peer"], "completed", NOW - 40 * 86400);
+        await rebuildCatalogProjections(db);
+        statements = [];
+        statementParams = [];
+        expect((await rankProductRecommendations(db, { productIds: ["source"] })).rows.map((row) => row.id)).toEqual(["peer"]);
+        const plan = rankingPlan();
+        expect(plan).toContain("SEARCH source_order USING INDEX recommendation_order_products_product_idx (product_id=? AND created_at>?)");
+        expect(plan).toContain("SEARCH sample USING INDEX recommendation_order_products_created_idx (created_at>?)");
+        expect(plan).toMatch(/SEARCH peer USING (COVERING )?INDEX sqlite_autoindex_recommendation_order_products_1 \(order_id=\?\)/);
+        expect(plan).toContain("SEARCH candidate USING INDEX sqlite_autoindex_product_buyer_state_1 (product_id=?)");
+        expect(plan).toMatch(/SEARCH peer USING (COVERING )?INDEX product_buyer_state_category_newest_idx \(is_public=\? AND category_id=\? AND product_created_at/);
+        expect(plan).toMatch(/SEARCH peer_value USING (COVERING )?INDEX product_attribute_values_attr_value_product_idx \(attribute_id=\? AND value=\? AND product_id<\?\)/);
+        expect(plan).not.toMatch(/SCAN (orders|order_items|products|product_buyer_state|product_attribute_values|recommendation_order_products|candidate|peer|newest|population)\b/);
     });
 
     it("keeps unchanged stored projections stable and invalidates changed ranking positions", async () => {
@@ -354,11 +294,12 @@ describe("product recommendations", () => {
         expect(sequence("popular")).toBeGreaterThan(popular);
     });
 
-    it("ranks category, collection and attribute matches above price-only and unrelated products", async () => {
+    it("ranks category, collection and attribute matches first; the price band lifts related products only", async () => {
         product({ id: "source", categoryId: "cat_shirts", priceMinor: 100_000 });
         attribute("source", "attr_colour", "Red");
         product({ id: "same_category_same_colour", categoryId: "cat_shirts", priceMinor: 100_000, createdAt: NOW - 50 });
         attribute("same_category_same_colour", "attr_colour", "Red");
+        product({ id: "same_category_far_price", categoryId: "cat_shirts", priceMinor: 900_000, createdAt: NOW - 45 });
         product({ id: "same_category", categoryId: "cat_shirts", priceMinor: 120_000, createdAt: NOW - 40 });
         product({ id: "same_collection", categoryId: "cat_trousers", priceMinor: 900_000, createdAt: NOW - 30 });
         product({ id: "similar_price", categoryId: "cat_trousers", priceMinor: 110_000, createdAt: NOW - 20 });
@@ -374,9 +315,10 @@ describe("product recommendations", () => {
         expect(ids(result)).toEqual([
             "same_category_same_colour",
             "same_category",
+            "same_category_far_price",
             "same_collection",
-            "similar_price",
             "unrelated_newest",
+            "similar_price",
             "unrelated_older",
         ]);
         expect(result.reason).toBe("similar");
@@ -391,12 +333,8 @@ describe("product recommendations", () => {
             imageAlt: "Photo 0",
             secondaryImageUrl: null,
         });
-        // Never computed: the stored-list read, the live ranking, then the
-        // kept rows' cards and media.
-        expect(statements).toHaveLength(4);
-        // The ranking scores every public product, so it reads the buyer
-        // state alone; card columns are read for the kept rows only.
-        const ranking = statements.find((query) => query.includes("rec_co_purchase"))!;
+        // The ranking reads ids and signals only; cards come afterwards.
+        const ranking = statements.find((query) => query.includes("rec_pool"))!;
         expect(ranking).not.toContain('"products"."name"');
         expect(ranking).not.toContain("buyer_state_card_sku");
     });
@@ -438,7 +376,7 @@ describe("product recommendations", () => {
         expect(wider.reason).toBe("also_bought");
     });
 
-    it("covers recent buyer and order-line reads without changing live scores or the strict deadline", async () => {
+    it("counts distinct real buyers by phone or normalized email, by the order's own time", async () => {
         product({ id: "source", categoryId: "cat_shirts" });
         product({ id: "peer", categoryId: "cat_trousers", priceMinor: 900_000 });
         product({ id: "similar", categoryId: "cat_shirts" });
@@ -457,14 +395,11 @@ describe("product recommendations", () => {
         }
         order("01733333333", basket);
         sqlite.prepare("UPDATE orders SET deleted_at = ? WHERE id = ?").run(NOW, `ord_${orderSequence}`);
+        // Old line times never move an order out of (or into) a window.
+        sqlite.prepare("UPDATE order_items SET created_at = ?").run(NOW - 400 * 86_400);
         await rebuildCatalogProjections(db);
-        statements = [];
-        statementParams = [];
 
-        const { value, dependencies } = await withDependencyScope(
-            () => rankProductRecommendations(db, { productIds: ["source"], limit: 8 }),
-            { strict: true, log: () => {} },
-        );
+        const { value, dependencies } = await rankStrict(["source"], 8);
         expect(value).toEqual({
             reason: "also_bought",
             rows: [
@@ -474,80 +409,12 @@ describe("product recommendations", () => {
         });
         expect(dependencies.validUntil).toBe((NOW - 3_600 + 30 * 86_400 + 1) * 1_000);
         expect(dependencies.keys).toContain("recommendation-signals");
-        expect(dependencies.uncacheable).toEqual([]);
-        expect(dependencies.coarseTables).toEqual([]);
-        expect(statements).toHaveLength(1);
-        const plan = statements.flatMap((query, index) => sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`)
-            .all(...statementParams[index]!).map((step) => String(step.detail))).join("\n");
-        expect(plan).toContain("SEARCH product_buyer_state USING COVERING INDEX product_buyer_state_price_idx (is_public=?)");
-        // A non-covering lookup per order/line took 18 seconds at one million orders.
-        expect(plan).toContain("SEARCH rec_popular_first USING COVERING INDEX recommendation_order_products_created_idx (created_at>?)");
-        for (const alias of ["rec_peer_line"]) {
-            expect(plan).toMatch(new RegExp(`SEARCH ${alias} USING COVERING INDEX order_items_order_product_idx`));
-        }
-        expect(plan).toContain("SEARCH rec_popular_projection USING COVERING INDEX recommendation_order_products_product_idx (product_id=? AND created_at>?)");
-        expect(plan).toMatch(/SEARCH rec_source_pair USING (?:COVERING )?INDEX \S+ \(order_id=\? AND product_id=\?\)/);
-        expect(plan).not.toMatch(/(?:SEARCH|SCAN) rec_source_order(?: |$)/m);
-        // Compare both exact score rows and the strict boundary with the old
-        // orders and lines, including duplicate source lines and buyers.
-        for (const [index, query] of statements.entries()) {
-            expect(sqlite.prepare(query).all(...statementParams[index]!))
-                .toEqual(sqlite.prepare(originalOrderPopularity(query)).all(...statementParams[index]!));
+        for (const productIds of [[], ["source", "similar"]]) {
+            expect((await rankStrict(productIds, 3)).value.rows.find((row) => row.id === "peer")?.popularBuyers).toBe(2);
         }
     });
 
-    it("matches original orders for parent-time popularity across source counts and duplicate SKU lines", async () => {
-        for (const id of ["source", "source_b", "peer", "rival"]) product({ id });
-        for (const status of ["pending", "processing", "confirmed", "shipped", "delivered", "completed"]) {
-            order(`buyer_${status}`, ["peer", "peer"], status);
-        }
-        for (const email of [" Buyer@Example.com ", "buyer@example.com"]) {
-            order("", ["peer", "peer"]);
-            sqlite.prepare("UPDATE orders SET customer_email = ? WHERE id = ?").run(email, `ord_${orderSequence}`);
-        }
-        order("", ["peer"]); // NULL buyer is not a distinct buyer.
-        sqlite.prepare("UPDATE orders SET customer_email = NULL WHERE id = ?").run(`ord_${orderSequence}`);
-        const boundary = NOW - 30 * 86400 + 100;
-        order("boundary", ["peer", "peer"], "completed", boundary);
-        // These old SKU-line times must not remove recent parent orders.
-        sqlite.prepare("UPDATE order_items SET created_at = ?, variant_id = 'var_peer'").run(NOW - 400 * 86400);
-        order("old_parent", ["peer", "peer"], "completed", NOW - 31 * 86400);
-        // Conversely, a fresh line cannot restore an expired parent order.
-        sqlite.prepare("UPDATE order_items SET created_at = ? WHERE order_id = ?").run(NOW, `ord_${orderSequence}`);
-        for (const status of ["cancelled", "incomplete", "refunded", "returned"]) order(`excluded_${status}`, ["peer"], status);
-        order("deleted", ["peer"]);
-        sqlite.prepare("UPDATE orders SET deleted_at = ? WHERE id = ?").run(NOW, `ord_${orderSequence}`);
-        await rebuildCatalogProjections(db);
-
-        let lastQuery = "";
-        let lastParams: readonly SQLInputValue[] = [];
-        for (const productIds of [[], ["source"], ["source", "source_b"]]) {
-            statements = [];
-            statementParams = [];
-            const { value, dependencies } = await withDependencyScope(
-                () => rankProductRecommendations(db, { productIds, limit: 3 }), { strict: true, log: () => {} },
-            );
-            expect(value.rows.find(row => row.id === "peer")?.popularBuyers).toBe(8);
-            expect(dependencies.validUntil).toBe((boundary + 30 * 86400 + 1) * 1000);
-            expect(dependencies.uncacheable).toEqual([]);
-            expect(statements).toHaveLength(1);
-            lastQuery = statements[0]!;
-            lastParams = statementParams[0]!;
-            expect(sqlite.prepare(lastQuery).all(...lastParams))
-                .toEqual(sqlite.prepare(originalOrderPopularity(lastQuery)).all(...lastParams));
-            if (productIds.length > 0) {
-                expect(scoreRows(sqlite.prepare(fullUniverseRanking(lastQuery, 3)).all(...lastParams))).toEqual(value.rows);
-            }
-        }
-        // Prove the oracle cannot silently inherit a corrupt projection.
-        const sourceQuery = originalOrderPopularity(lastQuery);
-        const sourceRows = sqlite.prepare(sourceQuery).all(...lastParams);
-        sqlite.exec("DELETE FROM recommendation_order_products");
-        expect(sqlite.prepare(sourceQuery).all(...lastParams)).toEqual(sourceRows);
-        expect(sqlite.prepare(lastQuery).all(...lastParams)).not.toEqual(sourceRows);
-    });
-
-    it("uses the complete co-buy tier only when its eligible recent witnesses prove the popularity quorum", async () => {
+    it("orders the co-buy tier by popularity once enough eligible products are popular", async () => {
         for (const [index, id] of ["source", "peer_a", "peer_b", "peer_c", "peer_d", "outsider"].entries()) {
             product({ id, createdAt: NOW - 100 + index });
         }
@@ -558,8 +425,6 @@ describe("product recommendations", () => {
         order("phone_a", recentBasket, "delivered");
         order("", recentBasket);
         sqlite.prepare("UPDATE orders SET customer_email = ? WHERE id = ?").run("buyer@example.com", `ord_${orderSequence}`);
-        order("", recentBasket);
-        sqlite.prepare("UPDATE orders SET customer_email = ? WHERE id = ?").run(" BUYER@EXAMPLE.COM ", `ord_${orderSequence}`);
         for (const buyer of ["old_a", "old_b"]) order(buyer, ["source", "peer_c", "peer_d"], "completed", NOW - 40 * 86400);
         for (let buyer = 0; buyer < 4; buyer += 1) {
             order(`global_${buyer}`, buyer < 3 ? ["peer_c", "peer_d", "outsider"] : ["peer_d", "outsider"]);
@@ -567,148 +432,19 @@ describe("product recommendations", () => {
         for (const status of ["cancelled", "incomplete", "refunded", "returned"]) {
             order(`excluded_${status}`, ["source", "peer_d"], status);
         }
-        order("deleted", ["source", "peer_d"]);
-        sqlite.prepare("UPDATE orders SET deleted_at = ? WHERE id = ?").run(NOW, `ord_${orderSequence}`);
         await rebuildCatalogProjections(db);
-        statements = [];
-        statementParams = [];
-        const { value, dependencies } = await withDependencyScope(
-            () => rankProductRecommendations(db, { productIds: ["source"], limit: 3 }),
-            { strict: true, log: () => {} },
-        );
+        const { value, dependencies } = await rankStrict(["source"], 3);
         expect(value).toEqual({ reason: "also_bought", rows: [
             { id: "peer_d", alsoBoughtBuyers: 2, relatedScore: 0, popularBuyers: 4, popularOrdering: 4 },
             { id: "peer_c", alsoBoughtBuyers: 2, relatedScore: 0, popularBuyers: 3, popularOrdering: 3 },
             { id: "peer_b", alsoBoughtBuyers: 2, relatedScore: 0, popularBuyers: 2, popularOrdering: 2 },
         ] });
-        expect(statements).toHaveLength(1);
         expect(dependencies.validUntil).toBe((NOW - 3600 + 30 * 86400 + 1) * 1000);
-        expect(dependencies.uncacheable).toEqual([]);
-        expect(dependencies.coarseTables).toEqual([]);
-        const index = statements.findIndex((query) => query.includes("rec_guard AS MATERIALIZED"));
-        const query = statements[index]!;
-        const params = statementParams[index]!;
-        const canonical = fullUniverseRanking(query, 3);
-        expect(canonical).not.toBe(query);
-        expect(scoreRows(sqlite.prepare(canonical).all(...params))).toEqual(value.rows);
-        expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(canonical).all(...params));
-
-        const guardValues: number[] = [];
-        let quorumVisits = 0;
-        sqlite.function("observe_guard", (value) => { guardValues.push(Number(value)); return value; });
-        sqlite.function("observe_global_quorum", (value) => { quorumVisits += 1; return value; });
-        const observed = query
-            .replace("THEN 1 ELSE 0 END AS qualifies", "THEN observe_guard(1) ELSE observe_guard(0) END AS qualifies")
-            .replace("AND rec_quorum_projection.created_at >= unixepoch()", "AND observe_global_quorum(rec_quorum_projection.created_at) >= unixepoch()");
-        expect(observed).toContain("observe_global_quorum(rec_quorum_projection.created_at)");
-        expect(scoreRows(sqlite.prepare(observed).all(...params))).toEqual(value.rows);
-        expect(guardValues).toEqual([1]);
-        expect(quorumVisits).toBe(0);
-        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...params).map((row) => String(row.detail));
-        expect(plan.filter((line) => line.startsWith("SEARCH rec_source_line_sample "))).toHaveLength(1);
-        expect(plan.filter((line) => line.startsWith("SEARCH rec_popular_projection "))).toEqual([
-            "SEARCH rec_popular_projection USING COVERING INDEX recommendation_order_products_product_idx (product_id=? AND created_at>?)",
-        ]);
     });
 
-    it("keeps global popularity enabled when its recent witnesses are below the winning cutoff", async () => {
-        product({ id: "source" });
-        const winners = ["high_a", "high_b", "high_c", "high_d"];
-        for (const [index, id] of winners.entries()) product({ id, createdAt: NOW - 100 + index });
-        for (const id of ["witness_a", "witness_b"]) product({ id });
-        for (let buyer = 0; buyer < 4; buyer += 1) {
-            order(`annual_${buyer}`, ["source", ...winners], "completed", NOW - 40 * 86400);
-        }
-        for (const buyer of ["recent_a", "recent_b"]) {
-            order(buyer, ["source", "witness_a", "witness_b"]);
-            order(buyer, ["high_a"]);
-        }
-        await rebuildCatalogProjections(db);
-        statements = [];
-        statementParams = [];
-        const result = await rankProductRecommendations(db, { productIds: ["source"], limit: 3 });
-        // Only one of four tied winners is popular. The discarded witnesses
-        // still enable the global switch, placing that older winner first.
-        expect(result.rows).toEqual([
-            { id: "high_a", alsoBoughtBuyers: 4, relatedScore: 0, popularBuyers: 2, popularOrdering: 2 },
-            { id: "high_d", alsoBoughtBuyers: 4, relatedScore: 0, popularBuyers: 0, popularOrdering: 0 },
-            { id: "high_c", alsoBoughtBuyers: 4, relatedScore: 0, popularBuyers: 0, popularOrdering: 0 },
-        ]);
-        const query = statements[0]!;
-        const canonical = fullUniverseRanking(query, 3);
-        expect(canonical).not.toBe(query);
-        expect(scoreRows(sqlite.prepare(canonical).all(...statementParams[0]!))).toEqual(result.rows);
-    });
-
-    it("keeps every cutoff tie and exact scores for the 24-row stored refresh", async () => {
-        product({ id: "source" });
-        const peers = Array.from({ length: 25 }, (_, index) => `peer_${String(index).padStart(2, "0")}`);
-        for (const [index, id] of peers.entries()) product({ id, createdAt: NOW - 100 + index });
-        order("buyer_a", ["source", "source", ...peers]);
-        order("buyer_b", ["source", ...peers]);
-        await rebuildCatalogProjections(db);
-        statements = [];
-        statementParams = [];
-        const { value: rows, dependencies } = await withDependencyScope(
-            () => rankRecommendationRows(db, ["source"], 24), { strict: true, log: () => {} },
-        );
-        expect(dependencies.validUntil).toBe((NOW - 3600 + 30 * 86400 + 1) * 1000);
-        expect(rows).toEqual([...peers].reverse().slice(0, 24).map((id) => ({
-            id, alsoBoughtBuyers: 2, relatedScore: 0, popularBuyers: 2, popularOrdering: 2,
-        })));
-        expect(statements).toHaveLength(1);
-        const canonical = fullUniverseRanking(statements[0]!, 24);
-        expect(canonical).not.toBe(statements[0]);
-        expect(scoreRows(sqlite.prepare(canonical).all(...statementParams[0]!))).toEqual(rows);
-        await expect(refreshProductRecommendations(db, ["source"])).resolves.toEqual({ refreshed: 1, cleared: 0 });
-        const stored = sqlite.prepare("SELECT recommended_product_id AS id FROM product_recommendations WHERE product_id = 'source' ORDER BY position").all();
-        expect(stored.map((row) => row.id)).toEqual(rows.map((row) => row.id));
-    });
-
-    it.each(["no_source", "no_history", "underfilled", "insufficient_recent"] as const)(
-        "keeps canonical ranking through the fallback for %s",
-        async (scenario) => {
-            for (const id of ["source", "peer_a", "peer_b", "peer_c", "peer_d"]) product({ id });
-            product({ id: "hidden", isActive: false });
-            product({ id: "sold_out", stock: 0 });
-            for (const buyer of ["global_a", "global_b"]) order(buyer, ["peer_a", "peer_b", "peer_c", "peer_d"]);
-            if (scenario === "underfilled") {
-                for (const buyer of ["co_a", "co_b"]) order(buyer, ["source", "peer_a", "hidden", "sold_out"]);
-            } else if (scenario === "insufficient_recent") {
-                for (const buyer of ["old_a", "old_b"]) order(buyer, ["source", "peer_a", "peer_b", "peer_c", "peer_d"], "completed", NOW - 40 * 86400);
-                for (const buyer of ["co_a", "co_b"]) order(buyer, ["source", "peer_a"]);
-            }
-            await rebuildCatalogProjections(db);
-            statements = [];
-            statementParams = [];
-            const result = await rankProductRecommendations(db, {
-                productIds: scenario === "no_source" ? [] : ["source"], limit: 3,
-            });
-            expect(statements).toHaveLength(1);
-            expect(result.rows).toHaveLength(3);
-            const query = statements[0]!;
-            const params = statementParams[0]!;
-            expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(originalOrderPopularity(query)).all(...params));
-            if (scenario === "no_source") {
-                expect(query).not.toContain("rec_guard");
-                expect(query).not.toContain("rec_candidates");
-                return;
-            }
-            const canonical = fullUniverseRanking(query, 3);
-            expect(canonical).not.toBe(query);
-            expect(scoreRows(sqlite.prepare(canonical).all(...params))).toEqual(result.rows);
-            const guardValues: number[] = [];
-            sqlite.function("observe_guard", (value) => { guardValues.push(Number(value)); return value; });
-            const observed = query.replace("THEN 1 ELSE 0 END AS qualifies", "THEN observe_guard(1) ELSE observe_guard(0) END AS qualifies");
-            expect(scoreRows(sqlite.prepare(observed).all(...params))).toEqual(result.rows);
-            expect(guardValues).toEqual([0]);
-        },
-    );
-
-    it("keeps fallback affinity ties and counts popularity witnesses outside the cutoff only while eligible", async () => {
+    it("lets an unrelated popular product switch popularity on for related ones, only while it is eligible", async () => {
         product({ id: "source", categoryId: "cat_shirts" });
-        const peers = ["peer_a", "peer_b", "peer_c", "peer_d", "peer_e"];
-        for (const id of peers) product({ id, categoryId: "cat_shirts", createdAt: NOW - 100 });
+        for (const id of ["peer_a", "peer_b", "peer_c", "peer_d", "peer_e"]) product({ id, categoryId: "cat_shirts", createdAt: NOW - 100 });
         product({ id: "outside", categoryId: "cat_trousers" });
         product({ id: "hidden", categoryId: "cat_trousers", isActive: false });
         product({ id: "sold_out", categoryId: "cat_trousers", stock: 0 });
@@ -716,183 +452,90 @@ describe("product recommendations", () => {
             order(buyer, ["peer_b", "outside", "hidden", "sold_out"]);
             order(buyer, ["source"]);
         }
-
-        const read = async () => {
-            await rebuildCatalogProjections(db);
-            statements = [];
-            statementParams = [];
-            const result = await withDependencyScope(
-                () => rankProductRecommendations(db, { productIds: ["source"], limit: 3 }),
-                { strict: true, log: () => {} },
-            );
-            expect(statements).toHaveLength(1);
-            const query = statements[0]!;
-            const params = statementParams[0]!;
-            expect(sqlite.prepare(query).all(...params))
-                .toEqual(sqlite.prepare(fullUniverseRanking(query, 3)).all(...params));
-            const visits = affinityVisits(query, params);
-            expect(visits.guard).toEqual([1]);
-            expect(visits.scored[1]).toEqual([]);
-            expect(result.dependencies.validUntil).toBe((NOW - 3600 + 30 * 86400 + 1) * 1000);
-            expect(result.dependencies.uncacheable).toEqual([]);
-            expect(result.dependencies.coarseTables).toEqual([]);
-            return result.value;
-        };
-        const enabled = await read();
+        await rebuildCatalogProjections(db);
+        const enabled = (await rankStrict(["source"], 3)).value;
         expect(enabled.reason).toBe("similar");
         expect(enabled.rows.map((row) => row.id)).toEqual(["peer_b", "peer_a", "peer_c"]);
         expect(enabled.rows[0]).toMatchObject({ alsoBoughtBuyers: 0, relatedScore: 40, popularBuyers: 2, popularOrdering: 2 });
 
         sqlite.prepare("UPDATE product_variants SET stock = 0 WHERE id = 'var_outside'").run();
-        const disabled = await read();
+        await rebuildCatalogProjections(db);
+        const disabled = (await rankStrict(["source"], 3)).value;
         expect(disabled.rows.map((row) => row.id)).toEqual(["peer_a", "peer_b", "peer_c"]);
-        // Hidden/sold-out/source products cannot keep the global switch on.
         // Exact buyer counts survive even when they no longer order the rows.
         expect(disabled.rows[1]).toMatchObject({ popularBuyers: 2, popularOrdering: 0 });
         expect(maxBoundParameters).toBeLessThanOrEqual(100);
     });
 
-    it("counts only finalists while proving the global quorum from distinct eligible buyers", async () => {
-        product({ id: "source", categoryId: "cat_shirts" });
-        for (const id of ["peer_a", "peer_b", "peer_c"]) product({ id, categoryId: "cat_shirts" });
-        product({ id: "outside", categoryId: "cat_trousers" });
-        product({ id: "hidden", isActive: false });
-        product({ id: "sold_out", stock: 0 });
-        order("buyer_a", ["peer_b", "peer_b"]);
-        for (let repeat = 0; repeat < 3; repeat += 1) order("buyer_b", ["peer_b", "peer_b"]);
-        for (let repeat = 0; repeat < 4; repeat += 1) order("buyer_a", ["outside", "outside"]);
-        const outsideOrder = `ord_${orderSequence}`;
-        order("", ["outside"]);
-        sqlite.prepare("UPDATE orders SET customer_email = NULL WHERE id = ?").run(`ord_${orderSequence}`);
-        for (const buyer of ["buyer_a", "buyer_b"]) {
-            order(buyer, ["hidden", "sold_out"]);
-            order(buyer, ["source"]);
-        }
-        await rebuildCatalogProjections(db);
-
-        const read = async (enabled: boolean) => {
-            statements = [];
-            statementParams = [];
-            const { value, dependencies } = await withDependencyScope(
-                () => rankProductRecommendations(db, { productIds: ["source"], limit: 3 }),
-                { strict: true, log: () => {} },
-            );
-            expect(value.rows.map(row => row.id)).toEqual(enabled
-                ? ["peer_b", "peer_a", "peer_c"] : ["peer_a", "peer_b", "peer_c"]);
-            expect(value.rows.find(row => row.id === "peer_b"))
-                .toMatchObject({ popularBuyers: 2, popularOrdering: enabled ? 2 : 0 });
-            const query = statements[0]!;
-            const params = statementParams[0]!;
-            expect(statements).toHaveLength(1);
-            expect(sqlite.prepare(query).all(...params))
-                .toEqual(sqlite.prepare(fullUniverseRanking(query, 3)).all(...params));
-            expect(dependencies.validUntil).toBe((NOW - 3600 + 30 * 86400 + 1) * 1000);
-            expect(dependencies.uncacheable).toEqual([]);
-
-            const counted = new Set<string>();
-            const quorum = new Map<string, number>();
-            sqlite.function("observe_finalist_buyer", (id, buyer) => { counted.add(String(id)); return buyer; });
-            sqlite.function("observe_quorum_buyer", (id, buyer) => {
-                quorum.set(String(id), (quorum.get(String(id)) ?? 0) + 1);
-                return buyer;
-            });
-            const observed = query
-                .replace("COUNT(DISTINCT rec_popular_projection.buyer)", "COUNT(DISTINCT observe_finalist_buyer(rec_popular_projection.product_id, rec_popular_projection.buyer))")
-                .replace("SELECT DISTINCT rec_quorum_projection.buyer", "SELECT DISTINCT observe_quorum_buyer(rec_quorum_projection.product_id, rec_quorum_projection.buyer)");
-            expect(observed).toContain("SELECT DISTINCT observe_quorum_buyer");
-            expect(scoreRows(sqlite.prepare(observed).all(...params))).toEqual(value.rows);
-            expect([...counted]).toEqual(["peer_b"]);
-            expect([...quorum.keys()].sort()).toEqual(["outside", "peer_b"]);
-            // The finalist has four orders from two buyers; the second
-            // distinct buyer stops the witness probe before its repeats.
-            expect(quorum.get("peer_b")).toBe(2);
-            const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...params)
-                .map(row => String(row.detail)).join("\n");
-            expect(plan).toContain("SEARCH rec_quorum_projection USING COVERING INDEX recommendation_order_products_product_idx (product_id=? AND created_at>?)");
-        };
-        await read(false);
-        sqlite.prepare("UPDATE orders SET customer_phone = 'buyer_b' WHERE id = ?").run(outsideOrder);
-        await read(true);
-    });
-
-    it("covers every related signal once while keeping popularity witnesses outside the sparse set", async () => {
+    it("scores every related signal once, and a buyerless co-purchase as no evidence", async () => {
         product({ id: "source", categoryId: "cat_shirts" });
         for (const id of ["overlap", "category_peer"]) product({ id, categoryId: "cat_shirts" });
-        for (const id of ["collection_peer", "attribute_peer", "single_peer", "outside_a", "outside_b"]) {
+        for (const id of ["collection_peer", "attribute_peer", "single_peer", "buyerless_peer", "outside_a", "outside_b"]) {
             product({ id, categoryId: "cat_trousers" });
         }
-        product({ id: "hidden", categoryId: "cat_shirts", isActive: false });
-        product({ id: "sold_out", categoryId: "cat_shirts", stock: 0 });
         collection("col_sparse", { source: "manual", productIds: ["source", "overlap", "collection_peer", null] });
         for (const id of ["source", "overlap", "attribute_peer"]) attribute(id, "attr_sparse", "same");
         order("single_buyer", ["source", "single_peer"]);
+        order("", ["source", "buyerless_peer"]);
         for (const buyer of ["global_a", "global_b"]) order(buyer, ["attribute_peer", "outside_a", "outside_b"]);
         await rebuildCatalogProjections(db);
-        statements = [];
-        statementParams = [];
-        const result = await withDependencyScope(
-            () => rankProductRecommendations(db, { productIds: ["source", "source"], limit: 5 }),
-            { strict: true, log: () => {} },
-        );
-        expect(result.value.rows.map(row => row.id))
-            .toEqual(["overlap", "category_peer", "collection_peer", "single_peer", "attribute_peer"]);
-        expect(result.value.rows.at(-1)).toMatchObject({ popularBuyers: 2, popularOrdering: 2 });
-        const query = statements[0]!;
-        const params = statementParams[0]!;
-        expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(fullUniverseRanking(query, 5)).all(...params));
-        const visits = affinityVisits(query, params);
-        expect(visits.guard).toEqual([1]);
-        expect(visits.scored[0].sort()).toEqual(["attribute_peer", "category_peer", "collection_peer", "overlap", "single_peer"]);
-        expect(visits.scored[1]).toEqual([]);
-        expect(result.dependencies.uncacheable).toEqual([]);
-        expect(result.dependencies.coarseTables).toEqual([]);
-        expect(maxBoundParameters).toBeLessThanOrEqual(100);
+        const { value } = await rankStrict(["source", "source"], 6);
+        expect(value.rows.map((row) => row.id))
+            .toEqual(["overlap", "category_peer", "collection_peer", "single_peer", "attribute_peer", "outside_a"]);
+        expect(value.rows.map((row) => row.relatedScore)).toEqual([75, 40, 25, 20, 10, 0]);
+        expect(value.rows.at(-1)).toMatchObject({ popularBuyers: 2, popularOrdering: 2 });
     });
 
-    it("reuses dense weak relations and scores only unrelated products when the sparse bound fails", async () => {
+    it("keeps related products above unrelated newer or popular ones", async () => {
         product({ id: "source" });
-        const peers = Array.from({ length: 20 }, (_, index) => `weak_${index}`);
-        for (const id of peers) product({ id, priceMinor: 300_000 });
-        for (const id of ["outside_a", "outside_b", "outside_c"]) product({ id, createdAt: NOW - 10 });
+        const peers = Array.from({ length: 4 }, (_, index) => `weak_${index}`);
+        for (const id of peers) product({ id, priceMinor: 300_000, createdAt: NOW - 100 });
+        for (const id of ["outside_a", "outside_b"]) product({ id, createdAt: NOW - 10 });
         for (const id of ["source", ...peers]) attribute(id, "attr_weak", "same");
-        // Raw relation IDs may contain NULL; the eligible-affinity exclusion cannot.
-        collection("col_null", { source: "manual", productIds: ["source", null] });
+        for (const buyer of ["global_a", "global_b"]) order(buyer, ["outside_a"]);
         await rebuildCatalogProjections(db);
-        statements = [];
-        statementParams = [];
-        const result = await rankProductRecommendations(db, { productIds: ["source"], limit: 3 });
-        expect(result.rows.map(row => row.id)).toEqual(["outside_a", "outside_b", "outside_c"]);
-        const query = statements[0]!;
-        const params = statementParams[0]!;
-        expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(fullUniverseRanking(query, 3)).all(...params));
-        const visits = affinityVisits(query, params);
-        expect(visits.guard).toEqual([0]);
-        expect(visits.scored[0].sort()).toEqual(peers.sort());
-        expect(visits.scored[1].sort()).toEqual(["outside_a", "outside_b", "outside_c"]);
+        expect((await rankStrict(["source"], 6)).value.rows.map((row) => row.id))
+            .toEqual(["weak_0", "weak_1", "weak_2", "weak_3", "outside_a", "outside_b"]);
     });
 
-    it("rejects an exact (zero co-buy tier, fifteen affinity) bound so outside popularity can win", async () => {
+    it("keeps every co-buy tie for the 24-row stored refresh", async () => {
         product({ id: "source" });
-        for (const id of ["peer_a", "peer_b"]) product({ id });
-        product({ id: "outside", createdAt: NOW - 10 });
-        // A real order without a buyer contributes peer IDs but no distinct buyer.
-        order("", ["source", "peer_a", "peer_b"]);
-        for (const buyer of ["global_a", "global_b"]) order(buyer, ["outside"]);
+        const peers = Array.from({ length: 25 }, (_, index) => `peer_${String(index).padStart(2, "0")}`);
+        for (const [index, id] of peers.entries()) product({ id, createdAt: NOW - 100 + index });
+        order("buyer_a", ["source", "source", ...peers]);
+        order("buyer_b", ["source", ...peers]);
         await rebuildCatalogProjections(db);
         statements = [];
-        statementParams = [];
-        const result = await rankProductRecommendations(db, { productIds: ["source"], limit: 2 });
-        expect(result.rows[0]).toMatchObject({ id: "outside", popularOrdering: 2 });
-        const query = statements[0]!;
-        const params = statementParams[0]!;
-        expect(sqlite.prepare(query).all(...params)).toEqual(sqlite.prepare(fullUniverseRanking(query, 2)).all(...params));
-        const visits = affinityVisits(query, params);
-        expect(visits.guard).toEqual([0]);
-        expect(visits.scored[0].sort()).toEqual(["peer_a", "peer_b"]);
-        expect(visits.scored[1]).toEqual(["outside"]);
+        const { value: rows, dependencies } = await withDependencyScope(
+            () => rankRecommendationRows(db, ["source"], 24), { strict: true, log: () => {} },
+        );
+        expect(statements).toHaveLength(1);
+        expect(dependencies.validUntil).toBe((NOW - 3600 + 30 * 86400 + 1) * 1000);
+        expect(rows).toEqual([...peers].reverse().slice(0, 24).map((id) => ({
+            id, alsoBoughtBuyers: 2, relatedScore: 0, popularBuyers: 2, popularOrdering: 2,
+        })));
+        await expect(refreshProductRecommendations(db, ["source"])).resolves.toEqual({ refreshed: 1, cleared: 0 });
+        const stored = sqlite.prepare("SELECT recommended_product_id AS id FROM product_recommendations WHERE product_id = 'source' ORDER BY position").all();
+        expect(stored.map((row) => row.id)).toEqual(rows.map((row) => row.id));
     });
 
-    it.each([0, 1, 2, 3])("keeps all %i fallback candidates when the requested list is larger", async (count) => {
+    it("reads co-purchases and popularity from the latest sampled orders only", async () => {
+        product({ id: "source" });
+        product({ id: "old_peer", createdAt: NOW - 100 });
+        product({ id: "new_peer", createdAt: NOW - 200 });
+        const older = NOW - 20 * 86400;
+        for (const buyer of ["a", "b"]) order(`old_${buyer}`, ["source", "old_peer"], "completed", older);
+        for (let index = 0; index < ALSO_BOUGHT_SOURCE_ORDERS; index += 1) order(`new_${index % 2}`, ["source", "new_peer"]);
+        await rebuildCatalogProjections(db);
+        const { value } = await rankStrict(["source"], 2);
+        // The two older orders fall outside the source's latest sampled orders.
+        expect(value.rows).toEqual([
+            { id: "new_peer", alsoBoughtBuyers: 2, relatedScore: 0, popularBuyers: 2, popularOrdering: 2 },
+            { id: "old_peer", alsoBoughtBuyers: 0, relatedScore: 0, popularBuyers: 2, popularOrdering: 2 },
+        ]);
+    });
+
+    it.each([0, 1, 2, 3])("keeps all %i candidates when the requested list is larger", async (count) => {
         product({ id: "source", categoryId: "cat_shirts" });
         for (let index = 0; index < count; index += 1) {
             product({ id: `peer_${index}`, categoryId: "cat_shirts" });
@@ -901,20 +544,11 @@ describe("product recommendations", () => {
             for (const buyer of ["buyer_a", "buyer_b"]) order(buyer, ["peer_0"]);
         }
         await rebuildCatalogProjections(db);
-        statements = [];
-        statementParams = [];
-        const { value, dependencies } = await withDependencyScope(
-            () => rankProductRecommendations(db, { productIds: ["source"], limit: 4 }),
-            { strict: true, log: () => {} },
-        );
+        const { value, dependencies } = await rankStrict(["source"], 4);
         expect(value.rows).toHaveLength(count);
-        expect(sqlite.prepare(statements[0]!).all(...statementParams[0]!))
-            .toEqual(sqlite.prepare(fullUniverseRanking(statements[0]!, 4)).all(...statementParams[0]!));
         if (count > 0) expect(value.rows.find((row) => row.id === "peer_0"))
             .toMatchObject({ popularBuyers: 2, popularOrdering: count <= 2 ? 2 : 0 });
         else expect(dependencies.validUntil).toBeNull();
-        expect(dependencies.uncacheable).toEqual([]);
-        expect(dependencies.coarseTables).toEqual([]);
     });
 
     it("recommends for a whole cart, excluding every cart item", async () => {
@@ -960,13 +594,15 @@ describe("product recommendations", () => {
         expect(result.reason).toBe("similar");
     });
 
-    it("breaks ties deterministically by id", async () => {
+    it("breaks price-band, time and id ties deterministically", async () => {
         product({ id: "source", categoryId: "cat_shirts" });
-        for (const id of ["tie_c", "tie_a", "tie_b"]) {
-            product({ id, categoryId: "cat_shirts", createdAt: NOW - 10 });
-        }
-        expect(ids(await recommend(["source"]))).toEqual(["tie_a", "tie_b", "tie_c"]);
-        expect(ids(await recommend(["source"]))).toEqual(["tie_a", "tie_b", "tie_c"]);
+        product({ id: "far_new", categoryId: "cat_shirts", priceMinor: 900000, createdAt: NOW - 10 });
+        product({ id: "near_old", categoryId: "cat_shirts", createdAt: NOW - 100 });
+        for (const id of ["tie_c", "tie_a", "tie_b"]) product({ id, categoryId: "cat_shirts", createdAt: NOW - 50 });
+        await rebuildCatalogProjections(db);
+        const expected = ["tie_a", "tie_b", "tie_c", "near_old", "far_new"];
+        expect((await rankStrict(["source"], 5)).value.rows.map((row) => row.id)).toEqual(expected);
+        expect(ids(await recommend(["source"]))).toEqual(expected);
     });
 
     it("keeps bound parameters constant for many source ids and caps the source list", async () => {
@@ -980,30 +616,6 @@ describe("product recommendations", () => {
         expect(ids(result).every((id) => many.indexOf(id) >= MAX_RECOMMENDATION_SOURCE_IDS)).toBe(true);
         expect(statements).toHaveLength(3); // ranking, then cards and media
         expect(maxBoundParameters).toBeLessThanOrEqual(90);
-    });
-
-    it("expands only the source's collections and orders, never the whole store", async () => {
-        product({ id: "source", categoryId: "cat_shirts" });
-        product({ id: "peer", categoryId: "cat_trousers" });
-        collection("col_menswear", { source: "dynamic", categoryIds: ["cat_shirts", "cat_trousers"] });
-        collection("col_pick", { source: "manual", productIds: ["source", "peer"] });
-
-        expect(ids(await recommend(["source"]))).toEqual(["peer"]);
-
-        // Without statistics SQLite used to start the dynamic-collection
-        // expansion from every published category and every product in the
-        // store (1.3 s per product page at 30k products).
-        const index = statements.findIndex((query) => query.includes("rec_collection_peer"));
-        const steps = sqlite.prepare(`EXPLAIN QUERY PLAN ${statements[index]}`).all(...statementParams[index]!);
-        const plan = steps.map((step) => String(step.detail));
-        expect(plan.join("\n")).not.toMatch(/SEARCH rec_(peer|source)_category USING INDEX categories_public_idx/);
-        expect(plan.join("\n")).not.toMatch(/SCAN rec_(peer|source)_product/);
-        // Also-bought starts from the source products' latest order lines
-        // (newest first, bounded), not from every order of the last year.
-        expect(plan.join("\n")).toMatch(/SEARCH rec_source_line_sample USING COVERING INDEX order_items_product_recent_idx \(product_id=\? AND created_at>\?\)/);
-        const sample = steps.find((step) => String(step.detail).startsWith("SEARCH rec_source_line_sample "))!;
-        expect(steps.filter((step) => step.parent === sample.parent).map((step) => String(step.detail)).join("\n"))
-            .not.toMatch(/USE TEMP B-TREE FOR .*ORDER BY/);
     });
 
     it("stores the live ranking's top rows with a reason each, and reads them by primary key", async () => {
