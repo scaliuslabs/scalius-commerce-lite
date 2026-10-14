@@ -23,7 +23,7 @@ import {
   type EventResourceType,
   type EventTopic,
 } from "@scalius/shared/events";
-import { and, asc, desc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, lte, or, sql, type SQL } from "drizzle-orm";
 
 /**
  * Work a fan-out target recorded for an event: one durable delivery row the
@@ -89,6 +89,24 @@ function claimableCondition() {
   );
 }
 
+/**
+ * The ids of up to `limit` due rows, oldest first: one bounded walk of
+ * `event_outbox_due_idx` per retryable state and of `event_outbox_claim_idx`
+ * for expired leases, each stopping after `limit`. One `OR` sorted by due
+ * time would read every due row first (a backlog of a million events read a
+ * million rows on every drain). Ties keep index order.
+ */
+function dueEventIds(limit: number): SQL {
+  const due = (status: "pending" | "failed") => sql`SELECT "id", "next_attempt_at" AS "due" FROM "event_outbox"
+    WHERE "status" = ${status} AND "next_attempt_at" <= unixepoch() ORDER BY "next_attempt_at" LIMIT ${limit}`;
+  return sql`SELECT "id" FROM (
+    SELECT "id", "due" FROM (${due("pending")}) AS "pending_due"
+    UNION ALL SELECT "id", "due" FROM (${due("failed")}) AS "failed_due"
+    UNION ALL SELECT "id", "due" FROM (SELECT "id", "claim_expires_at" AS "due" FROM "event_outbox"
+      WHERE "status" = 'processing' AND "claim_expires_at" <= unixepoch() ORDER BY "claim_expires_at" LIMIT ${limit}) AS "lease_due"
+  ) AS "due_rows" ORDER BY "due" LIMIT ${limit}`;
+}
+
 export async function anyEventSubscribers(
   db: Database,
   targets: readonly EventFanOutTarget[],
@@ -141,9 +159,8 @@ export async function dispatchPendingEvents(options: {
   const dueRows = await db
     .select({ id: eventOutbox.id })
     .from(eventOutbox)
-    .where(claimableCondition())
+    .where(sql`${eventOutbox.id} IN (${dueEventIds(limit)})`)
     .orderBy(asc(eventOutbox.nextAttemptAt), asc(eventOutbox.id))
-    .limit(limit)
     .all();
   result.scanned = dueRows.length;
   if (dueRows.length === 0) return result;
@@ -155,12 +172,6 @@ export async function dispatchPendingEvents(options: {
     // statement whatever it takes, so it takes a full EVENT_FLUSH_BATCH_SIZE:
     // a backlog clears in a few drains instead of writing two rows on every
     // later tick, at the same D1 calls per drain.
-    const oldestDue = db
-      .select({ id: eventOutbox.id })
-      .from(eventOutbox)
-      .where(claimableCondition())
-      .orderBy(asc(eventOutbox.nextAttemptAt), asc(eventOutbox.id))
-      .limit(EVENT_FLUSH_BATCH_SIZE);
     const settled = await db
       .update(eventOutbox)
       .set({
@@ -171,7 +182,7 @@ export async function dispatchPendingEvents(options: {
         dispatchedAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
       })
-      .where(and(inArray(eventOutbox.id, oldestDue), claimableCondition()))
+      .where(and(sql`${eventOutbox.id} IN (${dueEventIds(EVENT_FLUSH_BATCH_SIZE)})`, claimableCondition()))
       .returning(flushedColumns());
     for (const row of settled) {
       const event = toOutboxEvent(row);
