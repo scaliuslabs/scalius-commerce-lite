@@ -26,6 +26,7 @@ describe("scale proof arguments", () => {
     expect(() => parseArgs(["--state", "/tmp/scale", "--providers", "mysql"])).toThrow("--providers");
     expect(() => parseArgs(["--state", "/tmp/scale", "--orders", "2"])).toThrow("--orders");
     expect(() => parseArgs(["--state", "/tmp/scale", "--nope"])).toThrow("Unknown option");
+    expect(parseArgs(["--render", "a.json,b.json"]).render).toEqual(["a.json", "b.json"]);
   });
 });
 
@@ -42,11 +43,12 @@ describe("scale proof tables", () => {
   it("replaces only the marked block of the document", () => {
     const meta = { date: "2026-10-14", commit: "abc1234", machine: "test machine" };
     const doc = "# Scale\n\nbefore\n\n<!-- scale-proof:start -->\nold\n<!-- scale-proof:end -->\n\nafter\n";
-    const next = replaceDocBlock(doc, docBlock([d1], meta));
+    const next = replaceDocBlock(doc, docBlock([{ meta, results: [d1] }, { meta, results: [pg] }]));
     expect(next).toContain("before");
     expect(next).toContain("after");
     expect(next).not.toContain("\nold\n");
     expect(next).toContain("Measured 2026-10-14 at commit `abc1234` on test machine.");
+    expect(next.match(/### 1,000,000 orders, 150,000 SKUs/g)).toHaveLength(2);
     expect(() => replaceDocBlock("no markers", "x")).toThrow("block");
   });
 });

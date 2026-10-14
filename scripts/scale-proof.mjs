@@ -7,6 +7,7 @@
 //   node scripts/scale-proof.mjs --state /ABSOLUTE/dir                measure D1 and PostgreSQL (~20 min)
 //   node scripts/scale-proof.mjs --state /ABSOLUTE/dir --providers d1 --orders 100 --json out.json
 //   node scripts/scale-proof.mjs --state /ABSOLUTE/dir --write-doc    also write the table into docs/SCALE.md
+//   node scripts/scale-proof.mjs --render a.json,b.json --write-doc   write saved runs (--json files) into docs/SCALE.md
 //
 // The seeded state is never written: D1 runs on an APFS/reflink clone of it, PostgreSQL on a temporary cluster
 // (initdb and pg_ctl on PATH) loaded from a clone of the same SQLite file. Both are deleted at the end, and
@@ -15,7 +16,7 @@
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { cpus, platform, release, tmpdir, totalmem } from "node:os";
+import { cpus, loadavg, platform, release, tmpdir, totalmem } from "node:os";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
@@ -25,7 +26,7 @@ const DOC = join(root, "docs", "SCALE.md");
 const MARKERS = ["<!-- scale-proof:start -->", "<!-- scale-proof:end -->"];
 
 export function parseArgs(argv) {
-  const options = { state: null, seed: false, providers: ["d1", "postgres"], orders: 150, json: null, writeDoc: false };
+  const options = { state: null, seed: false, providers: ["d1", "postgres"], orders: 150, json: null, writeDoc: false, render: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--state") options.state = argv[(index += 1)] ?? null;
@@ -34,8 +35,10 @@ export function parseArgs(argv) {
     else if (arg === "--orders") options.orders = Number(argv[(index += 1)]);
     else if (arg === "--json") options.json = argv[(index += 1)] ?? null;
     else if (arg === "--write-doc") options.writeDoc = true;
+    else if (arg === "--render") options.render = (argv[(index += 1)] ?? "").split(",").filter(Boolean);
     else throw new Error(`Unknown option ${arg}`);
   }
+  if (options.render.length > 0) return options;
   if (!options.state || !options.state.startsWith("/")) throw new Error("--state needs an absolute directory outside the repository");
   if (options.state.startsWith(`${root}/`)) throw new Error("--state must be outside the repository");
   if (options.providers.some((provider) => !["d1", "postgres"].includes(provider)) || options.providers.length === 0) throw new Error("--providers is d1, postgres or both");
@@ -83,7 +86,7 @@ export function renderResults(results) {
 
 function machine() {
   const model = cpus()[0]?.model ?? "unknown CPU";
-  return `${model}, ${cpus().length} cores, ${Math.round(totalmem() / 2 ** 30)} GB RAM, ${platform()} ${release()}, Node ${process.version}`;
+  return `${model}, ${cpus().length} cores, ${Math.round(totalmem() / 2 ** 30)} GB RAM, ${platform()} ${release()}, Node ${process.version}, 1-minute load average ${loadavg()[0].toFixed(1)} at the end of the run`;
 }
 
 const run = (command, args, options = {}) => {
@@ -92,16 +95,20 @@ const run = (command, args, options = {}) => {
   return result.stdout;
 };
 
-/** The block docs/SCALE.md carries: the run's tables with the date, machine and commit. */
-export function docBlock(results, meta) {
-  return [
-    MARKERS[0],
-    `Measured ${meta.date} at commit \`${meta.commit}\` on ${meta.machine}.`,
-    `Engines: ${results.map((r) => r.engine).join("; ")}.`,
-    "",
-    renderResults(results),
-    MARKERS[1],
-  ].join("\n");
+/** The block docs/SCALE.md carries: each run's tables with its date, machine and commit. */
+export function docBlock(runs) {
+  const sections = runs.map(({ meta, results }) => {
+    const store = results[0]?.store;
+    return [
+      `### ${store ? `${fmt(store.orders)} orders, ${fmt(store.skus)} SKUs` : "Results"}`,
+      "",
+      `Measured ${meta.date} at commit \`${meta.commit}\` on ${meta.machine}.`,
+      `Engines: ${results.map((r) => r.engine).join("; ")}.`,
+      "",
+      renderResults(results),
+    ].join("\n");
+  });
+  return [MARKERS[0], ...sections.flatMap((section, index) => (index === 0 ? [section] : ["", section])), MARKERS[1]].join("\n");
 }
 
 export function replaceDocBlock(doc, block) {
@@ -161,6 +168,13 @@ function measureD1(options, scratch) {
   return JSON.parse(readFileSync(out, "utf8"));
 }
 
+/** The PostgreSQL cluster this run started, so an interrupt can stop it. */
+let runningCluster = null;
+const stopCluster = () => {
+  if (runningCluster) spawnSync("pg_ctl", ["-D", runningCluster, "-m", "immediate", "stop"], { env: { ...process.env, LC_ALL: "en_US.UTF-8" } });
+  runningCluster = null;
+};
+
 async function measurePostgres(options, scratch) {
   const data = join(scratch, "pgdata");
   const port = await freePort();
@@ -176,6 +190,7 @@ async function measurePostgres(options, scratch) {
   try {
     run("pg_ctl", ["-D", data, "-o", `-p ${port} -k ${scratch} -c listen_addresses=127.0.0.1 -c shared_buffers=1GB -c max_connections=200`, "-l", join(scratch, "pg.log"), "-w", "start"], { env });
     started = true;
+    runningCluster = data;
     run("psql", ["-h", "127.0.0.1", "-p", String(port), "-U", "postgres", "-c", "CREATE DATABASE scale_proof"], { env });
     const url = `postgres://postgres@127.0.0.1:${port}/scale_proof`;
     run("pnpm", ["--dir", "apps/api", "exec", "tsx", "../../packages/database/scripts/migrate-sqlite-to-postgres.ts", "--sqlite", plain, "--checkpoint", join(scratch, "pg-checkpoint.json"), "--ack-target-host", "127.0.0.1"], { env: { ...env, POSTGRES_DATABASE_URL: url } });
@@ -184,16 +199,22 @@ async function measurePostgres(options, scratch) {
     vitest("scripts/scale-proof.test.ts", { SCALE_PROOF_POSTGRES_URL: url, SCALE_PROOF_ORDERS: String(options.orders), SCALE_PROOF_OUT: out });
     return JSON.parse(readFileSync(out, "utf8"));
   } finally {
-    if (started) spawnSync("pg_ctl", ["-D", data, "-m", "immediate", "stop"], { env });
+    if (started) stopCluster();
     rmSync(data, { recursive: true, force: true });
   }
 }
 
 async function main(argv) {
   const options = parseArgs(argv);
+  if (options.render.length > 0) {
+    const block = docBlock(options.render.map((file) => JSON.parse(readFileSync(file, "utf8"))));
+    console.log(`\n${block}\n`);
+    if (options.writeDoc) writeFileSync(DOC, replaceDocBlock(readFileSync(DOC, "utf8"), block));
+    return;
+  }
   if (options.seed) seed(options.state);
   const scratch = mkdtempSync(join(tmpdir(), "scalius-scale-proof-"));
-  const cleanup = () => rmSync(scratch, { recursive: true, force: true });
+  const cleanup = () => { stopCluster(); rmSync(scratch, { recursive: true, force: true }); };
   for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => { cleanup(); process.exit(130); });
   try {
     const results = [];
@@ -205,8 +226,9 @@ async function main(argv) {
       machine: machine(),
     };
     if (options.json) writeFileSync(options.json, `${JSON.stringify({ meta, results }, null, 2)}\n`);
-    console.log(`\n${docBlock(results, meta)}\n`);
-    if (options.writeDoc) writeFileSync(DOC, replaceDocBlock(readFileSync(DOC, "utf8"), docBlock(results, meta)));
+    const block = docBlock([{ meta, results }]);
+    console.log(`\n${block}\n`);
+    if (options.writeDoc) writeFileSync(DOC, replaceDocBlock(readFileSync(DOC, "utf8"), block));
   } finally {
     cleanup();
   }

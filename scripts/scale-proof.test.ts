@@ -32,6 +32,41 @@ const CLIENTS = [1, 16] as const;
 
 let provider: "d1" | "postgres" = "d1";
 let serializationRetries = 0;
+let transportRetries = 0;
+
+const TRANSIENT_TRANSPORT = /fetch failed|ECONNRESET|socket hang up|other side closed/i;
+
+/**
+ * Miniflare's D1 binding reaches workerd over HTTP, and a kept-alive connection the server has closed fails the
+ * next call with ECONNRESET before the request is sent. That is the harness, not D1: retry the call and count it.
+ */
+function retryingTransport<T extends object>(target: T): T {
+  const transient = (error: unknown) => TRANSIENT_TRANSPORT.test(`${String(error)} ${String((error as { cause?: unknown })?.cause)}`);
+  return new Proxy(target, {
+    get(inner, property, receiver) {
+      const value = Reflect.get(inner, property, receiver) as unknown;
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => {
+        const invoke = () => (value as (...a: unknown[]) => unknown).apply(inner, args);
+        const first = invoke();
+        if (first && typeof (first as PromiseLike<unknown>).then === "function") {
+          const settle = async (left: number, pending: unknown): Promise<unknown> => {
+            try {
+              return await pending;
+            } catch (error) {
+              if (left === 0 || !transient(error)) throw error;
+              transportRetries += 1;
+              await new Promise((done) => setTimeout(done, 25));
+              return settle(left - 1, invoke());
+            }
+          };
+          return settle(4, first);
+        }
+        return first && typeof first === "object" ? retryingTransport(first) : first;
+      };
+    },
+  });
+}
 
 // The API resolves `@scalius/database/client` to this file; mock it by path (as scripts/cache-dvc-load.test.ts does).
 vi.mock("../packages/database/src/client", async (importOriginal) => {
@@ -110,7 +145,7 @@ describe.skipIf(!STATE && !POSTGRES_URL)("scale proof", () => {
       // wrangler is an apps/api dependency, not a root one.
       const { getPlatformProxy } = createRequire(resolve(__dirname, "../apps/api/package.json"))("wrangler") as typeof import("wrangler");
       const proxy = await getPlatformProxy({ configPath: resolve(__dirname, "../apps/api/wrangler.local.jsonc"), persist: { path: resolve(STATE!, "v3") } });
-      d1 = proxy.env.DB as D1Database;
+      d1 = retryingTransport(proxy.env.DB as D1Database);
       const { getDb } = await vi.importActual<typeof import("../packages/database/src/client")>("../packages/database/src/client");
       db = getDb({ DB: d1 } as never);
       baseEnv = { ...(proxy.env as unknown as Record<string, unknown>), ...secrets, DB: d1, RL_STRICT: limiter, RL_STANDARD: limiter, REALTIME_HUB: undefined };
@@ -231,6 +266,7 @@ describe.skipIf(!STATE && !POSTGRES_URL)("scale proof", () => {
         const failures: Record<number, number> = {};
         let next = 0;
         const retriesBefore = serializationRetries;
+        const transportBefore = transportRetries;
         const started = performance.now();
         await Promise.all(Array.from({ length: clients }, async () => {
           while (next < total) {
@@ -250,6 +286,7 @@ describe.skipIf(!STATE && !POSTGRES_URL)("scale proof", () => {
           clients, orders: latencies.length, seconds: Number(seconds.toFixed(1)),
           ordersPerSecond: Number((latencies.length / seconds).toFixed(2)),
           ...summarize(latencies), failures, retries: provider === "postgres" ? serializationRetries - retriesBefore : null,
+          ...(provider === "d1" ? { transportRetries: transportRetries - transportBefore } : {}),
         };
         scenarios.push(entry);
         console.info(`[scale] checkout ${JSON.stringify(entry)}`);
@@ -259,7 +296,9 @@ describe.skipIf(!STATE && !POSTGRES_URL)("scale proof", () => {
   }, 3_600_000);
 
   it("counts the rows one 3-line checkout reads and writes", async () => {
-    const lines = (await (await import("../apps/api/src/testing/scale-proof-store")).checkoutLines(db, 30)).slice(0, 3);
+    const store = await import("../apps/api/src/testing/scale-proof-store");
+    await store.ensureDelivery(db);
+    const lines = (await store.checkoutLines(db, 30)).slice(0, 3);
     await checkout(lines); // warm
     if (d1) {
       const meter = metered(d1);
@@ -267,7 +306,8 @@ describe.skipIf(!STATE && !POSTGRES_URL)("scale proof", () => {
       const outcome = await checkout(lines, meter.binding);
       expect(outcome.ok).toBe(true);
       const sum = (key: "rowsRead" | "rowsWritten") => meter.statements.reduce((total, statement) => total + Math.max(0, statement[key]), 0);
-      result.perOrder = { statements: meter.statements.length, rowsRead: sum("rowsRead"), rowsWritten: sum("rowsWritten"), note: "D1 meta, index entries included; quote + commit + after-response work" };
+      const heaviest = [...meter.statements].sort((a, b) => b.rowsRead - a.rowsRead).slice(0, 5).map((statement) => ({ rowsRead: statement.rowsRead, sql: (statement.fullSql ?? statement.sql).replace(/\s+/g, " ").slice(0, 900) }));
+      result.perOrder = { statements: meter.statements.length, rowsRead: sum("rowsRead"), rowsWritten: sum("rowsWritten"), heaviest, note: "D1 meta, index entries included; quote + commit + after-response work" };
     } else {
       const rows = await postgresMetered(async (database) => { expect((await checkout(lines, undefined, database)).ok).toBe(true); });
       result.perOrder = { rowsRead: rows.read, rowsWritten: rows.written, note: "PostgreSQL tuple counters: heap tuples, index entries not counted; quote + commit + after-response work" };
