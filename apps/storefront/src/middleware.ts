@@ -116,7 +116,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   const bypassesPublicCache = requestBypassesPublicStorefrontCache(
     request.headers,
   );
-  // The cart is private but a cacheable shell; checkout and the rest are not.
+  // The cart and checkout are private but cacheable shells; the rest are not.
   const explicitlyPrivatePath = isUncachedPrivateStorefrontPathname(url.pathname);
 
   if (isGet && hasVariantSelection) {

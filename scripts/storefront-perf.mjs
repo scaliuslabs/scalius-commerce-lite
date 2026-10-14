@@ -13,7 +13,7 @@
  * without it the first request of each page is reported
  * as "first" (miss or hit, whatever the edge had) and the rest as hits.
  * Pages default to home, the first category and product linked from home,
- * a search, and the cart. Exit code 1 when any budget is exceeded.
+ * a search, the cart and the checkout. Exit code 1 when any budget is exceeded.
  * Against a local base it first checks that the storefront renders its own
  * canonical origin, i.e. that it reached this stack's API
  * (`--media-url <origin>` also checks media; `--no-binding-check` skips it).
@@ -26,13 +26,18 @@ import { pathToFileURL } from "node:url";
 import { stripJsonc } from "./check-worker-env.mjs";
 import { verifyStorefrontBinding } from "./dev-ports.mjs";
 
-/** Budgets (ms) the check enforces. Miss budgets hold for a local stack. */
+/**
+ * Budgets (ms) the check enforces. Miss budgets hold for a local stack. LCP
+ * and CLS are the 2026-10-14 targets (docs/STOREFRONT-PERFORMANCE.md): every
+ * measured page met CLS 0, desktop LCP 650 ms and, with the shell and font
+ * changes, phone LCP about 1 s in the local A/B.
+ */
 export const DEFAULT_BUDGETS = Object.freeze({
   ttfbHitMs: 50,
   ttfbMissMs: 300,
-  lcpPhoneMs: 1500,
-  lcpDesktopMs: 1200,
-  cls: 0.1,
+  lcpPhoneMs: 1200,
+  lcpDesktopMs: 800,
+  cls: 0.05,
 });
 
 /** Lighthouse's mobile profile: 150 ms RTT, 1.6 Mbps down, 750 kbps up, 4x CPU. */
@@ -83,12 +88,12 @@ export function evaluateBudgets(row, budgets = DEFAULT_BUDGETS) {
   return failures;
 }
 
-/** First category and product links on the home page, plus search and cart. */
+/** First category and product links on the home page, plus search and the cart and checkout shells. */
 export function discoverPaths(homeHtml) {
   const first = (pattern) => homeHtml.match(pattern)?.[1] ?? null;
   const category = first(/href="(\/categories\/[^"?#]+)/);
   const product = first(/href="(\/products\/[^"?#]+)/);
-  return ["/", category, product, "/search?q=a", "/cart"].filter(Boolean);
+  return ["/", category, product, "/search?q=a", "/cart", "/checkout"].filter(Boolean);
 }
 
 export function parseArgs(argv) {
@@ -186,7 +191,7 @@ export function isLocalBase(base) {
   return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(base);
 }
 
-async function timeFetch(url) {
+export async function timeFetch(url) {
   const started = performance.now();
   const response = await fetch(url, { redirect: "manual", headers: { "User-Agent": "scalius-storefront-perf" } });
   const ttfb = Math.round(performance.now() - started);
@@ -198,7 +203,7 @@ async function timeFetch(url) {
 // Minimal CDP client (headless Chrome, no Playwright).
 // ---------------------------------------------------------------------------
 
-async function launchChrome(port) {
+export async function launchChrome(port) {
   try {
     const r = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(800) });
     if (r.ok) return null;
@@ -263,7 +268,7 @@ const COLLECT_METRICS = `new Promise((resolve) => {
   }, 1500);
 })`;
 
-async function measureInBrowser(port, url, profileName) {
+export async function measureInBrowser(port, url, profileName) {
   const profile = PROFILES[profileName];
   const { send, close } = await openTarget(port);
   try {

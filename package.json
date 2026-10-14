@@ -49,6 +49,7 @@
     "check:env": "node scripts/check-worker-env.mjs",
     "check:admin-perf": "node scripts/admin-perf-check.mjs",
     "perf:storefront": "node scripts/storefront-perf.mjs",
+    "perf:compare": "node scripts/storefront-compare.mjs",
     "gallery:storefront": "node apps/storefront/scripts/gallery-server.mjs",
     "quality:storefront": "node scripts/storefront-quality.mjs",
     "quality:admin": "node scripts/admin-quality.mjs",

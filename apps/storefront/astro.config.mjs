@@ -121,6 +121,13 @@ export default defineConfig({
       // are cached across pages instead of repeating 4-9 KB in every response.
       assetsInlineLimit: 1_024,
       minify: true,
+      // Astro forces `build.minify: false` on the server build, so the
+      // Worker shipped 4.6 MB of unminified modules. workerd compiles every
+      // uploaded module when an isolate starts, so the bytes are cold-start
+      // time: minified (2.7 MB) the storefront isolate starts in about 115 ms
+      // instead of 185 ms (docs/STOREFRONT-PERFORMANCE.md, Cold start).
+      // Rolldown's own `output.minify` is the one setting Astro passes on.
+      rolldownOptions: { output: { minify: true } },
     },
     server: {
       hmr: {

@@ -10,12 +10,12 @@ A baseline is one measurement at one date on one build. Measure again before you
 
 | Area | Threshold | Enforced by |
 | --- | --- | --- |
-| Cache-hit TTFB, cache-miss TTFB, phone LCP, desktop LCP, CLS | 50 ms, 300 ms, 1500 ms, 1200 ms, 0.1 | `pnpm perf:storefront` (`DEFAULT_BUDGETS` in `scripts/storefront-perf.mjs`) |
+| Cache-hit TTFB, cache-miss TTFB, phone LCP, desktop LCP, CLS | 50 ms, 300 ms, 1200 ms, 800 ms, 0.05 | `pnpm perf:storefront` (`DEFAULT_BUDGETS` in `scripts/storefront-perf.mjs`) |
 | Template fidelity and page weights | `tolerances` and `budgets` in `scripts/storefront-fidelity/reference-metrics.json` (CLS 0.05 there) | `pnpm fidelity:check` |
 | API calls, D1 round trips and waves per page render | 1 call; per-page limits in [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md#budgets-and-guardrails) | `render-batch.test.ts`, `storefront-render-budget.test.ts` |
 | Dashboard first-render JavaScript (Brotli) | `BUNDLE_BUDGETS` in `scripts/admin-perf-check.mjs` | `pnpm check:admin-perf` |
 | API Worker size | 90% of 64 MiB uncompressed | `pnpm check:api-bundle` |
-| Public pages report their cache lane | `X-Cache-Status` is `HIT` or `MISS`; checkout is `NO_CACHE` | `pnpm release:check` |
+| Public pages report their cache lane | `X-Cache-Status` is `HIT` or `MISS`, also for the checkout shell, whose browser copy stays `private, no-store` | `pnpm release:check` |
 | Every Worker declares `CF_VERSION_METADATA`; the API keeps Workers Cache off | n/a | `pnpm check:env` |
 
 Run the heavy gates one at a time on a 16 GB host. `pnpm typecheck` (`scripts/typecheck.mjs`) runs one `tsc --build` with two builders and two checkers (about 4 GB peak), then `astro check`.
@@ -118,6 +118,21 @@ Method: local built stack with a copy of the demo state. One product had a 2400 
 The first row's "after" is after the self-healing render job ran, 2 min 9 s after the first read queued it. The generated test photo is noise-heavy (960 px rendition 344 KB, against 60-100 KB for a real photo).
 
 ## Cold-start experiments
+
+### Worker isolate start in workerd (2026-10-14)
+
+Method: each built Worker in workerd 1.20261006 through Miniflare, a fresh runtime per run, no database, timed until it is ready, less the ready time of a trivial Worker (about 50 ms). The API bundle runs without its source map: Miniflare reads a 40 MB map at start-up and doubles the number. The storefront renders from API answers recorded once from the live demo. Median of 7 runs; the host was shared, so compare rows of one run only.
+
+| Worker | Uploaded JS | Isolate start | First home render |
+| --- | --- | --- | --- |
+| API, places dataset as a JSON import | 14.96 MB | 407-426 ms | not measured |
+| API, places dataset imported as text (`with { type: "text" }`, parsed when a seed runs) | 15.27 MB | 284-304 ms | not measured |
+| Storefront, server build unminified (Astro forces `build.minify: false`) | 4.6 MB in 271 modules | 155-170 ms | 62-67 ms |
+| Storefront, server build minified (`rolldownOptions.output.minify`) | 2.6 MB in 271 modules | 110-120 ms | 60-64 ms |
+
+- workerd paid about 120 ms to compile the 2.3 MB Bangladesh place directory as one array literal, although no request evaluates it. The same bytes as a string cost almost nothing. In Node the difference is about 15 ms, so measure start-up in workerd, not Node.
+- The 1.8 MB of agent operation schemas (an object literal) made no measurable difference as JSON strings. The 3 MB OpenAPI contract string and the remaining code still cost about 10 ms per MB; moving the contract out of the script is the next lever (about 35 ms).
+- A first page render on a fresh storefront isolate costs about 50 ms more than a warm one (zod schemas and the theme context compile on first use).
 
 ### API isolate start (2026-09-24)
 

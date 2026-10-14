@@ -122,8 +122,9 @@ describe("public storefront cache policy", () => {
   });
 
   it.each([
-    ["checkout", "/checkout", {}],
+    ["signed-in checkout", "/checkout", { Cookie: "cs_tok=private" }],
     ["checkout step", "/checkout/payment", {}],
+    ["quick buy", "/checkout/quick", {}],
     ["signed-in cart", "/cart", { Cookie: "cs_auth=1; cs_tok=private" }],
     ["account", "/account/orders", {}],
     ["receipt", "/order-success", {}],
@@ -139,13 +140,13 @@ describe("public storefront cache policy", () => {
     expect(getPublicStorefrontCachePolicy(workerRequest(path, headers))).toBeNull();
   });
 
-  it("caches the cart shell under one canonical URL whatever the query", () => {
-    for (const path of ["/cart", "/cart/", "/cart?quickBuyStorage=blocked", "/cart?checkoutIssues=1&utm_source=x"]) {
-      expect(getPublicStorefrontCachePolicy(workerRequest(path, { Cookie: "_fbp=fb.1.1" })), path)
-        .toEqual({ canonicalUrl: "https://shop.example/cart" });
+  it.each(["cart", "checkout"])("caches the %s shell under one canonical URL whatever the query", (shell) => {
+    for (const query of ["", "/", "?quickBuyStorage=blocked", "?checkoutIssues=1&utm_source=x", "?payment=card&orderId=o1"]) {
+      expect(getPublicStorefrontCachePolicy(workerRequest(`/${shell}${query}`, { Cookie: "_fbp=fb.1.1" })), query)
+        .toEqual({ canonicalUrl: `https://shop.example/${shell}` });
     }
-    expect(getPublicStorefrontCachePolicy(new Request("https://shop.example/cart", { method: "POST" }))).toBeNull();
-    expect(getPublicStorefrontCachePolicy(workerRequest("/cart/extra"))).toBeNull();
+    expect(getPublicStorefrontCachePolicy(new Request(`https://shop.example/${shell}`, { method: "POST" }))).toBeNull();
+    expect(getPublicStorefrontCachePolicy(workerRequest(`/${shell}/extra`))).toBeNull();
   });
 
   it("keeps tracking-cookie visitors on the shared cache lane", () => {
@@ -296,7 +297,7 @@ describe("servePublicStorefrontRequest", () => {
 
   it("renders private requests directly without reading the generation or touching the cache", async () => {
     const { context, render } = createContext();
-    const request = workerRequest("/checkout");
+    const request = workerRequest("/order-success?orderId=o1");
 
     await servePublicStorefrontRequest(request, context);
 
@@ -385,7 +386,7 @@ describe("the cart shell", () => {
     expect(context.cache.put).not.toHaveBeenCalled();
   });
 
-  it.each(["/checkout", "/order-success?orderId=o1", "/payment-recovery", "/account", "/track-order", "/newsletter", "/newsletter/confirm"])(
+  it.each(["/checkout/quick", "/order-success?orderId=o1", "/payment-recovery", "/account", "/track-order", "/newsletter", "/newsletter/confirm"])(
     "still renders %s for every request",
     async (path) => {
       const { context, render } = createContext();

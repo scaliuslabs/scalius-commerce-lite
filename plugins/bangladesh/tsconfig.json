@@ -11,6 +11,7 @@
         "../../packages/shared/src/*"
       ]
     },
+    "module": "ESNext",
     "noEmit": true,
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/plugin-bangladesh.tsbuildinfo"
   },

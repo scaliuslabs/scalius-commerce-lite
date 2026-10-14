@@ -5,6 +5,7 @@ import { vi, beforeAll, describe, expect, it } from "vitest";
 vi.mock("./plugins/bundled.gen", async (importOriginal) => (await import("./plugins/testing/fixture-apps")).withFixtureApps(await importOriginal()));
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { createPublicPartReader, renderPublicRead } from "./public-read";
+import { MAX_STOREFRONT_BATCH_PARTS } from "@scalius/shared/public-api-cache-routes";
 import { getDb } from "@scalius/database/client";
 import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
@@ -48,12 +49,14 @@ import {
  * The same page again is all hits: one validation statement, one wave.
  */
 const PAGE_D1_BUDGETS = {
-  home: { roundTrips: 13, waves: 2 },
-  product: { roundTrips: 21, waves: 3 },
-  category: { roundTrips: 7, waves: 3 },
-  search: { roundTrips: 7, waves: 2 },
-  collection: { roundTrips: 7, waves: 3 },
-  landing: { roundTrips: 13, waves: 2 },
+  home: { roundTrips: 10, waves: 2 },
+  product: { roundTrips: 19, waves: 3 },
+  category: { roundTrips: 5, waves: 3 },
+  search: { roundTrips: 5, waves: 2 },
+  collection: { roundTrips: 6, waves: 3 },
+  landing: { roundTrips: 10, waves: 2 },
+  cart: { roundTrips: 13, waves: 2 },
+  checkout: { roundTrips: 7, waves: 2 },
 } as const;
 
 /**
@@ -65,8 +68,8 @@ const PAGE_D1_BUDGETS = {
  * so drawing adds nothing. Apps that read their storage add their own reads.
  */
 const APP_PAGE_D1_BUDGETS = {
-  home: { roundTrips: 12, waves: 2 },
-  product: { roundTrips: 20, waves: 3 },
+  home: { roundTrips: 11, waves: 2 },
+  product: { roundTrips: 19, waves: 3 },
 } as const;
 
 /** A page template with sections: its part read after the page's batch (theme and collections, then the sections' data). */
@@ -80,6 +83,9 @@ const PAGE_PARTS: Record<keyof typeof PAGE_D1_BUDGETS, string[]> = {
   search: ["/api/v1/storefront/layout", "/api/v1/products?page=1&limit=20&sort=relevance&search=linen"],
   collection: ["/api/v1/storefront/layout", "/api/v1/collections/col_grid?page=1&limit=20&sort=newest"],
   landing: ["/api/v1/storefront/layout", "/api/v1/storefront/landing/eid", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
+  // The buyer shells (cached like public pages; a signed-in buyer renders them live).
+  cart: ["/api/v1/storefront/layout", "/api/v1/locations/cities", "/api/v1/shipping-methods", "/api/v1/checkout-languages/active", "/api/v1/checkout/config", "/api/v1/products/recommendations?limit=8"],
+  checkout: ["/api/v1/storefront/layout", "/api/v1/checkout/config", "/api/v1/checkout-languages/active"],
 };
 
 const SEED = `
@@ -338,7 +344,7 @@ async function renderPage(
       db: () => getDb(env),
       render: (part) => renderPublicRead(part, env, ctx),
       waitUntil: (promise) => void waits.push(promise),
-      maxConcurrentRenders: 4,
+      maxConcurrentRenders: MAX_STOREFRONT_BATCH_PARTS,
       random: () => 1,
     });
     const settled = await reader.readParts(paths.map((path) => new Request(`https://api.internal${path}`)), null);
@@ -491,13 +497,14 @@ describe("storefront page render D1 budget", () => {
     expect(result.hit).toEqual({ roundTrips: 1, waves: 1, statuses: ["hit"], sameBodies: true });
   });
 
-  it("reads a reviewed product's summary and first five reviews in its existing render budget (22 round trips, 3 waves) plus authoritative validation", async () => {
+  it("reads a reviewed product's summary and first five reviews in its existing render budget (20 round trips, 3 waves) plus authoritative validation", async () => {
     const result = await renderPage("product", REVIEW_SEED);
     const product = (result.bodies[1] as { data: { product: { reviews: { summary: { count: number; average: number }; items: unknown[]; nextCursor: string | null } } } }).data.product;
     expect(product.reviews.summary).toMatchObject({ count: 6, average: 4.66 });
     expect(product.reviews.items).toHaveLength(5);
     expect(product.reviews.nextCursor).toEqual(expect.any(String));
-    expect(result.render.roundTrips).toBeLessThanOrEqual(22);
+    process.stdout.write(`[storefront budget] reviewed product: render ${result.render.roundTrips} trips/${result.render.waves} waves\n`);
+    expect(result.render.roundTrips).toBeLessThanOrEqual(20);
     expect(result.render.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.product.waves);
   });
 
@@ -630,11 +637,13 @@ describe("storefront page render D1 budget", () => {
       .toEqual({ roundTrips: Math.min(home.render.roundTrips, APP_PAGE_D1_BUDGETS.home.roundTrips), waves: Math.min(home.render.waves, APP_PAGE_D1_BUDGETS.home.waves) });
     expect(home.hit).toEqual({ roundTrips: 1, waves: 1, statuses: PAGE_PARTS.home.map(() => "hit"), sameBodies: true });
 
+    process.stdout.write(`[storefront budget] home with an app: render ${home.render.roundTrips} trips/${home.render.waves} waves\n`);
     const product = await renderPage("product", "", { apps: true });
     expect((product.bodies[4] as { data: { blocks: Array<{ placement: string }> } }).data.blocks).toEqual([expect.objectContaining({ placement: "buy-box" })]);
     expect({ roundTrips: product.render.roundTrips, waves: product.render.waves })
       .toEqual({ roundTrips: Math.min(product.render.roundTrips, APP_PAGE_D1_BUDGETS.product.roundTrips), waves: Math.min(product.render.waves, APP_PAGE_D1_BUDGETS.product.waves) });
     expect(product.hit).toEqual({ roundTrips: 1, waves: 1, statuses: PAGE_PARTS.product.map(() => "hit"), sameBodies: true });
+    process.stdout.write(`[storefront budget] product with an app: render ${product.render.roundTrips} trips/${product.render.waves} waves\n`);
   });
 
   it("gives app component sections their products and images from the homepage's batches", async () => {

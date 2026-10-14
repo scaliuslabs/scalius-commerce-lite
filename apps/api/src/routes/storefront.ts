@@ -66,13 +66,13 @@ import {
 } from "@scalius/shared/cache-frontier";
 
 /**
- * Parts of one batch rendered at once: every part of a page (layout, page
- * data, shipping, checkout settings), as when each was its own invocation.
- * Usually only the page data misses; right after a generation bump all four
- * do, and their D1 queries queue on the invocation's six connections. A
- * lower limit would serialise the parts and add whole D1 waves instead.
+ * Parts of one batch rendered at once: every part of a page (the product
+ * page and the cart have five), as when each was its own invocation. Usually
+ * only the page data misses; on a cold page every part does, and their D1
+ * queries queue on the invocation's six connections. A lower limit
+ * serialises the last parts behind the first and adds whole D1 waves.
  */
-const MAX_BATCH_PART_RENDERS = 4;
+const MAX_BATCH_PART_RENDERS = MAX_STOREFRONT_BATCH_PARTS;
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";

@@ -1,6 +1,6 @@
 # Storefront performance
 
-Last reviewed: 2026-10-03
+Last reviewed: 2026-10-14
 
 This document explains how the storefront renders and caches a page, what each page may cost, and how to measure it. It is for contributors and operators. Dated measurements and release thresholds are in [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEASE.md).
 
@@ -32,9 +32,10 @@ The batch carries at most 8 parts of at most 2,048 characters each (`MAX_STOREFR
 | Category | `storefront/layout`, `categories/<slug>/products?...` |
 | Collection | `storefront/layout`, `collections/<id>?...` |
 | Search | `storefront/layout`, `products?...&search=...` |
-| Cart shell | `storefront/layout`, `locations/cities`, `shipping-methods`, `checkout-languages/active`, `checkout/config` |
+| Cart shell | `storefront/layout`, `locations/cities`, `shipping-methods`, `checkout-languages/active`, `checkout/config`, `products/recommendations?limit=8` |
+| Checkout shell | `storefront/layout`, `checkout/config`, `checkout-languages/active` |
 
-Sources: `PAGE_PARTS` in `apps/api/src/storefront-render-budget.test.ts` and `apps/storefront/src/pages/cart.astro`. Installed apps draw inside these parts and add no call. The API sanitizes the drawn output and caches it under the `plg` and `plgs` dependency keys, so a hit runs no app code (`apps/api/src/plugins/storefront-render.ts`).
+Sources: `PAGE_PARTS` in `apps/api/src/storefront-render-budget.test.ts`. Installed apps draw inside these parts and add no call. The API sanitizes the drawn output and caches it under the `plg` and `plgs` dependency keys, so a hit runs no app code (`apps/api/src/plugins/storefront-render.ts`).
 
 ### Transport rules
 
@@ -49,7 +50,7 @@ Code: `apps/api/src/routes/storefront.ts`, `apps/api/src/storefront-batch.ts`, `
 
 - A part comes from the Cache API under `dvcReadCacheKey` (canonical path, sorted query, `__cv=<API Worker version>`). Otherwise `renderPublicRead` renders it from the one snapshot that validated the hits.
 - Each part answers as its own GET would, with its status, body and proof. A part that fails fails alone (status 502 for that part).
-- Up to 4 parts render at once (`MAX_BATCH_PART_RENDERS`). D1 queues the rest on the invocation's six connections.
+- Every part of a batch renders at once (`MAX_BATCH_PART_RENDERS` equals the 8-part cap). D1 queues their statements on the invocation's six connections. A lower limit made the fifth part of the product page and the cart wait for the first to finish, one extra D1 wave.
 - The batch response is `private, no-store`, and public API responses carry `no-store` CDN headers, so no CDN copy skips validation. Workers Cache entrypoints stay off for the same reason: a hit runs no code and cannot validate. `pnpm check:env` fails when an entrypoint enables it.
 
 ### API placement
@@ -66,7 +67,7 @@ A request uses the shared page cache (`getPublicStorefrontCachePolicy`) when all
 - The request has no `Authorization` or `X-API-Token` header and no `cs_tok`, `cs_auth` or `stp_theme_preview` cookie. Other cookies do not matter: the render drops every cookie.
 - After tracking parameters leave, the query has at most 30 entries, each key at most 64 characters and each value at most 512.
 - The URL is not a product page with a `size` or `color` query (a variant selection).
-- The path is public (`isPublicCachePath`): pages, feeds, sitemaps, `/robots.txt`, `/llms.txt`, `/.well-known/ucp` and the cart shell.
+- The path is public (`isPublicCachePath`): pages, feeds, sitemaps, `/robots.txt`, `/llms.txt`, `/.well-known/ucp` and the buyer shells (cart and checkout).
 
 The public and private path lists and the browser `Cache-Control` values are in [apps/storefront/README.md](../apps/storefront/README.md#public-cache-and-private-pages).
 
@@ -94,27 +95,27 @@ A page entry is valid by committed dependencies, not by age, so an unchanged ent
 - A scheduled change (a promotion start or end) sets `validUntil`, and the gateway never serves the entry at or after it. Buyer facts have no stale-if-error allowance.
 - Public product, search and feed projections carry `availabilityBand`. `stock` and `reservedStock` are stable compatibility values, never exact quantity. A write inside one band changes no bytes and no dependency. Cart and checkout stay the live authority.
 
-## The cart shell
+## Buyer shells: cart and checkout
 
-The `GET /cart` HTML does not depend on the buyer, so the gateway caches it like a public page (`isBuyerShellPathname` in `apps/storefront/src/lib/cache-policy.ts`).
+The `GET /cart` and `GET /checkout` HTML does not depend on the buyer, so the gateway caches it like a public page (`isBuyerShellPathname` in `apps/storefront/src/lib/cache-policy.ts`). A page that always rendered paid one placed-API round trip per view: from Dhaka about 150 ms for the API hop alone and 285-1,400 ms for `/checkout` (2026-10-14). A shell hit costs what any page hit costs.
 
-- The cart lines live in `localStorage` (`cart:v3`). An inline script paints them, or the empty state, before first paint. Sign-in state comes from the browser (`cs_auth=1`). Saved details, discounts, cart validation, the tax quote and the order come from no-store APIs or the POST.
-- The reads are public and dependency-validated: layout, cities, shipping methods, checkout copy and checkout settings.
-- The key drops every `/cart` query. A session cookie (`cs_tok`, `cs_auth`) bypasses the cache. A POST is never cached.
-- A failed read (fail-closed "checkout unavailable") renders for this request only: `markRenderUncacheable` sets `no-store`, the middleware answers `BYPASS_DEGRADED`, and the gateway does not store it.
-- The browser copy stays `private, no-cache, no-store, must-revalidate`, because the buyer types contact details into the page. Prefetch of `/cart` stays off.
+- The cart lines live in `localStorage` (`cart:v3`). An inline script paints them, or the empty state, before first paint. The checkout reads its session from the browser. Sign-in state comes from the browser (`cs_auth=1`). Saved details, discounts, cart validation, the tax quote, the payment options of the quote and the order come from no-store APIs or the POST.
+- The reads are public and dependency-validated: layout, cities, shipping methods, checkout copy and checkout settings (the checkout needs only the layout, settings and copy).
+- The key drops every query. A session cookie (`cs_tok`, `cs_auth`) bypasses the cache. A POST is never cached. `/checkout/quick`, receipts, payment recovery and accounts are never shells.
+- A failed read (fail-closed "checkout unavailable") renders for this request only: `markRenderUncacheable` sets `no-store`, the middleware answers `BYPASS_DEGRADED`, and the gateway does not store it. A store that is really unavailable is a valid answer and is stored.
+- The browser copy stays `private, no-cache, no-store, must-revalidate`, because the buyer types contact and payment details into the page. Prefetch of `/cart` and `/checkout` stays off.
 
-`cart-shell.render.test.ts` (beside the cart code) renders the real page with buyer cookies and asserts identical bytes, one API batch and uncacheable failed renders.
+`cart-shell.render.test.ts` (beside the cart code) renders both real pages with buyer cookies and queries and asserts identical bytes, one API batch and uncacheable failed renders.
 
 ## Budgets and guardrails
 
 | Guardrail | Where | Limit |
 | --- | --- | --- |
-| API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts` (`PAGE_API_CALL_BUDGET`), `cart-shell.render.test.ts` | 1 for home, product, category, search and cart |
+| API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts` (`PAGE_API_CALL_BUDGET`), `cart-shell.render.test.ts` | 1 for home, product, category, search, cart and checkout |
 | D1 round trips and waves of a cold render | `apps/api/src/storefront-render-budget.test.ts` (`PAGE_D1_BUDGETS`) | table below |
 | Validation statement | same test | exactly 1, in wave 1. Every render statement starts in wave 2. |
 | The same page again (all parts validated hits) | same test | exactly 1 statement, 1 wave, identical bodies |
-| A page with one app drawing | same test (`APP_PAGE_D1_BUDGETS`) | home 12 / 2, product 20 / 3 |
+| A page with one app drawing | same test (`APP_PAGE_D1_BUDGETS`) | home 11 / 2, product 19 / 3 |
 | Batch safety, and batchable reads only in read-only route families | `storefront-batch*.test.ts`, `runtime/storefront-render-families.test.ts` | exact |
 | API Worker size | `pnpm check:api-bundle` (also in every deploy) | at most 90% of 64 MiB uncompressed |
 | Product JSON-LD weight | `commerce-structured-data.product-group.test.ts` | at most 20 KB (`PRODUCT_JSON_LD_MAX_BYTES`) |
@@ -127,14 +128,16 @@ D1 budgets of a cold render, per page (seeded store; the home page uses every se
 
 | Page | Round trips | Waves |
 | --- | ---: | ---: |
-| Home | 13 | 2 |
-| Landing page | 13 | 2 |
-| Product | 21 | 3 |
-| Category | 7 | 3 |
-| Collection | 7 | 3 |
-| Search | 7 | 2 |
+| Home | 10 | 2 |
+| Landing page | 10 | 2 |
+| Product | 19 | 3 |
+| Category | 5 | 3 |
+| Collection | 6 | 3 |
+| Search | 5 | 2 |
+| Cart shell | 13 | 2 |
+| Checkout shell | 7 | 2 |
 
-A product with 6 reviews may use 22 round trips in 3 waves.
+A product with 6 reviews may use 20 round trips in 3 waves. The budgets are the measured values (2026-10-14), so any new statement or wave fails the test.
 
 A wave is a round of D1 calls that must wait for the previous one, and each wave costs a full database round trip. A new sequential `await` in a storefront read fails the budget test even when the query count stays the same. The layout and homepage parts each read in two steps (batch contents: [storefront README](../packages/core/src/modules/storefront/README.md)).
 
@@ -142,7 +145,7 @@ The validation statement reads the clock and the current Platform settings toget
 
 ## `pnpm perf:storefront`
 
-`pnpm perf:storefront` (`scripts/storefront-perf.mjs`) measures TTFB, LCP and CLS of built Workers. It sends only GET requests, except for the local `--d1-explorer` option. It checks the home page, the first category and product linked from home, `/search?q=a` and `/cart`. For each page it records:
+`pnpm perf:storefront` (`scripts/storefront-perf.mjs`) measures TTFB, LCP and CLS of built Workers. It sends only GET requests, except for the local `--d1-explorer` option. It checks the home page, the first category and product linked from home, `/search?q=a`, `/cart` and `/checkout`. For each page it records:
 
 - Server TTFB of a cache miss and the median of the hits. A 5xx first response is a failure. Against a remote base, it subtracts the TTFB of the edge's own `/cdn-cgi/trace` (the network round trip) from the hit TTFB and prints both values.
 - In headless Chrome, LCP, CLS, TTFB and transfer size, read 1.5 s after load with the browser cache off. The phone profile is 390x844 at DPR 3, 150 ms latency, 1.6 Mbps down, 750 kbps up, 4x CPU slowdown. The desktop profile is 1440x900.
@@ -153,9 +156,9 @@ It exits 1 when a threshold is exceeded:
 | --- | --- | --- |
 | Cache-hit TTFB | 50 ms | `--budget-ttfb-hit-ms` |
 | Cache-miss TTFB (and pages that always render) | 300 ms | `--budget-ttfb-miss-ms` |
-| Phone LCP | 1500 ms | `--budget-lcp-phone-ms` |
-| Desktop LCP | 1200 ms | `--budget-lcp-desktop-ms` |
-| CLS (either profile) | 0.1 | `--budget-cls` |
+| Phone LCP | 1200 ms | `--budget-lcp-phone-ms` |
+| Desktop LCP | 800 ms | `--budget-lcp-desktop-ms` |
+| CLS (either profile) | 0.05 | `--budget-cls` |
 
 Other flags: `--base <origin>` (default `http://localhost:4391`), `--paths "/,/products/x"`, `--runs <n>` (default 3), `--profiles phone,desktop`, `--no-browser` (TTFB only), `--json`, `--media-url <origin>`, `--no-binding-check` and `--cdp-port <port>` (default 9395; the script starts its own headless Chrome when nothing listens there).
 
@@ -187,6 +190,34 @@ pnpm perf:storefront --base https://storefront.scalius.com
 ```
 
 Miss TTFB from a laptop includes the network round trip to the edge. From Bangladesh, some ISPs reach Cloudflare in Europe (MXP, MAD, CDG, MRS) as often as in SIN or HKG, which adds 150-450 ms per TLS connection. Read the data center from `cf-ray` before you blame the server.
+
+## Comparison with other platforms
+
+`pnpm perf:compare` (`scripts/storefront-compare.mjs`) runs the same profile against any public stores: `--site <label>=<url>` per store, `--runs` at most 3. From each home page it takes the first listing and product link (Scalius `/categories/` and `/products/`, Shopify `/collections/` and `/products/`, WooCommerce `/shop/`, `/product-category/` and `/product/`) and the cart (`/cart` or `/basket`). It records the page TTFB on a warm connection, the TTFB of the site's `/robots.txt` on the same connection (the network and edge floor; "server" is the page less the floor), and phone and desktop LCP, CLS and transfer size. It sends only GET requests, one at a time, and never accepts a cookie dialog or touches a form.
+
+```sh
+pnpm perf:compare --site scalius=https://storefront.scalius.com \
+  --site shopify-dawn=https://theme-dawn-demo.myshopify.com --site woo-storefront=https://wp-skins.com
+```
+
+2026-10-14 from Dhaka (Cloudflare DAC), 3 runs per page, median. Shopify: the official Dawn theme demo. WooCommerce: a public Storefront-theme store (the official Storefront demo now redirects to woocommerce.com). The Scalius row is the live demo before the buyer-shell, cart and font changes of this date (its cart LCP was the late popular-products photo, about 1.0 s after them in the local A/B).
+
+| Site | Page | TTFB server / page / floor (ms) | Phone LCP (ms) | Phone CLS | Phone KB | Desktop LCP (ms) | Desktop CLS |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Scalius | home | 2 / 27 / 25 | 1376 | 0 | 209 | 436 | 0 |
+| Scalius | listing | 0 / 30 / 31 | 1316 | 0 | 235 | 280 | 0.001 |
+| Scalius | product | 0 / 25 / 26 | 1516 | 0 | 257 | 276 | 0 |
+| Scalius | cart | 2 / 26 / 24 | 2592 | 0 | 238 | 648 | 0 |
+| Shopify Dawn | home | 18 / 148 / 130 | 3816 | 0 | 849 | 236 | 0 |
+| Shopify Dawn | listing | 158 / 275 / 117 | 1800 | 0 | 701 | 344 | 0 |
+| Shopify Dawn | product | 47 / 169 / 122 | 2372 | 0 | 530 | 264 | 0 |
+| Shopify Dawn | cart | 0 / 128 / 140 | 1860 | 0 | 383 | 256 | 0 |
+| WooCommerce Storefront | home | 4 / 250 / 246 | 4732 | 0 | 1042 | 1992 | 0.223 |
+| WooCommerce Storefront | listing | 6 / 251 / 245 | 11668 | 0.034 | 2258 | 2328 | 0.042 |
+| WooCommerce Storefront | product | 26 / 274 / 248 | 4788 | 0.001 | 961 | 1064 | 0 |
+| WooCommerce Storefront | cart | 158 / 409 / 251 | 1428 | 0 | 224 | 1012 | 0 |
+
+Scalius pages are edge hits (about 25 ms at the DAC edge); Shopify pages pass to its origin (120-140 ms floor from Dhaka, 0-160 ms more). Phone LCP follows bytes on slow 4G: Scalius pages move 210-260 KB, Dawn 380-850 KB, the WooCommerce store 220-2,260 KB. A store's `/robots.txt` can itself be dynamic (WordPress), so read the floor column before comparing server times.
 
 ## `pnpm fidelity:check`
 
@@ -284,6 +315,11 @@ A numbered page deeper than `maxOffset` is an empty page, reads no rows and gets
 
 A cache miss on a fresh API isolate pays module start-up on top of the render. A page is one batch, so a render pays for at most one isolate start, and API placement keeps isolates warm more often. The API loads route families lazily (`classifyPublicRuntimePath` in `apps/api/src/runtime/public-app.ts`): `config`, `catalog`, `content`, `buyer` and `proxy`. A render must not load the `buyer` family (orders, customer auth, agent contexts), so every batchable read, including `checkout/config`, lives in a read-only family. The generated payloads (`apps/api/src/generated/openapi-contract.gen.ts`, `agent-operations.gen.ts`) stay unevaluated outside their own routes. Splitting the API into more bundles does not help ([experiments](./PERFORMANCE-RELEASE.md#cold-start-experiments)), so the API stays one script.
 
+workerd compiles every uploaded byte when an isolate starts, and a large object or array literal costs far more than the same bytes as a string. Rules that keep the first view after a deploy fast:
+
+- Bundle a large dataset as text and parse it where it is used (`import(..., { with: { type: "text" } })`, as the Bangladesh pack loads its place directory). A JSON import becomes one literal that every API isolate compiles.
+- The storefront server build is minified (`vite.build.rolldownOptions.output.minify` in `apps/storefront/astro.config.mjs`); Astro turns `build.minify` off for it.
+
 ## Images
 
 - Uploads get WebP renditions at `media/<id>.<ext>/<w>.webp` on a fixed ladder (`MEDIA_VARIANT_WIDTHS` in `packages/shared/src/media-variants.ts`: 144 to 1600, each step at most 1.2 times the one below; master up to 2400). The dashboard browser pipeline or the API `IMAGES` binding renders them. No image transformation runs on the delivery path (the storefront image service is `passthrough`).
@@ -298,4 +334,6 @@ Build output, the CSS inline limit, the preconnect `Link` header and the prefetc
 
 - Astro sessions are off (`session: false` in `apps/storefront/astro.config.mjs`), so the adapter adds no KV session driver.
 - Analytics scripts that run in Partytown load through a hashed bootstrap after first paint (`apps/storefront/integrations/deferred-partytown.mjs`). The Cloudflare Web Analytics beacon loads as a module script with `fetchpriority="low"` (`apps/storefront/src/lib/analytics-script-delivery.ts`).
+- The theme's heading face is preloaded only from 640 px (`media` on the preload in `ThemeFonts.astro`). On a phone on slow 4G the 47 KB preload shared the link with the render-blocking CSS and the LCP photo and cost 150 ms of LCP (A/B of the live home page, 5 runs each: 1,056 ms to 908-916 ms). Every face swaps over a metric-matched fallback, so CLS stays 0.
+- Content that buyers see at first paint is in the HTML, not fetched by a page script. The empty cart's "Popular now" products are drawn in the cached cart shell (one more batch part, lazy photos, so a full cart never fetches them). Fetched by the cart script, they were the phone LCP at 2.6 s; drawn in the shell, about 1.0 s in the same A/B.
 - The preconnect `Link` header stays a fixed CDN origin. A preconnect transfers no merchant bytes, so Cloudflare's URI-keyed Early Hints cache cannot serve stale price, stock or hero content.

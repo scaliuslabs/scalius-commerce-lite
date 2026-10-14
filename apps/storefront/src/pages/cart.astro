@@ -13,6 +13,7 @@ import ShippingCountryField from "@/components/checkout/ShippingCountryField.ast
 import ForeignAddressFields from "@/components/checkout/ForeignAddressFields.astro";
 import BillingAddressFields from "@/components/checkout/BillingAddressFields.astro";
 import AppBlocks from "@/components/apps/AppBlocks.astro";
+import EmptyCartPopular from "@/components/checkout/EmptyCartPopular.astro";
 import { getAppBlocks } from "@/lib/api/app-blocks";
 import { layoutHasAppBlocks } from "@/lib/app-surfaces";
 import {
@@ -31,6 +32,7 @@ import {
   getActiveCheckoutLanguage,
   type CheckoutLanguageData,
   getCheckoutConfig,
+  getProductRecommendations,
   isCheckoutConfigReadFailure,
   isCodOnly,
 } from "@/lib/api";
@@ -71,12 +73,15 @@ const [
   shippingMethodsResponse,
   checkoutLanguageResponse,
   checkoutConfig,
+  popularProducts,
 ] = await Promise.all([
   getLayoutData(),
   getCities(),
   getShippingMethods(),
   getActiveCheckoutLanguage(),
   getCheckoutConfig(),
+  // The empty cart's "Popular now" (store-wide, no source product).
+  getProductRecommendations([], 8),
 ]);
 // Apps' checkout blocks: read only when the layout says an active app draws one.
 const appBlocks = layoutHasAppBlocks(layoutData, "checkout") ? await getAppBlocks("checkout") : [];
@@ -326,7 +331,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
 // The cart template's own sections (Online store, theme editor), around the cart.
 const cartRequestTheme = await resolveRequestTheme(Astro, layoutData);
-// An empty cart points to the store's top categories (popular products fill in from the browser).
+// An empty cart points to the store's top categories and popular products.
 const emptyCartCopy = shopCopy(checkoutLanguageBaseCode(lang.code)).cart;
 const emptyCartCategories = (layoutData?.categoryTree?.nodes ?? []).filter((node) => node.parentId === null).slice(0, 8);
 const cartTemplate = cartRequestTheme.resolved.pages.templates.cart;
@@ -1025,7 +1030,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           </div>
         </section>
         <AppBlocks blocks={appBlocks} target="purchase.checkout.cart-line-list.render-after" class="mt-4" />
-        {/* An empty cart still leads somewhere: the store's categories now, its popular products once the cart script knows the cart is empty. */}
+        {/* An empty cart still leads somewhere: the store's categories and popular products, shown while the cart is empty. */}
         <div class="mx-auto mt-8 hidden max-w-3xl space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras>
           {emptyCartCategories.length > 0 && (
             <nav aria-labelledby="cartEmptyCategoriesTitle">
@@ -1042,10 +1047,12 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
               </ul>
             </nav>
           )}
-          <section aria-labelledby="cartEmptyPopularTitle" data-cart-empty-popular hidden>
-            <h2 id="cartEmptyPopularTitle" class="mb-3 text-base font-semibold text-foreground">{emptyCartCopy.popularNow}</h2>
-            <ul class="grid grid-cols-2 gap-3 sm:grid-cols-4"></ul>
-          </section>
+          <EmptyCartPopular
+            title={emptyCartCopy.popularNow}
+            recommendations={popularProducts}
+            currencySymbol={layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol}
+            currencyCode={layoutData?.currency?.code ?? DEFAULT_CURRENCY.code}
+          />
         </div>
       </div>
     </div>
