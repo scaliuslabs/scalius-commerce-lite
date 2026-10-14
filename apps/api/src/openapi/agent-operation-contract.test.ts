@@ -11,6 +11,7 @@ import {
 import {
   AGENT_OPERATION_MANIFEST_PATH,
   assertCliWorkflowResolverCoreFresh,
+  assertAgentOperationManifestLoaderFresh,
   assertOpenApiContractModuleFresh,
   generateAgentOperationManifestSource,
 } from "./generate-agent-operation-manifest";
@@ -626,6 +627,7 @@ describe("agent operation contract", () => {
     const checkedIn = readFileSync(AGENT_OPERATION_MANIFEST_PATH, "utf8");
     expect(checkedIn).toBe(expected);
     expect(checkedIn).not.toMatch(/generatedAt|new Date\(|20\d\d-\d\d-\d\dT/);
+    expect(() => assertAgentOperationManifestLoaderFresh()).not.toThrow();
   });
 
   it("keeps the runtime OpenAPI response byte-for-byte deploy generated", () => {

@@ -58,6 +58,8 @@ function cart(overrides: Partial<FunctionCart> = {}): FunctionCart {
     customer: null,
     destination: null,
     discountCodes: [],
+    market: { id: "mkt_backup", country: null },
+    attributes: {},
     ...overrides,
   };
 }

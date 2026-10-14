@@ -186,6 +186,9 @@ const adminSchema = z.object({
 const timelineSchema = z.array(z.object({ kind: name, title }).strict()).max(20).default([])
   .refine((kinds) => new Set(kinds.map((entry) => entry.kind)).size === kinds.length, "Timeline kinds must be unique.");
 
+/** The pages an app script can name. Buyer pages (checkout, the receipt, account) are not among them. */
+export const PLUGIN_STOREFRONT_SCRIPT_PAGES = ["all", "home", "product", "listing", "cart"] as const;
+
 const storefrontSchema = z.object({
   /**
    * Theme sections the merchant can add in the theme editor/builder. A
@@ -234,11 +237,15 @@ const storefrontSchema = z.object({
   }).strict()).max(10).default([]),
   /** Meta tags and JSON-LD (sanitized) for the page head. */
   head: z.boolean().default(false),
-  /** External scripts; their hosts join the storefront CSP. Loaded non-blocking. */
+  /**
+   * External scripts; their hosts join the storefront CSP. Loaded non-blocking,
+   * on public pages only: app JavaScript never runs on checkout, the receipt or
+   * a private page (R3), so those pages cannot be named.
+   */
   scripts: z.array(z.object({
     src: z.string().url().max(2048).refine((value) => value.startsWith("https://"), "Scripts load over https."),
     placement: z.enum(["head", "body-end"]).default("body-end"),
-    pages: z.array(z.enum(["all", "home", "product", "listing", "cart", "checkout", "order-success"])).min(1).default(["all"]),
+    pages: z.array(z.enum(PLUGIN_STOREFRONT_SCRIPT_PAGES)).min(1).default(["all"]),
   }).strict()).max(5).default([]),
   /** `/apps/<plugin id>/*` on the storefront origin proxies to the plugin's public routes. */
   proxy: z.boolean().default(false),
@@ -346,9 +353,13 @@ function semverBelow(left: string, right: string): boolean {
 
 // ── Translations ──────────────────────────────────────────────────────────
 
-/** Dashboard languages besides English, the manifest's own language. */
-export const PLUGIN_TRANSLATION_LOCALES = ["bn"] as const;
-export type PluginTranslationLocale = (typeof PLUGIN_TRANSLATION_LOCALES)[number];
+/**
+ * A translation key: a BCP 47 tag as the store and dashboard write it
+ * (`bn`, `fr`, `pt-BR`, `zh-Hant-TW`). English is the manifest itself.
+ */
+export const PLUGIN_TRANSLATION_LOCALE_PATTERN = /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|[0-9]{3}))?$/;
+/** Languages one app may translate into. */
+export const PLUGIN_TRANSLATIONS_MAX = 20;
 
 /**
  * The manifest's merchant-facing text in another dashboard language: the
@@ -498,7 +509,8 @@ export const pluginManifestSchema = z.object({
   timeline: timelineSchema,
   storefront: storefrontSchema.default(emptyPluginStorefront),
   /** The dashboard text in other languages (additive; English is the manifest itself). */
-  translations: z.object({ bn: pluginTranslationSchema.optional() }).strict().optional(),
+  translations: z.record(z.string().regex(PLUGIN_TRANSLATION_LOCALE_PATTERN, "Use a BCP 47 language tag such as bn or pt-BR."), pluginTranslationSchema).optional()
+    .refine((translations) => translations === undefined || Object.keys(translations).length <= PLUGIN_TRANSLATIONS_MAX, `Translate into ${PLUGIN_TRANSLATIONS_MAX} languages or fewer.`),
 
   /** Per-invocation limits, within the platform's ceilings. */
   limits: z.object({
@@ -534,9 +546,7 @@ export const pluginManifestSchema = z.object({
   manifest.admin.cards.forEach((card, index) => needAdminRoute(["admin", "cards", index, "route"], card.route));
   manifest.admin.actions.forEach((action, index) => needAdminRoute(["admin", "actions", index, "route"], action.route));
   manifest.admin.widgets.forEach((widget, index) => needAdminRoute(["admin", "widgets", index, "route"], widget.route));
-  for (const locale of PLUGIN_TRANSLATION_LOCALES) {
-    const translation = manifest.translations?.[locale];
-    if (!translation) continue;
+  for (const [locale, translation] of Object.entries(manifest.translations ?? {})) {
     for (const surface of ["pages", "cards", "actions", "widgets", "listColumns"] as const) {
       const declared = new Set(manifest.admin[surface].map((entry) => entry.id));
       for (const id of Object.keys(translation[surface] ?? {})) {

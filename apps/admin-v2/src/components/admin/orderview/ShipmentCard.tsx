@@ -454,6 +454,7 @@ export function BookCourier({ order, focusRequest, guard }: {
           })}
         />
         <Button
+          variant="outline"
           className="shrink-0"
           loading={mutation.isPending}
           onClick={() => guard(() => mutation.mutate({ orderId: order.id, providerId, options: {} }))}
@@ -556,7 +557,7 @@ export function ShipmentCard({ order }: { order: Order }) {
           )
         ) : null}
         {canDeliver ? (
-          <Button type="button" className="w-full" loading={deliveredMutation.isPending} onClick={() => deliveredMutation.mutate({ orderId: order.id })}>
+          <Button type="button" variant="outline" className="w-full" loading={deliveredMutation.isPending} onClick={() => deliveredMutation.mutate({ orderId: order.id })}>
             {t("primary.markDelivered")}
           </Button>
         ) : null}

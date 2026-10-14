@@ -17,6 +17,7 @@ import {
 import { getLayoutData } from "@/lib/api/storefront";
 import { getRuntime, getWorkerEnv } from "@/lib/api/runtime";
 import { appComponentsRenderOn, storefrontAppPage } from "@/lib/app-scripts";
+import { pageKind } from "./page-kind";
 import { storeRegion, storeTimeZone } from "@/lib/store-time-zone";
 import { dateLocale } from "@scalius/shared/locale-format";
 import { markPageUnproven } from "@/lib/page-dependencies";
@@ -57,16 +58,6 @@ const perRequest = new WeakMap<object, Promise<RequestExtensions>>();
 
 function runtimeEnv(): ExtensionRuntime["env"] {
   return (getWorkerEnv() ?? {}) as unknown as ExtensionRuntime["env"];
-}
-
-function pageKind(path: string): StorefrontRenderContext["page"]["kind"] {
-  if (path === "/") return "home";
-  if (path.startsWith("/pages/")) return "landing";
-  if (path.startsWith("/products/")) return "product";
-  if (/^\/(?:categories|collections|brands)(?:\/|$)/.test(path)) return "listing";
-  if (path.startsWith("/search")) return "search";
-  if (path === "/cart" || path.startsWith("/checkout")) return "cart";
-  return "other";
 }
 
 /** The request's extensions and render host (one per request, built on first use). */

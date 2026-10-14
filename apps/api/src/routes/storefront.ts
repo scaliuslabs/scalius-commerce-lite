@@ -3,6 +3,7 @@
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
 import { STOREFRONT_COMPONENT_SLOTS } from "@scalius/shared/plugins/storefront-protocol";
+import { PLUGIN_STOREFRONT_SCRIPT_PAGES } from "@scalius/shared/plugins/manifest";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
@@ -402,7 +403,7 @@ const layoutDataSchema = z.object({
     pluginId: z.string(),
     src: z.string(),
     placement: z.enum(["head", "body-end"]),
-    pages: z.array(z.enum(["all", "home", "product", "listing", "cart", "checkout", "order-success"])),
+    pages: z.array(z.enum(PLUGIN_STOREFRONT_SCRIPT_PAGES)),
   })),
   appExtensions: z.array(z.object({
     pluginId: z.string(),

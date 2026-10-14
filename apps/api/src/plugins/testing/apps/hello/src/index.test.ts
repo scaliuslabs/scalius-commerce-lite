@@ -18,6 +18,8 @@ const cart = (subtotalMinor: number) => ({
   customer: null,
   destination: null,
   discountCodes: [],
+  market: { id: "mkt_backup", country: null },
+  attributes: {},
 });
 
 describe("acme.hello", () => {

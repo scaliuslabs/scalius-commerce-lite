@@ -477,7 +477,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             {codRead.status === "ready" && codOpen && (canRecordCodCollection || (isCOD && (canRecordCodFailure || canRecordCodReturn))) ? (
               <div className="flex flex-wrap gap-2">
                 {canRecordCodCollection ? (
-                  <Button size="sm" disabled={isRefundLocked} onClick={() => openCod("collected")}>{collectTitle}</Button>
+                  <Button size="sm" variant="outline" disabled={isRefundLocked} onClick={() => openCod("collected")}>{collectTitle}</Button>
                 ) : null}
                 {isCOD && canRecordCodFailure ? (
                   <Button size="sm" variant="outline" disabled={isRefundLocked} onClick={() => openCod("failed")}>

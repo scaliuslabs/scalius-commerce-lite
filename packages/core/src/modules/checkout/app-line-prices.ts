@@ -24,6 +24,7 @@ import type { FunctionCart, PluginFunctionOutput } from "@scalius/shared/plugins
 import type { AppLinePrice, ResolvedPriceSource } from "@scalius/shared/market-pricing";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
 import {
+    appCartMarketCountry,
     buildAppFunctionCart,
     loadAppFunctionCartFacts,
     type CheckoutAppFunctionResult,
@@ -69,6 +70,7 @@ export function createAppLinePricer(
             productIds: items.map((item) => item.productId),
             variantIds: items.map((item) => item.variantId),
             customerId,
+            marketCountry: appCartMarketCountry(context.destination ?? null),
         });
         let cart: FunctionCart;
         try {

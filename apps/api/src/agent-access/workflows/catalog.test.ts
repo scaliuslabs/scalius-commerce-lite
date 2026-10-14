@@ -131,8 +131,7 @@ describe("agent workflow catalog", () => {
     expect(Buffer.byteLength(JSON.stringify(THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW)))
       .toBeLessThanOrEqual(8 * 1024);
     const generatedSource = generateAgentOperationManifestSource(document);
-    expect(generatedSource).toContain("export const AGENT_WORKFLOW_CATALOG");
-    expect(generatedSource).toContain(JSON.stringify(catalog));
+    expect(generatedSource).toContain(`"workflowCatalog":${JSON.stringify(catalog)}`);
 
     const missing = structuredClone(document);
     delete missing["x-scalius-workflows"];

@@ -50,6 +50,7 @@ import { ValidationError } from "@scalius/core/errors";
 import {
     applyAppPaymentMethodOperations,
     applyAppShippingRateOperations,
+    appCartMarketCountry,
     buildAppFunctionCart,
     CHECKOUT_RULES_FAILED_REASON,
     collectCheckoutRuleErrors,
@@ -107,12 +108,20 @@ function manualDiscountAllocation(lines: readonly ManualOrderAppLine[], discount
 
 type CartSource = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "shippingCountryCode" | "locationNames">;
 
+/** Where a manual order ships; null when it ships nothing. */
+function destinationOf(input: CartSource) {
+    return input.requiresShipping
+        ? { country: input.shippingCountryCode ?? null, city: input.locationNames.cityName, zone: input.locationNames.zoneName }
+        : null;
+}
+
 function loadCartFacts(db: Database, input: CartSource) {
     return loadAppFunctionCartFacts(db, {
         productIds: input.lines.map((line) => line.productId),
         variantIds: input.lines.map((line) => line.variantId),
         // A staff order belongs to no signed-in account: apps see a guest, as at a guest checkout.
         customerId: null,
+        marketCountry: appCartMarketCountry(destinationOf(input)),
     });
 }
 
@@ -136,9 +145,7 @@ function cartOf(
             properties: parseLineInputs(line.properties),
         })),
         facts,
-        destination: input.requiresShipping
-            ? { country: input.shippingCountryCode ?? null, city: input.locationNames.cityName, zone: input.locationNames.zoneName }
-            : null,
+        destination: destinationOf(input),
         discountCodes: [],
     });
 }

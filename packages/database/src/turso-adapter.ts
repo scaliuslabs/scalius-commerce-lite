@@ -3,15 +3,11 @@ import {
   type BatchStatement,
   type Config as TursoConnectionConfig,
 } from "@tursodatabase/serverless";
-import {
-  drizzle as drizzleRemote,
-  type AsyncBatchRemoteCallback,
-  type AsyncRemoteCallback,
-} from "drizzle-orm/sqlite-proxy";
+import type { AsyncBatchRemoteCallback, AsyncRemoteCallback } from "drizzle-orm/sqlite-proxy";
+import { drizzleRemote } from "./drizzle-clients";
 import { registerDatabaseProvider } from "./provider";
 import { observeStatement } from "./read-observer";
 import { withNamedRawRows } from "./remote-raw-rows";
-import * as schema from "./schema";
 import type { Database } from "./types";
 
 const DEFAULT_CONFLICT_ATTEMPTS = 8;
@@ -311,7 +307,7 @@ export function createTursoDatabase(
   // Database intentionally exposes the common SQLite query surface currently
   // shaped by the D1 type. This is the only transport cast in the application.
   return registerDatabaseProvider(
-    withNamedRawRows(drizzleRemote(executeOne, executeBatch, { schema }), executeOne),
+    withNamedRawRows(drizzleRemote(executeOne, executeBatch), executeOne),
     "turso",
   ) as unknown as Database;
 }

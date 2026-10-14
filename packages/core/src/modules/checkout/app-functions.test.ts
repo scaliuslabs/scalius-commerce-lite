@@ -219,7 +219,8 @@ describe("the app cart", () => {
       facts: {
         products: new Map([["p_a", { categoryIds: ["cat_child", "cat_root"], collectionIds: ["col_1"], brandId: "brand_1" }]]),
         skus: new Map([["v_a", "TEE-M"]]),
-        customer: { id: "cust_1", tags: [], orderCount: 3, totalSpentMinor: 250_000 },
+        customer: { id: "cust_1", tags: ["vip", "wholesale"], orderCount: 3, totalSpentMinor: 250_000 },
+        market: { id: "mkt_backup", country: "BD" },
       },
       destination: { city: "Dhaka", zone: null },
       discountCodes: [" bulk10 ", "BULK10"],
@@ -234,9 +235,11 @@ describe("the app cart", () => {
         brandId: "brand_1", properties: { engraving: "Anika" },
       }],
       subtotalMinor: 90_000,
-      customer: { id: "cust_1", tags: [], orderCount: 3, totalSpentMinor: 250_000 },
+      customer: { id: "cust_1", tags: ["vip", "wholesale"], orderCount: 3, totalSpentMinor: 250_000 },
       destination: { country: "BD", city: "Dhaka", zone: null },
       discountCodes: ["BULK10"],
+      market: { id: "mkt_backup", country: "BD" },
+      attributes: {},
     });
   });
 });

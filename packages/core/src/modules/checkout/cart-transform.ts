@@ -39,6 +39,7 @@ import { and, inArray, isNull } from "drizzle-orm";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
 import {
+    appCartMarketCountry,
     buildAppFunctionCart,
     loadAppFunctionCartFacts,
     type CheckoutAppFunctionResult,
@@ -99,6 +100,7 @@ export function createCartTransformer(
             productIds: valid.map((item) => item.productId),
             variantIds: valid.map((item) => item.variantId),
             customerId,
+            marketCountry: appCartMarketCountry(context.destination ?? null),
         });
         let cart: FunctionCart;
         try {

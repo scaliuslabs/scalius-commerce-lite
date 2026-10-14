@@ -17,7 +17,7 @@
     "ttfbMissMs": 300,
     "lcpPhoneMs": 1500,
     "lcpDesktopMs": 1200,
-    "cls": 0.05,
+    "cls": 0.01,
     "pdpHtmlKB": 120,
     "categoryHtmlKB": 150,
     "headerHtmlKB": 45,

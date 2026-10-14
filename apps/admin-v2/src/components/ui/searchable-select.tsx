@@ -365,7 +365,7 @@ function ComboboxView({
               "flex h-11 w-full items-center gap-2 text-start sm:h-9",
             )}
           >
-            <span data-placeholder={label ? undefined : ""} className="min-w-0 flex-1 truncate data-[placeholder]:text-muted-foreground">
+            <span data-placeholder={label ? undefined : ""} title={busy ? undefined : label} className="min-w-0 flex-1 truncate data-[placeholder]:text-muted-foreground">
               {busy ? t("loading") : label ?? placeholder ?? t("placeholder")}
             </span>
             {/* Room for the clear button, which sits just before the chevron. */}

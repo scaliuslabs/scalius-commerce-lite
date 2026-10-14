@@ -122,11 +122,16 @@ describe("plugin manifest", () => {
     ["a wildcard with a port", { allowedHosts: ["*.acme.example:8443"] }, "allowedHosts.0"],
     ["a port out of range", { allowedHosts: ["api.acme.example:70000"] }, "allowedHosts.0"],
     ["an http script", { storefront: { scripts: [{ src: "http://cdn.acme.example/w.js" }] } }, "storefront.scripts.0.src"],
+    ["a script on checkout", { storefront: { scripts: [{ src: "https://cdn.acme.example/w.js", pages: ["checkout"] }] } }, "storefront.scripts.0.pages.0"],
+    ["a script on the order receipt", { storefront: { scripts: [{ src: "https://cdn.acme.example/w.js", pages: ["order-success"] }] } }, "storefront.scripts.0.pages.0"],
     ["a page whose route is missing", { admin: { pages: [{ id: "p", title: "P", route: "nope" }] } }, "admin.pages.0.route"],
     ["a section on an admin route", { storefront: { sections: [{ type: "s", name: "S", route: "dashboard" }] } }, "storefront.sections.0.route"],
     ["an unknown key", { extra: true }, "(root)"],
     ["a translation of a page it doesn't have", { translations: { bn: { pages: { missing: "পাতা" } } } }, "translations.bn.pages.missing"],
-    ["a translation for a language the dashboard lacks", { translations: { fr: { name: "Fidélité" } } }, "translations"],
+    ["a translation under a malformed language tag", { translations: { "pt_BR": { name: "Fidelidade" } } }, "translations.pt_BR"],
+    ["a translation under an uppercase language", { translations: { FR: { name: "Fidélité" } } }, "translations.FR"],
+    ["a translation of a page in another language it doesn't have", { translations: { fr: { pages: { missing: "Page" } } } }, "translations.fr.pages.missing"],
+    ["twenty-one translations", { translations: Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`a${String.fromCharCode(97 + index)}`, { name: "X" }])) }, "translations"],
     ["a discount that blocks checkout", { functions: [{ point: "checkout.discounts", onError: "block" }] }, "functions.0.onError"],
     ["a snapshot outside checkout.discounts", { functions: [{ point: "cart.validate", snapshot: { collection: "visits" } }] }, "functions.0.snapshot"],
     ["a snapshot of an undeclared collection", { functions: [{ point: "checkout.discounts", snapshot: { collection: "nope" } }] }, "functions.0.snapshot.collection"],
@@ -191,6 +196,16 @@ describe("plugin manifest", () => {
     // Without translations the manifest is English only.
     const english = parsePluginManifest(FULL);
     expect(english.ok && english.manifest.translations).toBeUndefined();
+  });
+
+  it("takes a translation under any BCP 47 language tag, up to twenty", () => {
+    const tags = ["fr", "pt-BR", "zh-Hant-TW", "es-419", "fil"];
+    const result = parsePluginManifest({ ...FULL, translations: Object.fromEntries(tags.map((tag) => [tag, { name: `Name ${tag}` }])) });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(Object.keys(result.manifest.translations ?? {})).toEqual(tags);
+    const twenty = parsePluginManifest({ ...FULL, translations: Object.fromEntries(Array.from({ length: 20 }, (_, index) => [`a${String.fromCharCode(97 + index)}`, { name: "X" }])) });
+    expect(twenty.ok).toBe(true);
   });
 
   it("asks for approval again only when an update widens the grant", () => {

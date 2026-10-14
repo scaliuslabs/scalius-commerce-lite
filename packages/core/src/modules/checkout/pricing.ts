@@ -31,6 +31,7 @@ import type { StorefrontCartValidationResult } from "./cart-validation";
 import {
   applyAppPaymentMethodOperations,
   applyAppShippingRateOperations,
+  appCartMarketCountry,
   buildAppFunctionCart,
   CHECKOUT_RULES_FAILED_REASON,
   collectCheckoutRuleErrors,
@@ -258,11 +259,16 @@ export async function priceStorefrontCheckout(
 
   if (apps && wantsAppCart(apps, ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods"])) {
     const wantsRates = apps.points.has("checkout.shipping_rates") && delivery.kind !== null && shippingMethod !== null;
+    const appDestination = delivery.fulfilment.requiresShipping
+      ? { country: delivery.address?.countryCode ?? null, city: delivery.cityName, zone: delivery.zoneName }
+      : null;
     const [facts, rateOptions] = await Promise.all([
       loadAppFunctionCartFacts(db, {
         productIds: cartValidation.items.map((item) => item.productId),
         variantIds: cartValidation.items.map((item) => item.variantId),
         customerId: input.customerId,
+        // An order that ships nothing is placed in its billing country, where it is taxed.
+        marketCountry: appCartMarketCountry(appDestination, input.billing?.countryCode),
       }),
       wantsRates ? listRateOptions(db, input) : Promise.resolve([] as CheckoutRateOption[]),
     ]);
@@ -281,9 +287,7 @@ export async function priceStorefrontCheckout(
         properties: item.properties,
       })),
       facts,
-      destination: delivery.fulfilment.requiresShipping
-        ? { country: delivery.address?.countryCode ?? null, city: delivery.cityName, zone: delivery.zoneName }
-        : null,
+      destination: appDestination,
       discountCodes: input.discountCodes,
     }));
     const cart = appCart;
@@ -460,10 +464,14 @@ export async function checkStorefrontCartRules(
   const { apps, cartValidation } = input;
   if (!apps?.points.has("cart.validate") || cartValidation.items.length === 0) return [];
   const lineIds = cartValidation.items.map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId));
+  const destination = input.delivery?.fulfilment.requiresShipping
+    ? { country: input.delivery.address?.countryCode ?? null, city: input.delivery.cityName, zone: input.delivery.zoneName }
+    : null;
   const facts = await loadAppFunctionCartFacts(db, {
     productIds: cartValidation.items.map((item) => item.productId),
     variantIds: cartValidation.items.map((item) => item.variantId),
     customerId: input.customerId,
+    marketCountry: appCartMarketCountry(destination),
   });
   const cart = safeAppCart(() => buildAppFunctionCart({
     currency: input.currency,
@@ -479,9 +487,7 @@ export async function checkStorefrontCartRules(
       properties: item.properties,
     })),
     facts,
-    destination: input.delivery?.fulfilment.requiresShipping
-      ? { country: input.delivery.address?.countryCode ?? null, city: input.delivery.cityName, zone: input.delivery.zoneName }
-      : null,
+    destination,
     discountCodes: [],
   }));
   if (!cart) return [];
@@ -516,6 +522,8 @@ export async function previewStorefrontAppDiscounts(
   const facts = await loadAppFunctionCartFacts(db, {
     productIds: input.lines.map((line) => line.productId),
     variantIds: input.lines.map((line) => line.variantId),
+    // A preview knows no address: the backup market.
+    marketCountry: null,
   });
   const platformLines = new Map((input.platformAllocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
   const cart = safeAppCart(() => buildAppFunctionCart({
@@ -620,7 +628,7 @@ function parseLineInputs(serialized: string | null | undefined): Array<{ key: st
 export async function buildAppCartFromOrderPayload(
   db: Database,
   input: {
-    payload: Pick<StorefrontOrderCommitPayload, "items" | "orderData">;
+    payload: Pick<StorefrontOrderCommitPayload, "items" | "orderData" | "taxQuote">;
     appDiscounts: readonly AppliedAppDiscount[];
     discountCodes: readonly string[];
     customerId: string | null;
@@ -632,10 +640,15 @@ export async function buildAppCartFromOrderPayload(
     for (const line of discount.lines) appPart.set(line.lineId, (appPart.get(line.lineId) ?? 0) + line.amountMinor);
   }
   const { items, orderData } = input.payload;
+  const destination = orderData.requiresShipping === false
+    ? null
+    : { country: orderData.shippingCountryCode, city: orderData.cityName ?? orderData.shippingLocality, zone: orderData.zoneName };
   const facts = await loadAppFunctionCartFacts(db, {
     productIds: items.map((item) => item.productId),
     variantIds: items.map((item) => item.variantId),
     customerId: input.customerId,
+    // The market the order was placed in (commit.ts): shipping country, else billing when taxed there.
+    marketCountry: appCartMarketCountry(destination, input.payload.taxQuote.jurisdiction?.addressSource === "billing" ? orderData.billingCountryCode : null),
   });
   return buildAppFunctionCart({
     currency: { code: orderData.currencyCode, decimalPlaces: orderData.currencyDecimalPlaces },
@@ -651,9 +664,7 @@ export async function buildAppCartFromOrderPayload(
       properties: parseLineInputs(item.properties),
     })),
     facts,
-    destination: orderData.requiresShipping === false
-      ? null
-      : { country: orderData.shippingCountryCode, city: orderData.cityName ?? orderData.shippingLocality, zone: orderData.zoneName },
+    destination,
     discountCodes: input.discountCodes,
   });
 }

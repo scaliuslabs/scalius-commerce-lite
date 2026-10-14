@@ -70,9 +70,10 @@ export interface SeedOptions {
 /**
  * The dataset as text, parsed when a seed runs. As a JSON import the bundler
  * turns its 2.3 MB into one object literal that workerd compiles at every
- * API isolate start (about 120 ms of a cold start); a string literal costs
- * almost nothing until it is parsed here. Vitest's JSON plugin ignores the
- * attribute and hands over the parsed array.
+ * API isolate start (about 120 ms of a cold start). The API build makes the
+ * file a Text module (`rules` in apps/api/wrangler.jsonc), which workerd does
+ * not compile at all. Vitest's JSON plugin ignores the attribute and hands
+ * over the parsed array.
  */
 async function bundledPlaces(): Promise<readonly PlaceEntry[]> {
   const module = (await import("../places/places.json", { with: { type: "text" } })) as { default: unknown };

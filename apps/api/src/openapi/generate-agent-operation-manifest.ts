@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  AGENT_OPERATION_MANIFEST_LOADER_SOURCE,
   buildAgentComponentSchemas,
   buildAgentOperationManifest,
   renderAgentOperationManifestModule,
@@ -17,9 +18,19 @@ import {
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const apiSourceDirectory = resolve(currentDirectory, "..");
+// The large payloads are Text modules (strings workerd does not compile at
+// isolate start); each has a small generated loader beside it.
 export const AGENT_OPERATION_MANIFEST_PATH = resolve(
   apiSourceDirectory,
+  "generated/agent-operations.gen.txt",
+);
+export const AGENT_OPERATION_MANIFEST_LOADER_PATH = resolve(
+  apiSourceDirectory,
   "generated/agent-operations.gen.ts",
+);
+export const OPENAPI_CONTRACT_TEXT_PATH = resolve(
+  apiSourceDirectory,
+  "generated/openapi-contract.gen.txt",
 );
 export const OPENAPI_CONTRACT_MODULE_PATH = resolve(
   apiSourceDirectory,
@@ -85,6 +96,7 @@ export function writeAgentOperationManifest(
   const source = generateAgentOperationManifestSource(document);
   mkdirSync(dirname(AGENT_OPERATION_MANIFEST_PATH), { recursive: true });
   writeFileSync(AGENT_OPERATION_MANIFEST_PATH, source);
+  writeFileSync(AGENT_OPERATION_MANIFEST_LOADER_PATH, AGENT_OPERATION_MANIFEST_LOADER_SOURCE);
   return source;
 }
 
@@ -99,40 +111,49 @@ export function writeCliWorkflowResolverCore(): string {
   return source;
 }
 
+/** The contract served at /api/v1/openapi.json: its Text module and the loader with its ETag. */
 export function generateOpenApiContractModuleSource(
   document: AgentOperationOpenApiDocument,
-): string {
+): { text: string; module: string } {
   const json = JSON.stringify(document);
   const etag = `"${createHash("sha256").update(json).digest("hex")}"`;
-  return `// This file is generated from the finalized /api/v1 OpenAPI contract.\n// Do not edit by hand.\n\nexport const OPENAPI_CONTRACT_JSON = ${JSON.stringify(json)};\nexport const OPENAPI_CONTRACT_ETAG = ${JSON.stringify(etag)};\n`;
+  return {
+    text: json,
+    module: `// This file is generated from the finalized /api/v1 OpenAPI contract.\n// Do not edit by hand.\n\n// A Text module: a string, not compiled at isolate start.\nimport contract from "./openapi-contract.gen.txt";\n\nexport const OPENAPI_CONTRACT_JSON: string = contract;\nexport const OPENAPI_CONTRACT_ETAG = ${JSON.stringify(etag)};\n`,
+  };
 }
 
 export function writeOpenApiContractModule(
   document: AgentOperationOpenApiDocument,
-): string {
-  const source = generateOpenApiContractModuleSource(document);
+): void {
+  const { text, module } = generateOpenApiContractModuleSource(document);
   mkdirSync(dirname(OPENAPI_CONTRACT_MODULE_PATH), { recursive: true });
-  writeFileSync(OPENAPI_CONTRACT_MODULE_PATH, source);
-  return source;
+  writeFileSync(OPENAPI_CONTRACT_TEXT_PATH, text);
+  writeFileSync(OPENAPI_CONTRACT_MODULE_PATH, module);
+}
+
+function assertFileContent(path: string, expected: string, what: string): void {
+  let actual: string;
+  try {
+    actual = readFileSync(path, "utf8");
+  } catch {
+    throw new Error(`Generated ${what} is missing at ${path}.`);
+  }
+  if (actual !== expected) {
+    throw new Error(`Generated ${what} is stale. Regenerate it from the finalized OpenAPI contract.`);
+  }
 }
 
 export function assertOpenApiContractModuleFresh(
   document: AgentOperationOpenApiDocument,
 ): void {
-  const expected = generateOpenApiContractModuleSource(document);
-  let actual: string;
-  try {
-    actual = readFileSync(OPENAPI_CONTRACT_MODULE_PATH, "utf8");
-  } catch {
-    throw new Error(
-      `Generated OpenAPI contract module is missing at ${OPENAPI_CONTRACT_MODULE_PATH}.`,
-    );
-  }
-  if (actual !== expected) {
-    throw new Error(
-      "Generated OpenAPI contract module is stale. Regenerate it from the finalized OpenAPI contract.",
-    );
-  }
+  const { text, module } = generateOpenApiContractModuleSource(document);
+  assertFileContent(OPENAPI_CONTRACT_TEXT_PATH, text, "OpenAPI contract");
+  assertFileContent(OPENAPI_CONTRACT_MODULE_PATH, module, "OpenAPI contract module");
+}
+
+export function assertAgentOperationManifestLoaderFresh(): void {
+  assertFileContent(AGENT_OPERATION_MANIFEST_LOADER_PATH, AGENT_OPERATION_MANIFEST_LOADER_SOURCE, "agent operation manifest loader");
 }
 
 export function assertCliWorkflowResolverCoreFresh(): void {

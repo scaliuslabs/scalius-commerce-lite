@@ -81,7 +81,7 @@ describe("stable manifest identity", () => {
     const catalog = buildAgentWorkflowCatalog(manifest);
     const first = renderAgentOperationManifestModule(manifest, catalog);
     expect(renderAgentOperationManifestModule(manifest, catalog)).toBe(first);
-    expect(first).toContain("export const AGENT_WORKFLOW_CATALOG");
+    expect(JSON.parse(first).workflowCatalog).toEqual(catalog);
     expect(first).toContain(JSON.stringify(catalog.version));
     expect(first).not.toMatch(/generatedAt|new Date\(|20\d\d-\d\d-\d\dT/);
   });

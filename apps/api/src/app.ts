@@ -1,6 +1,5 @@
 // src/server/index.ts
 
-import { swaggerUI } from "@hono/swagger-ui";
 import { productRoutes } from "./routes/products";
 import authRoutes from "./routes/auth";
 import { categoryRoutes } from "./routes/categories";
@@ -43,10 +42,7 @@ import { agentAuthRoutes } from "./routes/agent-auth";
 import { agentArtifactRoutes } from "./routes/agent-artifacts";
 import { serveMediaRoute } from "./routes/media-server";
 import { createContractApiApp } from "./runtime/base-app";
-import {
-  OPENAPI_CONTRACT_ETAG,
-  OPENAPI_CONTRACT_JSON,
-} from "./generated/openapi-contract.gen";
+import { registerDocRoutes } from "./runtime/register-doc-routes";
 
 // Admin routes
 import { adminAuthMiddleware } from "./middleware/admin-auth";
@@ -278,21 +274,8 @@ app.route("/setup", authSetupRoutes);
 // Payment routes — session/intent creation is public (storefront)
 app.route("/payment", paymentRoutes);
 
-// Add Swagger UI documentation (relative path '/docs')
-// Swagger URL needs full path as it's resolved by browser/Swagger tool
-app.get("/docs", swaggerUI({ url: "/api/v1/openapi.json" }));
-
-// Add OpenAPI specification
-app.get("/openapi.json", (c) => {
-  c.header("Cache-Control", "public, max-age=0, must-revalidate");
-  c.header("ETag", OPENAPI_CONTRACT_ETAG);
-  if (c.req.header("If-None-Match") === OPENAPI_CONTRACT_ETAG) {
-    return c.body(null, 304);
-  }
-  return c.body(OPENAPI_CONTRACT_JSON, 200, {
-    "Content-Type": "application/json; charset=UTF-8",
-  });
-});
+// Swagger UI and the generated OpenAPI contract
+registerDocRoutes(app);
 
 // Register the security scheme for the OpenAPI spec
 app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {

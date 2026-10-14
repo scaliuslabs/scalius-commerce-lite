@@ -12488,94 +12488,92 @@
       "AppTranslations": {
         "type": "object",
         "nullable": true,
-        "properties": {
-          "bn": {
-            "type": "object",
-            "properties": {
-              "name": {
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "tagline": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "pages": {
+              "type": "object",
+              "additionalProperties": {
                 "type": "string"
-              },
-              "tagline": {
+              }
+            },
+            "cards": {
+              "type": "object",
+              "additionalProperties": {
                 "type": "string"
-              },
-              "description": {
+              }
+            },
+            "actions": {
+              "type": "object",
+              "additionalProperties": {
                 "type": "string"
-              },
-              "pages": {
+              }
+            },
+            "widgets": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "listColumns": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "timeline": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "tabs": {
+              "type": "object",
+              "additionalProperties": {
                 "type": "object",
                 "additionalProperties": {
                   "type": "string"
                 }
-              },
-              "cards": {
+              }
+            },
+            "settingsGroups": {
+              "type": "object",
+              "additionalProperties": {
                 "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "actions": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "widgets": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "listColumns": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "timeline": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "tabs": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "object",
-                  "additionalProperties": {
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
                     "type": "string"
                   }
                 }
-              },
-              "settingsGroups": {
+              }
+            },
+            "settings": {
+              "type": "object",
+              "additionalProperties": {
                 "type": "object",
-                "additionalProperties": {
-                  "type": "object",
-                  "properties": {
-                    "title": {
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "help": {
+                    "type": "string"
+                  },
+                  "options": {
+                    "type": "object",
+                    "additionalProperties": {
                       "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    }
-                  }
-                }
-              },
-              "settings": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "object",
-                  "properties": {
-                    "label": {
-                      "type": "string"
-                    },
-                    "help": {
-                      "type": "string"
-                    },
-                    "options": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
                     }
                   }
                 }
@@ -12583,7 +12581,7 @@
             }
           }
         },
-        "description": "Name, tagline, description and surface titles in other dashboard languages (null: English only)."
+        "description": "Name, tagline, description and surface titles by BCP 47 language tag (null: English only)."
       },
       "AppListing": {
         "type": "object",
@@ -24513,9 +24511,7 @@
                                     "home",
                                     "product",
                                     "listing",
-                                    "cart",
-                                    "checkout",
-                                    "order-success"
+                                    "cart"
                                   ]
                                 }
                               }

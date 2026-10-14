@@ -202,7 +202,7 @@ describe("admin app routes", () => {
     expect(detail.status).toBe(200);
     expect(detail.json.data.app.translations.bn.settings.environment.options).toEqual({ sandbox: "স্যান্ডবক্স (পরীক্ষা)", live: "লাইভ" });
     const document = app.getOpenAPIDocument({ openapi: "3.0.0", info: { title: "App translations", version: "1.0.0" } });
-    expect(document.components?.schemas?.AppTranslations).toMatchObject({ properties: { bn: { properties: { settings: { additionalProperties: { properties: { options: { additionalProperties: { type: "string" } } } } } } } } });
+    expect(document.components?.schemas?.AppTranslations).toMatchObject({ additionalProperties: { properties: { settings: { additionalProperties: { properties: { options: { additionalProperties: { type: "string" } } } } } } } });
   });
 
   it("lists each app's listing and serves its checked icon, cached by fingerprint", async () => {

@@ -21,6 +21,8 @@ function cart(lines: ReturnType<typeof line>[], discountCodes: string[] = []) {
     customer: null,
     destination: null,
     discountCodes,
+    market: { id: "mkt_backup", country: null },
+    attributes: {},
   };
 }
 

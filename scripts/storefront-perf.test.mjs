@@ -22,7 +22,7 @@ describe("storefront perf check", () => {
   it("judges cached pages on hit and miss TTFB and every page on LCP and CLS", () => {
     const fast = {
       path: "/", cacheable: true, ttfbHit: 20, ttfbMiss: 250,
-      phone: { lcp: 1150, cls: 0 }, desktop: { lcp: 700, cls: 0.02 },
+      phone: { lcp: 1150, cls: 0 }, desktop: { lcp: 700, cls: 0.01 },
     };
     expect(evaluateBudgets(fast)).toEqual([]);
 
@@ -35,7 +35,7 @@ describe("storefront perf check", () => {
       "/products/x: ttfb miss ms 900 > 300",
       "/products/x: phone LCP ms 5500 > 1200",
       "/products/x: desktop LCP ms 1100 > 800",
-      "/products/x: phone CLS 0.2 > 0.05",
+      "/products/x: phone CLS 0.2 > 0.01",
     ]);
   });
 

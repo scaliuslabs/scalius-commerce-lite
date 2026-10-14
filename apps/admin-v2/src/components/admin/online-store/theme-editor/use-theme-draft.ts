@@ -93,8 +93,14 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
     dispatch({ type: "edit", update: (current) => (typeof next === "function" ? next(current) : next), at: Date.now() });
   }, [dispatch]);
 
-  const latest = useRef({ pending, saved, saving, conflict, busy });
-  latest.current = { pending, saved, saving, conflict, busy };
+  const latest = useRef({ pending, saved, conflict, busy });
+  latest.current = { pending, saved, conflict, busy };
+  /**
+   * One save at a time, decided before React re-renders: two calls in one
+   * tick (the first-draft effect run twice, a shortcut beside autosave) would
+   * otherwise both send the same revision and the second would answer 409.
+   */
+  const inFlight = useRef(false);
 
   /** Names who saved over the editor's draft, from the server's draft now. */
   const noteConflict = useCallback(async () => {
@@ -108,8 +114,9 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
   }, [refetch]);
 
   const save = useCallback(async () => {
-    const { pending: sending, saved: base, saving: running, conflict: blocked, busy: replacing } = latest.current;
-    if (!sending || running || blocked || replacing) return false;
+    const { pending: sending, saved: base, conflict: blocked, busy: replacing } = latest.current;
+    if (!sending || inFlight.current || blocked || replacing) return false;
+    inFlight.current = true;
     setSaving(true);
     setUrgent(false);
     try {
@@ -127,6 +134,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
       else setFailure({ for: sending, message: actionErrorText(error) });
       return false;
     } finally {
+      inFlight.current = false;
       setSaving(false);
     }
   }, [noteConflict]);
