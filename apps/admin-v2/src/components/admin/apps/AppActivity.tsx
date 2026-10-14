@@ -1,6 +1,6 @@
 // An app's activity: the store events sent to it (status filter, "Load more",
 // a row that opens to the error; failed ones can be sent again by managers)
-// and its log, newest first.
+// and its log, newest first. Shown only once there is something to show.
 import { Fragment, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
@@ -249,9 +249,16 @@ function Log({ appId }: { appId: string }) {
   );
 }
 
-/** One card, two tabs; each tab loads when it opens. */
+/** One card, two tabs; nothing until the app has sent or logged something. */
 export function AppActivity({ appId, canManage }: { appId: string; canManage: boolean }) {
   const t = useMessages(installedAppsMessages);
+  // The same first pages the tabs read: an app with no events and no log has no card.
+  const deliveries = useInfiniteQuery(appDeliveriesQueryOptions(appId, null));
+  const log = useInfiniteQuery(appLogsQueryOptions(appId));
+  const failed = deliveries.isError || log.isError;
+  const sent = deliveries.data?.pages[0]?.deliveries.length ?? 0;
+  const logged = log.data?.pages[0]?.lines.length ?? 0;
+  if (!failed && sent === 0 && logged === 0) return null;
   return (
     <Card className="overflow-clip">
       <Tabs defaultValue="deliveries">

@@ -22,8 +22,6 @@ export const appsLifecycleMessages = defineMessages({
     stopAllNone: "No apps were running",
     stopAllFailed: "The apps weren't stopped. Try again.",
 
-    stoppedNoticeTitle: "{count, plural, one {# app is stopped} other {# apps are stopped}}",
-    stoppedNoticeBody: "These apps are not running. Open one to see why and to start it again.",
 
     stopNow: "Stop now",
     stopTitle: "Stop {name} now?",
@@ -68,7 +66,6 @@ export const appsLifecycleMessages = defineMessages({
     registryBy: "by {author} · {registry}",
     developerBadgeVerified: "Verified developer",
     needsNewerScalius: "Needs a newer Scalius",
-    updateBadge: "Version {version} available",
 
     registryInstallIntro: "Installing adds the app to your store. It stays off until a Super Admin reviews what it can do and approves it.",
     registryInstall: "Install",
@@ -153,8 +150,6 @@ export const appsLifecycleMessages = defineMessages({
     stopAllNone: "কোনো অ্যাপ চলছিল না",
     stopAllFailed: "অ্যাপগুলো থামানো যায়নি। আবার চেষ্টা করুন।",
 
-    stoppedNoticeTitle: "{count}টি অ্যাপ থেমে আছে",
-    stoppedNoticeBody: "এই অ্যাপগুলো চলছে না। কারণ দেখতে ও আবার চালু করতে একটি খুলুন।",
 
     stopNow: "এখনই থামান",
     stopTitle: "{name} এখনই থামাবেন?",
@@ -199,7 +194,6 @@ export const appsLifecycleMessages = defineMessages({
     registryBy: "{author} · {registry}",
     developerBadgeVerified: "যাচাই করা ডেভেলপার",
     needsNewerScalius: "নতুন Scalius দরকার",
-    updateBadge: "ভার্সন {version} পাওয়া যাচ্ছে",
 
     registryInstallIntro: "ইনস্টল করলে অ্যাপটি আপনার স্টোরে যোগ হয়। একজন সুপার অ্যাডমিন এর অ্যাক্সেস দেখে অনুমোদন না দেওয়া পর্যন্ত এটি বন্ধ থাকে।",
     registryInstall: "ইনস্টল",

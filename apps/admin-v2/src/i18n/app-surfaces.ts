@@ -1,27 +1,21 @@
 import { defineMessages } from "./index";
 
 /**
- * An app's page (Shopify's app details): its tabs, where it appears, its
- * settings sections and the providers it offers; and app surfaces in search.
+ * An app's page (Shopify's app details): where it appears, its settings
+ * sections and the kinds of service it offers; and app surfaces in search.
  */
 export const appSurfacesMessages = defineMessages({
   en: {
     tabsLabel: "App sections",
-    tab_overview: "Overview",
-    tab_settings: "Settings",
-    tab_permissions: "Permissions",
 
     appearsTitle: "Where this app appears",
     appearsDescription: "Everything this app adds to your dashboard and store.",
     appearsInactive: "Its pages, cards and store sections show once the app is active.",
-    appearsNothing: "This app adds nothing to your dashboard or store.",
     appears_settings: "Settings",
     appears_navigation: "Pages",
     appears_resources: "Order, product and customer pages",
     appears_home: "Home",
     appears_store: "Online store",
-    appSettings: "App settings",
-    appSettingsDetail: "On this page",
     settingsPage: "Settings page",
     navPage: "Page under {section}",
     card: "Card on {target} pages",
@@ -30,7 +24,6 @@ export const appSurfacesMessages = defineMessages({
     widget: "Home card",
     section: "Theme section",
     productBlock: "Product page block",
-    providerIn: "{kind} · Settings → {page}",
 
     target_product: "product",
     target_variant: "variant",
@@ -58,35 +51,21 @@ export const appSurfacesMessages = defineMessages({
     kind_identity: "Sign-in with other accounts",
 
     generalSettings: "General",
-    providersTitle: "Services",
-    providersDescription: "Each service is set up where it is used. Its keys are kept with this app.",
-    providerFields: "{count, plural, one {# setting} other {# settings}}",
-    providerFieldsOne: "1 setting",
-    providerSetIn: "Set up in Settings → {page}",
-    fieldSet: "Set",
-    fieldNotSet: "Not set",
-    noAppSettings: "This app has no settings of its own.",
 
     searchApp: "App",
     searchProvider: "{kind} by {app}",
   },
   bn: {
     tabsLabel: "অ্যাপের অংশ",
-    tab_overview: "সারসংক্ষেপ",
-    tab_settings: "সেটিংস",
-    tab_permissions: "অনুমতি",
 
     appearsTitle: "অ্যাপটি কোথায় দেখা যায়",
     appearsDescription: "এই অ্যাপ আপনার ড্যাশবোর্ড আর স্টোরে যা যোগ করে।",
     appearsInactive: "অ্যাপটি চালু হলে এর পেজ, কার্ড আর স্টোরের সেকশন দেখা যাবে।",
-    appearsNothing: "এই অ্যাপ আপনার ড্যাশবোর্ড বা স্টোরে কিছু যোগ করে না।",
     appears_settings: "সেটিংস",
     appears_navigation: "পেজ",
     appears_resources: "অর্ডার, পণ্য ও কাস্টমারের পেজ",
     appears_home: "হোম",
     appears_store: "অনলাইন স্টোর",
-    appSettings: "অ্যাপের সেটিংস",
-    appSettingsDetail: "এই পেজে",
     settingsPage: "সেটিংসের পেজ",
     navPage: "{section}-এর পেজ",
     card: "{target} পেজের কার্ড",
@@ -95,7 +74,6 @@ export const appSurfacesMessages = defineMessages({
     widget: "হোমের কার্ড",
     section: "থিমের সেকশন",
     productBlock: "পণ্য পেজের ব্লক",
-    providerIn: "{kind} · সেটিংস → {page}",
 
     target_product: "পণ্য",
     target_variant: "ভ্যারিয়েন্ট",
@@ -123,14 +101,6 @@ export const appSurfacesMessages = defineMessages({
     kind_identity: "অন্য অ্যাকাউন্টে সাইন-ইন",
 
     generalSettings: "সাধারণ",
-    providersTitle: "সার্ভিস",
-    providersDescription: "প্রতিটি সার্ভিস যেখানে ব্যবহার হয় সেখানেই সেট আপ করা হয়। এর কী এই অ্যাপের সাথে রাখা থাকে।",
-    providerFields: "{count}টি সেটিং",
-    providerFieldsOne: "১টি সেটিং",
-    providerSetIn: "সেটিংস → {page}-এ সেট আপ করুন",
-    fieldSet: "সেট করা আছে",
-    fieldNotSet: "সেট করা নেই",
-    noAppSettings: "এই অ্যাপের নিজের কোনো সেটিং নেই।",
 
     searchApp: "অ্যাপ",
     searchProvider: "{app}-এর {kind}",

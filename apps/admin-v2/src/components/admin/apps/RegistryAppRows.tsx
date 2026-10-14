@@ -1,12 +1,9 @@
-// Registry apps in the Apps list, loaded when the "Available to install" or
-// "Updates available" view first opens (the API reads each registry's index,
-// so the Apps page's first render never asks for it). Available: apps no one
-// has installed, each opening its install listing. Updates: installed apps a
-// registry lists in a newer version, each opening its own page.
-import { lazy, Suspense, useState, type ComponentType, type ReactNode } from "react";
+// Registry apps in the Apps page's "Add apps" view, loaded when that view
+// first opens (the API reads each registry's index, so the Apps page's first
+// render never asks for it): apps no one has installed, each opening its
+// install listing. An installed app's newer version is offered on its page.
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { EmptyState } from "~/components/admin/resource/EmptyState";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -29,45 +26,17 @@ export function registryAppMatches(app: RegistryApp, query: string): boolean {
   return words.every((word) => haystack.includes(word));
 }
 
-function RowContent({ app, registryName, update, chevron }: { app: RegistryApp; registryName: string; update: boolean; chevron: ReactNode }) {
-  const t = useMessages(appsLifecycleMessages);
-  const main = useMessages(installedAppsMessages);
-  return (
-    <>
-      <AppIcon src={null} />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-body font-medium">{app.name}</span>
-          {update ? <Badge variant="warning">{t("updateBadge", { version: app.version })}</Badge> : <Badge variant="secondary">{main("status_available")}</Badge>}
-          {update ? null : app.signer.trusted ? <Badge variant="success">{t("developerBadgeVerified")}</Badge> : <Badge variant="warning">{t("developerUnknown")}</Badge>}
-          {app.compatible ? null : <Badge variant="secondary">{t("needsNewerScalius")}</Badge>}
-        </span>
-        <span className="line-clamp-2 text-body text-muted-foreground">{app.tagline ?? app.description}</span>
-        <span className="text-body text-muted-foreground">{t("registryBy", { author: app.author, registry: registryName })}</span>
-      </span>
-      <span className="flex h-10 items-center">{chevron}</span>
-    </>
-  );
-}
-
 interface RegistryAppRowsProps {
-  view: "available" | "updates";
   query: string;
-  /** A category is chosen: registry apps list none. */
-  categoryChosen: boolean;
-  /** Any filter is on (the empty state offers to clear them). */
-  filtered: boolean;
-  /** The first-party apps already fill the list, so an empty registry says nothing. */
-  hasOther: boolean;
-  /** Apps already listed above (an installed app waiting for approval). */
-  listed: ReadonlySet<string>;
-  onClearFilters: () => void;
-  /** The list's own row arrow and empty-state icon: this part imports no icon of its own. */
+  /** The list's own row arrow: this part imports no icon of its own. */
   chevron: ReactNode;
-  emptyIcon: ComponentType<{ className?: string }>;
+  /** What the list shows when neither it nor the first-party apps have a row. */
+  empty: (registryEmpty: boolean) => ReactNode;
+  /** The first-party apps above already fill the list. */
+  hasOther: boolean;
 }
 
-export function RegistryAppRows({ view, query, categoryChosen, filtered, hasOther, listed, onClearFilters, chevron, emptyIcon }: RegistryAppRowsProps) {
+export function RegistryAppRows({ query, chevron, empty, hasOther }: RegistryAppRowsProps) {
   const t = useMessages(appsLifecycleMessages);
   const main = useMessages(installedAppsMessages);
   const { data, isError, isRefetching, refetch } = useQuery(appRegistryQueryOptions());
@@ -100,56 +69,45 @@ export function RegistryAppRows({ view, query, categoryChosen, filtered, hasOthe
   }
 
   const registryName = (id: string) => data.registries.find((registry) => registry.id === id)?.name ?? id;
-  const apps = categoryChosen
-    ? []
-    : data.apps.filter((app) => (view === "updates" ? app.installed !== null && app.updateAvailable && !listed.has(app.id) : app.installed === null) && registryAppMatches(app, query));
+  const apps = data.apps.filter((app) => app.installed === null && registryAppMatches(app, query));
   const unavailable = data.registries.filter((registry) => registry.status === "unavailable");
 
   return (
     <>
-      {view === "available" && !data.officialConfigured ? (
-        <p className="border-t border-border px-4 py-3 text-body text-muted-foreground">{t("registryNotSetUp")}</p>
-      ) : null}
-      {view === "available"
-        ? unavailable.map((registry) => (
-            <p key={registry.id} className="border-t border-border px-4 py-3 text-body text-muted-foreground">
-              {t("registryUnreachable", { name: registry.name, error: registry.error ?? "" })}
-            </p>
-          ))
-        : null}
+      {!data.officialConfigured ? <p className="border-t border-border px-4 py-3 text-body text-muted-foreground">{t("registryNotSetUp")}</p> : null}
+      {unavailable.map((registry) => (
+        <p key={registry.id} className="border-t border-border px-4 py-3 text-body text-muted-foreground">
+          {t("registryUnreachable", { name: registry.name, error: registry.error ?? "" })}
+        </p>
+      ))}
       {apps.length > 0 ? (
         <ul>
           {apps.map((app) => (
             <li key={`${app.registryId}:${app.id}`} className="border-t border-border">
-              {view === "updates" ? (
-                <Link to="/admin/apps/$pluginId" params={{ pluginId: app.id }} className={ROW}>
-                  <RowContent app={app} registryName={registryName(app.registryId)} update chevron={chevron} />
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  className={ROW}
-                  onClick={() => {
-                    setSelected(app);
-                    setOpen(true);
-                  }}
-                >
-                  <RowContent app={app} registryName={registryName(app.registryId)} update={false} chevron={chevron} />
-                </button>
-              )}
+              <button
+                type="button"
+                className={ROW}
+                onClick={() => {
+                  setSelected(app);
+                  setOpen(true);
+                }}
+              >
+                <AppIcon src={null} />
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-body font-medium">{app.name}</span>
+                    {app.signer.trusted ? <Badge variant="success">{t("developerBadgeVerified")}</Badge> : <Badge variant="warning">{t("developerUnknown")}</Badge>}
+                    {app.compatible ? null : <Badge variant="secondary">{t("needsNewerScalius")}</Badge>}
+                  </span>
+                  <span className="line-clamp-2 text-body text-muted-foreground">{app.tagline ?? app.description}</span>
+                  <span className="text-body text-muted-foreground">{t("registryBy", { author: app.author, registry: registryName(app.registryId) })}</span>
+                </span>
+                <span className="flex h-10 items-center">{chevron}</span>
+              </button>
             </li>
           ))}
         </ul>
-      ) : hasOther ? null : filtered ? (
-        <EmptyState
-          icon={emptyIcon}
-          title={main("noMatchTitle")}
-          description={main("noMatchBody")}
-          action={<Button type="button" variant="outline" onClick={onClearFilters}>{main("clearFilters")}</Button>}
-        />
-      ) : (
-        <EmptyState icon={emptyIcon} title={t("registryEmptyTitle")} description={t("registryEmptyBody")} />
-      )}
+      ) : hasOther ? null : empty(data.apps.length === 0)}
       {loaded ? (
         <Suspense fallback={null}>
           <RegistryAppDialog app={selected} installMode={data.installMode} open={open} onOpenChange={setOpen} />

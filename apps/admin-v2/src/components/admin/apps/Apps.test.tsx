@@ -44,6 +44,7 @@ import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setLocale } from "~/i18n";
 import { appQueryOptions } from "~/lib/api-query-options/apps";
 import { AppDetailPage } from "./AppDetailPage";
+import { AppProviderSheetHost, useOpenAppProvider } from "./AppProviderSheetHost";
 import { AppsList } from "./AppsList";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -90,6 +91,7 @@ function summary(overrides: Record<string, unknown> = {}) {
     installedAt: "2026-10-01T08:00:00.000Z",
     activatedAt: null,
     updatedAt: "2026-10-01T08:00:00.000Z",
+    featureCount: { on: 0, total: 0 },
     functions: [],
     ...overrides,
   };
@@ -175,6 +177,8 @@ function feature(overrides: Record<string, unknown> = {}) {
       cron: [],
     },
     grantKey: "feature-key-bkash",
+    settings: [],
+    pages: [],
     ...overrides,
   };
 }
@@ -189,6 +193,7 @@ const placesFeature = () => feature({
     allowedHosts: [], providers: [], events: [], functions: [], publicRoutes: false, storefront: false, admin: true, cron: ["places-sync"],
   },
   grantKey: "feature-key-places",
+  pages: ["places"],
 });
 
 function delivery(overrides: Record<string, unknown> = {}) {
@@ -347,51 +352,57 @@ const rows = () => [...document.querySelectorAll("li")].map((row) => row.textCon
 const tab = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((element) => element.textContent?.startsWith(label))!;
 
 describe("Apps list", () => {
-  it("shows every app with its icon, status, tagline and countries, and links to its page", async () => {
-    sdk.getApiV1AdminApps.mockImplementation(() => ok(STORE));
+  it("shows every installed app with its icon, status, purpose and features on, and links to its page", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok({
+      ...STORE,
+      apps: [...STORE.apps.slice(0, 1), summary({ id: "scalius.bangladesh", name: "Bangladesh pack", status: "active", tagline: "Payments, couriers and SMS", featureCount: { on: 3, total: 14 } }), ...STORE.apps.slice(1)],
+    }));
     await render(<AppsList />, VIEWER);
     await vi.waitFor(() => expect(text()).toContain("ERP sync"));
 
     const list = rows();
+    expect(list).toHaveLength(7);
     expect(list[0]).toContain("Loyalty points");
     expect(list[0]).toContain("Active");
     expect(list[0]).toContain("Points that bring buyers back");
-    expect(list[1]).toContain("Available in Bangladesh");
+    expect(list[1]).toContain("3 of 14 features on");
     // No tagline: the description stands in.
-    expect(list[2]).toContain("Not active");
-    expect(list[2]).toContain("Texts buyers when orders ship.");
-    expect(list[3]).toContain("Update available");
-    expect(list[4]).toContain("Off");
-    expect(list[5]).toContain("Failed");
-    expect(list[6]).toContain("Gift wrap");
-    expect(list[6]).toContain("Not installed");
-    // Countries show only when an app serves some of them.
-    expect(list.filter((row) => row.includes("Available in"))).toHaveLength(1);
+    expect(list[3]).toContain("Not active");
+    expect(list[3]).toContain("Texts buyers when orders ship.");
+    expect(list[4]).toContain("Update available");
+    expect(list[5]).toContain("Off");
+    expect(list[6]).toContain("Failed");
+    // An app without features says nothing about them; an available app waits in Add apps.
+    expect(list.filter((row) => row.includes("features on"))).toHaveLength(1);
+    expect(text()).not.toContain("Gift wrap");
     expect(document.querySelector('a[href="/admin/apps/acme.erp"]')?.textContent).toContain("ERP sync");
     const bkashIcon = document.querySelector('a[href="/admin/apps/scalius.bkash"] img');
     expect(bkashIcon?.getAttribute("src")).toBe("/api/v1/admin/apps/scalius.bkash/assets/icon?v=63a5ccd16b4c0000");
     expect(bkashIcon?.getAttribute("alt")).toBe("");
   });
 
-  it("counts each view and shows only its apps", async () => {
+  it("has two views, Installed with its count and Add apps", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(STORE));
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok({ installMode: "dashboard", officialConfigured: true, registries: [], apps: [] }));
     await render(<AppsList />, VIEWER);
     await vi.waitFor(() => expect(text()).toContain("ERP sync"));
 
-    expect([...document.querySelectorAll('[role="tab"]')].map((element) => element.textContent)).toEqual([
-      "All7", "Active2", "Installed, not active3", "Updates available1", "Available to install1",
-    ]);
-    await click(tab("Installed, not active"));
-    expect(rows()).toHaveLength(3);
-    expect(text()).toContain("Product feed");
-    expect(text()).not.toContain("Photo reviews");
-    await click(tab("Updates available"));
+    expect([...document.querySelectorAll('[role="tab"]')].map((element) => element.textContent)).toEqual(["Installed6", "Add apps"]);
+    await click(tab("Add apps"));
+    expect(tab("Add apps").getAttribute("aria-selected")).toBe("true");
     expect(rows()).toHaveLength(1);
-    expect(text()).toContain("Photo reviews");
-    expect(tab("Updates available").getAttribute("aria-selected")).toBe("true");
+    expect(text()).toContain("Gift wrap");
+    expect(text()).not.toContain("ERP sync");
   });
 
-  it("searches names, taglines and category names, and clears the filters when nothing matches", async () => {
+  it("says why a stopped app is off on its row", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok({ ...STORE, apps: [summary({ id: "acme.feed", name: "Product feed", status: "disabled", failureReason: "Stopped with the emergency switch." })] }));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("Product feed"));
+    expect(rows()[0]).toContain("Stopped: Stopped with the emergency switch.");
+  });
+
+  it("searches names, taglines and category names, and clears the search when nothing matches", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(STORE));
     await render(<AppsList />, VIEWER);
     await vi.waitFor(() => expect(text()).toContain("ERP sync"));
@@ -399,37 +410,23 @@ describe("Apps list", () => {
 
     await type(search, "bkash");
     expect(rows()).toHaveLength(1);
-    await type(search, "gifts");
-    expect(rows().map((row) => row.slice(0, 9))).toEqual(["Gift wrap"]);
     await type(search, "customer loyalty");
     expect(rows()).toHaveLength(1);
     expect(text()).toContain("Loyalty points");
 
     await type(search, "nothing like this");
-    expect(text()).toContain("No apps match these filters");
+    expect(text()).toContain("No apps match your search");
     await click(button("Clear filters"));
     expect(search.value).toBe("");
-    expect(rows()).toHaveLength(7);
-  });
-
-  it("offers only the categories its apps use, and filters by one", async () => {
-    sdk.getApiV1AdminApps.mockImplementation(() => ok(STORE));
-    await render(<AppsList />, VIEWER);
-    await vi.waitFor(() => expect(text()).toContain("ERP sync"));
-    const trigger = document.querySelector<HTMLButtonElement>('button[aria-label="Category"]')!;
-    expect(trigger.textContent).toContain("All categories");
-
-    await click(trigger);
-    const options = [...document.querySelectorAll('[role="option"]')].map((option) => option.textContent);
-    expect(options).toEqual(["All categories", "Payments", "Orders", "Marketing", "Customer loyalty", "Notifications", "Operations"]);
-    await click([...document.querySelectorAll<HTMLElement>('[role="option"]')].find((option) => option.textContent === "Marketing")!);
-    expect(rows().map((row) => row.slice(0, 13))).toEqual(["Loyalty point", "Photo reviews"]);
+    expect(rows()).toHaveLength(6);
   });
 
   it("opens an available app's listing with the command that adds it", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(STORE));
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok({ installMode: "dashboard", officialConfigured: true, registries: [], apps: [] }));
     await render(<AppsList />, VIEWER);
-    await vi.waitFor(() => expect(text()).toContain("Gift wrap"));
+    await vi.waitFor(() => expect(text()).toContain("ERP sync"));
+    await click(tab("Add apps"));
 
     await click([...document.querySelectorAll<HTMLButtonElement>("li button")].find((element) => element.textContent?.includes("Gift wrap"))!);
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift wrap"));
@@ -443,23 +440,29 @@ describe("Apps list", () => {
     expect(dialog().querySelector('a[href="https://help.example/gift/changes"]')).not.toBeNull();
   });
 
-  it("says what appears here when nothing is installed", async () => {
-    sdk.getApiV1AdminApps.mockImplementation(() => ok({ apps: [], available: [], sandboxAvailable: false }));
+  it("opens on the apps a store can add when nothing is installed, and Installed asks for a first app", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok({ apps: [], available: [listing()], sandboxAvailable: false }));
+    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok({ installMode: "dashboard", officialConfigured: true, registries: [], apps: [] }));
     await render(<AppsList />, VIEWER);
-    await vi.waitFor(() => expect(text()).toContain("No apps installed"));
+    await vi.waitFor(() => expect(text()).toContain("Gift wrap"));
+    expect(tab("Add apps").getAttribute("aria-selected")).toBe("true");
+    await click(tab("Installed"));
+    expect(text()).toContain("Add your first app");
+    await click(button("Browse apps"));
+    expect(text()).toContain("Gift wrap");
   });
 
   it("speaks Bangla, the app's own text included", async () => {
     setLocale("bn");
     sdk.getApiV1AdminApps.mockImplementation(() => ok({
       ...STORE,
-      apps: [summary({ id: "scalius.bkash", name: "bKash", tagline: "Take bKash payments", categories: ["payments"], countries: ["BD"], translations: { bn: { name: "বিকাশ", tagline: "চেকআউটে বিকাশ পেমেন্ট নিন" } } })],
+      apps: [summary({ id: "scalius.bkash", name: "bKash", tagline: "Take bKash payments", categories: ["payments"], countries: ["BD"], featureCount: { on: 1, total: 3 }, translations: { bn: { name: "বিকাশ", tagline: "চেকআউটে বিকাশ পেমেন্ট নিন" } } })],
     }));
     await render(<AppsList />, VIEWER);
     await vi.waitFor(() => expect(text()).toContain("বিকাশ"));
     expect(text()).toContain("চেকআউটে বিকাশ পেমেন্ট নিন");
-    expect(text()).toContain("ইনস্টল করা যায়");
-    expect(text()).toContain("যেসব দেশে চলে:");
+    expect(text()).toContain("অ্যাপ যোগ করুন");
+    expect(text()).toContain("৩টি ফিচারের মধ্যে ১টি চালু");
   });
 });
 
@@ -688,7 +691,7 @@ describe("App page", () => {
   it("uninstalls keeping the data unless the merchant chooses to delete it", async () => {
     sdk.postApiV1AdminAppsByIdUninstall.mockImplementation(() => ok({ id: "acme.loyalty", uninstalled: true, keepData: false, hookError: null }));
     await renderApp(detail({ status: "active", activatedAt: "2026-10-01T09:00:00.000Z" }), MANAGER);
-    await chooseMenuItem("Uninstall");
+    await click(button("Uninstall"));
 
     expect(dialog().textContent).toContain("Uninstall Loyalty points?");
     expect(dialog().textContent).toContain("stays in your apps, ready to activate again");
@@ -707,7 +710,8 @@ describe("App page", () => {
   it("deactivates with the revision it showed", async () => {
     sdk.postApiV1AdminAppsByIdDeactivate.mockImplementation(() => ok({ app: detail({ status: "disabled", revision: 4 }), hookError: null }));
     await renderApp(detail({ status: "active" }), MANAGER);
-    await chooseMenuItem("Deactivate");
+    expect(text()).toContain("Stops the app. Its settings and data stay, ready to activate again.");
+    await click(button("Deactivate"));
     await click(button("Deactivate", dialog()));
 
     expect(sdk.postApiV1AdminAppsByIdDeactivate).toHaveBeenCalledWith({ path: { id: "acme.loyalty" }, body: { expectedRevision: 3 } });
@@ -755,16 +759,17 @@ describe("App page", () => {
     expect(text()).toContain('"orderId": "ord_9"');
   });
 
-  it("is read-only without apps.manage: no menu, no saving, no retry", async () => {
+  it("is read-only without apps.manage: no turning off, no saving, no retry", async () => {
     sdk.getApiV1AdminAppsByIdDeliveries.mockImplementation(() => ok({ deliveries: [delivery()], nextCursor: null }));
     await renderApp(detail({ status: "active" }), VIEWER);
     await vi.waitFor(() => expect(document.querySelector('button[aria-label^="Details for"]')).not.toBeNull());
 
-    expect(hasButton("More actions")).toBe(false);
+    expect(hasButton("Deactivate")).toBe(false);
+    expect(hasButton("Uninstall")).toBe(false);
     expect(hasButton("Remove saved value")).toBe(false);
     expect(input("program_name").disabled).toBe(true);
     expect(input("api_key").disabled).toBe(true);
-    expect(text()).toContain("Ask the store owner for access to change it.");
+    expect(document.querySelector('[data-slot="read-only-notice"]')).not.toBeNull();
     await click(document.querySelector<HTMLButtonElement>('button[aria-label^="Details for"]')!);
     expect(text()).toContain("Points service answered 500");
     expect(hasButton("Send again")).toBe(false);
@@ -820,14 +825,20 @@ describe("App page: features", () => {
       ok({ app: detail({ status: "active", revision: 5, features: [feature({ enabled: true, grantKey: null }), placesFeature()] }), changed: true, hookError: null }));
     await renderApp(detail({ status: "active", features: [feature(), placesFeature()] }), MANAGER, true);
 
-    expect(text()).toContain("Features");
-    expect(text()).toContain("Payments");
+    // One card per kind of service; the group with the recommended feature first.
+    expect([...document.querySelectorAll('[data-slot="card"] > div:first-child')].map((element) => element.textContent).slice(0, 2)).toEqual([
+      expect.stringContaining("Other features"),
+      "Payments",
+    ]);
     expect(text()).toContain("Recommended");
+    expect(text()).toContain("Access: Connects to tokenized.pay.bka.sh and tokenized.sandbox.bka.sh");
     const switches = [...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')];
     expect(switches.map((element) => element.getAttribute("aria-checked"))).toEqual(["false", "false"]);
-    await click(switches[0]!);
+    await click(switches[1]!);
 
     expect(dialog().textContent).toContain("Turn on bKash?");
+    // Why: the feature's own description.
+    expect(dialog().textContent).toContain("Take bKash payments at checkout.");
     expect(dialog().textContent).toContain("tokenized.pay.bka.sh");
     expect(dialog().textContent).toContain("Takes payments");
     // Only this feature's access: not the places scope.
@@ -845,10 +856,12 @@ describe("App page: features", () => {
       ok({ app: detail({ status: "active", revision: 4, features: [feature(), placesFeature()] }), changed: true, hookError: null }));
     await renderApp(detail({ status: "active", features: [feature({ enabled: true, grantKey: null }), placesFeature()] }), MANAGER, false);
     expect(text()).toContain("Only a Super Admin can turn a feature on");
-    const [bkash, places] = [...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')];
+    const [places, bkash] = [...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')];
     expect(places!.disabled).toBe(true);
     await click(bkash!);
     expect(dialog().textContent).toContain("Turn off bKash?");
+    // What stops for the store.
+    expect(dialog().textContent).toContain("Buyers can no longer pay with it.");
     await click(button("Turn off", dialog()));
     expect(sdk.postApiV1AdminAppsByIdFeaturesByFeatureIdDisable).toHaveBeenCalledWith({
       path: { id: "acme.loyalty", featureId: "bkash" },
@@ -857,12 +870,56 @@ describe("App page: features", () => {
     await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith("bKash is off."));
   });
 
-  it("keeps features off until the app is active, and shows every feature's access on Permissions", async () => {
+  it("keeps features off until the app is active, and says what each one would reach", async () => {
     await renderApp(detail({ features: [feature(), placesFeature()] }), MANAGER, true);
     expect(text()).toContain("Activate the app first.");
     expect([...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')].every((element) => element.disabled)).toBe(true);
-    expect(text()).toContain("Access by feature");
     expect(text()).toContain("Load delivery places");
+  });
+
+  it("shows an on feature's own settings under it, its health and where it is chosen, and saves them with the page", async () => {
+    const bkashOn = feature({ enabled: true, grantKey: null, settings: ["bkash_app_key", "bkash_username"] });
+    const app = (overrides: Record<string, unknown> = {}) => detail({
+      status: "active",
+      features: [bkashOn, placesFeature()],
+      settings: {
+        fields: [
+          field({ key: "bkash_app_key", label: "App key", type: "secret", group: "bkash" }),
+          field({ key: "bkash_username", label: "Username", type: "text", group: "bkash" }),
+        ],
+        values: { bkash_username: "shop" },
+        secrets: { bkash_app_key: false },
+        missing: [],
+        sections: [],
+      },
+      providers: [{ id: "acme.loyalty:bkash", providerId: "bkash", kind: "payment", name: "bKash", icon: null, settings: ["bkash_app_key", "bkash_username"], own: true, required: ["bkash_app_key", "bkash_username"] }],
+      ...overrides,
+    });
+    sdk.putApiV1AdminAppsByIdSettings.mockImplementation(() => ok({ app: app({ revision: 4 }) }));
+    await renderApp(app(), MANAGER, true);
+
+    expect(input("bkash_app_key").type).toBe("password");
+    expect(input("bkash_username").value).toBe("shop");
+    // The places feature is off: nothing of it shows but its row.
+    expect(text()).toContain("Needs setup");
+    expect(document.querySelector('a[href="/admin/settings/payments"]')?.textContent).toBe("Choose it in Settings → Payments");
+    await type(input("bkash_username"), "my-shop");
+    const sent = await saveSettings();
+    expect(sent.body.values).toEqual({ bkash_username: "my-shop" });
+  });
+
+  it("says a feature's job failed, with when and why", async () => {
+    await renderApp(detail({
+      status: "active",
+      features: [placesFeature(), feature()].map((entry, index) => (index === 0 ? { ...entry, enabled: true, grantKey: null } : entry)),
+      admin: { pages: [{ id: "places", title: "Bangladesh places", placement: "settings", route: "places", tabs: null }], cards: [], actions: [], widgets: [] },
+      cron: [{ name: "places-sync", schedule: "17 * * * *", lastRun: { scheduledFor: "2026-10-01T08:00:00.000Z", status: "failed", finishedAt: "2026-10-01T08:00:05.000Z", durationMs: 5000, error: "Pathao answered 503." } }],
+    }), MANAGER, true);
+    expect(text()).toContain("Not working");
+    expect(text()).toContain("Pathao answered 503.");
+    expect(document.querySelector('a[href="/admin/apps/acme.loyalty/pages/places"]')?.textContent).toBe("Open Bangladesh places");
+    // A feature's job shows with the feature, not as the app's own.
+    expect(text()).not.toContain("Scheduled jobs");
   });
 
   it("names features in Bangla from the app's translations", async () => {
@@ -881,49 +938,58 @@ describe("App page: features", () => {
   });
 });
 
+/** Opens a provider's setup sheet the way a capability settings page does. */
+function OpenSheet({ id }: { id: string }) {
+  const open = useOpenAppProvider();
+  return <button type="button" onClick={() => open?.(id)}>Open sheet</button>;
+}
+
 describe("App page: settings and services", () => {
-  it("has Overview, Settings and Permissions tabs", async () => {
+  it("is one page: no tabs, what it is and what it can reach beside its services", async () => {
     await renderApp(detail(), MANAGER);
-    const tabs = document.querySelector('[role="tablist"][aria-label="App sections"]')!;
-    expect([...tabs.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual(["Overview", "Settings", "Permissions"]);
+    expect(document.querySelector('[role="tablist"][aria-label="App sections"]')).toBeNull();
+    expect(text()).toContain("About");
+    expect(text()).toContain("What this app can see and do in your store.");
+    expect(text()).toContain("Version 1.2.0 · by Acme");
   });
 
-  it("shows only app-wide settings in the sections the app declares, each service as a collapsed group with its status", async () => {
+  it("shows the app's own settings in their sections, and each service as a row with its own fields and status", async () => {
     sdk.getApiV1AdminAppsById.mockImplementation(() => ok({ app: pack() }));
     await render(<AppRoute id="acme.pack" />, MANAGER);
     await vi.waitFor(() => expect(text()).toContain("Acme pack"));
 
     expect(text()).toContain("How the pack names your store.");
     expect(input("store_code").value).toBe("DHK-1");
-    // A service's fields are never on the app page itself, nor named with a prefix.
-    for (const key of ["alpha_key", "alpha_sender", "beta_token", "beta_weight"]) expect(input(key)).toBeNull();
-    expect(text()).toContain("Services");
-    const triggers = [...document.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].filter((element) => element.closest('[data-slot="accordion-item"]'));
-    expect(triggers.map((trigger) => trigger.textContent)).toEqual([
-      expect.stringContaining("Alpha SMS"),
-      expect.stringContaining("Beta Courier"),
-    ]);
-    expect(triggers[0]!.textContent).toContain("Configured");
-    expect(triggers[1]!.textContent).toContain("Not set");
-    expect(triggers.every((trigger) => trigger.getAttribute("aria-expanded") === "false")).toBe(true);
-    // Open: each field reads Set or Not set, and the service links to where it is used.
-    await click(triggers[1]!);
-    expect(triggers[1]!.getAttribute("aria-expanded")).toBe("true");
-    const group = triggers[1]!.closest('[data-slot="accordion-item"]')!;
-    expect(group.textContent).toContain("TokenNot set");
-    expect(group.textContent).toContain("Default weightSet");
-    expect(group.querySelector("a")?.getAttribute("href")).toBe("/admin/settings/shipping");
+    // Each service in its kind's card, its fields under it, never named with a prefix.
+    for (const key of ["alpha_key", "alpha_sender", "beta_token", "beta_weight"]) expect(input(key)).not.toBeNull();
+    const rowOf = (name: string) => [...document.querySelectorAll("li")].find((row) => row.textContent?.startsWith(name))!;
+    expect(rowOf("Alpha SMS").textContent).toContain("Ready");
+    expect(rowOf("Beta Courier").textContent).toContain("Needs setup");
+    expect(rowOf("Beta Courier").querySelector("a")?.getAttribute("href")).toBe("/admin/settings/shipping");
+    expect(text()).toContain("SMS");
+    expect(text()).toContain("Couriers");
+    expect(document.querySelectorAll('button[role="switch"]')).toHaveLength(0);
+  });
+
+  it("saves a service's field with the page: every other field as last saved, no secret unless typed", async () => {
+    sdk.getApiV1AdminAppsById.mockImplementation(() => ok({ app: pack() }));
+    sdk.putApiV1AdminAppsByIdSettings.mockImplementation(() => ok({ app: pack({ revision: 4 }) }));
+    await render(<AppRoute id="acme.pack" />, MANAGER);
+    await vi.waitFor(() => expect(text()).toContain("Acme pack"));
+    await type(input("alpha_sender"), "ACMEBD");
+    const sent = await saveSettings();
+    expect(sent).toEqual({
+      path: { id: "acme.pack" },
+      body: { expectedRevision: 3, values: { store_code: "DHK-1", alpha_sender: "ACMEBD", beta_weight: 0.5 } },
+    });
   });
 
   it("opens a service's setup sheet with only its own fields, never a saved secret, and saves through the app", async () => {
     sdk.getApiV1AdminAppsById.mockImplementation(() => ok({ app: pack() }));
     sdk.putApiV1AdminAppsByIdSettings.mockImplementation(({ body }: { body: { values: Record<string, unknown> } }) =>
       ok({ app: pack({ revision: 4, settings: { ...pack().settings, values: { ...pack().settings.values, alpha_sender: body.values.alpha_sender } } }) }));
-    await render(<AppRoute id="acme.pack" />, MANAGER);
-    await vi.waitFor(() => expect(text()).toContain("Acme pack"));
-    const trigger = [...document.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find((element) => element.textContent?.includes("Alpha SMS"))!;
-    await click(trigger);
-    await click(button("Edit Alpha SMS settings"));
+    await render(<AppProviderSheetHost><OpenSheet id="acme.pack:alpha" /></AppProviderSheetHost>, MANAGER);
+    await click(button("Open sheet"));
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')?.textContent).toContain("by Acme pack"));
 
     const sheet = dialog();
@@ -1029,7 +1095,7 @@ describe("Registry apps in the Apps list", () => {
     await vi.waitFor(() => expect(hasButton("More actions")).toBe(true));
     expect(sdk.getApiV1AdminAppsRegistry).not.toHaveBeenCalled();
 
-    await click(tab("Available to install"));
+    await click(tab("Add apps"));
     await vi.waitFor(() => expect(text()).toContain("Gift box"));
     expect(sdk.getApiV1AdminAppsRegistry).toHaveBeenCalledTimes(1);
   });
@@ -1045,7 +1111,7 @@ describe("Registry apps in the Apps list", () => {
     })));
     await render(<AppsList />, VIEWER);
     await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
-    await click(tab("Available to install"));
+    await click(tab("Add apps"));
     await vi.waitFor(() => expect(text()).toContain("Gift box"));
 
     const list = rows();
@@ -1069,7 +1135,7 @@ describe("Registry apps in the Apps list", () => {
     })));
     await render(<AppsList />, VIEWER);
     await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
-    await click(tab("Available to install"));
+    await click(tab("Add apps"));
     await vi.waitFor(() => expect(text()).toContain("The official app registry is not set up yet."));
     expect(text()).toContain("Couldn't load apps from Partner apps: It answered 503.");
     expect(text()).toContain("No apps to install");
@@ -1081,7 +1147,7 @@ describe("Registry apps in the Apps list", () => {
     sdk.postApiV1AdminAppsRegistryInstall.mockImplementation(() => ok({ app: detail({ id: "acme.wrap", name: "Gift box", source: "registry" }) }));
     await render(<AppsList />, MANAGER);
     await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
-    await click(tab("Available to install"));
+    await click(tab("Add apps"));
     await vi.waitFor(() => expect(text()).toContain("Gift box"));
     await click(registryRowButton("Gift box"));
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift box"));
@@ -1100,7 +1166,7 @@ describe("Registry apps in the Apps list", () => {
     })));
     await render(<AppsList />, MANAGER);
     await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
-    await click(tab("Available to install"));
+    await click(tab("Add apps"));
     await vi.waitFor(() => expect(text()).toContain("Gift box"));
     await click(registryRowButton("Gift box"));
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift box"));
@@ -1117,7 +1183,7 @@ describe("Registry apps in the Apps list", () => {
     })));
     await render(<AppsList />, MANAGER);
     await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
-    await click(tab("Available to install"));
+    await click(tab("Add apps"));
     await vi.waitFor(() => expect(text()).toContain("Gift box"));
     await click(registryRowButton("Gift box"));
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift box"));
@@ -1134,7 +1200,7 @@ describe("Registry apps in the Apps list", () => {
     sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({ installMode: "command" })));
     await render(<AppsList />, MANAGER);
     await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
-    await click(tab("Available to install"));
+    await click(tab("Add apps"));
     await vi.waitFor(() => expect(text()).toContain("Gift box"));
     await click(registryRowButton("Gift box"));
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift box"));
@@ -1145,21 +1211,9 @@ describe("Registry apps in the Apps list", () => {
     await click(button("Copy command", dialog()));
     expect(writeText).toHaveBeenCalledWith("pnpm plugin add acme.wrap --registry https://registry.example/index.json");
   });
-
-  it("lists registry updates for installed apps in Updates available", async () => {
-    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
-    sdk.getApiV1AdminAppsRegistry.mockImplementation(() => ok(registryList({
-      apps: [registryApp({ id: "acme.loyalty", name: "Loyalty points", version: "1.3.0", installed: { version: "1.2.0", source: "registry" }, updateAvailable: true })],
-    })));
-    await render(<AppsList />, VIEWER);
-    await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
-    await click(tab("Updates available"));
-    await vi.waitFor(() => expect(text()).toContain("Version 1.3.0 available"));
-    expect(document.querySelector('a[href="/admin/apps/acme.loyalty"]')?.textContent).toContain("Version 1.3.0 available");
-  });
 });
 
-describe("Upload, emergency stop and notices on the Apps list", () => {
+describe("Upload and emergency stop on the Apps list", () => {
   it("offers Upload app only to managers on a store that installs from the dashboard", async () => {
     sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST()));
     await render(<AppsList />, VIEWER);
@@ -1279,24 +1333,6 @@ describe("Upload, emergency stop and notices on the Apps list", () => {
     const items = [...document.querySelectorAll('[role="menuitem"]')].map((element) => element.textContent?.trim());
     expect(items).toEqual(["Registries and trusted developers"]);
   });
-
-  it("lists stopped apps in a notice with their reasons and links to each", async () => {
-    sdk.getApiV1AdminApps.mockImplementation(() => ok(LIST({
-      apps: [
-        thirdParty({ status: "disabled", failureReason: "Stopped automatically: it went over its limits 3 times within an hour." }),
-        thirdParty({ id: "acme.sms", name: "SMS alerts", status: "disabled", failureReason: "Stopped with the emergency switch." }),
-        summary({ id: "acme.feed", name: "Product feed", status: "disabled" }),
-      ],
-    })));
-    await render(<AppsList />, VIEWER);
-    await vi.waitFor(() => expect(text()).toContain("2 apps are stopped"));
-
-    const notice = document.querySelector<HTMLElement>('[role="alert"]')!;
-    expect(notice.textContent).toContain("Stopped automatically: it went over its limits 3 times within an hour.");
-    expect(notice.textContent).toContain("Stopped with the emergency switch.");
-    expect(notice.textContent).not.toContain("Product feed");
-    expect(notice.querySelector('a[href="/admin/apps/acme.sms"]')).not.toBeNull();
-  });
 });
 
 describe("Registries and trusted developers", () => {
@@ -1369,7 +1405,7 @@ describe("Registries and trusted developers", () => {
 describe("App page lifecycle", () => {
   it("stops an active app at once after a confirmation", async () => {
     sdk.postApiV1AdminAppsByIdStop.mockImplementation(() => ok({ app: detail({ status: "disabled", failureReason: "Stopped with the emergency switch." }), stopped: true }));
-    await renderApp(detail({ status: "active", source: "registry" }), MANAGER);
+    await renderApp(detail({ status: "active", source: "registry", thirdParty: true }), MANAGER);
     await vi.waitFor(() => expect(hasButton("Stop now")).toBe(true));
     await click(button("Stop now"));
     await vi.waitFor(() => expect(dialog()?.textContent).toContain("Stop Loyalty points now?"));
@@ -1381,8 +1417,11 @@ describe("App page lifecycle", () => {
     await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith("App stopped"));
   });
 
-  it("offers Stop now only to managers and only while the app is active", async () => {
-    await renderApp(detail({ status: "active" }), VIEWER);
+  it("offers Stop now only to managers, for a third-party app while it is active", async () => {
+    await renderApp(detail({ status: "active", thirdParty: true }), VIEWER);
+    expect(hasButton("Stop now")).toBe(false);
+    restart();
+    await renderApp(detail({ status: "active" }), MANAGER);
     expect(hasButton("Stop now")).toBe(false);
   });
 

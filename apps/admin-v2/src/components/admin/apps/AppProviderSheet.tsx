@@ -25,7 +25,8 @@ import { appQueryOptions, type AppDetail } from "~/lib/api-query-options/apps";
 import { providerPluginId } from "./app-capabilities";
 import { localizedAppDetail } from "./app-detail-text";
 import { AppIcon } from "./AppIcon";
-import { AppSettingControl, providerConfigured, useAppSettingsDraft } from "./AppSettingsForm";
+import { AppSettingControl, useAppSettingsDraft } from "./AppSettingsForm";
+import { providerConfigured } from "./app-settings-draft";
 
 type Provider = AppDetail["providers"][number];
 
