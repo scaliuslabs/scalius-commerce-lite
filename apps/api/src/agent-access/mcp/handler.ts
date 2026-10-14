@@ -87,7 +87,7 @@ export abstract class AgentMcpHandler extends WorkerEntrypoint<Env, AgentOAuthPr
         legacy: "stateless",
         responseMode: "auto",
         allowedHostnames: [canonicalHostname],
-        // Exact Origin validation runs in runtime.ts before OAuthProvider.
+        // Exact Origin validation runs in runtime.ts before the OAuth resource server.
         allowedOriginHostnames: "*",
         authContext: { props: { ...this.ctx.props } },
         corsOptions: {

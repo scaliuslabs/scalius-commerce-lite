@@ -1,9 +1,10 @@
-import OAuthProvider, {
+import {
   AuthorizationError,
-  getOAuthApi,
+  OAuthAuthorizationServer,
   OAuthError,
+  OAuthResourceServer,
   type AuthRequest,
-  type OAuthProviderOptions,
+  type OAuthAuthorizationServerOptions,
 } from "@cloudflare/workers-oauth-provider";
 import { getDb } from "@scalius/database/client";
 import {
@@ -15,16 +16,17 @@ import {
 } from "@scalius/core/utils/system-kv";
 import { loadAgentAccessBackend } from "./backend";
 import {
-  DASHBOARD_MCP_PATH,
+  getMcpPath,
+  getMcpResourceForPath,
   OAUTH_AUTHORIZE_PATH,
   OAUTH_REGISTER_PATH,
   OAUTH_TOKEN_PATH,
-  STOREFRONT_MCP_PATH,
 } from "./paths";
 export { getOAuthCompletionUrl } from "./paths";
 import { DashboardMcpHandler } from "./mcp/dashboard";
 import { StorefrontMcpHandler } from "./mcp/storefront";
 import type {
+  AgentOAuthProps,
   AgentResource,
   ValidatedAuthorizationRequest,
 } from "./types";
@@ -45,8 +47,7 @@ function requireCanonicalApiOrigin(env: Env): string {
 }
 
 export function getCanonicalMcpResource(env: Env, resource: AgentResource): string {
-  const path = resource === "dashboard" ? DASHBOARD_MCP_PATH : STOREFRONT_MCP_PATH;
-  return `${requireCanonicalApiOrigin(env)}${path}`;
+  return `${requireCanonicalApiOrigin(env)}${getMcpPath(resource)}`;
 }
 
 function validateRequestedResource(
@@ -135,43 +136,42 @@ function authorizationErrorResponse(error: AuthorizationError): Response {
   );
 }
 
-const oauthDefaultHandler = {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname !== OAUTH_AUTHORIZE_PATH || request.method !== "GET") {
-      return new Response("Not Found", { status: 404 });
+/** The authorization endpoint: parse and validate the request, then hand the buyer to the dashboard to approve. */
+async function handleAuthorizeRequest(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "GET") return new Response("Not Found", { status: 404 });
+  try {
+    const helpers = createAuthorizationServer(env).getOAuthApi(withOAuthKv(env));
+    const parsed = await helpers.parseAuthRequest(request);
+    const client = await helpers.lookupClient(parsed.clientId);
+    if (!client) {
+      throw new AuthorizationError("unauthorized_client", {
+        description: "OAuth client is not registered",
+      });
     }
+    const validated = validateAuthorizationRequest(parsed, client.clientName, env);
+    const backend = await loadAgentAccessBackend();
+    const pending = await backend.beginAuthorization(validated, env);
+    return Response.redirect(pending.dashboardUrl, 302);
+  } catch (error) {
+    if (error instanceof AuthorizationError) return authorizationErrorResponse(error);
+    return Response.json(
+      { error: "server_error", error_description: "Authorization could not be started" },
+      { status: 500 },
+    );
+  }
+}
 
-    try {
-      const helpers = getOAuthApi(createOAuthProviderOptions(env), withOAuthKv(env));
-      const parsed = await helpers.parseAuthRequest(request);
-      const client = await helpers.lookupClient(parsed.clientId);
-      if (!client) {
-        throw new AuthorizationError("unauthorized_client", {
-          description: "OAuth client is not registered",
-        });
-      }
-      const validated = validateAuthorizationRequest(parsed, client.clientName, env);
-      const backend = await loadAgentAccessBackend();
-      const pending = await backend.beginAuthorization(validated, env);
-      return Response.redirect(pending.dashboardUrl, 302);
-    } catch (error) {
-      if (error instanceof AuthorizationError) return authorizationErrorResponse(error);
-      return Response.json(
-        { error: "server_error", error_description: "Authorization could not be started" },
-        { status: 500 },
-      );
-    }
-  },
-};
-
-export function createOAuthProviderOptions(envForTokenExchange: Env): OAuthProviderOptions<Env> {
-  return {
-    apiHandlers: {
-      [DASHBOARD_MCP_PATH]: DashboardMcpHandler,
-      [STOREFRONT_MCP_PATH]: StorefrontMcpHandler,
-    },
-    defaultHandler: oauthDefaultHandler,
+/**
+ * One authorization server for both path-isolated MCP resources on this origin.
+ * Every grant and token is bound to exactly one of the two canonical resources.
+ */
+export function createAuthorizationServer(envForTokenExchange: Env): OAuthAuthorizationServer<Env> {
+  const options: OAuthAuthorizationServerOptions<Env> = {
+    issuer: requireCanonicalApiOrigin(envForTokenExchange),
+    resources: [
+      getCanonicalMcpResource(envForTokenExchange, "dashboard"),
+      getCanonicalMcpResource(envForTokenExchange, "storefront"),
+    ],
     authorizeEndpoint: OAUTH_AUTHORIZE_PATH,
     tokenEndpoint: OAUTH_TOKEN_PATH,
     clientRegistrationEndpoint: OAUTH_REGISTER_PATH,
@@ -179,22 +179,8 @@ export function createOAuthProviderOptions(envForTokenExchange: Env): OAuthProvi
     refreshTokenTTL: REFRESH_TOKEN_TTL_SECONDS,
     clientRegistrationTTL: CLIENT_REGISTRATION_TTL_SECONDS,
     scopesSupported: [AGENT_SCOPE],
-    allowImplicitFlow: false,
-    allowPlainPKCE: false,
     allowTokenExchangeGrant: false,
     clientIdMetadataDocumentEnabled: true,
-    resourceMatchOriginOnly: false,
-    // There are two path-isolated resources on one origin, so a provider-wide
-    // resource pin would be incorrect. Authorization requires one exact URI and
-    // RFC 9728 metadata derives the exact resource from its path.
-    resourceMetadata: {
-      scopes_supported: [AGENT_SCOPE],
-      bearer_methods_supported: ["header"],
-    },
-    async resolveExternalToken({ token, request, env }) {
-      const backend = await loadAgentAccessBackend();
-      return backend.resolveExternalToken(token, request, env);
-    },
     async tokenExchangeCallback({ props, grantType }) {
       const backend = await loadAgentAccessBackend();
       const fresh = await backend.refreshOAuthGrant(props, envForTokenExchange);
@@ -232,6 +218,33 @@ export function createOAuthProviderOptions(envForTokenExchange: Env): OAuthProvi
       };
     },
   };
+  return new OAuthAuthorizationServer<Env>(options);
+}
+
+/**
+ * One MCP resource. It accepts a bearer token from this authorization server
+ * or a personal access token (`sc_pat_`, `sc_cli_`), and only for its own audience.
+ */
+function createResourceServer(
+  env: Env,
+  authorizationServer: OAuthAuthorizationServer<Env>,
+  surface: AgentResource,
+): OAuthResourceServer<Env, AgentOAuthProps> {
+  return new OAuthResourceServer<Env, AgentOAuthProps>({
+    resourceMetadata: {
+      resource: getCanonicalMcpResource(env, surface),
+      authorization_servers: [requireCanonicalApiOrigin(env)],
+      bearer_methods_supported: ["header"],
+    },
+    requiredScopes: [AGENT_SCOPE],
+    validateToken: (validatorEnv, request) => async (resource, token) => {
+      const backend = await loadAgentAccessBackend();
+      const external = await backend.resolveExternalToken(token, request, validatorEnv);
+      if (external) return external;
+      return authorizationServer.validateToken<AgentOAuthProps>(resource, token, validatorEnv);
+    },
+    handler: surface === "dashboard" ? DashboardMcpHandler : StorefrontMcpHandler,
+  });
 }
 
 const OAUTH_KV_PREFIX = "oauth:";
@@ -280,7 +293,14 @@ export function handleOAuthRequest(
   env: Env,
   ctx: ExecutionContext,
 ): Promise<Response> {
-  return new OAuthProvider<Env>(createOAuthProviderOptions(env)).fetch(request, withOAuthKv(env), ctx);
+  const { pathname } = new URL(request.url);
+  if (pathname === OAUTH_AUTHORIZE_PATH) return handleAuthorizeRequest(request, env);
+  const providerEnv = withOAuthKv(env);
+  const authorizationServer = createAuthorizationServer(env);
+  const surface = getMcpResourceForPath(pathname);
+  return surface
+    ? createResourceServer(env, authorizationServer, surface).fetch(request, providerEnv, ctx)
+    : authorizationServer.fetch(request, providerEnv, ctx);
 }
 
 /** Expired grants, tokens and clients (and other `system_kv` rows) are rows past `expires_at`. */
@@ -298,7 +318,7 @@ export async function completeOAuthAuthorization(
   try {
     let redirectTo: string;
     if (claimed.kind === "approved") {
-      const helpers = getOAuthApi(createOAuthProviderOptions(env), withOAuthKv(env));
+      const helpers = createAuthorizationServer(env).getOAuthApi(withOAuthKv(env));
       const result = await helpers.completeAuthorization({
         ...claimed.authorization,
         request: claimed.authorization.request as AuthRequest,

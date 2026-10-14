@@ -40,7 +40,7 @@ overrides:
   http-cache-semantics: 4.3.0
 
 patchedDependencies:
-  '@cloudflare/workers-oauth-provider@0.10.3': b35459eacb3658af36342b4ca814f19e1d420c2ee6bc39754b718f1291cebbeb
+  '@cloudflare/workers-oauth-provider@1.2.3': 29a68c317d5b08351f0fbb4d1fb466c460590e91f86dfc81212048dd2f6b06d8
 
 importers:
 
@@ -351,8 +351,8 @@ importers:
   apps/api:
     dependencies:
       '@cloudflare/workers-oauth-provider':
-        specifier: 0.10.3
-        version: 0.10.3(patch_hash=b35459eacb3658af36342b4ca814f19e1d420c2ee6bc39754b718f1291cebbeb)
+        specifier: 1.2.3
+        version: 1.2.3(patch_hash=29a68c317d5b08351f0fbb4d1fb466c460590e91f86dfc81212048dd2f6b06d8)
       '@hono/swagger-ui':
         specifier: ^0.6.1
         version: 0.6.1(hono@4.13.13)
@@ -1425,8 +1425,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@cloudflare/workers-oauth-provider@0.10.3':
-    resolution: {integrity: sha512-25ufMONJir9PllqVpK4GwOOoSFgpYm3+bM6NBedj7ufMCIfNf5jk4OI0LPuTJBaJgLl2lGCLqFqEPJXcSuPopQ==}
+  '@cloudflare/workers-oauth-provider@1.2.3':
+    resolution: {integrity: sha512-40eGeA3DnTOEl2ijHYY5Z9yNIf0fdjgomoaA6GHPo4FyKQw0oXPuy4GVjTE/uNfS/MoFAvzsuVBRwTPKUki4hA==}
 
   '@cloudflare/workers-types@5.20261014.1':
     resolution: {integrity: sha512-eGvDG17vu/BmQPOGWFgG1M7iPnW3c17Ykf2qi80JBkPI9f/GYl+5IC2XnZfrwf/CQXZICFgyX/l0+pc1bLbp+g==}
@@ -8306,7 +8306,7 @@ snapshots:
   '@cloudflare/workerd-windows-64@1.20261006.1':
     optional: true
 
-  '@cloudflare/workers-oauth-provider@0.10.3(patch_hash=b35459eacb3658af36342b4ca814f19e1d420c2ee6bc39754b718f1291cebbeb)': {}
+  '@cloudflare/workers-oauth-provider@1.2.3(patch_hash=29a68c317d5b08351f0fbb4d1fb466c460590e91f86dfc81212048dd2f6b06d8)': {}
 
   '@cloudflare/workers-types@5.20261014.1': {}
 

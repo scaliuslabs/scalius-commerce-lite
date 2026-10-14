@@ -323,9 +323,8 @@ function safeToolError(error: unknown) {
 }
 
 function readVerifiedProps(surface: AgentResource): AgentOAuthProps | null {
-  // OAuthProvider 0.10.3 passes verified props through the Worker execution
-  // context. agents 0.20.1 exposes those supported props here, even though
-  // its richer SDK authInfo bridge requires a newer provider Symbol seam.
+  // The handler passes the props the OAuth resource server verified into
+  // createMcpHandler's authContext; getMcpAuthContext reads them back here.
   const props = getMcpAuthContext()?.props;
   if (!isAgentOAuthProps(props) || props.resource !== surface) return null;
   return props;

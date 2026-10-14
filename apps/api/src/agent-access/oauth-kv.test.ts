@@ -3,7 +3,12 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 vi.mock("./mcp/dashboard", () => ({ DashboardMcpHandler: class {} }));
 vi.mock("./mcp/storefront", () => ({ StorefrontMcpHandler: class {} }));
-vi.mock("@cloudflare/workers-oauth-provider", () => ({ default: class {} }));
+vi.mock("@cloudflare/workers-oauth-provider", () => ({
+  AuthorizationError: class {},
+  OAuthError: class {},
+  OAuthAuthorizationServer: class {},
+  OAuthResourceServer: class {},
+}));
 
 import { purgeExpiredOAuthData, withOAuthKv } from "./oauth";
 

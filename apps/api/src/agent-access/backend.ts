@@ -47,7 +47,7 @@ export interface AgentAccessBackend {
     token: string,
     request: Request,
     env: Env,
-  ): Promise<{ props: AgentOAuthProps; audience: string[] } | null>;
+  ): Promise<{ props: AgentOAuthProps; audience: string } | null>;
   refreshOAuthGrant(
     props: AgentOAuthProps,
     env: Env,
@@ -81,7 +81,7 @@ const backend: AgentAccessBackend = {
   async resolveExternalToken(token, _request, env) {
     const principal = await resolveAgentPrincipalFromBearer(getDb(env), token, env.AGENT_TOKEN_PEPPER);
     if (!principal) return null;
-    const audience = [getCanonicalMcpResource(env, principal.resource)];
+    const audience = getCanonicalMcpResource(env, principal.resource);
     return {
       props: {
         grantId: principal.grantId,
@@ -90,7 +90,7 @@ const backend: AgentAccessBackend = {
         resource: principal.resource,
         permissions: [...principal.permissions].sort(),
         riskCeiling: principal.riskCeiling,
-        audience,
+        audience: [audience],
       },
       audience,
     };

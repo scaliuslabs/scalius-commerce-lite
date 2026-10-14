@@ -22,12 +22,12 @@ vi.mock("@cloudflare/workers-oauth-provider", () => {
     description = "invalid";
   }
   class OAuthError extends Error {}
-  return {
-    default: class {},
-    AuthorizationError,
-    OAuthError,
-    getOAuthApi: vi.fn(() => ({ completeAuthorization: mocks.providerComplete })),
-  };
+  class OAuthAuthorizationServer {
+    getOAuthApi() {
+      return { completeAuthorization: mocks.providerComplete };
+    }
+  }
+  return { AuthorizationError, OAuthError, OAuthAuthorizationServer, OAuthResourceServer: class {} };
 });
 
 import {

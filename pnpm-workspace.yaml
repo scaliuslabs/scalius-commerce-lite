@@ -131,6 +131,6 @@ minimumReleaseAgeExclude:
   - agents@0.28.1
 
 patchedDependencies:
-  # Upstream 0.10.3 accepts a previous refresh token repeatedly (cloudflare/workers-oauth-provider#43).
+  # Upstream 1.2.3 still accepts the previous refresh token (cloudflare/workers-oauth-provider#43).
   # Fail closed with strict single-use rotation until the provider ships an equivalent fix.
-  '@cloudflare/workers-oauth-provider@0.10.3': patches/@cloudflare__workers-oauth-provider@0.10.3.patch
+  '@cloudflare/workers-oauth-provider@1.2.3': patches/@cloudflare__workers-oauth-provider@1.2.3.patch

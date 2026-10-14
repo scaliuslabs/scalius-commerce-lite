@@ -1,21 +1,21 @@
 diff --git a/dist/oauth-provider.js b/dist/oauth-provider.js
-index c15348c226f1064f6c277f45f10740b9266219e9..a9e43e9ea5eab7c667c146c6af144732dbf8f8b8 100644
+index c12a1c7aee8320c923c86f7fd9c69d7046b1c92d..91287a41b3011560e00ba5a074f92b0c9e7c3587 100644
 --- a/dist/oauth-provider.js
 +++ b/dist/oauth-provider.js
-@@ -2011,8 +2011,7 @@ var OAuthProviderImpl = class {
- 		const grantData = await env.OAUTH_KV.get(grantKey, { type: "json" });
- 		if (!grantData) return this.createErrorResponse("invalid_grant", { description: "Grant not found" });
+@@ -3685,8 +3685,7 @@ var OAuthProviderImpl = class {
+ 			reason: "grant_not_found"
+ 		});
  		const isCurrentToken = grantData.refreshTokenId === providedTokenHash;
 -		const isPreviousToken = grantData.previousRefreshTokenId === providedTokenHash;
--		if (!isCurrentToken && !isPreviousToken) return this.createErrorResponse("invalid_grant", { description: "Invalid refresh token" });
-+		if (!isCurrentToken) return this.createErrorResponse("invalid_grant", { description: "Invalid refresh token" });
- 		if (grantData.clientId !== clientInfo.clientId) return this.createErrorResponse("invalid_grant", { description: "Client ID mismatch" });
- 		if (grantData.expiresAt !== void 0) {
- 			const now$1 = Math.floor(Date.now() / 1e3);
-@@ -2022,9 +2021,7 @@ var OAuthProviderImpl = class {
- 		const newAccessToken = `${userId}:${grantId}:${generateRandomString(TOKEN_LENGTH)}`;
+-		if (!isCurrentToken && !isPreviousToken) return this.createErrorResponse("invalid_grant", { description: "Invalid refresh token" }, {
++		if (!isCurrentToken) return this.createErrorResponse("invalid_grant", { description: "Invalid refresh token" }, {
+ 			category: "refresh-token-grant",
+ 			reason: "refresh_token_mismatch"
+ 		});
+@@ -3707,9 +3706,7 @@ var OAuthProviderImpl = class {
  		const accessTokenId = await generateTokenId(newAccessToken);
  		let accessTokenTTL = this.options.accessTokenTTL;
+ 		let refreshTokenIdleTTL = this.options.refreshTokenIdleTTL;
 -		let wrappedKeyToUse;
 -		if (isCurrentToken) wrappedKeyToUse = grantData.refreshTokenWrappedKey;
 -		else wrappedKeyToUse = grantData.previousRefreshTokenWrappedKey;
@@ -23,7 +23,7 @@ index c15348c226f1064f6c277f45f10740b9266219e9..a9e43e9ea5eab7c667c146c6af144732
  		const encryptionKey = await unwrapKeyWithToken(refreshToken, wrappedKeyToUse);
  		let grantEncryptionKey = encryptionKey;
  		let accessTokenEncryptionKey = encryptionKey;
-@@ -2085,8 +2082,8 @@ var OAuthProviderImpl = class {
+@@ -3789,8 +3786,8 @@ var OAuthProviderImpl = class {
  		const newRefreshToken = `${userId}:${grantId}:${generateRandomString(TOKEN_LENGTH)}`;
  		const newRefreshTokenId = await generateTokenId(newRefreshToken);
  		const newRefreshTokenWrappedKey = await wrapKeyWithToken(newRefreshToken, grantEncryptionKey);
@@ -33,4 +33,13 @@ index c15348c226f1064f6c277f45f10740b9266219e9..a9e43e9ea5eab7c667c146c6af144732
 +		grantData.previousRefreshTokenWrappedKey = void 0;
  		grantData.refreshTokenId = newRefreshTokenId;
  		grantData.refreshTokenWrappedKey = newRefreshTokenWrappedKey;
- 		await this.saveGrantWithTTL(env, grantKey, grantData, now);
+ 		if (resourceResolution.grantResourceBackfill) grantData.resource = resourceResolution.grantResourceBackfill;
+@@ -4280,7 +4277,7 @@ var OAuthProviderImpl = class {
+ 	async revokeRefreshIfOwned(tokenId, userId, grantId, clientInfo, env) {
+ 		const grantData = await env.OAUTH_KV.get(`grant:${userId}:${grantId}`, { type: "json" });
+ 		if (!grantData) return false;
+-		if (!(grantData.refreshTokenId === tokenId || grantData.previousRefreshTokenId === tokenId)) return false;
++		if (grantData.refreshTokenId !== tokenId) return false;
+ 		if (grantData.clientId !== clientInfo.clientId) return false;
+ 		await this.createOAuthHelpers(env).revokeGrant(grantId, userId);
+ 		return true;

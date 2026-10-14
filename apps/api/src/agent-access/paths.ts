@@ -33,6 +33,19 @@ export function getMcpPath(resource: AgentResource): string {
   return resource === "dashboard" ? DASHBOARD_MCP_PATH : STOREFRONT_MCP_PATH;
 }
 
+/** The MCP resource a path belongs to: its endpoint, a child path, or its protected resource metadata. */
+export function getMcpResourceForPath(pathname: string): AgentResource | null {
+  for (const resource of ["dashboard", "storefront"] as const) {
+    const mcpPath = getMcpPath(resource);
+    if (
+      pathname === mcpPath ||
+      pathname.startsWith(`${mcpPath}/`) ||
+      pathname === `${OAUTH_PROTECTED_RESOURCE_METADATA_PREFIX}${mcpPath}`
+    ) return resource;
+  }
+  return null;
+}
+
 export function getOAuthCompletionRequestId(pathname: string): string | null {
   if (!pathname.startsWith(OAUTH_COMPLETION_PREFIX)) return null;
   const requestId = pathname.slice(OAUTH_COMPLETION_PREFIX.length);

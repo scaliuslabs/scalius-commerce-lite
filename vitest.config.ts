@@ -56,6 +56,8 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    // The OAuth provider imports `cloudflare:workers`; inline it so the stub above resolves.
+    server: { deps: { inline: ["@cloudflare/workers-oauth-provider"] } },
     // Frozen review copies and agent checkouts are not source test suites.
     exclude: [...configDefaults.exclude, ".claude/**", "audit/**"],
     // Transformed modules persist in node_modules/.vitest-cache between runs.

@@ -16,7 +16,7 @@
     "lint": "oxlint -c ../../.oxlintrc.json src/"
   },
   "dependencies": {
-    "@cloudflare/workers-oauth-provider": "0.10.3",
+    "@cloudflare/workers-oauth-provider": "1.2.3",
     "@hono/swagger-ui": "^0.6.1",
     "@hono/zod-openapi": "^1.6.3",
     "@modelcontextprotocol/server": "2.3.1",
