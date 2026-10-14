@@ -11,7 +11,7 @@ import {
 } from "./free-plan-budget.mjs";
 
 const counters = (overrides = {}) => ({
-  cpuMs: 1, wallMs: 1, d1Calls: 0, d1Statements: 0, d1RowsChanged: 0,
+  cpuMs: 1, wallMs: 1, d1Calls: 0, d1Statements: 0, d1RowsChanged: 0, d1RowsRead: 0, d1FullScans: 0,
   r2Ops: 0, cacheOps: 0, serviceCalls: 0, externalFetches: 0, waitUntilTasks: 0,
   ...overrides,
 });
@@ -72,7 +72,7 @@ describe("rendering", () => {
   it("writes the budgets file source from a report: every deterministic counter of every operation", () => {
     const source = budgetsSource({ free: report(), paid: report({ d1Calls: 2 }) });
     expect(source).toContain("export const BUDGETS: Record<WorkersPlan, Record<string, Budget>>");
-    expect(source).toContain('"order-lifecycle": { d1Calls: 0, d1Statements: 0, externalFetches: 0 }');
+    expect(source).toContain('"order-lifecycle": { d1Calls: 0, d1Statements: 0, externalFetches: 0, rowsWritten: 106, rowsRead: 1, fullScans: 0 }');
     expect(source.match(/"cron-idle"/g)).toHaveLength(2);
   });
 

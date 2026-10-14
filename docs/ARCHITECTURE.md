@@ -7,7 +7,7 @@ Related docs:
 - Themes, templates and listings: [storefront-theme.md](../packages/shared/src/storefront-theme.md).
 - Render budgets and `pnpm perf:storefront`: [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md). Baseline: [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEASE.md).
 - Public cache validity (DVC): [cache-deps README](../packages/core/src/cache-deps/README.md).
-- Plan profile: [FREE-PLAN.md](./FREE-PLAN.md). Provider cutover: [DATABASE-PORTABILITY.md](./DATABASE-PORTABILITY.md).
+- Plan profile: [FREE-PLAN.md](./FREE-PLAN.md). Cost per operation and the scale proof: [SCALE.md](./SCALE.md). Provider cutover: [DATABASE-PORTABILITY.md](./DATABASE-PORTABILITY.md).
 
 ## System overview
 
