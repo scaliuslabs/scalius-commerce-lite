@@ -6308,6 +6308,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 apiUrl: string;
                 dashboardUrl: string;
                 mediaUrl: string;
+                sameOriginMedia: boolean;
             };
             timeZone: string;
             cspAllowedDomains: string;

@@ -24345,13 +24345,17 @@
                             },
                             "mediaUrl": {
                               "type": "string"
+                            },
+                            "sameOriginMedia": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
                             "storefrontUrl",
                             "apiUrl",
                             "dashboardUrl",
-                            "mediaUrl"
+                            "mediaUrl",
+                            "sameOriginMedia"
                           ]
                         },
                         "timeZone": {

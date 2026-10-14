@@ -32,6 +32,15 @@ export interface PlanLimits {
   /** What a new password hash costs: it must fit the plan's CPU limit with the rest of a sign-in. */
   readonly password: PasswordHashSpec;
   /**
+   * Whether the storefront serves photos from its own origin (`/media/...`,
+   * so the LCP image reuses the page's connection). Every photo then costs a
+   * storefront Worker request, which Free (100,000 requests a day) cannot
+   * afford: Free keeps the direct media address (the R2 custom domain, which
+   * is not a Worker request) and its preconnect hints. The API hands this to
+   * the storefront in the layout payload (`platform.sameOriginMedia`).
+   */
+  readonly sameOriginMedia: boolean;
+  /**
    * Background work drains durable rows (outboxes, deliveries, claimed
    * payment events, cursors) in the invocation that wrote them (`waitUntil`)
    * and on every scheduled tick. It shares that invocation's D1 queries (Free
@@ -124,6 +133,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     plan: "free",
     cpuMs: null,
     password: Object.freeze({ algorithm: "pbkdf2-sha256", iterations: 30_000 }),
+    sameOriginMedia: false,
     background: Object.freeze({
       eventsPerDrain: 2,
       deliveriesPerDrain: 2,
@@ -162,6 +172,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     plan: "paid",
     cpuMs: 30_000,
     password: Object.freeze({ algorithm: "scrypt", N: 16_384, r: 16, p: 1 }),
+    sameOriginMedia: true,
     background: Object.freeze({
       eventsPerDrain: 50,
       deliveriesPerDrain: 25,

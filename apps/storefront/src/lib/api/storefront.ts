@@ -236,6 +236,8 @@ export interface LayoutData {
     apiUrl?: string;
     dashboardUrl?: string;
     mediaUrl?: string;
+    /** The plan profile serves photos from the store's own origin (`/media/...`). */
+    sameOriginMedia?: boolean;
   };
   /** Merchant CSP sources (Settings -> Security), comma-separated. */
   cspAllowedDomains?: string;

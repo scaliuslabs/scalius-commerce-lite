@@ -16,6 +16,7 @@ import {
   getRuntimeImageCdnBaseUrl,
   getRuntimeImageCdnCanonicalHostAliases,
   getRuntimeMediaUrl,
+  getRuntimeSameOriginMedia,
   getRuntimeStorefrontUrl,
 } from "./api/runtime";
 
@@ -111,16 +112,18 @@ function trimTrailingSlashes(value: string): string {
  * The platform media address whose files the storefront serves on its own
  * origin (`/media/<key>`, lib/media-proxy.ts), so a page's images reuse the
  * connection that carried the page: the LCP image costs no second DNS lookup
- * or TLS handshake. Empty when they are not served that way: no platform
- * media address, a merchant-chosen canonical CDN (that choice stays), or a
- * media address already on the store's origin.
+ * or TLS handshake. Empty when they are not served that way: the plan
+ * profile keeps the direct media address (`planLimits().sameOriginMedia`,
+ * carried by the layout: every photo is a Worker request here, which Free
+ * cannot afford), no platform media address, a merchant-chosen canonical CDN
+ * (that choice stays), or a media address already on the store's origin.
  *
  * SSR reads the request context; the browser reads `window.__MEDIA_SOURCE_URL__`
  * (written by Layout.astro only when this is active) and its own origin.
  */
 export function getSameOriginMediaSource(): string {
   if (import.meta.env.SSR) {
-    if (getRuntimeImageCdnBaseUrl()?.trim()) return "";
+    if (!getRuntimeSameOriginMedia() || getRuntimeImageCdnBaseUrl()?.trim()) return "";
     const source = trimTrailingSlashes(getRuntimeMediaUrl()?.trim() ?? "");
     const storefront = getRuntimeStorefrontUrl();
     if (!source || !storefront) return "";

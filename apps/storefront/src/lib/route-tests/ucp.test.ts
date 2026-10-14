@@ -29,6 +29,7 @@ vi.mock("@/lib/api/runtime", () => ({
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
   getRuntimeCdnDomain: mocks.getRuntimeCdnDomain,
   getRuntimeMediaUrl: () => undefined,
+  getRuntimeSameOriginMedia: () => false,
   getRuntimeImageCdnBaseUrl: mocks.getRuntimeImageCdnBaseUrl,
   getRuntimeImageCdnCanonicalHostAliases: mocks.getRuntimeImageCdnCanonicalHostAliases,
   setRuntimeImageCdnPolicy: mocks.setRuntimeImageCdnPolicy,

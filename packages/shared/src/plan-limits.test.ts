@@ -64,6 +64,11 @@ describe("plan profile", () => {
       expect(paid.plugins.breachesBeforeStop).toBeGreaterThanOrEqual(PLAN_LIMITS.free.plugins.breachesBeforeStop);
     });
 
+    it("photos are served from the store's own origin on Paid only", () => {
+      expect(paid.sameOriginMedia).toBe(true);
+      expect(PLAN_LIMITS.free.sameOriginMedia).toBe(false);
+    });
+
     it("CPU stays at 30 s", () => {
       expect(paid.cpuMs).toBe(BEFORE_THE_PROFILE.cpuMs);
     });

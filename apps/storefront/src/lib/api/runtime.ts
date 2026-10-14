@@ -54,6 +54,8 @@ export interface StorefrontRuntime {
   CDN_DOMAIN_URL?: string;
   /** Public media base URL from platform settings (R2 custom domain). */
   MEDIA_URL?: string;
+  /** The plan profile serves photos from the store's own origin (layout `platform.sameOriginMedia`). */
+  SAME_ORIGIN_MEDIA?: boolean;
   /** Admin dashboard origin. */
   DASHBOARD_URL?: string;
   IMAGE_CDN_BASE_URL?: string;
@@ -175,6 +177,11 @@ export function getRuntimeMediaUrl(): string | undefined {
   return getRuntime()?.MEDIA_URL;
 }
 
+/** Whether the plan profile serves photos from the store's own origin. */
+export function getRuntimeSameOriginMedia(): boolean {
+  return getRuntime()?.SAME_ORIGIN_MEDIA === true;
+}
+
 /** The subfolder presence this render is in, or null for the root (MARKETS-DESIGN D4). */
 export function getRuntimePresence(): string | null {
   return getRuntime()?.MARKET_PRESENCE ?? null;
@@ -266,6 +273,7 @@ export function applyPlatformOrigins(
   // The dashboard may live below a path prefix on a shared host; keep it.
   store.DASHBOARD_URL = optional(normalizeDashboardUrl(platform.dashboardUrl));
   store.MEDIA_URL = mediaUrl;
+  store.SAME_ORIGIN_MEDIA = platform.sameOriginMedia === true;
   store.CDN_DOMAIN_URL = mediaUrl ? optional(mediaHostFromUrl(mediaUrl)) : undefined;
   const cspAllowedDomains = layout?.cspAllowedDomains;
   store.CSP_ALLOWED_DOMAINS =

@@ -36,6 +36,7 @@ import {
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings";
 import { CATEGORY_NAVIGATION_LAYOUT_NODES } from "@scalius/core/modules/navigation";
 import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { PRODUCT_PAGE_COPY_KEYS, type ProductPageCopyKey } from "@scalius/shared/checkout-language";
 import { NotFoundError, ValidationError } from "../utils/api-error";
 import {
@@ -371,6 +372,8 @@ const layoutDataSchema = z.object({
     apiUrl: z.string(),
     dashboardUrl: z.string(),
     mediaUrl: z.string(),
+    /** Whether the storefront serves photos from its own origin (`/media/...`): the plan profile's `sameOriginMedia`. */
+    sameOriginMedia: z.boolean(),
   }),
   /** The store's IANA time zone (Settings -> Store details): buyer-facing dates are shown in it. */
   timeZone: z.string().max(64),
@@ -828,6 +831,7 @@ app.openapi(layoutRoute, async (c) => {
       apiUrl: platform.apiUrl,
       dashboardUrl: platform.dashboardUrl,
       mediaUrl: platform.mediaUrl,
+      sameOriginMedia: planLimits().sameOriginMedia,
     },
     // From the tracked platform row inside a dependency scope, so a saved
     // time zone advances this page's `set:platform:document` dependency.

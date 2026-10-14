@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { requestRuntime } from "./api/runtime";
+import { applyPlatformOrigins, requestRuntime } from "./api/runtime";
 import {
   getCdnBase,
   getSameOriginMediaSource,
@@ -43,6 +43,7 @@ describe("media on the store's own origin", () => {
     MEDIA_URL: "https://cloud.example.test",
     CDN_DOMAIN_URL: "cloud.example.test",
     STOREFRONT_URL: "https://shop.example.test",
+    SAME_ORIGIN_MEDIA: true,
   };
 
   it("serves a media-address file from the store origin, absolute, keeping query and fragment", () => {
@@ -79,20 +80,45 @@ describe("media on the store's own origin", () => {
     });
   });
 
+  it("keeps the direct media address on the Free profile, and on a layout that does not say", () => {
+    const free = { ...runtime, SAME_ORIGIN_MEDIA: false };
+    requestRuntime.run(free, () => {
+      expect(getSameOriginMediaSource()).toBe("");
+      expect(resolveMediaUrl("https://cloud.example.test/media/m_abc.jpg/1600.webp"))
+        .toBe("https://cloud.example.test/media/m_abc.jpg/1600.webp");
+      expect(mediaImageUrl("https://cloud.example.test/media/m_abc.jpg/1600.webp", 300))
+        .toBe("https://cloud.example.test/media/m_abc.jpg/355.webp");
+    });
+    const { SAME_ORIGIN_MEDIA: _unset, ...undeclared } = runtime;
+    requestRuntime.run(undeclared, () => expect(getSameOriginMediaSource()).toBe(""));
+  });
+
+  it("follows the layout's plan flag when the platform origins are applied", () => {
+    const platform = (sameOriginMedia: boolean | undefined) => ({
+      platform: { storefrontUrl: "https://shop.example.test", mediaUrl: "https://cloud.example.test", sameOriginMedia },
+    });
+    for (const [flag, expected] of [[true, "https://cloud.example.test"], [false, ""], [undefined, ""]] as const) {
+      requestRuntime.run({}, () => {
+        applyPlatformOrigins(platform(flag));
+        expect(getSameOriginMediaSource()).toBe(expected);
+      });
+    }
+  });
+
   it("does nothing without a store origin or media address, or when they share an origin", () => {
-    requestRuntime.run({ MEDIA_URL: "https://cloud.example.test" }, () => {
+    requestRuntime.run({ MEDIA_URL: "https://cloud.example.test", SAME_ORIGIN_MEDIA: true }, () => {
       expect(getSameOriginMediaSource()).toBe("");
     });
-    requestRuntime.run({ STOREFRONT_URL: "https://shop.example.test" }, () => {
+    requestRuntime.run({ STOREFRONT_URL: "https://shop.example.test", SAME_ORIGIN_MEDIA: true }, () => {
       expect(getSameOriginMediaSource()).toBe("");
     });
-    requestRuntime.run({ MEDIA_URL: "https://shop.example.test/files", STOREFRONT_URL: "https://shop.example.test" }, () => {
+    requestRuntime.run({ MEDIA_URL: "https://shop.example.test/files", STOREFRONT_URL: "https://shop.example.test", SAME_ORIGIN_MEDIA: true }, () => {
       expect(getSameOriginMediaSource()).toBe("");
     });
   });
 
   it("re-roots a local development media address below a path", () => {
-    requestRuntime.run({ MEDIA_URL: "http://localhost:8787/api/v1/media", STOREFRONT_URL: "http://localhost:4321" }, () => {
+    requestRuntime.run({ MEDIA_URL: "http://localhost:8787/api/v1/media", STOREFRONT_URL: "http://localhost:4321", SAME_ORIGIN_MEDIA: true }, () => {
       expect(resolveMediaUrl("http://localhost:8787/api/v1/media/media/m_abc.jpg/960.webp"))
         .toBe("http://localhost:4321/media/m_abc.jpg/960.webp");
     });
