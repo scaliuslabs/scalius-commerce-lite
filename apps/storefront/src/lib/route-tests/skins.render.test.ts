@@ -112,10 +112,11 @@ function theme(skin: "pdp" | null = "pdp"): StorefrontThemeDocument {
 
 /** The app's storefront module, as the host would run it: what each job draws, and every job it saw. */
 function app(draw: Partial<Record<string, (job: Record<string, unknown>) => string | null>>) {
-  const jobs: Array<{ job: Record<string, unknown>; options: { jsonLd?: boolean } | undefined }> = [];
-  vi.spyOn(hostPrototype, "render").mockImplementation(async (_extension, job, options) => {
+  type Context = { store: { name: string; language: string } };
+  const jobs: Array<{ job: Record<string, unknown>; options: { jsonLd?: boolean } | undefined; context: Context }> = [];
+  vi.spyOn(hostPrototype, "render").mockImplementation(async function (this: { context: Context }, _extension, job, options) {
     const record = job as unknown as Record<string, unknown>;
-    jobs.push({ job: record, options });
+    jobs.push({ job: record, options, context: this.context });
     const key = record.kind === "block" ? `block:${String(record.type)}` : String(record.target);
     return draw[key]?.(record) ?? null;
   });
@@ -215,6 +216,8 @@ describe("a product-main skin", () => {
     // The projection: band availability, market prices, sanitized description, fields, no quantity.
     const skinJob = jobs.find(({ job }) => job.target === "product-main")!;
     expect(skinJob.options?.jsonLd).toBe(false);
+    // Drawn before the page's Layout, it still gets the page's store and language by Layout's rules.
+    expect(skinJob.context.store).toMatchObject({ name: "Nakshi Ghor", language: "en" });
     const product = (skinJob.job.data as { product: Record<string, unknown> }).product;
     expect(product).toMatchObject({
       id: "prod_linen", title: "Linen shirt", url: "/products/linen", availability: "in_stock",

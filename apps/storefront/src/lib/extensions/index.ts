@@ -22,7 +22,10 @@ import {
 } from "@scalius/shared/plugins/storefront-components";
 import { splitStorefrontEmbeds, type StorefrontMarkupPart } from "@scalius/shared/plugins/storefront-embeds";
 import { getLayoutData } from "@/lib/api/storefront";
-import { getRuntime, getWorkerEnv } from "@/lib/api/runtime";
+import { getRuntime, getRuntimePresence, getWorkerEnv } from "@/lib/api/runtime";
+import { presencePageLanguage } from "@/lib/market-selector";
+import { resolveStoreDisplayName } from "@/lib/store-identity";
+import { getAbsoluteStorefrontSeoBaseUrl } from "@/lib/seo-base-url";
 import { appComponentsRenderOn, storefrontAppPage } from "@/lib/app-scripts";
 import { pageKind } from "./page-kind";
 import { storeRegion, storeTimeZone } from "@/lib/store-time-zone";
@@ -79,12 +82,19 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
       // The store's own values, never a guess: without its currency no component draws.
       const currency = layout?.currency?.code ?? "";
       const list = currency && appComponentsRenderOn(storefrontAppPage(path)) ? readStorefrontExtensions(layout?.appExtensions) : [];
-      const page = pages.get(locals);
-      const language = page?.language ?? theme.language;
+      // Layout states the page before its body draws; a page that draws a skin
+      // before its Layout (the product page's main part) gets the same values
+      // by Layout's own rules (the default document language of public pages).
+      const page = pages.get(locals) ?? {
+        language: presencePageLanguage(layout?.markets, getRuntimePresence(), "en"),
+        storeName: resolveStoreDisplayName(layout?.business, getAbsoluteStorefrontSeoBaseUrl()) ?? "",
+        noIndex: false,
+      };
+      const language = page.language;
       const byId = new Map(list.map((extension) => [extension.pluginId, extension]));
       const context: StorefrontRenderContext = {
         store: {
-          name: page?.storeName ?? "",
+          name: page.storeName,
           currency,
           locale: dateLocale(language, storeRegion()),
           language,

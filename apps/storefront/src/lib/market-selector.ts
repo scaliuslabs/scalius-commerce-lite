@@ -9,6 +9,7 @@
 import {
   activePresences,
   backupMarket,
+  defaultLocale,
   isStorefrontPagePath,
   marketLanguagePresences,
   marketOfPresence,
@@ -28,6 +29,17 @@ export interface MarketCountryOption {
 /** Whether the store sells at more than one URL: the selector, hreflang and the suggestion appear only then. */
 export function hasSeveralPresences(matrix: MarketMatrix | null | undefined): boolean {
   return activePresences(matrix ?? { markets: [] }).length > 1;
+}
+
+/**
+ * A page's language (`<html lang>`): a subfolder presence's locale
+ * (`/en-in`); on root pages the store default once the store sells at more
+ * than one URL (hreflang names it), else the page's own document language.
+ */
+export function presencePageLanguage(matrix: MarketMatrix | null | undefined, presence: string | null, documentLanguage: string): string {
+  const markets = matrix ?? { markets: [] };
+  const entry = presence ? marketOfPresence(markets, presence) : null;
+  return entry?.presence.locale ?? (hasSeveralPresences(markets) ? defaultLocale(markets) : null) ?? documentLanguage;
 }
 
 function regionName(code: string, language: string): string {
