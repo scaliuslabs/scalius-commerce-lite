@@ -130,12 +130,12 @@ const number = (value, digits = 0) => (Number.isFinite(value) ? value.toFixed(di
 export function renderCounterTable(plan, rows) {
   const lines = [
     `Plan profile: ${plan}`,
-    `${"operation".padEnd(34)} ${pad("cpu cold", 8)} ${pad("cpu warm", 8)} ${pad("D1 calls", 8)} ${pad("D1 stmts", 8)} ${pad("rows chg", 8)} ${pad("fetch", 5)}`,
+    `${"operation".padEnd(34)} ${pad("cpu cold", 8)} ${pad("cpu warm", 8)} ${pad("D1 calls", 8)} ${pad("D1 stmts", 8)} ${pad("rows wr", 8)} ${pad("rows rd", 8)} ${pad("scans", 5)} ${pad("fetch", 5)}`,
   ];
   for (const row of rows) {
     const c = row.counters;
     lines.push(
-      `${row.id.padEnd(34)} ${pad(number(row.cold.cpuMs, 1), 8)} ${pad(number(row.warmCpuMs, 1), 8)} ${pad(c.d1Calls, 8)} ${pad(c.d1Statements, 8)} ${pad(c.d1RowsChanged, 8)} ${pad(c.externalFetches, 5)}`,
+      `${row.id.padEnd(34)} ${pad(number(row.cold.cpuMs, 1), 8)} ${pad(number(row.warmCpuMs, 1), 8)} ${pad(c.d1Calls, 8)} ${pad(c.d1Statements, 8)} ${pad(c.d1RowsChanged, 8)} ${pad(c.d1RowsRead ?? 0, 8)} ${pad(c.d1FullScans ?? 0, 5)} ${pad(c.externalFetches, 5)}`,
     );
   }
   return lines.join("\n");
@@ -161,11 +161,38 @@ export function renderQuotaTable(plan, quota) {
   return lines.join("\n");
 }
 
+/** Budget field -> the counter it bounds (the worst run of the operation). */
+const BUDGET_COUNTERS = {
+  d1Calls: "d1Calls",
+  d1Statements: "d1Statements",
+  externalFetches: "externalFetches",
+  rowsWritten: "d1RowsChanged",
+  rowsRead: "d1RowsRead",
+  fullScans: "d1FullScans",
+};
+
+/** An operation with this many runs is a steady state (an idle hour of cron ticks): its mean is a cost too. */
+const STEADY_RUNS = 30;
+
+/**
+ * Rows written and read move a few percent between runs (an event backlog another test left, a clock second),
+ * so their budgets carry 5% and one row of headroom: a row more per operation still fails, a stray row does not.
+ */
+const withHeadroom = (value) => Math.ceil(value * 1.05 - 1e-6) + 1;
+const ROW_BUDGETS = new Set(["rowsWritten", "rowsRead"]);
+const round2 = (value) => Math.ceil(value * 1.05 * 100 - 1e-6) / 100;
+
 /** Source of apps/api/src/testing/free-plan-budgets.ts from a report: each operation's measured counters. */
 export function budgetsSource(report) {
-  const keys = ["d1Calls", "d1Statements", "externalFetches"];
+  const fields = (row) => {
+    const parts = Object.entries(BUDGET_COUNTERS).map(([key, counter]) => `${key}: ${ROW_BUDGETS.has(key) ? withHeadroom(row.counters[counter]) : row.counters[counter]}`);
+    if (row.runs >= STEADY_RUNS && row.mean) {
+      parts.push(`meanRowsWritten: ${round2(row.mean.d1RowsChanged)}`, `meanRowsRead: ${round2(row.mean.d1RowsRead)}`);
+    }
+    return parts.join(", ");
+  };
   const block = (rows) => rows
-    .map((row) => `    ${JSON.stringify(row.id)}: { ${keys.map((key) => `${key}: ${row.counters[key]}`).join(", ")} },`)
+    .map((row) => `    ${JSON.stringify(row.id)}: { ${fields(row)} },`)
     .join("\n");
   return `export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {\n  free: {\n${block(report.free)}\n  },\n  paid: {\n${block(report.paid)}\n  },\n};\n`;
 }

@@ -28,8 +28,15 @@ export interface FreePlanCounters {
   d1Calls: number;
   /** D1 statements executed (every member of a batch counts). */
   d1Statements: number;
-  /** Rows changed by writes (a lower bound of D1 "rows written": index writes are not counted). */
+  /** Rows changed by writes, triggers' writes included (a lower bound of D1 "rows written": index entries are not counted). */
   d1RowsChanged: number;
+  /**
+   * Rows read, an estimate (SQLite reports none): the rows each statement returns plus, for every full scan
+   * its query plan shows (triggers included), the scanned table's row count. An upper bound of D1's `rows_read`.
+   */
+  d1RowsRead: number;
+  /** Full-table-scan steps in the plans of the executed statements: rows read that grow with the table. */
+  d1FullScans: number;
   r2Ops: number;
   /** Cache API `match`/`put`/`delete` calls (each is a subrequest). */
   cacheOps: number;
@@ -43,7 +50,7 @@ export interface FreePlanCounters {
 
 export function emptyCounters(): FreePlanCounters {
   return {
-    cpuMs: 0, wallMs: 0, d1Calls: 0, d1Statements: 0, d1RowsChanged: 0,
+    cpuMs: 0, wallMs: 0, d1Calls: 0, d1Statements: 0, d1RowsChanged: 0, d1RowsRead: 0, d1FullScans: 0,
     r2Ops: 0, cacheOps: 0, serviceCalls: 0, externalFetches: 0, waitUntilTasks: 0,
   };
 }
@@ -78,11 +85,77 @@ function rowsChanged(value: unknown): number {
   return typeof result?.meta?.changes === "number" ? result.meta.changes : 0;
 }
 
+/** Rows a result returned: `all/run` results, `raw` arrays, a `first` row. */
+function rowsReturned(value: unknown): number {
+  if (Array.isArray(value)) return value.length;
+  const results = (value as { results?: unknown[] } | null | undefined)?.results;
+  return Array.isArray(results) ? results.length : value ? 1 : 0;
+}
+
+export interface ScanEstimator {
+  /** Full scans in the statement's plan and the rows they read (the scanned tables' row counts). */
+  estimate(query: string): { scans: number; rows: number };
+  /** Forget the row counts (they change as the operations write). */
+  reset(): void;
+}
+
+/** Reads each statement's `EXPLAIN QUERY PLAN` (cached per SQL text) for `SCAN <table>` steps. */
+export function createScanEstimator(sqlite: DatabaseSync): ScanEstimator {
+  const plans = new Map<string, string[]>();
+  const counts = new Map<string, number>();
+  const tables = () => new Set((sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((row) => row.name));
+  let known: Set<string> | undefined;
+  const scannedTables = (query: string): string[] => {
+    let plan = plans.get(query);
+    if (plan) return plan;
+    plan = [];
+    try {
+      known ??= tables();
+      for (const row of sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all() as Array<{ detail: string }>) {
+        const name = /^SCAN (\S+)/.exec(row.detail)?.[1];
+        if (!name || name === "CONSTANT" || name.startsWith("(")) continue;
+        // An alias names its table in the SQL (`FROM products p`); a CTE or subquery names none.
+        const table = known.has(name) ? name : new RegExp(`\\b(?:from|join)\\s+"?(\\w+)"?\\s+(?:as\\s+)?"?${name}"?(?![\\w"])`, "i").exec(query)?.[1];
+        if (table && known.has(table)) plan.push(table);
+      }
+    } catch {
+      // Not plannable (a PRAGMA, a script): no scan to count.
+    }
+    plans.set(query, plan);
+    return plan;
+  };
+  return {
+    estimate(query) {
+      const scanned = scannedTables(query);
+      let rows = 0;
+      for (const table of scanned) {
+        let count = counts.get(table);
+        if (count === undefined) {
+          count = Number((sqlite.prepare(`SELECT count(*) AS n FROM "${table}"`).get() as { n: number | bigint }).n);
+          counts.set(table, count);
+        }
+        rows += count;
+      }
+      return { scans: scanned.length, rows };
+    },
+    reset: () => counts.clear(),
+  };
+}
+
 export function meterD1(
   inner: D1Database,
   counters: () => FreePlanCounters,
   clock: EngineClock,
+  scan?: ScanEstimator,
 ): D1Database {
+  const read = (query: string | undefined, result: unknown): void => {
+    const c = counters();
+    c.d1RowsRead += rowsReturned(result);
+    if (!scan || !query) return;
+    const { scans, rows } = timedEngine(clock, () => scan.estimate(query));
+    c.d1FullScans += scans;
+    c.d1RowsRead += rows;
+  };
   const wrapStatement = (statement: D1PreparedStatement): D1PreparedStatement => new Proxy(statement, {
     get(target, property, receiver) {
       const value = Reflect.get(target, property, receiver) as unknown;
@@ -95,8 +168,10 @@ export function meterD1(
           c.d1Calls += 1;
           c.d1Statements += 1;
           const pending = timedEngine(clock, () => (value as AnyFn).apply(target, args)) as Promise<unknown>;
+          const query = (target as { query?: string }).query;
           return pending.then((result) => {
             c.d1RowsChanged += rowsChanged(result);
+            read(query, result);
             return result;
           });
         };
@@ -116,7 +191,10 @@ export function meterD1(
           c.d1Statements += statements.length;
           const pending = timedEngine(clock, () => target.batch(statements)) as Promise<unknown[]>;
           return pending.then((results) => {
-            for (const result of results) c.d1RowsChanged += rowsChanged(result);
+            results.forEach((result, index) => {
+              c.d1RowsChanged += rowsChanged(result);
+              read((statements[index] as { query?: string } | undefined)?.query, result);
+            });
             return results;
           });
         };
@@ -213,6 +291,8 @@ export interface FreePlanMeter {
   service<T extends object>(binding: T): T;
   /** An `ExecutionContext` whose `waitUntil` tasks the measurement awaits. */
   readonly ctx: ExecutionContext;
+  /** Await the `waitUntil` work of unmetered setup, so it does not run into the next measurement. */
+  settle(): Promise<void>;
   /**
    * Run `operation`, await everything it scheduled with `waitUntil`, and
    * return the counters it produced (counters restart for every call).
@@ -249,8 +329,9 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
     if (!options.sqlite) return 0;
     return Number((options.sqlite.prepare("SELECT total_changes() AS n").get() as { n: number | bigint }).n);
   };
+  const scan = options.sqlite ? createScanEstimator(options.sqlite) : undefined;
   const bindings = {
-    DB: meterD1(options.d1, counters, clock),
+    DB: meterD1(options.d1, counters, clock, scan),
     BUCKET: meterR2(counters),
     RL_STRICT: limiter,
     RL_STANDARD: limiter,
@@ -269,9 +350,14 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
     caches,
     service: (binding) => meterService(binding, counters),
     ctx,
+    async settle() {
+      for (let index = 0; index < pending.length; index += 1) await pending[index];
+      pending.length = 0;
+    },
     async measure<T>(operation: () => Promise<T>) {
       current = emptyCounters();
       clock.engineMicros = 0;
+      scan?.reset();
       pending.length = 0;
       const originalFetch = globalThis.fetch;
       const originalCaches = (globalThis as { caches?: unknown }).caches;
