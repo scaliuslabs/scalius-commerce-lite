@@ -42,10 +42,7 @@ overrides:
   fast-uri: "3.1.8"
   svgo: "4.1.0"
   wrangler: "4.150.0"
-  partyserver: ">=0.5.9"
   better-call: ">=1.4.0"
-  shell-quote: ">=1.8.4"
-  "@grpc/grpc-js": ">=1.14.4"
   ws: ">=8.21.0"
   qs: "6.16.0"
   js-yaml: "4.3.2"
@@ -65,12 +62,6 @@ overrides:
   # Routine refresh, not a confirmed security patch: the maintainer disputes
   # GHSA-ch52-4w7c-c8xp (upstream issue 56). Used only by Astro's image build cache.
   http-cache-semantics: "4.3.0"
-  # The agents server declaration chunk imports ClientOptions, even without
-  # client runtime use. Keep that type dependency patched; server stays on v2.0.
-  "agents@0.22.0>@modelcontextprotocol/client": "2.2.0"
-  # We use only agents/mcp/server, whose runtime and types never import SDK v1.
-  # Reassess this unused peer removal before an agents upgrade or legacy entry use.
-  "agents@0.22.0>@modelcontextprotocol/sdk": "-"
 
 allowBuilds:
   '@firebase/util': true
@@ -137,6 +128,7 @@ minimumReleaseAgeExclude:
   - '@turbo/windows-arm64@2.11.8'
   - oxlint@1.88.0
   - turbo@2.11.8
+  - agents@0.28.1
 
 patchedDependencies:
   # Upstream 0.10.3 accepts a previous refresh token repeatedly (cloudflare/workers-oauth-provider#43).
