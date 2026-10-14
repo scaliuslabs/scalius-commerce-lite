@@ -2,14 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildApiV1Url,
   buildWranglerDeploymentsCommand,
-  buildWranglerQueueInfoCommand,
   evaluateMonitoringConfig,
   evaluateLatestDeployment,
-  evaluateQueueInfoOutput,
   evaluateReadinessSamples,
-  getKnownQueueNames,
   parseOpsCheckArgs,
-  parseWranglerQueueInfoOutput,
   runOpsCheck,
 } from "./ops-check.mjs";
 
@@ -17,14 +13,7 @@ function monitoringApiConfig() {
   return {
     name: "scalius-api",
     observability: { enabled: true },
-    triggers: { crons: ["*/15 * * * *"] },
-    queues: {
-      producers: [{ queue: "payment-events" }],
-      consumers: [
-        { queue: "payment-events", dead_letter_queue: "payment-events-dlq" },
-        { queue: "payment-events-dlq" },
-      ],
-    },
+    triggers: { crons: ["* * * * *"] },
   };
 }
 
@@ -83,11 +72,10 @@ describe("ops-check config helpers", () => {
       samples: 2,
       timeoutMs: 5000,
       skipWrangler: false,
-      queues: false,
     });
 
     expect(() => parseOpsCheckArgs(["--samples", "0"])).toThrow("--samples must be a positive integer");
-    expect(() => parseOpsCheckArgs(["--skip-wrangler", "--queues"])).toThrow("cannot be combined");
+    expect(() => parseOpsCheckArgs(["--queues"])).toThrow("Unknown option --queues");
   });
 
   it("defaults the API origin to the repository demo without reading Wrangler vars", () => {
@@ -99,44 +87,23 @@ describe("ops-check config helpers", () => {
     expect(buildApiV1Url("https://api.example.test/api/v1", "/readyz")).toBe("https://api.example.test/api/v1/readyz");
   });
 
-  it("derives known queue names from the API Wrangler config shape", () => {
-    expect(getKnownQueueNames({
-      queues: {
-        producers: [{ queue: "payment-events" }],
-        consumers: [
-          { queue: "payment-events", dead_letter_queue: "payment-events-dlq" },
-          { queue: "payment-events-dlq" },
-          { queue: "auth-otp", dead_letter_queue: "auth-otp-dlq" },
-        ],
-      },
-    })).toEqual(["payment-events", "payment-events-dlq", "auth-otp", "auth-otp-dlq"]);
-  });
-
   it("validates monitoring config preconditions from the API Wrangler config", () => {
     expect(evaluateMonitoringConfig(monitoringApiConfig())).toMatchObject({
       ok: true,
       workerName: "scalius-api",
       observabilityEnabled: true,
       requiredCronPresent: true,
-      queueCount: 2,
-      normalQueueCount: 1,
-      deadLetterQueueCount: 1,
     });
 
     expect(evaluateMonitoringConfig({
       name: "scalius-api",
       observability: { enabled: false },
       triggers: { crons: [] },
-      queues: {
-        producers: [{ queue: "payment-events" }],
-        consumers: [{ queue: "payment-events" }],
-      },
     })).toMatchObject({
       ok: false,
       errors: expect.arrayContaining([
         expect.stringContaining("observability.enabled true"),
         expect.stringContaining("scheduled maintenance cron"),
-        expect.stringContaining("dead_letter_queue"),
       ]),
     });
   });
@@ -184,16 +151,6 @@ describe("ops-check Wrangler helpers", () => {
       cwd: "/repo",
       display: "pnpm --dir apps/api exec wrangler deployments list --json",
     });
-
-    expect(buildWranglerQueueInfoCommand("auth-otp", {
-      pnpmExecutable: "pnpm",
-      rootDir: "/repo",
-    })).toMatchObject({
-      command: "pnpm",
-      args: ["--dir", "apps/api", "exec", "wrangler", "queues", "info", "auth-otp"],
-      cwd: "/repo",
-      display: "pnpm --dir apps/api exec wrangler queues info auth-otp",
-    });
   });
 
   it("requires the latest deployment to have exactly one 100% version", () => {
@@ -223,78 +180,6 @@ describe("ops-check Wrangler helpers", () => {
     ])).toMatchObject({
       ok: false,
       fullyServedVersionCount: 0,
-    });
-  });
-
-  it("parses Wrangler queue info and fails missing provider actors", () => {
-    const output = [
-      "Queue Name: payment-events",
-      "Queue ID: queue-id",
-      "Number of Producers: 1",
-      "Producers: worker:scalius-api",
-      "Number of Consumers: 0",
-    ].join("\n");
-
-    expect(parseWranglerQueueInfoOutput(output)).toMatchObject({
-      name: "payment-events",
-      producerCount: 1,
-      consumerCount: 0,
-      producers: ["worker:scalius-api"],
-      consumers: [],
-    });
-
-    expect(evaluateQueueInfoOutput("payment-events", output, {
-      expectedProducers: ["worker:scalius-api"],
-      expectedConsumers: ["worker:scalius-api"],
-    })).toMatchObject({
-      ok: false,
-      errors: ["missing expected consumer worker:scalius-api"],
-    });
-  });
-
-  it("warns for unexpected queue producers without failing expected wiring", () => {
-    const output = [
-      "Queue Name: payment-events",
-      "Queue ID: queue-id",
-      "Number of Producers: 3",
-      "Producers: worker:scalius-api, worker:testdash",
-      "Number of Consumers: 1",
-      "Consumers: worker:scalius-api",
-    ].join("\n");
-
-    expect(evaluateQueueInfoOutput("payment-events", output, {
-      expectedProducers: ["worker:scalius-api"],
-      expectedConsumers: ["worker:scalius-api"],
-    })).toMatchObject({
-      ok: true,
-      errors: [],
-      warnings: [
-        "unexpected producer worker:testdash",
-      ],
-      unexpectedProducers: ["worker:testdash"],
-      unexpectedConsumers: [],
-    });
-  });
-
-  it("fails unexpected queue consumers after expected and allowed actors are removed", () => {
-    const output = [
-      "Queue Name: payment-events",
-      "Queue ID: queue-id",
-      "Number of Producers: 1",
-      "Producers: worker:scalius-api",
-      "Number of Consumers: 3",
-      "Consumers: worker:scalius-api, worker:testdash",
-    ].join("\n");
-
-    expect(evaluateQueueInfoOutput("payment-events", output, {
-      expectedProducers: ["worker:scalius-api"],
-      expectedConsumers: ["worker:scalius-api"],
-    })).toMatchObject({
-      ok: false,
-      errors: ["unexpected consumer worker:testdash"],
-      warnings: [],
-      unexpectedProducers: [],
-      unexpectedConsumers: ["worker:testdash"],
     });
   });
 });
@@ -351,7 +236,6 @@ describe("runOpsCheck", () => {
     expect(result.checks.openapi.requiredPaths).toContain("/api/v1/admin/analytics/health");
     expect(result.checks.monitoringConfig.status).toBe("passed");
     expect(result.checks.deployment.versionId).toBe("api-version");
-    expect(result.checks.queues.status).toBe("skipped");
     expect(fetchImpl).toHaveBeenCalledTimes(3);
     expect(execFileImpl).toHaveBeenCalledTimes(1);
   });
@@ -395,146 +279,5 @@ describe("runOpsCheck", () => {
     expect(result.checks.readyz.status).toBe("warning");
     expect(result.checks.readyz.readyCount).toBe(2);
     expect(result.warnings).toContain("API /readyz recovered after transient degraded samples.");
-  });
-
-  it("runs optional queue info checks with fake exec", async () => {
-    const fetchImpl = vi.fn(async (url) => {
-      const path = new URL(url).pathname;
-      if (path === "/api/v1/health") return textResponse("ok");
-      if (path === "/api/v1/readyz") return readyResponse();
-      if (path === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
-      throw new Error(`Unexpected URL ${url}`);
-    });
-    const execFileImpl = vi.fn(async (_command, args) => {
-      if (args.includes("deployments")) {
-        return {
-          stdout: JSON.stringify([
-            {
-              created_on: "2026-07-05T02:00:00Z",
-              versions: [{ version_id: "api-version", percentage: 100 }],
-            },
-          ]),
-        };
-      }
-      const queueName = args.at(-1);
-      const producerLines = queueName.endsWith("-dlq")
-        ? ["Number of Producers: 0"]
-        : ["Number of Producers: 1", "Producers: worker:scalius-api"];
-      return {
-        stdout: [
-          `Queue Name: ${queueName}`,
-          "Queue ID: queue-id",
-          ...producerLines,
-          "Number of Consumers: 1",
-          "Consumers: worker:scalius-api",
-        ].join("\n"),
-      };
-    });
-
-    const result = await runOpsCheck(parseOpsCheckArgs(["--samples", "1", "--queues"], {
-      defaultApiBaseUrl: "https://api.example.test",
-    }), {
-      apiConfig: monitoringApiConfig(),
-      fetchImpl,
-      execFileImpl,
-      sleepImpl: async () => undefined,
-      logger: null,
-      pnpmExecutable: "pnpm",
-      rootDir: "/repo",
-      requestId: "ops-check-test",
-    });
-
-    expect(result.checks.queues.queueCount).toBe(2);
-    expect(result.checks.queues.queues[0]).toMatchObject({
-      name: "payment-events",
-      producers: ["worker:scalius-api"],
-      consumers: ["worker:scalius-api"],
-      expectedProducers: ["worker:scalius-api"],
-      expectedConsumers: ["worker:scalius-api"],
-    });
-    expect(execFileImpl.mock.calls.map(([, args]) => args.join(" "))).toEqual([
-      "--dir apps/api exec wrangler deployments list --json",
-      "--dir apps/api exec wrangler queues info payment-events",
-      "--dir apps/api exec wrangler queues info payment-events-dlq",
-    ]);
-  });
-
-  it("propagates unexpected queue actor warnings without failing the run", async () => {
-    const fetchImpl = vi.fn(async (url) => {
-      const path = new URL(url).pathname;
-      if (path === "/api/v1/health") return textResponse("ok");
-      if (path === "/api/v1/readyz") return readyResponse();
-      if (path === "/api/v1/openapi.json") return openApiResponse({ "/x": {} });
-      throw new Error(`Unexpected URL ${url}`);
-    });
-    const execFileImpl = vi.fn(async (_command, args) => {
-      if (args.includes("deployments")) {
-        return {
-          stdout: JSON.stringify([
-            {
-              created_on: "2026-07-05T02:00:00Z",
-              versions: [{ version_id: "api-version", percentage: 100 }],
-            },
-          ]),
-        };
-      }
-      const queueName = args.at(-1);
-      const producerLines = queueName.endsWith("-dlq")
-        ? ["Number of Producers: 0"]
-        : ["Number of Producers: 2", "Producers: worker:scalius-api, worker:testdash"];
-      const consumerLines = queueName.endsWith("-dlq")
-        ? ["Number of Consumers: 1", "Consumers: worker:scalius-api"]
-        : ["Number of Consumers: 1", "Consumers: worker:scalius-api"];
-      return {
-        stdout: [
-          `Queue Name: ${queueName}`,
-          "Queue ID: queue-id",
-          ...producerLines,
-          ...consumerLines,
-        ].join("\n"),
-      };
-    });
-    const logger = {
-      log: vi.fn(),
-      warn: vi.fn(),
-    };
-
-    const result = await runOpsCheck(parseOpsCheckArgs(["--samples", "1", "--queues"], {
-      defaultApiBaseUrl: "https://api.example.test",
-    }), {
-      apiConfig: monitoringApiConfig(),
-      fetchImpl,
-      execFileImpl,
-      sleepImpl: async () => undefined,
-      logger,
-      pnpmExecutable: "pnpm",
-      rootDir: "/repo",
-      requestId: "ops-check-test",
-    });
-
-    expect(result.status).toBe("passed");
-    expect(result.checks.queues.status).toBe("passed");
-    expect(result.warnings).toEqual([
-      "Queue payment-events: unexpected producer worker:testdash",
-    ]);
-    expect(result.requiredActions).toEqual([
-      "Queue payment-events: migrate or redeploy worker:testdash without this production queue producer binding; do not allowlist it unless it is intentionally source-owned.",
-    ]);
-    expect(result.checks.queues.requiredActions).toEqual([
-      "Queue payment-events: migrate or redeploy worker:testdash without this production queue producer binding; do not allowlist it unless it is intentionally source-owned.",
-    ]);
-    expect(result.checks.queues.queues[0]).toMatchObject({
-      name: "payment-events",
-      unexpectedProducers: ["worker:testdash"],
-      unexpectedConsumers: [],
-      warnings: ["unexpected producer worker:testdash"],
-    });
-    expect(result.checks.queues.queues[1]).toMatchObject({
-      name: "payment-events-dlq",
-      unexpectedProducers: [],
-      unexpectedConsumers: [],
-      warnings: [],
-    });
-    expect(logger.warn).toHaveBeenCalledWith("⚠ Queue payment-events: unexpected producer worker:testdash");
   });
 });
