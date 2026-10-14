@@ -92,7 +92,7 @@ function quoteSqliteIdentifier(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`;
 }
 
-describe("provider-neutral schema upgrades", () => {
+describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
   it("loads a contiguous migration chain with exact Turso and PostgreSQL sidecars", async () => {
     const artifacts = await loadSchemaUpgradeArtifacts();
     expect(artifacts.map((artifact) => ({

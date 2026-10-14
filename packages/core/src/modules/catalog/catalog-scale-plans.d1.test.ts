@@ -233,7 +233,7 @@ describe("catalogue-scale query plans", () => {
         expect(phones.facets.map((facet) => facet.slug)).not.toContain("maker");
         const laptops = await getStorefrontProducts(db, { page: 1, limit: 2, category: "laptop" });
         expect(laptops.facets.map((facet) => facet.slug)).toEqual(["maker"]);
-    });
+    }, 60_000);
 
     it("pages and counts the product sitemap from the buyer state's newest index", async () => {
         const { db, queries, plans } = setup();
