@@ -14,8 +14,17 @@ import {
 } from "./postgres-sqlite-profile";
 import type { Database } from "./types";
 
-const DEFAULT_SERIALIZATION_ATTEMPTS = 8;
+/**
+ * Concurrent checkouts serialize on PostgreSQL (each takes the next order
+ * number, and SERIALIZABLE's page-level read locks make writers that append
+ * to the same index pages conflict), so under contention a batch can lose
+ * several rounds in a row. The budget is 1.4 to 2.8 s of capped, jittered
+ * waiting: 16 concurrent checkouts queue through on a laptop with about 2% left
+ * over, which the API answers 503 (retry-safe) instead of 500.
+ */
+const DEFAULT_SERIALIZATION_ATTEMPTS = 32;
 const SERIALIZATION_RETRY_BASE_DELAY_MS = 2;
+const SERIALIZATION_RETRY_MAX_DELAY_MS = 50;
 
 type QueryMethod = "run" | "all" | "values" | "get";
 
@@ -289,7 +298,7 @@ async function withSerializationRetry<T>(
       ) {
         throw error;
       }
-      const exponentialDelay = SERIALIZATION_RETRY_BASE_DELAY_MS * 2 ** attempt;
+      const exponentialDelay = Math.min(SERIALIZATION_RETRY_BASE_DELAY_MS * 2 ** attempt, SERIALIZATION_RETRY_MAX_DELAY_MS);
       const delayMs = exponentialDelay + Math.floor(options.random() * exponentialDelay);
       options.onSerializationRetry?.({ attempt: attempt + 1, delayMs, code });
       await options.sleep(delayMs);

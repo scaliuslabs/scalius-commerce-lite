@@ -7,6 +7,14 @@ afterEach(() => {
 });
 
 describe("errorResponseFromError", () => {
+  it("answers a write that lost its PostgreSQL serialization retries as busy (503), not a fault", () => {
+    const conflict = Object.assign(new Error("Failed query"), { cause: { code: "40001" } });
+    const response = errorResponseFromError(conflict);
+    expect(response.status).toBe(503);
+    expect(response.body.error.code).toBe("SERVICE_UNAVAILABLE");
+    expect(errorResponseFromError(Object.assign(new Error("duplicate"), { code: "23505" })).status).toBe(500);
+  });
+
   it("hides unexpected internal error messages", () => {
     const response = errorResponseFromError(new Error("D1 token abc123 failed"));
 

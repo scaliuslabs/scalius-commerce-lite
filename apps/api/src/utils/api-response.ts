@@ -1,5 +1,6 @@
 import type { Context } from "hono";
-import { AppError } from "./api-error";
+import { isPostgresSerializationError } from "@scalius/database/postgres-adapter";
+import { AppError, ServiceUnavailableError } from "./api-error";
 import { logOpsEvent } from "./ops-log";
 
 /** Standard success response shape: { success: true, data: T } */
@@ -75,10 +76,17 @@ function toErrorStatusCode(status: number): ErrorStatusCode {
     : 500;
 }
 
+const busy = () => new ServiceUnavailableError("The store is busy. Try again in a moment.");
+
 export function errorResponseFromError(err: unknown): {
   body: ApiErrorResponse;
   status: ErrorStatusCode;
 } {
+  // A write that still lost its PostgreSQL serialization retries is contention,
+  // not a fault: every such write is a whole transaction that left nothing
+  // behind, so the caller may send it again (checkout is idempotent by its
+  // request id).
+  if (isPostgresSerializationError(err)) err = busy();
   if (err instanceof AppError) {
     return {
       body: {
@@ -109,6 +117,7 @@ export function logApiError(
   err: unknown,
   request?: { method?: string; path?: string; requestId?: string; cfRay?: string },
 ): void {
+  if (isPostgresSerializationError(err)) err = busy();
   if (err instanceof AppError) {
     if (err.status < 500) return;
 
