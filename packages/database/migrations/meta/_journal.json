@@ -1065,6 +1065,13 @@
       "when": 1792200000000,
       "tag": "0151_postgres_scale",
       "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "6",
+      "when": 1792300000000,
+      "tag": "0152_search_index",
+      "breakpoints": true
     }
   ]
 }

@@ -1197,7 +1197,7 @@ export async function revalidateMigrationCheckpointTarget(
   checkpoint: MigrationCheckpoint,
   sourceTables: readonly SourceTable[],
   sourceContent: DatabaseContentFingerprint,
-  schema: { applicationTables: number; triggers: number },
+  schema: { applicationTables: number; derivedTables?: number; triggers: number },
   target: PostgresMigrationTargetReader,
 ): Promise<void> {
   validateCheckpointTargetReceipts(checkpoint, sourceTables, sourceContent);
@@ -1235,7 +1235,10 @@ export async function revalidateMigrationCheckpointTarget(
     await target.triggers(),
     "PostgreSQL trigger catalog",
   );
-  const expectedPublicTables = checkpoint.phase === "planned" ? 0 : schema.applicationTables;
+  // Post-data adds the derived tables (the search index) when it completes.
+  const expectedPublicTables = checkpoint.phase === "planned"
+    ? 0
+    : schema.applicationTables + (checkpoint.phase === "complete" ? schema.derivedTables ?? 0 : 0);
   const expectedTriggers = checkpoint.phase === "complete" ? schema.triggers : 0;
   if (publicTables !== expectedPublicTables || triggers !== expectedTriggers) {
     throw new Error(`PostgreSQL target schema counts differ in ${checkpoint.phase} phase.`);

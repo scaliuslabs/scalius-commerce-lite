@@ -18,6 +18,7 @@ import {
   restoreTriggers,
 } from "./sqlite-provider-schema";
 import { compileSqliteMigrationForProvider } from "../src/migration-artifacts";
+import { SEARCH_INDEX_TABLE, searchIndexRebuildStatements } from "../src/search-index";
 import type { DatabaseProvider } from "../src/provider";
 import { CURRENT_DATABASE_SCHEMA_MIGRATIONS } from "../src/schema-contract";
 
@@ -1219,7 +1220,9 @@ export async function normalizeSqliteDatabaseToTursoDatabase(
       WHERE type = 'table'
         AND name NOT LIKE 'sqlite_%'
       ORDER BY name
-    `).all().map((row) => String(row.name));
+    `).all().map((row) => String(row.name))
+      // A derived search index (search_fts_terms) is rebuilt below, not copied.
+      .filter((table) => !isProviderDerivedSourceTable(table));
     const targetTableNames = new Set(tables);
     ignoredSourceTables = target.prepare(`
       SELECT name
@@ -1388,6 +1391,9 @@ export async function normalizeSqliteDatabaseToTursoDatabase(
         rowCount += targetRows;
       }
       restoreTriggers(target, triggers);
+      if (triggers.some((trigger) => trigger.name.startsWith(`${SEARCH_INDEX_TABLE}_`))) {
+        for (const statement of searchIndexRebuildStatements("sqlite")) target.exec(statement);
+      }
       target.exec("COMMIT;");
     } catch (error) {
       target.exec("ROLLBACK;");

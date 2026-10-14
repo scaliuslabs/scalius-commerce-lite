@@ -166,7 +166,8 @@ describe.runIf(postgresUrl)("0100 cache dependencies on PostgreSQL", () => {
 
   it("0151 turns an existing store's rows into the change log and its text bytewise, exactly the fresh schema, continuing its clock", async () => {
     const [fresh, before] = await Promise.all([
-      compileCanonicalPostgresSchema(),
+      // Fresh through 0151 only: 0152 has its own sidecar test.
+      compileCanonicalPostgresSchema({ beforeMigration: "0152_" }),
       compileCanonicalPostgresSchema({ beforeMigration: "0151_" }),
     ]);
     const freshDatabase = await database(fresh.sql);

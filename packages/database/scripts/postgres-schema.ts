@@ -21,6 +21,12 @@ import {
 } from "./cache-dep-triggers";
 import { eventOutboxPostgresTrigger } from "./event-outbox-triggers";
 import { conversationSearchPostgresCollation } from "./conversation-workspace";
+import {
+  SEARCH_INDEX_TABLE,
+  SEARCH_INDEX_TABLE_STATEMENTS,
+  searchIndexRebuildStatements,
+  searchIndexTriggers,
+} from "../src/search-index";
 
 export const POSTGRES_SCHEMA_BUNDLE_VERSION =
   "scalius-postgres-schema/v1" as const;
@@ -39,6 +45,8 @@ export interface PostgresSchemaBundle {
   sql: string;
   sha256: string;
   applicationTables: number;
+  /** Derived tables post-data creates and rebuilds from the loaded rows (the search index). */
+  derivedTables: number;
   indexes: number;
   triggers: number;
 }
@@ -421,6 +429,20 @@ export function compileSqliteTriggerForPostgres(
   ].join("\n");
 }
 
+/**
+ * The search index in PostgreSQL form (search-index.ts): its table and
+ * indexes, its triggers by name (one translate() pass per column instead of
+ * SQLite's staged replace() chains), and its rebuild from the source rows.
+ * It is derived, so it is created after the rows are loaded.
+ */
+export function searchIndexPostgresSql(): { table: string[]; triggers: ReadonlyMap<string, string>; rebuild: string[] } {
+  return {
+    table: SEARCH_INDEX_TABLE_STATEMENTS.map((statement) => `${collatePostgresTextColumns(compileSqliteDdlForPostgres(statement))};`),
+    triggers: new Map(searchIndexTriggers("postgres").map((trigger) => [trigger.name, compileSqliteTriggerForPostgres(trigger)])),
+    rebuild: searchIndexRebuildStatements("postgres").map((statement) => `${statement};`),
+  };
+}
+
 function readSchemaObjects(database: DatabaseSync): readonly SqliteSchemaObject[] {
   return database.prepare(`
     SELECT type, name, tbl_name AS table_name, sql
@@ -528,9 +550,17 @@ export async function compileCanonicalPostgresSchema(
       typeof cacheDepPostgresTrigger(definition.name, definition.sql) === "string")
       ? [`${CACHE_DEP_POSTGRES_BUMP_FUNCTION};`]
       : [];
+    const searchIndex = triggerDefinitions.some((definition) => definition.name.startsWith(`${SEARCH_INDEX_TABLE}_`))
+      ? searchIndexPostgresSql()
+      : undefined;
     // Event outbox triggers likewise have a generated PostgreSQL form
     // (jsonb facts and a PostgreSQL event id), not the generic compilation.
     const compiledTriggers = triggerDefinitions.flatMap((definition) => {
+      // SQLite's index triggers (queued rows) have no PostgreSQL form: its source triggers index directly.
+      if (searchIndex && definition.name.startsWith(`${SEARCH_INDEX_TABLE}_`)) {
+        const searchTrigger = searchIndex.triggers.get(definition.name);
+        return searchTrigger ? [searchTrigger] : [];
+      }
       const cacheDep = cacheDepPostgresTrigger(definition.name, definition.sql);
       if (cacheDep === null) return [];
       return [cacheDep ?? eventOutboxPostgresTrigger(definition.name, definition.sql) ?? compileSqliteTriggerForPostgres(definition)];
@@ -555,9 +585,11 @@ export async function compileCanonicalPostgresSchema(
     const postDataSql = [
       "BEGIN;",
       ...indexObjects.map((object) => `${compileSqliteDdlForPostgres(object.sql)};`),
+      ...(searchIndex?.table ?? []),
       ...cacheDepFunction,
       ...compiledTriggers,
       ...changeLog,
+      ...(searchIndex?.rebuild ?? []),
       "COMMIT;",
       "",
     ].join("\n\n");
@@ -569,6 +601,7 @@ export async function compileCanonicalPostgresSchema(
       sql,
       sha256: createHash("sha256").update(sql).digest("hex"),
       applicationTables: tableObjects.length,
+      derivedTables: searchIndex ? 1 : 0,
       indexes: allIndexObjects.length,
       triggers: compiledTriggers.length,
     };
