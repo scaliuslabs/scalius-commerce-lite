@@ -446,15 +446,17 @@ export function selectStorefrontCartVariantRows(
             listPrices: checkoutListPricesSql(),
         })
         .from(productVariants)
+        // One id set (the cart's SKUs and its products' live SKUs), read by
+        // primary key: an OR of two IN sets is an index union on SQLite but a
+        // sequential scan of every SKU on PostgreSQL.
         .where(and(
-            or(
-                sql`${productVariants.productId} IN (
-                    SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
-                )`,
-                sql`${productVariants.id} IN (
-                    SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet})
-                )`,
-            ),
+            sql`${productVariants.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet})
+                UNION ALL
+                SELECT product_sku."id" FROM "product_variants" AS product_sku
+                WHERE product_sku."product_id" IN (SELECT CAST(value AS TEXT) FROM json_each(${productIdSet}))
+                  AND product_sku."deleted_at" IS NULL
+            )`,
             isNull(productVariants.deletedAt),
         ));
 }

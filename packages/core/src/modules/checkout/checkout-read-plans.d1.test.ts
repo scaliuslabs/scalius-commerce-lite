@@ -28,11 +28,11 @@ describe("checkout read plans", () => {
         expect(steps.filter((step) => /^(SCAN|SEARCH) products\b/.test(step))).toHaveLength(1);
     });
 
-    it("reads the cart's SKUs by product and by id", () => {
+    it("reads the cart's SKUs by id: its own and its products' live SKUs", () => {
         const steps = plan(selectStorefrontCartVariantRows(db, ids, skus));
-        expect(steps.filter((step) => /^(SCAN|SEARCH) product_variants\b/.test(step))).toEqual([
-            "SEARCH product_variants USING INDEX product_variants_product_live_idx (product_id=? AND deleted_at=?)",
+        expect(steps.filter((step) => /^(SCAN|SEARCH) (product_variants|product_sku)\b/.test(step))).toEqual([
             "SEARCH product_variants USING INDEX sqlite_autoindex_product_variants_1 (id=?)",
+            "SEARCH product_sku USING INDEX product_variants_product_live_idx (product_id=? AND deleted_at=?)",
         ]);
     });
 
