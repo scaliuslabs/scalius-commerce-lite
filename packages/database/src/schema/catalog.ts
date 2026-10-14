@@ -92,14 +92,6 @@ export const productFacetValues = sqliteTable("product_facet_values", {
     index("product_facet_values_number_idx")
         .on(table.facetKey, table.valueNumber, table.productId)
         .where(sql`${table.valueNumber} IS NOT NULL`),
-    index("product_facet_values_metadata_label_idx").on(table.facetKind, table.facetKey, table.valueKey, table.valueLabel, table.productId),
-    index("product_facet_values_metadata_sort_idx").on(table.facetKind, table.facetKey, table.valueKey, table.sortOrder, table.productId),
-    index("product_facet_values_metadata_sample_idx")
-        .on(table.facetKind, table.facetKey, table.valueKey, table.variantId, table.productId)
-        .where(sql`${table.facetKind} = 'option'`),
-    index("product_facet_values_metadata_number_idx")
-        .on(table.facetKind, table.facetKey, table.valueKey, table.valueNumber, table.productId)
-        .where(sql`${table.facetKind} = 'attribute' AND ${table.valueNumber} IS NOT NULL`),
 ]);
 
 /** Exact public DISTINCT-product counts, maintained with the facet/buyer writes. */

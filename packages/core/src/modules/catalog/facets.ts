@@ -26,7 +26,7 @@ import {
 } from "@scalius/shared/catalog-attributes";
 import { normalizeProductOptionIdentity } from "@scalius/shared/product-options";
 import { ValidationError } from "@scalius/core/errors";
-import { getDatabaseProviderForClient, type Database } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import type { CatalogFacetFilter } from "../products";
 import { publicCategorySubtreeCondition } from "../categories";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
@@ -34,8 +34,6 @@ import { buildStorefrontBuyerStateConditions, productMinRatingCondition, reviewS
 import { categoryScope, deps } from "./declare-deps";
 import { reviewsEnabledSql, storeCurrencyCodeSql } from "../settings";
 import { REVIEW_RATING_FACET_STARS } from "@scalius/shared/reviews";
-import { sanitizeFtsQuery } from "../../search/fts5";
-import { productCategoryNameMatch } from "./search-relevance";
 
 /** URL/facet key prefix for merchant option axes, e.g. `option.size`. */
 export const OPTION_FACET_PREFIX = OPTION_FACET_KEY_PREFIX;
@@ -56,6 +54,14 @@ export const BRAND_FACET_VALUE_LIMIT = 500;
 export const CATEGORY_FACET_KEY = "category";
 /** Filter values one request may carry. */
 export const MAX_PUBLIC_FACET_FILTER_VALUES = 90;
+/**
+ * Attribute and option values are counted from the scope's own facet rows
+ * only while the scope holds at most this many products (Shopify stops
+ * filtering a collection at the same size). A larger scope still gets its
+ * brand, category and rating facets, which read the scope rows alone; the
+ * unfiltered shop-all page reads the maintained public counts instead.
+ */
+export const FACET_SCOPE_PRODUCT_LIMIT = 5_000;
 
 const RANGE_QUERY_KEY = /^([a-z0-9]+(?:-[a-z0-9]+)*)\.(min|max)$/;
 const FACET_KEY_MAX_LENGTH = 200;
@@ -487,11 +493,12 @@ export interface CatalogFacetCountInput {
     baseConditions: SQL[];
     /** A base condition reads `products` columns. */
     needsProducts: boolean;
-    /** Equivalent plain-search predicates with category read from buyer state for the covering scope only. */
-    identitySearch?: {
-        query: string;
-        baseConditions: SQL[];
-    };
+    /**
+     * The scope is every public product and nothing is selected (the plain
+     * shop-all page): attribute and option values come from the maintained
+     * public counts, whatever the catalogue's size.
+     */
+    allPublic?: boolean;
     filters: readonly CatalogFacetFilter[] | undefined;
     /** A category listing: its effective attribute set orders and restricts the attribute facets. */
     categoryId?: string;
@@ -571,11 +578,11 @@ type FacetResultRow = CatalogFacetCountRow & {
  * facets return one row with their bounds, and at most
  * `FACET_ATTRIBUTE_LIMIT` attribute facets are kept.
  *
- * Plan shape: the scope is read once through the listing's own index and
- * materialized with each product's match flags. Filtered and narrow scopes
- * probe facet rows per product. A broad, unfiltered D1 scope subtracts the
- * excluded public products from maintained distinct-product counts, then
- * resolves each independent metadata minimum through its ordered index.
+ * Plan shape (the same SQL on every provider): the scope is read once
+ * through the listing's own index and materialized with each product's
+ * match flags; attribute and option values then probe each scoped product's
+ * facet rows, only while the scope holds at most FACET_SCOPE_PRODUCT_LIMIT
+ * products (`allPublic` reads the public counts instead).
  */
 export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCountInput): Promise<CatalogFacetCountRow[]> {
     return readCatalogFacets(db, input).then(result => result.rows);
@@ -635,11 +642,6 @@ export function declareFacetReadWithoutProducts(rows: readonly CatalogFacetCount
 function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summary?: ListingSummaryInput): Promise<FacetRead> {
     const sets = splitFacetFilters(input.filters);
     const minRatingCenti = input.minRating === undefined ? undefined : input.minRating * 100;
-    const complement = getDatabaseProviderForClient(db) === "d1"
-        && sets.attributes.length === 0 && sets.options.length === 0 && !sets.brand
-        && minRatingCenti === undefined;
-    const identitySearch = complement && input.needsProducts && input.identitySearch
-        ? sanitizeFtsQuery(input.identitySearch.query) : "";
     const readsRating = Boolean(input.ratingFacet) || minRatingCenti !== undefined;
     // The selected rating narrows every other facet's count (never its own).
     const ratingMatch = minRatingCenti === undefined ? sql`` : sql` AND facet_scope.rating_match = 1`;
@@ -656,17 +658,14 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
         id: filter.kind === "brand" ? BRAND_FACET_KEY : filter.id,
         keys: filter.keys,
     })));
-    // A left join by primary key after the scope's own index: it never drives.
-    const scopeFrom = (covering = false) => {
-        const scopeProducts = input.needsProducts
-            ? sql`${buyerState} INNER JOIN "products" ${covering ? sql`INDEXED BY sqlite_autoindex_products_1` : sql``}
-                ON "products"."id" = ${buyerState.productId}`
-            : sql`${buyerState}`;
-        return readsRating
-            ? sql`${scopeProducts} LEFT JOIN ${reviewStats} AS facet_rating ON facet_rating.product_id = ${buyerState.productId} AND ${reviewsEnabledSql()} = 1`
-            : scopeProducts;
-    };
-    const scopeRows = (covering = false) => sql`
+    // Left joins by primary key after the scope's own index: they never drive.
+    const scopeProducts = input.needsProducts
+        ? sql`${buyerState} INNER JOIN "products" ON "products"."id" = ${buyerState.productId}`
+        : sql`${buyerState}`;
+    const scopeFrom = readsRating
+        ? sql`${scopeProducts} LEFT JOIN ${reviewStats} AS facet_rating ON facet_rating.product_id = ${buyerState.productId} AND ${reviewsEnabledSql()} = 1`
+        : scopeProducts;
+    const scopeQuery = sql`
         SELECT ${buyerState.productId} AS product_id, ${buyerState.brandId} AS brand_id,
             ${buyerState.categoryId} AS category_id,
             ${productAttributeMissSql(scopeProduct, sets.attributes)} AS attribute_miss,
@@ -677,28 +676,8 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
                 ? sql`1`
                 : sql`CASE WHEN facet_rating.rating_avg_centi >= ${minRatingCenti} THEN 1 ELSE 0 END`} AS rating_match
             ${summary ? sql`, ${buyerState.fromMinor} AS listing_from_minor, ${buyerState.toMinor} AS listing_to_minor` : sql``}
-        FROM ${scopeFrom(covering)}
-        WHERE ${and(...(covering ? input.identitySearch!.baseConditions : input.baseConditions)) ?? sql`1 = 1`}`;
-    // Reuse the complement's two catalogue counts. A narrow FTS match keeps
-    // its rowid-led scope; only a broad match selects the covering ID join.
-    const scopePlanCtes = complement ? sql`
-        catalog_sizes AS MATERIALIZED (
-            SELECT public_count, all_count
-            FROM (SELECT COUNT(*) AS public_count FROM product_buyer_state WHERE is_public = 1) AS public_size
-            CROSS JOIN (SELECT COUNT(*) AS all_count FROM product_buyer_state) AS catalog_size
-        ),
-        ${identitySearch ? sql`identity_scope_plan AS MATERIALIZED (
-            SELECT CASE WHEN all_count > 0 AND
-                (SELECT COUNT(*) FROM products_fts WHERE products_fts MATCH ${identitySearch}) * 5 >= all_count * 4
-                THEN 1 ELSE 0 END AS use_covering FROM catalog_sizes
-        ),` : sql``}
-    ` : sql``;
-    const scopeQuery = identitySearch ? sql`
-        SELECT * FROM (${scopeRows()} LIMIT (
-            SELECT CASE WHEN use_covering = 0 THEN 9223372036854775807 ELSE 0 END FROM identity_scope_plan
-        )) UNION ALL SELECT * FROM (${scopeRows(true)} LIMIT (
-            SELECT CASE WHEN use_covering = 1 THEN 9223372036854775807 ELSE 0 END FROM identity_scope_plan
-        ))` : scopeRows();
+        FROM ${scopeFrom}
+        WHERE ${and(...input.baseConditions) ?? sql`1 = 1`}`;
     const categorySet = input.categoryId
         ? sql`(
             SELECT set_row.attribute_id AS attribute_id,
@@ -782,9 +761,8 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
                 SUM(CASE WHEN ${everySelection} THEN 1 ELSE 0 END),
                 NULL, NULL, NULL, NULL
             FROM facet_scope
-            CROSS JOIN category_closure AS child_link
-            WHERE child_link.descendant_id = facet_scope.category_id
-              AND child_link.ancestor_id IN (
+            INNER JOIN category_closure AS child_link ON child_link.descendant_id = facet_scope.category_id
+            WHERE child_link.ancestor_id IN (
                   SELECT listing_child.descendant_id FROM category_closure AS listing_child
                   WHERE listing_child.ancestor_id = ${input.categoryFacet.parentId} AND listing_child.depth = 1
               )
@@ -792,7 +770,12 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
     const valueLimit = boundedLimit(input.valueLimit, FACET_VALUE_LIMIT);
     const brandValueLimit = input.valueLimit === undefined ? BRAND_FACET_VALUE_LIMIT : valueLimit;
 
-    const sourceFacetCounts = sql`
+    // Attribute and option values: each scoped product's own facet rows, only
+    // while the scope is within the limit (a one-time check on every engine).
+    // The scope drives: a LEFT JOIN keeps it outer, where a planner without
+    // statistics would rather walk every facet row in GROUP BY order; the
+    // product without rows forms one NULL group, which HAVING drops.
+    const scopedValueCounts = sql`
             SELECT 'attribute' AS facet_kind, attribute_row.facet_key AS facet_id, attribute_row.value_key AS value_key,
                 SUM(CASE WHEN ${attributeMatch(sql.raw("attribute_row.facet_key"))} AND ${optionMatch} AND ${brandMatch}${ratingMatch} THEN 1 ELSE 0 END) AS value_count,
                 MIN(attribute_row.value_label) AS value_label,
@@ -800,10 +783,11 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
                 MIN(attribute_row.value_number) AS value_number,
                 NULL AS sample_sku
             FROM facet_scope
-            CROSS JOIN product_facet_values AS attribute_row
-            WHERE attribute_row.owner_id = facet_scope.product_id
-              AND attribute_row.facet_kind = 'attribute'
+            LEFT JOIN product_facet_values AS attribute_row ON attribute_row.owner_id = facet_scope.product_id
+                AND attribute_row.facet_kind = 'attribute'
+            WHERE (SELECT products FROM facet_size) <= ${sql.raw(String(FACET_SCOPE_PRODUCT_LIMIT))}
             GROUP BY attribute_row.facet_key, attribute_row.value_key
+            HAVING attribute_row.facet_key IS NOT NULL
             UNION ALL
             SELECT 'option', option_row.facet_key, option_row.value_key,
                 COUNT(DISTINCT CASE
@@ -813,88 +797,31 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
                 END),
                 MIN(option_row.value_label), MIN(option_row.sort_order), NULL, MIN(option_row.variant_id)
             FROM facet_scope
-            CROSS JOIN product_facet_values AS option_row
-            WHERE option_row.product_id = facet_scope.product_id
-              AND option_row.facet_key > ${OPTION_FACET_PREFIX}
-              AND option_row.facet_key < ${`${OPTION_FACET_PREFIX.slice(0, -1)}/`}
-              AND option_row.facet_kind = 'option'
+            LEFT JOIN product_facet_values AS option_row ON option_row.product_id = facet_scope.product_id
+                AND option_row.facet_kind = 'option'
+            WHERE (SELECT products FROM facet_size) <= ${sql.raw(String(FACET_SCOPE_PRODUCT_LIMIT))}
             GROUP BY option_row.facet_key, option_row.value_key
+            HAVING option_row.facet_key IS NOT NULL
     `;
-    // With no selections every scoped product contributes once. The public
-    // and scope ratios bound exclusions; private rows are also skipped by
-    // metadata probes. Other providers retain their product-led query.
-    // Each disabled branch exits before opening its facet scan.
-    const branchLimit = (fast: boolean) => sql`(SELECT CASE WHEN use_complement = ${fast ? 1 : 0}
-        THEN 9223372036854775807 ELSE 0 END FROM facet_plan)`;
-    const metadataMinimum = (column: "value_label" | "sort_order" | "variant_id" | "value_number", index: string) => {
-        const kind = column === "variant_id" ? sql`'option'`
-            : column === "value_number" ? sql`'attribute'` : sql`complement_value.facet_kind`;
-        return sql`(SELECT metadata.${sql.raw(column)}
-            FROM product_facet_values AS metadata INDEXED BY ${sql.raw(index)}
-            WHERE metadata.facet_kind = ${kind}
-              AND metadata.facet_key = complement_value.facet_key
-              AND metadata.value_key = complement_value.value_key
-              ${column === "value_number" ? sql`AND metadata.value_number IS NOT NULL` : sql``}
-              AND metadata.product_id NOT IN (SELECT product_id FROM excluded_products)
-              AND EXISTS (
-                  SELECT 1 FROM product_buyer_state AS metadata_buyer
-                  WHERE metadata_buyer.product_id = metadata.product_id AND metadata_buyer.is_public = 1
-              )
-            ORDER BY metadata.${sql.raw(column)} LIMIT 1)`;
-    };
-    const complementCtes = complement ? sql`
-        facet_plan AS MATERIALIZED (
-            SELECT CASE WHEN matched_count > 0 AND matched_count * 5 >= public_count * 4
-                AND public_count * 10 >= all_count * 9 THEN 1 ELSE 0 END AS use_complement
-            FROM (SELECT COUNT(*) AS matched_count FROM facet_scope) AS matched_size
-            CROSS JOIN catalog_sizes
-        ),
-        excluded_products AS MATERIALIZED (
-            SELECT product_id FROM product_buyer_state
-            WHERE is_public = 1 AND product_id NOT IN (SELECT product_id FROM facet_scope)
-            LIMIT ${branchLimit(true)}
-        ),
-        excluded_counts AS MATERIALIZED (
-            SELECT excluded_row.facet_kind, excluded_row.facet_key, excluded_row.value_key,
-                COUNT(DISTINCT excluded_row.product_id) AS product_count
-            FROM excluded_products
-            CROSS JOIN product_facet_values AS excluded_row
-            WHERE excluded_row.product_id = excluded_products.product_id
-            GROUP BY excluded_row.facet_kind, excluded_row.facet_key, excluded_row.value_key
-            LIMIT ${branchLimit(true)}
-        ),
-        complement_values AS MATERIALIZED (
-            SELECT public_value.facet_kind, public_value.facet_key, public_value.value_key,
-                public_value.product_count - COALESCE(excluded_value.product_count, 0) AS value_count
+    // Every public product with nothing selected: the maintained counts, each
+    // value's label, order and sample SKU from its first public row.
+    const publicValueCounts = sql`
+            SELECT public_value.facet_kind AS facet_kind, public_value.facet_key AS facet_id,
+                public_value.value_key AS value_key, public_value.product_count AS value_count,
+                sample_row.value_label AS value_label, sample_row.sort_order AS value_sort,
+                sample_row.value_number AS value_number, sample_row.variant_id AS sample_sku
             FROM product_facet_public_counts AS public_value
-            LEFT JOIN excluded_counts AS excluded_value
-                ON excluded_value.facet_kind = public_value.facet_kind
-               AND excluded_value.facet_key = public_value.facet_key
-               AND excluded_value.value_key = public_value.value_key
-            WHERE public_value.product_count > COALESCE(excluded_value.product_count, 0)
-              AND (public_value.facet_kind = 'attribute' OR (
-                  public_value.facet_key > ${OPTION_FACET_PREFIX}
-                  AND public_value.facet_key < ${`${OPTION_FACET_PREFIX.slice(0, -1)}/`}
-              ))
-            LIMIT ${branchLimit(true)}
-        ),
-        baseline_facet_counts AS MATERIALIZED (
-            ${sourceFacetCounts}
-            LIMIT ${branchLimit(false)}
-        ),
-        complement_facet_counts AS MATERIALIZED (
-            SELECT complement_value.facet_kind, complement_value.facet_key AS facet_id, complement_value.value_key,
-                complement_value.value_count,
-                ${metadataMinimum("value_label", "product_facet_values_metadata_label_idx")} AS value_label,
-                ${metadataMinimum("sort_order", "product_facet_values_metadata_sort_idx")} AS value_sort,
-                CASE WHEN complement_value.facet_kind = 'attribute' THEN
-                    ${metadataMinimum("value_number", "product_facet_values_metadata_number_idx")} END AS value_number,
-                CASE WHEN complement_value.facet_kind = 'option' THEN
-                    ${metadataMinimum("variant_id", "product_facet_values_metadata_sample_idx")} END AS sample_sku
-            FROM complement_values AS complement_value
-            LIMIT ${branchLimit(true)}
-        ),
-    ` : sql``;
+            INNER JOIN product_facet_values AS sample_row
+                ON sample_row.facet_key = public_value.facet_key
+               AND sample_row.owner_id = (
+                   SELECT first_row.owner_id FROM product_facet_values AS first_row
+                   INNER JOIN product_buyer_state AS first_buyer
+                       ON first_buyer.product_id = first_row.product_id AND first_buyer.is_public = 1
+                   WHERE first_row.facet_key = public_value.facet_key AND first_row.value_key = public_value.value_key
+                   ORDER BY first_row.product_id, first_row.owner_id LIMIT 1
+               )
+            WHERE public_value.product_count > 0
+    `;
     const scopeSummary = sql`
         SELECT COUNT(*) AS listing_count, MIN(listing_from_minor) AS listing_min, MAX(listing_to_minor) AS listing_max
         FROM facet_scope
@@ -902,12 +829,10 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
           AND ${input.minRating === undefined ? sql`1 = 1`
                 : productMinRatingCondition(sql`facet_scope.product_id`, input.minRating)}`;
     return namedRows<FacetResultRow>(db.all(sql`
-        WITH ${scopePlanCtes}
-        facet_scope AS MATERIALIZED (${scopeQuery}),
-        ${complementCtes}
+        WITH facet_scope AS MATERIALIZED (${scopeQuery}),
+        facet_size AS (SELECT COUNT(*) AS products FROM facet_scope),
         facet_counts AS (
-            ${complement ? sql`SELECT * FROM baseline_facet_counts
-                UNION ALL SELECT * FROM complement_facet_counts` : sourceFacetCounts}
+            ${input.allPublic ? publicValueCounts : scopedValueCounts}
             ${brandBranch}${ratingBranch}${categoryBranch}
         ),
         facet_resolved AS (
