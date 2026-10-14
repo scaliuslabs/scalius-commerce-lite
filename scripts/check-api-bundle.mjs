@@ -13,6 +13,12 @@
 // run within one second at startup (both plans): the size is a coarse proxy
 // for it, and the dynamic imports in apps/api/src/worker.ts keep route graphs
 // out of that scope.
+//
+// workerd compiles every JavaScript module of the Worker when an isolate
+// starts, whatever runs, so the gate also budgets the JavaScript alone. Large
+// data ships as Text modules (generated *.txt, the places dataset), which are
+// strings: 14.6 MiB of JavaScript compiled at a cold start became 7.7 MiB
+// (2026-10-14), about 80 ms less per new isolate.
 
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
@@ -28,21 +34,28 @@ export const WORKER_SIZE_LIMIT_BYTES = 64 * 1024 * 1024;
 export const LEGACY_FREE_COMPRESSED_LIMIT_BYTES = 3 * 1024 * 1024;
 export const API_BUNDLE_MARGIN = 0.1;
 export const API_BUNDLE_BUDGET_BYTES = Math.floor(WORKER_SIZE_LIMIT_BYTES * (1 - API_BUNDLE_MARGIN));
+/** JavaScript compiled at every isolate start; data belongs in a Text module. */
+export const API_SCRIPT_BUDGET_BYTES = 9 * 1024 * 1024;
 
-/** Every uploaded module of a Wrangler `--outdir` build (source maps and notes are not uploaded). */
+/**
+ * Every uploaded module of a Wrangler `--outdir` build (source maps, notes and
+ * the esbuild metafile are not uploaded); `script` is its JavaScript alone.
+ */
 export function measureWorkerOutput(directory) {
   const files = readdirSync(directory, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile())
     .map((entry) => join(entry.parentPath ?? entry.path, entry.name))
-    .filter((path) => /\.(?:m?js|cjs|wasm|bin|txt)$/.test(path) && !/\.map$/.test(path) && !/README\.md$/.test(path));
+    .filter((path) => /\.(?:m?js|cjs|wasm|bin|txt|json)$/.test(path) && !/\.map$/.test(path) && !/(?:^|[\\/])bundle-meta\.json$/.test(path));
   let raw = 0;
   let gzip = 0;
+  let script = 0;
   for (const path of files) {
     const bytes = readFileSync(path);
     raw += bytes.byteLength;
     gzip += gzipSync(bytes, { level: 9 }).byteLength;
+    if (/\.(?:m?js|cjs)$/.test(path)) script += bytes.byteLength;
   }
-  return { files: files.map((path) => relative(directory, path)), raw, gzip };
+  return { files: files.map((path) => relative(directory, path)), raw, gzip, script };
 }
 
 /** Judges the uncompressed size, the number the platform limit counts. */
@@ -74,7 +87,7 @@ function main(args) {
     process.exit(1);
   }
   try {
-    const { files, raw, gzip } = measureWorkerOutput(directory);
+    const { files, raw, gzip, script } = measureWorkerOutput(directory);
     if (files.length === 0) {
       console.error("✗ The API build produced no Worker modules.");
       process.exit(1);
@@ -86,6 +99,12 @@ function main(args) {
       process.exit(1);
     }
     console.log(`✓ ${summary}: ${mib(verdict.headroom)} headroom.`);
+    const scriptSummary = `API JavaScript compiled at isolate start: ${mib(script)}, budget ${mib(API_SCRIPT_BUDGET_BYTES)}`;
+    if (script > API_SCRIPT_BUDGET_BYTES) {
+      console.error(`✗ ${scriptSummary}. Ship large data as a Text module (a generated *.txt import) instead of a JavaScript literal.`);
+      process.exit(1);
+    }
+    console.log(`✓ ${scriptSummary}.`);
     if (gzip > LEGACY_FREE_COMPRESSED_LIMIT_BYTES) {
       console.warn(`! ${mib(gzip)} gzip is above the 3 MiB compressed limit Workers Free used to have; the current limits page has no compressed limit, so this is only a note.`);
     }
