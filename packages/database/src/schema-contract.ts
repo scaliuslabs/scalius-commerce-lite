@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 151,
-  name: "0151_postgres_scale",
+  version: 153,
+  name: "0153_theme_skins",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -536,6 +536,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 151,
     name: "0151_postgres_scale",
     sourceSha256: "959ce66f33eab4b3ecc54e59371b3a4e6b621198f0bd8f5f6504acebe99ab234",
+  },
+  {
+    version: 153,
+    name: "0153_theme_skins",
+    sourceSha256: "d0be879752ec302b137e897dea2cd1bd0c1778240d556dbd9ab5e310f5f8ed02",
   },
 ] as const;
 

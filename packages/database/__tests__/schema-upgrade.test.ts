@@ -783,6 +783,12 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         sqliteStatements: 2,
         postgresStatements: 12,
       },
+      {
+        version: 153,
+        name: "0153_theme_skins",
+        sqliteStatements: 17,
+        postgresStatements: 17,
+      },
     ]);
   });
 
@@ -1018,6 +1024,7 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
           { version: 149, name: "0149_strict_readers_reset" },
           { version: 150, name: "0150_facet_engine" },
           { version: 151, name: "0151_postgres_scale" },
+          { version: 153, name: "0153_theme_skins" },
         ],
       });
     } finally {
