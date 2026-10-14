@@ -10,6 +10,7 @@ import {
   postApiV1AdminConversationsByIdRead,
   postApiV1AdminConversationsOrderByOrderIdMessages,
 } from "@scalius/api-client/sdk";
+import { encodeImageAsWebp } from "@scalius/shared/browser-image";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { apiData } from "~/lib/api";
 import { inboxKeys, type StaffThread } from "~/lib/api-query-options/inbox";
@@ -100,13 +101,13 @@ export interface UploadedImage {
   height: number | null;
 }
 
-/** Uploads one image for a thread (or an order's thread); the server re-encodes it to WebP. */
+/** Uploads one image for a thread (or an order's thread), scaled and encoded as WebP in this browser first. */
 export async function uploadConversationImage(
   file: File,
   target: { conversationId?: string | null; orderId?: string | null },
 ): Promise<UploadedImage> {
   const form = new FormData();
-  form.set("file", file);
+  form.set("file", (await encodeImageAsWebp(file)) ?? file);
   if (target.conversationId) form.set("conversationId", target.conversationId);
   else if (target.orderId) form.set("orderId", target.orderId);
   const response = await fetch(withDashboardBasePath("/api/v1/admin/conversations/attachments"), {
