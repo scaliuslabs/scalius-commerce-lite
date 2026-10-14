@@ -106,8 +106,9 @@ function cardIdsCte(productIds: readonly string[] | SQLWrapper): SQL {
             SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}) LIMIT ${sql.raw(String(ids.length))}
         )`;
     }
-    // An embedded query renders parenthesized, which a CTE body cannot be.
-    return sql`card_ids(id) AS MATERIALIZED (SELECT * FROM ${productIds as SQLWrapper})`;
+    // An embedded query renders parenthesized, which a CTE body cannot be; as
+    // a derived table it needs an alias on PostgreSQL.
+    return sql`card_ids(id) AS MATERIALIZED (SELECT * FROM ${productIds as SQLWrapper} AS card_id_source)`;
 }
 
 function idScope(column: string): SQL {
