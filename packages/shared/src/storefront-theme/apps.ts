@@ -56,23 +56,26 @@ export const storefrontSkinRefSchema = z.object({
 }).strict();
 export type StorefrontSkinRef = z.infer<typeof storefrontSkinRefSchema>;
 
-/** The units a theme gives to app skins, by skin target (a core section's skin sits on its placement instead). */
-export const storefrontThemeSkinsSchema = z.object({
-  header: storefrontSkinRefSchema.optional(),
-  footer: storefrontSkinRefSchema.optional(),
-  "product-card": storefrontSkinRefSchema.optional(),
-  "product-main": storefrontSkinRefSchema.optional(),
-  "listing-main": storefrontSkinRefSchema.optional(),
-}).strict();
-export type StorefrontThemeSkins = z.infer<typeof storefrontThemeSkinsSchema>;
-export type StorefrontThemeSkinUnit = keyof StorefrontThemeSkins;
-
 /**
- * The document's `apps`: the units app skins draw, and the app template the
- * look was applied from (a label, like `template`).
+ * The document's `apps`: the units app skins draw, by skin target (a core
+ * section's skin sits on its placement instead), and the app template the
+ * look was applied from (a label, like `template`). `skin` is the skin
+ * reference schema (the API passes its named one, so its contract states it once).
  */
-export const storefrontThemeAppsSchema = z.object({
-  skins: storefrontThemeSkinsSchema.optional(),
-  template: storefrontAppKeySchema.optional(),
-}).strict();
+export function storefrontThemeAppsSchemaOf(skin: typeof storefrontSkinRefSchema) {
+  return z.object({
+    skins: z.object({
+      header: skin.optional(),
+      footer: skin.optional(),
+      "product-card": skin.optional(),
+      "product-main": skin.optional(),
+      "listing-main": skin.optional(),
+    }).strict().optional(),
+    template: storefrontAppKeySchema.optional(),
+  }).strict();
+}
+
+export const storefrontThemeAppsSchema = storefrontThemeAppsSchemaOf(storefrontSkinRefSchema);
 export type StorefrontThemeApps = z.infer<typeof storefrontThemeAppsSchema>;
+export type StorefrontThemeSkins = NonNullable<StorefrontThemeApps["skins"]>;
+export type StorefrontThemeSkinUnit = keyof StorefrontThemeSkins;

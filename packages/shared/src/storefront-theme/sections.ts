@@ -453,20 +453,35 @@ export function isStorefrontAppSection(section: StorefrontSection): section is S
   return section.type === "app";
 }
 
-export const storefrontSectionSchema = z.discriminatedUnion(
-  "type",
-  [...sectionSchemas, storefrontAppSectionSchema] as unknown as [Registry["hero"]["schema"], ...Registry[StorefrontSectionType]["schema"][]],
-) as unknown as z.ZodType<StorefrontSection>;
+/** One section of any type, its core sections taking `skin` as their skin schema. */
+function storefrontSectionSchemaOf(skin: typeof storefrontSkinRefSchema) {
+  const schemas = skin === storefrontSkinRefSchema
+    ? sectionSchemas
+    : sectionSchemas.map((schema) => (schema as z.ZodObject).extend({ skin: skin.optional() }));
+  return z.discriminatedUnion(
+    "type",
+    [...schemas, storefrontAppSectionSchema] as unknown as [Registry["hero"]["schema"], ...Registry[StorefrontSectionType]["schema"][]],
+  ) as unknown as z.ZodType<StorefrontSection>;
+}
 
-/** A list of sections: unique ids, at most 24. */
-export const storefrontSectionListSchema = z.array(storefrontSectionSchema).max(STOREFRONT_MAX_SECTIONS)
-  .superRefine((sections, context) => {
-    const ids = new Set<string>();
-    sections.forEach((each, index) => {
-      if (ids.has(each.id)) context.addIssue({ code: "custom", path: [index, "id"], message: "Section ids must be unique." });
-      ids.add(each.id);
+export const storefrontSectionSchema = storefrontSectionSchemaOf(storefrontSkinRefSchema);
+
+/**
+ * A list of sections: unique ids, at most 24. `skin` is the skin reference
+ * schema (the API passes its named one, so its contract states it once).
+ */
+export function storefrontSectionListSchemaOf(skin: typeof storefrontSkinRefSchema = storefrontSkinRefSchema) {
+  return z.array(skin === storefrontSkinRefSchema ? storefrontSectionSchema : storefrontSectionSchemaOf(skin)).max(STOREFRONT_MAX_SECTIONS)
+    .superRefine((sections, context) => {
+      const ids = new Set<string>();
+      sections.forEach((each, index) => {
+        if (ids.has(each.id)) context.addIssue({ code: "custom", path: [index, "id"], message: "Section ids must be unique." });
+        ids.add(each.id);
+      });
     });
-  });
+}
+
+export const storefrontSectionListSchema = storefrontSectionListSchemaOf();
 
 /** A new section id on a page: the type (`app` for an app's), then -2, -3… until it is free. */
 export function storefrontNextSectionId(type: string, taken: Iterable<{ id: string }>): string {
