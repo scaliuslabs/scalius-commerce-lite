@@ -28,6 +28,7 @@ import { CartContent, CmsPageContent, HomePageSettings, LandingPageSettings } fr
 import { ProductAppBlocksSettings } from "./ProductAppBlocks";
 import { ProductMainSettings, ProductModuleSettings } from "./ProductPanels";
 import { AnnouncementSettings, FooterSettings, HeaderSettings } from "./ThemeSettingsPanel";
+import { AppSkinSettings } from "./AppSkinSettings";
 
 export { AppSectionSettings } from "./AppSectionSettings";
 export { ThemeSettingsPanel } from "./ThemeSettingsPanel";
@@ -156,9 +157,19 @@ export function PartSettings({ selected, page, theme, resolved, media, apps, cms
       return null;
     case EDITOR_PARTS.pageContent: return <CmsPageContent pageId={cmsPageId} />;
     case EDITOR_PARTS.cart: return <CartContent />;
-    case EDITOR_PARTS.productMain: return <ProductMainSettings {...shared} />;
+    case EDITOR_PARTS.productMain:
+      return (
+        <AppSkinSettings unit="product-main" theme={theme} apps={apps} media={media} setDraft={setDraft}>
+          {() => <ProductMainSettings {...shared} />}
+        </AppSkinSettings>
+      );
     case EDITOR_PARTS.productApps: return <ProductAppBlocksSettings theme={theme} apps={apps} media={media} setDraft={setDraft} />;
-    case EDITOR_PARTS.listing: return <ListingGridSettings theme={theme} setDraft={setDraft} media={media} search={page.kind === "search"} />;
+    case EDITOR_PARTS.listing:
+      return (
+        <AppSkinSettings unit="listing-main" theme={theme} apps={apps} media={media} setDraft={setDraft}>
+          {() => <ListingGridSettings theme={theme} setDraft={setDraft} media={media} search={page.kind === "search"} />}
+        </AppSkinSettings>
+      );
     case EDITOR_PARTS.listingToolbar: return <ListingToolbarSettings theme={theme} setDraft={setDraft} />;
     case EDITOR_PARTS.listingFilters: return <ListingFilterSettings theme={theme} setDraft={setDraft} search={page.kind === "search"} />;
     default: return null;

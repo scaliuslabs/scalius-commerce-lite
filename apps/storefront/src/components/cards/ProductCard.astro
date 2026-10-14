@@ -1,14 +1,12 @@
 ---
-// The product card every listing, rail and search draws: the app card the
-// theme names (`apps.productCard`, an app's product-card slot), else the
-// theme's own card (CoreProductCard.astro). The app card gets the same
-// card model (prices in the page's market, photo renditions, the quick-add
-// rules); one that draws nothing, fails or is late gives way to the core
-// card. A grid of app cards is one call to the app (lib/extensions/host.ts).
+// The product card every listing, rail and search draws: the app card skin
+// the theme names (`apps.skins["product-card"]`), else the theme's own card
+// (CoreProductCard.astro). The skin gets the same card model (prices in the
+// page's market, photo renditions, the quick-add rules); one that draws
+// nothing, fails or is late gives way to the core card. A grid of app cards
+// is one call to the app (lib/extensions/host.ts).
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import { storefrontExtensionBase } from "@scalius/shared/plugins/storefront-protocol";
-import AppComponent from "@/components/apps/AppComponent.astro";
-import { appSlot, requestExtensions } from "@/lib/extensions";
+import Skin from "@/components/apps/Skin.astro";
 import { productCardData } from "@/lib/extensions/data";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { productCardModel } from "./card-model";
@@ -17,33 +15,23 @@ import CoreProductCard from "./CoreProductCard.astro";
 type Props = import("astro/types").ComponentProps<typeof CoreProductCard>;
 
 const props = Astro.props;
-const app = await appSlot(Astro.locals, Astro.url, "product-card");
-let html: string | null = null;
-if (app) {
+const data = async () => {
   const { resolved } = await currentRequestTheme(Astro.locals);
-  const currency = { symbol: props.currencySymbol ?? DEFAULT_CURRENCY.symbol, code: props.currencyCode ?? DEFAULT_CURRENCY.code };
   const model = productCardModel(props.product, {
-    currencySymbol: currency.symbol,
-    currencyCode: currency.code,
-    // The app decides whether to show the second photo (its own card settings).
+    currencySymbol: props.currencySymbol ?? DEFAULT_CURRENCY.symbol,
+    currencyCode: props.currencyCode ?? DEFAULT_CURRENCY.code,
+    // The skin decides whether to show the second photo (its own card settings).
     hoverImage: true,
     ratings: resolved.facts.hasReviews,
   });
-  const { host } = await requestExtensions(Astro.locals, Astro.url);
-  html = await host.render(app.extension, {
-    kind: "slot",
-    slot: "product-card",
-    component: app.component,
-    settings: app.settings,
-    data: {
-      product: productCardData(props.product, model),
-      position: props.index ?? 0,
-      aboveFold: props.aboveFold === true && (props.index ?? 0) < 4,
-    },
-  });
-}
+  return {
+    product: productCardData(props.product, model),
+    position: props.index ?? 0,
+    aboveFold: props.aboveFold === true && (props.index ?? 0) < 4,
+  };
+};
 ---
 
-{html?.trim() && app
-  ? <AppComponent html={html} pluginId={app.extension.pluginId} base={storefrontExtensionBase(app.extension.pluginId, app.extension.release)} />
-  : <CoreProductCard {...props} />}
+<Skin target="product-card" data={data}>
+  <CoreProductCard {...props} />
+</Skin>

@@ -59,6 +59,8 @@ interface Props {
   details?: boolean;
   /** The key features show in the buy box or in "About this item": the tabs leave them out. */
   detailsFeatures?: boolean;
+  /** False leaves out the product title (a product-main skin that draws its own `<h1>`). */
+  title?: boolean;
 }
 
 const {
@@ -80,6 +82,7 @@ const {
   soldOutCopy = { note: "This item is sold out right now.", similar: "See similar items" },
   details = true,
   detailsFeatures = true,
+  title = true,
 } = Astro.props;
 
 const factsColumn = look.facts === "column";
@@ -252,7 +255,7 @@ function optionAriaLabel(
     <div class="buy-box-main">
     <div class="mb-2 border-b border-border pb-2">
       <div class="buy-box-title">
-        <h1 class="mb-1 text-lg font-semibold leading-tight text-foreground lg:mb-2 lg:text-3xl">{product.name}</h1>
+        {title && <h1 class="mb-1 text-lg font-semibold leading-tight text-foreground lg:mb-2 lg:text-3xl">{product.name}</h1>}
         <slot name="after-title" />
       </div>
       {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}

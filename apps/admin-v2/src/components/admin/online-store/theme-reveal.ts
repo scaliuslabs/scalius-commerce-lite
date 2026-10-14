@@ -3,7 +3,7 @@
  * so the editor can open that tab and group, scroll to the field and focus
  * it. Section settings have their own path (their form ids); this is the
  * theme-wide parts (colours, brand, product cards, the announcement bar,
- * the slots apps fill and the one-product homepage).
+ * the units app skins draw and the one-product homepage).
  */
 import { createContext, useContext } from "react";
 import { isStorefrontThemeHexColor, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";

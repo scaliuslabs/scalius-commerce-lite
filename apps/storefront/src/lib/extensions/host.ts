@@ -1,7 +1,7 @@
 // The storefront's render host for app components (docs/STOREFRONT-COMPONENTS.md).
 //
 // A page asks for each component as Astro reaches it (the header, every card
-// of a grid, each section). The host joins every ask made in the same task
+// of a grid, each section, skin and product block). The host joins every ask made in the same task
 // into one batch per app, so a listing of 36 app cards is one call, not 36,
 // and runs each batch with the app's module (loaders.ts). Every answer:
 //
@@ -11,7 +11,7 @@
 //   footer and every card already drawn cost nothing on the next page
 //   (and pages served from the page cache run no app code at all);
 // - comes within `renderWallMs`, or the page draws without it: a section
-//   draws nothing, a slot draws the theme's own block. This timeout cannot
+//   or block draws nothing, a skin leaves its unit to core. This timeout cannot
 //   preempt synchronous bundled code or detect incorrect layout/interaction.
 //   A page drawn without an answer (late, failed, refused, or a release the
 //   isolate cannot load) calls `degraded`, so the page cache never keeps it.
@@ -115,10 +115,14 @@ export class ExtensionHost {
     return { ...this.#options.context, assets: storefrontExtensionBase(extension.pluginId, extension.release) };
   }
 
-  /** The component's checked markup, or null when it draws nothing, fails or is late. */
-  render(extension: StorefrontExtension, ask: ExtensionJob): Promise<string | null> {
+  /**
+   * The component's checked markup, or null when it draws nothing, fails or
+   * is late. `jsonLd: false` strips its JSON-LD (core owns the page's
+   * structured data there), as a `noindex` page always does.
+   */
+  render(extension: StorefrontExtension, ask: ExtensionJob, options: { jsonLd?: boolean } = {}): Promise<string | null> {
     const context = this.#options.context;
-    const jsonLd = this.#options.jsonLd?.() ?? true;
+    const jsonLd = (options.jsonLd ?? true) && (this.#options.jsonLd?.() ?? true);
     const key = `${extension.pluginId}\u0000${extension.release}\u0000${jsonLd}\u0000${JSON.stringify(context)}\u0000${JSON.stringify(ask)}`;
     const known = recall(key);
     if (known !== undefined) return Promise.resolve(known);
@@ -187,5 +191,7 @@ export class ExtensionHost {
 }
 
 function describe(job: StorefrontRenderJob): string {
-  return job.kind === "section" ? `section ${job.type}` : `${job.slot} ${job.component}`;
+  if (job.kind === "section") return `section ${job.type}`;
+  if (job.kind === "block") return `block ${job.type}`;
+  return `${job.target} skin ${job.component}`;
 }

@@ -33,6 +33,7 @@ import {
   type StorefrontSection,
   type StorefrontSectionType,
   type StorefrontTemplateId,
+  type StorefrontSkinRef,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { ARABIC_TEXT, BANGLA_LONG, cardProduct, type ProductScenario } from "./fixtures";
@@ -639,10 +640,11 @@ function noorEntries(): GalleryEntry[] {
     below: ["description", "spec-table", "reviews", "related"],
     sticky: { phoneTop: "anchor-bar", phoneBottom: "buy-bar", desktop: "anchor-bar" },
   };
-  const product = (id: string, title: string, values: NonNullable<NonNullable<StorefrontThemeDocument["apps"]>["header"]>["values"] = {}, scenario: GalleryScenario = {}): GalleryEntry => {
+  const product = (id: string, title: string, values: StorefrontSkinRef["values"] = {}, scenario: GalleryScenario = {}): GalleryEntry => {
     const theme = clone(base);
     theme.apps ??= {};
-    theme.apps.header = { app: "scalius.noor/noor-header", values: { ...theme.apps.header?.values, ...values } };
+    theme.apps.skins ??= {};
+    theme.apps.skins.header = { app: "scalius.noor/noor-header", values: { ...theme.apps.skins.header?.values, ...values } };
     return { id, family: "integration:noor", title, page: "product", theme, focus: WHOLE_PAGE, scenario: { noor: "active", product: "fashion", productInfo: "tabs", menu: "compact", ...scenario } };
   };
   const quiet = product("noor-product-quiet", "Noor header without an announcement", { announcements: [] });
@@ -663,7 +665,7 @@ function noorEntries(): GalleryEntry[] {
   const search = product("noor-search", "Noor search popover over a core product page");
   search.interact = [{ click: 'button[popovertarget="noor-search"]:visible', expectVisible: "#noor-search:popover-open" }];
   entries.push(search);
-  // Keep the same tokens and product composition, changing only the slots.
+  // Keep the same tokens and product composition, changing only the skins.
   const core = product("noor-product-core", "Core header + the same product tabs and navigation");
   core.theme.apps = {};
   core.scenario.noor = undefined;
@@ -678,7 +680,7 @@ function noorEntries(): GalleryEntry[] {
   tabs.theme.blocks.product.sticky = { phoneTop: "none", phoneBottom: "buy-bar", desktop: "none" };
   entries.push(tabs);
   const home = clone(base);
-  home.apps!.header!.values.transparent_home = true;
+  home.apps!.skins!.header!.values.transparent_home = true;
   const homeEntry: GalleryEntry = { id: "noor-home", family: "integration:noor", title: "Noor transparent header over the first image hero", page: "home", theme: home, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact" } };
   entries.push(homeEntry);
   const textFirst = { ...homeEntry, id: "noor-home-text", title: "Noor transparent setting with a text section first", theme: clone(home) };

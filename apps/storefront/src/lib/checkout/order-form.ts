@@ -1,5 +1,5 @@
 /**
- * The order form an app places in its markup (`<scalius-checkout>`, docs/
+ * The order form an app places in its markup (`<scalius-embed kind="order-form">`, docs/
  * STOREFRONT-COMPONENTS.md "Core embeds"): the buyer picks an option and a
  * quantity and fills in name, phone and address on the landing page itself;
  * the form posts to the quick checkout (`/checkout/quick`), which checks

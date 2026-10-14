@@ -1,0 +1,33 @@
+---
+// A core section an app skin may draw (`section.skin`, target
+// `section:<type>`): the skin from the section's projection (its settings
+// with every reference resolved from the page's section data), else the
+// core section in the default slot. A section without a skin renders its
+// core section directly and builds no projection.
+import type { StorefrontSection } from "@scalius/shared/storefront-theme";
+import { storefrontSkinTargetSection } from "@scalius/shared/storefront-theme";
+import Skin from "@/components/apps/Skin.astro";
+import { coreSectionSkinData } from "@/lib/extensions/data";
+import type { HomepageContent } from "@/lib/homepage-sections";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+
+interface Props {
+  section: StorefrontSection;
+  content: HomepageContent;
+  currencySymbol: string;
+  currencyCode: string;
+}
+
+const { section, content, currencySymbol, currencyCode } = Astro.props;
+const skin = section.type === "app" ? null : section.skin ?? null;
+const target = `section:${section.type}` as const;
+const skinnable = skin !== null && storefrontSkinTargetSection(target) !== null;
+const data = async () => {
+  const { resolved } = await currentRequestTheme(Astro.locals);
+  return coreSectionSkinData(section as never, content, { currencySymbol, currencyCode, ratings: resolved.facts.hasReviews });
+};
+---
+
+{skinnable
+  ? <Skin target={target} skin={skin} data={data} instanceId={section.id}><slot /></Skin>
+  : <slot />}

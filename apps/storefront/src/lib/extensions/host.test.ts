@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StorefrontExtension, StorefrontRenderBatch, StorefrontRenderReply } from "@scalius/shared/plugins/storefront-components";
 import { ExtensionHost, clearExtensionMemo, type ExtensionHostOptions } from "./host";
-import { splitCoreEmbeds } from "./embeds";
+import { orderFormEmbed } from "./embeds";
 import type { StorefrontHeaderData } from "@scalius/shared/plugins/storefront-protocol";
 
 const extension: StorefrontExtension = {
   pluginId: "acme.theme", version: "1.0.0", source: "bundled", release: "e".repeat(64),
-  sections: ["hero"], sectionSettings: {}, slots: [], islands: [], stylesheet: false, connect: [],
+  sections: ["hero"], sectionSettings: {}, skins: [], blocks: [], islands: [], stylesheet: false, connect: [],
 };
 
 function host(run: (batch: StorefrontRenderBatch) => Promise<StorefrontRenderReply> | StorefrontRenderReply, wallMs?: number, extra: Partial<ExtensionHostOptions> = {}) {
@@ -72,7 +72,7 @@ describe("ExtensionHost", () => {
       store: { name: "Acme", url: "/", logo: null, logoWidth: 100 }, menu: [], categories: [], announcement: null,
       routes: { home: "/", search: "/search", cart: "/cart", account: "/account" }, searchParam: "q",
     };
-    const header = (layout: string) => ({ kind: "slot" as const, slot: "header" as const, component: "head", settings: {}, data: {
+    const header = (layout: string) => ({ kind: "skin" as const, target: "header" as const, component: "head", settings: {}, data: {
       ...data, page: { lead: { kind: "app" as const, pluginId: extension.pluginId, type: "hero", instanceId: "lead", settings: { layout } } },
     } });
     const first = host(echo);
@@ -84,7 +84,7 @@ describe("ExtensionHost", () => {
     await Promise.all([changed.instance.render(extension, header("split")), changed.instance.render(extension, section("card"))]);
     expect(changed.calls).toHaveLength(1);
     expect(changed.calls[0]!.jobs).toHaveLength(1);
-    expect(changed.calls[0]!.jobs[0]).toMatchObject({ kind: "slot", slot: "header", data: { page: { lead: { settings: { layout: "split" } } } } });
+    expect(changed.calls[0]!.jobs[0]).toMatchObject({ kind: "skin", target: "header", data: { page: { lead: { settings: { layout: "split" } } } } });
     expect(changed.calls[0]!.context.page).toEqual({ kind: "home", path: "/" });
   });
 
@@ -144,18 +144,27 @@ describe("ExtensionHost", () => {
   });
 });
 
-describe("splitCoreEmbeds", () => {
-  it("cuts the markup at the store's order form, keeping the app's markup around it", () => {
-    expect(splitCoreEmbeds(`<div class="a"><scalius-checkout data-product="linen-shirt" data-max-quantity="3" data-submit-label="Order &amp; pay"></scalius-checkout></div>`)).toEqual([
-      { kind: "html", html: '<div class="a">' },
-      { kind: "checkout", product: "linen-shirt", maxQuantity: 3, submitLabel: "Order & pay" },
-      { kind: "html", html: "</div>" },
-    ]);
-  });
+describe("the order form embed", () => {
+  const OrderForm = () => null;
+  const render = orderFormEmbed(OrderForm, new Map([["linen-shirt", "linen"]]), { instanceId: "landing order", preview: false });
 
-  it("leaves markup without embeds whole, and drops embeds beyond the limit or without a product", () => {
-    expect(splitCoreEmbeds("<p>x</p>")).toEqual([{ kind: "html", html: "<p>x</p>" }]);
-    const parts = splitCoreEmbeds(`<scalius-checkout></scalius-checkout>${'<scalius-checkout data-product="a"></scalius-checkout>'.repeat(3)}`);
-    expect(parts.filter((part) => part.kind === "checkout")).toHaveLength(2);
+  it("orders only a product the section was given, with its cap and words", () => {
+    expect(render({ data: { product: "linen-shirt", "max-quantity": "30", "submit-label": " Order & pay " }, index: 1 })).toEqual({
+      component: OrderForm,
+      props: { slug: "linen", idPrefix: "order-landing%20order-1", maxQuantity: 10, submitLabel: "Order & pay", preview: false },
+    });
+    expect(render({ data: { product: "linen-shirt", "max-quantity": "zero" }, index: 0 })?.props.maxQuantity).toBe(5);
+    expect(render({ data: { product: "other" }, index: 0 })).toBeNull();
+    expect(render({ data: {}, index: 0 })).toBeNull();
+  });
+});
+
+describe("skin JSON-LD", () => {
+  it("strips app JSON-LD where core owns the page's structured data", async () => {
+    const jsonLd = '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product"}</script>';
+    const run = (batch: StorefrontRenderBatch): StorefrontRenderReply => ({ abi: 1, results: batch.jobs.map((job) => ({ id: job.id, html: `<p>p</p>${jsonLd}` })) });
+    const { instance } = host(run, undefined, { jsonLd: () => true });
+    expect(await instance.render(extension, section("a"))).toBe(`<p>p</p>${jsonLd}`);
+    expect(await instance.render(extension, section("b"), { jsonLd: false })).toBe("<p>p</p>");
   });
 });

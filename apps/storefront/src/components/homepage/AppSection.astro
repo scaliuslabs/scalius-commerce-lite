@@ -8,11 +8,12 @@
 // component that draws nothing, fails or is late renders nothing.
 import AppSurface from "@/components/apps/AppSurface.astro";
 import AppComponent from "@/components/apps/AppComponent.astro";
+import OrderForm from "@/components/checkout/OrderForm.astro";
 import type { StorefrontAppSection } from "@scalius/shared/storefront-theme";
-import { storefrontExtensionBase } from "@scalius/shared/plugins/storefront-protocol";
 import type { HomepageAppSurface } from "@/lib/app-surfaces";
 import Container from "@/components/ui/Container.astro";
-import { requestExtensions } from "@/lib/extensions";
+import { appMarkup, requestExtensions, type AppMarkup } from "@/lib/extensions";
+import { orderFormEmbed, type EmbedRender } from "@/lib/extensions/embeds";
 import { componentSectionSettings, productCardData, storefrontImageOf } from "@/lib/extensions/data";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { productCardModel, type ProductCardProduct } from "@/components/cards/card-model";
@@ -29,8 +30,7 @@ const { section, surface, headerLead = false } = Astro.props;
 const component = surface.component;
 const libraryPreview = (Astro.locals as { sectionLibraryPreview?: boolean }).sectionLibraryPreview === true;
 let html: string | null = null;
-let base = "";
-let pluginId = "";
+let markup: AppMarkup | null = null;
 let preview = false;
 /** The products the component was given (id to handle): its order-form embeds may name only these. */
 const embedProducts = new Map<string, string>();
@@ -64,8 +64,7 @@ if (component) {
       instanceId: section.id,
       settings: componentSectionSettings(schema, component.values, media, products),
     });
-    base = storefrontExtensionBase(extension.pluginId, extension.release);
-    pluginId = extension.pluginId;
+    markup = appMarkup(extension, "section", html);
   }
 }
 ---
@@ -76,7 +75,7 @@ if (component) {
     still means the app intentionally has nothing to display. */}
 {libraryPreview && component && html === null && <template data-library-render-failed></template>}
 {component
-  ? html !== null && html.trim() !== "" && <AppComponent html={html} pluginId={pluginId} base={base} instanceId={section.id} preview={preview} products={embedProducts} />
+  ? markup && <AppComponent markup={markup} embeds={{ "order-form": orderFormEmbed(OrderForm as EmbedRender["component"], embedProducts, { instanceId: section.id, preview }) }} />
   : (
     <section class="home-section w-full" data-app-section={section.settings.app}>
       <Container>

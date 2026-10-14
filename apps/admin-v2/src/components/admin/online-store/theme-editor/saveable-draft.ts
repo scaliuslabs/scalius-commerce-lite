@@ -2,14 +2,13 @@
  * What autosave sends when part of the working document is not valid yet
  * (research P16: an invalid field blocks only itself). The document splits
  * into parts that are checked one by one: the tokens, the brand, each block,
- * each slot an app fills, each section, a landing page's own fields and the
+ * each unit an app skin draws, each section, a landing page's own fields and the
  * home mode. A part that
  * fails keeps its last saved value in what is sent (a new section that is
  * not valid yet is left out), while the field keeps the merchant's input and
  * shows its error. Everything else keeps saving.
  */
 import {
-  STOREFRONT_APP_SLOT_KEYS,
   storefrontThemeDocumentSchema,
   type StorefrontSection,
   type StorefrontThemeDocument,
@@ -17,29 +16,28 @@ import {
 import {
   announcementLinkInvalid,
   homeProductMissing,
-  invalidAppSlots,
+  invalidAppSkins,
   productAppBlocksInvalid,
   themeContrastProblems,
   allThemeColorsValid,
   type AppBlockEntry,
-  type AppSlotEntry,
+  type AppSkinEntry,
+  type AppSkinUnit,
 } from "../theme-settings";
 import { appSectionInvalid, type AppSectionEntry } from "./editor-state";
 
 type Theme = StorefrontThemeDocument;
 type Path = ReadonlyArray<string | number>;
 
-/** One independently saved part, by key: `tokens`, `brand`, `block:<slot>`, `app:<slot key>`, `apps`, `section:<list>:<id>`, `list:<list>`, `landing:<slug>`, `homeMode`. */
+/** One independently saved part, by key: `tokens`, `brand`, `block:<slot>`, `skin:<unit>`, `apps`, `section:<list>:<id>`, `list:<list>`, `landing:<slug>`, `homeMode`. */
 export type DraftPart = string;
 
 /** What the store's active apps offer, by key: their values are checked against what each declares. */
 export interface DraftApps {
   sections: ReadonlyMap<string, AppSectionEntry>;
   blocks: ReadonlyMap<string, AppBlockEntry>;
-  slots: ReadonlyMap<string, AppSlotEntry>;
+  skins: ReadonlyMap<string, AppSkinEntry>;
 }
-
-type AppsKey = keyof NonNullable<Theme["apps"]>;
 
 /** Section lists by key: `home`, `landing:<slug>`, `template:<kind>`. */
 function sectionList(theme: Theme, list: string): StorefrontSection[] | null {
@@ -67,7 +65,7 @@ export function draftPartOf(theme: Theme, path: Path): DraftPart {
   const [area, second, third, fourth, fifth] = path;
   if (area === "tokens") return "tokens";
   if (area === "brand") return "brand";
-  if (area === "apps") return typeof second === "string" ? `app:${second}` : "apps";
+  if (area === "apps") return second === "skins" && typeof third === "string" ? `skin:${third}` : "apps";
   if (area === "blocks") {
     if (second === "product" && (third === "gallery" || third === "buyBox" || third === "apps")) return `block:product.${third}`;
     return `block:${String(second)}`;
@@ -99,17 +97,20 @@ function withSavedPart(working: Theme, saved: Theme, part: DraftPart): Theme | n
   if (part === "tokens") return { ...working, tokens: saved.tokens };
   if (part === "brand") return { ...working, brand: saved.brand };
   if (part === "homeMode") return { ...working, pages: { ...working.pages, homeMode: saved.pages.homeMode } };
-  if (part === "apps" || part.startsWith("app:")) {
+  if (part === "apps") {
     const { apps: _apps, ...document } = working;
-    let apps: Theme["apps"] = saved.apps;
-    if (part !== "apps") {
-      // One slot (or the template label) as saved; the rest as edited.
-      const key = part.slice(4) as AppsKey;
-      const { [key]: _edited, ...rest } = working.apps ?? {};
-      const before = saved.apps?.[key];
-      apps = before === undefined ? rest : { ...rest, [key]: before };
-    }
-    return apps && Object.keys(apps).length > 0 ? { ...document, apps } : document;
+    return saved.apps && Object.keys(saved.apps).length > 0 ? { ...document, apps: saved.apps } : document;
+  }
+  if (part.startsWith("skin:")) {
+    // One unit's skin as saved; the rest as edited.
+    const unit = part.slice(5) as AppSkinUnit;
+    const { apps: _apps, ...document } = working;
+    const { [unit]: _edited, ...others } = working.apps?.skins ?? {};
+    const before = saved.apps?.skins?.[unit];
+    const skins = before === undefined ? others : { ...others, [unit]: before };
+    const { skins: _skins, ...rest } = working.apps ?? {};
+    const apps = Object.keys(skins).length > 0 ? { ...rest, skins } : rest;
+    return Object.keys(apps).length > 0 ? { ...document, apps } : document;
   }
   if (part.startsWith("block:product.")) {
     const key = part.slice("block:product.".length) as "gallery" | "buyBox" | "apps";
@@ -162,7 +163,7 @@ function checkedParts(theme: Theme, apps: DraftApps): DraftPart[] {
   if (announcementLinkInvalid(theme)) parts.push("block:topBar");
   if (homeProductMissing(theme)) parts.push("homeMode");
   if (productAppBlocksInvalid(theme, apps.blocks)) parts.push("block:product.apps");
-  for (const slot of invalidAppSlots(theme, apps.slots)) parts.push(`app:${STOREFRONT_APP_SLOT_KEYS[slot]}`);
+  for (const unit of invalidAppSkins(theme, apps.skins)) parts.push(`skin:${unit}`);
   const lists: Array<[string, StorefrontSection[]]> = [
     ["home", theme.pages.home],
     ...Object.entries(theme.pages.landing).map(([slug, page]) => [`landing:${slug}`, page.sections] as [string, StorefrontSection[]]),

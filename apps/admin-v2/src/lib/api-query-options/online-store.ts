@@ -20,7 +20,7 @@ export type ThemeApp = ThemeWorkspaceDocument["apps"][number];
 export type ThemeAppSection = ThemeApp["sections"][number];
 export type ThemeAppBlock = ThemeApp["productBlocks"][number];
 /** A theme slot (header, footer, product card) an app fills, with its settings. */
-export type ThemeAppSlot = ThemeApp["slots"][number];
+export type ThemeAppSkin = ThemeApp["skins"][number];
 /** One setting of an app section or block, as the app's manifest declares it (labels are the app's plain text). */
 export type ThemeAppSettingField = ThemeAppSection["settings"][number];
 /** The menu detail is the stored row: no item or placement counts. */

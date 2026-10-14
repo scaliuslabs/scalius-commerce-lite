@@ -949,7 +949,7 @@ describe("app sections", () => {
     try {
       const page = await requestRuntime.run({ layout: Promise.resolve({ currency: { code: "BDT", symbol: "৳" }, appExtensions: [{
         pluginId: "acme.hello", version: "1.0.0", source: "bundled", release: "a".repeat(64),
-        sections: ["greeting"], sectionSettings: { greeting: [] }, slots: [], islands: [], stylesheet: false, connect: [],
+        sections: ["greeting"], sectionSettings: { greeting: [] }, skins: [], blocks: [], islands: [], stylesheet: false, connect: [],
       }] } as unknown as import("@/lib/api/storefront").LayoutData) }, () => renderWith(sections, content, { headerLeadSectionId: "lead" }));
       expect(draw).toHaveBeenCalledOnce();
       expect(page.querySelector("template[data-scalius-lead-empty]") !== null).toBe(!html?.trim());
@@ -993,6 +993,60 @@ describe("app sections", () => {
     const only = await renderWith(sections, content, { only: "greeting" });
     expect(Array.from(only.querySelectorAll("[data-theme-section-id]")).map((node) => node.getAttribute("data-theme-section-id"))).toEqual(["greeting"]);
     expect(only.querySelector("[data-app-surface]")?.textContent).toBe("Hello");
+  });
+});
+
+describe("section skins", () => {
+  const SKIN_LAYOUT = { currency: { code: "BDT", symbol: "৳" }, appExtensions: [{
+    pluginId: "acme.hello", version: "1.0.0", source: "bundled", release: "b".repeat(64),
+    sections: [], sectionSettings: {}, blocks: [], islands: [], stylesheet: false, connect: [],
+    skins: [{ id: "faq", target: "section:faq", settings: [] }, { id: "rail", target: "section:product-rail", settings: [] }],
+  }] } as unknown as import("@/lib/api/storefront").LayoutData;
+  const skinned = (each: StorefrontSection, app: string) => ({ ...each, skin: { app, values: {} } }) as StorefrontSection;
+
+  async function renderSkinned(sections: StorefrontSection[], content: HomepageContent): Promise<Document> {
+    return requestRuntime.run({ layout: Promise.resolve(SKIN_LAYOUT) }, async () => parse(await container.renderToString(HomepageSections, {
+      props: { sections, content, leadSectionId: null, currencySymbol: "৳", currencyCode: "BDT" },
+      locals: { storefrontTheme: Promise.resolve(requestThemeFor(DEFAULT_STOREFRONT_THEME)) },
+      request: new Request("https://shop.test/"),
+    })));
+  }
+
+  it("draws a core section through its skin from the resolved projection, in the section's own unit", async () => {
+    const rail = skinned(section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit: 4 }), "acme.hello/rail");
+    const draw = vi.spyOn(ExtensionHost.prototype, "render").mockResolvedValue('<ul class="acme-rail"><li>skin</li></ul>');
+    try {
+      const page = await renderSkinned([rail], store("large"));
+      expect(draw).toHaveBeenCalledOnce();
+      const job = draw.mock.calls[0]![1] as { kind: string; target: string; instanceId: string; data: { type: string; settings: { source: { title: string; url: string | null; cards: unknown[] } } } };
+      expect(job).toMatchObject({ kind: "skin", target: "section:product-rail", instanceId: "rail" });
+      // The product source as the core rail shows it: its title, its listing and as many cards as the rail's limit.
+      expect(job.data.type).toBe("product-rail");
+      expect(job.data.settings.source).toMatchObject({ title: "New arrivals", url: "/search" });
+      expect(job.data.settings.source.cards).toHaveLength(4);
+      const unit = page.querySelector('[data-section-id="rail"]')!;
+      expect(unit.querySelector('[data-sx-app="acme.hello"] .acme-rail')).not.toBeNull();
+      expect(unit.querySelector("[data-product-card], article")).toBeNull();
+    } finally {
+      draw.mockRestore();
+    }
+  });
+
+  it("draws the core section when the skin draws nothing, fails, or its app no longer declares it", async () => {
+    const faq = section("faq", "faq", { heading: "Questions", items: [{ question: "Do you ship?", answer: "Yes." }] });
+    const draw = vi.spyOn(ExtensionHost.prototype, "render").mockResolvedValue(null);
+    try {
+      const failed = await renderSkinned([skinned(faq, "acme.hello/faq")], EMPTY);
+      expect(text(failed.querySelector('[data-section-id="faq"]'))).toContain("Do you ship?");
+      expect(failed.querySelector("[data-sx-app]")).toBeNull();
+      draw.mockClear();
+      // A skin of another type, or of an app that does not declare it, never draws.
+      const undeclared = await renderSkinned([skinned(faq, "acme.hello/rail"), skinned(section("faq", "faq-2", { heading: "", items: [{ question: "Q?", answer: "A." }] }), "acme.gone/faq")], EMPTY);
+      expect(draw).not.toHaveBeenCalled();
+      expect(undeclared.querySelectorAll("[data-home-section=\"faq\"]")).toHaveLength(2);
+    } finally {
+      draw.mockRestore();
+    }
   });
 });
 

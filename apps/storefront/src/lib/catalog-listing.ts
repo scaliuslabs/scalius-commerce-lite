@@ -191,6 +191,30 @@ export function catalogListingControls({
   };
 }
 
+/**
+ * The listing's sort choices: "Best match" for a search, the default order's
+ * own label ("Latest", or "Featured" for curated collections), and "Top
+ * rated" once the store has reviews (or while it is the chosen order).
+ */
+export function catalogSortOptions(input: {
+  defaultSort: ProductListSort;
+  sortBy: ProductListSort;
+  newestLabel: string;
+  hasReviews: boolean;
+}): Array<{ value: string; label: string }> {
+  return [
+    ...(input.defaultSort === "relevance" ? [{ value: "relevance", label: "Best match" }] : []),
+    { value: "newest", label: input.newestLabel },
+    { value: "price-asc", label: "Price: Low to High" },
+    { value: "price-desc", label: "Price: High to Low" },
+    { value: "name-asc", label: "Name: A to Z" },
+    { value: "name-desc", label: "Name: Z to A" },
+    { value: "discount", label: "Biggest discount" },
+    // Amazon's "Avg. Customer Review": offered once the store has reviews.
+    ...(input.hasReviews || input.sortBy === "rating" ? [{ value: "rating", label: "Top rated" }] : []),
+  ];
+}
+
 // ─── Facet display types ────────────────────────────────────────────────
 
 /**

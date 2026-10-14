@@ -1,6 +1,7 @@
 ---
 import Layout from "@/layouts/Layout.astro";
 import CatalogListingPage from "@/components/catalog/CatalogListingPage.astro";
+import { storefrontFieldValues } from "@/lib/extensions/data";
 import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
 import { catalogCategoryLinks } from "@/lib/catalog-listing";
 import { getCollectionByIdResult } from "@/lib/api";
@@ -172,6 +173,7 @@ const collectionJsonLd =
   <CatalogListingPage
     template
     kind="collection"
+    fields={storefrontFieldValues(collection.customFields)}
     hero={{
       title: collection.name,
       description: pagination.page === 1 ? collectionDescription : null,

@@ -7,6 +7,7 @@ import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "@/layouts/Layout.astro";
 import CatalogListingPage from "@/components/catalog/CatalogListingPage.astro";
+import { storefrontFieldValues } from "@/lib/extensions/data";
 import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
 import { getProductsByBrand } from "@/lib/api";
 import {
@@ -129,6 +130,7 @@ const collectionJsonLd =
   <CatalogListingPage
     template
     kind="brand"
+    fields={storefrontFieldValues(brand.customFields)}
     data={{ "data-brand-name": brand.name }}
     hero={{
       title: brand.name,

@@ -1,6 +1,6 @@
 /** Real bundled Noor metadata and fixture data; all rendering stays in the production host. */
 import { parsePluginManifest } from "@scalius/shared/plugins/manifest";
-import { storefrontSettingNeeds, type StorefrontExtension } from "@scalius/shared/plugins/storefront-components";
+import { storefrontSettingNeeds, type StorefrontExtension, type StorefrontSkinTarget } from "@scalius/shared/plugins/storefront-components";
 import { applyStorefrontAppTemplate, readStorefrontAppTemplateTheme, readStorefrontPagePresetSections, type StorefrontSection, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import { BUNDLED_STOREFRONT_EXTENSIONS } from "../extensions/bundled.gen";
 import { manifest } from "../../../../plugins/noor/src/index";
@@ -21,7 +21,9 @@ export const NOOR_EXTENSION: StorefrontExtension = {
   release: bundled.release,
   sections: storefront.sections.filter((section) => section.route === undefined).map((section) => section.type),
   sectionSettings: Object.fromEntries(storefront.sections.filter((section) => section.route === undefined).map((section) => [section.type, section.settings])),
-  slots: storefront.slots.map(({ id, slot, settings }) => ({ id, slot, settings })),
+  skins: storefront.skins.map(({ id, target, settings }) => ({ id, target: target as StorefrontSkinTarget, settings })),
+  blocks: storefront.productBlocks.filter((block) => block.route === undefined)
+    .map((block) => ({ type: block.type, target: `product.${block.placement}` as const, settings: block.settings })),
   islands: storefront.islands.map((island) => island.name),
   stylesheet: storefront.stylesheet,
   connect: storefront.connect,

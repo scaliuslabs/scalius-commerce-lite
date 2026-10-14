@@ -5,23 +5,60 @@
 // (@scalius/shared/plugins/storefront-protocol): additive only.
 
 import type {
+  StorefrontFieldValues,
   StorefrontFooterData,
   StorefrontHeaderData,
   StorefrontImage,
+  StorefrontLink,
+  StorefrontListingPage,
   StorefrontMenuItem,
+  StorefrontMoney,
   StorefrontProductCard,
+  StorefrontProductPage,
   StorefrontResolvedSettings,
+  StorefrontSectionSkinData,
+  StorefrontTile,
 } from "@scalius/shared/plugins/storefront-protocol";
+import {
+  HOME_PRODUCT_LIST_LIMIT,
+  homeSectionProductLists,
+  resolveCoreSectionSettings,
+  storefrontProductSourceKey,
+  storefrontVisibleSection,
+  type StorefrontSectionOf,
+  type StorefrontSkinnableSectionType,
+} from "@scalius/shared/storefront-theme";
+import { resolveBuyerAvailabilityBand, type BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
+import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { resolveStorefrontSettings, type StorefrontExtension } from "@scalius/shared/plugins/storefront-components";
 import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
 import { mediaImageSrcSet, mediaImageUrl } from "@scalius/shared/media-variants";
-import type { CategoryNavigationNode, FooterMenu, NavigationItem } from "@/lib/api";
+import type {
+  CategoryNavigationNode,
+  FooterMenu,
+  NavigationItem,
+  Product,
+  ProductMedia,
+  ProductOptionDefinition,
+  ProductVariant,
+  StorefrontCustomField,
+} from "@/lib/api";
 import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
-import type { ProductCardModel, ProductCardProduct } from "@/components/cards/card-model";
+import { productCardModel, type ProductCardModel, type ProductCardProduct } from "@/components/cards/card-model";
 import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
+import { productGalleryItems } from "@/components/product/lib/gallery-media";
+import { isVariantAvailable } from "@/lib/product-sellable-variants";
 import { navigationFromCategoryTree, sourceNavigation, type NavigationSource } from "@/components/header/nav-tree";
 import type { RequestTheme } from "@/lib/storefront-theme-context";
-import type { HomepageHeaderLead } from "@/lib/homepage-sections";
+import {
+  collectionShowsProducts,
+  homepageBrandHref,
+  homepageCollectionsFallback,
+  homepageMedia,
+  homepageSourceProducts,
+  type HomepageContent,
+  type HomepageHeaderLead,
+} from "@/lib/homepage-sections";
 
 /** Three levels at most, store paths or https links only. */
 function menuItems(items: readonly NavigationItem[] | undefined, depth = 1): StorefrontMenuItem[] {
@@ -174,4 +211,182 @@ export function componentSectionSettings(
     image: (id) => media.get(id) ?? null,
     products: (source) => products.get(source) ?? [],
   });
+}
+
+// ── Skins of the product page, listings and core sections ────────────────
+//
+// The projections a skin gets are built from exactly what the core renderer
+// draws from (the page's batch data, the same card model and price engine),
+// and only when a skin will draw: a page without skins builds none of this.
+
+/** Cards for a list of products, through the core card model (market prices, photo renditions, quick-add rules). */
+export function productCardsOf(
+  products: readonly ProductCardProduct[],
+  options: { currencySymbol: string; currencyCode: string; ratings: boolean },
+): StorefrontProductCard[] {
+  return products.map((product) => productCardData(product, productCardModel(product, { ...options, hoverImage: true })));
+}
+
+/** A resource's storefront-visible custom fields by `<namespace>.<key>`. */
+export function storefrontFieldValues(fields: readonly StorefrontCustomField[] | null | undefined): StorefrontFieldValues {
+  const values: StorefrontFieldValues = {};
+  for (const field of fields ?? []) values[`${field.namespace}.${field.key}`] = field.value;
+  return values;
+}
+
+const BAND_ORDER: readonly BuyerAvailabilityBand[] = ["in_stock", "untracked", "low_stock"];
+const PRODUCT_PAGE_MEDIA_MAX = 20;
+const PRODUCT_PAGE_VARIANTS_MAX = 100;
+
+/** The product page's projection (`StorefrontProductPage`): what a product-main skin and product blocks get. */
+export function productPageData(input: {
+  product: Product;
+  media: readonly ProductMedia[];
+  /** The buyer's SKUs (`resolveBuyerVariants`), sold-out ones included. */
+  variants: readonly ProductVariant[];
+  options: readonly ProductOptionDefinition[];
+  url: string;
+  breadcrumbs: StorefrontLink[];
+  /** The price the buy form opens on: current, regular (discounted when higher) and whether options price differently. */
+  price: { current: number; regular: number; from: boolean };
+  /** One SKU's buyer price (the page's price engine). */
+  variantPrice: (variant: ProductVariant) => number;
+  money: (amount: number) => string;
+}): StorefrontProductPage {
+  const { product, money } = input;
+  const amount = (value: number): StorefrontMoney => ({ amount: value, formatted: money(value) });
+  const compare = (current: number, regular: number) => (regular > current ? amount(regular) : null);
+  const media = productGalleryItems(product, input.media).flatMap((item) => {
+    const url = item.kind === "video" ? item.posterUrl : item.url;
+    const source = input.media.find((each) => each.id === item.id);
+    const image = url ? storefrontImageOf({ url, alt: item.altText, width: source?.width ?? null, height: source?.height ?? null }) : null;
+    return image ? [image] : [];
+  }).slice(0, PRODUCT_PAGE_MEDIA_MAX);
+  const bands = input.variants.map((variant) => variant.availabilityBand ?? resolveBuyerAvailabilityBand(variant));
+  const availability = BAND_ORDER.find((band) => bands.includes(band)) ?? "out_of_stock";
+  const summary = product.reviews?.summary;
+  const brand = product.brand?.name?.trim();
+  return {
+    product: {
+      id: product.id,
+      title: product.name,
+      url: input.url,
+      brand: brand && product.brand ? { title: brand, url: `/brands/${encodeURIComponent(product.brand.slug)}` } : null,
+      descriptionHtml: product.description ? sanitizeHtml(product.description) : "",
+      media,
+      price: amount(input.price.current),
+      compareAt: compare(input.price.current, input.price.regular),
+      priceVaries: input.price.from,
+      availability,
+      rating: summary && summary.count > 0 ? { average: summary.average, count: summary.count } : null,
+      options: input.options.map((option) => ({
+        name: option.name,
+        values: option.values.map((value) => ({ label: value.value, swatch: null })),
+      })),
+      variants: input.variants.slice(0, PRODUCT_PAGE_VARIANTS_MAX).map((variant) => {
+        const price = input.variantPrice(variant);
+        const image = variant.imageUrl ? storefrontImageOf({ url: variant.imageUrl, alt: product.name }) : null;
+        return {
+          id: variant.id,
+          title: variant.selectedOptions.map((option) => option.value).join(" / ") || product.name,
+          options: input.options.map((option) => variant.selectedOptions.find((each) => each.optionDefinitionId === option.id)?.value ?? ""),
+          price: amount(price),
+          compareAt: compare(price, variant.price ?? product.price),
+          available: isVariantAvailable(variant),
+          image,
+        };
+      }),
+      fields: storefrontFieldValues(product.customFields),
+      breadcrumbs: input.breadcrumbs,
+    },
+  };
+}
+
+/** A listing page's projection (`StorefrontListingPage`): what a listing-main skin gets. */
+export function listingPageData(input: {
+  kind: StorefrontListingPage["kind"];
+  title: string;
+  descriptionHtml: string | null;
+  image: StorefrontImage | null;
+  cards: StorefrontProductCard[];
+  pagination: { page: number; totalPages: number; total: number; totalIsCapped?: boolean };
+  breadcrumbs: ReadonlyArray<{ label: string; href: string }>;
+  fields: StorefrontFieldValues;
+}): StorefrontListingPage {
+  return {
+    kind: input.kind,
+    title: input.title,
+    descriptionHtml: input.descriptionHtml ? sanitizeHtml(input.descriptionHtml) : null,
+    image: input.image,
+    cards: input.cards,
+    total: input.pagination.total,
+    totalIsCapped: input.pagination.totalIsCapped === true,
+    page: input.pagination.page,
+    pageCount: input.pagination.totalPages,
+    breadcrumbs: input.breadcrumbs.map((crumb) => ({ title: crumb.label, url: crumb.href })),
+    fields: input.fields,
+  };
+}
+
+/**
+ * A core section's projection (`StorefrontSectionSkinData`): its settings
+ * with references resolved from the page's section data by the fixed rules
+ * (`resolveCoreSectionSettings`), each product source to as many cards as
+ * the core section shows.
+ */
+export function coreSectionSkinData(
+  section: StorefrontSectionOf<StorefrontSkinnableSectionType>,
+  content: HomepageContent,
+  money: { currencySymbol: string; currencyCode: string; ratings: boolean },
+): StorefrontSectionSkinData {
+  const shown = storefrontVisibleSection(section);
+  const cards = (products: readonly unknown[]) => productCardsOf(products as ProductCardProduct[], money);
+  const limits = new Map(homeSectionProductLists(shown).map((list) => [storefrontProductSourceKey(list.source), list.limit]));
+  const settings = resolveCoreSectionSettings(shown, {
+    image: (id) => storefrontImageOf(homepageMedia(content, id)),
+    products: (source) => {
+      const list = homepageSourceProducts(source, limits.get(storefrontProductSourceKey(source)) ?? HOME_PRODUCT_LIST_LIMIT, content);
+      return { title: list?.title ?? "", url: list?.href ?? null, cards: list ? cards(list.products) : [] };
+    },
+    tiles: (kind, ids) => ids.flatMap((id): StorefrontTile[] => {
+      if (kind === "category") {
+        const category = content.categories.get(id);
+        return category ? [{
+          id,
+          title: category.name,
+          url: category.canonicalPath || `/categories/${encodeURIComponent(category.slug)}`,
+          image: category.imageUrl ? storefrontImageOf({ url: category.imageUrl, alt: category.name }) : null,
+          cards: [],
+        }] : [];
+      }
+      const collection = content.collections.get(id);
+      return collection && collectionShowsProducts(collection) ? [{
+        id,
+        title: collection.name,
+        url: collection.canonicalPath || `/collections/${encodeURIComponent(collection.id)}`,
+        image: null,
+        cards: cards(collection.products ?? []),
+      }] : [];
+    }),
+    promotion: (id) => {
+      const endsAt = content.promotionEnds.get(id);
+      return endsAt && Date.parse(endsAt) > Date.now() ? { endsAt } : null;
+    },
+    deliveryFacts: () => content.deliveryFacts.map((fact) => ({ title: fact.title, detail: fact.detail })),
+  });
+  return {
+    type: shown.type,
+    version: shown.version,
+    settings: settings as Record<string, unknown>,
+    tiles: shown.type === "brand-wall"
+      ? content.brands.map((brand) => ({
+        id: brand.id,
+        title: brand.name,
+        url: homepageBrandHref(brand),
+        image: brand.logo ? storefrontImageOf({ ...brand.logo, alt: brand.logo.alt || brand.name }) : null,
+        cards: [],
+      }))
+      : [],
+    cards: shown.type === "collections" ? cards(homepageCollectionsFallback(shown, content)) : [],
+  };
 }

@@ -59,7 +59,7 @@ import { appSettingDefaults } from "../schema-form/app-settings";
 import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previews";
 import { settingErrors } from "../schema-form/errors";
 import { useFitReason } from "../use-fit-reason";
-import { appBlocksByKey, appSlotsByKey, resolveThemeForStore, toggleProductModule } from "../theme-settings";
+import { appBlocksByKey, appSkinsByKey, resolveThemeForStore, toggleProductModule } from "../theme-settings";
 import { themeProblemTarget, type ThemeRevealRequest } from "../theme-reveal";
 import { useOpenThemePreview } from "../theme-preview";
 import type { AiPage } from "./AiDraftDialog";
@@ -212,7 +212,7 @@ export function ThemeEditor({ workspace, refetch }: {
   const draftApps = useMemo(() => ({
     sections: appSections,
     blocks: appBlocksByKey(workspace.apps),
-    slots: appSlotsByKey(workspace.apps),
+    skins: appSkinsByKey(workspace.apps),
   }), [appSections, workspace.apps]);
   const draft = useThemeDraft({ workspace, refetch, canEdit, apps: draftApps });
   const theme = draft.working;

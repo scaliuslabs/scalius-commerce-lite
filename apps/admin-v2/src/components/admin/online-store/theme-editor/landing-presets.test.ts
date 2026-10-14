@@ -9,7 +9,7 @@ const field = (key: string, type: string) => ({
 const app = {
   id: "acme.theme",
   name: "Acme theme",
-  slots: [],
+  skins: [],
   templates: [],
   productBlocks: [],
   sections: [
