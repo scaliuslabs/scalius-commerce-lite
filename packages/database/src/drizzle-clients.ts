@@ -26,12 +26,15 @@ type RelationalSchema = {
   tableNamesMap: Record<string, string>;
 };
 
-let relational: RelationalSchema | undefined;
+/** Keyed by the schema module itself: one derived view per loaded schema. */
+const relationalBySchema = new WeakMap<object, RelationalSchema>();
 
 export function relationalSchema(): RelationalSchema {
+  let relational = relationalBySchema.get(schema);
   if (!relational) {
     const config = extractTablesRelationalConfig(schema, createTableRelationsHelpers);
     relational = { fullSchema: schema, schema: config.tables, tableNamesMap: config.tableNamesMap };
+    relationalBySchema.set(schema, relational);
   }
   return relational;
 }
