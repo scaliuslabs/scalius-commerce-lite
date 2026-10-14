@@ -27,7 +27,6 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | Worker CPU (`limits.cpu_ms`) | not set (fixed 10 ms) | 30,000 ms |
 | New password hash | PBKDF2-SHA256, 30,000 iterations | scrypt N=16384, r=16, p=1 |
 | Rows per drain: events, deliveries, notifications, payment events | 2, 2, 1, 1 | 50, 25, 20, 10 |
-| Renditions rendered from one public read | 0 | 4 |
 | Recommendation rotation per run | 4 products | 32 products |
 | Maintenance jobs (the sweep rotation) | one a minute: each job every 23 minutes | every job every 15 minutes |
 | Expired reservations released per run | 4 | 50 |
@@ -48,11 +47,10 @@ The budget harness encodes the per-invocation limits (`apps/api/src/free-plan-bu
 | D1 queries per invocation (a `batch()` is one) | 50 |
 | D1 per day | 5M rows read, 100,000 rows written |
 | Requests per day | 100,000 |
-| Images transformations per month | 5,000 (unverified) |
 | Worker script size | 64 MiB uncompressed, no compressed limit |
 | Worker startup (global scope) | 1 s |
 
-Paid raises these to 30 s of CPU as configured, 1,000 D1 queries and 10,000 subrequests per invocation. The Paid daily quotas are (unverified). One image needs up to 13 transformations (`apps/api/src/scheduled-maintenance.ts`), so the Images allowance covers about 380 images a month.
+Paid raises these to 30 s of CPU as configured, 1,000 D1 queries and 10,000 subrequests per invocation. The Paid daily quotas are (unverified).
 
 ## Measuring
 
@@ -96,7 +94,7 @@ A store has no queue: a queue is one more resource per store, and Free allows 10
 | Automatic fulfilment | the settled order | `runOrderAutoFulfil` | `auto_fulfil_sweep` |
 | Projection rebuild | `system_kv` `catalog:projections:rebuild-cursor` | the first chunks | each drain continues from the cursor |
 | Recommendations | `system_kv` `catalog:recommendations:rotation-cursor` | the written products and their peers | a daily lap visits every public product once (up to the per-run size times the runs in a day); the nightly tick refreshes products sold that day |
-| Image renditions | media rows without renditions | Paid: a rendered public read renders up to 4 | the `media_rendition_backfill` job |
+| Image renditions | media rows with `variant_width` NULL (pending) | none: no Worker renders images | an open dashboard tab renders them in the background |
 
 Rules:
 
@@ -106,11 +104,11 @@ Rules:
 
 ### No KV
 
-A store has no KV namespace (an account allows 1,000, and KV was only ever a hint or, worse, a sole copy). The relational provider holds what must persist: OAuth grants and tokens and small markers in `system_kv`, scanner sessions on their `scanner_token_claims` row. Per-colo hints that only spare a database read use the Cache API, keyed by the Worker version (`workerCacheHint` in `packages/shared/src/worker-cache-hint.ts`): the settings mirror, the RBAC seed marker, the Meta CAPI circuit and the "rendition requested" marker. Permission checks always read the database (one batch). Free skips the rendition marker: the scheduled backfill renders.
+A store has no KV namespace (an account allows 1,000, and KV was only ever a hint or, worse, a sole copy). The relational provider holds what must persist: OAuth grants and tokens and small markers in `system_kv`, scanner sessions on their `scanner_token_claims` row. Per-colo hints that only spare a database read use the Cache API, keyed by the Worker version (`workerCacheHint` in `packages/shared/src/worker-cache-hint.ts`): the settings mirror, the RBAC seed marker, and the Meta CAPI circuit. Permission checks always read the database (one batch).
 
 ### Maintenance cron
 
-The cron runs every minute (`* * * * *` in `apps/api/wrangler.jsonc`). Every tick runs the background drains. `MAINTENANCE_SWEEPS` in `apps/api/src/scheduled-maintenance.ts` lists the maintenance jobs as data, in rotation order (24 jobs, including the media rendition backfill and agent-access housekeeping). `apps/api/src/scheduled/slices.ts` picks the jobs of a tick from two plan values, `sweepEveryMinutes` and `sweepsPerTick`:
+The cron runs every minute (`* * * * *` in `apps/api/wrangler.jsonc`). Every tick runs the background drains. `MAINTENANCE_SWEEPS` in `apps/api/src/scheduled-maintenance.ts` lists the maintenance jobs as data, in rotation order (23 jobs, including agent-access housekeeping). `apps/api/src/scheduled/slices.ts` picks the jobs of a tick from two plan values, `sweepEveryMinutes` and `sweepsPerTick`:
 
 - Free runs the next job of the rotation on every tick, beside the drains. Each job runs every 23 minutes, and every tick of a whole rotation stays within 50 D1 queries with work due (`apps/api/src/maintenance-budget.test.ts`).
 - Paid runs every job on every fifteenth minute.

@@ -81,7 +81,7 @@ Runtime dependencies (listed in `package.json`):
 
 ### Image renditions
 
-Uploads get fixed WebP renditions stored beside the original at `<object_key>/<width>.webp` (widths from `mediaVariantWidths()`: the 1.2x geometric ladder 144/172/206/247/296/355/426/511/613/735/882/960/1600 below the source width plus a master of at most 2400 px, so any card photo fetches at most 1.2x its pixels; a ladder change needs a re-render migration such as 0094). The dashboard encodes them in the browser; agent/CLI/URL-import uploads get them once from the API's Images binding. The API publishes the largest rendition as the media URL, so `mediaImageUrl()` and `mediaImageSrcSet()` derive every smaller one from that URL alone. Any other URL (older uploads, SVG, external hosts) is served unchanged; there are no on-the-fly transforms.
+Uploads get fixed WebP renditions stored beside the original at `<object_key>/<width>.webp` (widths from `mediaVariantWidths()`: the 1.2x geometric ladder 144/172/206/247/296/355/426/511/613/735/882/960/1600 below the source width plus a master of at most 2400 px, so any card photo fetches at most 1.2x its pixels; a ladder change needs a re-render migration such as 0094). The dashboard encodes them in the browser and the CLI encodes them locally (no Worker renders images, there is no Images binding); agent (MCP) and URL-import uploads stay pending (`variant_width` NULL, original only) until an open dashboard tab renders them. The API publishes the largest rendition as the media URL, so `mediaImageUrl()` and `mediaImageSrcSet()` derive every smaller one from that URL alone. Any other URL (older uploads, SVG, external hosts) is served unchanged; there are no on-the-fly transforms.
 
 ### Rich HTML Security
 

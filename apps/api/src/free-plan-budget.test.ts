@@ -382,7 +382,7 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
   });
 
   it("drain ticks with due notifications and a requested projection rebuild", async () => {
-    const busy = await run("drain-busy", "Cron tick (due notifications, a projection rebuild chunk)", 2, (index) => minuteOfHour(116 + index), async () => {
+    const busy = await run("drain-busy", "Cron tick (due notifications, a projection rebuild chunk)", 2, (index) => minuteOfHour(118 + index), async () => {
       store.sqlite.exec("UPDATE notification_outbox SET status = 'pending', next_attempt_at = 0, claim_id = NULL WHERE status <> 'sent'");
       store.sqlite.exec("INSERT INTO system_kv (key, value) VALUES ('catalog:projections:rebuild-cursor', '') ON CONFLICT(key) DO UPDATE SET value = ''");
     });

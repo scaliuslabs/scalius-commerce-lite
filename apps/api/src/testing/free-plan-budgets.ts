@@ -61,7 +61,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-status-change": { d1Calls: 71, d1Statements: 118, externalFetches: 0, rowsWritten: 103, rowsRead: 98, fullScans: 27 },
     "order-refund": { d1Calls: 80, d1Statements: 129, externalFetches: 0, rowsWritten: 78, rowsRead: 116, fullScans: 28 },
     "sku-stock-change": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 53, rowsRead: 21, fullScans: 7 },
-    "cron-idle": { d1Calls: 21, d1Statements: 24, externalFetches: 0, rowsWritten: 110, rowsRead: 7548, fullScans: 10, meanRowsWritten: 0, meanRowsRead: 14.63 },
+    "cron-idle": { d1Calls: 21, d1Statements: 24, externalFetches: 0, rowsWritten: 110, rowsRead: 7548, fullScans: 11, meanRowsWritten: 0, meanRowsRead: 14.63 },
     "cron-nightly": { d1Calls: 22, d1Statements: 29, externalFetches: 0, rowsWritten: 432, rowsRead: 24972, fullScans: 54 },
     "drain-busy": { d1Calls: 11, d1Statements: 18, externalFetches: 0, rowsWritten: 103, rowsRead: 218, fullScans: 10 },
     "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 106, rowsRead: 73, fullScans: 26 },
