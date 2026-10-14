@@ -159,7 +159,7 @@ It exits 1 when a threshold is exceeded:
 | Cache-hit TTFB | 50 ms | `--budget-ttfb-hit-ms` |
 | Cache-miss TTFB (and pages that always render) | 300 ms | `--budget-ttfb-miss-ms` |
 | Phone LCP | 1200 ms | `--budget-lcp-phone-ms` |
-| Desktop LCP | 800 ms | `--budget-lcp-desktop-ms` |
+| Desktop LCP | 300 ms | `--budget-lcp-desktop-ms` |
 | CLS (either profile) | 0.01 | `--budget-cls` |
 
 Other flags: `--base <origin>` (default `http://localhost:4391`), `--paths "/,/products/x"`, `--runs <n>` (default 3), `--profiles phone,desktop`, `--no-browser` (TTFB only), `--json`, `--media-url <origin>`, `--no-binding-check` and `--cdp-port <port>` (default 9395; the script starts its own headless Chrome when nothing listens there).

@@ -28,15 +28,17 @@ import { verifyStorefrontBinding } from "./dev-ports.mjs";
 
 /**
  * Budgets (ms) the check enforces. Miss budgets hold for a local stack. LCP
- * and CLS are the 2026-10-14 targets (docs/STOREFRONT-PERFORMANCE.md): every
- * measured page met CLS 0, desktop LCP 650 ms and, with the shell and font
- * changes, phone LCP about 1 s in the local A/B.
+ * and CLS are the 2026-10-15 targets (docs/STOREFRONT-PERFORMANCE.md): every
+ * measured page met CLS 0, phone LCP about 0.85 s and desktop LCP 80-200 ms
+ * (unthrottled Chrome on loopback, so it is main-thread time plus one render
+ * pass). 300 ms leaves room for a loaded host and fails a page that adds
+ * main-thread work before first paint.
  */
 export const DEFAULT_BUDGETS = Object.freeze({
   ttfbHitMs: 50,
   ttfbMissMs: 300,
   lcpPhoneMs: 1200,
-  lcpDesktopMs: 800,
+  lcpDesktopMs: 300,
   // Every measured page has CLS 0 (checkout since 2026-10-14); 0.01 allows
   // only sub-pixel rounding.
   cls: 0.01,
