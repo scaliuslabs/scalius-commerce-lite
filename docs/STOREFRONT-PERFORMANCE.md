@@ -28,14 +28,14 @@ The batch carries at most 8 parts of at most 2,048 characters each (`MAX_STOREFR
 | --- | --- |
 | Home | `storefront/layout`, `storefront/homepage`, `shipping-methods`, `checkout/config` |
 | Landing page | `storefront/layout`, `storefront/landing/<slug>`, `shipping-methods`, `checkout/config` |
-| Product | `storefront/layout`, `products/<slug>`, `shipping-methods`, `checkout/config`, `storefront/product-apps/<slug>` |
+| Product | `storefront/layout`, `products/<slug>`, `shipping-methods`, `checkout/config` |
 | Category | `storefront/layout`, `categories/<slug>/products?...` |
 | Collection | `storefront/layout`, `collections/<id>?...` |
 | Search | `storefront/layout`, `products?...&search=...` |
 | Cart shell | `storefront/layout`, `locations/cities`, `shipping-methods`, `checkout-languages/active`, `checkout/config`, `products/recommendations?limit=8` |
 | Checkout shell | `storefront/layout`, `checkout/config`, `checkout-languages/active` |
 
-Sources: `PAGE_PARTS` in `apps/api/src/storefront-render-budget.test.ts`. Installed apps draw inside these parts and add no call. The API sanitizes the drawn output and caches it under the `plg` and `plgs` dependency keys, so a hit runs no app code (`apps/api/src/plugins/storefront-render.ts`).
+Sources: `PAGE_PARTS` in `apps/api/src/storefront-render-budget.test.ts`. Installed apps add no call: component sections, product blocks and skins draw at the edge from data these parts already hold. Checkout and account blocks are the one output the API draws (`apps/api/src/plugins/storefront-render.ts`); it sanitizes them and caches them under the `plg` and `plgs` dependency keys, so a hit runs no app code.
 
 ### Transport rules
 

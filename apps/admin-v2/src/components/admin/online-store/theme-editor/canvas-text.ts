@@ -18,7 +18,7 @@ const NO_APPS: ReadonlyMap<string, AppSectionEntry> = new Map();
  */
 function appTextField(section: Extract<StorefrontSection, { type: "app" }>, field: string, apps: ReadonlyMap<string, AppSectionEntry>) {
   const entry = apps.get(section.settings.app);
-  const setting = entry?.section.component && THEME_APP_TEXT_FIELD.test(field)
+  const setting = entry && THEME_APP_TEXT_FIELD.test(field)
     ? entry.section.settings.find((each) => each.key === field && (each.type === "text" || each.type === "textarea"))
     : undefined;
   const value = setting ? appFieldValue(setting, section.settings.values) : undefined;

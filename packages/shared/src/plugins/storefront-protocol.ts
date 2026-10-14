@@ -442,7 +442,7 @@ export type StorefrontRenderJob =
   | StorefrontSkinJob
   | {
     id: string;
-    /** A component product block (a `productBlocks` entry without a route). */
+    /** A product block (a `productBlocks` entry). */
     kind: "block";
     target: StorefrontBlockTarget;
     /** The manifest block type. */

@@ -14,23 +14,17 @@ import {
   getPageRenderData,
   readAppComponentData,
   readPluginBlockContext,
-  readPluginRenderContext,
-  readProductAppContext,
   readThemeBrandAssets,
   type AppComponentPlacement,
   type HomepageAppSection,
 } from "@scalius/core/modules/storefront";
-import { deps } from "@scalius/core/cache-deps";
+import { activePluginInstallationsFromRows, selectActivePluginInstallations } from "@scalius/core/modules/plugins";
 import type { MarketPricing } from "@scalius/core/modules/price-lists";
 import {
-  EMPTY_PLUGIN_HEAD,
   PLUGIN_BLOCK_PAGES,
   PLUGIN_BLOCK_TARGETS,
-  PLUGIN_HOME_ROUTE_SECTIONS_MAX,
   PLUGIN_HOME_SECTIONS_MAX,
   PLUGIN_PAGE_BLOCKS_MAX,
-  PLUGIN_PRODUCT_BLOCKS_MAX,
-  parsePluginSurfaceKey,
   pluginSurfaceKey,
 } from "@scalius/shared/plugins";
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings";
@@ -49,7 +43,6 @@ import {
   STOREFRONT_PAGE_TEMPLATES,
   homeSectionRequests,
   type HomeAppSectionRequest,
-  type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { readWorkerVersion } from "@scalius/shared/cache-generation";
 import {
@@ -157,14 +150,6 @@ const homepageBrandSchema = z.object({
     height: z.number().int().nullable(),
   }).nullable(),
 });
-/** What an app drew for one placement (plugins/storefront-render.ts). */
-const appSurfaceRenderSchema = z.object({
-  html: z.string().openapi({ description: "Sanitized HTML: content, tables, lists, images (https or store paths), links and forms posting to the app's own /apps/<id>/ proxy only." }),
-  head: z.object({
-    meta: z.array(z.object({ attribute: z.enum(["name", "property"]), key: z.string(), content: z.string() })),
-    jsonLd: z.array(z.string()).openapi({ description: "schema.org JSON-LD, already serialized for a <script type=\"application/ld+json\">." }),
-  }),
-}).openapi("StorefrontAppSurface");
 /** A deal countdown's promotion: active, started, and ending at `endsAt` (still ahead when read). */
 const homepagePromotionSchema = z.object({
   id: z.string(),
@@ -204,7 +189,7 @@ const homepageSectionsSchema = z.object({
   homeProduct: z.object({ id: z.string(), slug: z.string() }).nullable().openapi({
     description: "A product homepage's product while it is public (the storefront answers `/` with a redirect to its page); null for a sections homepage or a product that is not public.",
   }),
-  apps: z.array(appSurfaceRenderSchema.extend({
+  apps: z.array(z.object({
     sectionId: z.string(),
     component: z.object({
       pluginId: z.string(),
@@ -212,11 +197,11 @@ const homepageSectionsSchema = z.object({
       values: z.record(z.string(), z.unknown()),
       media: z.array(z.object({ id: z.string(), url: z.string(), alt: z.string(), width: z.number().nullable(), height: z.number().nullable() })),
       lists: z.array(z.object({ source: z.string(), products: z.array(z.unknown()) })),
-    }).optional().openapi({
-      description: "A component section (no `html`): the storefront draws it at the edge with the app's storefront module, from these resolved values, images and product cards.",
+    }).openapi({
+      description: "A component section: the storefront draws it at the edge with the app's storefront module, from these resolved values, images and product cards.",
     }),
   })).max(PLUGIN_HOME_SECTIONS_MAX).openapi({
-    description: "The app sections to show, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add, or a component section's data. An app section missing here renders nothing.",
+    description: "The app sections to show, by section id, each a component section's data. An app section missing here renders nothing.",
   }),
   metaobjects: z.array(z.object({
     id: z.string(),
@@ -465,48 +450,27 @@ const homepageRoute = createRoute({
 });
 
 /**
- * A page's app sections: route sections drawn by their apps with the
- * request's plugin host (plugins/storefront-render.ts), component sections
- * given their settings' images and products for the storefront to draw
- * (core app-components.ts), both from one read of the apps.
+ * A page's app sections: component sections given their settings' images and
+ * products for the storefront to draw at the edge (core app-components.ts),
+ * from one read of the apps.
  */
-function homeAppRenderer(c: Context<{ Bindings: Env }>, failOnError = false) {
+function homeAppRenderer(c: Context<{ Bindings: Env }>) {
   return async (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null }) => {
     const db = c.get("db");
-    const context = await readPluginRenderContext(db, [...new Set(requests.map((request) => request.pluginId))]);
+    // The active apps among these (`plg:<id>` each: an app that starts, stops or drops a type changes the answer).
+    const installations = activePluginInstallationsFromRows(await selectActivePluginInstallations(db, [...new Set(requests.map((request) => request.pluginId))]));
     const components: AppComponentPlacement[] = [];
-    const routed: HomeAppSectionRequest[] = [];
     for (const request of requests) {
-      const installation = context.installations.get(request.pluginId);
+      const installation = installations.get(request.pluginId);
       const section = installation?.manifest.storefront.sections.find((entry) => entry.type === request.type);
-      if (installation && section && section.route === undefined) {
-        // Drawn at the edge only while the approved grant covers storefront code.
-        deps.plugin(request.pluginId);
-        if (installation.grant?.storefrontCode === true) {
-          components.push({ sectionId: request.sectionId, pluginId: request.pluginId, type: request.type, schema: section.settings, values: request.values });
-        }
-      } else if (routed.length < PLUGIN_HOME_ROUTE_SECTIONS_MAX) {
-        routed.push(request);
+      if (!installation || !section) continue;
+      // Drawn at the edge only while the approved grant covers storefront code.
+      if (installation.grant?.storefrontCode === true) {
+        components.push({ sectionId: request.sectionId, pluginId: request.pluginId, type: request.type, schema: section.settings, values: request.values });
       }
     }
-    const { renderAppSurfaces } = await import("../plugins/storefront-render");
-    const [drawn, data] = await Promise.all([
-      renderAppSurfaces(
-        routed.map((request) => ({
-          instanceId: request.sectionId,
-          pluginId: request.pluginId,
-          type: request.type,
-          kind: "section" as const,
-          values: request.values,
-        })),
-        { env: c.env, ctx: executionContextOf(c), db, failOnError, context },
-      ),
-      readAppComponentData(db, components, page.pricing),
-    ]);
-    const bySection = new Map<string, HomepageAppSection>([
-      ...drawn.map((each) => [each.instanceId, { sectionId: each.instanceId, html: each.html, head: each.head }] as const),
-      ...data.map((each) => [each.sectionId, { sectionId: each.sectionId, html: "", head: EMPTY_PLUGIN_HEAD, component: each.component }] as const),
-    ]);
+    const data = await readAppComponentData(db, components, page.pricing);
+    const bySection = new Map<string, HomepageAppSection>(data.map((each) => [each.sectionId, each] as const));
     // Document order.
     return requests.flatMap((request) => bySection.get(request.sectionId) ?? []);
   };
@@ -586,72 +550,6 @@ app.openapi(templateSectionsRoute, async (c) => {
   assertOnlyPresenceQuery(c.req.url, "The template read takes no query parameters");
   const sections = await getTemplateSectionsData(c.get("db"), c.req.valid("param").kind, { renderApps: homeAppRenderer(c), pricing: publicMarketPricing(c) });
   return ok(c, { sections });
-});
-
-// GET /storefront/product-apps/:slug — the product page's app blocks
-const productAppsRoute = createRoute({
-  method: "get",
-  path: "/product-apps/{slug}",
-  operationId: "storefront.product_apps.get",
-  tags: ["Storefront"],
-  summary: "Get the app blocks a product page shows",
-  description:
-    "The published theme's product app blocks drawn by their active apps for this public product: sanitized HTML and head tags, each in the buy box or below the modules as its app declares. Takes no query; cached under dependency validation (the theme, the product and each app's installation and declared storage), so a cached answer runs no app code.",
-  request: { params: z.object({ slug: z.string().min(1).max(255) }) },
-  responses: {
-    200: {
-      description: "The drawn app blocks",
-      content: { "application/json": { schema: successEnvelope(z.object({
-        blocks: z.array(appSurfaceRenderSchema.extend({
-          id: z.string(),
-          app: z.string(),
-          placement: z.enum(["buy-box", "below"]),
-        })).max(PLUGIN_PRODUCT_BLOCKS_MAX),
-      })) } },
-    },
-    400: errorResponses[400],
-    404: errorResponses[404],
-    500: errorResponses[500],
-  },
-});
-
-async function drawProductAppBlocks(c: Context<{ Bindings: Env }>, slug: string, theme?: StorefrontThemeDocument) {
-  const db = c.get("db");
-  const context = await readProductAppContext(db, slug, theme);
-  if (!context) throw new NotFoundError("Product not found");
-  const requests = context.blocks.flatMap((block) => {
-    const key = parsePluginSurfaceKey(block.app);
-    return key ? [{
-      instanceId: block.id,
-      pluginId: key.pluginId,
-      type: key.type,
-      kind: "product-block" as const,
-      values: block.values,
-      product: context.product,
-    }] : [];
-  });
-  if (requests.length === 0) return { blocks: [] };
-  const { renderAppSurfaces } = await import("../plugins/storefront-render");
-  const drawn = await renderAppSurfaces(requests, {
-    env: c.env,
-    ctx: executionContextOf(c),
-    db,
-    context: { installations: context.installations, store: context.store },
-  });
-  const appOf = new Map(context.blocks.map((block) => [block.id, block.app]));
-  return {
-    blocks: drawn.map((each) => ({
-      id: each.instanceId,
-      app: appOf.get(each.instanceId) ?? `${each.pluginId}/${each.type}`,
-      placement: each.placement ?? "below",
-      html: each.html,
-      head: each.head,
-    })),
-  };
-}
-app.openapi(productAppsRoute, async (c) => {
-  if (new URL(c.req.url).search) throw new ValidationError("The product apps read takes no query parameters");
-  return ok(c, await drawProductAppBlocks(c, c.req.valid("param").slug));
 });
 
 // GET /storefront/extensions/:pluginId/:release?path= — an app's storefront file
@@ -734,23 +632,15 @@ app.openapi(appBlocksRoute, async (c) => {
   const db = c.get("db");
   const context = await readPluginBlockContext(db, c.req.valid("param").page);
   if (context.requests.length === 0) return ok(c, { blocks: [] });
-  const { renderAppSurfaces } = await import("../plugins/storefront-render");
-  const drawn = await renderAppSurfaces(context.requests.map((request) => ({
-    instanceId: pluginSurfaceKey(request.pluginId, request.type),
-    pluginId: request.pluginId,
-    type: request.type,
-    kind: "block" as const,
-    values: {},
-  })), {
+  const { renderAppBlocks } = await import("../plugins/storefront-render");
+  const drawn = await renderAppBlocks(context.requests, {
     env: c.env,
     ctx: executionContextOf(c),
     db,
     context: { installations: context.installations, store: context.store },
   });
   return ok(c, {
-    blocks: drawn.flatMap((each) => (each.target && each.html.trim()
-      ? [{ id: each.instanceId, app: each.pluginId, target: each.target, html: each.html }]
-      : [])),
+    blocks: drawn.map((each) => ({ id: pluginSurfaceKey(each.pluginId, each.type), app: each.pluginId, target: each.target, html: each.html })),
   });
 });
 
@@ -1072,28 +962,10 @@ app.openapi(themePreviewHomepageRoute, async (c) => {
   // A draft's app sections are drawn live (this answer is never cached).
   const data = (await getHomepageData(db, {
     requests,
-    renderApps: homeAppRenderer(c, true),
+    renderApps: homeAppRenderer(c),
     pricing: presence ? startMarketPricing(db, presence) : null,
   })).sections;
   return ok(c, data as unknown as HomepageData["sections"]);
-});
-
-const themePreviewProductAppsRoute = createRoute({
-  method: "post", path: "/theme-preview/product-apps/{slug}", tags: ["Storefront"],
-  summary: "Render a preview theme's app blocks for a public product",
-  operationId: "system.storefront_theme_preview.product_apps",
-  request: {
-    params: z.object({ slug: z.string().min(1).max(255) }),
-    body: { required: true, content: { "application/json": { schema: z.object({ token: z.string().length(52).regex(/^tpv_[A-Za-z0-9_-]{48}$/) }).strict() } } },
-  },
-  responses: productAppsRoute.responses,
-});
-app.openapi(themePreviewProductAppsRoute, async (c) => {
-  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
-  c.header("Referrer-Policy", "no-referrer");
-  const preview = await resolveThemePreviewSession(c.get("db"), c.req.valid("json").token);
-  if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
-  return ok(c, await drawProductAppBlocks(c, c.req.valid("param").slug, preview.theme));
 });
 
 export { app as storefrontRoutes };

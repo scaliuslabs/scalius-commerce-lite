@@ -1,17 +1,14 @@
 ---
-// A section an installed app draws (`type: "app"`):
-// - a route section: the HTML its app drew into the homepage read, sanitized by the API;
-// - a component section: drawn here by the app's storefront module
-//   (docs/STOREFRONT-COMPONENTS.md) from its settings, the images they name
-//   and the product cards of its product settings, priced in the page's market.
-// HomepageSections renders it only when there is something to show; a
-// component that draws nothing, fails or is late renders nothing.
-import AppSurface from "@/components/apps/AppSurface.astro";
+// A section an installed app draws (`type: "app"`): drawn here by the app's
+// storefront module (docs/STOREFRONT-COMPONENTS.md) from its settings, the
+// images they name and the product cards of its product settings, priced in
+// the page's market. HomepageSections renders it only when there is
+// something to show; a component that draws nothing, fails or is late
+// renders nothing.
 import AppComponent from "@/components/apps/AppComponent.astro";
 import OrderForm from "@/components/checkout/OrderForm.astro";
 import type { StorefrontAppSection } from "@scalius/shared/storefront-theme";
 import type { HomepageAppSurface } from "@/lib/app-surfaces";
-import Container from "@/components/ui/Container.astro";
 import { appMarkup, requestExtensions, type AppMarkup } from "@/lib/extensions";
 import { orderFormEmbed, type EmbedRender } from "@/lib/extensions/embeds";
 import { componentSectionSettings, productCardData, storefrontImageOf } from "@/lib/extensions/data";
@@ -27,59 +24,49 @@ interface Props {
 }
 
 const { section, surface, headerLead = false } = Astro.props;
-const component = surface.component;
+const { component } = surface;
 const libraryPreview = (Astro.locals as { sectionLibraryPreview?: boolean }).sectionLibraryPreview === true;
 let html: string | null = null;
 let markup: AppMarkup | null = null;
 let preview = false;
 /** The products the component was given (id to handle): its order-form embeds may name only these. */
 const embedProducts = new Map<string, string>();
-if (component) {
-  const { byId, host } = await requestExtensions(Astro.locals, Astro.url);
-  const extension = byId.get(component.pluginId);
-  const schema = extension?.sectionSettings[component.type];
-  if (extension && schema && extension.sections.includes(component.type)) {
-    const [{ resolved, preview: themePreview }, layoutData] = await Promise.all([currentRequestTheme(Astro.locals), getLayoutData()]);
-    preview = themePreview !== null;
-    const currency = { symbol: layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol, code: layoutData?.currency?.code ?? DEFAULT_CURRENCY.code };
-    const media = new Map(component.media.flatMap((asset) => {
-      const image = storefrontImageOf(asset);
-      return image ? [[asset.id, image] as const] : [];
-    }));
-    const products = new Map(component.lists.map((list) => [list.source, list.products.map((product) => {
-      const card = product as ProductCardProduct;
-      embedProducts.set(card.id, card.slug);
-      const model = productCardModel(card, {
-        currencySymbol: currency.symbol,
-        currencyCode: currency.code,
-        // The app decides whether to show the second photo.
-        hoverImage: true,
-        ratings: resolved.facts.hasReviews,
-      });
-      return productCardData(card, model);
-    })]));
-    html = await host.render(extension, {
-      kind: "section",
-      type: component.type,
-      instanceId: section.id,
-      settings: componentSectionSettings(schema, component.values, media, products),
+const { byId, host } = await requestExtensions(Astro.locals, Astro.url);
+const extension = byId.get(component.pluginId);
+const schema = extension?.sectionSettings[component.type];
+if (extension && schema && extension.sections.includes(component.type)) {
+  const [{ resolved, preview: themePreview }, layoutData] = await Promise.all([currentRequestTheme(Astro.locals), getLayoutData()]);
+  preview = themePreview !== null;
+  const currency = { symbol: layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol, code: layoutData?.currency?.code ?? DEFAULT_CURRENCY.code };
+  const media = new Map(component.media.flatMap((asset) => {
+    const image = storefrontImageOf(asset);
+    return image ? [[asset.id, image] as const] : [];
+  }));
+  const products = new Map(component.lists.map((list) => [list.source, list.products.map((product) => {
+    const card = product as ProductCardProduct;
+    embedProducts.set(card.id, card.slug);
+    const model = productCardModel(card, {
+      currencySymbol: currency.symbol,
+      currencyCode: currency.code,
+      // The app decides whether to show the second photo.
+      hoverImage: true,
+      ratings: resolved.facts.hasReviews,
     });
-    markup = appMarkup(extension, "section", html);
-  }
+    return productCardData(card, model);
+  })]));
+  html = await host.render(extension, {
+    kind: "section",
+    type: component.type,
+    instanceId: section.id,
+    settings: componentSectionSettings(schema, component.values, media, products),
+  });
+  markup = appMarkup(extension, "section", html);
 }
 ---
 
 {/* Public guard for a header that used this declared lead before the app rendered. */}
-{headerLead && component && !html?.trim() && <template data-scalius-lead-empty></template>}
+{headerLead && !html?.trim() && <template data-scalius-lead-empty></template>}
 {/* Only the isolated library reports a failed module; a valid empty string
     still means the app intentionally has nothing to display. */}
-{libraryPreview && component && html === null && <template data-library-render-failed></template>}
-{component
-  ? markup && <AppComponent markup={markup} embeds={{ "order-form": orderFormEmbed(OrderForm as EmbedRender["component"], embedProducts, { instanceId: section.id, preview }) }} />
-  : (
-    <section class="home-section w-full" data-app-section={section.settings.app}>
-      <Container>
-        <AppSurface html={surface.html} app={section.settings.app} instanceId={section.id} />
-      </Container>
-    </section>
-  )}
+{libraryPreview && html === null && <template data-library-render-failed></template>}
+{markup && <AppComponent markup={markup} embeds={{ "order-form": orderFormEmbed(OrderForm as EmbedRender["component"], embedProducts, { instanceId: section.id, preview }) }} />}

@@ -174,8 +174,4 @@ export const SYSTEM_OPERATIONS = {
     reason:
       "Private storefront preview read keyed by the preview cookie bearer; the token must never enter agent input or execution.",
   },
-  "system.storefront_theme_preview.product_apps": {
-    exposure: "excluded", principals: ["internal"], risk: "security", limits: { request: 16_384 },
-    reason: "Private preview-cookie bearer read; preview tokens never enter agent input or execution.",
-  },
 } satisfies Record<string, OperationRegistryEntry>;

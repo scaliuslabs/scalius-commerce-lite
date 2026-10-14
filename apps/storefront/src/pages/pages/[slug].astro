@@ -7,11 +7,10 @@ import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
 import { getRuntimePresence } from "@/lib/api/runtime";
 import Layout from "../../layouts/Layout.astro";
 import LandingSections from "@/components/homepage/LandingSections.astro";
-import AppHeadTags from "@/components/apps/AppHeadTags.astro";
 import { getLandingPageData, getThemePreviewHomepageSections, getShippingMethods, getCheckoutConfig, isCheckoutConfigReadFailure } from "@/lib/api";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
-import { EMPTY_HOMEPAGE_SECTION_DATA, homepageAppHeads, homepageContent } from "@/lib/homepage-sections";
+import { EMPTY_HOMEPAGE_SECTION_DATA } from "@/lib/homepage-sections";
 import { buildDeliveryFacts } from "@/lib/delivery-facts";
 import { formatMoney } from "@/lib/currency";
 import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
@@ -62,7 +61,6 @@ const deliveryFacts = homeSectionsShowDeliveryFacts(sections)
   ogType="website"
   noindex={landing.noIndex === true}
 >
-  <Fragment slot="head"><AppHeadTags heads={homepageAppHeads(sections, homepageContent(data, deliveryFacts))} /></Fragment>
   <h1 class="sr-only">{landing.title}</h1>
   <LandingSections
     sections={sections}

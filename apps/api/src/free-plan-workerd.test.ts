@@ -224,7 +224,7 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
 
   it("storefront pages through the batch route (cache miss, then hit)", async () => {
     const page = (parts: string[]) => (): Call => [`https://api.internal${storefrontBatchPath(parts)}`, { headers: { "X-Scalius-Cache-Generation": "gen1" } }];
-    const product = ["/api/v1/storefront/layout", "/api/v1/products/linen-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/linen-panjabi"];
+    const product = ["/api/v1/storefront/layout", "/api/v1/products/linen-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config"];
     await record("workerd-page-product-miss", "Storefront product page, all parts render (first call cold, then cached parts)", 6, page(product));
     const home = ["/api/v1/storefront/layout", "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"];
     await record("workerd-page-home", "Storefront home page", 6, page(home));
@@ -238,7 +238,7 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
       await mf.ready;
       return record(id, label, 2, page(parts));
     };
-    const product = await fresh("workerd-page-product-fresh", "Storefront product page, first request of a fresh isolate", ["/api/v1/storefront/layout", "/api/v1/products/cotton-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/cotton-panjabi"]);
+    const product = await fresh("workerd-page-product-fresh", "Storefront product page, first request of a fresh isolate", ["/api/v1/storefront/layout", "/api/v1/products/cotton-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config"]);
     const home = await fresh("workerd-page-home-fresh", "Storefront home page, first request of a fresh isolate", ["/api/v1/storefront/layout", "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"]);
     // Generous guards (measured 136 and 124 ms on the reference laptop, 2026-10-14):
     // a page that loads far more code on a cold isolate fails here.

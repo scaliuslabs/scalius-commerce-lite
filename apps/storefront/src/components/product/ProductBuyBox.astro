@@ -6,14 +6,12 @@
 // and a product-main skin's buy form embed (`<scalius-embed kind="buy-form">`),
 // so a skin always gets the store's own form, rules, scripts and words.
 import type { ComponentProps } from "astro/types";
-import type { ProductAppBlock } from "@/lib/app-surfaces";
 import type { AppProductBlock } from "@/lib/extensions";
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import type { ProductFulfilment } from "@/lib/delivery-facts";
 import type { StoreContactLink } from "@/lib/store-contact";
 import DeliveryFacts from "@/components/DeliveryFacts.astro";
-import ProductAppBlocks from "@/components/apps/ProductAppBlocks.astro";
 import ComponentProductBlocks from "@/components/apps/ComponentProductBlocks.astro";
 import DigitalPromise from "./DigitalPromise.astro";
 import ProductEmiLine from "./ProductEmiLine.astro";
@@ -33,9 +31,7 @@ interface Props {
   /** The EMI line (the buy box's setting and the product's EMI plan). */
   emi: boolean;
   contactLinks: readonly StoreContactLink[];
-  /** Route-drawn app blocks of the buy box. */
-  appBlocks: readonly ProductAppBlock[];
-  /** Component app blocks of the buy box, and the page projection they draw from. */
+  /** App blocks of the buy box, and the page projection they draw from. */
   componentBlocks: readonly AppProductBlock[];
   blockData: () => StorefrontProductPage;
   fulfilment: ProductFulfilment;
@@ -43,7 +39,7 @@ interface Props {
   canPurchaseAny: boolean;
 }
 
-const { summary, reviewCopy, features, emi, contactLinks, appBlocks, componentBlocks, blockData, fulfilment, deliveryFacts, canPurchaseAny } = Astro.props;
+const { summary, reviewCopy, features, emi, contactLinks, componentBlocks, blockData, fulfilment, deliveryFacts, canPurchaseAny } = Astro.props;
 const { product } = summary;
 ---
 
@@ -68,7 +64,6 @@ const { product } = summary;
       ))}
     </nav>
   )}
-  <ProductAppBlocks slot="after-actions" blocks={appBlocks} placement="buy-box" />
   <ComponentProductBlocks slot="after-actions" blocks={componentBlocks} target="product.buy-box" data={blockData} />
   <DigitalPromise slot="after-actions" product={product} fulfilment={fulfilment} />
   {canPurchaseAny && <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />}

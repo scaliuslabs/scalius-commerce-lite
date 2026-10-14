@@ -34,7 +34,6 @@ import type { DeliveryFact } from "@/lib/delivery-facts";
 import { resolveHomepageHero, type ResolvedHomepageHero } from "@/lib/homepage-hero";
 import { readHomepageAppSurfaces, type HomepageAppComponent, type HomepageAppSurface } from "@/lib/app-surfaces";
 import { storefrontCopy, type StorefrontLanguage } from "@/lib/storefront-copy";
-import type { PluginHead } from "@scalius/shared/plugins/storefront";
 
 /**
  * Everything the homepage sections draw from, looked up by source key,
@@ -90,7 +89,7 @@ export function homepageContent(
   };
 }
 
-/** What an app section drew, or null when its app drew nothing (the section then renders nothing). */
+/** What an app section was given, or null when its app gave nothing (the section then renders nothing). */
 export function homepageAppSurface(
   section: StorefrontSection,
   content: Pick<HomepageContent, "apps">,
@@ -111,17 +110,6 @@ export function homepageMetaobject(
   const type = content.metaobjects?.get(section.settings.definitionId);
   const entries = type?.entries.slice(0, section.settings.limit) ?? [];
   return type && entries.length > 0 ? { ...type, entries } : null;
-}
-
-/** The head tags of the app sections that render, in page order (the homepage head carries them). */
-export function homepageAppHeads(
-  sections: readonly StorefrontSection[],
-  content: HomepageContent,
-): PluginHead[] {
-  return sections.flatMap((section) => {
-    const surface = section.hidden ? null : homepageAppSurface(section, content);
-    return surface ? [surface.head] : [];
-  });
 }
 
 /** A hero section's slides per viewport (slides whose image did not resolve are left out). */

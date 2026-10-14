@@ -122,7 +122,7 @@ describe("packed Noor gallery integration", () => {
     const surfaces = [...readHomepageAppSurfaces(sections.apps).values()];
     const order = surfaces.find((surface) => surface.component?.type === "landing-order")!;
     expect(surfaces.length).toBeGreaterThan(1);
-    expect(surfaces.every((surface) => surface.html === "" && surface.component?.pluginId === NOOR_EXTENSION.pluginId)).toBe(true);
+    expect(surfaces.every((surface) => surface.component?.pluginId === NOOR_EXTENSION.pluginId)).toBe(true);
     expect(order.component!.lists[0]!.source).toBe("product:prod_0");
     const product = order.component!.lists[0]!.products[0] as { id: string; slug: string };
     const detail = await read("noor-landing", `products/${product.slug}`);

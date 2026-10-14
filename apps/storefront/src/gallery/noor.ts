@@ -19,10 +19,10 @@ export const NOOR_EXTENSION: StorefrontExtension = {
   version: manifest.version,
   source: "bundled",
   release: bundled.release,
-  sections: storefront.sections.filter((section) => section.route === undefined).map((section) => section.type),
-  sectionSettings: Object.fromEntries(storefront.sections.filter((section) => section.route === undefined).map((section) => [section.type, section.settings])),
+  sections: storefront.sections.map((section) => section.type),
+  sectionSettings: Object.fromEntries(storefront.sections.map((section) => [section.type, section.settings])),
   skins: storefront.skins.map(({ id, target, settings }) => ({ id, target: target as StorefrontSkinTarget, settings })),
-  blocks: storefront.productBlocks.filter((block) => block.route === undefined)
+  blocks: storefront.productBlocks
     .map((block) => ({ type: block.type, target: `product.${block.placement}` as const, settings: block.settings })),
   islands: storefront.islands.map((island) => island.name),
   stylesheet: storefront.stylesheet,
@@ -67,8 +67,6 @@ export function noorSectionSurfaces(sections: readonly StorefrontSection[], prod
     const needs = storefrontSettingNeeds(schema, section.settings.values);
     return [{
       sectionId: section.id,
-      html: "",
-      head: { meta: [], jsonLd: [] },
       component: {
         pluginId: manifest.id,
         type,

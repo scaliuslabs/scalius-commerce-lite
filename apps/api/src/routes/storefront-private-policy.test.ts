@@ -14,7 +14,6 @@ vi.mock("@scalius/core/modules/storefront", async (importOriginal) => ({
   getLandingPageData: vi.fn(),
   getLayoutData: vi.fn(),
   getPageRenderData: vi.fn(),
-  readProductAppContext: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
@@ -22,7 +21,7 @@ vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
   resolveThemePreviewSession: mocks.resolveThemePreviewSession,
 }));
 
-import { getHomepageData, getLandingPageData, readProductAppContext } from "@scalius/core/modules/storefront";
+import { getHomepageData, getLandingPageData } from "@scalius/core/modules/storefront";
 import { storefrontRoutes } from "./storefront";
 
 function createTestApp() {
@@ -190,26 +189,5 @@ describe("storefront private cache policy", () => {
     const query = await createTestApp().request("/api/v1/storefront/landing/eid-offers?draft=true");
     expect(query.status).toBe(400);
     expect(getLandingPageData).not.toHaveBeenCalled();
-  });
-
-  it("draws product apps from the authorized preview and fails expired tokens privately", async () => {
-    const theme = storefrontTemplateTheme("marketplace");
-    const token = `tpv_${"a".repeat(48)}`;
-    mocks.resolveThemePreviewSession.mockResolvedValue({ theme });
-    vi.mocked(readProductAppContext).mockResolvedValue({ blocks: [] } as never);
-    const request = () => createTestApp().request("/api/v1/storefront/theme-preview/product-apps/phone", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }),
-    });
-    const response = await request();
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Cache-Control")).toContain("no-store");
-    await expect(response.json()).resolves.toMatchObject({ data: { blocks: [] } });
-    expect(readProductAppContext).toHaveBeenCalledWith({}, "phone", theme);
-    vi.mocked(readProductAppContext).mockClear();
-    mocks.resolveThemePreviewSession.mockResolvedValue(null);
-    const expired = await request();
-    expect(expired.status).toBe(404);
-    expect(expired.headers.get("Cache-Control")).toContain("no-store");
-    expect(readProductAppContext).not.toHaveBeenCalled();
   });
 });

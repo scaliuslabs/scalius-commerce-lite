@@ -8,7 +8,7 @@ The orchestrator for the public storefront reads: the homepage, landing pages, t
 
 - `storefront.service.ts`: `getHomepageData`, `getLandingPageData`, `getPageRenderData`, `getLayoutData` and their result types.
 - `store-shape.ts`: `selectStoreShapeCounts`, `storeShapeFromCounts`, `readStoreShape`.
-- `product-apps.ts` and `app-render.ts`: `readProductAppContext`, `planPluginRenderStoreFacts`, `readPluginRenderContext`.
+- `app-render.ts`: `planPluginRenderStoreFacts`, `readPluginBlockContext`.
 - `homepage-sections.ts`: `readThemeBrandAssets`, `readThemeMedia`, `HomeMediaAsset`.
 
 Layer L10. The domain imports `analytics`, `catalog`, `categories`, `collections`, `markets`, `navigation`, `pages`, `platform`, `plugins` and `settings`. Nothing in core imports `storefront`; only API routes call it (`apps/api/src/routes/storefront.ts`, `routes/admin/settings/site.ts`, `plugins/storefront-render.ts`).
@@ -27,12 +27,11 @@ All routes are in `apps/api/src/routes/storefront.ts` under `/api/v1/storefront`
 |-----------------|------|
 | `GET /homepage` | `getHomepageData`. Takes no query string |
 | `GET /landing/{slug}` | A theme landing page's sections |
-| `GET /product-apps/{slug}` | `readProductAppContext`, then the apps draw the blocks |
 | `GET /pages/slug/{slug}` | `getPageRenderData` |
 | `GET /layout` | `getLayoutData`, plus the public Platform origins |
 | `GET /batch?r=<path>&r=...` | At most 8 public reads of one page render. Each part is answered as its own GET would, from the dependency-validated cache. The batch itself is never cached |
 | `GET /frontier`, `POST /frontier/check` | Cache change frontier for the storefront page cache. Authenticated with the storefront's frontier key; not public contract |
-| `POST /theme-preview/resolve`, `/theme-preview/homepage`, `/theme-preview/product-apps/{slug}` | Theme preview reads |
+| `POST /theme-preview/resolve`, `/theme-preview/homepage` | Theme preview reads |
 
 How a page renders from one batch, the per-page API and D1 budgets and `pnpm perf:storefront` are in [`docs/STOREFRONT-PERFORMANCE.md`](../../../../../docs/STOREFRONT-PERFORMANCE.md).
 

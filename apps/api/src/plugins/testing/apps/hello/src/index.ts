@@ -3,9 +3,8 @@
 // collection with a compound and a unique index, KV with a TTL, event
 // handlers that call an /api/v1 operation, an admin page, an order card, a
 // bulk product action and a home widget (declarative UI), public routes on
-// the storefront proxy, a homepage section and a product block (sanitized
-// HTML, cached), a signed provider webhook, a cron job, a checkout function
-// and a lifecycle hook.
+// the storefront proxy with head tags, a signed provider webhook, a cron
+// job, a checkout function and a lifecycle hook.
 
 import {
   adminContext,
@@ -44,8 +43,6 @@ export const manifest = {
     public: [
       { name: "greet", methods: ["GET"] },
       { name: "visits", methods: ["GET", "POST"] },
-      { name: "greeting-section", methods: ["GET"], description: "Draws the greeting section." },
-      { name: "product-note", methods: ["GET"], description: "Draws the product note block." },
     ],
     webhooks: ["ping"],
   },
@@ -92,29 +89,8 @@ export const manifest = {
   storefront: {
     proxy: true,
     head: true,
-    sections: [{
-      type: "greeting",
-      name: "Greeting",
-      description: "A short greeting from the store.",
-      route: "greeting-section",
-      settings: [
-        { key: "heading", label: "Heading", type: "text", default: "Hello from our shop", maxLength: 120 },
-        { key: "text", label: "Text", type: "textarea", default: "", maxLength: 500 },
-      ],
-    }],
-    productBlocks: [{
-      type: "note",
-      name: "Hello note",
-      placement: "below",
-      route: "product-note",
-      settings: [{ key: "note", label: "Note", type: "text", default: "Packed with care.", maxLength: 200 }],
-    }],
   },
 } satisfies PluginManifestInput;
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => `&#${character.charCodeAt(0)};`);
-}
 
 function greetings(ctx: PluginContext) {
   const collection = ctx.storage.greetings;
@@ -282,25 +258,6 @@ export default definePlugin({
         const visits = ((await ctx.kv.get<number>("greet_visits")) ?? 0) + 1;
         await ctx.kv.set("greet_visits", visits, { ttlSeconds: DAY_MS / 1000 });
         return { status: 201, body: { message: `Welcome, ${name}!`, visits } };
-      },
-      // Storefront output: drawn from settings alone (no `reads`), cached until they change.
-      "greeting-section": (request) => {
-        const settings = request.render?.settings ?? {};
-        const heading = String(settings.heading ?? "").trim();
-        const text = String(settings.text ?? "").trim();
-        if (!heading && !text) return { body: { html: "" } };
-        return {
-          body: {
-            html: `<div class="mx-auto max-w-7xl px-3 py-6 text-center sm:px-6">${heading ? `<h2 class="text-xl font-bold">${escapeHtml(heading)}</h2>` : ""}${text ? `<p class="mt-2 text-muted-foreground">${escapeHtml(text)}</p>` : ""}</div>`,
-            head: { meta: [{ name: "hello-greeting", content: heading || text }] },
-          },
-        };
-      },
-      "product-note": (request) => {
-        const note = String(request.render?.settings.note ?? "").trim();
-        const product = request.render?.product;
-        if (!note || !product) return { body: { html: "" } };
-        return { body: { html: `<p class="text-sm text-muted-foreground" data-product="${escapeHtml(product.id)}">${escapeHtml(note)}</p>` } };
       },
     },
     webhooks: {

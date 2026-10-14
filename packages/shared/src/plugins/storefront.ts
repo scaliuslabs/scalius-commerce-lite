@@ -1,14 +1,15 @@
 // Storefront surfaces of a plugin (docs/platform/PLUGINS.md, "Storefront
-// surfaces"): theme sections, product blocks, checkout and customer-account
-// blocks, head tags and proxy pages.
-// Each is answered by one of the app's public routes:
+// surfaces"): checkout and customer-account blocks, head tags and proxy
+// pages. Theme sections, product blocks and skins are components drawn at the
+// edge (storefront-components.ts); no app section or product block is drawn
+// by a route.
 //
-// - a section or product block route gets `request.render` (what to draw,
-//   with the merchant's settings) and answers `{ html, head? }`. The API
-//   sanitizes the HTML (html.ts) and stores it inside the homepage or
-//   product-apps batch part under dependency validation, so a cache hit runs
-//   no plugin code. While rendering, a plugin may read only its own settings
-//   and the storage collections the section declares in `reads`;
+// - a checkout or account block route gets `request.render` (what to draw,
+//   with the app's settings) and answers `{ html, head? }`. The API
+//   sanitizes the HTML (html.ts) and stores it inside the app-blocks batch
+//   part under dependency validation, so a cache hit runs no plugin code.
+//   While rendering, a plugin may read only its own settings and the storage
+//   collections the block declares in `reads`;
 // - a proxy page (`/apps/<id>/<route>`, a browser navigation) answers
 //   `{ page: { title, html, … } }` and is drawn inside the store layout, or
 //   `{ redirect: "/same/store/path" }` after a form post.
@@ -26,8 +27,6 @@ export { serializeJsonLd } from "./html";
  * cap): component sections draw at the edge from the page's own data.
  */
 export const PLUGIN_HOME_SECTIONS_MAX = 24;
-/** Of them, at most this many route sections (each a call to its app); later ones render nothing. */
-export const PLUGIN_HOME_ROUTE_SECTIONS_MAX = 8;
 /** At most this many app blocks render on one product page. */
 export const PLUGIN_PRODUCT_BLOCKS_MAX = 10;
 /** A storefront render shares the page's time: its wall time is capped below the manifest's. */
@@ -97,19 +96,17 @@ export function pluginBlockAllowsForms(target: PluginBlockTarget): boolean {
 /** At most this many app blocks draw on one page group. */
 export const PLUGIN_PAGE_BLOCKS_MAX = 12;
 
-/** What a section, product block or checkout/account block route is asked to draw (`request.render`). */
+/** What a checkout or customer-account block route is asked to draw (`request.render`). */
 export interface PluginRenderContext {
-  kind: "section" | "product-block" | "block";
-  /** Checkout and customer-account blocks: where it draws. */
-  target?: PluginBlockTarget;
-  /** The manifest section or block type. */
+  kind: "block";
+  /** Where it draws. */
+  target: PluginBlockTarget;
+  /** The manifest block type. */
   type: string;
-  /** The theme's id of this placement (stable while the merchant keeps it). */
+  /** `<plugin id>/<block type>`. */
   instanceId: string;
-  /** The merchant's settings for this placement, resolved against the manifest (defaults filled). */
+  /** The block has no settings of its own: the app reads its own. */
   settings: Record<string, PluginSettingValue>;
-  /** Product blocks: the product the page shows. */
-  product: { id: string; slug: string; categoryId: string | null; brandId: string | null } | null;
 }
 
 // ── Head contributions ────────────────────────────────────────────────────

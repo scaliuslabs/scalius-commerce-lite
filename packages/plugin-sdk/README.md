@@ -15,8 +15,8 @@ Real apps in `plugins/`: `bkash` and `nagad` (payment providers) and `bangladesh
 | Admin list columns and filters | `admin.listColumns` | storage records or your custom fields (no code) |
 | Order timeline entries | `timeline` | `ctx.timeline.add(…)` |
 | Custom fields, metaobjects | `customFields`, `metaobjects` | `ctx.customFields`, `ctx.api` (`dashboard.metaobjects.*`) |
-| Theme sections, product blocks, checkout and account blocks | `storefront.sections`, `productBlocks`, `blocks` | a public route that answers `{ html }` |
-| Storefront components: sections, product blocks, skins (header, footer, product card, product page, listing, core sections), templates | `storefront.sections` and `productBlocks` (no `route`), `skins`, `templates` | `defineStorefront` in `src/storefront.tsx` (`@scalius/plugin-sdk/storefront`) |
+| Checkout and account blocks | `storefront.blocks` | a public route that answers `{ html }` |
+| Storefront components: sections, product blocks, skins (header, footer, product card, product page, listing, core sections), templates | `storefront.sections`, `productBlocks`, `skins`, `templates` | `defineStorefront` in `src/storefront.tsx` (`@scalius/plugin-sdk/storefront`) |
 | Client islands, stylesheet, public files | `storefront.islands`, `stylesheet`, `connect` | `src/islands/<name>.ts` (`defineIsland`), `src/storefront.css`, `public/` |
 | Scripts, head, proxy | `storefront.scripts`, `head`, `proxy` | |
 | Public routes, webhooks | `routes.public`, `routes.webhooks` | `routes.public[name]`, `routes.webhooks[name]` |
@@ -223,8 +223,7 @@ A function is pure: `(input, settings) => output`, with no I/O. The host stops i
 - Only active apps answer, and only declared routes and methods. Cookies never reach a handler. Admin and public handlers see only `accept`, `accept-language`, `content-type`, `if-none-match`, `user-agent` and `x-requested-with`. Webhook handlers see every header except credentials and network headers.
 - Responses are JSON. An app cannot set cookies, CSP, CORS, `content-type` or redirect headers. A public or webhook response is `no-store` unless it sets exactly `cache-control: public, max-age=N` with N at most 300.
 - Admin pages, cards and widgets answer with `ui.page(...)` or `ui.view(...)`, and buttons and forms with `ui.result(...)`. `adminContext(request)` reads the request, including the dashboard language.
-- A theme section or product block route gets `request.render` and answers `{ body: { html, head? } }`. The platform sanitizes and caches the HTML. A render reads only the app's settings and the collections its section lists in `reads`, and stops after 1.5 s. A page shows at most 8 route sections (component sections, drawn at the edge, may fill the page: 24) and a product page at most 10 app blocks.
-- A checkout or account block (`storefront.blocks: [{ type, name, target, route, reads }]`) renders like a section at its Shopify target (`purchase.checkout.contact.render-after`, `customer-account.order-status.block.render`, …). No forms on checkout targets and no head tags. A page shows at most 12 app blocks.
+- A checkout or account block (`storefront.blocks: [{ type, name, target, route, reads }]`) gets `request.render` and answers `{ body: { html } }`; the platform sanitizes and caches the HTML. A render reads only the app's settings and the collections the block lists in `reads`, and stops after 1.5 s. It draws at its Shopify target (`purchase.checkout.contact.render-after`, `customer-account.order-status.block.render`, …). No forms on checkout targets and no head tags. A page shows at most 12 app blocks.
 - With `storefront.proxy`, `/apps/<id>/*` on the storefront reaches the public routes. `request.customer` holds the signed-in customer's id, never a cookie. Answer `{ page }` or `{ redirect }` for a page navigation.
 
 ## Storefront components

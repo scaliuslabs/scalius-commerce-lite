@@ -258,10 +258,10 @@ export interface PluginRouteRequest {
   /** Admin routes: the staff member's id. */
   staffId: string | null;
   /**
-   * Public routes asked to draw a theme section or a product block: what to
-   * draw and the merchant's settings for it. Answer `{ body: { html, head? } }`.
+   * Public routes asked to draw a checkout or account block: what to
+   * draw. Answer `{ body: { html } }`.
    * The platform sanitizes the HTML and caches it until the app's settings,
-   * version or a collection the section declares in `reads` change, so the
+   * version or a collection the block declares in `reads` change, so the
    * answer must depend only on those and this context: while rendering, the
    * app may read its settings and those collections; `ctx.api`, `ctx.http`,
    * `ctx.kv`, custom fields, messaging and every write are refused. Never

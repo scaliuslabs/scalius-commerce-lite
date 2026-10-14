@@ -202,15 +202,6 @@ function sectionData(entry: GalleryEntry, sections: readonly StorefrontSection[]
     collections: requests.collectionIds.map((id, index) => catalogCollection(entry, id, index % 2 === 0 ? "carousel" : "grid")),
     homeProduct: null,
     metaobjects,
-    ...(entry.scenario.apps === undefined ? {} : {
-      apps: entry.scenario.apps
-        ? (requests.apps ?? []).map((app) => ({
-            sectionId: app.sectionId,
-            html: `<div class="mx-auto max-w-7xl px-3 py-6 text-center sm:px-6"><h2 class="text-xl font-bold">${String(app.values.heading ?? "")}</h2><p class="mt-2 text-muted-foreground">${String(app.values.text ?? "")}</p></div>`,
-            head: { meta: [], jsonLd: [] },
-          }))
-        : [],
-    }),
     ...(entry.scenario.noor ? { apps: entry.scenario.noor === "active" ? noorSectionSurfaces(sections, entry.scenario.product) : [] } : {}),
   };
 }
@@ -245,22 +236,6 @@ function listing(entry: GalleryEntry, search: URLSearchParams) {
     ratingFacet: finiteProducts
       ? [4, 3, 2, 1].map((min) => ({ min, count: finiteProducts.filter((product) => product.rating && product.rating.average >= min).length }))
       : [{ min: 4, count: 820 }, { min: 3, count: 1010 }, { min: 2, count: 1100 }, { min: 1, count: 1140 }],
-  };
-}
-
-function productApps(entry: GalleryEntry) {
-  if (!entry.scenario.apps) return { blocks: [] };
-  return {
-    blocks: [
-      {
-        id: "wishlist",
-        app: "acme.wishlist/button",
-        placement: "buy-box",
-        html: '<form class="mt-3" action="/apps/acme.wishlist/toggle" method="post" data-app-form><input type="hidden" name="productId" value="prod_0"><button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground" aria-pressed="false"><span aria-hidden="true">&#9825;</span><span data-app-label>Save to wishlist</span></button><p class="mt-1 text-sm text-muted-foreground" role="status" data-app-message></p></form>',
-        head: { meta: [], jsonLd: [] },
-      },
-      { id: "note", app: "acme.hello/note", placement: "below", html: '<p class="text-sm text-muted-foreground">Packed with care in Dhaka.</p>', head: { meta: [], jsonLd: [] } },
-    ],
   };
 }
 
@@ -315,8 +290,6 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   if (path === "/api/v1/checkout/config") return { gateways: entry.scenario.checkout === "no-cod" ? [] : [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }] };
   const checkoutApp = /^\/api\/v1\/storefront\/app-blocks\/(checkout)$/.exec(path);
   if (checkoutApp) return checkoutApps(entry);
-  const productApp = /^\/api\/v1\/storefront\/product-apps\/([^/]+)$/.exec(path);
-  if (productApp) return productApps(entry);
   if (path === "/api/v1/products/recommendations") {
     const limit = Math.min(positiveInteger(search.get("limit"), 8), 20);
     const sources = new Set((search.get("productIds") ?? "").split(",").filter(Boolean));

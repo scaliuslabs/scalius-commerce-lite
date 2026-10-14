@@ -48,11 +48,11 @@ The storefront runs the module in one of two loaders, with the same input and th
 | Stylesheet | `stylesheet: true` | `src/storefront.css` | |
 | Browser hosts | `connect: ["api.example.com"]` | | |
 
-A section or product block with a `route` is the older kind: the API calls the app's public route and caches the HTML (docs in `packages/plugin-sdk/README.md`); it retires in slice K2. Component sections and blocks are faster (no network hop) and can show product cards, images and the order form.
+Component sections and product blocks are the only app sections and blocks: they have no `route`, and the API draws nothing for them (a manifest that gives one a `route` or `reads` is rejected). They run at the edge with no network hop and can show product cards, images and the order form. The API still draws checkout and account blocks (`storefront.blocks`) from a public route; only proxy pages (`/apps/<id>/*`) and those blocks put app HTML through the API's sanitizer.
 
 A **page preset** is a ready-made landing page: when the merchant makes a new landing page (`/pages/<slug>`), the editor offers "a blank page" or the presets of the active apps, and asks for a product when a preset's sections have `product` settings, which it fills in. Noor's "Product campaign" preset builds a complete Facebook-ad page (offer, promises, features, steps, reviews, questions, order form) in one step; every section stays editable and reorderable.
 
-A page may hold 24 sections, all of them component sections; at most 8 route sections render on one page (each is a call to its app).
+A page may hold 24 app sections, all of them component sections.
 
 ## Skins
 

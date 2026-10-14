@@ -8,10 +8,9 @@
 //
 // - acme.hello: every surface (settings with secrets, storage, KV, events,
 //   admin pages, cards, actions and widgets, public routes and the proxy,
-//   cron, a signed webhook, a checkout function, a section, a product block
-//   and head tags).
-// - acme.wishlist: a product block without JavaScript, a proxy page, a
-//   product.updated handler and a dashboard page.
+//   cron, a signed webhook, a checkout function and head tags).
+// - acme.wishlist: a proxy page, a product.updated handler and a dashboard
+//   page.
 // - acme.loyalty: checkout.discounts with a snapshot and a commit.
 // - acme.bulk-discount: checkout.discounts and cart.validate by quantity.
 // - acme.order-tagger: an order card and actions through `ctx.api`.

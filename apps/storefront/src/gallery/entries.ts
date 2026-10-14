@@ -67,8 +67,6 @@ export interface GalleryScenario {
   catalogSize?: 0 | 1 | 200;
   /** Configured section media IDs do not resolve (for example, deleted uploads). */
   missingSectionMedia?: boolean;
-  /** App sections and product blocks draw something. */
-  apps?: boolean;
   /** Real packed Noor through the production host; missing exercises core slot fallback. */
   noor?: "active" | "missing";
   /** A small authored menu; omitted retains the 1,000+ link stress fixture. */
@@ -515,20 +513,6 @@ const GALLERY_CART = JSON.stringify({
 
 function appEntries(): GalleryEntry[] {
   const base = baseTheme();
-  const home = clone(base);
-  home.pages.home = [
-    contentSection("hero", "hero"),
-    { id: "app-greeting", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: { heading: "Eid Mubarak from Nakshi Bazar", text: "Orders placed before the 28th arrive before Eid." } } },
-    contentSection("product-rail", "rail"),
-  ];
-  const product = clone(base);
-  product.blocks.product = {
-    ...product.blocks.product,
-    apps: [
-      { id: "wishlist", app: "acme.wishlist/button", values: { label: "Save to wishlist" } },
-      { id: "note", app: "acme.hello/note", values: { note: "Packed with care in Dhaka." } },
-    ],
-  };
   return [
     { id: entryId("app", "checkout-blocks"), family: "app:checkout-block", title: "App blocks at the checkout targets (cart page)", page: "cart", theme: clone(base), focus: MAIN, scenario: { checkoutBlocks: true, storage: { "cart:v3": GALLERY_CART } } },
     {
@@ -544,9 +528,6 @@ function appEntries(): GalleryEntry[] {
         { type: "#shippingAddress", text: "10 Down", expectVisible: '[id^="shippingAddress-suggestions-"] [role="option"]' },
       ],
     },
-    { id: entryId("app", "section"), family: "app:section", title: "App section on the home page", page: "home", theme: home, focus: { include: ['[data-section-id="app-greeting"]'] }, scenario: { apps: true } },
-    { id: entryId("app", "section", "empty"), family: "app:section", title: "App section that drew nothing", page: "home", theme: home, focus: WHOLE_PAGE, scenario: { apps: false } },
-    { id: entryId("app", "product-blocks"), family: "app:product-block", title: "App product blocks (buy box and below)", page: "product", theme: product, focus: MAIN, scenario: { apps: true, product: "fashion" } },
   ];
 }
 

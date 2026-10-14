@@ -95,10 +95,10 @@ export function activePluginStorefrontExtensions(installations: Iterable<PluginI
       version: installation.version,
       source: installation.source,
       release: installation.bundleSha256,
-      sections: storefront.sections.filter((section) => section.route === undefined).map((section) => section.type),
-      sectionSettings: Object.fromEntries(storefront.sections.filter((section) => section.route === undefined).map((section) => [section.type, section.settings])),
+      sections: storefront.sections.map((section) => section.type),
+      sectionSettings: Object.fromEntries(storefront.sections.map((section) => [section.type, section.settings])),
       skins: storefront.skins.map((skin) => ({ id: skin.id, target: skin.target as StorefrontSkinTarget, settings: skin.settings })),
-      blocks: storefront.productBlocks.filter((block) => block.route === undefined)
+      blocks: storefront.productBlocks
         .map((block) => ({ type: block.type, target: `product.${block.placement}` as const, settings: block.settings })),
       islands: storefront.islands.map((island) => island.name),
       stylesheet: storefront.stylesheet,

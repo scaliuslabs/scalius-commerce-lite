@@ -1,7 +1,7 @@
 // The one sanitizer for HTML an app gives the storefront: an allowlist with
 // two profiles.
 //
-// - "surface": route sections, product blocks and proxy pages
+// - "surface": checkout and account blocks and proxy pages
 //   (docs/platform/PLUGINS.md, "Storefront surfaces"). Content, table, list
 //   and form tags; no inline style, no `id`, no `h1` (the page owns it), no
 //   SVG; forms post only to the app's own proxy (`/apps/<plugin id>/...`),
@@ -31,7 +31,7 @@
 // `<`, `>` or `&`). So the browser reads exactly the tags written here,
 // whatever htmlparser2 made of the input, and decoded entities stay text.
 //
-// Pure and deterministic: the API sanitizes route section and block HTML
+// Pure and deterministic: the API sanitizes checkout and account block HTML
 // before it stores it; the storefront sanitizes proxy pages and component
 // output before it renders them.
 

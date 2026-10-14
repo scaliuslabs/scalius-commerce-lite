@@ -52,7 +52,7 @@ const FULL: PluginManifestInput = {
     actions: [{ id: "grant", target: "customer", label: "Grant points", route: "adjust" }],
   },
   storefront: {
-    sections: [{ type: "points-banner", name: "Points banner", route: "balance" }],
+    sections: [{ type: "points-banner", name: "Points banner" }],
     scripts: [{ src: "https://cdn.acme.example/widget.js" }],
     proxy: true,
   },
@@ -131,7 +131,7 @@ describe("plugin manifest", () => {
     ["a script on checkout", { storefront: { scripts: [{ src: "https://cdn.acme.example/w.js", pages: ["checkout"] }] } }, "storefront.scripts.0.pages.0"],
     ["a script on the order receipt", { storefront: { scripts: [{ src: "https://cdn.acme.example/w.js", pages: ["order-success"] }] } }, "storefront.scripts.0.pages.0"],
     ["a page whose route is missing", { admin: { pages: [{ id: "p", title: "P", route: "nope" }] } }, "admin.pages.0.route"],
-    ["a section on an admin route", { storefront: { sections: [{ type: "s", name: "S", route: "dashboard" }] } }, "storefront.sections.0.route"],
+    ["a section with a route (sections are components)", { storefront: { sections: [{ type: "s", name: "S", route: "dashboard" }] } }, "storefront.sections.0"],
     ["an unknown key", { extra: true }, "(root)"],
     ["a translation of a page it doesn't have", { translations: { bn: { pages: { missing: "পাতা" } } } }, "translations.bn.pages.missing"],
     ["a translation under a malformed language tag", { translations: { "pt_BR": { name: "Fidelidade" } } }, "translations.pt_BR"],
@@ -271,20 +271,17 @@ describe("storefront surfaces in the manifest", () => {
     customFields: [],
     admin: { pages: [], cards: [], actions: [], widgets: [] },
   } satisfies PluginManifestInput;
-  const section = (extra: Record<string, unknown> = {}) => ({ type: "latest", name: "Latest", route: "draw", ...extra });
+  const section = (extra: Record<string, unknown> = {}) => ({ type: "latest", name: "Latest", ...extra });
   const issues = (input: unknown) => {
     const parsed = parsePluginManifest(input);
     return parsed.ok ? [] : parsed.issues.map((issue) => `${issue.path} ${issue.message}`);
   };
 
-  it("declares what a section reads, from declared collections only", () => {
-    const parsed = parsePluginManifest({ ...base, storefront: { sections: [section({ reads: ["reviews"] })] } });
-    expect(parsed.ok && parsed.manifest.storefront.sections[0]!.reads).toEqual(["reviews"]);
-    // Nothing declared: the output depends on settings alone.
-    const none = parsePluginManifest({ ...base, storefront: { productBlocks: [{ type: "stars", name: "Stars", placement: "buy-box", route: "draw" }] } });
-    expect(none.ok && none.manifest.storefront.productBlocks[0]!.reads).toEqual([]);
-    expect(issues({ ...base, storefront: { sections: [section({ reads: ["ledger"] })] } }))
-      .toEqual(["storefront.sections.0.reads.0 Storage collection ledger is not declared."]);
+  it("declares sections and product blocks as components: no route, no storage reads", () => {
+    expect(parsePluginManifest({ ...base, storefront: { sections: [section()] } }).ok).toBe(true);
+    expect(issues({ ...base, storefront: { sections: [section({ route: "draw" })] } })).toHaveLength(1);
+    expect(issues({ ...base, storefront: { sections: [section({ reads: ["reviews"] })] } })).toHaveLength(1);
+    expect(issues({ ...base, storefront: { productBlocks: [{ type: "stars", name: "Stars", placement: "buy-box", route: "draw" }] } })).toHaveLength(1);
   });
 
   it("keeps storefront settings public: no secrets", () => {
@@ -292,10 +289,9 @@ describe("storefront surfaces in the manifest", () => {
       .toEqual(["storefront.sections.0.settings.0.type Storefront settings are public: keep secrets in the app's settings."]);
   });
 
-  it("needs unique product block types and a declared public route", () => {
-    const block = { type: "stars", name: "Stars", placement: "below", route: "draw" } as const;
+  it("needs unique product block types", () => {
+    const block = { type: "stars", name: "Stars", placement: "below" } as const;
     expect(issues({ ...base, storefront: { productBlocks: [block, block] } })).toEqual(["storefront.productBlocks Product block types must be unique."]);
-    expect(issues({ ...base, storefront: { productBlocks: [{ ...block, route: "missing" }] } })).toEqual(["storefront.productBlocks.0.route Public route missing is not declared."]);
   });
 
   it("draws checkout and account blocks at Shopify's extension targets, from declared routes and collections", () => {
@@ -369,7 +365,7 @@ describe("settings groups and page tabs in the manifest", () => {
     expect(issues({
       ...pack,
       routes: { ...FULL.routes, public: [{ name: "draw", methods: ["GET"] }] },
-      storefront: { sections: [{ type: "s", name: "S", route: "draw", settings: [{ key: "a", label: "A", type: "text", group: "store" }] }] },
+      storefront: { sections: [{ type: "s", name: "S", settings: [{ key: "a", label: "A", type: "text", group: "store" }] }] },
     })).toEqual(["storefront.sections.0.settings.0.group Groups are for the app's own settings."]);
   });
 

@@ -90,7 +90,7 @@ describe("the storefront gallery", () => {
       for (const value of values) expect(ids.has(entryId("product", "sticky", `${position}=${value}`)), `${position}=${value}`).toBe(true);
     }
     for (const palette of STOREFRONT_THEME_PALETTE_KEYS) expect(families.has(`palette:${palette}`), palette).toBe(true);
-    for (const family of ["app:section", "app:product-block", "app:checkout-block", "locale:bn", "locale:rtl", "page:cart", "page:cms", "page:landing"]) expect(families.has(family), family).toBe(true);
+    for (const family of ["app:checkout-block", "locale:bn", "locale:rtl", "page:cart", "page:cms", "page:landing"]) expect(families.has(family), family).toBe(true);
   });
 
   it("audits the cart page with lines in it: 1, 3 and 10 lines, a sold-out line and a Bangla cart", () => {

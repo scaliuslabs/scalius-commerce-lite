@@ -5,15 +5,11 @@ import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 import {
   getCheckoutConfig,
   getLayoutData,
-  getProductAppBlocks,
   getProductBySlugResult,
   getShippingMethods,
-  getThemePreviewProductAppBlocks,
 } from "@/lib/api";
-import AppHeadTags from "@/components/apps/AppHeadTags.astro";
 import AppComponent from "@/components/apps/AppComponent.astro";
 import ComponentProductBlocks from "@/components/apps/ComponentProductBlocks.astro";
-import ProductAppBlocks from "@/components/apps/ProductAppBlocks.astro";
 import { appProductBlocks, appSkin, renderAppSkin } from "@/lib/extensions";
 import { productPageData } from "@/lib/extensions/data";
 import type { EmbedRender, EmbedRenderers } from "@/lib/extensions/embeds";
@@ -22,7 +18,6 @@ import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
 import { THEME_EDITOR_MARKS, themeEditorModuleMark } from "@scalius/shared/theme-editor-bridge";
 import TemplateSections from "@/components/homepage/TemplateSections.astro";
 import { templateSectionData } from "@/lib/template-sections";
-import { markRenderUncacheable } from "@/lib/cache-policy";
 import { buildDeliveryFacts, productFulfilment } from "@/lib/delivery-facts";
 import { resolveProductPageCopy } from "@/components/product/lib/buyer-inputs";
 import { formatMoney } from "@/lib/currency";
@@ -122,16 +117,13 @@ const layoutPromise = getLayoutData();
 const productPromise = getProductBySlugResult(slug);
 const shippingMethodsPromise = getShippingMethods();
 const checkoutConfigPromise = getCheckoutConfig();
-const productAppsPromise = getProductAppBlocks(slug);
 
-// Parallel fetch, one batch: layout, product, shipping and payment data, and
-// the app blocks the published theme places on product pages.
-const [layoutData, productResult, shippingMethods, checkoutConfig, productApps] = await Promise.all([
+// Parallel fetch, one batch: layout, product, shipping and payment data.
+const [layoutData, productResult, shippingMethods, checkoutConfig] = await Promise.all([
   layoutPromise,
   productPromise,
   shippingMethodsPromise,
   checkoutConfigPromise,
-  productAppsPromise,
 ]);
 setRuntimeImageCdnPolicy(layoutData?.media);
 if (productResult.state === "not_found") {
@@ -148,22 +140,12 @@ if (productResult.state === "unavailable" || !layoutData) {
 const productData = productResult.data;
 const { product, category, media, variants, recommendations } = productData;
 
-// Installed apps' blocks (in the buy box and after the modules) and their
-// head tags. A failed read renders the page without them, for this request
-// only (its part carries no proof, and the render is marked uncacheable).
-// A theme preview draws the previewed theme's blocks instead (private, never cached).
 const requestTheme = await resolveRequestTheme(Astro, layoutData);
 // The theme editor's preview marks the page's parts so a click selects them.
 const editorMarks = requestTheme.preview !== null;
-const renderedApps = requestTheme.preview && requestTheme.previewToken
-  ? await getThemePreviewProductAppBlocks(requestTheme.previewToken, slug)
-  : productApps;
-const appBlocks = renderedApps.blocks;
-if (renderedApps.failed) markRenderUncacheable(Astro.response.headers);
 const productTemplate = requestTheme.resolved.pages.templates.product;
 const shop = shopCopy(requestTheme.language);
 const templateData = await templateSectionData("product", requestTheme);
-const appHeads = appBlocks.map((block) => block.head);
 
 // Theme -> Layout -> Product page: the gallery, the buy box's look and the
 // modules below the fold, in the template's order.
@@ -606,7 +588,6 @@ const buyBox = {
   features: { shown: featuresAt === "buy-box", title: productPageCopy.productKeyFeaturesText },
   emi: buyBoxShowsEmi,
   contactLinks,
-  appBlocks,
   componentBlocks,
   blockData: productPageProjection,
   fulfilment: pageFulfilment,
@@ -777,7 +758,6 @@ const productCategoryAnalytics = productCategory
 >
   <Fragment slot="head">
     <RichTextStyles />
-    {appHeads.length > 0 && <AppHeadTags heads={appHeads} jsonLd={false} />}
   </Fragment>
 
   <Fragment slot="preload">
@@ -942,8 +922,7 @@ const productCategoryAnalytics = productCategory
     })()}</ThemeEditorMark>)}
 
     {/* Installed apps' blocks after the template's modules. */}
-    <ThemeEditorMark id={editorMarks && (appBlocks.some((block) => block.placement === "below") || componentBlocks.some((block) => block.target === "product.below")) ? THEME_EDITOR_MARKS.productApps : null}>
-      <ProductAppBlocks blocks={appBlocks} placement="below" />
+    <ThemeEditorMark id={editorMarks && componentBlocks.some((block) => block.target === "product.below") ? THEME_EDITOR_MARKS.productApps : null}>
       <ComponentProductBlocks blocks={componentBlocks} target="product.below" data={productPageProjection} />
     </ThemeEditorMark>
   </div>
@@ -982,9 +961,6 @@ const productCategoryAnalytics = productCategory
       />
     )
   }
-  {/* Apps' JSON-LD beside the product's own (never instead of it), and like
-      it only on an indexed product page. */}
-  {!product.noIndex && appHeads.length > 0 && <AppHeadTags heads={appHeads} meta={false} />}
 </Layout>
 
 <script>

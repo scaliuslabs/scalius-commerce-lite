@@ -208,40 +208,26 @@ export const PLUGIN_STOREFRONT_SCRIPT_PAGES = ["all", "home", "product", "listin
 
 const storefrontSchema = z.object({
   /**
-   * Theme sections the merchant can add in the theme editor/builder. A
-   * section with a `route` is drawn by that public route (sanitized HTML,
-   * cached under dependency validation); one without is a component the
-   * app's storefront module draws at the edge (storefront-components.ts).
+   * Theme sections the merchant can add in the theme editor/builder: a
+   * component the app's storefront module draws at the edge
+   * (storefront-components.ts).
    */
   sections: z.array(z.object({
     type: name,
     name: title,
     description: description.optional(),
     settings: pluginSettingsSchemaSchema.default([]),
-    /** The public route that renders the section (sanitized HTML), cached under dependency validation. */
-    route: name.optional(),
-    /**
-     * Storage collections the render reads. Rendering may read only these
-     * (and the app's settings); a write to one invalidates the cached
-     * section. Nothing declared: the output depends on settings alone.
-     * Route sections only.
-     */
-    reads: z.array(name).max(20).default([]),
   }).strict()).max(32).default([]),
   /**
-   * Blocks inside the product page's purchase area or below it. A block
-   * with a `route` is drawn by that public route; one without is a
-   * component the storefront module draws at the edge from the product
-   * page's projection (`block` jobs, storefront-components.ts).
+   * Blocks inside the product page's purchase area or below it: components
+   * the storefront module draws at the edge from the product page's
+   * projection (`block` jobs, storefront-components.ts).
    */
   productBlocks: z.array(z.object({
     type: name,
     name: title,
     placement: z.enum(["buy-box", "below"]),
     settings: pluginSettingsSchemaSchema.default([]),
-    route: name.optional(),
-    /** As for sections. */
-    reads: z.array(name).max(20).default([]),
   }).strict()).max(10).default([]),
   /**
    * Checkout and customer-account blocks (Shopify's UI extension targets):
@@ -254,7 +240,7 @@ const storefrontSchema = z.object({
     name: title,
     target: z.enum(PLUGIN_BLOCK_TARGETS),
     route: name,
-    /** As for sections. */
+    /** Storage collections the render reads; it may read only these (and the app's settings). */
     reads: z.array(name).max(20).default([]),
   }).strict()).max(10).default([]),
   /** Meta tags and JSON-LD (sanitized) for the page head. */
@@ -285,11 +271,9 @@ function emptyPluginStorefront() {
   };
 }
 
-/** Whether the app ships a storefront module (component sections, component product blocks or skins). */
+/** Whether the app ships a storefront module (component sections, product blocks or skins). */
 export function pluginHasStorefrontModule(storefront: Pick<PluginManifest["storefront"], "sections" | "productBlocks" | "skins">): boolean {
-  return storefront.skins.length > 0
-    || storefront.sections.some((section) => section.route === undefined)
-    || storefront.productBlocks.some((block) => block.route === undefined);
+  return storefront.skins.length > 0 || storefront.sections.length > 0 || storefront.productBlocks.length > 0;
 }
 
 /** A setting a component cannot resolve without a read: images and products (the theme's sections read them; skins and blocks read nothing). */
@@ -634,35 +618,32 @@ export const pluginManifestSchema = z.object({
   if (collections.has("batch")) {
     context.addIssue({ code: "custom", path: ["storage", "batch"], message: "\"batch\" is reserved: name the collection something else." });
   }
-  const surfaces = [
-    ...manifest.storefront.sections.map((surface, index) => ({ surface, path: ["storefront", "sections", index] as (string | number)[], reads: true })),
-    ...manifest.storefront.productBlocks.map((surface, index) => ({ surface, path: ["storefront", "productBlocks", index] as (string | number)[], reads: false })),
-    ...manifest.storefront.blocks.map((surface, index) => ({ surface: { ...surface, settings: [] }, path: ["storefront", "blocks", index] as (string | number)[], reads: false })),
-  ];
-  const storefrontOnly = new Set<string>(PLUGIN_STOREFRONT_SETTING_TYPES);
-  for (const { surface, path, reads } of surfaces) {
-    const component = surface.route === undefined;
-    if (surface.route !== undefined) needPublicRoute([...path, "route"], surface.route);
-    else if (surface.reads.length > 0) {
-      context.addIssue({ code: "custom", path: [...path, "reads"], message: "A component reads no storage: its storefront module draws from its settings and the page's data. Give it a route to read storage." });
-    }
-    surface.reads.forEach((collection, readIndex) => {
+  // Checkout and customer-account blocks, the one route-drawn surface left: a public route reading declared collections.
+  manifest.storefront.blocks.forEach((block, index) => {
+    const path = ["storefront", "blocks", index];
+    needPublicRoute([...path, "route"], block.route);
+    block.reads.forEach((collection, readIndex) => {
       if (!collections.has(collection)) {
         context.addIssue({ code: "custom", path: [...path, "reads", readIndex], message: `Storage collection ${collection} is not declared.` });
       }
     });
-    surface.settings.forEach((field, fieldIndex) => {
+  });
+  // Components (sections and product blocks): public settings the storefront module resolves at the edge.
+  const components = [
+    ...manifest.storefront.sections.map((surface, index) => ({ settings: surface.settings, path: ["storefront", "sections", index] as (string | number)[], reads: true })),
+    ...manifest.storefront.productBlocks.map((surface, index) => ({ settings: surface.settings, path: ["storefront", "productBlocks", index] as (string | number)[], reads: false })),
+  ];
+  const storefrontOnly = new Set<string>(PLUGIN_STOREFRONT_SETTING_TYPES);
+  for (const { settings, path, reads } of components) {
+    settings.forEach((field, fieldIndex) => {
       if (field.type === "secret") {
         context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "type"], message: "Storefront settings are public: keep secrets in the app's settings." });
       }
       if (field.group !== undefined) {
         context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "group"], message: "Groups are for the app's own settings." });
       }
-      if (!component && storefrontOnly.has(field.type)) {
-        context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "type"], message: `${field.type} settings are for components (drawn by the storefront module).` });
-      }
-      // A component product block draws from the product page's projection alone: no media or catalog read.
-      if (component && !reads && settingNeedsRead(field)) {
+      // A product block draws from the product page's projection alone: no media or catalog read.
+      if (!reads && settingNeedsRead(field)) {
         context.addIssue({ code: "custom", path: [...path, "settings", fieldIndex, "type"], message: "A product block's settings cannot name images or products (ship images in the app's public files)." });
       }
     });

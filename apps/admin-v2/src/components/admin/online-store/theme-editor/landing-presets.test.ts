@@ -13,8 +13,8 @@ const app = {
   templates: [],
   productBlocks: [],
   sections: [
-    { key: "acme.theme/hero", type: "hero", name: "Hero", description: null, component: true, settings: [field("product", "product"), field("heading", "text")] },
-    { key: "acme.theme/faq", type: "faq", name: "FAQ", description: null, component: true, settings: [field("heading", "text")] },
+    { key: "acme.theme/hero", type: "hero", name: "Hero", description: null, settings: [field("product", "product"), field("heading", "text")] },
+    { key: "acme.theme/faq", type: "faq", name: "FAQ", description: null, settings: [field("heading", "text")] },
   ],
   pagePresets: [
     {

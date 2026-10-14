@@ -29,7 +29,7 @@ export type PluginSettingType = (typeof PLUGIN_SETTING_TYPES)[number];
 
 /**
  * Types only a storefront component's settings may use (`storefront.sections`
- * drawn by the storefront module, component `productBlocks` and `storefront.skins`;
+ * drawn by the storefront module, `productBlocks` and `storefront.skins`;
  * skins and blocks name no images or products). A component gets
  * them resolved: an image as its URLs and size, a product source as its
  * products' cards, a link as a safe href, a list as its items.

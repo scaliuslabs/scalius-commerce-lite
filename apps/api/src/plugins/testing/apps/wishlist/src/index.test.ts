@@ -1,5 +1,5 @@
 // The wishlist app over the SDK harness: the same runtime as the platform,
-// an in-memory bridge, and the platform's render mode for the product block.
+// and an in-memory bridge.
 import { describe, expect, it } from "vitest";
 import {
   createPluginTestHarness,
@@ -8,7 +8,6 @@ import {
 } from "@scalius/plugin-sdk/testing";
 import wishlist from "./index";
 
-const product = { id: "p_linen", slug: "linen-panjabi", categoryId: null, brandId: null };
 const productApi = async (operationId: string, input: unknown) => {
   if (operationId === "dashboard.products.get_section") {
     const id = (input as { path: { id: string } }).path.id;
@@ -25,18 +24,6 @@ const json = { accept: "application/json" };
 const html = { accept: "text/html" };
 
 describe("acme.wishlist", () => {
-  it("draws the same heart button for every buyer, from settings alone, and it survives sanitizing", async () => {
-    const harness = createPluginTestHarness(wishlist);
-    const drawn = (await harness.render("product-block", "button", { product, settings: { label: "Love it" } })).value as { body: { html: string } };
-    expect(drawn.body.html).toContain('action="/apps/acme.wishlist/toggle"');
-    expect(drawn.body.html).toContain("Love it");
-    const clean = sanitizePluginHtml(drawn.body.html, { pluginId: "acme.wishlist", forms: true });
-    // Nothing is dropped (the heart entity is written out as its character).
-    expect(clean.ok && clean.html).toBe(drawn.body.html.replace("&#9825;", "♡"));
-    // Rendering may not read the wishes (the block declares no reads) or write anything.
-    expect((await harness.render("product-block", "button", { product: { ...product, id: "../x" } })).value).toEqual({ body: { html: "" } });
-  });
-
   it("asks guests to sign in, as JSON or as a page redirect", async () => {
     const harness = createPluginTestHarness(wishlist, { api: productApi });
     expect((await harness.route("public", "toggle", { method: "POST", headers: json, body: { productId: "p_linen" } })).value)

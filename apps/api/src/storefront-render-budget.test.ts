@@ -1,8 +1,6 @@
 // Extends zod with .openapi() before the shared theme schemas load (the routes need it).
 import "@hono/zod-openapi";
-import { vi, beforeAll, describe, expect, it } from "vitest";
-// The reference app is a sample, not in scalius.plugins.json: add it to the bundled registry.
-vi.mock("./plugins/bundled.gen", async (importOriginal) => (await import("./plugins/testing/fixture-apps")).withFixtureApps(await importOriginal()));
+import { beforeAll, describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { createPublicPartReader, renderPublicRead } from "./public-read";
 import { MAX_STOREFRONT_BATCH_PARTS } from "@scalius/shared/public-api-cache-routes";
@@ -11,8 +9,6 @@ import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
 import { activatePlugin, installPlugin } from "@scalius/core/modules/plugins";
 import { BUNDLED_PLUGINS } from "./plugins/bundled.gen";
-import { installHello, PLUGIN_TEST_CREDENTIAL_KEY } from "./plugins/testing/fixtures";
-import { manifest as wishlistManifest } from "./plugins/testing/apps/wishlist/src/index";
 import { manifest as noorManifest } from "../../../plugins/noor/src/index";
 import {
   createNavigationMenu,
@@ -59,26 +55,12 @@ const PAGE_D1_BUDGETS = {
   checkout: { roundTrips: 7, waves: 2 },
 } as const;
 
-/**
- * The same pages with one app drawing on them (Hello's homepage section,
- * Wishlist's product block), measured. Home: the apps' installations and
- * store facts are one batch beside the homepage's second batch (one round
- * trip, no wave). Product: the product-apps part reads the theme, product,
- * active apps and store facts in its one batch whether or not an app draws,
- * so drawing adds nothing. Apps that read their storage add their own reads.
- */
-const APP_PAGE_D1_BUDGETS = {
-  home: { roundTrips: 11, waves: 2 },
-  product: { roundTrips: 19, waves: 3 },
-} as const;
-
 /** A page template with sections: its part read after the page's batch (theme and collections, then the sections' data). */
 const TEMPLATE_PART_D1_BUDGET = { roundTrips: 2, waves: 2 } as const;
 
 const PAGE_PARTS: Record<keyof typeof PAGE_D1_BUDGETS, string[]> = {
   home: ["/api/v1/storefront/layout", "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
-  // The product page's app blocks are a part of their own (theme, product and active apps in one read).
-  product: ["/api/v1/storefront/layout", "/api/v1/products/linen-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/linen-panjabi"],
+  product: ["/api/v1/storefront/layout", "/api/v1/products/linen-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
   category: ["/api/v1/storefront/layout", "/api/v1/categories/panjabi/products?page=1&limit=20&sort=newest"],
   search: ["/api/v1/storefront/layout", "/api/v1/products?page=1&limit=20&sort=relevance&search=linen"],
   collection: ["/api/v1/storefront/layout", "/api/v1/collections/col_grid?page=1&limit=20&sort=newest"],
@@ -279,7 +261,6 @@ async function renderPage(
   options: {
     paths?: readonly string[];
     prepare?: (db: Database) => Promise<void>;
-    apps?: boolean;
     /** App component sections (Noor's) added to the home page. */
     components?: StorefrontSection[];
     editTheme?: (theme: StorefrontThemeDocument) => void;
@@ -295,26 +276,16 @@ async function renderPage(
     const noor = await installPlugin(db, { manifest: noorManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["scalius.noor"]!.sha256, actorUserId: "noor-owner" });
     await activatePlugin(db, "scalius.noor", { actorUserId: "noor-owner", expectedRevision: noor.revision });
   }
-  if (options.apps) {
-    // Hello draws a homepage section; Wishlist draws a product block (both bundled, active).
-    await installHello(db, sqlite);
-    const wishlist = await installPlugin(db, { manifest: wishlistManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["acme.wishlist"]!.sha256, actorUserId: "owner" });
-    await activatePlugin(db, "acme.wishlist", { actorUserId: "owner", expectedRevision: wishlist.revision });
-  }
   const sectionPage = page === "home" || page === "landing";
   const theme = sectionPage ? everySectionTheme() : storefrontTemplateTheme("department-mall");
   if (sectionPage) {
     sqlite.exec(HOME_SEED);
     // Room for three component sections within the page cap (the same core sections go with or without them).
     if (options.components) theme.pages.home = [...theme.pages.home.slice(0, -3), ...options.components];
-    if (options.apps) theme.pages.home.push({ id: "hello", type: "app", version: 1, settings: { app: "acme.hello/greeting", values: { heading: "Eid Mubarak" } } });
     theme.pages.landing.eid = { title: "ঈদের বাছাই", description: "", sections: structuredClone(theme.pages.home) };
   } else if (page === "collection") {
     sqlite.exec(`INSERT INTO collections (id, name, presentation, config, sort_order) VALUES
       ('col_grid', 'Best sellers', 'grid', '{"source":"manual","productIds":["p_linen","p_cotton"],"maxProducts":8}', 0)`);
-  }
-  if (options.apps && !sectionPage) {
-    theme.blocks.product.apps = [{ id: "wish", app: "acme.wishlist/button", values: {} }];
   }
   options.editTheme?.(theme);
   expect(storefrontThemeDocumentSchema.safeParse(theme).error?.issues ?? []).toEqual([]);
@@ -330,8 +301,7 @@ async function renderPage(
   const baseEnv = {
     CF_VERSION_METADATA: { id: "render-budget-version", tag: "", timestamp: "" },
     JWT_SECRET: "render-budget-secret-0123456789abcdef",
-    // Hello's secret settings were sealed with the fixtures' key.
-    CREDENTIAL_ENCRYPTION_KEY: options.apps ? PLUGIN_TEST_CREDENTIAL_KEY : "render-budget-credential-key-0123456789abcdef",
+    CREDENTIAL_ENCRYPTION_KEY: "render-budget-credential-key-0123456789abcdef",
   };
   const cache = new MemoryCache();
   const readBatch = async (env: Env, paths: readonly string[]) => {
@@ -625,26 +595,6 @@ describe("storefront page render D1 budget", () => {
       process.stdout.write(`[storefront budget] ${page}: render ${result.render.roundTrips} trips/${result.render.waves} waves; validation ${result.validation.roundTrips}/${result.validation.waves}; hit ${result.hit.roundTrips}/${result.hit.waves}\n`);
     },
   );
-
-  it("draws an app section on the home page and an app block on the product page within their app budgets, and hits run no app code", async () => {
-    // Load the app modules first, as beforeAll does for the routes (production is one bundle).
-    await renderPage("home", "", { apps: true });
-    await renderPage("product", "", { apps: true });
-    const home = await renderPage("home", "", { apps: true });
-    expect((home.bodies[1] as { data: { sections: { apps: Array<{ sectionId: string }> } } }).data.sections.apps).toEqual([expect.objectContaining({ sectionId: "hello" })]);
-    // One batch for the apps beside the second batch: one round trip, no wave.
-    expect({ roundTrips: home.render.roundTrips, waves: home.render.waves })
-      .toEqual({ roundTrips: Math.min(home.render.roundTrips, APP_PAGE_D1_BUDGETS.home.roundTrips), waves: Math.min(home.render.waves, APP_PAGE_D1_BUDGETS.home.waves) });
-    expect(home.hit).toEqual({ roundTrips: 1, waves: 1, statuses: PAGE_PARTS.home.map(() => "hit"), sameBodies: true });
-
-    process.stdout.write(`[storefront budget] home with an app: render ${home.render.roundTrips} trips/${home.render.waves} waves\n`);
-    const product = await renderPage("product", "", { apps: true });
-    expect((product.bodies[4] as { data: { blocks: Array<{ placement: string }> } }).data.blocks).toEqual([expect.objectContaining({ placement: "buy-box" })]);
-    expect({ roundTrips: product.render.roundTrips, waves: product.render.waves })
-      .toEqual({ roundTrips: Math.min(product.render.roundTrips, APP_PAGE_D1_BUDGETS.product.roundTrips), waves: Math.min(product.render.waves, APP_PAGE_D1_BUDGETS.product.waves) });
-    expect(product.hit).toEqual({ roundTrips: 1, waves: 1, statuses: PAGE_PARTS.product.map(() => "hit"), sameBodies: true });
-    process.stdout.write(`[storefront budget] product with an app: render ${product.render.roundTrips} trips/${product.render.waves} waves\n`);
-  });
 
   it("gives app component sections their products and images from the homepage's batches", async () => {
     const section = (id: string, type: string, values: Record<string, unknown>): StorefrontSection =>

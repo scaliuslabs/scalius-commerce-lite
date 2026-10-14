@@ -279,14 +279,14 @@ export type StorefrontHomepageSections = {
         slug: string;
     } | null;
     /**
-     * The app sections to show, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add, or a component section's data. An app section missing here renders nothing.
+     * The app sections to show, by section id, each a component section's data. An app section missing here renders nothing.
      */
-    apps: Array<StorefrontAppSurface & {
+    apps: Array<{
         sectionId: string;
         /**
-         * A component section (no `html`): the storefront draws it at the edge with the app's storefront module, from these resolved values, images and product cards.
+         * A component section: the storefront draws it at the edge with the app's storefront module, from these resolved values, images and product cards.
          */
-        component?: {
+        component: {
             pluginId: string;
             type: string;
             values: {
@@ -325,24 +325,6 @@ export type StorefrontHomepageSections = {
             }>;
         }>;
     }>;
-};
-
-export type StorefrontAppSurface = {
-    /**
-     * Sanitized HTML: content, tables, lists, images (https or store paths), links and forms posting to the app's own /apps/<id>/ proxy only.
-     */
-    html: string;
-    head: {
-        meta: Array<{
-            attribute: 'name' | 'property';
-            key: string;
-            content: string;
-        }>;
-        /**
-         * schema.org JSON-LD, already serialized for a <script type="application/ld+json">.
-         */
-        jsonLd: Array<string>;
-    };
 };
 
 /**
@@ -2221,7 +2203,6 @@ export type ThemeAppSurfaces = {
         name: string;
         description: string | null;
         settings: Array<AppSettingField>;
-        component: boolean;
     }>;
     skins: Array<{
         key: string;
@@ -5923,50 +5904,6 @@ export type GetApiV1StorefrontTemplateByKindResponses = {
 
 export type GetApiV1StorefrontTemplateByKindResponse = GetApiV1StorefrontTemplateByKindResponses[keyof GetApiV1StorefrontTemplateByKindResponses];
 
-export type GetApiV1StorefrontProductAppsBySlugData = {
-    body?: never;
-    path: {
-        slug: string;
-    };
-    query?: never;
-    url: '/api/v1/storefront/product-apps/{slug}';
-};
-
-export type GetApiV1StorefrontProductAppsBySlugErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type GetApiV1StorefrontProductAppsBySlugError = GetApiV1StorefrontProductAppsBySlugErrors[keyof GetApiV1StorefrontProductAppsBySlugErrors];
-
-export type GetApiV1StorefrontProductAppsBySlugResponses = {
-    /**
-     * The drawn app blocks
-     */
-    200: {
-        success: true;
-        data: {
-            blocks: Array<StorefrontAppSurface & {
-                id: string;
-                app: string;
-                placement: 'buy-box' | 'below';
-            }>;
-        };
-    };
-};
-
-export type GetApiV1StorefrontProductAppsBySlugResponse = GetApiV1StorefrontProductAppsBySlugResponses[keyof GetApiV1StorefrontProductAppsBySlugResponses];
-
 export type GetApiV1StorefrontExtensionsByPluginIdByReleaseData = {
     body?: never;
     path: {
@@ -6609,52 +6546,6 @@ export type PostApiV1StorefrontThemePreviewHomepageResponses = {
 };
 
 export type PostApiV1StorefrontThemePreviewHomepageResponse = PostApiV1StorefrontThemePreviewHomepageResponses[keyof PostApiV1StorefrontThemePreviewHomepageResponses];
-
-export type PostApiV1StorefrontThemePreviewProductAppsBySlugData = {
-    body: {
-        token: string;
-    };
-    path: {
-        slug: string;
-    };
-    query?: never;
-    url: '/api/v1/storefront/theme-preview/product-apps/{slug}';
-};
-
-export type PostApiV1StorefrontThemePreviewProductAppsBySlugErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1StorefrontThemePreviewProductAppsBySlugError = PostApiV1StorefrontThemePreviewProductAppsBySlugErrors[keyof PostApiV1StorefrontThemePreviewProductAppsBySlugErrors];
-
-export type PostApiV1StorefrontThemePreviewProductAppsBySlugResponses = {
-    /**
-     * The drawn app blocks
-     */
-    200: {
-        success: true;
-        data: {
-            blocks: Array<StorefrontAppSurface & {
-                id: string;
-                app: string;
-                placement: 'buy-box' | 'below';
-            }>;
-        };
-    };
-};
-
-export type PostApiV1StorefrontThemePreviewProductAppsBySlugResponse = PostApiV1StorefrontThemePreviewProductAppsBySlugResponses[keyof PostApiV1StorefrontThemePreviewProductAppsBySlugResponses];
 
 export type GetApiV1PlatformData = {
     body?: never;

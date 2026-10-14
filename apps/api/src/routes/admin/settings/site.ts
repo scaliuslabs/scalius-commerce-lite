@@ -230,8 +230,6 @@ const themeAppSurfacesSchema = z.object({
     name: z.string(),
     description: z.string().nullable(),
     settings: z.array(appSettingFieldSchema),
-    /** Drawn at the edge by the app's storefront module (it can use image, products, link and list settings). */
-    component: z.boolean(),
   })),
   /** Skins the app draws: a core-owned unit (header, footer, product card, product page, listing, a core section), with their settings. */
   skins: z.array(z.object({
@@ -281,14 +279,13 @@ function themeAppSurfaces(installations: PluginInstallations) {
       return {
         id: installation.pluginId,
         name,
-        sections: storefront.sections.filter((section) => section.route !== undefined || code).map((section) => ({
+        sections: code ? storefront.sections.map((section) => ({
           key: pluginSurfaceKey(installation.pluginId, section.type),
           type: section.type,
           name: section.name,
           description: section.description ?? null,
           settings: section.settings.map(appSettingField),
-          component: section.route === undefined,
-        })),
+        })) : [],
         skins: code ? storefront.skins.map((skin) => ({
           key: pluginSurfaceKey(installation.pluginId, skin.id),
           id: skin.id,
@@ -318,13 +315,13 @@ function themeAppSurfaces(installations: PluginInstallations) {
           }] : [];
         }) : [],
         // A component block needs the approved grant to cover storefront code.
-        productBlocks: storefront.productBlocks.filter((block) => block.route !== undefined || code).map((block) => ({
+        productBlocks: code ? storefront.productBlocks.map((block) => ({
           key: pluginSurfaceKey(installation.pluginId, block.type),
           type: block.type,
           name: block.name,
           placement: block.placement,
           settings: block.settings.map(appSettingField),
-        })),
+        })) : [],
       };
     })
     .filter((surfaces) => surfaces.sections.length + surfaces.productBlocks.length + surfaces.skins.length + surfaces.templates.length + surfaces.pagePresets.length > 0)

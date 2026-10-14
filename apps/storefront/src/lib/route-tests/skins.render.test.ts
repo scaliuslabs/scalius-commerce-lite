@@ -164,7 +164,6 @@ function stubApi(document: StorefrontThemeDocument) {
   const answer = (path: string): { status: number; body: string } => {
     if (path === "/api/v1/storefront/layout") return { status: 200, body: envelope(layout) };
     if (path === "/api/v1/products/linen") return { status: 200, body: envelope(productData()) };
-    if (path === "/api/v1/storefront/product-apps/linen") return { status: 200, body: envelope({ blocks: [] }) };
     if (path === "/api/v1/shipping-methods") return { status: 200, body: envelope({ shippingMethods: [] }) };
     if (path === "/api/v1/checkout/config") return { status: 200, body: envelope({ gateways: [] }) };
     return { status: 404, body: "{}" };

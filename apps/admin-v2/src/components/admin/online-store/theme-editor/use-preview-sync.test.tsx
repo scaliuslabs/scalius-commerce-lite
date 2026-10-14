@@ -200,7 +200,7 @@ describe("app sections and skins", () => {
   });
   const appSections = appSectionsByKey([{
     id: "acme.studio", name: "Studio", skins: [], templates: [], pagePresets: [], productBlocks: [],
-    sections: [{ key: "acme.studio/quote", type: "quote", name: "Quote", description: null, component: true,
+    sections: [{ key: "acme.studio/quote", type: "quote", name: "Quote", description: null,
       settings: [setting("quote", "textarea"), setting("author", "text"), setting("size", "number")] }],
   }]);
   const quote = (values: Record<string, string | number>): StorefrontSection =>

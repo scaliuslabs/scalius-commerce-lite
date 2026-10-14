@@ -1,11 +1,9 @@
 // Scalius Wishlist (`acme.wishlist`): a first-party app built only on the
 // public plugin contract.
 //
-// - Storefront: a heart button product block (buy box) drawn from settings
-//   alone, so it is cached with the product page and never per buyer; the
-//   buyer's state is fetched after load (`data-app-state`) and the button is
-//   a plain form, so it works without JavaScript. The wishlist page is
-//   `/apps/acme.wishlist/wishlist`, drawn inside the store layout.
+// - Storefront: the wishlist page `/apps/acme.wishlist/wishlist`, drawn
+//   inside the store layout, and the toggle and state routes a heart button
+//   would use (a plain form, so it works without JavaScript).
 // - Identity: the storefront proxy tells public routes who is signed in
 //   (`request.customer.id`); the app never sees a cookie or token.
 // - Storage: `wishes` (one record per customer and product) and `products`
@@ -45,7 +43,6 @@ export const manifest = {
       { name: "product-card", methods: ["GET"], description: "How often one product is wished." },
     ],
     public: [
-      { name: "button", methods: ["GET"], description: "Draws the heart button (product block)." },
       { name: "toggle", methods: ["POST"], description: "Saves or removes a product for the signed-in buyer." },
       { name: "state", methods: ["GET"], description: "Whether the signed-in buyer saved a product." },
       { name: "wishlist", methods: ["GET"], description: "The signed-in buyer's wishlist (a store page)." },
@@ -73,16 +70,6 @@ export const manifest = {
   },
   storefront: {
     proxy: true,
-    productBlocks: [{
-      type: "button",
-      name: "Wishlist button",
-      placement: "buy-box",
-      route: "button",
-      settings: [
-        { key: "label", label: "Button text", type: "text", default: "Save to wishlist", maxLength: 40 },
-        { key: "saved_label", label: "Button text once saved", type: "text", default: "Saved to wishlist", maxLength: 40 },
-      ],
-    }],
   },
 } satisfies PluginManifestInput;
 
@@ -233,25 +220,6 @@ export default definePlugin({
 
   routes: {
     public: {
-      // The product block: the same HTML for every buyer (cached with the page).
-      button: (request) => {
-        const product = request.render?.product;
-        if (!product || !PRODUCT_ID.test(product.id)) return { body: { html: "" } };
-        const label = String(request.render?.settings.label ?? "").trim() || "Save to wishlist";
-        const saved = String(request.render?.settings.saved_label ?? "").trim() || "Saved to wishlist";
-        const id = escapeHtml(product.id);
-        const html = [
-          `<form class="mt-3" action="${APP}/toggle" method="post" data-app-form data-app-state="${APP}/state?productId=${id}">`,
-          `<input type="hidden" name="productId" value="${id}">`,
-          `<input type="hidden" name="returnTo" value="/products/${escapeHtml(encodeURIComponent(product.slug))}">`,
-          `<button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground" aria-pressed="false" data-app-label-on="${escapeHtml(saved)}" data-app-label-off="${escapeHtml(label)}">`,
-          `<span aria-hidden="true">&#9825;</span><span data-app-label>${escapeHtml(label)}</span></button>`,
-          `<p class="mt-1 text-sm text-muted-foreground" role="status" data-app-message></p>`,
-          `</form>`,
-        ].join("");
-        return { body: { html } };
-      },
-
       toggle: async (request, ctx) => {
         const productId = fieldOf(request, "productId");
         const back = returnPath(fieldOf(request, "returnTo"), `${APP}/wishlist`);
