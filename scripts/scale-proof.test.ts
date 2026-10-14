@@ -304,10 +304,10 @@ describe.skipIf(!STATE && !POSTGRES_URL)("scale proof", () => {
       const meter = metered(d1);
       meter.metering = true;
       const outcome = await checkout(lines, meter.binding);
-      expect(outcome.ok).toBe(true);
-      const sum = (key: "rowsRead" | "rowsWritten") => meter.statements.reduce((total, statement) => total + Math.max(0, statement[key]), 0);
+      expect(outcome.ok, `checkout ${outcome.status}: ${outcome.text.slice(0, 500)}`).toBe(true);
+      const sum = (key: "rowsRead" | "rowsWritten" | "ms") => meter.statements.reduce((total, statement) => total + Math.max(0, statement[key]), 0);
       const heaviest = [...meter.statements].sort((a, b) => b.rowsRead - a.rowsRead).slice(0, 5).map((statement) => ({ rowsRead: statement.rowsRead, sql: (statement.fullSql ?? statement.sql).replace(/\s+/g, " ").slice(0, 900) }));
-      result.perOrder = { statements: meter.statements.length, rowsRead: sum("rowsRead"), rowsWritten: sum("rowsWritten"), heaviest, note: "D1 meta, index entries included; quote + commit + after-response work" };
+      result.perOrder = { statements: meter.statements.length, rowsRead: sum("rowsRead"), rowsWritten: sum("rowsWritten"), wallMs: Math.round(outcome.ms), d1Ms: Math.round(sum("ms")), heaviest, note: "D1 meta, index entries included; quote + commit + after-response work" };
     } else {
       const rows = await postgresMetered(async (database) => { expect((await checkout(lines, undefined, database)).ok).toBe(true); });
       result.perOrder = { rowsRead: rows.read, rowsWritten: rows.written, note: "PostgreSQL tuple counters: heap tuples, index entries not counted; quote + commit + after-response work" };

@@ -10,7 +10,7 @@ import {
   productVariants,
 } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { buildInventoryLedgerV2Edge, type InventoryLedgerPool } from "./ledger-v2";
+import { buildInventoryLedgerV2Edge, ledgerVersionKeyRead, type InventoryLedgerPool } from "./ledger-v2";
 import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 
 export const DEFAULT_EXPIRY_SWEEP_LIMIT = 50;
@@ -361,6 +361,7 @@ export async function releaseExpiredReservations(
         WHERE ${productVariants.id} = ${variantId}
           AND ${productVariants.stockVersion} = ${variant.stockVersion}
           AND ${productVariants.reservedStock} >= ${outstandingQuantity}
+          ${ledgerVersionKeyRead(edge.stockVersionAfter)}
       `).returning({ id: inventoryMovements.id });
 
       // Decrement reservedStock (clamped to 0). The deterministic release

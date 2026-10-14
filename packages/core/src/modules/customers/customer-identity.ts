@@ -105,10 +105,17 @@ export function guestRecordForContact(contact: OrderContact): SQL {
 export function selectContactCustomerCandidates(db: Database, contact: OrderContact) {
     const email = normalizeContactEmail(contact.email);
     const phone = phoneOrNull(contact.phone);
+    // Each match leads with its own indexed equality and carries `deleted_at`
+    // itself: a shared `deleted_at IS NULL` beside the OR let SQLite (no D1
+    // statistics) walk a `deleted_at` index over every customer instead.
+    const live = isNull(customers.deletedAt);
     const matches: SQL[] = phone
         ? [
-            and(eq(customers.phone, phone), isNotNull(customers.phoneVerifiedAt), isNotNull(customers.accountClaimedAt))!,
-            and(eq(customers.phone, phone), isNull(customers.accountClaimedAt))!,
+            and(
+                eq(customers.phone, phone),
+                live,
+                or(and(isNotNull(customers.phoneVerifiedAt), isNotNull(customers.accountClaimedAt)), isNull(customers.accountClaimedAt)),
+            )!,
         ]
         : [];
     if (email) {
@@ -116,11 +123,12 @@ export function selectContactCustomerCandidates(db: Database, contact: OrderCont
             sql`lower(${customers.email}) = ${email}`,
             isNotNull(customers.emailVerifiedAt),
             isNotNull(customers.accountClaimedAt),
+            live,
         )!);
     }
     // Without a phone, the email's phoneless guest record (never one with a phone).
     if (!phone && email) {
-        matches.push(and(eq(customers.phone, NO_PHONE), sql`lower(${customers.email}) = ${email}`, isNull(customers.accountClaimedAt))!);
+        matches.push(and(eq(customers.phone, NO_PHONE), sql`lower(${customers.email}) = ${email}`, isNull(customers.accountClaimedAt), live)!);
     }
     if (matches.length === 0) matches.push(sql`0`);
     return db
@@ -133,7 +141,7 @@ export function selectContactCustomerCandidates(db: Database, contact: OrderCont
             emailVerifiedAt: customers.emailVerifiedAt,
         })
         .from(customers)
-        .where(and(isNull(customers.deletedAt), or(...matches)));
+        .where(or(...matches));
 }
 
 /**

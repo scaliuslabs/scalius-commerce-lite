@@ -56,6 +56,10 @@ export function seedOrders(sqlite: DatabaseSync, count: number): void {
       10000, 10000, 10000, 10000, 'confirmed', 1790000000 + i * 60, 1790000000 + i * 60
     FROM n;
   `);
+  // Seeded history, not live writes: its events were settled long ago, so the
+  // operations measured next pay only for their own events (a backlog would
+  // be drained by whichever operation or idle tick ran first).
+  sqlite.exec(`UPDATE event_outbox SET status = 'dispatched', dispatched_at = unixepoch() WHERE status = 'pending'`);
 }
 
 /** Images that still publish only their original: the rendition backlog the cron fans out. */
