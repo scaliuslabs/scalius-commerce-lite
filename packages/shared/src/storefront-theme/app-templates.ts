@@ -1,6 +1,6 @@
 // Templates installed apps offer (`storefront.templates` of a manifest): a
 // ready-made look the template library applies in one step, like a built-in
-// template. A template may set the tokens, any blocks, the slots apps fill
+// template. A template may set the tokens, any blocks, the units app skins draw
 // and the homepage sections; the merchant's brand, landing pages, page
 // templates and other content stay. The API lists only templates that parse
 // against the live document schema, and the applied document is checked
@@ -30,7 +30,7 @@ export function readStorefrontAppTemplateTheme(value: unknown): StorefrontAppTem
 }
 
 /**
- * The document with an app template applied: its tokens, blocks and slots
+ * The document with an app template applied: its tokens, blocks and skins
  * replace the document's, its sections become the homepage's, and the
  * document records the template it came from (`apps.template`). A homepage
  * section whose id the template reuses keeps the merchant's values.

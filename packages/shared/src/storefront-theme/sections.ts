@@ -3,7 +3,7 @@
 // optional, repeatable and reorderable; a section whose data does not fit
 // the store (`requires`) or that has nothing to show renders nothing.
 import { z } from "zod";
-import { storefrontAppKeySchema, storefrontAppValuesSchema } from "./apps";
+import { storefrontAppKeySchema, storefrontAppValuesSchema, storefrontSkinRefSchema } from "./apps";
 import { atLeast, type FitCondition } from "./fit";
 import { storefrontLinkSchema } from "./links";
 
@@ -112,6 +112,8 @@ function section<const Type extends string, Settings extends z.ZodType>(spec: {
       hidden: z.boolean().optional(),
       aiDraft,
       settings: spec.settings,
+      /** An app skin draws this section from its projection; core draws it while the skin cannot. */
+      skin: storefrontSkinRefSchema.optional(),
     }).strict(),
   };
 }

@@ -38,7 +38,7 @@ const BLOCK_AREA: Record<string, ThemeChangeArea> = {
   card: "productCard", listing: "listing", product: "productPage", footer: "footer",
 };
 
-const APP_AREA: Record<string, ThemeChangeArea> = { header: "header", footer: "footer", productCard: "productCard", template: "template" };
+const SKIN_AREA: Record<string, ThemeChangeArea> = { header: "header", footer: "footer", "product-card": "productCard", "product-main": "productPage", "listing-main": "listing" };
 
 /**
  * Equal as stored JSON: a key whose value is undefined is the same as no key
@@ -115,7 +115,8 @@ export function compareThemeDocuments(before: StorefrontThemeDocument, after: St
     ...areas(before.tokens, after.tokens, TOKEN_AREA, "style"),
     ...(equal(before.brand, after.brand) ? [] : ["brand" as const]),
     ...areas(before.blocks, after.blocks, BLOCK_AREA, "style"),
-    ...areas(before.apps ?? {}, after.apps ?? {}, APP_AREA, "template"),
+    ...areas(before.apps?.skins ?? {}, after.apps?.skins ?? {}, SKIN_AREA, "template"),
+    ...(before.apps?.template === after.apps?.template ? [] : ["template" as const]),
     ...(equal(before.pages.homeMode, after.pages.homeMode) ? [] : ["homeMode" as const]),
   ]);
   for (const area of THEME_CHANGE_AREAS) if (changed.has(area)) changes.push({ kind: "settings-changed", area });
