@@ -10,7 +10,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { CACHE_DEP_LATER_TABLES, cacheDepTriggersForMigration } from "../scripts/cache-dep-triggers";
+import { CACHE_DEP_LATER_TABLES, CACHE_DEP_LATER_TRIGGERS, generateCacheDepTriggers } from "../scripts/cache-dep-triggers";
 import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
 
 const NAME = "0110_plugin_providers";
@@ -20,7 +20,8 @@ const MANIFEST = JSON.stringify({ id: "acme.loyalty", name: "Loyalty", version: 
 
 describe(`${NAME} files`, () => {
   it("installs the generated cache dependency triggers of the plugin tables verbatim on every provider", () => {
-    const triggers = cacheDepTriggersForMigration(NAME);
+    const triggers = generateCacheDepTriggers({ withRetired: true }).filter((trigger) =>
+      (CACHE_DEP_LATER_TRIGGERS[trigger.name] ?? CACHE_DEP_LATER_TABLES[trigger.table]) === NAME);
     const tables = ["plugin_installations", "plugin_registrations", "plugin_records"];
     expect([...new Set(triggers.map((trigger) => trigger.table))]).toEqual(tables);
     expect(Object.entries(CACHE_DEP_LATER_TABLES).filter(([, name]) => name === NAME).map(([table]) => table)).toEqual(tables);
@@ -66,7 +67,7 @@ describe(`${NAME} over a populated 0109 database`, () => {
       INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, payment_method)
         VALUES ('ord_1', 'Rahim', '+8801711111111', 'House 1', 'city_1', 'zone_1', 'pending', 'sslcommerz');
     `);
-    db.exec(compiledMigrationSql("d1", undefined, "0110_"));
+    db.exec(compiledMigrationSql("d1", "0111_", "0110_"));
   });
   afterEach(() => db.close());
 

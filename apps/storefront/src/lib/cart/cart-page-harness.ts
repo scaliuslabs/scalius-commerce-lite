@@ -15,6 +15,7 @@ import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-fo
 import { formatMoney } from "@scalius/shared/currency";
 import { getCustomerSession } from "../api/customer-auth";
 import { browserApiUrl } from "../api/browser-url";
+import { readBuyerAttributes } from "../buyer-ui";
 import { pagePath } from "../presence-url";
 import { addressAutocompleteService, pageLocale } from "../app-services";
 import { storefrontSourcePath } from "../test-source-paths";
@@ -118,6 +119,7 @@ const realImports: Record<string, unknown> = {
   pageLocale,
   pagePath,
   phoneHintCopy,
+  readBuyerAttributes,
   readCheckoutDeliveryMode,
   readCheckoutFormDraft,
   readCheckoutPhoneNeed,

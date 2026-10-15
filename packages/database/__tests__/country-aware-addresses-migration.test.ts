@@ -141,6 +141,8 @@ describe(`${NAME} rules`, () => {
   let db: DatabaseSync;
   beforeEach(() => {
     db = createMigratedSqlite();
+    db.exec(`INSERT INTO webhook_subscriptions (id, url, topics, api_version, secret_ciphertext, secret_hint)
+      VALUES ('whs_addresses', 'https://hooks.example.test/addresses', '["customer.updated"]', '2026-10', 'enc:test', 'test')`);
   });
   afterEach(() => db.close());
 

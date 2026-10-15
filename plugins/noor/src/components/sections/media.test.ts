@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 import { parsePluginManifest } from "@scalius/plugin-sdk/manifest";
-import { fixtureSectionSkinData, renderSection, renderSkin, storefrontShown } from "@scalius/plugin-sdk/storefront/testing";
+import { fixtureContext, fixtureSectionSkinData, renderSection, renderSkin, storefrontShown } from "@scalius/plugin-sdk/storefront/testing";
 import { resolveStorefrontSettings } from "@scalius/shared/plugins";
 import { manifest } from "../../index";
 import storefront from "../../storefront";
@@ -38,6 +38,30 @@ function renderHero(slide: { image?: string; phoneImage?: string }, next?: { ima
 afterEach(() => document.body.replaceChildren());
 
 describe("Noor responsive media", () => {
+  it.each([
+    ["en", "Open gallery link"],
+    ["bn", "গ্যালারির লিংক খুলুন"],
+  ])("names gallery links with empty image alt in %s without replacing merchant descriptions", (language, label) => {
+    const image = { url: "https://media.example/gallery.webp", srcset: null, width: 1200, height: 800, alt: "" };
+    const context = fixtureContext();
+    const result = storefrontShown(renderSection(storefront, "gallery", {
+      eyebrow: null, heading: null, handle: null, link: null, tone: "plain", spacing: "m",
+      images: [
+        { image, link: "/products/linen" },
+        { image: { ...image, alt: "Merchant's linen detail" }, link: "/products/linen" },
+        { image, link: null },
+      ],
+    }, { context: { store: { ...context.store, language } } }), "scalius.noor");
+    expect(result.dropped).toBe(0);
+    document.body.innerHTML = result.html;
+    const links = document.querySelectorAll(".noor-wall a");
+    expect(links).toHaveLength(2);
+    expect(links[0]!.getAttribute("aria-label")).toBe(label);
+    expect(links[0]!.querySelector("img")!.getAttribute("alt")).toBe("");
+    expect(links[1]!.hasAttribute("aria-label")).toBe(false);
+    expect(links[1]!.querySelector("img")!.getAttribute("alt")).toBe("Merchant's linen detail");
+  });
+
   it("lets the browser select one crop instead of rendering two eager images", () => {
     const root = renderHero({ image: "wide", phoneImage: "phone" });
     expect(root.querySelectorAll("img")).toHaveLength(1);

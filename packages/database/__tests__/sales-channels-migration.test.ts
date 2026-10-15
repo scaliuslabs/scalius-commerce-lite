@@ -13,7 +13,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CACHE_DEP_LATER_TABLES, CACHE_DEP_LATER_TRIGGERS, cacheDepTriggersForMigration } from "../scripts/cache-dep-triggers";
-import { eventOutboxPostgresStatements, eventOutboxSqliteStatements } from "../scripts/event-outbox-triggers";
+import { supersededEventOutboxPostgresStatements, supersededEventOutboxSqliteStatements } from "../scripts/event-outbox-triggers";
 import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
 
 const NAME = "0122_sales_channels";
@@ -38,9 +38,9 @@ describe(`${NAME} files`, () => {
     for (const trigger of triggers.filter((entry) => entry.table === "products")) {
       expect(trigger.sqlite).not.toContain("exclude_from_product_feed");
     }
-    for (const statement of eventOutboxSqliteStatements(NAME)) expect(sqlite).toContain(statement);
-    for (const statement of eventOutboxPostgresStatements(NAME)) expect(postgres).toContain(statement);
-    expect(eventOutboxSqliteStatements(NAME)).toHaveLength(4);
+    for (const statement of supersededEventOutboxSqliteStatements(NAME)) expect(sqlite).toContain(statement);
+    for (const statement of supersededEventOutboxPostgresStatements(NAME)) expect(postgres).toContain(statement);
+    expect(supersededEventOutboxSqliteStatements(NAME)).toHaveLength(4);
   });
 
   it("keeps every statement remote-D1 safe and transaction-safe", () => {

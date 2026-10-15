@@ -77,14 +77,14 @@ const V3_CLASSIC = {
   sections: ["hero", "collections", "category-tiles", "usp-strip"],
 } as const;
 
-describe("storefront theme document v9", () => {
+describe("storefront theme document v10", () => {
   it("parses every template as a complete document in its own palette", () => {
     expect(STOREFRONT_TEMPLATES.map((template) => template.id)).toEqual([...STOREFRONT_TEMPLATE_IDS]);
     expect(STOREFRONT_TEMPLATE_IDS).toHaveLength(5);
     for (const template of STOREFRONT_TEMPLATES) {
       const theme = storefrontTemplateTheme(template.id);
       expect(issues(theme), template.id).toEqual([]);
-      expect(theme).toMatchObject({ version: 9, template: template.id });
+      expect(theme).toMatchObject({ version: 10, template: template.id });
       expect(theme.tokens.colors).toEqual(STOREFRONT_THEME_PALETTES[template.palette]);
       expect(Object.isFrozen(template.blocks.product.below)).toBe(true);
     }
@@ -281,7 +281,8 @@ describe("storefront theme document v9", () => {
     expect(parseStoredStorefrontThemeDocument(JSON.stringify(DEFAULT_STOREFRONT_THEME))).toEqual(DEFAULT_STOREFRONT_THEME);
     expect(parseStoredStorefrontThemeDocument(null)).toBeNull();
     expect(parseStoredStorefrontThemeDocument("{not json")).toBeNull();
-    expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 10 }))).toBeNull();
+    expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 9 }))).toBeNull();
+    expect(parseStoredStorefrontThemeDocument(JSON.stringify({ ...clone(), version: 11 }))).toBeNull();
   });
 
   it("has exactly the three header layouts, each resolving on an empty store", () => {

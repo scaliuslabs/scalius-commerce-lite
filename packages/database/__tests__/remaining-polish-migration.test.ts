@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { connect } from "@tursodatabase/database";
 import { describe, expect, it } from "vitest";
 import { compileSqliteDdlForPostgres } from "../scripts/postgres-schema";
-import { eventOutboxSqliteStatements } from "../scripts/event-outbox-triggers";
+import { supersededEventOutboxSqliteStatements } from "../scripts/event-outbox-triggers";
 import { conversationProductReplyGuard, conversationSearchPostgresCollation } from "../scripts/conversation-workspace";
 import { createMigratedSqlite } from "../src/testing/sqlite-d1";
 
@@ -19,7 +19,9 @@ const seed = [
 
 describe("0143 conversation and messaging migration", () => {
   it("keeps event generation and provider prefix ordering consistent", () => {
-    for (const trigger of eventOutboxSqliteStatements().filter((s) => s.startsWith("CREATE TRIGGER `evt_customer_marketing_consents_"))) {
+    const consentTriggers = supersededEventOutboxSqliteStatements("0108_customer_marketing");
+    expect(consentTriggers).toHaveLength(2);
+    for (const trigger of consentTriggers) {
       expect(migration).toContain(trigger);
     }
     expect(migration).toContain(conversationProductReplyGuard);

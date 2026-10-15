@@ -43,6 +43,10 @@ const SEED = `
     ('col_rail', 'Panjabi', 'carousel', '{"source":"dynamic","categoryIds":["cat_panjabi"],"maxProducts":12}', 1);
   INSERT INTO pages (id, title, slug, content, is_published) VALUES ('pg_about', 'About', 'about', '<p>x</p>', 1);
   INSERT INTO pages (id, content_type, title, slug, content, is_published) VALUES ('pg_post', 'article', 'Post', 'post', '<p>x</p>', 1);
+  INSERT INTO object_types (id, namespace, type, name, fields_json, display_field, storefront, handle) VALUES
+    ('oty_custom.faq', 'custom', 'faq', 'FAQ', '[{"key":"question","name":"Question","type":"single_line_text"}]', 'question', 1, 1);
+  INSERT INTO object_records (type_id, id, handle, status, data_json, pub) VALUES
+    ('oty_custom.faq', 'obj_returns', 'returns', 'published', '{"question":"Can I return an item?"}', 1);
   INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
     VALUES ('city_1', 'Dhaka', 'BD', 1, NULL, '{}', '{}', 1), ('zone_1', 'North', 'BD', 2, 'city_1', '{}', '{}', 1),
            ('area_1', 'Banani', 'BD', 3, 'zone_1', '{}', '{}', 1);
@@ -86,6 +90,8 @@ const URLS = [
   "/api/v1/collections",
   "/api/v1/collections/col_grid",
   "/api/v1/collections/col_rail",
+  "/api/v1/objects/custom.faq",
+  "/api/v1/objects/custom.faq?handle=returns&limit=1",
   "/api/v1/storefront/homepage",
   "/api/v1/storefront/layout",
   "/api/v1/storefront/markets",
@@ -169,7 +175,7 @@ describe("cache dependency registry coverage of public reads", () => {
       .map((table) => `${table} (read by ${[...touched.get(table)!].slice(0, 3).join(", ")})`);
     expect(uncovered).toEqual([]);
     // The reads really reach the catalogue, content and settings tables.
-    for (const table of ["products", "product_buyer_state", "product_facet_values", "product_variants", "categories", "category_closure", "settings", "navigation_placements", "pages"]) {
+    for (const table of ["products", "product_buyer_state", "product_facet_values", "product_variants", "categories", "category_closure", "settings", "navigation_placements", "pages", "object_types", "object_records"]) {
       expect(touched.has(table), table).toBe(true);
     }
   }, 120_000);

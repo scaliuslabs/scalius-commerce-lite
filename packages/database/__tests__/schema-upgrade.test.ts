@@ -795,6 +795,30 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         sqliteStatements: 17,
         postgresStatements: 17,
       },
+      {
+        version: 154,
+        name: "0154_order_number_sequence",
+        sqliteStatements: 2,
+        postgresStatements: 4,
+      },
+      {
+        version: 155,
+        name: "0155_v2_beta_contract",
+        sqliteStatements: 163,
+        postgresStatements: 175,
+      },
+      {
+        version: 156,
+        name: "0156_custom_field_object_references",
+        sqliteStatements: 59,
+        postgresStatements: 3,
+      },
+      {
+        version: 157,
+        name: "0157_order_search_update_guards",
+        sqliteStatements: 1,
+        postgresStatements: 1,
+      },
     ]);
   });
 
@@ -860,7 +884,14 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
       const ledger = "SELECT version, name, source_sha256 FROM scalius_schema_migrations ORDER BY version";
       expect((await engine.prepare(ledger).all()).map((row) => [(row as { version: number }).version, (row as { source_sha256: string }).source_sha256]))
         .toEqual(replayed.prepare(ledger).all().map((row) => [row.version, row.source_sha256]));
-      // Its triggers run on the engine.
+      // Its demand and event triggers run on the engine: no subscriber means
+      // no outbox work, then registering a subscriber enables matching facts.
+      await engine.exec(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
+        VALUES ('ord_no_demand', 'A', '+8801711111111', 'House', 'city', 'zone', 'pending')`);
+      expect(await engine.prepare("SELECT topic FROM event_outbox").all()).toEqual([]);
+      await engine.exec(`INSERT INTO webhook_subscriptions (id, url, topics, api_version, secret_ciphertext, secret_hint)
+        VALUES ('whk_upgrade', 'https://example.test/events', '["order.created"]', '2026-08-01', 'enc:fixture', 'test')`);
+      expect(await engine.prepare("SELECT filter FROM event_demand").all()).toEqual([{ filter: "order.created" }]);
       await engine.exec(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
         VALUES ('ord_t', 'A', '+8801711111111', 'House', 'city', 'zone', 'pending')`);
       expect((await engine.prepare("SELECT topic FROM event_outbox").all()).map((row) => (row as { topic: string }).topic)).toEqual(["order.created"]);
@@ -1032,6 +1063,10 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
           { version: 151, name: "0151_postgres_scale" },
           { version: 152, name: "0152_search_index" },
           { version: 153, name: "0153_theme_skins" },
+          { version: 154, name: "0154_order_number_sequence" },
+          { version: 155, name: "0155_v2_beta_contract" },
+          { version: 156, name: "0156_custom_field_object_references" },
+          { version: 157, name: "0157_order_search_update_guards" },
         ],
       });
     } finally {

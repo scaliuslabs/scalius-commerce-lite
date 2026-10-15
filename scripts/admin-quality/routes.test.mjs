@@ -16,7 +16,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/admin/products': typeof AdminProductsIndexRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
-  '/admin/metaobjects/$definitionId/entries/$entryId': typeof X
+  '/admin/objects/$type/records/$recordId': typeof X
   '/admin/settings/agent-access/authorize/$requestId': typeof Y
 }
 export interface FileRoutesById {
@@ -28,7 +28,7 @@ describe("route discovery", () => {
   it("reads the leaf URLs of FileRoutesByTo only", () => {
     expect(parseLeafRoutes(TREE)).toEqual([
       "/", "/auth/login", "/admin", "/admin/products", "/admin/products/$productId/edit",
-      "/admin/metaobjects/$definitionId/entries/$entryId", "/admin/settings/agent-access/authorize/$requestId",
+      "/admin/objects/$type/records/$recordId", "/admin/settings/agent-access/authorize/$requestId",
     ]);
   });
 
@@ -45,7 +45,7 @@ describe("route discovery", () => {
   });
 
   it("names params and fills them, encoding the values", () => {
-    expect(paramNames("/admin/metaobjects/$definitionId/entries/$entryId")).toEqual(["definitionId", "entryId"]);
+    expect(paramNames("/admin/objects/$type/records/$recordId")).toEqual(["type", "recordId"]);
     expect(fillPath("/admin/orders/$orderId/edit", { orderId: "a b/c" })).toBe("/admin/orders/a%20b%2Fc/edit");
   });
 
@@ -71,9 +71,9 @@ describe("route discovery", () => {
 
   it("plans the routes that have every param and reports the others", () => {
     const paths = parseLeafRoutes(TREE);
-    const plan = buildPlan({ paths, resolved: { productId: "p1" }, unresolved: { definitionId: "the store has no metaobject definitions" } });
+    const plan = buildPlan({ paths, resolved: { productId: "p1" }, unresolved: { type: "the store has no object types" } });
     expect(plan.routes.map((route) => route.url)).toContain("/admin/products/p1/edit");
-    expect(plan.skipped).toContainEqual({ path: "/admin/metaobjects/$definitionId/entries/$entryId", reason: "the store has no metaobject definitions" });
+    expect(plan.skipped).toContainEqual({ path: "/admin/objects/$type/records/$recordId", reason: "the store has no object types" });
     expect(plan.skipped.some((item) => item.path.includes("agent-access"))).toBe(true);
     expect(plan.routes.find((route) => route.path === "/auth/login").public).toBe(true);
   });
@@ -112,16 +112,16 @@ describe("param resolution", () => {
     const calls = [];
     const getJson = async (path) => {
       calls.push(path);
-      if (path.includes("/metaobjects/definitions/mod_1/entries")) return { data: { entries: [{ id: "moe_1" }] } };
-      if (path.endsWith("/metaobjects/definitions")) return { data: { items: [{ id: "mod_1" }] } };
+      if (path === "/api/v1/admin/objects/custom.makers?limit=1") return { data: { records: [{ id: "obj_1" }] } };
+      if (path.endsWith("/objects/types")) return { data: { items: [{ id: "objtype_1", handle: "custom.makers" }] } };
       if (path.includes("/brands")) return { data: { brands: [] } };
       throw new Error("404");
     };
-    const { resolved, unresolved } = await resolveParams(["entryId", "brandId", "productId"], getJson);
-    expect(resolved).toEqual({ definitionId: "mod_1", entryId: "moe_1" });
+    const { resolved, unresolved } = await resolveParams(["recordId", "brandId", "productId"], getJson);
+    expect(resolved).toEqual({ type: "custom.makers", recordId: "obj_1" });
     expect(unresolved.brandId).toMatch(/no brands/);
     expect(unresolved.productId).toMatch(/no products/);
-    expect(calls[0]).toMatch(/definitions$/);
+    expect(calls[0]).toMatch(/objects\/types$/);
   });
 
   it("does not fetch a param twice", async () => {

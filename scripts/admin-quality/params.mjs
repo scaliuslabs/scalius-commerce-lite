@@ -22,7 +22,7 @@ const A = "/api/v1/admin";
 
 /**
  * Param name -> where its value comes from. `needs` names params resolved
- * first (a metaobject entry lives under a definition). `none` is the reason
+ * first (an object record lives under a type). `none` is the reason
  * shown when the store has no row.
  */
 export const PARAM_SOURCES = {
@@ -38,12 +38,12 @@ export const PARAM_SOURCES = {
   giftCardId: { url: () => `${A}/gift-cards?limit=1`, keys: ["items"], none: "the store has no gift cards" },
   priceListId: { url: () => `${A}/price-lists?limit=1`, keys: ["items"], none: "the store has no price lists" },
   conversationId: { url: () => `${A}/conversations?limit=1`, keys: ["items"], none: "the inbox is empty" },
-  definitionId: { url: () => `${A}/metaobjects/definitions`, keys: ["items"], none: "the store has no metaobject definitions" },
-  entryId: {
-    needs: ["definitionId"],
-    url: (values) => `${A}/metaobjects/definitions/${encodeURIComponent(values.definitionId)}/entries?limit=1`,
-    keys: ["entries"],
-    none: "the first metaobject definition has no entries",
+  type: { url: () => `${A}/objects/types`, keys: ["items"], id: (row) => row?.handle, none: "the store has no object types" },
+  recordId: {
+    needs: ["type"],
+    url: (values) => `${A}/objects/${encodeURIComponent(values.type)}?limit=1`,
+    keys: ["records"],
+    none: "the first object type has no records",
   },
   segmentId: { url: () => `${A}/customers/segments`, keys: ["segments"], none: "the store has no customer segments" },
   purchaseOrderId: { url: () => `${A}/inventory/purchase-orders?limit=1`, keys: ["purchaseOrders"], none: "the store has no purchase orders" },

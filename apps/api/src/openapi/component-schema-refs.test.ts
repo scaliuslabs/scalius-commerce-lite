@@ -127,6 +127,12 @@ describe("shared component schemas in the agent manifest", () => {
       AGENT_COMPONENT_SCHEMAS,
     )));
     expect(AGENT_COMPONENT_SCHEMAS).toHaveProperty("StorefrontThemeDocument");
+    expect(AGENT_COMPONENT_SCHEMAS).toHaveProperty("StorefrontSettingBindings");
+    expect(AGENT_COMPONENT_SCHEMAS).toHaveProperty("StorefrontProductSource");
+    expect(refs(AGENT_COMPONENT_SCHEMAS.StorefrontSectionList)
+      .filter((ref) => ref === "#/components/schemas/StorefrontProductSource")).toHaveLength(5);
+    expect(refs(AGENT_COMPONENT_SCHEMAS.StorefrontThemeDocument)
+      .filter((ref) => ref === "#/components/schemas/StorefrontSettingBindings").length).toBeGreaterThan(20);
     // The theme document is written once, not per operation.
     const source = readFileSync(AGENT_OPERATION_MANIFEST_PATH, "utf8");
     const templateEnum = `"template":{"type":"string","enum":${JSON.stringify(STOREFRONT_TEMPLATE_IDS)}`;

@@ -323,7 +323,7 @@ export function Gallery({ settings, context }: SectionProps<GallerySettings>) {
       <ul class={cx("noor-wall", `count-${images.length}`)}>
         {images.map((entry) => {
           const photo = <Image image={entry.image} sizes="(min-width: 1024px) 16vw, 33vw" class="noor-cover" />;
-          return <li>{text(entry.link) ? <a href={entry.link!}>{photo}</a> : photo}</li>;
+          return <li>{text(entry.link) ? <a href={entry.link!} aria-label={text(entry.image?.alt) ? undefined : t(context, { en: "Open gallery link", bn: "গ্যালারির লিংক খুলুন" })}>{photo}</a> : photo}</li>;
         })}
       </ul>
     </Section>

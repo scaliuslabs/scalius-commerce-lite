@@ -194,6 +194,8 @@ describe(`${NAME} over a populated 0107 database`, () => {
   });
 
   it("writes one audit row and one event per consent state change", () => {
+    db.exec(`INSERT INTO webhook_subscriptions (id, url, topics, api_version, secret_ciphertext, secret_hint)
+      VALUES ('whs_consent', 'https://hooks.example.test/consent', '["customer.consent_changed"]', '2026-10', 'enc:test', 'test')`);
     db.exec("DELETE FROM event_outbox");
     db.exec(`INSERT INTO customer_marketing_consents (customer_id, channel, state, contact, source, actor, consent_text_version, consent_text, requested_at, confirmation_hash)
       VALUES ('cust_a', 'email', 'pending', 'a@example.com', 'newsletter', 'buyer', 'newsletter:abcdef012345', 'Get offers', 100, 'hash1')`);

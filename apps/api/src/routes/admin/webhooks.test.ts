@@ -133,6 +133,11 @@ describe("admin webhook routes", () => {
   });
 
   it("lists recent events with their facts", async () => {
+    const subscribed = await call("POST", "/webhooks", {
+      url: "https://hooks.example.com/events",
+      topics: ["order.created"],
+    });
+    expect(subscribed.status).toBe(201);
     sqlite.exec(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, channel)
       VALUES ('ord_ev', 'Rahim', '+8801711111111', 'House 1', 'city_1', 'zone_1', 'pending', 'admin')`);
     const listed = await call("GET", "/events?topic=order.created");

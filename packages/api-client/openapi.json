@@ -1785,19 +1785,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -1835,19 +1823,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -1885,19 +1861,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -1948,19 +1912,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2007,19 +1959,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2066,19 +2006,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2135,19 +2063,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2171,19 +2087,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2214,19 +2118,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2250,19 +2142,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2297,19 +2177,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2344,19 +2212,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2384,19 +2240,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2420,19 +2264,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2483,19 +2315,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -2549,19 +2369,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       },
                       "fields": {
                         "type": "array",
@@ -2599,19 +2407,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -2635,19 +2431,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -2688,19 +2472,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -2724,19 +2496,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -2937,19 +2697,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -2973,19 +2721,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -3013,19 +2749,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -3049,19 +2773,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -3085,19 +2797,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -3121,19 +2821,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -3192,19 +2880,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -3228,19 +2904,7 @@
                             "additionalProperties": false
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -3444,19 +3108,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -3508,19 +3160,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -3570,19 +3210,7 @@
                         "additionalProperties": false
                       },
                       "bindings": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "source": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "source"
-                          ],
-                          "additionalProperties": false
-                        }
+                        "$ref": "#/components/schemas/StorefrontSettingBindings"
                       }
                     },
                     "required": [
@@ -3733,6 +3361,21 @@
           "pages"
         ],
         "additionalProperties": false
+      },
+      "StorefrontSettingBindings": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "additionalProperties": false
+        }
       },
       "StorefrontSkinRef": {
         "type": "object",
@@ -3992,19 +3635,7 @@
                             "type": "boolean"
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -4031,19 +3662,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -4139,19 +3758,7 @@
                                     "type": "boolean"
                                   },
                                   "bindings": {
-                                    "type": "object",
-                                    "additionalProperties": {
-                                      "type": "object",
-                                      "properties": {
-                                        "source": {
-                                          "type": "string"
-                                        }
-                                      },
-                                      "required": [
-                                        "source"
-                                      ],
-                                      "additionalProperties": false
-                                    }
+                                    "$ref": "#/components/schemas/StorefrontSettingBindings"
                                   }
                                 },
                                 "required": [
@@ -4180,19 +3787,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -4272,19 +3867,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -4357,19 +3940,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -4419,95 +3990,7 @@
                       "maxLength": 80
                     },
                     "source": {
-                      "oneOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "newest"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "on-sale"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "popular"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "collection"
-                              ]
-                            },
-                            "collectionId": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 64
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "collectionId"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "category"
-                              ]
-                            },
-                            "categoryId": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 64
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "categoryId"
-                          ],
-                          "additionalProperties": false
-                        }
-                      ]
+                      "$ref": "#/components/schemas/StorefrontProductSource"
                     },
                     "limit": {
                       "type": "integer",
@@ -4523,19 +4006,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -4585,95 +4056,7 @@
                       "maxLength": 80
                     },
                     "source": {
-                      "oneOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "newest"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "on-sale"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "popular"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "collection"
-                              ]
-                            },
-                            "collectionId": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 64
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "collectionId"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "category"
-                              ]
-                            },
-                            "categoryId": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 64
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "categoryId"
-                          ],
-                          "additionalProperties": false
-                        }
-                      ]
+                      "$ref": "#/components/schemas/StorefrontProductSource"
                     },
                     "columns": {
                       "type": "integer",
@@ -4695,19 +4078,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -4757,95 +4128,7 @@
                       "maxLength": 80
                     },
                     "source": {
-                      "oneOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "newest"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "on-sale"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "popular"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "collection"
-                              ]
-                            },
-                            "collectionId": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 64
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "collectionId"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "category"
-                              ]
-                            },
-                            "categoryId": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 64
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "categoryId"
-                          ],
-                          "additionalProperties": false
-                        }
-                      ]
+                      "$ref": "#/components/schemas/StorefrontProductSource"
                     },
                     "promotionId": {
                       "type": "string",
@@ -4867,19 +4150,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -4938,113 +4209,13 @@
                             "maxLength": 40
                           },
                           "source": {
-                            "oneOf": [
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "kind": {
-                                    "type": "string",
-                                    "enum": [
-                                      "newest"
-                                    ]
-                                  }
-                                },
-                                "required": [
-                                  "kind"
-                                ],
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "kind": {
-                                    "type": "string",
-                                    "enum": [
-                                      "on-sale"
-                                    ]
-                                  }
-                                },
-                                "required": [
-                                  "kind"
-                                ],
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "kind": {
-                                    "type": "string",
-                                    "enum": [
-                                      "popular"
-                                    ]
-                                  }
-                                },
-                                "required": [
-                                  "kind"
-                                ],
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "kind": {
-                                    "type": "string",
-                                    "enum": [
-                                      "collection"
-                                    ]
-                                  },
-                                  "collectionId": {
-                                    "type": "string",
-                                    "minLength": 1,
-                                    "maxLength": 64
-                                  }
-                                },
-                                "required": [
-                                  "kind",
-                                  "collectionId"
-                                ],
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "kind": {
-                                    "type": "string",
-                                    "enum": [
-                                      "category"
-                                    ]
-                                  },
-                                  "categoryId": {
-                                    "type": "string",
-                                    "minLength": 1,
-                                    "maxLength": 64
-                                  }
-                                },
-                                "required": [
-                                  "kind",
-                                  "categoryId"
-                                ],
-                                "additionalProperties": false
-                              }
-                            ]
+                            "$ref": "#/components/schemas/StorefrontProductSource"
                           },
                           "hidden": {
                             "type": "boolean"
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -5070,19 +4241,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -5159,19 +4318,7 @@
                             "type": "boolean"
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -5191,19 +4338,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -5272,19 +4407,7 @@
                             "type": "boolean"
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -5303,19 +4426,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -5371,95 +4482,7 @@
                       "maxLength": 64
                     },
                     "source": {
-                      "oneOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "newest"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "on-sale"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "popular"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "collection"
-                              ]
-                            },
-                            "collectionId": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 64
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "collectionId"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "category"
-                              ]
-                            },
-                            "categoryId": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 64
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "categoryId"
-                          ],
-                          "additionalProperties": false
-                        }
-                      ]
+                      "$ref": "#/components/schemas/StorefrontProductSource"
                     },
                     "photo": {
                       "type": "string",
@@ -5478,19 +4501,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -5589,19 +4600,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -5665,19 +4664,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -5816,19 +4803,7 @@
                                 "type": "boolean"
                               },
                               "bindings": {
-                                "type": "object",
-                                "additionalProperties": {
-                                  "type": "object",
-                                  "properties": {
-                                    "source": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "source"
-                                  ],
-                                  "additionalProperties": false
-                                }
+                                "$ref": "#/components/schemas/StorefrontSettingBindings"
                               }
                             },
                             "required": [
@@ -5874,19 +4849,7 @@
                                 "type": "boolean"
                               },
                               "bindings": {
-                                "type": "object",
-                                "additionalProperties": {
-                                  "type": "object",
-                                  "properties": {
-                                    "source": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "source"
-                                  ],
-                                  "additionalProperties": false
-                                }
+                                "$ref": "#/components/schemas/StorefrontSettingBindings"
                               }
                             },
                             "required": [
@@ -5907,19 +4870,7 @@
                   ]
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -5989,19 +4940,7 @@
                             "type": "boolean"
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -6020,19 +4959,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -6100,19 +5027,7 @@
                             "type": "boolean"
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -6131,19 +5046,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -6211,19 +5114,7 @@
                             "type": "boolean"
                           },
                           "bindings": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "type": "object",
-                              "properties": {
-                                "source": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "source"
-                              ],
-                              "additionalProperties": false
-                            }
+                            "$ref": "#/components/schemas/StorefrontSettingBindings"
                           }
                         },
                         "required": [
@@ -6242,19 +5133,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -6333,19 +5212,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -6406,19 +5273,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -6474,19 +5329,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -6562,19 +5405,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -6656,19 +5487,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 },
                 "skin": {
                   "$ref": "#/components/schemas/StorefrontSkinRef"
@@ -6773,19 +5592,7 @@
                   "additionalProperties": false
                 },
                 "bindings": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                      "source": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "source"
-                    ],
-                    "additionalProperties": false
-                  }
+                  "$ref": "#/components/schemas/StorefrontSettingBindings"
                 }
               },
               "required": [
@@ -6799,6 +5606,97 @@
           ]
         },
         "maxItems": 24
+      },
+      "StorefrontProductSource": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "newest"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "on-sale"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "popular"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "collection"
+                ]
+              },
+              "collectionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              }
+            },
+            "required": [
+              "kind",
+              "collectionId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "category"
+                ]
+              },
+              "categoryId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              }
+            },
+            "required": [
+              "kind",
+              "categoryId"
+            ],
+            "additionalProperties": false
+          }
+        ]
       },
       "StorefrontLandingPage": {
         "type": "object",

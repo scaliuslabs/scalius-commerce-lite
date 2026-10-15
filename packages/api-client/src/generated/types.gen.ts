@@ -482,33 +482,21 @@ export type StorefrontThemeDocument = {
             settings: {
                 [key: string]: never;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'announcement';
             settings: {
                 text: string;
                 link: string | null;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'utility';
             settings: {
                 text: string;
                 link: string | null;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         };
         header: {
             variant: 'inline-nav';
@@ -517,11 +505,7 @@ export type StorefrontThemeDocument = {
                 rowTone: 'page' | 'header';
                 cartTotal: boolean;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'search-first';
             settings: {
@@ -529,11 +513,7 @@ export type StorefrontThemeDocument = {
                 rowTone: 'page' | 'header';
                 cartTotal: boolean;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'centered-logo';
             settings: {
@@ -541,11 +521,7 @@ export type StorefrontThemeDocument = {
                 rowTone: 'page' | 'header';
                 cartTotal: boolean;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         };
         navigation: {
             source: 'menu' | 'category-tree' | 'tree+menu';
@@ -557,93 +533,57 @@ export type StorefrontThemeDocument = {
             settings: {
                 [key: string]: never;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'cascading';
             settings: {
                 [key: string]: never;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'mega-panel';
             settings: {
                 promoImages: boolean;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'drill-in-drawer';
             settings: {
                 [key: string]: never;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'departments-rail';
             settings: {
                 open: 'demand' | 'always';
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'sticky-category-bar';
             settings: {
                 flyouts: 'dropdown' | 'cascading';
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         };
         mobileNav: {
             variant: 'accordion-drawer';
             settings: {
                 [key: string]: never;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'drill-in-drawer';
             settings: {
                 [key: string]: never;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'bottom-tabs';
             settings: {
                 tabs: Array<'home' | 'categories' | 'offers' | 'compare' | 'account'>;
                 drawer: 'accordion' | 'drill-in';
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         };
         card: {
             variant: 'standard';
@@ -652,11 +592,7 @@ export type StorefrontThemeDocument = {
                 action: 'none' | 'quick-add' | 'full';
                 hoverImage: boolean;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
             fields?: Array<string>;
         };
         listing: {
@@ -665,42 +601,26 @@ export type StorefrontThemeDocument = {
                 settings: {
                     [key: string]: never;
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             } | {
                 variant: 'list';
                 settings: {
                     [key: string]: never;
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             } | {
                 variant: 'shelves';
                 settings: {
                     maxShelves: number;
                     spacing: 'standard' | 'airy';
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             } | {
                 variant: 'quick-grid';
                 settings: {
                     [key: string]: never;
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             };
             searchLayout: 'same' | 'grid' | 'list';
             descriptionPlacement: 'above' | 'below';
@@ -730,61 +650,37 @@ export type StorefrontThemeDocument = {
                 settings: {
                     [key: string]: never;
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             } | {
                 variant: 'thumbs-below';
                 settings: {
                     [key: string]: never;
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             } | {
                 variant: 'thumbs-left';
                 settings: {
                     phoneSideThumbnails?: boolean;
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             } | {
                 variant: 'stacked';
                 settings: {
                     [key: string]: never;
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             } | {
                 variant: 'portrait';
                 settings: {
                     [key: string]: never;
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             } | {
                 variant: 'image-grid';
                 settings: {
                     [key: string]: never;
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             };
             buyBox: {
                 variant: 'classic';
@@ -795,21 +691,13 @@ export type StorefrontThemeDocument = {
                     emi: boolean;
                     whatsapp: boolean;
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             } | {
                 variant: 'marketplace-3col';
                 settings: {
                     [key: string]: never;
                 };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             };
             below: Array<'key-attributes' | 'about-bullets' | 'spec-table' | 'description' | 'content-blocks' | 'compare-similar' | 'warranty' | 'reviews' | 'policies' | 'related' | 'recently-viewed'>;
             apps?: Array<{
@@ -840,11 +728,7 @@ export type StorefrontThemeDocument = {
                 about: string;
                 copyright: string;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'centered-compact';
             settings: {
@@ -853,11 +737,7 @@ export type StorefrontThemeDocument = {
                 about: string;
                 copyright: string;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         } | {
             variant: 'directory';
             settings: {
@@ -866,11 +746,7 @@ export type StorefrontThemeDocument = {
                 about: string;
                 copyright: string;
             };
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         };
     };
     apps?: {
@@ -900,6 +776,12 @@ export type StorefrontThemeDocument = {
             cart: StorefrontPageTemplate;
             page: StorefrontPageTemplate;
         };
+    };
+};
+
+export type StorefrontSettingBindings = {
+    [key: string]: {
+        source: string;
     };
 };
 
@@ -954,19 +836,11 @@ export type StorefrontSectionList = Array<{
             alt: string;
             href: string | null;
             hidden?: boolean;
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         }>;
         phoneHeight?: 'screen' | 'compact';
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -984,19 +858,11 @@ export type StorefrontSectionList = Array<{
                 title: string;
                 detail: string;
                 hidden?: boolean;
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                bindings?: StorefrontSettingBindings;
             }>;
         };
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1009,11 +875,7 @@ export type StorefrontSectionList = Array<{
         title: string;
         categoryIds: Array<string>;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1026,11 +888,7 @@ export type StorefrontSectionList = Array<{
         collectionIds: Array<string>;
         title?: string;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1040,26 +898,10 @@ export type StorefrontSectionList = Array<{
     aiDraft?: true;
     settings: {
         title: string;
-        source: {
-            kind: 'newest';
-        } | {
-            kind: 'on-sale';
-        } | {
-            kind: 'popular';
-        } | {
-            kind: 'collection';
-            collectionId: string;
-        } | {
-            kind: 'category';
-            categoryId: string;
-        };
+        source: StorefrontProductSource;
         limit: number;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1069,27 +911,11 @@ export type StorefrontSectionList = Array<{
     aiDraft?: true;
     settings: {
         title: string;
-        source: {
-            kind: 'newest';
-        } | {
-            kind: 'on-sale';
-        } | {
-            kind: 'popular';
-        } | {
-            kind: 'collection';
-            collectionId: string;
-        } | {
-            kind: 'category';
-            categoryId: string;
-        };
+        source: StorefrontProductSource;
         columns: number;
         rows: number;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1099,27 +925,11 @@ export type StorefrontSectionList = Array<{
     aiDraft?: true;
     settings: {
         title: string;
-        source: {
-            kind: 'newest';
-        } | {
-            kind: 'on-sale';
-        } | {
-            kind: 'popular';
-        } | {
-            kind: 'collection';
-            collectionId: string;
-        } | {
-            kind: 'category';
-            categoryId: string;
-        };
+        source: StorefrontProductSource;
         promotionId?: string | null;
         mediaId?: string | null;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1131,33 +941,13 @@ export type StorefrontSectionList = Array<{
         title: string;
         tabs: Array<{
             label: string;
-            source: {
-                kind: 'newest';
-            } | {
-                kind: 'on-sale';
-            } | {
-                kind: 'popular';
-            } | {
-                kind: 'collection';
-                collectionId: string;
-            } | {
-                kind: 'category';
-                categoryId: string;
-            };
+            source: StorefrontProductSource;
             hidden?: boolean;
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         }>;
         limit: number;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1173,18 +963,10 @@ export type StorefrontSectionList = Array<{
             subtitle?: string;
             href: string;
             hidden?: boolean;
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         }>;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1198,18 +980,10 @@ export type StorefrontSectionList = Array<{
             alt: string;
             href: string | null;
             hidden?: boolean;
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         }>;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1220,26 +994,10 @@ export type StorefrontSectionList = Array<{
     settings: {
         title: string;
         mediaId: string | null;
-        source: {
-            kind: 'newest';
-        } | {
-            kind: 'on-sale';
-        } | {
-            kind: 'popular';
-        } | {
-            kind: 'collection';
-            collectionId: string;
-        } | {
-            kind: 'category';
-            categoryId: string;
-        };
+        source: StorefrontProductSource;
         photo: 'tall' | 'square';
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1257,11 +1015,7 @@ export type StorefrontSectionList = Array<{
             href: string;
         } | null;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1273,11 +1027,7 @@ export type StorefrontSectionList = Array<{
         title: string;
         style: 'grid' | 'rail';
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1302,11 +1052,7 @@ export type StorefrontSectionList = Array<{
             title: string;
             text: string;
             hidden?: boolean;
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         }>;
     } | {
         layout: 'testimonial';
@@ -1314,18 +1060,10 @@ export type StorefrontSectionList = Array<{
             quote: string;
             author: string;
             hidden?: boolean;
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         }>;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1340,18 +1078,10 @@ export type StorefrontSectionList = Array<{
             label: string;
             value: string;
             hidden?: boolean;
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         }>;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1365,18 +1095,10 @@ export type StorefrontSectionList = Array<{
             question: string;
             answer: string;
             hidden?: boolean;
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         }>;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1390,18 +1112,10 @@ export type StorefrontSectionList = Array<{
             text: string;
             href: string;
             hidden?: boolean;
-            bindings?: {
-                [key: string]: {
-                    source: string;
-                };
-            };
+            bindings?: StorefrontSettingBindings;
         }>;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1413,11 +1127,7 @@ export type StorefrontSectionList = Array<{
         title: string;
         pageSize: 12 | 24 | 36;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1429,11 +1139,7 @@ export type StorefrontSectionList = Array<{
         heading: string;
         body: string;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1444,11 +1150,7 @@ export type StorefrontSectionList = Array<{
     settings: {
         title: string;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1462,11 +1164,7 @@ export type StorefrontSectionList = Array<{
         layout: 'list' | 'grid' | 'accordion';
         limit: number;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1482,11 +1180,7 @@ export type StorefrontSectionList = Array<{
         whatsapp?: boolean;
         buttonLabel?: string;
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1502,12 +1196,22 @@ export type StorefrontSectionList = Array<{
             }> | unknown;
         };
     };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    bindings?: StorefrontSettingBindings;
 }>;
+
+export type StorefrontProductSource = {
+    kind: 'newest';
+} | {
+    kind: 'on-sale';
+} | {
+    kind: 'popular';
+} | {
+    kind: 'collection';
+    collectionId: string;
+} | {
+    kind: 'category';
+    categoryId: string;
+};
 
 export type StorefrontLandingPage = {
     title: string;

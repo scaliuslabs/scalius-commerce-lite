@@ -56,6 +56,7 @@ beforeEach(async () => {
   queries = [];
   ({ sqlite, db } = createSqliteD1Database({ onQuery: (query) => queries.push(query) }));
   sqlite.exec(`
+    UPDATE markets SET price_increment_minor = 1 WHERE id = 'mkt_backup';
     INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1);
     INSERT INTO customers (id, name, phone) VALUES ('cus_a', 'Asha', '+8801711000001'), ('cus_b', 'Bilal', '+8801711000002'), ('cus_c', 'Chandra', '+8801711000003');
     INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status) VALUES

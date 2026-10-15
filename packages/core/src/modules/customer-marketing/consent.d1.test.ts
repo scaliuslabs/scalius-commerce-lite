@@ -49,6 +49,8 @@ describe("marketing consent", () => {
     beforeEach(() => {
         ({ sqlite, db } = createSqliteD1Database());
         sqlite.exec(`
+            INSERT INTO webhook_subscriptions (id, url, topics, api_version, secret_ciphertext, secret_hint)
+              VALUES ('whs_consent', 'https://hooks.example.test/consent', '["customer.consent_changed"]', '2026-10', 'enc:test', 'test');
             INSERT INTO customers (id, name, phone, email, origin) VALUES ('cust_guest', 'Rahim', '+8801711111111', NULL, 'order');
             INSERT INTO customers (id, name, phone, email, origin, account_claimed_at, phone_verified_at, email_verified_at)
               VALUES ('cust_acct', 'Karim', '+8801722222222', 'karim@example.com', 'account', 1, 1, 1);

@@ -134,6 +134,9 @@ describe("suppliers", () => {
 
 describe("purchase orders", () => {
   it("edits a draft, locks its lines once ordered, and receives in parts into the destination", async () => {
+    // Outbox facts are emitted only for subscribed topics.
+    sqlite.exec(`INSERT INTO webhook_subscriptions (id, url, topics, api_version, secret_ciphertext, secret_hint)
+      VALUES ('whs_inventory', 'https://hooks.example.test/inventory', '["inventory.*"]', '2026-10', 'enc:test', 'test')`);
     const draft = await createPurchaseOrder(db, {
       destinationLocationId: "loc_shop",
       expectedOn: "2026-10-20",

@@ -392,6 +392,8 @@ describe(`${MIGRATION} transactions`, () => {
   it("rolls the event back with the write when the batch fails", async () => {
     const { sqlite, db } = createSqliteD1Database();
     try {
+      sqlite.exec(`INSERT INTO webhook_subscriptions (id, url, topics, api_version, secret_ciphertext, secret_hint)
+        VALUES ('whs_transaction', 'https://hooks.example.test/orders', '["order.*"]', '2026-10', 'enc:test', 'test')`);
       const order = {
         id: "ord_tx",
         customerName: "Rahim",

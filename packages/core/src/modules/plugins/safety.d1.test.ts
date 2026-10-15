@@ -153,7 +153,7 @@ describe("app safety", () => {
   it("measures stored bytes and picks the longest-unmeasured app once a day", async () => {
     await installActive(db);
     await installActive(db, { id: "beta.other", name: "Other" });
-    await putObjectRecord(db, "beta.other", "ledger", LEDGER, "other", { note: "other app".repeat(200) });
+    await putObjectRecord(db, "beta.other", "ledger", LEDGER, "other", { note: "other app".repeat(50) });
     await putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, "r1", { customer_id: "c1", note: "x".repeat(100) });
     await setPluginKv(db, "acme.loyalty", "cursor", { at: 1 });
     expect(await pluginDueForStorageMeasurement(db)).toBe("acme.loyalty");

@@ -116,6 +116,8 @@ The cron runs every minute (`* * * * *` in `apps/api/wrangler.jsonc`). Every tic
 - Hourly work inside a job (app exchange rates) runs on the job's first run of each hour (`firstSweepRunOfHour`).
 - A sweep's row limit is `floor(limit * limitScale)`, at least 1.
 
+The 2026-10-15 ordered budget run measures at most 23 D1 calls on Free and 62 on Paid during the initial cron rotation, including first registration of the bundled apps' three Object types. Each new type checks the store's 100-type capacity; its insert returns the created row without another read. After warm-up, both profiles write zero rows per idle tick (mean D1 calls: 7.73 Free, 8.67 Paid). The Free invocation ceiling stays at 50.
+
 ### Frontier cache refresh
 
 The storefront validates cached pages against the DVC change clock ([packages/core/src/cache-deps/README.md](../packages/core/src/cache-deps/README.md)). The slow check scans at most one frontier window (4,000 changes, `FRONTIER_CHECK_MAX_ROWS` in `apps/api/src/cache-frontier.ts`) of `cache_dep` after the page's `s0`. A page older than the window renders again, so a bulk write cannot turn into millions of rows read.

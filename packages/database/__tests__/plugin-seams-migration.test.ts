@@ -9,7 +9,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CACHE_DEP_LATER_TABLES, CACHE_DEP_LATER_TRIGGERS, cacheDepTriggersForMigration } from "../scripts/cache-dep-triggers";
+import { CACHE_DEP_LATER_TABLES, CACHE_DEP_LATER_TRIGGERS, generateCacheDepTriggers } from "../scripts/cache-dep-triggers";
 import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
 
 const NAME = "0126_plugin_seams";
@@ -18,7 +18,8 @@ const migration = (dir = "") => readFileSync(join(import.meta.dirname, `../migra
 
 describe(`${NAME} files`, () => {
   it("installs the generated cache dependency triggers verbatim on every provider", () => {
-    const triggers = cacheDepTriggersForMigration(NAME);
+    const triggers = generateCacheDepTriggers({ withRetired: true }).filter((trigger) =>
+      (CACHE_DEP_LATER_TRIGGERS[trigger.name] ?? CACHE_DEP_LATER_TABLES[trigger.table]) === NAME);
     expect(Object.entries(CACHE_DEP_LATER_TABLES).filter(([, name]) => name === NAME).map(([table]) => table))
       .toEqual(["metaobject_definitions", "metaobject_entries"]);
     expect(Object.entries(CACHE_DEP_LATER_TRIGGERS).filter(([, name]) => name === NAME)).toEqual([]);
@@ -52,7 +53,7 @@ describe(`${NAME} over a populated 0125 database`, () => {
   function migrate(seed: (database: DatabaseSync) => void = () => undefined): DatabaseSync {
     db = createMigratedSqlite({ beforeMigration: "0126_" });
     seed(db);
-    db.exec(compiledMigrationSql("d1", undefined, "0126_"));
+    db.exec(compiledMigrationSql("d1", "0127_", "0126_"));
     return db;
   }
 

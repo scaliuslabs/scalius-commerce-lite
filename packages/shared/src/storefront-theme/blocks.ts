@@ -729,9 +729,9 @@ type BlockValue<Variants> = {
 }[keyof Variants & string];
 
 /** `{ variant, settings }` with the settings schema of that variant. */
-function blockSchema<Variants extends Record<string, { settings: z.ZodType }>, Extra extends z.ZodRawShape = Record<never, never>>(variants: Variants, extra?: Extra) {
+function blockSchema<Variants extends Record<string, { settings: z.ZodType }>, Extra extends z.ZodRawShape = Record<never, never>>(variants: Variants, bindings: typeof storefrontSettingBindingsSchema, extra?: Extra) {
   const options = Object.entries(variants).map(([id, spec]) =>
-    z.object({ variant: z.literal(id), settings: spec.settings, bindings: storefrontSettingBindingsSchema.optional(), ...extra }).strict());
+    z.object({ variant: z.literal(id), settings: spec.settings, bindings: bindings.optional(), ...extra }).strict());
   return z.discriminatedUnion("variant", options as [typeof options[number], ...typeof options]) as unknown as z.ZodType<
     BlockValue<Variants> & (keyof Extra extends never ? unknown : z.infer<z.ZodObject<Extra>>)
   >;
@@ -746,21 +746,22 @@ const moduleIds = Object.keys(STOREFRONT_PRODUCT_MODULES) as [keyof typeof STORE
 export type StorefrontListingToolbarPiece = keyof typeof STOREFRONT_LISTING_TOOLBAR;
 export type StorefrontProductModule = keyof typeof STOREFRONT_PRODUCT_MODULES;
 
-export const storefrontThemeBlocksSchema = z.object({
-  topBar: blockSchema(STOREFRONT_TOP_BAR_VARIANTS),
-  header: blockSchema(STOREFRONT_HEADER_VARIANTS),
+/** The API supplies the named bindings schema so every block refers to one component. */
+export const storefrontThemeBlocksSchemaOf = (bindings: typeof storefrontSettingBindingsSchema = storefrontSettingBindingsSchema) => z.object({
+  topBar: blockSchema(STOREFRONT_TOP_BAR_VARIANTS, bindings),
+  header: blockSchema(STOREFRONT_HEADER_VARIANTS, bindings),
   /** The links every header surface shows (source, top entries, link budget). */
   navigation: storefrontNavigationSchema,
-  desktopNav: blockSchema(STOREFRONT_DESKTOP_NAV_VARIANTS),
-  mobileNav: blockSchema(STOREFRONT_MOBILE_NAV_VARIANTS),
-  card: blockSchema(STOREFRONT_CARD_VARIANTS, {
+  desktopNav: blockSchema(STOREFRONT_DESKTOP_NAV_VARIANTS, bindings),
+  mobileNav: blockSchema(STOREFRONT_MOBILE_NAV_VARIANTS, bindings),
+  card: blockSchema(STOREFRONT_CARD_VARIANTS, bindings, {
     fields: z.array(z.string().refine((value) => {
       const separator = value.lastIndexOf(".");
       return isCustomFieldNamespace(value.slice(0, separator)) && isCustomFieldKey(value.slice(separator + 1));
     }, "Use a custom-field namespace and key.")).max(3).refine((fields) => new Set(fields).size === fields.length, "Each card field appears once.").optional(),
   }),
   listing: z.object({
-    layout: blockSchema(STOREFRONT_LISTING_VARIANTS),
+    layout: blockSchema(STOREFRONT_LISTING_VARIANTS, bindings),
     /** Search can follow the category layout or start in its own card/list view. */
     searchLayout: z.enum(STOREFRONT_LISTING_SEARCH_LAYOUTS),
     /** Place the short category, collection or brand description around the product results. */
@@ -780,8 +781,8 @@ export const storefrontThemeBlocksSchema = z.object({
     maxColumns: z.number().int().min(STOREFRONT_LISTING_MAX_COLUMNS.min).max(STOREFRONT_LISTING_MAX_COLUMNS.max).nullable(),
   }).strict(),
   product: z.object({
-    gallery: blockSchema(STOREFRONT_GALLERY_VARIANTS),
-    buyBox: blockSchema(STOREFRONT_BUY_BOX_VARIANTS),
+    gallery: blockSchema(STOREFRONT_GALLERY_VARIANTS, bindings),
+    buyBox: blockSchema(STOREFRONT_BUY_BOX_VARIANTS, bindings),
     below: uniqueList(moduleIds, moduleIds.length, "module"),
     /**
      * Installed apps' product blocks (apps.ts), in the merchant's order;
@@ -795,8 +796,10 @@ export const storefrontThemeBlocksSchema = z.object({
       desktop: z.enum(STOREFRONT_PRODUCT_STICKY.desktop),
     }).strict(),
   }).strict(),
-  footer: blockSchema(STOREFRONT_FOOTER_VARIANTS),
+  footer: blockSchema(STOREFRONT_FOOTER_VARIANTS, bindings),
 }).strict();
+
+export const storefrontThemeBlocksSchema = storefrontThemeBlocksSchemaOf();
 
 export type StorefrontThemeBlocks = z.infer<typeof storefrontThemeBlocksSchema>;
 

@@ -30,8 +30,8 @@ Free profile, measured on a seeded store (3-line orders; the others as listed). 
 | 3-line order: checkout commit + after-response work | 34 | 100 | 100 | 68 | 26 |
 | 20-line order | 38 | 480 | 563 | 205 | 56 |
 | 99-line order | 34 | 2,146 | 2,547 | 843 | 205 |
-| Order status change (pending to confirmed) | 32 | 32 | 32 | 21 | 1 |
-| Order refund (cash, partly) | 41 | 51 | 68 | 27 | 2 |
+| Order status change (pending to confirmed) | 32 | 16 | 16 | 21 | 1 |
+| Order refund (cash, partly) | 41 | 18 | 18 | 27 | 2 |
 | Admin order list (50 rows; cold RBAC reconciliation) | 9 | 0 | 0 | 1,255 | 4 |
 | Product edit (admin save) | 24 | 34 | 521 | 152 | 27 |
 | SKU stock change (+1 received) | 13 | 26 | 49 | 19 | 7 |
@@ -40,11 +40,11 @@ Free profile, measured on a seeded store (3-line orders; the others as listed). 
 | Category listing, cache miss | 5 | 0 | 0 | 110 | 6 |
 | Search, cache miss | 6 | 0 | 0 | 726 | 17 |
 | Product page, cache hit | 2 | 0 | 0 | 2 | 0 |
-| Cron tick, idle store | 21 | 0 | 103 | 7,187 | 10 |
+| Cron tick, idle store | 23 | 0 | 104 | 7,188 | 11 |
 
-Read the cron row with care. A Free store ticks 1,440 times a day, so a row a tick is 1,440 rows written a day per store before any order: 100,000 stores would pay for 144 million rows a day, about $144, on idle alone. An idle tick writes 0 rows on both profiles; the worst run is the first tick of the hour, which pays the hourly and daily work. Until 2026-10-14 the Free tick wrote 2 rows a minute: Free's drain took two events at a time even when nobody subscribes, so any backlog (here the seed's 1,000 order events) trickled out over later ticks. A drain now settles up to 50 subscriber-less events in its one statement, and the seed settles its own history.
+Read the cron row with care. A Free store ticks 1,440 times a day, so a row a tick is 1,440 rows written a day per store before any order: 100,000 stores would pay for 144 million rows a day, about $144, on idle alone. An idle tick writes 0 rows on both profiles; worst counters include first-run, hourly and daily work. The 2026-10-15 rerun includes first registration of three bundled Object types: 23 Free calls at worst, 62 Paid, with creation returning the row instead of rereading it. Until 2026-10-14 the Free tick wrote 2 rows a minute: Free's drain took two events at a time even when nobody subscribes, so any backlog (here the seed's 1,000 order events) trickled out over later ticks. A drain now settles up to 50 subscriber-less events in its one statement, and the seed settles its own history.
 
-The status/refund and admin-list rows were remeasured on both profiles on 2026-10-15 after the beta migration integration, meter correction and notification-read batching. The status/refund table rows follow the admin-list case; isolated cold costs are listed below. Other rows retain the earlier measurements. The first admin list includes the existing permission/role/grant reconciliation over initialized RBAC; the fixture now matches real first-admin setup. The old empty-RBAC fixture instead paid 12 calls, 366 statements and roughly 353 initialization writes. The new cold baseline pays 9 calls, 15 statements, no writes and 1,255 estimated reads; warm lists are unchanged at 3 calls, 53 rows read and no full scans. This increase is the corrected fixture measuring existing RBAC maintenance, not an order-list scan regression.
+The status/refund, admin-list and cron rows were remeasured on both profiles on 2026-10-15 after the beta migration integration, meter correction and notification-read batching. Migration 0157 guards the order FTS update triggers so status and inventory-marker changes do not reindex unchanged customer text; this removes variable index-merge writes and brings status/refund writes to 16/18. The status/refund table rows follow the admin-list case; isolated cold costs are listed below. Other rows retain the earlier measurements. The first admin list includes the existing permission/role/grant reconciliation over initialized RBAC; the fixture now matches real first-admin setup. The old empty-RBAC fixture instead paid 12 calls, 366 statements and roughly 353 initialization writes. The new cold baseline pays 9 calls, 15 statements, no writes and 1,255 estimated reads; warm lists are unchanged at 3 calls, 53 rows read and no full scans. This increase is the corrected fixture measuring existing RBAC maintenance, not an order-list scan regression.
 
 The rows-read column is an estimate (see the counter table), and it found a real regression on 2026-10-14: every render, validation snapshot and admin commit read the dependency clock with a full index scan of `cache_dep` (a `MAX` in a joined derived table; SQLite seeks only a scalar `MAX`), which added the table's row count to every page and write. The clock read is now a scalar subquery.
 

@@ -9,7 +9,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { eventOutboxPostgresStatements, eventOutboxSqliteStatements } from "../scripts/event-outbox-triggers";
+import { supersededEventOutboxPostgresStatements, supersededEventOutboxSqliteStatements } from "../scripts/event-outbox-triggers";
 import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
 
 const NAME = "0119_billing_addresses";
@@ -22,9 +22,9 @@ describe(`${NAME} files`, () => {
     const postgres = migration("postgres/");
     expect(sqlite).not.toMatch(/CREATE TABLE|PRAGMA|INSERT INTO `orders`|UPDATE `orders`/i);
     expect(postgres).not.toMatch(/GLOB|PRAGMA|randomblob|CREATE TABLE/i);
-    expect(eventOutboxSqliteStatements(NAME)).toHaveLength(2);
-    for (const statement of eventOutboxSqliteStatements(NAME)) expect(sqlite, statement.split("\n")[0]).toContain(statement);
-    for (const statement of eventOutboxPostgresStatements(NAME)) expect(postgres, statement.split("\n")[0]).toContain(statement);
+    expect(supersededEventOutboxSqliteStatements(NAME)).toHaveLength(2);
+    for (const statement of supersededEventOutboxSqliteStatements(NAME)) expect(sqlite, statement.split("\n")[0]).toContain(statement);
+    for (const statement of supersededEventOutboxPostgresStatements(NAME)) expect(postgres, statement.split("\n")[0]).toContain(statement);
     expect(sqlite.split(BREAKPOINT)).toHaveLength(postgres.split(BREAKPOINT).length);
   });
 });
@@ -70,6 +70,8 @@ describe(`${NAME} rules`, () => {
   it("keeps one default billing address per customer and a billing change is an update event", () => {
     db = createMigratedSqlite();
     db.exec(`
+      INSERT INTO webhook_subscriptions (id, url, topics, api_version, secret_ciphertext, secret_hint)
+        VALUES ('whs_billing', 'https://hooks.example.test/billing', '["customer.updated","order.updated"]', '2026-10', 'enc:test', 'test');
       INSERT INTO customers (id, name, phone) VALUES ('cust_1', 'Karim', '+8801711111112');
       INSERT INTO customer_addresses (id, customer_id, country_code, line1, is_default_billing) VALUES ('caddr_a', 'cust_1', 'DE', 'Hauptstr. 1', 1);
       INSERT INTO customer_addresses (id, customer_id, country_code, line1) VALUES ('caddr_b', 'cust_1', 'DE', 'Hauptstr. 2');

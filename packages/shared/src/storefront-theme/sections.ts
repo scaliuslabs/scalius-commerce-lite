@@ -96,345 +96,356 @@ export const storefrontProductSourceSchema = z.discriminatedUnion("kind", [
 ]);
 export type StorefrontProductSource = z.infer<typeof storefrontProductSourceSchema>;
 
-function section<const Type extends string, Settings extends z.ZodType>(spec: {
-  type: Type;
-  settings: Settings;
-  defaults: z.infer<Settings>;
-  requires?: readonly FitCondition[];
-}) {
-  return {
-    version: 1 as const,
-    settings: spec.settings,
-    defaults: spec.defaults,
-    requires: spec.requires ?? [],
-    schema: z.object({
-      id: sectionIdSchema,
-      type: z.literal(spec.type),
-      version: z.literal(1),
-      hidden: z.boolean().optional(),
-      aiDraft,
+function storefrontSectionRegistryOf(
+  skin: typeof storefrontSkinRefSchema,
+  bindings: typeof storefrontSettingBindingsSchema,
+  productSource: typeof storefrontProductSourceSchema,
+) {
+  const blockHidden = { hidden: z.boolean().optional(), bindings: bindings.optional() };
+  function section<const Type extends string, Settings extends z.ZodType>(spec: {
+    type: Type;
+    settings: Settings;
+    defaults: z.infer<Settings>;
+    requires?: readonly FitCondition[];
+  }) {
+    return {
+      version: 1 as const,
       settings: spec.settings,
-      bindings: storefrontSettingBindingsSchema.optional(),
-      /** An app skin draws this section from its projection; core draws it while the skin cannot. */
-      skin: storefrontSkinRefSchema.optional(),
-    }).strict(),
+      defaults: spec.defaults,
+      requires: spec.requires ?? [],
+      schema: z.object({
+        id: sectionIdSchema,
+        type: z.literal(spec.type),
+        version: z.literal(1),
+        hidden: z.boolean().optional(),
+        aiDraft,
+        settings: spec.settings,
+        bindings: bindings.optional(),
+        /** An app skin draws this section from its projection; core draws it while the skin cannot. */
+        skin: skin.optional(),
+      }).strict(),
+    };
+  }
+
+  return {
+    hero: section({
+      type: "hero",
+      settings: z.object({
+        // Full-bleed 2.6:1; contained (+ 2 side banners); split halves; a
+        // full-screen phone frame; wide editorial (copy beside the image).
+        layout: z.enum(["full-bleed", "contained-banners", "split", "full-screen", "wide-editorial"]),
+        /** The slides, in order. A hero without one renders nothing. */
+        slides: z.array(storefrontHeroSlideSchema).max(STOREFRONT_HERO_SLIDE_LIMIT),
+        /** Keep the desktop order, but let category tiles lead on phones. */
+        phonePlacement: z.enum(["after-categories"]).optional(),
+        /**
+         * Star Tech's two stacked promos beside a contained hero (300x240 at
+         * 1440px, two across under it on phones). Only `contained-banners`
+         * shows them; without them it is the contained banner alone. Optional,
+         * so stored version 1 heroes stay valid.
+         */
+        sideBanners: z.array(z.object({
+          mediaId: recordId,
+          /** What the image shows (its alt text). */
+          alt: z.string().trim().max(160),
+          href: href.nullable(),
+          ...blockHidden,
+        }).strict()).max(2).optional(),
+        /**
+         * `full-screen` on phones: the first screen (`screen`, the default), or
+         * Aarong's `compact` 65svh frame (23-35rem) when the phone banners carry
+         * no words, so a photo-only banner does not take the whole screen.
+         */
+        phoneHeight: z.enum(["screen", "compact"]).optional(),
+      }).strict(),
+      defaults: { layout: "full-bleed", slides: [] },
+    }),
+    /** Delivery facts or the merchant's points. The section's presence is its switch. */
+    "usp-strip": section({
+      type: "usp-strip",
+      settings: z.object({
+        style: z.enum(["icons", "ticker"]),
+        source: z.discriminatedUnion("kind", [
+          // Delivery, cash on delivery and returns from the live store settings.
+          z.object({ kind: z.literal("delivery-facts") }).strict(),
+          z.object({
+            kind: z.literal("custom"),
+            items: z.array(z.object({ title: z.string().trim().min(1).max(60), detail: z.string().trim().max(80), ...blockHidden }).strict()).min(1).max(4),
+          }).strict(),
+        ]),
+      }).strict(),
+      defaults: { style: "icons", source: { kind: "delivery-facts" } },
+    }),
+    /**
+     * The categories the merchant picks (`categoryIds`, in order; published
+     * ones show) under its title (empty: "Shop by category"). `photo` is a
+     * scrolling rail of portrait photos (a grid from 640px); `photo-grid`
+     * Aarong's department grid (two to four across); `round` a grid of round
+     * photos (3 to 8 across); `round-small` Apple Gadgets' 56px circles;
+     * `round-row` Target's round photos in one scrolling row on phones;
+     * `icons` Star Tech's icon grid; `quad` Amazon's cards of four; `square`
+     * eBay's gallery.
+     */
+    "category-tiles": section({
+      type: "category-tiles",
+      settings: z.object({
+        style: z.enum(STOREFRONT_CATEGORY_TILE_STYLES),
+        title,
+        categoryIds: idList(STOREFRONT_CATEGORY_TILES_LIMIT, "category"),
+      }).strict(),
+      defaults: { style: "photo", title: "", categoryIds: [] },
+      requires: [atLeast("topCategoryCount", 2)],
+    }),
+    /**
+     * The collections the merchant picks (`collectionIds`, in order; active
+     * ones with products show), each in its own presentation. Without one,
+     * the section shows the newest products. A carousel collection's cards are
+     * `large` (1.4 cards on a phone, 3 to 5 across) or Apple Gadgets'
+     * `compact` shelf (2.3 on a phone, up to 5.3 across).
+     */
+    collections: section({
+      type: "collections",
+      settings: z.object({
+        carousel: z.enum(["large", "compact"]),
+        collectionIds: idList(STOREFRONT_COLLECTIONS_LIMIT, "collection"),
+        // The heading over the newest products shown until collections are chosen (each collection has its own name).
+        title: title.optional(),
+      }).strict(),
+      defaults: { carousel: "large", collectionIds: [] },
+    }),
+    "product-rail": section({
+      type: "product-rail",
+      settings: z.object({ title, source: productSource, limit: z.number().int().min(4).max(24) }).strict(),
+      defaults: { title: "", source: { kind: "newest" }, limit: 12 },
+    }),
+    "product-grid": section({
+      type: "product-grid",
+      settings: z.object({
+        title,
+        source: productSource,
+        columns: z.number().int().min(2).max(6),
+        rows: z.number().int().min(1).max(6),
+      }).strict(),
+      defaults: { title: "", source: { kind: "newest" }, columns: 4, rows: 2 },
+    }),
+    /**
+     * Daraz's flash sale: a product row whose countdown counts to the end of a
+     * real promotion (`promotionId`, an active discount with an end time),
+     * never to a typed-in date. Without one, or once it has ended, the row has
+     * no countdown.
+     */
+    "deal-block": section({
+      type: "deal-block",
+      settings: z.object({
+        title,
+        source: productSource,
+        promotionId: recordId.nullable().optional(),
+        mediaId: mediaId.optional(),
+      }).strict(),
+      defaults: { title: "", source: { kind: "on-sale" }, promotionId: null },
+    }),
+    /**
+     * Multi-list tabs (Game Ghor, Walmart, Chaldal): one heading and 2 to 4
+     * tabs, each a product source. Works without script (radio tabs); each tab
+     * shows its first `limit` products.
+     */
+    "product-tabs": section({
+      type: "product-tabs",
+      settings: z.object({
+        title,
+        tabs: z.array(z.object({ label: z.string().trim().max(40), source: productSource, ...blockHidden }).strict()).min(2).max(4),
+        limit: z.number().int().min(4).max(12),
+      }).strict(),
+      defaults: {
+        title: "",
+        tabs: [
+          { label: "", source: { kind: "newest" } },
+          { label: "", source: { kind: "on-sale" } },
+          { label: "", source: { kind: "popular" } },
+        ],
+        limit: 8,
+      },
+    }),
+    /**
+     * "Shop by" image cards (Target's and Walmart's occasion cards, Amazon's
+     * quad cards): the merchant's photos, each with a label and a link.
+     */
+    "shop-by": section({
+      type: "shop-by",
+      settings: z.object({
+        title,
+        cards: z.array(z.object({ mediaId: recordId, title: z.string().trim().min(1).max(60), subtitle: z.string().trim().max(120).optional(), href, ...blockHidden }).strict()).max(8),
+      }).strict(),
+      defaults: { title: "", cards: [] },
+    }),
+    /**
+     * A promo banner mosaic (Daraz, Aarong, Walmart): one large tile beside up
+     * to four smaller ones, each an image with its link.
+     */
+    "banner-mosaic": section({
+      type: "banner-mosaic",
+      settings: z.object({
+        tiles: z.array(z.object({
+          mediaId: recordId,
+          /** What the image shows (its alt text). */
+          alt: z.string().trim().max(160),
+          href: href.nullable(),
+          ...blockHidden,
+        }).strict()).max(5),
+      }).strict(),
+      defaults: { tiles: [] },
+    }),
+    /**
+     * A lifestyle photo beside a grid of the list's products: `tall` fills the
+     * height of the grid beside it (2:3 columns); `square` is Fabrilife's
+     * square photo in a 1:2 split.
+     */
+    lookbook: section({
+      type: "lookbook",
+      settings: z.object({ title, mediaId, source: productSource, photo: z.enum(["tall", "square"]) }).strict(),
+      defaults: { title: "", mediaId: null, source: { kind: "newest" }, photo: "tall" },
+    }),
+    /**
+     * One campaign banner. Consecutive banners with the same `two-up` or
+     * `four-up` layout share one row (Fabrilife's two campaigns side by side,
+     * Target's four promo tiles), each with its own image, words and link.
+     */
+    banner: section({
+      type: "banner",
+      settings: z.object({
+        layout: z.enum(["full", "two-up", "four-up"]),
+        heading,
+        text: z.string().trim().max(300),
+        mediaId,
+        cta: z.object({ label: z.string().trim().min(1).max(40), href }).strict().nullable(),
+      }).strict(),
+      defaults: { layout: "full", heading: "", text: "", mediaId: null, cta: null },
+    }),
+    "brand-wall": section({
+      type: "brand-wall",
+      settings: z.object({ title, style: z.enum(["grid", "rail"]) }).strict(),
+      defaults: { title: "", style: "rail" },
+      requires: [atLeast("brandCount", 4)],
+    }),
+    editorial: section({
+      type: "editorial",
+      settings: z.discriminatedUnion("layout", [
+        z.object({ layout: z.literal("rich-text"), heading, body: z.string().trim().max(2000) }).strict(),
+        z.object({
+          layout: z.literal("image-with-text"),
+          heading,
+          body: z.string().trim().max(2000),
+          mediaId,
+          imageSide: z.enum(["start", "end"]),
+        }).strict(),
+        z.object({
+          layout: z.literal("multicolumn"),
+          heading,
+          columns: z.array(z.object({ title, text: z.string().trim().max(400), ...blockHidden }).strict()).max(4),
+        }).strict(),
+        z.object({
+          layout: z.literal("testimonial"),
+          quotes: z.array(z.object({ quote: z.string().trim().min(1).max(400), author: title, ...blockHidden }).strict()).max(6),
+        }).strict(),
+      ]),
+      defaults: { layout: "rich-text", heading: "", body: "" },
+    }),
+    specifications: section({
+      type: "specifications",
+      settings: z.object({
+        heading,
+        objectField: z.string().trim().max(166).refine((value) => {
+          if (!value) return true;
+          const separator = value.lastIndexOf(".");
+          return isCustomFieldNamespace(value.slice(0, separator)) && isCustomFieldKey(value.slice(separator + 1));
+        }, "Use a qualified custom field, such as custom.size_chart.").optional(),
+        rows: z.array(z.object({ label: title, value: z.string().trim().max(1000), ...blockHidden }).strict()).max(24),
+      }).strict(),
+      defaults: { heading: "Specifications", rows: [] },
+    }),
+    faq: section({
+      type: "faq",
+      settings: z.object({
+        heading,
+        items: z.array(z.object({
+          question: z.string().trim().min(1).max(200),
+          answer: z.string().trim().min(1).max(1000),
+          ...blockHidden,
+        }).strict()).max(20),
+      }).strict(),
+      defaults: { heading: "", items: [] },
+    }),
+    "utility-cards": section({
+      type: "utility-cards",
+      settings: z.object({
+        cards: z.array(z.object({ title: z.string().trim().min(1).max(60), text: z.string().trim().max(120), href, ...blockHidden }).strict()).max(4),
+      }).strict(),
+      defaults: { cards: [] },
+    }),
+    // Daraz "Just For You": off below 40 products.
+    "endless-grid": section({
+      type: "endless-grid",
+      settings: z.object({ title, pageSize: z.union([z.literal(12), z.literal(24), z.literal(36)]) }).strict(),
+      defaults: { title: "", pageSize: 24 },
+      requires: [atLeast("productCount", 40)],
+    }),
+    // Long copy below everything (Star Tech, Apple Gadgets).
+    "seo-text": section({
+      type: "seo-text",
+      settings: z.object({ heading, body: z.string().trim().max(8000) }).strict(),
+      defaults: { heading: "", body: "" },
+    }),
+    // A client island after load; never part of the cached page.
+    "recently-viewed": section({
+      type: "recently-viewed",
+      settings: z.object({ title }).strict(),
+      defaults: { title: "" },
+    }),
+    /**
+     * A object content type's published entries (Shopify's object
+     * sections): an FAQ, a size chart, designers, store locations. The
+     * merchant picks the content type (it must allow storefront access); the
+     * section shows up to `limit` entries in their order, each its display
+     * field and the rest of its fields, as a list, cards or questions that
+     * open. Nothing shows while the type is unset, gone or private.
+     */
+    objects: section({
+      type: "objects",
+      settings: z.object({
+        heading,
+        typeId: z.string().trim().max(160),
+        layout: z.enum(["list", "grid", "accordion"]),
+        limit: z.number().int().min(1).max(24),
+      }).strict(),
+      defaults: { heading: "", typeId: "", layout: "list", limit: 12 },
+    }),
+    /**
+     * The newsletter signup (Dawn's email signup, Fabrilife's band): the
+     * phone always (customer identity; it subscribes to SMS), the e-mail as
+     * `email` says, and with `whatsapp` a box that adds WhatsApp for the same
+     * number. The form states the channels it subscribes. An empty heading,
+     * text or button label shows the storefront's own words in the store's
+     * language. `email`, `whatsapp` and `buttonLabel` are optional, so stored
+     * version 1 newsletters stay valid (no `email`: optional).
+     */
+    newsletter: section({
+      type: "newsletter",
+      settings: z.object({
+        heading,
+        text: z.string().trim().max(300),
+        mediaId: mediaId.optional(),
+        email: z.enum(STOREFRONT_NEWSLETTER_EMAIL_FIELDS).optional(),
+        whatsapp: z.boolean().optional(),
+        buttonLabel: z.string().trim().max(STOREFRONT_NEWSLETTER_BUTTON_LABEL_MAX).optional(),
+      }).strict(),
+      defaults: { heading: "", text: "", email: "optional", whatsapp: false },
+    }),
   };
 }
 
-export const STOREFRONT_SECTION_REGISTRY = {
-  hero: section({
-    type: "hero",
-    settings: z.object({
-      // Full-bleed 2.6:1; contained (+ 2 side banners); split halves; a
-      // full-screen phone frame; wide editorial (copy beside the image).
-      layout: z.enum(["full-bleed", "contained-banners", "split", "full-screen", "wide-editorial"]),
-      /** The slides, in order. A hero without one renders nothing. */
-      slides: z.array(storefrontHeroSlideSchema).max(STOREFRONT_HERO_SLIDE_LIMIT),
-      /** Keep the desktop order, but let category tiles lead on phones. */
-      phonePlacement: z.enum(["after-categories"]).optional(),
-      /**
-       * Star Tech's two stacked promos beside a contained hero (300x240 at
-       * 1440px, two across under it on phones). Only `contained-banners`
-       * shows them; without them it is the contained banner alone. Optional,
-       * so stored version 1 heroes stay valid.
-       */
-      sideBanners: z.array(z.object({
-        mediaId: recordId,
-        /** What the image shows (its alt text). */
-        alt: z.string().trim().max(160),
-        href: href.nullable(),
-        ...blockHidden,
-      }).strict()).max(2).optional(),
-      /**
-       * `full-screen` on phones: the first screen (`screen`, the default), or
-       * Aarong's `compact` 65svh frame (23-35rem) when the phone banners carry
-       * no words, so a photo-only banner does not take the whole screen.
-       */
-      phoneHeight: z.enum(["screen", "compact"]).optional(),
-    }).strict(),
-    defaults: { layout: "full-bleed", slides: [] },
-  }),
-  /** Delivery facts or the merchant's points. The section's presence is its switch. */
-  "usp-strip": section({
-    type: "usp-strip",
-    settings: z.object({
-      style: z.enum(["icons", "ticker"]),
-      source: z.discriminatedUnion("kind", [
-        // Delivery, cash on delivery and returns from the live store settings.
-        z.object({ kind: z.literal("delivery-facts") }).strict(),
-        z.object({
-          kind: z.literal("custom"),
-          items: z.array(z.object({ title: z.string().trim().min(1).max(60), detail: z.string().trim().max(80), ...blockHidden }).strict()).min(1).max(4),
-        }).strict(),
-      ]),
-    }).strict(),
-    defaults: { style: "icons", source: { kind: "delivery-facts" } },
-  }),
-  /**
-   * The categories the merchant picks (`categoryIds`, in order; published
-   * ones show) under its title (empty: "Shop by category"). `photo` is a
-   * scrolling rail of portrait photos (a grid from 640px); `photo-grid`
-   * Aarong's department grid (two to four across); `round` a grid of round
-   * photos (3 to 8 across); `round-small` Apple Gadgets' 56px circles;
-   * `round-row` Target's round photos in one scrolling row on phones;
-   * `icons` Star Tech's icon grid; `quad` Amazon's cards of four; `square`
-   * eBay's gallery.
-   */
-  "category-tiles": section({
-    type: "category-tiles",
-    settings: z.object({
-      style: z.enum(STOREFRONT_CATEGORY_TILE_STYLES),
-      title,
-      categoryIds: idList(STOREFRONT_CATEGORY_TILES_LIMIT, "category"),
-    }).strict(),
-    defaults: { style: "photo", title: "", categoryIds: [] },
-    requires: [atLeast("topCategoryCount", 2)],
-  }),
-  /**
-   * The collections the merchant picks (`collectionIds`, in order; active
-   * ones with products show), each in its own presentation. Without one,
-   * the section shows the newest products. A carousel collection's cards are
-   * `large` (1.4 cards on a phone, 3 to 5 across) or Apple Gadgets'
-   * `compact` shelf (2.3 on a phone, up to 5.3 across).
-   */
-  collections: section({
-    type: "collections",
-    settings: z.object({
-      carousel: z.enum(["large", "compact"]),
-      collectionIds: idList(STOREFRONT_COLLECTIONS_LIMIT, "collection"),
-      // The heading over the newest products shown until collections are chosen (each collection has its own name).
-      title: title.optional(),
-    }).strict(),
-    defaults: { carousel: "large", collectionIds: [] },
-  }),
-  "product-rail": section({
-    type: "product-rail",
-    settings: z.object({ title, source: storefrontProductSourceSchema, limit: z.number().int().min(4).max(24) }).strict(),
-    defaults: { title: "", source: { kind: "newest" }, limit: 12 },
-  }),
-  "product-grid": section({
-    type: "product-grid",
-    settings: z.object({
-      title,
-      source: storefrontProductSourceSchema,
-      columns: z.number().int().min(2).max(6),
-      rows: z.number().int().min(1).max(6),
-    }).strict(),
-    defaults: { title: "", source: { kind: "newest" }, columns: 4, rows: 2 },
-  }),
-  /**
-   * Daraz's flash sale: a product row whose countdown counts to the end of a
-   * real promotion (`promotionId`, an active discount with an end time),
-   * never to a typed-in date. Without one, or once it has ended, the row has
-   * no countdown.
-   */
-  "deal-block": section({
-    type: "deal-block",
-    settings: z.object({
-      title,
-      source: storefrontProductSourceSchema,
-      promotionId: recordId.nullable().optional(),
-      mediaId: mediaId.optional(),
-    }).strict(),
-    defaults: { title: "", source: { kind: "on-sale" }, promotionId: null },
-  }),
-  /**
-   * Multi-list tabs (Game Ghor, Walmart, Chaldal): one heading and 2 to 4
-   * tabs, each a product source. Works without script (radio tabs); each tab
-   * shows its first `limit` products.
-   */
-  "product-tabs": section({
-    type: "product-tabs",
-    settings: z.object({
-      title,
-      tabs: z.array(z.object({ label: z.string().trim().max(40), source: storefrontProductSourceSchema, ...blockHidden }).strict()).min(2).max(4),
-      limit: z.number().int().min(4).max(12),
-    }).strict(),
-    defaults: {
-      title: "",
-      tabs: [
-        { label: "", source: { kind: "newest" } },
-        { label: "", source: { kind: "on-sale" } },
-        { label: "", source: { kind: "popular" } },
-      ],
-      limit: 8,
-    },
-  }),
-  /**
-   * "Shop by" image cards (Target's and Walmart's occasion cards, Amazon's
-   * quad cards): the merchant's photos, each with a label and a link.
-   */
-  "shop-by": section({
-    type: "shop-by",
-    settings: z.object({
-      title,
-      cards: z.array(z.object({ mediaId: recordId, title: z.string().trim().min(1).max(60), subtitle: z.string().trim().max(120).optional(), href, ...blockHidden }).strict()).max(8),
-    }).strict(),
-    defaults: { title: "", cards: [] },
-  }),
-  /**
-   * A promo banner mosaic (Daraz, Aarong, Walmart): one large tile beside up
-   * to four smaller ones, each an image with its link.
-   */
-  "banner-mosaic": section({
-    type: "banner-mosaic",
-    settings: z.object({
-      tiles: z.array(z.object({
-        mediaId: recordId,
-        /** What the image shows (its alt text). */
-        alt: z.string().trim().max(160),
-        href: href.nullable(),
-        ...blockHidden,
-      }).strict()).max(5),
-    }).strict(),
-    defaults: { tiles: [] },
-  }),
-  /**
-   * A lifestyle photo beside a grid of the list's products: `tall` fills the
-   * height of the grid beside it (2:3 columns); `square` is Fabrilife's
-   * square photo in a 1:2 split.
-   */
-  lookbook: section({
-    type: "lookbook",
-    settings: z.object({ title, mediaId, source: storefrontProductSourceSchema, photo: z.enum(["tall", "square"]) }).strict(),
-    defaults: { title: "", mediaId: null, source: { kind: "newest" }, photo: "tall" },
-  }),
-  /**
-   * One campaign banner. Consecutive banners with the same `two-up` or
-   * `four-up` layout share one row (Fabrilife's two campaigns side by side,
-   * Target's four promo tiles), each with its own image, words and link.
-   */
-  banner: section({
-    type: "banner",
-    settings: z.object({
-      layout: z.enum(["full", "two-up", "four-up"]),
-      heading,
-      text: z.string().trim().max(300),
-      mediaId,
-      cta: z.object({ label: z.string().trim().min(1).max(40), href }).strict().nullable(),
-    }).strict(),
-    defaults: { layout: "full", heading: "", text: "", mediaId: null, cta: null },
-  }),
-  "brand-wall": section({
-    type: "brand-wall",
-    settings: z.object({ title, style: z.enum(["grid", "rail"]) }).strict(),
-    defaults: { title: "", style: "rail" },
-    requires: [atLeast("brandCount", 4)],
-  }),
-  editorial: section({
-    type: "editorial",
-    settings: z.discriminatedUnion("layout", [
-      z.object({ layout: z.literal("rich-text"), heading, body: z.string().trim().max(2000) }).strict(),
-      z.object({
-        layout: z.literal("image-with-text"),
-        heading,
-        body: z.string().trim().max(2000),
-        mediaId,
-        imageSide: z.enum(["start", "end"]),
-      }).strict(),
-      z.object({
-        layout: z.literal("multicolumn"),
-        heading,
-        columns: z.array(z.object({ title, text: z.string().trim().max(400), ...blockHidden }).strict()).max(4),
-      }).strict(),
-      z.object({
-        layout: z.literal("testimonial"),
-        quotes: z.array(z.object({ quote: z.string().trim().min(1).max(400), author: title, ...blockHidden }).strict()).max(6),
-      }).strict(),
-    ]),
-    defaults: { layout: "rich-text", heading: "", body: "" },
-  }),
-  specifications: section({
-    type: "specifications",
-    settings: z.object({
-      heading,
-      objectField: z.string().trim().max(166).refine((value) => {
-        if (!value) return true;
-        const separator = value.lastIndexOf(".");
-        return isCustomFieldNamespace(value.slice(0, separator)) && isCustomFieldKey(value.slice(separator + 1));
-      }, "Use a qualified custom field, such as custom.size_chart.").optional(),
-      rows: z.array(z.object({ label: title, value: z.string().trim().max(1000), ...blockHidden }).strict()).max(24),
-    }).strict(),
-    defaults: { heading: "Specifications", rows: [] },
-  }),
-  faq: section({
-    type: "faq",
-    settings: z.object({
-      heading,
-      items: z.array(z.object({
-        question: z.string().trim().min(1).max(200),
-        answer: z.string().trim().min(1).max(1000),
-        ...blockHidden,
-      }).strict()).max(20),
-    }).strict(),
-    defaults: { heading: "", items: [] },
-  }),
-  "utility-cards": section({
-    type: "utility-cards",
-    settings: z.object({
-      cards: z.array(z.object({ title: z.string().trim().min(1).max(60), text: z.string().trim().max(120), href, ...blockHidden }).strict()).max(4),
-    }).strict(),
-    defaults: { cards: [] },
-  }),
-  // Daraz "Just For You": off below 40 products.
-  "endless-grid": section({
-    type: "endless-grid",
-    settings: z.object({ title, pageSize: z.union([z.literal(12), z.literal(24), z.literal(36)]) }).strict(),
-    defaults: { title: "", pageSize: 24 },
-    requires: [atLeast("productCount", 40)],
-  }),
-  // Long copy below everything (Star Tech, Apple Gadgets).
-  "seo-text": section({
-    type: "seo-text",
-    settings: z.object({ heading, body: z.string().trim().max(8000) }).strict(),
-    defaults: { heading: "", body: "" },
-  }),
-  // A client island after load; never part of the cached page.
-  "recently-viewed": section({
-    type: "recently-viewed",
-    settings: z.object({ title }).strict(),
-    defaults: { title: "" },
-  }),
-  /**
-   * A object content type's published entries (Shopify's object
-   * sections): an FAQ, a size chart, designers, store locations. The
-   * merchant picks the content type (it must allow storefront access); the
-   * section shows up to `limit` entries in their order, each its display
-   * field and the rest of its fields, as a list, cards or questions that
-   * open. Nothing shows while the type is unset, gone or private.
-   */
-  objects: section({
-    type: "objects",
-    settings: z.object({
-      heading,
-      typeId: z.string().trim().max(160),
-      layout: z.enum(["list", "grid", "accordion"]),
-      limit: z.number().int().min(1).max(24),
-    }).strict(),
-    defaults: { heading: "", typeId: "", layout: "list", limit: 12 },
-  }),
-  /**
-   * The newsletter signup (Dawn's email signup, Fabrilife's band): the
-   * phone always (customer identity; it subscribes to SMS), the e-mail as
-   * `email` says, and with `whatsapp` a box that adds WhatsApp for the same
-   * number. The form states the channels it subscribes. An empty heading,
-   * text or button label shows the storefront's own words in the store's
-   * language. `email`, `whatsapp` and `buttonLabel` are optional, so stored
-   * version 1 newsletters stay valid (no `email`: optional).
-   */
-  newsletter: section({
-    type: "newsletter",
-    settings: z.object({
-      heading,
-      text: z.string().trim().max(300),
-      mediaId: mediaId.optional(),
-      email: z.enum(STOREFRONT_NEWSLETTER_EMAIL_FIELDS).optional(),
-      whatsapp: z.boolean().optional(),
-      buttonLabel: z.string().trim().max(STOREFRONT_NEWSLETTER_BUTTON_LABEL_MAX).optional(),
-    }).strict(),
-    defaults: { heading: "", text: "", email: "optional", whatsapp: false },
-  }),
-};
+export const STOREFRONT_SECTION_REGISTRY = storefrontSectionRegistryOf(
+  storefrontSkinRefSchema, storefrontSettingBindingsSchema, storefrontProductSourceSchema,
+);
 
 export type StorefrontSectionType = keyof typeof STOREFRONT_SECTION_REGISTRY;
 export const STOREFRONT_SECTION_TYPES = Object.keys(STOREFRONT_SECTION_REGISTRY) as StorefrontSectionType[];
@@ -472,25 +483,36 @@ export function isStorefrontAppSection(section: StorefrontSection): section is S
   return section.type === "app";
 }
 
-/** One section of any type, its core sections taking `skin` as their skin schema. */
-function storefrontSectionSchemaOf(skin: typeof storefrontSkinRefSchema) {
-  const schemas = skin === storefrontSkinRefSchema
+/** One section of any type, using shared schemas for repeated placement and source values. */
+function storefrontSectionSchemaOf(
+  skin: typeof storefrontSkinRefSchema,
+  bindings: typeof storefrontSettingBindingsSchema = storefrontSettingBindingsSchema,
+  productSource: typeof storefrontProductSourceSchema = storefrontProductSourceSchema,
+) {
+  const schemas = skin === storefrontSkinRefSchema && bindings === storefrontSettingBindingsSchema && productSource === storefrontProductSourceSchema
     ? sectionSchemas
-    : sectionSchemas.map((schema) => (schema as z.ZodObject).extend({ skin: skin.optional() }));
+    : Object.values(storefrontSectionRegistryOf(skin, bindings, productSource)).map((entry) => entry.schema);
+  const app = bindings === storefrontSettingBindingsSchema
+    ? storefrontAppSectionSchema
+    : storefrontAppSectionSchema.extend({ bindings: bindings.optional() });
   return z.discriminatedUnion(
     "type",
-    [...schemas, storefrontAppSectionSchema] as unknown as [Registry["hero"]["schema"], ...Registry[StorefrontSectionType]["schema"][]],
+    [...schemas, app] as unknown as [Registry["hero"]["schema"], ...Registry[StorefrontSectionType]["schema"][]],
   ) as unknown as z.ZodType<StorefrontSection>;
 }
 
 export const storefrontSectionSchema = storefrontSectionSchemaOf(storefrontSkinRefSchema);
 
 /**
- * A list of sections: unique ids, at most 24. `skin` is the skin reference
- * schema (the API passes its named one, so its contract states it once).
+ * A list of sections: unique ids, at most 24. The API passes named shared
+ * schemas so repeated skins, bindings and product sources are stated once.
  */
-export function storefrontSectionListSchemaOf(skin: typeof storefrontSkinRefSchema = storefrontSkinRefSchema) {
-  return z.array(skin === storefrontSkinRefSchema ? storefrontSectionSchema : storefrontSectionSchemaOf(skin)).max(STOREFRONT_MAX_SECTIONS)
+export function storefrontSectionListSchemaOf(
+  skin: typeof storefrontSkinRefSchema = storefrontSkinRefSchema,
+  bindings: typeof storefrontSettingBindingsSchema = storefrontSettingBindingsSchema,
+  productSource: typeof storefrontProductSourceSchema = storefrontProductSourceSchema,
+) {
+  return z.array(storefrontSectionSchemaOf(skin, bindings, productSource)).max(STOREFRONT_MAX_SECTIONS)
     .superRefine((sections, context) => {
       const ids = new Set<string>();
       sections.forEach((each, index) => {

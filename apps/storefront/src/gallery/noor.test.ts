@@ -89,7 +89,7 @@ describe("packed Noor gallery integration", () => {
     expect(NOOR_EXTENSION.skins.map((skin) => skin.target)).toEqual([
       "header", "footer", "product-card", "product-main", "section:hero", "section:product-tabs", "section:product-grid", "section:product-rail",
       "section:category-tiles", "section:shop-by", "section:banner-mosaic", "section:lookbook", "section:deal-block", "section:usp-strip",
-      "section:editorial", "section:seo-text", "section:faq", "section:newsletter",
+      "section:editorial", "section:seo-text", "section:specifications", "section:faq", "section:newsletter",
     ]);
     expect((await read("noor-product-missing", "storefront/layout")).appExtensions).toEqual([]);
     expect(galleryEntry("noor-product-missing")!.theme.apps!.skins!.header).toEqual(galleryEntry("noor-product")!.theme.apps!.skins!.header);

@@ -155,6 +155,7 @@ describe("cart server order processing", () => {
         }),
       ],
       {
+        cod: true,
         city: "city_1",
         zone: "zone_1",
         area: null,
@@ -531,7 +532,7 @@ describe("cart server order processing: delivery, pickup and nothing to deliver"
     expect(result).toMatchObject({ success: true, orderId: "order_1" });
     expect(mocks.validateCartItems).toHaveBeenCalledWith(
       [expect.objectContaining({ properties: [{ key: "engraving", value: "Anika" }] })],
-      { shippingMethodId: "pickup_1" },
+      { shippingMethodId: "pickup_1", cod: true },
     );
     const payload = mocks.createOrder.mock.calls[0]![0];
     expect(payload).toMatchObject({
@@ -589,7 +590,7 @@ describe("cart server order processing: delivery, pickup and nothing to deliver"
     }));
 
     expect(result).toMatchObject({ success: true });
-    expect(mocks.validateCartItems).toHaveBeenCalledWith(expect.any(Array), {});
+    expect(mocks.validateCartItems).toHaveBeenCalledWith(expect.any(Array), { cod: true });
     expect(mocks.createOrder.mock.calls[0]![0]).toMatchObject({
       shippingAddress: null,
       city: null,
@@ -633,6 +634,7 @@ describe("cart server order processing: delivery, pickup and nothing to deliver"
     expect(result).toMatchObject({ success: true });
     // Its shipping zone matches on the region and postal code (MARKETS-DESIGN step 3b).
     expect(mocks.validateCartItems).toHaveBeenCalledWith(expect.any(Array), {
+      cod: true,
       shippingMethodId: "ship_1",
       shippingCountryCode: "US",
       shippingAdminArea: "CA",
@@ -698,7 +700,7 @@ describe("cart server order processing: delivery, pickup and nothing to deliver"
 
     await processOrder(formWith({ shippingAddress: "House 1, Road 2, Dhaka" }));
 
-    expect(mocks.validateCartItems).toHaveBeenCalledWith(expect.any(Array), { shippingMethodId: "ship_1", city: "city_1", zone: "zone_1", area: null });
+    expect(mocks.validateCartItems).toHaveBeenCalledWith(expect.any(Array), { shippingMethodId: "ship_1", city: "city_1", zone: "zone_1", area: null, cod: true });
     const payload = mocks.createOrder.mock.calls[0]![0];
     expect(payload).not.toHaveProperty("shippingCountryCode");
     expect(payload).toMatchObject({ shippingAddress: "House 1, Road 2, Dhaka", city: "city_1", zone: "zone_1", cityName: "Dhaka" });

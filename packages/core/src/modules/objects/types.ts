@@ -96,9 +96,9 @@ export async function createObjectType(db: Database, input: ObjectTypeInput, wri
   if (Number(total?.n ?? 0) >= OBJECT_TYPES_MAX) throw new AppError(409, "OBJECT_LIMIT", `A store holds at most ${OBJECT_TYPES_MAX} object types.`);
   const id = objectTypeId(namespace, spec.type);
   const inserted = await db.insert(objectTypes).values({ id, namespace, type: spec.type, ...values(spec, namespace) })
-    .onConflictDoNothing().returning({ id: objectTypes.id });
+    .onConflictDoNothing().returning();
   if (!inserted.length) throw new AppError(409, "OBJECT_TYPE_TAKEN", `Object type ${objectTypeHandle(namespace, spec.type)} already exists.`);
-  return requireType(db, id);
+  return presentType(inserted[0]!, 0);
 }
 async function assertFieldTypesKept(db: Database, current: ObjectTypeView, fields: readonly ObjectField[]): Promise<void> {
   if (!current.recordCount) return;

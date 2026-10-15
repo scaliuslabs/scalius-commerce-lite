@@ -1056,6 +1056,55 @@ describe("CLI workflow resolver adapter", () => {
     });
   });
 
+  it.each([
+    "objects.types.list", "objects.types.get", "objects.types.create",
+    "objects.types.update", "objects.types.delete", "objects.list",
+    "objects.get", "objects.upsert", "objects.delete",
+  ])("accepts the dashboard-only %s operation fallback", (operationId) => {
+    const objectsDocument = document((workflows) => {
+      workflows.coverage.operations.push({
+        operationId,
+        surface: "dashboard",
+        mode: "operation-fallback",
+        workflowIds: [`operation.${operationId}`],
+      });
+    });
+    objectsDocument.paths!["/api/v1/admin/objects/{type}/{id}"] = {
+      get: operation(operationId, "dashboard"),
+    };
+
+    expect(resolveWorkflow(objectsDocument, {
+      prompt: operationId,
+      surface: "dashboard",
+    })).toMatchObject({
+      kind: "plan",
+      disposition: "execute",
+      plan: { source: "operation-fallback", operationIds: [operationId] },
+    });
+    expect(resolveWorkflow(objectsDocument, {
+      prompt: operationId,
+      surface: "storefront",
+    })).toMatchObject({ kind: "unsupported", disposition: "unsupported" });
+  });
+
+  it("rejects an unregistered Objects operation in workflow coverage", () => {
+    const objectsDocument = document((workflows) => {
+      workflows.coverage.operations.push({
+        operationId: "objects.unknown",
+        surface: "dashboard",
+        mode: "operation-fallback",
+        workflowIds: ["operation.objects.unknown"],
+      });
+    });
+    objectsDocument.paths!["/api/v1/admin/objects/{type}/{id}"] = {
+      get: operation("objects.unknown", "dashboard"),
+    };
+    expectInvalidOpenApi(() => resolveWorkflow(objectsDocument, {
+      prompt: "objects.unknown",
+      surface: "dashboard",
+    }));
+  });
+
   it("returns unsupported for an unrelated request", () => {
     expect(resolveWorkflow(document(), {
       prompt: "Compose a symphony about lunar geology",

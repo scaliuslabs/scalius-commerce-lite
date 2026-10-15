@@ -134,14 +134,14 @@ Both generators emit a PostgreSQL form. Remote D1 rejects a trigger body that em
 
 ## Migrations
 
-`migrations/` holds 157 SQL files, `0000` to `0156`. The latest is `0156_custom_field_object_references`. `0000_blushing_jack_power.sql` is the baseline and holds the raw SQL Drizzle cannot express (FTS5, partial indexes, guard triggers). Never delete or squash a released migration. Installed D1 databases depend on Wrangler's history, and installed TursoDB and PostgreSQL databases depend on the release ledger.
+`migrations/` holds 158 SQL files, `0000` to `0157`. The latest is `0157_order_search_update_guards`. `0000_blushing_jack_power.sql` is the baseline and holds the raw SQL Drizzle cannot express (FTS5, partial indexes, guard triggers). Never delete or squash a released migration. Installed D1 databases depend on Wrangler's history, and installed TursoDB and PostgreSQL databases depend on the release ledger.
 
-Migration 0155 installs transactional event demand and the expanded event catalog, replaces the disposable pre-beta metaobject/plugin-record tables with object types/records, adds private checkout attributes, carrier-rate fields and abandonment timestamps, and resets all saved theme documents for strict version 10 readers. Object permissions retain their existing IDs while their names and stored agent grants move to `objects.view/edit`. Public object changes and carrier settings have generated cache-dependency triggers; prior migrations remain immutable. Migration 0156 adds scalar/list object-reference custom fields while preserving existing definitions, values and triggers. Apply 0154–0156 before deploying the corresponding application code.
+Migration 0155 installs transactional event demand and the expanded event catalog, replaces the disposable pre-beta metaobject/plugin-record tables with object types/records, adds private checkout attributes, carrier-rate fields and abandonment timestamps, and resets all saved theme documents for strict version 10 readers. Object permissions retain their existing IDs while their names and stored agent grants move to `objects.view/edit`. Public object changes and carrier settings have generated cache-dependency triggers; prior migrations remain immutable. Migration 0156 adds scalar/list object-reference custom fields while preserving existing definitions, values and triggers. Migration 0157 avoids FTS5 reindexing for order operations that change no searchable field; other providers already guard their search triggers. Apply 0154–0157 before deploying the corresponding application code.
 
 | Path | Content |
 |------|---------|
 | `migrations/NNNN_<name>.sql` | The canonical SQLite SQL (D1 and TursoDB) |
-| `migrations/postgres/NNNN_<name>.sql` | The transaction-safe PostgreSQL sidecar (`0050` to `0156`, 107 files) |
+| `migrations/postgres/NNNN_<name>.sql` | The transaction-safe PostgreSQL sidecar (`0050` to `0157`, 108 files) |
 | `migrations/meta/` | Drizzle journal and snapshots |
 
 ### Private staff notification history

@@ -15,11 +15,13 @@ This is the beta candidate for the core contract freeze. Deployment and publicat
 
 ## Upgrade
 
-Apply migrations 0154–0156 before the new application code. Use the repository deploy command when deployment is authorized.
+Apply migrations 0154–0157 before the new application code. Use the repository deploy command when deployment is authorized.
 
 0155 deliberately removes the disposable pre-beta metaobject/app-record tables. It also resets stored themes, drafts, history, restore points and previews: old theme versions are not upgraded on read. Reconfigure saved theme branding and landing layouts after that reset. Other catalog, order and customer data are not part of this reset.
 
 0156 preserves existing custom-field definitions and values while expanding the type constraint. SQLite retains foreign-key enforcement throughout the rebuild; PostgreSQL changes only the constraint.
+
+0157 guards order search-index updates so status and inventory changes do not rewrite unchanged search terms. Measured status writes fell from 95 to 16; search edits and deletes remain indexed.
 
 This is an intentional pre-freeze contract replacement. Existing pre-beta apps using retired storage, metaobject or static-block APIs must be rebuilt against the new SDK. Future changes to the sealed beta contract must pass the compatibility gates.
 
@@ -39,3 +41,9 @@ The candidate does not claim an npm publication, production deployment, full-sui
 - Live messaging authorization now rejects disabled/replaced apps, banned approvers and revoked scopes; bridge and bundled/sandbox regressions passed.
 
 Review sweeps, final composed browser journeys, full-suite/DVC race and capacity runs, deployment smokes and package publication remain separate release steps. The earlier Noor gallery passed eight scenarios at mobile and desktop widths; final integration still needs the requested review sweep.
+
+## Full verification repairs — 2026-10-15
+
+The first full suite ran 1,820 files: 1,718 passed, 30 failed and 72 skipped. All initially failing cases passed after fixes to Objects workflow IDs, shared MCP schema references, order search-index write amplification, redundant Object type reads, and stale fixtures for the new contracts. Strict Free/Paid database budgets passed (36 tests); the Free 50-call ceiling is unchanged. Migration 0154–0157 application and search behavior passed on a disposable remote D1 database, which was then deleted.
+
+The complete storefront gallery covered 341 scenarios at 390, 768, 1280 and 1440 px. It found unnamed Noor gallery links and two development reload interruptions. All five affected scenarios passed their rerun after the link fix; all 24 packed Noor integration scenarios passed. Heuristic advisory findings remain separate from the zero failing accessibility/layout gates. Final full-suite, native PostgreSQL, five-seed DVC, deployment and live-smoke outcomes are still pending.

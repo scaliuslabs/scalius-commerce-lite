@@ -95,6 +95,11 @@ vi.mock("./payment/payment-session-create", () => ({
   resolveCustomerPaymentSessionRecovery: mocks.resolveCustomerPaymentSessionRecovery,
 }));
 
+vi.mock("@scalius/core/modules/plugins", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/plugins")>()),
+  listActiveCheckoutRegistrations: vi.fn(async () => []),
+}));
+
 import { customerAuthRoutes } from "./customer-auth";
 
 function createTestApp() {

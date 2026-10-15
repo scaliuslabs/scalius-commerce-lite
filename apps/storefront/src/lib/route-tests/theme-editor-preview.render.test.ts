@@ -719,7 +719,7 @@ describe("one private library document", () => {
     ["/products/current-product", "product", "product"],
     ["/categories/current-category", "listing", "collection"],
     ["/cart", "cart", "cart"],
-  ] as const)("passes %s to the real extension host and renders only the selected placement", async (path, kind, template) => {
+  ] as const)("enforces the extension boundary for a selected placement at %s", async (path, kind, template) => {
     const release = "a".repeat(64);
     const contexts: Array<import("@scalius/shared/plugins/storefront-components").StorefrontRenderContext> = [];
     const pluginId = "library.context-test";
@@ -747,6 +747,12 @@ describe("one private library document", () => {
         }] },
       }, { url: url(`${pluginId}/hero`, path), cookie: PREVIEW_COOKIE });
       expect(result.response.status).toBe(200);
+      if (kind === "cart") {
+        expect(contexts).toEqual([]);
+        expect(result.html).not.toContain("Selected app only");
+        expect(result.html).toContain("data-library-render-failed");
+        return;
+      }
       // This is the actual ExtensionHost batch, after layout and saved-theme
       // resolution, not a unit assertion of the override setter.
       expect(contexts).toHaveLength(1);
