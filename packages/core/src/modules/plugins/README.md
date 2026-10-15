@@ -1,6 +1,6 @@
 # Plugins
 
-Installed apps' persistent state and lifecycle (layer L1), for contributors. The domain imports only `events` (`event-deliveries.ts` implements its fan-out target), plus `@scalius/shared`, the database and the shared `auth`, `cache-deps` and `errors` areas. `checkout` and `storefront` import it. The API runs app code in `apps/api/src/plugins`. The author's guide is `packages/plugin-sdk/README.md`.
+Installed apps' persistent state and lifecycle (layer L4), for contributors. The domain imports `events` (delivery fan-out) and `objects` (manifest types and records), plus `@scalius/shared`, the database and the shared `auth`, `cache-deps` and `errors` areas. `checkout` and `storefront` import it. The API runs app code in `apps/api/src/plugins`. The author's guide is `packages/plugin-sdk/README.md`.
 
 ## Tables
 
@@ -8,7 +8,8 @@ Installed apps' persistent state and lifecycle (layer L1), for contributors. The
 | --- | --- |
 | `plugin_installations` | One row per app: manifest, approved grant, status, settings (secrets sealed as `ps1:...`), `revision`. |
 | `plugin_registrations` | Rows derived from the manifest in the same batch as each manifest write (`registry.ts`). `kind` is `event`, `function`, `cron` or `provider` (one row per app and port). |
-| `plugin_records`, `plugin_kv` | `ctx.storage` and `ctx.kv` data, each with a `revision`. |
+| `plugin_kv` | Private `ctx.kv` cache entries, each with a revision and optional expiry. |
+| `object_types`, `object_records` | `ctx.objects` data in the Objects domain, validated against manifest fields. |
 | `plugin_log_entries`, `plugin_event_deliveries`, `plugin_cron_runs` | The masked log ring, delivery state (8 attempts), cron claims. |
 | `plugin_migrations` | One row per data update an app ran (0125). Kept by a keep-data uninstall. |
 
@@ -24,7 +25,7 @@ No read mappings for retired manifest shapes before v2 is stable. A row whose st
 
 1. `installPlugin` adds an `installed` row with the setting defaults. Nothing runs. Bundled apps install from `apps/api/src/plugins/bundled-sync.ts`.
 2. `activatePlugin` needs the required settings filled, stores the grant the manifest asks for and sets `active`. Only a Super Admin may activate.
-3. `updatePluginInstallation` replaces the manifest, rewrites the registrations, migrates the settings and re-indexes changed collections. An active app whose update asks for more access returns to `installed` until a Super Admin approves it; presentation (sections, blocks, skins) under an approved `storefrontCode` grant asks for nothing new. It also replaces a row whose stored manifest no longer reads (its grant still decides). The bundled sync marks a running app `failed` with the reason when the deployed release cannot be installed.
+3. `updatePluginInstallation` replaces the manifest, rewrites the registrations, migrates the settings and synchronizes declared object types and rebuilds changed indexes. An active app whose update asks for more access returns to `installed` until a Super Admin approves it; presentation (sections, blocks, skins) under an approved `storefrontCode` grant asks for nothing new. It also replaces a row whose stored manifest no longer reads (its grant still decides). The bundled sync marks a running app `failed` with the reason when the deployed release cannot be installed.
 4. Deactivate sets `disabled`. `markPluginFailed` sets `failed` when the host cannot load the code.
 5. `uninstallPlugin` removes the row. With `keepData` it cancels waiting deliveries. Without it, it also deletes the app's records, KV, logs, deliveries, cron runs, data-update rows and custom-field definitions.
 6. `setPluginFeature` turns one of an active app's features on (a Super Admin's consent to that feature's access, checked by grant key) or off (revoked at once). The grant records the features that are on (`grant.features`); `toPluginInstallation` reads the manifest through `pluginManifestWithFeatures`, so `installation.manifest` is the app as it runs and every runtime reader skips off features. `declaredManifest` keeps the whole declaration. Registrations follow in the same batch. An update keeps the features that are on and starts new ones off; settings of an off feature stay stored but are hidden and refused on write.
@@ -36,10 +37,12 @@ No read mappings for retired manifest shapes before v2 is stable. A row whose st
 
 ## Atomic writes
 
-- `writePluginRecords` writes up to 25 puts, deletes and checks across collections in one provider batch. `expectedRevision` (a number, or `null` for "must not exist") adds a guard ahead of the writes. A failed guard aborts the batch as `storage.conflict` (`details.index` names the operation). A unique-index violation aborts it as `storage.unique_violation`.
-- `getPluginRecordVersion`, `getPluginKvVersion` and `compareAndSetPluginKv` (`kv.conflict`) serve conditional writes. The SDK builds `update` and `increment` as read-check-write loops over them.
-- `prepareAppStorageCommit` and `appStorageCommitStatements` let checkout write an app's snapshot record in the order's commit batch at the revision the app saw (`checkout/commit.ts`). `isAppStorageCommitConflict` recognizes the lost race.
+Object record helpers are exported by `@scalius/core/modules/objects`.
+
+- `writeObjectRecords` writes up to 25 puts, deletes and checks across object types in one provider batch. `expectedRevision` (a number, or `null` for "must not exist") adds a guard ahead of the writes. A failed guard aborts the batch as `object.conflict` (`details.index` names the operation). A unique-index violation aborts it as `object.unique_violation`.
+- `getObjectRecordVersion`, `getPluginKvVersion` and `compareAndSetPluginKv` (`kv.conflict`) serve conditional writes. The SDK builds `update` and `increment` as read-check-write loops over them.
+- `prepareAppObjectCommit` and `appObjectCommitStatements` let checkout write an app's snapshot record in the order's commit batch at the revision the app saw (`checkout/commit.ts`). `isAppObjectCommitConflict` recognizes the lost race.
 
 ## Cache dependencies
 
-Triggers generated for migration 0110 (`cdep_plugin_*`) advance dependencies in the same transaction as each write: `plg:<plugin id>`, `plg:*` and `t:<table>` for installations and registrations, and `plgs:<plugin id>:<collection>` and `t:plugin_records` for records. A write that changes only bookkeeping columns advances nothing. `plugin_kv`, logs, deliveries and cron runs have no public dependency. Readers declare `deps.plugin(id)` or `deps.anyPlugin()` (registry: `packages/shared/src/cache-deps.ts`).
+Installations and registrations advance `plg:<plugin id>` and `plg:*` transactionally. Objects advance `obj:<typeId>` only when the type or affected record is public, including removal from publication. Private object writes have no public dependency cost. Bookkeeping-only changes advance nothing. `plugin_kv`, logs, deliveries and cron runs have no public dependency. Readers declare `deps.plugin(id)`, `deps.anyPlugin()` or `deps.objects(typeIds)` (registry: `packages/shared/src/cache-deps.ts`).

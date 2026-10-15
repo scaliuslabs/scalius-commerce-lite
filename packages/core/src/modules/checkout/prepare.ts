@@ -1,3 +1,4 @@
+import { validateCheckoutAttributes } from "./attributes";
 // src/modules/checkout/prepare.ts
 // Storefront order creation — validates and prepares orders for the commit.
 
@@ -6,7 +7,8 @@ import type { Database } from "@scalius/database/client";
 import { assertOrderContact, resolveCheckoutContact, type CheckoutContactFieldSettings } from "./contact-fields";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { defaultPriceIncrementMinor, type PricingCurrency } from "@scalius/shared/currency-policy";
-import { fromMinor } from "@scalius/shared/money";
+import { isDepositPaymentRequired } from "@scalius/shared/checkout-payment";
+import { fromMinor, toMinor } from "@scalius/shared/money";
 import {
     convertStoreCurrencyMinor,
     isForeignPresentment,
@@ -65,6 +67,7 @@ import {
     summarizeStorefrontCartFulfilment,
     validateStorefrontCartItems,
     type StorefrontCartFulfilmentLine,
+    type StorefrontCartValidatedItem,
     type StorefrontCartFulfilmentSummary,
     type StorefrontCartItemIssue,
     type StorefrontCartValidationResult,
@@ -74,6 +77,8 @@ import type { FulfillmentType } from "@scalius/shared/fulfilment";
 import { hasFulfiller } from "../fulfilment";
 import {
   type ActiveDeliveryLocationRow,
+  type CalculatedRateOptions,
+  resolveCalculatedDeliveryRates,
   type DeliveryRateKind,
   type DeliveryRateRow,
   DELIVERY_RATE_UNAVAILABLE_REASON,
@@ -99,6 +104,8 @@ export interface StorefrontDeliveryPreflightInput {
     shippingAdminArea?: string | null;
     shippingPostalCode?: string | null;
     shippingMethodId?: string | null;
+    shippingRateToken?: string | null;
+    cod?: boolean;
 }
 
 /** `details.reason` when a delivery rate is chosen but the address is missing. */
@@ -111,6 +118,9 @@ export interface StorefrontDeliveryPreflightResult {
      */
     kind: DeliveryRateKind | null;
     shippingMinor: number;
+    rateToken?: string;
+    rateCod?: boolean;
+    rateRows?: DeliveryRateRow[];
     shippingMethod: StorefrontOrderShippingMethodSnapshot | null;
     cityName: string | null;
     zoneName: string | null;
@@ -138,6 +148,7 @@ export interface StorefrontDeliveryDestination {
 
 export interface StorefrontCheckoutPolicySnapshot {
     partialPaymentEnabled: boolean;
+    partialPaymentAmount?: number;
     /**
      * The countries the active markets sell to (the authority read); a shipped
      * order must go to one, and an order with nothing to ship is placed in one.
@@ -189,7 +200,7 @@ export function isTrustedStorefrontCheckoutPolicySnapshot(
 }
 
 type DeliveryPreflightCart = Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct" | "subtotalMinor"> & {
-    items: readonly StorefrontCartFulfilmentLine[];
+    items: readonly (StorefrontCartFulfilmentLine & Partial<Pick<StorefrontCartValidatedItem, "variantId" | "quantity" | "unitPriceMinor" | "weightGrams">>)[];
     /** The cart's currency: a rate's fee and free-over amount convert into it (MARKETS-DESIGN step 6). */
     money?: PresentmentMoney;
 };
@@ -319,10 +330,60 @@ export function resolveStorefrontDeliveryPreflightFromRows(
     });
 }
 
+/** Carrier results enter the same zone and fee resolver as flat delivery rates. */
+export async function resolveStorefrontDeliveryPreflightWithRates(
+    storefrontDb: Database,
+    data: StorefrontDeliveryPreflightInput,
+    cart: DeliveryPreflightCart,
+    locations: readonly ActiveDeliveryLocationRow[],
+    rows: readonly DeliveryRateRow[],
+    options?: CalculatedRateOptions,
+): Promise<StorefrontDeliveryPreflightResult> {
+    if (!summarizeStorefrontCartFulfilment(cart, null).requiresDeliveryMethod || rows.find((row) => row.id === data.shippingMethodId)?.kind === "pickup" || !rows.some((row) => row.rateSource && row.rateSource !== "flat") || !cart.money) {
+        return resolveStorefrontDeliveryPreflightFromRows(data, cart, locations, rows);
+    }
+    const destination = normalizeDeliveryDestination({ countryCode: data.shippingCountryCode, city: data.city, zone: data.zone, area: data.area, adminArea: data.shippingAdminArea, postalCode: data.shippingPostalCode });
+    const zoneId = resolveDestinationZoneId(destination, { locations, regions: parseDeliveryRegionRows(rows[0]?.destinationRegions) });
+    const lines = cart.items.filter((item) => item.fulfillmentKind === "physical").map((item) => ({ variantId: item.variantId ?? "", quantity: item.quantity ?? 1, unitPriceMinor: item.unitPriceMinor ?? 0, weightGrams: item.weightGrams ?? null }));
+    const rateRows = await resolveCalculatedDeliveryRates({
+        db: storefrontDb,
+        rows: rows.filter((row) => row.kind === "pickup" || row.zoneId === zoneId),
+        locationRows: locations,
+        money: cart.money,
+        request: {
+            destination: { country: destination.countryCode, adminArea: destination.adminArea ?? null, city: locations.find((row) => row.id === destination.city)?.name ?? null, postalCode: destination.postalCode ?? null,
+                placeIds: { city: destination.city ?? null, zone: destination.zone ?? null, area: destination.area ?? null } },
+            origin: null,
+            parcel: { lines, weightGrams: lines.every((line) => line.weightGrams !== null) ? lines.reduce((sum, line) => sum + line.weightGrams! * line.quantity, 0) : null },
+            currency: cart.money.currencyCode, decimalPlaces: cart.money.decimalPlaces, cod: data.cod === true,
+        },
+        token: data.shippingRateToken,
+        methodId: data.shippingMethodId,
+        options,
+    });
+    if (data.shippingMethodId && !rateRows.some((row) => row.id === data.shippingMethodId)) {
+        throw new ValidationError("This delivery option is unavailable. Choose another delivery option.", {
+            reason: DELIVERY_RATE_UNAVAILABLE_REASON,
+            shippingRates: rateRows.map((stored) => {
+                const row = deliveryRateInCurrency(stored, cart.money);
+                const waived = cart.hasFreeDeliveryProduct || (row.freeOverMinor !== null && cart.subtotalMinor >= row.freeOverMinor);
+                return { id: row.id, name: row.name, kind: row.kind ?? "delivery", amount: fromMinor(waived ? 0 : row.feeMinor, cart.money!.decimalPlaces), amountMinor: waived ? 0 : row.feeMinor };
+            }),
+        });
+    }
+    const result = resolveStorefrontDeliveryPreflightFromRows(data, cart, locations, rateRows);
+    result.rateRows = rateRows;
+    const selected = rateRows.find((row) => row.id === data.shippingMethodId);
+    result.rateToken = selected?.rateToken;
+    result.rateCod = selected?.rateCod;
+    return result;
+}
+
 export async function validateStorefrontDeliveryPreflight(
     storefrontDb: Database,
     data: StorefrontDeliveryPreflightInput,
     cartValidation: DeliveryPreflightCart,
+    options?: CalculatedRateOptions,
 ): Promise<StorefrontDeliveryPreflightResult> {
     if (!summarizeStorefrontCartFulfilment(cartValidation, null).requiresDeliveryMethod) {
         return resolveStorefrontDeliveryPreflightFromRows(data, cartValidation, [], []);
@@ -347,11 +408,13 @@ export async function validateStorefrontDeliveryPreflight(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     const [locationRows, shippingMethodRows] = await storefrontDb.batch(readBatch as any);
 
-    return resolveStorefrontDeliveryPreflightFromRows(
+    return resolveStorefrontDeliveryPreflightWithRates(
+        storefrontDb,
         data,
         cartValidation,
         Array.isArray(locationRows) ? locationRows as ActiveDeliveryLocationRow[] : [],
         Array.isArray(shippingMethodRows) ? shippingMethodRows as DeliveryRateRow[] : [],
+        options,
     );
 }
 
@@ -660,7 +723,9 @@ export async function createStorefrontOrder(
         throw new ValidationError("Checkout cart validation could not be trusted. Please retry checkout.");
     }
 
+    const attributes = validateCheckoutAttributes(appOptions?.apps, data.attributes, true);
     const appContext = {
+        attributes,
         channel: appOptions.channel ?? "online_store",
         customerId: customerIdentity?.customerId ?? null,
         destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
@@ -816,6 +881,7 @@ export async function createStorefrontOrder(
     // Typed codes fail closed; an app rule the cart breaks blocks the order.
     // ------------------------------------------------------------------
     const pricing = await priceStorefrontCheckout(storefrontDb, {
+        attributes,
         cartValidation,
         delivery: deliveryPreflight,
         discountCodes: data.discountCodes,
@@ -891,6 +957,16 @@ export async function createStorefrontOrder(
             ? "This store takes an advance payment online. Pay the rest online, or cover the whole order with gift cards."
             : "Advance deposit is required. COD cannot be selected for the full amount directly.");
     }
+    const requiresCashCollection = paymentMethod === PaymentMethod.COD || (!giftCardsApplied && isDepositPaymentRequired({
+        partialPaymentEnabled: isPartialEnabled,
+        partialPaymentAmount: toMinor(checkoutPolicySnapshot?.partialPaymentAmount ?? fallbackSettings?.partialPaymentAmount ?? 0, taxQuote.decimalPlaces),
+    }, taxQuote.totalMinor));
+    if (deliveryPreflight.rateToken && deliveryPreflight.rateCod !== requiresCashCollection) {
+        throw new ValidationError("The payment choice changed the delivery requirements. Review delivery again.", {
+            reason: DELIVERY_RATE_UNAVAILABLE_REASON,
+            cod: requiresCashCollection,
+        });
+    }
     // The one contact rule (orderContactNeeds): a phone unless the merchant
     // opted in and the order is only digital or service lines, paid in full
     // online, outside Bangladesh; then email is required.
@@ -953,6 +1029,7 @@ export async function createStorefrontOrder(
             ...orderShippingAddressColumns(shippingAddress, { name: data.customerName, phone: data.customerPhone }),
             ...orderBillingAddressColumns(billing, { name: data.customerName, phone: data.customerPhone }),
             notes: data.notes,
+            attributes: JSON.stringify(attributes),
             shippingMethodId: shippingMethod?.id ?? null,
             shippingMethodName: shippingMethod?.name ?? null,
             shippingMethodDescription: shippingMethod?.description ?? null,
@@ -1020,7 +1097,7 @@ export async function createStorefrontOrder(
         }),
         promotion: pricing.discount.snapshot,
         ...(pricing.appDiscounts.length > 0 ? { appDiscounts: pricing.appDiscounts } : {}),
-        ...(pricing.appStorageCommits.length > 0 ? { appStorageCommits: pricing.appStorageCommits } : {}),
+        ...(pricing.appObjectCommits.length > 0 ? { appObjectCommits: pricing.appObjectCommits } : {}),
         ...(giftCardsApplied
             ? {
                 giftCardRedemptions: giftCardTender.applied.map(({ giftCardId, appliedMinor, card }) => ({

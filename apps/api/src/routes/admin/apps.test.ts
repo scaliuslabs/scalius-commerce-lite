@@ -11,7 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../plugins/bundled.gen", async (importOriginal) => (await import("../../plugins/testing/fixture-apps")).withFixtureApps(await importOriginal()));
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { putPluginRecord, requirePluginInstallation } from "@scalius/core/modules/plugins";
+import { requirePluginInstallation } from "@scalius/core/modules/plugins";
+import { putObjectRecord } from "@scalius/core/modules/objects";
 import { errorResponseFromError } from "../../utils/api-response";
 import { BUNDLED_PLUGINS } from "../../plugins/bundled.gen";
 import { pluginTestCtx, pluginTestEnv } from "../../plugins/testing/fixtures";
@@ -181,16 +182,16 @@ describe("admin app routes", () => {
     expect(stopped.json.data.app.status).toBe("disabled");
     expect((await call("POST", "/apps/acme.hello/deliveries/pld_0000000000009aaaaaaaaaaaa/retry")).status).toBe(409);
 
-    await putPluginRecord(db, "acme.hello", "greetings", { indexes: ["orderId", ["kind", "createdAt"]], unique: ["orderId"] }, "g1", { orderId: "g1", kind: "paid", createdAt: 1 });
+    await putObjectRecord(db, "acme.hello", "greetings", (await requirePluginInstallation(db, "acme.hello")).manifest.objects.greetings!, "g1", { order_id: "g1", kind: "paid", created_at: 1 });
     const kept = await call("POST", "/apps/acme.hello/uninstall", { expectedRevision: stopped.json.data.app.revision, keepData: true });
     expect(kept.json.data).toEqual({ id: "acme.hello", uninstalled: true, keepData: true, hookError: null });
-    expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_records WHERE plugin_id = 'acme.hello'").get()).toEqual({ n: 1 });
+    expect(sqlite.prepare("SELECT count(*) AS n FROM object_records WHERE type_id = 'oty_acme.hello.greetings'").get()).toEqual({ n: 1 });
     // A bundled app is part of this deployment: it is listed again, fresh.
     const relisted = (await call("GET", "/apps")).json.data.apps.find((entry: Json) => entry.id === "acme.hello");
     expect(relisted).toMatchObject({ status: "installed", revision: 1, activatedAt: null });
     const removed = await call("POST", "/apps/acme.hello/uninstall", { expectedRevision: 1, keepData: false });
     expect(removed.status).toBe(200);
-    expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_records WHERE plugin_id = 'acme.hello'").get()).toEqual({ n: 0 });
+    expect(sqlite.prepare("SELECT count(*) AS n FROM object_records WHERE type_id = 'oty_acme.hello.greetings'").get()).toEqual({ n: 0 });
   });
 
   it("holds an updated bundled app whose access grows until a Super Admin approves it", async () => {

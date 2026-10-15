@@ -13,6 +13,7 @@ export type PluginErrorCode =
   | "installation.revision_conflict"
   | "installation.inactive"
   | "installation.settings_incomplete"
+  | "installation.objects_invalid"
   | "installation.grant_changed"
   /** An update waits for a Super Admin: nothing may change its grant until then. */
   | "installation.needs_approval"
@@ -22,17 +23,17 @@ export type PluginErrorCode =
   | "delivery.not_retryable"
   | "settings.invalid"
   | "settings.key_unavailable"
-  | "storage.undeclared_collection"
-  | "storage.invalid_id"
-  | "storage.invalid_record"
-  | "storage.record_too_large"
-  | "storage.invalid_index_value"
-  | "storage.unindexed_query"
-  | "storage.invalid_cursor"
-  | "storage.unique_violation"
+  | "object.undeclared_type"
+  | "object.invalid_id"
+  | "object.invalid_record"
+  | "object.record_too_large"
+  | "object.invalid_index_value"
+  | "object.unindexed_query"
+  | "object.invalid_cursor"
+  | "object.unique_violation"
   /** A conditional write found the record changed (or present when it must not be). */
-  | "storage.conflict"
-  | "storage.invalid_batch"
+  | "object.conflict"
+  | "object.invalid_batch"
   | "kv.invalid_key"
   | "kv.value_too_large"
   | "kv.invalid_ttl"
@@ -58,7 +59,6 @@ export type PluginErrorCode =
   | "timeline.invalid"
   | "timeline.not_found"
   /** Rendering storefront output: only the app's settings and the section's declared collections are readable. */
-  | "render.not_allowed"
   | "rate_limited"
   /** Quotas (docs/platform/PLUGINS.md, "Quotas"): over the plan's storage size or calls per run. */
   | "quota.storage"
@@ -79,6 +79,7 @@ export type PluginErrorCode =
 
 const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "installation.exists": 409,
+  "installation.objects_invalid": 409,
   "installation.not_found": 404,
   "installation.revision_conflict": 409,
   "installation.inactive": 409,
@@ -88,9 +89,9 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "delivery.not_found": 404,
   "delivery.not_retryable": 409,
   "settings.key_unavailable": 503,
-  "storage.unique_violation": 409,
-  "storage.conflict": 409,
-  "storage.record_too_large": 413,
+  "object.unique_violation": 409,
+  "object.conflict": 409,
+  "object.record_too_large": 413,
   "kv.value_too_large": 413,
   "kv.conflict": 409,
   "api.unknown_operation": 404,
@@ -104,7 +105,6 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "timeline.undeclared": 403,
   "timeline.invalid": 422,
   "timeline.not_found": 404,
-  "render.not_allowed": 403,
   rate_limited: 429,
   "quota.storage": 507,
   "quota.subrequests": 429,

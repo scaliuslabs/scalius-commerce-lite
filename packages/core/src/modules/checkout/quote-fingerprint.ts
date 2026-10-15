@@ -22,8 +22,10 @@ export async function buildStorefrontCheckoutQuoteFingerprint(
    * deploy still matches an order without properties.
    */
   linePropertiesHashes: readonly string[] = [],
+  attributes: Record<string, string> = {},
 ): Promise<string> {
   const identity = {
+    ...(Object.keys(attributes).length ? { attributes: Object.entries(attributes).sort(([a], [b]) => a.localeCompare(b)) } : {}),
     calculationVersion: quote.calculationVersion,
     settingsVersion: quote.settingsVersion,
     currencyCode: quote.currencyCode,

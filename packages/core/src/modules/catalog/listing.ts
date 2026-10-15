@@ -25,6 +25,7 @@ import { marketAmountMinor, marketDecimalPlaces, marketPriceContextOf, marketSho
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { publicCategoryConditions, publicCategorySubtreeCondition } from "../categories";
 import { loadCatalogCardData } from "./card-facts";
+import { cardFieldsOfTheme, cardFieldsThemeSql } from "./card-fields";
 import {
     translationScopeOf,
     NAME_FIELDS,
@@ -420,6 +421,7 @@ async function readStorefrontCatalogResults(
         .select({
             count: sql<number>`(SELECT count(*) FROM (SELECT 1 FROM ${buyerState} WHERE ${publicRows} LIMIT ${sql.raw(String(cappedCountLimit(lists.countCap)))}) AS capped_rows)`,
             storeCurrencyCode: storeCurrencyCodeSql(),
+            cardFieldsTheme: cardFieldsThemeSql(),
             min: sql<number | null>`(SELECT MIN(${buyerState.fromMinor}) FROM ${buyerState} WHERE ${publicRows})`,
             max: sql<number | null>`(SELECT MAX(${buyerState.toMinor}) FROM ${buyerState} WHERE ${publicRows})`,
         })
@@ -428,6 +430,7 @@ async function readStorefrontCatalogResults(
         .select({
             count: sql<number>`count(*)`,
             storeCurrencyCode: storeCurrencyCodeSql(),
+            cardFieldsTheme: cardFieldsThemeSql(),
             min: sql<number | null>`MIN(${buyerState.fromMinor})`,
             max: sql<number | null>`MAX(${buyerState.toMinor})`,
             publicCatalogueSize: boundedPublicCatalogueSizeSql(FACET_SCOPE_PRODUCT_LIMIT),
@@ -474,6 +477,7 @@ async function readStorefrontCatalogResults(
         hasPriceFilter ? priceRangeQuery.get() : Promise.resolve(null),
         unscoped ? Promise.resolve(null) : readCatalogFacetsWithSummary(db, facetInput, {
             categoryAncestors: ancestorsCategoryId ? categoryAncestorIdsSql(ancestorsCategoryId) : undefined,
+            cardFieldsTheme: cardFieldsThemeSql(),
         }),
     ]);
     const totalCount = scopedRead?.summary ?? separateCount;
@@ -507,7 +511,7 @@ async function readStorefrontCatalogResults(
     // list prices (only when one is live) ride beside them.
     const [productsList, cardData, categoriesData, facetRows] = await Promise.all([
         priceProductCards(db, market, listedRows),
-        loadCatalogCardData(db, listedRows, decimalPlaces, marketShopAmounts(market)),
+        loadCatalogCardData(db, listedRows, decimalPlaces, marketShopAmounts(market), cardFieldsOfTheme(totalCount?.cardFieldsTheme)),
         categoryIds.length > 0
             ? db
                 .select({
@@ -582,6 +586,7 @@ async function readStorefrontCatalogResults(
             ...resolveProductCardImages(cardData.media.get(product.id) ?? []),
             rating: presentCardRating(ratingAvgCenti, reviewCount),
             cardFacts: cardData.facts(product.id),
+            fields: cardData.fields.get(product.id) ?? {},
             category,
             ...(subtreeParentId
                 ? { subcategoryId: product.categoryId ? subcategoryIds.get(product.categoryId) ?? null : null }

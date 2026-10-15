@@ -49,6 +49,7 @@ export async function setPluginCustomFieldValues(
       description: field.description ?? null,
       type: field.type as CustomFieldType,
       storefrontVisible: field.storefrontVisible,
+      ...(field.to ? { validations: { to: field.to } } : {}),
     }, { writer });
     definitionIds.set(key, created.id);
   }

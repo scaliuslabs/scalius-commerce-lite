@@ -74,7 +74,7 @@ export interface GalleryScenario {
   /** `localStorage` the browser starts with (a saved cart); the quality audit seeds it before the page loads. */
   storage?: Record<string, string>;
   /** An app draws blocks at the checkout targets (the layout lists the `checkout` page). */
-  checkoutBlocks?: boolean;
+  checkoutBuyerUi?: boolean;
   /** The store sells to the United Kingdom too, and an address app completes its street lines (the layout names it). */
   addressApp?: boolean;
   /** The header has the merchant's logo. */
@@ -514,7 +514,7 @@ const GALLERY_CART = JSON.stringify({
 function appEntries(): GalleryEntry[] {
   const base = baseTheme();
   return [
-    { id: entryId("app", "checkout-blocks"), family: "app:checkout-block", title: "App blocks at the checkout targets (cart page)", page: "cart", theme: clone(base), focus: MAIN, scenario: { checkoutBlocks: true, storage: { "cart:v3": GALLERY_CART } } },
+    { id: entryId("app", "buyer-ui"), family: "app:buyer-ui", title: "Buyer UI at the checkout targets (cart page)", page: "cart", theme: clone(base), focus: MAIN, scenario: { checkoutBuyerUi: true, storage: { "cart:v3": GALLERY_CART } } },
     {
       id: entryId("app", "address-autocomplete"),
       family: "app:address-autocomplete",
@@ -677,10 +677,19 @@ function noorEntries(): GalleryEntry[] {
   skinned.pages.home = ([
     ["hero", "noor-hero"], ["product-tabs", "noor-products-tabs"], ["product-grid", "noor-products-grid"], ["product-rail", "noor-products-rail"],
     ["category-tiles", "noor-tiles-categories"], ["shop-by", "noor-tiles-cards"], ["banner-mosaic", "noor-promo-tiles"], ["lookbook", "noor-look"],
-    ["deal-block", "noor-sale"], ["usp-strip", "noor-promises"], ["editorial", "noor-story"], ["seo-text", "noor-text"], ["faq", "noor-faq"], ["newsletter", "noor-signup"],
+    ["deal-block", "noor-sale"], ["usp-strip", "noor-promises"], ["editorial", "noor-story"], ["seo-text", "noor-text"], ["faq", "noor-faq"], ["newsletter", "noor-signup"], ["specifications", "noor-specifications"],
   ] as const).map(([type, skin]) => ({ ...contentSection(type, `skin-${type}`), skin: { app: `scalius.noor/${skin}`, values: {} } }) as StorefrontSection);
   entries.push({ id: "noor-section-skins", family: "integration:noor", title: "Noor skins of the store's own sections", page: "home", theme: skinned, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact" } });
   const slideshow = { ...homeEntry, id: "noor-home-slideshow", title: "Noor transparent header over the first slideshow", theme: clone(home) };
+  slideshow.theme.pages.home[0] = { id: "noor-slideshow", type: "hero", version: 1, skin: { app: "scalius.noor/noor-hero", values: { autoplay: false } }, settings: {
+    layout: "full-bleed",
+    slides: [
+      { image: "banner-eid", focalPoint: { x: 50, y: 50 }, alt: "The Eid edit", heading: "The Eid edit", text: "Handwoven colour for the celebrations ahead.", buttonLabel: "Shop the collection", link: "/collections/col-eid" },
+      { image: "banner-boishakh", focalPoint: { x: 50, y: 50 }, alt: "Handwoven sarees", heading: "Made by hand", text: "Meet the weavers behind every piece.", buttonLabel: "Explore sarees", link: "/categories/women" },
+    ],
+  } };
+  entries.push({ ...slideshow, id: "noor-home-skin-slideshow", title: "Noor hero skin with multiple slides" });
+  slideshow.theme = clone(home);
   slideshow.theme.pages.home[0] = { id: "noor-slideshow", type: "app", version: 1, settings: { app: "scalius.noor/slideshow", values: {
     autoplay: false,
     slides: [

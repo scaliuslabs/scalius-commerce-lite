@@ -14,7 +14,7 @@
 // - Refunds are not declared: Nagad documents no refund API for this flow,
 //   so merchants refund in the Nagad merchant portal and record it in Scalius.
 //
-// Storage: `nagad-payments`, one record per Nagad order (its id), found by the
+// Storage: `nagad_payments`, one record per Nagad order (its id), found by the
 // attempt (latest generation first) or by Nagad's payment reference.
 
 import {
@@ -24,7 +24,7 @@ import {
   type PaymentSession,
   type PaymentSessionInput,
   type PluginContext,
-  type PluginStorageCollection,
+  type PluginObjectCollection,
 } from "@scalius/plugin-sdk";
 import {
   completePayment,
@@ -42,11 +42,18 @@ import {
 } from "./nagad";
 import { bytesToHex } from "./rsa";
 
-/** Storage collections (the pack's `storage`). */
-export const NAGAD_STORAGE = {
-  "nagad-payments": {
-    indexes: [["attempt", "generation"], "paymentReferenceId"],
-    unique: [["attempt", "generation"], "paymentReferenceId"],
+/** Object types (the pack's `objects`). */
+export const NAGAD_OBJECTS = {
+  "nagad_payments": {
+    name: "Nagad payments",
+    fields: [
+      { key: "attempt", name: "Attempt", type: "single_line_text" as const },
+      { key: "generation", name: "Generation", type: "integer" as const },
+      { key: "payment_reference_id", name: "Payment reference", type: "single_line_text" as const },
+      { key: "data", name: "Payment", type: "json" as const },
+    ],
+    indexes: [["attempt", "generation"], "payment_reference_id"],
+    unique: [["attempt", "generation"], "payment_reference_id"],
   },
 };
 
@@ -160,24 +167,24 @@ type NagadPayment = PaymentFacts & (
 );
 type InitializedPayment = Extract<NagadPayment, { status: "initialized" }>;
 
-const payments = (ctx: PluginContext) => ctx.storage["nagad-payments"] as PluginStorageCollection<NagadPayment>;
+const payments = (ctx: PluginContext) => ctx.objects.nagad_payments as PluginObjectCollection<{ attempt: string; generation: number; payment_reference_id: string | null; data: NagadPayment }>;
 
 async function sha256Hex(text: string): Promise<string> {
   return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))));
 }
 
 async function save(ctx: PluginContext, payment: NagadPayment): Promise<void> {
-  await payments(ctx).put(payment.nagadOrderId, payment);
+  await payments(ctx).put(payment.nagadOrderId, { attempt: payment.attempt, generation: payment.generation, payment_reference_id: payment.paymentReferenceId, data: payment });
 }
 
 async function latestPayment(ctx: PluginContext, attempt: string): Promise<NagadPayment | null> {
   const { records } = await payments(ctx).query({ where: { attempt }, orderBy: { field: "generation", direction: "desc" }, limit: 1 });
-  return records[0]?.data ?? null;
+  return records[0]?.data.data ?? null;
 }
 
 async function paymentByReference(ctx: PluginContext, paymentReferenceId: string): Promise<NagadPayment | null> {
-  const { records } = await payments(ctx).query({ where: { paymentReferenceId }, limit: 1 });
-  return records[0]?.data ?? null;
+  const { records } = await payments(ctx).query({ where: { payment_reference_id: paymentReferenceId }, limit: 1 });
+  return records[0]?.data.data ?? null;
 }
 
 /** The time left of the session's budget for the next Nagad call. */

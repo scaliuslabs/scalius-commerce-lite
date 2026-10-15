@@ -1,0 +1,2367 @@
+// Public exports
+{
+ "exports": {
+  ".": "./src/index.ts",
+  "./fixtures": "./src/fixtures.ts",
+  "./manifest": "./src/manifest.ts",
+  "./runtime": "./src/runtime.ts",
+  "./testing": "./src/testing.ts",
+  "./storefront": "./src/storefront/index.ts",
+  "./storefront/jsx-runtime": "./src/storefront/jsx-runtime.ts",
+  "./storefront/jsx-dev-runtime": "./src/storefront/jsx-dev-runtime.ts",
+  "./storefront/testing": "./src/storefront/testing.ts",
+  "./island": "./src/storefront/island.ts"
+ },
+ "publishExports": {
+  ".": {
+   "types": "./dist/types/plugin-sdk/src/index.d.ts",
+   "import": "./dist/index.js",
+   "default": "./dist/index.js"
+  },
+  "./fixtures": {
+   "types": "./dist/types/plugin-sdk/src/fixtures.d.ts",
+   "import": "./dist/fixtures.js",
+   "default": "./dist/fixtures.js"
+  },
+  "./manifest": {
+   "types": "./dist/types/plugin-sdk/src/manifest.d.ts",
+   "import": "./dist/manifest.js",
+   "default": "./dist/manifest.js"
+  },
+  "./runtime": {
+   "types": "./dist/types/plugin-sdk/src/runtime.d.ts",
+   "import": "./dist/runtime.js",
+   "default": "./dist/runtime.js"
+  },
+  "./testing": {
+   "types": "./dist/types/plugin-sdk/src/testing.d.ts",
+   "import": "./dist/testing.js",
+   "default": "./dist/testing.js"
+  },
+  "./storefront": {
+   "types": "./dist/types/plugin-sdk/src/storefront/index.d.ts",
+   "import": "./dist/storefront/index.js",
+   "default": "./dist/storefront/index.js"
+  },
+  "./storefront/jsx-runtime": {
+   "types": "./dist/types/plugin-sdk/src/storefront/jsx-runtime.d.ts",
+   "import": "./dist/storefront/jsx-runtime.js",
+   "default": "./dist/storefront/jsx-runtime.js"
+  },
+  "./storefront/jsx-dev-runtime": {
+   "types": "./dist/types/plugin-sdk/src/storefront/jsx-dev-runtime.d.ts",
+   "import": "./dist/storefront/jsx-dev-runtime.js",
+   "default": "./dist/storefront/jsx-dev-runtime.js"
+  },
+  "./storefront/testing": {
+   "types": "./dist/types/plugin-sdk/src/storefront/testing.d.ts",
+   "import": "./dist/storefront/testing.js",
+   "default": "./dist/storefront/testing.js"
+  },
+  "./island": {
+   "types": "./dist/types/plugin-sdk/src/storefront/island.d.ts",
+   "import": "./dist/storefront/island.js",
+   "default": "./dist/storefront/island.js"
+  }
+ }
+}
+
+// packages/plugin-sdk/src/context.d.ts
+import type { EventTopic, EventsApiVersion } from "@scalius/shared/events";
+import type { PluginSettingValue } from "@scalius/shared/plugins";
+export interface PluginStoreInfo {
+    name: string;
+    url: string | null;
+    currency: string;
+    decimalPlaces: number;
+    timezone: string;
+    locale: string;
+}
+export interface PluginApiCallInput {
+    path?: Record<string, string | number>;
+    query?: Record<string, string | number | boolean | null | undefined>;
+    body?: unknown;
+    idempotencyKey?: string;
+}
+export interface PluginApiResult<T = unknown> {
+    ok: boolean;
+    status: number;
+    data: T | null;
+    error: {
+        code: string;
+        message: string;
+    } | null;
+}
+export interface PluginApi {
+    call<T = unknown>(operationId: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
+}
+export interface PluginObjectQuery {
+    where?: Record<string, string | number | boolean | null>;
+    orderBy?: {
+        field: string;
+        direction?: "asc" | "desc";
+    };
+    limit?: number;
+    cursor?: string | null;
+}
+export interface PluginRecordVersion<T extends Record<string, unknown> = Record<string, unknown>> {
+    data: T;
+    revision: number;
+    handle: string | null;
+    status: "active" | "draft" | "published";
+}
+export interface PluginWriteCondition {
+    expectedRevision?: number | null;
+}
+export interface PluginObjectCollection<T extends Record<string, unknown> = Record<string, unknown>> {
+    get(id: string): Promise<T | null>;
+    getByHandle(handle: string): Promise<(PluginRecordVersion<T> & {
+        id: string;
+    }) | null>;
+    getVersion(id: string): Promise<PluginRecordVersion<T> | null>;
+    put(id: string, record: T, options?: PluginWriteCondition & {
+        handle?: string | null;
+        status?: "active" | "draft" | "published";
+    }): Promise<{
+        revision: number;
+    }>;
+    update(id: string, patch: Partial<T>, options?: {
+        expectedRevision?: number;
+    }): Promise<PluginRecordVersion<T>>;
+    increment(id: string, field: string, delta: number, options?: {
+        min?: number;
+        max?: number;
+    }): Promise<{
+        value: number;
+        revision: number;
+    }>;
+    delete(id: string, options?: PluginWriteCondition): Promise<boolean>;
+    query(query?: PluginObjectQuery): Promise<{
+        records: Array<PluginRecordVersion<T> & {
+            id: string;
+        }>;
+        nextCursor: string | null;
+    }>;
+    count(where?: PluginObjectQuery["where"]): Promise<number>;
+}
+export type PluginObjectOperation = {
+    op: "put";
+    object: string;
+    id: string;
+    record: Record<string, unknown>;
+    expectedRevision?: number | null;
+    handle?: string | null;
+    status?: "active" | "draft" | "published";
+} | {
+    op: "delete";
+    object: string;
+    id: string;
+    expectedRevision?: number | null;
+} | {
+    op: "check";
+    object: string;
+    id: string;
+    expectedRevision: number | null;
+};
+export type PluginObjects = Record<string, PluginObjectCollection> & {
+    batch(operations: PluginObjectOperation[]): Promise<{
+        revisions: Array<number | null>;
+    }>;
+};
+export interface PluginKv {
+    get<T = unknown>(key: string): Promise<T | null>;
+    getVersion<T = unknown>(key: string): Promise<{
+        value: T;
+        revision: number;
+    } | null>;
+    set(key: string, value: unknown, options?: {
+        ttlSeconds?: number;
+    }): Promise<{
+        revision: number;
+    }>;
+    compareAndSet(key: string, expectedRevision: number | null, value: unknown, options?: {
+        ttlSeconds?: number;
+    }): Promise<{
+        revision: number;
+    }>;
+    delete(key: string): Promise<void>;
+    list(prefix?: string): Promise<string[]>;
+}
+export interface PluginHttpResponse {
+    status: number;
+    ok: boolean;
+    headers: Record<string, string>;
+    text(): Promise<string>;
+    json<T = unknown>(): Promise<T>;
+}
+export interface PluginHttp {
+    fetch(url: string, init?: {
+        method?: string;
+        headers?: Record<string, string>;
+        body?: string;
+        timeoutMs?: number;
+    }): Promise<PluginHttpResponse>;
+}
+export interface PluginCustomFields {
+    get(ownerType: string, ownerId: string): Promise<Record<string, unknown>>;
+    set(ownerType: string, ownerId: string, values: Record<string, unknown>): Promise<void>;
+}
+export interface PluginMessaging {
+    email(input: {
+        customerId?: string;
+        to?: string;
+        subject: string;
+        html: string;
+        text?: string;
+        marketing?: boolean;
+    }): Promise<{
+        queued: boolean;
+    }>;
+    sms(input: {
+        customerId?: string;
+        to?: string;
+        text: string;
+        marketing?: boolean;
+    }): Promise<{
+        queued: boolean;
+    }>;
+    notifyStaff(input: {
+        title: string;
+        body?: string;
+        url?: string;
+    }): Promise<void>;
+    pushCustomer(input: {
+        customerId: string;
+        title: string;
+        body?: string;
+        url?: string;
+        tag?: string;
+    }): Promise<{
+        delivered: boolean;
+    }>;
+}
+export interface PluginTimeline {
+    add(input: {
+        orderId: string;
+        kind: string;
+        message: string;
+        fields?: Record<string, string | number | boolean>;
+        idempotencyKey?: string;
+    }): Promise<{
+        id: string;
+    }>;
+}
+export interface PluginLogger {
+    debug(message: string, fields?: Record<string, unknown>): void;
+    info(message: string, fields?: Record<string, unknown>): void;
+    warn(message: string, fields?: Record<string, unknown>): void;
+    error(message: string, fields?: Record<string, unknown>): void;
+}
+export interface PluginContext {
+    plugin: {
+        id: string;
+        version: string;
+    };
+    store: PluginStoreInfo;
+    settings: Readonly<Record<string, PluginSettingValue>>;
+    features: readonly string[];
+    api: PluginApi;
+    objects: PluginObjects;
+    kv: PluginKv;
+    http: PluginHttp;
+    customFields: PluginCustomFields;
+    messaging: PluginMessaging;
+    timeline: PluginTimeline;
+    log: PluginLogger;
+}
+export interface PluginEvent<T extends EventTopic = EventTopic> {
+    id: string;
+    topic: T;
+    apiVersion: EventsApiVersion;
+    occurredAt: string;
+    resource: {
+        type: string;
+        id: string;
+    };
+    facts: Record<string, unknown>;
+}
+export interface PluginRouteRequest {
+    method: string;
+    subpath: string;
+    query: Record<string, string>;
+    headers: Record<string, string>;
+    body: unknown;
+    rawBody: string | null;
+    staffId: string | null;
+    customer?: {
+        id: string;
+    } | null;
+}
+export interface PluginRouteResponse {
+    status?: number;
+    headers?: Record<string, string>;
+    body?: unknown;
+}
+
+// packages/plugin-sdk/src/fixtures.d.ts
+import type { EventTopic } from "@scalius/shared/events";
+import type { FunctionCart, PluginFunctionInput } from "@scalius/shared/plugins";
+import type { PluginEvent, PluginRouteRequest } from "./context";
+declare function event<T extends EventTopic>(topic: T, overrides?: Partial<PluginEvent<T>>): PluginEvent<T>;
+declare function cartLine(overrides?: Partial<FunctionCart["lines"][number]>): FunctionCart["lines"][number];
+declare function cart(overrides?: Partial<FunctionCart>): FunctionCart;
+declare function checkoutDiscountsInput(overrides?: {
+    cart?: Partial<FunctionCart>;
+    snapshot?: PluginFunctionInput<"checkout.discounts">["snapshot"];
+}): PluginFunctionInput<"checkout.discounts">;
+declare function adminRouteRequest(overrides?: Partial<PluginRouteRequest>): PluginRouteRequest;
+export declare const fixtures: {
+    event: typeof event;
+    cartLine: typeof cartLine;
+    cart: typeof cart;
+    checkoutDiscountsInput: typeof checkoutDiscountsInput;
+    adminRouteRequest: typeof adminRouteRequest;
+};
+export {};
+
+// packages/plugin-sdk/src/index.d.ts
+import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
+import type { PluginFunctionInput, PluginFunctionOutput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
+import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
+import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
+export type * from "./context";
+export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
+export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
+export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInput, CourierRatesInput, CourierRates, CourierShipmentStatus, CourierTracking, CourierWebhook, CourierWebhookReply, EmailSend, EmailSendInput, FraudCheck, FraudCheckInput, MessageStatus, PaymentEvent, PaymentQuery, PaymentQueryInput, PaymentRefund, PaymentRefundInput, PaymentRefundProbe, PaymentRefundProbeInput, PaymentSession, PaymentSessionInput, PaymentSettlement, PaymentVerification, ProviderConnection, ProviderHttpRequest, ProviderImplementation, ProviderKind, ProviderOperationInput, ProviderOperationOutput, ProviderWireAmount, SmsSend, SmsSendInput, TaxAddress, TaxCalculateInput, TaxCalculation, TaxCalculationLine, } from "@scalius/shared/plugins/providers";
+export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiTarget, } from "@scalius/shared/plugins";
+export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
+export type PluginEventHandler<T extends EventTopic = EventTopic> = (event: PluginEvent<T>, ctx: PluginContext) => Promise<void> | void;
+export type PluginFunctionHandler<P extends PluginFunctionPoint> = (input: PluginFunctionInput<P>, settings: Readonly<Record<string, PluginSettingValue>>) => PluginFunctionOutput<P> | Promise<PluginFunctionOutput<P>>;
+export type PluginRouteHandler = (request: PluginRouteRequest, ctx: PluginContext) => Promise<PluginRouteResponse> | PluginRouteResponse;
+export type PluginCronHandler = (ctx: PluginContext, run: {
+    name: string;
+    scheduledAt: string;
+}) => Promise<void> | void;
+export type PluginLifecycleHandler = (ctx: PluginContext) => Promise<void> | void;
+export interface PluginDefinition {
+    manifest: PluginManifestInput;
+    events?: {
+        [T in EventTopic]?: PluginEventHandler<T>;
+    } & {
+        [F in Exclude<EventTopicFilter, EventTopic>]?: PluginEventHandler;
+    };
+    functions?: {
+        [P in PluginFunctionPoint]?: PluginFunctionHandler<P>;
+    };
+    routes?: {
+        admin?: Record<string, PluginRouteHandler>;
+        public?: Record<string, PluginRouteHandler>;
+        webhooks?: Record<string, PluginRouteHandler>;
+    };
+    cron?: Record<string, PluginCronHandler>;
+    providers?: Record<string, PluginProvider>;
+    lifecycle?: {
+        install?: PluginLifecycleHandler;
+        activate?: PluginLifecycleHandler;
+        deactivate?: PluginLifecycleHandler;
+        uninstall?: (ctx: PluginContext, options: {
+            keepData: boolean;
+        }) => Promise<void> | void;
+        enable?: (ctx: PluginContext, options: {
+            feature: string;
+        }) => Promise<void> | void;
+        disable?: (ctx: PluginContext, options: {
+            feature: string;
+        }) => Promise<void> | void;
+    };
+    migrations?: Record<string, PluginMigrationHandler>;
+}
+export type PluginMigrationHandler = (ctx: PluginContext) => Promise<void> | void;
+export declare function definePlugin<const T extends PluginDefinition>(definition: T): T;
+export type PluginProviderOf<K extends ProviderKind> = {
+    readonly kind: K;
+} & ProviderImplementation<K, PluginContext>;
+export type PluginProvider = {
+    [K in ProviderKind]: PluginProviderOf<K>;
+}[ProviderKind];
+export declare const definePaymentProvider: <const T extends ProviderImplementation<"payment", PluginContext>>(implementation: T) => {
+    readonly kind: "payment";
+} & T;
+export declare const defineCourierProvider: <const T extends ProviderImplementation<"courier", PluginContext>>(implementation: T) => {
+    readonly kind: "courier";
+} & T;
+export declare const defineSmsProvider: <const T extends ProviderImplementation<"sms", PluginContext>>(implementation: T) => {
+    readonly kind: "sms";
+} & T;
+export declare const defineEmailProvider: <const T extends ProviderImplementation<"email", PluginContext>>(implementation: T) => {
+    readonly kind: "email";
+} & T;
+export declare const defineFraudProvider: <const T extends ProviderImplementation<"fraud", PluginContext>>(implementation: T) => {
+    readonly kind: "fraud";
+} & T;
+export declare const defineTaxProvider: <const T extends ProviderImplementation<"tax", PluginContext>>(implementation: T) => {
+    readonly kind: "tax";
+} & T;
+export declare const defineTranslationProvider: <const T extends ProviderImplementation<"translation", PluginContext>>(implementation: T) => {
+    readonly kind: "translation";
+} & T;
+export declare const defineAiProvider: <const T extends ProviderImplementation<"ai", PluginContext>>(implementation: T) => {
+    readonly kind: "ai";
+} & T;
+export declare const defineMessagingProvider: <const T extends ProviderImplementation<"messaging", PluginContext>>(implementation: T) => {
+    readonly kind: "messaging";
+} & T;
+export declare const definePushProvider: <const T extends ProviderImplementation<"push", PluginContext>>(implementation: T) => {
+    readonly kind: "push";
+} & T;
+export declare const defineSearchProvider: <const T extends ProviderImplementation<"search", PluginContext>>(implementation: T) => {
+    readonly kind: "search";
+} & T;
+export declare const defineAddressProvider: <const T extends ProviderImplementation<"address", PluginContext>>(implementation: T) => {
+    readonly kind: "address";
+} & T;
+export declare const defineFxProvider: <const T extends ProviderImplementation<"fx", PluginContext>>(implementation: T) => {
+    readonly kind: "fx";
+} & T;
+export declare const defineIdentityProvider: <const T extends ProviderImplementation<"identity", PluginContext>>(implementation: T) => {
+    readonly kind: "identity";
+} & T;
+
+// packages/plugin-sdk/src/manifest.d.ts
+export { parsePluginManifest, pluginFeatureRequest, pluginGrantRequest, pluginManifestWithFeatures, type PluginManifest, type PluginManifestInput, } from "@scalius/shared/plugins";
+
+// packages/plugin-sdk/src/runtime.d.ts
+import type { PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
+import type { PluginSettingValue } from "@scalius/shared/plugins/settings-schema";
+import { type PluginHandlerInventory, type PluginLifecycleHook } from "@scalius/shared/plugins/handlers";
+import { type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
+export interface PluginContextSeed {
+    plugin: {
+        id: string;
+        version: string;
+    };
+    store: PluginStoreInfo;
+    settings: Record<string, PluginSettingValue>;
+    objects: string[];
+    inventory: PluginHandlerInventory;
+    features?: string[];
+}
+export type PluginInvocation = {
+    kind: "event";
+    event: PluginEvent;
+} | {
+    kind: "function";
+    point: string;
+    input: unknown;
+} | {
+    kind: "provider";
+    provider: string;
+    operation: string;
+    input: unknown;
+} | {
+    kind: "route";
+    surface: "admin" | "public" | "webhooks";
+    name: string;
+    request: PluginRouteRequest;
+} | {
+    kind: "cron";
+    name: string;
+    scheduledAt: string;
+} | {
+    kind: "lifecycle";
+    hook: PluginLifecycleHook;
+    keepData?: boolean;
+    feature?: string;
+} | {
+    kind: "migration";
+    version: number;
+} | {
+    kind: "check";
+};
+export interface PluginLogRecord {
+    level: "debug" | "info" | "warn" | "error";
+    message: string;
+    fields?: Record<string, unknown>;
+}
+export interface PluginInvocationResult {
+    ok: boolean;
+    value: unknown;
+    error: {
+        code: string | null;
+        message: string;
+        category?: ProviderErrorCategory;
+        uncertain?: boolean;
+    } | null;
+    logs: PluginLogRecord[];
+    droppedLogs: number;
+}
+export interface PluginRuntimeBridge {
+    apiCall(operationId: string, input?: unknown): Promise<unknown>;
+    objectsGet(object: string, id: string): Promise<unknown>;
+    objectsGetByHandle(object: string, handle: string): Promise<unknown>;
+    objectsWrite(operations: unknown[]): Promise<Array<number | null>>;
+    objectsQuery(object: string, query?: unknown): Promise<unknown>;
+    objectsCount(object: string, where?: unknown): Promise<number>;
+    kvGet(key: string): Promise<unknown>;
+    kvSet(key: string, value: unknown, options?: {
+        ttlSeconds?: number;
+        expectedRevision?: number | null;
+    }): Promise<{
+        revision: number;
+    }>;
+    kvDelete(key: string): Promise<void>;
+    kvList(prefix?: string): Promise<string[]>;
+    httpFetch(url: string, init?: unknown): Promise<{
+        status: number;
+        headers: Record<string, string>;
+        body: string;
+    }>;
+    customFieldsGet(ownerType: string, ownerId: string): Promise<Record<string, unknown>>;
+    customFieldsSet(ownerType: string, ownerId: string, values: Record<string, unknown>): Promise<void>;
+    messagingEmail(input: unknown): Promise<{
+        queued: boolean;
+    }>;
+    messagingSms(input: unknown): Promise<{
+        queued: boolean;
+    }>;
+    messagingNotifyStaff(input: unknown): Promise<void>;
+    messagingPush?(input: unknown): Promise<{
+        delivered: boolean;
+    }>;
+    timelineAdd?(input: unknown): Promise<{
+        id: string;
+    }>;
+}
+export declare class PluginPlatformError extends Error {
+    readonly code: string;
+    constructor(code: string, message: string);
+}
+export declare function invokePluginDefinition(module: unknown, invocation: PluginInvocation, seed: PluginContextSeed, bridge: PluginRuntimeBridge | null): Promise<PluginInvocationResult>;
+
+// packages/plugin-sdk/src/storefront/components.d.ts
+import type { StorefrontImage, StorefrontIslandHydration, StorefrontMoney, StorefrontProductCard, StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
+import { type Html, type Renderable } from "./html";
+type Attributes = Record<string, string | number | boolean | null | undefined>;
+export interface ImageProps {
+    image: StorefrontImage | null | undefined;
+    sizes?: string;
+    loading?: "lazy" | "eager";
+    class?: string;
+    alt?: string;
+}
+export declare function Image(props: ImageProps): Html;
+export declare function asset(context: Pick<StorefrontRenderContext, "assets">, path: string): string;
+export interface PriceProps {
+    price: StorefrontMoney;
+    compareAt?: StorefrontMoney | null;
+    from?: boolean;
+    context: Pick<StorefrontRenderContext, "store">;
+    class?: string;
+}
+export declare function Price(props: PriceProps): Html;
+export interface IslandProps {
+    name: string;
+    props?: unknown;
+    hydrate?: StorefrontIslandHydration;
+    children?: Renderable;
+    class?: string;
+}
+export declare function Island(props: IslandProps): Html;
+export declare function stickyHeader(): Attributes;
+export declare function searchOpener(): Attributes;
+export declare function accountLink(): Attributes;
+export declare function quickAdd(product: Pick<StorefrontProductCard, "url" | "quickAdd">): Attributes;
+export declare function openCart(): Attributes;
+export declare function CartCount(props: {
+    class?: string;
+}): Html;
+export declare function editable(context: Pick<StorefrontRenderContext, "preview">, setting: string): Attributes;
+export interface BuyFormProps {
+    title?: boolean;
+}
+export declare function BuyForm(props?: BuyFormProps): Html;
+export declare function Reviews(): Html;
+export declare function Recommendations(): Html;
+export declare function Filters(): Html;
+export declare function Toolbar(): Html;
+export declare function Pagination(): Html;
+export interface OrderFormProps {
+    product: Pick<StorefrontProductCard, "id"> | null | undefined;
+    maxQuantity?: number;
+    submitLabel?: string;
+}
+export declare function OrderForm(props: OrderFormProps): Html;
+export {};
+
+// packages/plugin-sdk/src/storefront/define.d.ts
+import { type StorefrontBlockTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCardData, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontRenderJob, type StorefrontResolvedSettings, type StorefrontSectionSkinData } from "@scalius/shared/plugins/storefront-protocol";
+import type { CoreSectionSettings, StorefrontSkinnableSectionType } from "@scalius/shared/storefront-theme/skins";
+import { type Renderable } from "./html";
+export interface SectionProps<Settings = StorefrontResolvedSettings> {
+    objects: NonNullable<Extract<StorefrontRenderJob, {
+        kind: "section";
+    }>["objects"]>;
+    settings: Settings;
+    instanceId: string;
+    context: StorefrontRenderContext;
+}
+export interface SkinProps<Data, Settings = StorefrontResolvedSettings> {
+    settings: Settings;
+    data: Data;
+    context: StorefrontRenderContext;
+}
+export type HeaderProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontHeaderData, Settings>;
+export type FooterProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontFooterData, Settings>;
+export type ProductCardProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontProductCardData, Settings>;
+export type ProductMainProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontProductPage, Settings>;
+export type ListingMainProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontListingPage, Settings>;
+export type SectionSkinProps<Type extends StorefrontSkinnableSectionType = StorefrontSkinnableSectionType, Settings = StorefrontResolvedSettings> = SkinProps<StorefrontSectionSkinData<CoreSectionSettings<Type>>, Settings> & {
+    instanceId: string;
+};
+export interface BlockProps<Settings = StorefrontResolvedSettings> {
+    settings: Settings;
+    data: StorefrontProductPage;
+    target: StorefrontBlockTarget;
+    instanceId: string;
+    context: StorefrontRenderContext;
+}
+export type SectionComponent = (props: SectionProps<any>) => Renderable;
+export type HeaderComponent = (props: HeaderProps<any>) => Renderable;
+export type FooterComponent = (props: FooterProps<any>) => Renderable;
+export type ProductCardComponent = (props: ProductCardProps<any>) => Renderable;
+export type ProductMainComponent = (props: ProductMainProps<any>) => Renderable;
+export type ListingMainComponent = (props: ListingMainProps<any>) => Renderable;
+export type SectionSkinComponent = (props: SectionSkinProps<any, any>) => Renderable;
+export type SkinComponent = (props: any) => Renderable;
+export type BlockComponent = (props: BlockProps<any>) => Renderable;
+export interface StorefrontDefinition {
+    sections?: Record<string, SectionComponent>;
+    skins?: Record<string, SkinComponent>;
+    blocks?: Record<string, BlockComponent>;
+}
+export interface StorefrontModuleDefinition extends StorefrontModule {
+    definition: StorefrontDefinition;
+}
+export declare function defineStorefront(definition: StorefrontDefinition): StorefrontModuleDefinition;
+export declare function storefrontDefinitionOf(value: unknown): StorefrontDefinition | null;
+
+// packages/plugin-sdk/src/storefront/html.d.ts
+declare const HTML_BRAND: unique symbol;
+export interface Html {
+    readonly [HTML_BRAND]: true;
+    readonly value: string;
+    toString(): string;
+}
+export declare function isHtml(value: unknown): value is Html;
+export declare function raw(markup: string): Html;
+export declare const EMPTY_HTML: Html;
+export declare function escapeHtml(value: string): string;
+export type Renderable = Html | string | number | bigint | boolean | null | undefined | readonly Renderable[];
+export declare function renderChild(child: unknown, out: string[]): void;
+export declare function toHtml(children: unknown): Html;
+export declare function html(strings: TemplateStringsArray, ...values: unknown[]): Html;
+export {};
+
+// packages/plugin-sdk/src/storefront/index.d.ts
+export { defineStorefront, storefrontDefinitionOf } from "./define";
+export type { BlockComponent, BlockProps, FooterComponent, FooterProps, HeaderComponent, HeaderProps, ListingMainComponent, ListingMainProps, ProductCardComponent, ProductCardProps, ProductMainComponent, ProductMainProps, SectionComponent, SectionProps, SectionSkinComponent, SectionSkinProps, SkinComponent, SkinProps, StorefrontDefinition, StorefrontModuleDefinition, } from "./define";
+export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";
+export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
+export { BuyForm, CartCount, Filters, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Toolbar, accountLink, asset, editable, openCart, quickAdd, searchOpener, stickyHeader, } from "./components";
+export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
+export type { BuyFormProps, ImageProps, IslandProps, OrderFormProps, PriceProps } from "./components";
+export type { StorefrontBlockTarget, StorefrontFooterData, StorefrontHeaderData, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontMenuItem, StorefrontMoney, StorefrontProductCard, StorefrontProductCardData, StorefrontProductList, StorefrontProductPage, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSkinTarget, StorefrontStoreInfo, StorefrontTile, } from "@scalius/shared/plugins/storefront-protocol";
+export type { CoreSectionSettings, StorefrontSkinnableSectionType } from "@scalius/shared/storefront-theme/skins";
+
+// packages/plugin-sdk/src/storefront/island.d.ts
+import { type StorefrontIslandContext, type StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
+export type { StorefrontIslandContext as IslandContext };
+export declare function defineIsland<Props = unknown>(mount: (element: HTMLElement, props: Props, context: StorefrontIslandContext) => void | (() => void)): StorefrontIslandModule<Props>;
+
+// packages/plugin-sdk/src/storefront/jsx-dev-runtime.d.ts
+export { Fragment, jsx, jsxDEV, jsxs, type JSX } from "./jsx-runtime";
+
+// packages/plugin-sdk/src/storefront/jsx-runtime.d.ts
+import { type Html, type Renderable } from "./html";
+export type { Html, Renderable };
+export type Component<Props = Record<string, unknown>> = (props: Props & {
+    children?: Renderable;
+}) => Renderable;
+type Props = Record<string, unknown> & {
+    children?: unknown;
+};
+export declare function jsx(type: string | ((props: Props) => Renderable), props: Props, _key?: unknown): Html;
+export declare const jsxs: typeof jsx;
+export declare const jsxDEV: typeof jsx;
+export declare function Fragment(props: {
+    children?: unknown;
+}): Html;
+type AttributeValue = string | number | boolean | null | undefined;
+export declare namespace JSX {
+    type Element = Html;
+    interface ElementChildrenAttribute {
+        children: unknown;
+    }
+    interface IntrinsicAttributes {
+        key?: string | number;
+    }
+    interface HtmlAttributes {
+        children?: Renderable;
+        class?: AttributeValue | AttributeValue[];
+        className?: AttributeValue | AttributeValue[];
+        style?: string | Record<string, string | number | null | undefined | false>;
+        dangerouslySetInnerHTML?: {
+            __html: string;
+        };
+        [attribute: string]: unknown;
+    }
+    type IntrinsicElements = Record<string, HtmlAttributes>;
+}
+
+// packages/plugin-sdk/src/storefront/locale.d.ts
+import type { StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
+type Context = Pick<StorefrontRenderContext, "store">;
+export type Words<T = string> = {
+    en: T;
+} & {
+    [language: string]: T | undefined;
+};
+export declare function t<T = string>(context: Context, words: Words<T>): T;
+export declare function formatNumber(context: Context, value: number, options?: Intl.NumberFormatOptions): string;
+export declare function formatMoney(context: Context, amount: number): string;
+export declare function plural(context: Context, count: number, words: Words<Partial<Record<Intl.LDMLPluralRule, string>> & {
+    other: string;
+}>): string;
+export declare function formatDate(context: Context, value: Date | number, options?: Intl.DateTimeFormatOptions): string;
+export declare function storeTime(context: {
+    store: Pick<Context["store"], "timeZone">;
+}, date: string, hours?: number, minutes?: number): number | null;
+export {};
+
+// packages/plugin-sdk/src/storefront/testing.d.ts
+import { type StorefrontBlockTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCard, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSkinJob, type StorefrontSkinTarget, type StorefrontSkinUnit } from "@scalius/shared/plugins/storefront-protocol";
+import { type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
+export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-html-check";
+export declare function storefrontShown(html: string, pluginId: string): {
+    html: string;
+    dropped: number;
+};
+export declare function assertHeaderContract(html: string, options?: StorefrontHeaderCheckOptions): void;
+export declare function fixtureContext(overrides?: Partial<StorefrontRenderContext>): StorefrontRenderContext;
+export declare function fixtureProductCard(overrides?: Partial<StorefrontProductCard>): StorefrontProductCard;
+export declare function fixtureHeaderData(overrides?: Partial<StorefrontHeaderData>): StorefrontHeaderData;
+export declare function fixtureFooterData(overrides?: Partial<StorefrontFooterData>): StorefrontFooterData;
+export declare function fixtureProductPage(overrides?: Partial<StorefrontProductPage["product"]>): StorefrontProductPage;
+export declare function fixtureListingPage(overrides?: Partial<StorefrontListingPage>): StorefrontListingPage;
+export declare function fixtureSectionSkinData(type: string, settings?: Record<string, unknown>): StorefrontSectionSkinData;
+export type SkinData<Target extends StorefrontSkinTarget> = Target extends StorefrontSkinUnit ? Extract<StorefrontSkinJob, {
+    target: Target;
+}>["data"] : StorefrontSectionSkinData;
+export declare function fixtureSkinData(target: StorefrontSkinTarget): StorefrontSkinJob["data"];
+export declare function checkSkinHtml(target: StorefrontSkinTarget, html: string): string[];
+export interface RenderOptions extends StorefrontHeaderCheckOptions {
+    context?: Partial<StorefrontRenderContext>;
+}
+export declare function renderSection(module: StorefrontModule, type: string, settings?: StorefrontResolvedSettings, options?: RenderOptions): string;
+export declare function renderBlock(module: StorefrontModule, type: string, settings?: StorefrontResolvedSettings, data?: StorefrontProductPage, options?: RenderOptions & {
+    target?: StorefrontBlockTarget;
+}): string;
+export declare function renderSkin<Target extends StorefrontSkinTarget>(module: StorefrontModule, component: string, target: Target, settings?: StorefrontResolvedSettings, data?: SkinData<Target>, options?: RenderOptions): string;
+export declare function renderHeader(module: StorefrontModule, component: string, settings?: StorefrontResolvedSettings, data?: Partial<StorefrontHeaderData>, options?: RenderOptions): string;
+export declare function renderFooter(module: StorefrontModule, component: string, settings?: StorefrontResolvedSettings, data?: Partial<StorefrontFooterData>, options?: RenderOptions): string;
+export declare function renderProductCard(module: StorefrontModule, component: string, settings?: StorefrontResolvedSettings, product?: Partial<StorefrontProductCard>, options?: RenderOptions): string;
+
+// packages/plugin-sdk/src/testing.d.ts
+import { type PluginSettingValue } from "@scalius/shared/plugins";
+import type { EventTopic } from "@scalius/shared/events";
+import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
+import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
+export { parsePluginUiActionResult, parsePluginUiDocument, pluginUiRouteActions, sanitizePluginHead, } from "@scalius/shared/plugins";
+export { sanitizePluginHtml } from "@scalius/shared/plugins/html";
+export { fixtures } from "./fixtures";
+export interface PluginTestHarnessOptions {
+    settings?: Record<string, PluginSettingValue>;
+    features?: string[];
+    store?: Partial<PluginStoreInfo>;
+    api?: (operationId: string, input: PluginApiCallInput | undefined) => PluginApiResult | Promise<PluginApiResult>;
+    fetch?: (url: string, init: unknown) => {
+        status: number;
+        headers?: Record<string, string>;
+        body: string;
+    } | Promise<{
+        status: number;
+        headers?: Record<string, string>;
+        body: string;
+    }>;
+}
+export declare function createPluginTestHarness(module: unknown, options?: PluginTestHarnessOptions): {
+    manifest: {
+        id: string;
+        name: string;
+        version: string;
+        apiVersion: "2026-10";
+        description: string;
+        author: {
+            name: string;
+            url?: string | undefined;
+            email?: string | undefined;
+        };
+        categories: ("shipping" | "payments" | "orders" | "inventory" | "returns" | "checkout" | "pricing" | "marketing" | "loyalty" | "store-design" | "content" | "notifications" | "analytics" | "finances" | "support" | "operations" | "compliance")[];
+        screenshots: string[];
+        scopes: ("read_products" | "write_products" | "read_orders" | "write_orders" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_settings" | "write_places")[];
+        allowedHosts: string[];
+        events: import("@scalius/shared/events").EventTopicFilter[];
+        functions: {
+            point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods" | "order.risk" | "buyer.ui";
+            priority: number;
+            onError: "skip" | "block";
+            targets?: ("purchase.checkout.contact.render-after" | "purchase.checkout.shipping-option-list.render-after" | "purchase.checkout.cart-line-list.render-after" | "purchase.checkout.payment-method-list.render-after" | "purchase.checkout.actions.render-before" | "purchase.thank-you.customer-information.render-after" | "customer-account.order-status.block.render" | "customer-account.order-index.block.render" | "customer-account.profile.block.render")[] | undefined;
+            snapshot?: {
+                object: string;
+            } | undefined;
+        }[];
+        providers: import("@scalius/shared/plugins/providers").PluginProviderDeclaration[];
+        routes: {
+            admin: {
+                name: string;
+                methods: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[];
+                description?: string | undefined;
+                scope?: "read_products" | "write_products" | "read_orders" | "write_orders" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_settings" | "write_places" | undefined;
+            }[];
+            public: {
+                name: string;
+                methods: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[];
+                description?: string | undefined;
+            }[];
+            webhooks: string[];
+        };
+        cron: {
+            name: string;
+            schedule: string;
+        }[];
+        objects: Record<string, {
+            name: string;
+            fields: {
+                key: string;
+                name: string;
+                type: "boolean" | "date" | "url" | "integer" | "decimal" | "single_line_text" | "multi_line_text" | "date_time" | "color" | "json" | "money" | "product_reference" | "variant_reference" | "collection_reference" | "media_reference" | "object_reference" | "list.date" | "list.url" | "list.integer" | "list.decimal" | "list.single_line_text" | "list.multi_line_text" | "list.date_time" | "list.color" | "list.money" | "list.product_reference" | "list.variant_reference" | "list.collection_reference" | "list.media_reference" | "list.object_reference" | "customer_reference" | "order_reference";
+                required: boolean;
+                validations: {
+                    min?: string | number | null | undefined;
+                    max?: string | number | null | undefined;
+                    regex?: string | null | undefined;
+                    choices?: string[] | null | undefined;
+                };
+                to?: string | undefined;
+                description?: string | undefined;
+            }[];
+            indexes: (string | string[])[];
+            unique: (string | string[])[];
+            handle: boolean;
+            storefront: boolean;
+            events: boolean;
+            description?: string | undefined;
+            display?: string | undefined;
+            admin?: "none" | "read" | "edit" | undefined;
+        }>;
+        customFields: {
+            ownerType: "page" | "product" | "order" | "customer" | "category" | "collection" | "brand" | "variant";
+            key: string;
+            name: string;
+            type: string;
+            storefrontVisible: boolean;
+            description?: string | undefined;
+            to?: string | undefined;
+        }[];
+        migrations: {
+            version: number;
+            description: string;
+        }[];
+        salesChannels: {
+            id: string;
+            name: string;
+        }[];
+        settings: ({
+            type: "text";
+            maxLength: number;
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "textarea";
+            maxLength: number;
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "number";
+            integer: boolean;
+            key: string;
+            label: string;
+            required: boolean;
+            default?: number | undefined;
+            min?: number | undefined;
+            max?: number | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "boolean";
+            default: boolean;
+            key: string;
+            label: string;
+            required: boolean;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "select";
+            options: {
+                value: string;
+                label: string;
+            }[];
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "multiselect";
+            options: {
+                value: string;
+                label: string;
+            }[];
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string[] | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "secret";
+            key: string;
+            label: string;
+            required: boolean;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "url";
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "email";
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "color";
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "image";
+            key: string;
+            label: string;
+            required: boolean;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "products";
+            limit: number;
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "product";
+            key: string;
+            label: string;
+            required: boolean;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "link";
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "list";
+            fields: ({
+                type: "text";
+                maxLength: number;
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "textarea";
+                maxLength: number;
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "number";
+                integer: boolean;
+                key: string;
+                label: string;
+                required: boolean;
+                default?: number | undefined;
+                min?: number | undefined;
+                max?: number | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "boolean";
+                default: boolean;
+                key: string;
+                label: string;
+                required: boolean;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "select";
+                options: {
+                    value: string;
+                    label: string;
+                }[];
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "url";
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "color";
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "image";
+                key: string;
+                label: string;
+                required: boolean;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "link";
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            })[];
+            min: number;
+            max: number;
+            key: string;
+            label: string;
+            required: boolean;
+            itemLabel?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        })[];
+        features: {
+            id: string;
+            name: string;
+            description: string;
+            recommended: boolean;
+            scopes: ("read_products" | "write_products" | "read_orders" | "write_orders" | "write_fulfillments" | "read_customers" | "write_customers" | "write_marketing" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_settings" | "write_places")[];
+            allowedHosts: string[];
+            providers: string[];
+            settingsGroups: string[];
+            routes: {
+                admin: string[];
+                public: string[];
+                webhooks: string[];
+            };
+            cron: string[];
+            events: import("@scalius/shared/events").EventTopicFilter[];
+            functions: string[];
+            admin: string[];
+            storefront: {
+                sections: string[];
+                productBlocks: string[];
+                skins: string[];
+            };
+        }[];
+        settingsGroups: {
+            id: string;
+            title: string;
+            order: number;
+            description?: string | undefined;
+        }[];
+        admin: {
+            pages: {
+                id: string;
+                title: string;
+                placement: "orders" | "marketing" | "content" | "analytics" | "settings" | "products" | "apps" | "customers";
+                route: string;
+                tabs?: {
+                    id: string;
+                    title: string;
+                    route: string;
+                }[] | undefined;
+            }[];
+            cards: {
+                id: string;
+                target: "page" | "product" | "order" | "customer" | "category" | "collection" | "brand" | "return" | "variant";
+                title: string;
+                route: string;
+            }[];
+            actions: {
+                id: string;
+                target: "page" | "product" | "order" | "customer" | "category" | "collection" | "brand" | "return" | "variant";
+                label: string;
+                route: string;
+                bulk: boolean;
+                destructive: boolean;
+            }[];
+            widgets: {
+                id: string;
+                title: string;
+                route: string;
+            }[];
+            listColumns: {
+                id: string;
+                resource: "product" | "order" | "customer";
+                title: string;
+                type: "number" | "boolean" | "text" | "date" | "money";
+                source: {
+                    kind: "object";
+                    object: string;
+                    field: string;
+                } | {
+                    kind: "customField";
+                    key: string;
+                };
+                filterable: boolean;
+            }[];
+        };
+        timeline: {
+            kind: string;
+            title: string;
+        }[];
+        storefront: {
+            skins: {
+                id: string;
+                target: "header" | "footer" | "product-card" | "product-main" | "listing-main" | `section:${string}`;
+                name: string;
+                settings: ({
+                    type: "text";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "textarea";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "number";
+                    integer: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: number | undefined;
+                    min?: number | undefined;
+                    max?: number | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "boolean";
+                    default: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "select";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "multiselect";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string[] | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "secret";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "url";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "email";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "color";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "image";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "products";
+                    limit: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "product";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "link";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "list";
+                    fields: ({
+                        type: "text";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "textarea";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "number";
+                        integer: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: number | undefined;
+                        min?: number | undefined;
+                        max?: number | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "boolean";
+                        default: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "select";
+                        options: {
+                            value: string;
+                            label: string;
+                        }[];
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "url";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "color";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "image";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "link";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    })[];
+                    min: number;
+                    max: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    itemLabel?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                })[];
+                description?: string | undefined;
+            }[];
+            templates: {
+                id: string;
+                name: string;
+                theme: Record<string, unknown>;
+                description?: string | undefined;
+            }[];
+            pagePresets: {
+                id: string;
+                name: string;
+                sections: Record<string, unknown>[];
+                description?: string | undefined;
+            }[];
+            islands: {
+                name: string;
+                description?: string | undefined;
+            }[];
+            stylesheet: boolean;
+            connect: string[];
+            sections: {
+                type: string;
+                name: string;
+                settings: ({
+                    type: "text";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "textarea";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "number";
+                    integer: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: number | undefined;
+                    min?: number | undefined;
+                    max?: number | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "boolean";
+                    default: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "select";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "multiselect";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string[] | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "secret";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "url";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "email";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "color";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "image";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "products";
+                    limit: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "product";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "link";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "list";
+                    fields: ({
+                        type: "text";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "textarea";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "number";
+                        integer: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: number | undefined;
+                        min?: number | undefined;
+                        max?: number | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "boolean";
+                        default: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "select";
+                        options: {
+                            value: string;
+                            label: string;
+                        }[];
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "url";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "color";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "image";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "link";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    })[];
+                    min: number;
+                    max: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    itemLabel?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                })[];
+                reads: {
+                    object: string;
+                    limit: number;
+                    where?: Record<string, string | number | boolean | {
+                        setting: string;
+                    } | null> | undefined;
+                }[];
+                description?: string | undefined;
+            }[];
+            productBlocks: {
+                type: string;
+                name: string;
+                placement: "buy-box" | "below";
+                settings: ({
+                    type: "text";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "textarea";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "number";
+                    integer: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: number | undefined;
+                    min?: number | undefined;
+                    max?: number | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "boolean";
+                    default: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "select";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "multiselect";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string[] | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "secret";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "url";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "email";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "color";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "image";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "products";
+                    limit: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "product";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "link";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "list";
+                    fields: ({
+                        type: "text";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "textarea";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "number";
+                        integer: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: number | undefined;
+                        min?: number | undefined;
+                        max?: number | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "boolean";
+                        default: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "select";
+                        options: {
+                            value: string;
+                            label: string;
+                        }[];
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "url";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "color";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "image";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "link";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    })[];
+                    min: number;
+                    max: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    itemLabel?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                })[];
+            }[];
+            head: boolean;
+            scripts: {
+                src: string;
+                placement: "head" | "body-end";
+                pages: ("product" | "all" | "home" | "listing")[];
+            }[];
+            proxy: boolean;
+        };
+        limits: {
+            cpuMs: number;
+            wallMs: number;
+        };
+        homepage?: string | undefined;
+        license?: string | undefined;
+        icon?: string | undefined;
+        tagline?: string | undefined;
+        support?: {
+            url?: string | undefined;
+            email?: string | undefined;
+        } | undefined;
+        privacyPolicyUrl?: string | undefined;
+        documentationUrl?: string | undefined;
+        changelogUrl?: string | undefined;
+        countries?: string[] | undefined;
+        minPlatformVersion?: string | undefined;
+        checkout?: {
+            attributes: {
+                key: string;
+                label: string;
+                type: "number" | "boolean" | "text" | "date" | "multiline" | "choice";
+                help?: string | undefined;
+                required?: boolean | undefined;
+                maxLength?: number | undefined;
+                min?: number | undefined;
+                max?: number | undefined;
+                choices?: {
+                    value: string;
+                    label: string;
+                }[] | undefined;
+            }[];
+        } | undefined;
+        translations?: Record<string, {
+            name?: string | undefined;
+            tagline?: string | undefined;
+            description?: string | undefined;
+            pages?: Record<string, string> | undefined;
+            cards?: Record<string, string> | undefined;
+            salesChannels?: Record<string, string> | undefined;
+            actions?: Record<string, string> | undefined;
+            widgets?: Record<string, string> | undefined;
+            listColumns?: Record<string, string> | undefined;
+            timeline?: Record<string, string> | undefined;
+            tabs?: Record<string, Record<string, string>> | undefined;
+            settingsGroups?: Record<string, {
+                title?: string | undefined;
+                description?: string | undefined;
+            }> | undefined;
+            settings?: Record<string, {
+                label?: string | undefined;
+                help?: string | undefined;
+                options?: Record<string, string> | undefined;
+            }> | undefined;
+            features?: Record<string, {
+                name?: string | undefined;
+                description?: string | undefined;
+            }> | undefined;
+        }> | undefined;
+    };
+    records: Map<string, Map<string, Record<string, unknown>>>;
+    kv: Map<string, unknown>;
+    customFields: Map<string, Record<string, unknown>>;
+    logs: PluginLogRecord[];
+    sent: {
+        emails: unknown[];
+        sms: unknown[];
+        notices: unknown[];
+        pushes: unknown[];
+        timeline: unknown[];
+    };
+    event: (topic: EventTopic, resource: {
+        type: string;
+        id: string;
+    }, facts?: Record<string, unknown>, options?: {
+        id?: string;
+        occurredAt?: string;
+    }) => Promise<PluginInvocationResult>;
+    deliver: (event: PluginEvent) => Promise<PluginInvocationResult>;
+    fn: (point: string, input: unknown) => Promise<PluginInvocationResult>;
+    runMigration: (version: number) => Promise<PluginInvocationResult>;
+    runMigrations: (options?: {
+        from?: number;
+    }) => Promise<{
+        ok: boolean;
+        results: Array<{
+            version: number;
+            result: PluginInvocationResult;
+        }>;
+    }>;
+    provider: (providerId: string, operation: string, input: unknown) => Promise<PluginInvocationResult>;
+    route: (surface: "admin" | "public" | "webhooks", name: string, request?: Partial<PluginRouteRequest>) => Promise<PluginInvocationResult>;
+    cron: (name: string, scheduledAt?: string) => Promise<PluginInvocationResult>;
+    lifecycle: (hook: "install" | "activate" | "deactivate" | "uninstall", keepData?: boolean) => Promise<PluginInvocationResult>;
+    feature: (hook: "enable" | "disable", feature: string) => Promise<PluginInvocationResult>;
+};
+
+// packages/plugin-sdk/src/ui.d.ts
+import type { PluginUiActionResult, PluginUiButton, PluginUiDocument, PluginUiNode, PluginUiTarget, PluginUiTone } from "@scalius/shared/plugins";
+import type { PluginRouteRequest } from "./context";
+type NodeOf<T extends PluginUiNode["type"]> = Extract<PluginUiNode, {
+    type: T;
+}>;
+type Options<T extends PluginUiNode["type"], Omitted extends string = never> = Omit<NodeOf<T>, "type" | Omitted>;
+export declare const ui: {
+    page: (children: PluginUiNode[], options?: Options<"page", "children">) => PluginUiDocument;
+    view: (children: PluginUiNode[]) => PluginUiDocument;
+    section: (title: string, children: PluginUiNode[], options?: Options<"section", "children" | "title">) => PluginUiNode;
+    card: (title: string, children: PluginUiNode[], options?: Options<"card", "children" | "title">) => PluginUiNode;
+    stack: (children: PluginUiNode[], options?: Options<"stack", "children">) => PluginUiNode;
+    columns: (children: PluginUiNode[]) => PluginUiNode;
+    heading: (text: string, level?: 2 | 3 | 4) => PluginUiNode;
+    text: (text: string, options?: Options<"text", "text">) => PluginUiNode;
+    badge: (text: string, tone?: PluginUiTone) => PluginUiNode;
+    banner: (tone: PluginUiTone, text: string, options?: Options<"banner", "tone" | "text">) => PluginUiNode;
+    keyValue: (items: NodeOf<"key-value">["items"]) => PluginUiNode;
+    stat: (label: string, value: string | number, help?: string) => PluginUiNode;
+    table: (options: Options<"table">) => PluginUiNode;
+    empty: (title: string, options?: Options<"empty-state", "title">) => PluginUiNode;
+    image: (src: string, alt: string, options?: Options<"image", "src" | "alt">) => PluginUiNode;
+    link: (text: string, to: PluginUiTarget) => PluginUiNode;
+    divider: () => PluginUiNode;
+    button: (label: string, action: NonNullable<PluginUiButton["action"]>, options?: Omit<PluginUiButton, "type" | "label" | "action" | "to">) => PluginUiButton;
+    linkButton: (label: string, to: PluginUiTarget, options?: Omit<PluginUiButton, "type" | "label" | "action" | "to">) => PluginUiButton;
+    form: (action: NodeOf<"form">["action"], submitLabel: string, children: PluginUiNode[], options?: Options<"form", "action" | "submitLabel" | "children">) => PluginUiNode;
+    textField: (name: string, label: string, options?: Options<"text-field", "name" | "label">) => PluginUiNode;
+    textarea: (name: string, label: string, options?: Options<"textarea", "name" | "label">) => PluginUiNode;
+    numberField: (name: string, label: string, options?: Options<"number-field", "name" | "label">) => PluginUiNode;
+    select: (name: string, label: string, options: NodeOf<"select">["options"], rest?: Options<"select", "name" | "label" | "options">) => PluginUiNode;
+    checkbox: (name: string, label: string, options?: Options<"checkbox", "name" | "label">) => PluginUiNode;
+    dateField: (name: string, label: string, options?: Options<"date-field", "name" | "label">) => PluginUiNode;
+    to: {
+        resource: (resource: Extract<PluginUiTarget, {
+            kind: "resource";
+        }>["resource"], id: string) => PluginUiTarget;
+        page: (page: string, query?: Record<string, string>) => PluginUiTarget;
+        external: (href: string) => PluginUiTarget;
+    };
+    result: (result: Omit<PluginUiActionResult, "toast"> & {
+        toast?: string | PluginUiActionResult["toast"];
+    }) => PluginUiActionResult;
+};
+export interface PluginAdminContext {
+    resource: string | null;
+    id: string | null;
+    ids: string[];
+    action: string | null;
+    cursor: string | null;
+    values: Record<string, unknown>;
+    locale: PluginAdminLocale;
+}
+export type PluginAdminLocale = "en" | "bn";
+export declare function adminLocale(request: Pick<PluginRouteRequest, "headers">): PluginAdminLocale;
+export declare function adminContext(request: PluginRouteRequest): PluginAdminContext;
+export declare function wantsPage(request: PluginRouteRequest): boolean;
+export {};
+
+// packages/shared/src/plugins/storefront-protocol.d.ts
+import type { CustomFieldWireValue } from "../custom-fields";
+export declare const STOREFRONT_COMPONENT_ABI: 1;
+export declare const STOREFRONT_SKIN_UNITS: readonly ["header", "footer", "product-card", "product-main", "listing-main"];
+export type StorefrontSkinUnit = (typeof STOREFRONT_SKIN_UNITS)[number];
+export declare const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
+export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
+export declare const STOREFRONT_BLOCK_TARGETS: readonly ["product.buy-box", "product.below"];
+export type StorefrontBlockTarget = (typeof STOREFRONT_BLOCK_TARGETS)[number];
+export declare const STOREFRONT_EMBED_KINDS: readonly ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form"];
+export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
+export declare const STOREFRONT_EMBED_TAG = "scalius-embed";
+export interface StorefrontEmbedRule {
+    allowed: Partial<Record<StorefrontEmbedKind, number>>;
+    required: readonly StorefrontEmbedKind[];
+    appended: readonly StorefrontEmbedKind[];
+}
+export declare function storefrontEmbedRule(unit: "section" | "block" | StorefrontSkinTarget): StorefrontEmbedRule;
+export declare const STOREFRONT_ISLAND_HYDRATION: readonly ["load", "idle", "visible", "interaction"];
+export type StorefrontIslandHydration = (typeof STOREFRONT_ISLAND_HYDRATION)[number];
+export declare const STOREFRONT_COMPONENT_LIMITS: {
+    readonly moduleBytes: number;
+    readonly stylesheetBytes: number;
+    readonly islandBytes: number;
+    readonly islandsBytes: number;
+    readonly publicFileBytes: number;
+    readonly publicBytes: number;
+    readonly publicFiles: 40;
+    readonly htmlBytes: number;
+    readonly htmlDepth: 48;
+    readonly htmlElements: 6000;
+    readonly renderWallMs: 250;
+    readonly renderCpuMs: 50;
+    readonly batchJobs: 120;
+};
+export declare const STOREFRONT_PUBLIC_FILE_TYPES: Readonly<Record<string, string>>;
+export declare const STOREFRONT_PACKAGE_DIR = "storefront";
+export declare const STOREFRONT_MODULE_FILE = "storefront.js";
+export declare const STOREFRONT_STYLESHEET_FILE = "styles.css";
+export declare const storefrontIslandFile: (name: string) => string;
+export declare const storefrontPublicFile: (path: string) => string;
+export declare const STOREFRONT_FILE_PATH: RegExp;
+export declare function storefrontFileContentType(path: string): string | null;
+export declare const STOREFRONT_SEAL_PREFIX = "//# scalius-storefront ";
+export declare function sealedStorefrontDigests(code: string): Record<string, string>;
+export interface StorefrontImage {
+    url: string;
+    srcset: string | null;
+    width: number | null;
+    height: number | null;
+    alt: string;
+}
+export interface StorefrontMoney {
+    amount: number;
+    formatted: string;
+}
+export interface StorefrontProductCard {
+    id: string;
+    title: string;
+    url: string;
+    price: StorefrontMoney;
+    compareAt: StorefrontMoney | null;
+    priceVaries: boolean;
+    percentOff: number | null;
+    image: StorefrontImage | null;
+    hoverImage: StorefrontImage | null;
+    soldOut: boolean;
+    rating: {
+        average: number;
+        count: number;
+    } | null;
+    quickAdd: boolean;
+    needsOptions: boolean;
+    facts: string[];
+    fields: Record<string, CustomFieldWireValue>;
+}
+export interface StorefrontMenuItem {
+    title: string;
+    url: string;
+    children: StorefrontMenuItem[];
+}
+export interface StorefrontStoreInfo {
+    name: string;
+    url: string;
+    logo: StorefrontImage | null;
+    logoWidth: number;
+}
+export interface StorefrontHeaderData {
+    store: StorefrontStoreInfo;
+    menu: StorefrontMenuItem[];
+    categories: StorefrontMenuItem[];
+    announcement: {
+        text: string;
+        url: string | null;
+    } | null;
+    routes: {
+        home: string;
+        search: string;
+        cart: string;
+        account: string;
+    };
+    searchParam: string;
+    page?: {
+        lead: {
+            kind: "core";
+            type: string;
+            skin?: {
+                id: string;
+                settings: StorefrontResolvedSettings;
+            };
+        } | {
+            kind: "app";
+            pluginId: string;
+            type: string;
+            instanceId: string;
+            settings?: StorefrontResolvedSettings;
+        } | null;
+    };
+}
+export interface StorefrontFooterData {
+    store: StorefrontStoreInfo & {
+        footerLogo: StorefrontImage | null;
+        phone: string | null;
+        email: string | null;
+        address: string | null;
+        social: Array<{
+            network: string;
+            url: string;
+        }>;
+    };
+    menus: Array<{
+        title: string;
+        items: StorefrontMenuItem[];
+    }>;
+    policies: Array<{
+        title: string;
+        url: string;
+    }>;
+    newsletter: boolean;
+    routes: {
+        home: string;
+        newsletter: string;
+    };
+    year: number;
+}
+export interface StorefrontProductCardData {
+    product: StorefrontProductCard;
+    position: number;
+    aboveFold: boolean;
+}
+export type StorefrontFieldValues = Record<string, unknown>;
+export interface StorefrontLink {
+    title: string;
+    url: string;
+}
+export interface StorefrontProductPage {
+    product: {
+        id: string;
+        title: string;
+        url: string;
+        brand: StorefrontLink | null;
+        descriptionHtml: string;
+        media: StorefrontImage[];
+        price: StorefrontMoney;
+        compareAt: StorefrontMoney | null;
+        priceVaries: boolean;
+        availability: "untracked" | "out_of_stock" | "low_stock" | "in_stock";
+        rating: {
+            average: number;
+            count: number;
+        } | null;
+        options: Array<{
+            name: string;
+            values: Array<{
+                label: string;
+                swatch: string | null;
+            }>;
+        }>;
+        variants: Array<{
+            id: string;
+            title: string;
+            options: string[];
+            price: StorefrontMoney;
+            compareAt: StorefrontMoney | null;
+            available: boolean;
+            image: StorefrontImage | null;
+        }>;
+        fields: StorefrontFieldValues;
+        breadcrumbs: StorefrontLink[];
+    };
+}
+export interface StorefrontListingPage {
+    kind: "category" | "collection" | "brand" | "search";
+    title: string;
+    descriptionHtml: string | null;
+    image: StorefrontImage | null;
+    cards: StorefrontProductCard[];
+    total: number;
+    totalIsCapped: boolean;
+    page: number;
+    pageCount: number;
+    breadcrumbs: StorefrontLink[];
+    fields: StorefrontFieldValues;
+}
+export interface StorefrontTile {
+    id: string;
+    title: string;
+    url: string;
+    image: StorefrontImage | null;
+    cards: StorefrontProductCard[];
+}
+export interface StorefrontProductList {
+    title: string;
+    url: string | null;
+    cards: StorefrontProductCard[];
+}
+export interface StorefrontSectionSkinData<Settings = Record<string, unknown>> {
+    type: string;
+    version: number;
+    settings: Settings;
+    tiles: StorefrontTile[];
+    cards: StorefrontProductCard[];
+}
+export type StorefrontResolvedSettings = Record<string, StorefrontResolvedValue>;
+export type StorefrontResolvedValue = string | number | boolean | string[] | StorefrontImage | StorefrontProductCard | StorefrontProductCard[] | Array<Record<string, string | number | boolean | StorefrontImage | null>> | null;
+export interface StorefrontRenderContext {
+    store: {
+        name: string;
+        currency: string;
+        locale: string;
+        language: string;
+        timeZone: string;
+    };
+    page: {
+        kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "other";
+        path: string;
+    };
+    assets: string;
+    preview: boolean;
+}
+interface SkinJobBase {
+    id: string;
+    kind: "skin";
+    component: string;
+    settings: StorefrontResolvedSettings;
+}
+export type StorefrontSkinJob = (SkinJobBase & {
+    target: "header";
+    data: StorefrontHeaderData;
+}) | (SkinJobBase & {
+    target: "footer";
+    data: StorefrontFooterData;
+}) | (SkinJobBase & {
+    target: "product-card";
+    data: StorefrontProductCardData;
+}) | (SkinJobBase & {
+    target: "product-main";
+    data: StorefrontProductPage;
+}) | (SkinJobBase & {
+    target: "listing-main";
+    data: StorefrontListingPage;
+}) | (SkinJobBase & {
+    target: `section:${string}`;
+    instanceId: string;
+    data: StorefrontSectionSkinData;
+});
+export type StorefrontRenderJob = {
+    id: string;
+    kind: "section";
+    objects?: Record<string, {
+        records: Array<{
+            id: string;
+            handle: string | null;
+            data: Record<string, unknown>;
+        }>;
+        fields: Record<string, string>;
+    }>;
+    type: string;
+    instanceId: string;
+    settings: StorefrontResolvedSettings;
+} | StorefrontSkinJob | {
+    id: string;
+    kind: "block";
+    target: StorefrontBlockTarget;
+    type: string;
+    instanceId: string;
+    settings: StorefrontResolvedSettings;
+    data: StorefrontProductPage;
+};
+export interface StorefrontRenderBatch {
+    abi: typeof STOREFRONT_COMPONENT_ABI;
+    context: StorefrontRenderContext;
+    jobs: StorefrontRenderJob[];
+}
+export type StorefrontRenderResult = {
+    id: string;
+    html: string;
+} | {
+    id: string;
+    error: string;
+};
+export interface StorefrontRenderReply {
+    abi: typeof STOREFRONT_COMPONENT_ABI;
+    results: StorefrontRenderResult[];
+}
+export interface StorefrontModule {
+    abi: typeof STOREFRONT_COMPONENT_ABI;
+    render(batch: StorefrontRenderBatch): StorefrontRenderReply;
+}
+export interface StorefrontIslandContext {
+    pluginId: string;
+    assets: string;
+    language: string;
+    currency: string;
+    formatMoney(amount: number): string;
+    openCart(): void;
+    quickAdd(productUrl: string): Promise<boolean>;
+    onCart(listener: (cart: {
+        count: number;
+        total: number;
+    }) => void): () => void;
+    fetchApp(path: string, init?: RequestInit): Promise<Response>;
+}
+export interface StorefrontIslandModule<Props = unknown> {
+    abi: typeof STOREFRONT_COMPONENT_ABI;
+    mount(element: HTMLElement, props: Props, context: StorefrontIslandContext): void | (() => void);
+}
+export declare const STOREFRONT_EXTENSION_PREFIX = "/_x/";
+export declare function storefrontExtensionBase(pluginId: string, release: string): string;
+export declare function parseStorefrontExtensionPath(pathname: string): {
+    pluginId: string;
+    release: string;
+    path: string;
+} | null;
+export declare function storefrontIsolateId(pluginId: string, release: string): string;
+export {};

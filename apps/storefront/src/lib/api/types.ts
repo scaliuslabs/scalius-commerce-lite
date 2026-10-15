@@ -244,9 +244,11 @@ export interface StorefrontCustomField {
   name: string;
   type: string;
   value: unknown;
+  reference?: { id: string; url: string; alt?: string | null; width?: number | null; height?: number | null };
 }
 
 export interface Product {
+  fields?: Record<string, import("@scalius/shared/custom-fields").CustomFieldWireValue>;
   id: string;
   name: string;
   slug: string;
@@ -857,7 +859,7 @@ export interface OrderReceiptTracking {
   }>;
 }
 
-export type CreateOrderPayload = OrderPostRequest;
+export type CreateOrderPayload = OrderPostRequest & { attributes?: Record<string, string>; shippingRateToken?: string };
 
 // ---------------------------------------------------------------------------
 // Other Types (local domain types — SDK only has response wrappers)
@@ -876,6 +878,8 @@ export interface ShippingMethod {
   id: string;
   name: string;
   fee: number;
+  /** Calculated courier fees become known only after a checkout quote. */
+  rateSource?: string;
   /** Delivery is free once the items subtotal (before discounts) reaches this. */
   freeOver?: number | null;
   description: string | null;

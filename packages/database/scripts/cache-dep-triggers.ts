@@ -32,6 +32,7 @@ import * as schema from "../src/schema";
 import { compileSqliteDdlForPostgres } from "./postgres-schema";
 import {
   CACHE_DEP_TABLES,
+  withOldImageCompanions,
   type CacheDepKeyTemplate,
   type CacheDepKind,
   type CacheDepRule,
@@ -80,6 +81,8 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   inventory_levels: "0122_sales_channels",
   metaobject_definitions: "0126_plugin_seams",
   metaobject_entries: "0126_plugin_seams",
+  object_types: "0155_v2_beta_contract",
+  object_records: "0155_v2_beta_contract",
 };
 /**
  * Triggers added after their table's migration, by trigger name: the table's
@@ -126,6 +129,7 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_products_price_order_old: "0122_sales_channels",
   // A market's currency (0123) is a visible column of its row.
   cdep_markets_upd: "0123_market_currencies",
+  cdep_shipping_methods_upd: "0155_v2_beta_contract",
 };
 
 /**
@@ -156,6 +160,10 @@ export const CACHE_DEP_BASELINE_CHANGED: Readonly<Record<string, readonly string
 };
 
 export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  shipping_methods: [
+    "id", "name", "fee_minor", "description", "is_active", "sort_order", "created_at", "updated_at",
+    "deleted_at", "zone_id", "free_over_minor", "pickup_address", "pickup_hours", "kind",
+  ],
   products: [
     "id", "name", "description", "price_minor", "category_id", "slug", "meta_title", "meta_description",
     "canonical_path", "no_index", "exclude_from_sitemap", "exclude_from_product_feed", "product_condition",
@@ -184,6 +192,12 @@ export interface RetiredCacheDepTable {
   readonly spec: CacheDepTableSpec;
 }
 
+const retiredObjectRules = (keys: readonly CacheDepKeyTemplate[]): CacheDepRule[] => withOldImageCompanions([
+  { name: "ins", event: "insert", image: "new", keys },
+  { name: "del", event: "delete", image: "old", keys },
+  { name: "upd", event: "update", image: "new", changed: "visible", keys },
+]);
+
 /**
  * Tables deployed 0100 installed triggers for that the registry no longer
  * has. 0100 is immutable, so its renderer keeps each frozen spec at its old
@@ -192,6 +206,36 @@ export interface RetiredCacheDepTable {
  * functions, `retiredCacheDepFunctionDrops`).
  */
 export const CACHE_DEP_RETIRED_TABLES: Readonly<Record<string, RetiredCacheDepTable>> = {
+  metaobject_definitions: {
+    after: "plugin_registrations",
+    droppedIn: "0155_v2_beta_contract",
+    columns: ["id", "namespace", "type", "name", "description", "fields", "display_field", "storefront_access", "revision", "created_at", "updated_at"],
+    spec: {
+      kinds: ["mo" as CacheDepKind],
+      noise: ["revision", "created_at", "updated_at"],
+      rules: retiredObjectRules([{ prefix: "mo:", columns: ["id"] }, { dep: "mo:*" }]),
+    },
+  },
+  metaobject_entries: {
+    after: "plugin_registrations",
+    droppedIn: "0155_v2_beta_contract",
+    columns: ["id", "definition_id", "handle", "status", "fields", "position", "revision", "created_at", "updated_at"],
+    spec: {
+      kinds: ["mo" as CacheDepKind],
+      noise: ["revision", "created_at", "updated_at"],
+      rules: retiredObjectRules([{ prefix: "mo:", columns: ["definition_id"] }]),
+    },
+  },
+  plugin_records: {
+    after: "plugin_registrations",
+    droppedIn: "0155_v2_beta_contract",
+    columns: ["plugin_id", "collection", "id", "data_json", "revision", "idx1", "idx2", "idx3", "idx4", "uq1", "uq2", "created_at", "updated_at"],
+    spec: {
+      kinds: ["plgs" as CacheDepKind],
+      noise: ["revision", "created_at", "updated_at", "idx1", "idx2", "idx3", "idx4", "uq1", "uq2"],
+      rules: retiredObjectRules([{ prefix: "plgs:", columns: ["plugin_id", "collection"] }]),
+    },
+  },
   // The place directory (`places`, 0118) replaces the Bangladesh-only table.
   delivery_locations: {
     after: "delivery_zone_regions",

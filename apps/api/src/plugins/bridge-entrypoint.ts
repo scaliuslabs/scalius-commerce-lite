@@ -6,8 +6,8 @@
 // in-process. Lazily loaded: importing this module loads no host code.
 
 import { WorkerEntrypoint } from "cloudflare:workers";
-import type { PluginApiResult, PluginStorageQuery } from "@scalius/plugin-sdk";
-import type { PluginRecordVersion, PluginStorageOperation, PluginStorageQueryResult } from "@scalius/core/modules/plugins";
+import type { PluginApiResult, PluginObjectQuery } from "@scalius/plugin-sdk";
+import type { ObjectRecordVersion, ObjectOperation, ObjectQueryResult } from "@scalius/core/modules/objects";
 import type {
   PluginBridgeApi,
   PluginBridgeEnvironment,
@@ -74,20 +74,24 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
     return (await this.#host()).apiCall(operationId, input);
   }
 
-  async storageGet(collection: string, id: string): Promise<PluginRecordVersion | null> {
-    return (await this.#host()).storageGet(collection, id);
+  async objectsGet(object: string, id: string): Promise<ObjectRecordVersion | null> {
+    return (await this.#host()).objectsGet(object, id);
   }
 
-  async storageWrite(operations: PluginStorageOperation[]): Promise<Array<number | null>> {
-    return (await this.#host()).storageWrite(operations);
+  async objectsGetByHandle(object: string, handle: string): Promise<(ObjectRecordVersion & { id: string }) | null> {
+    return (await this.#host()).objectsGetByHandle(object, handle);
   }
 
-  async storageQuery(collection: string, query?: PluginStorageQuery): Promise<PluginStorageQueryResult> {
-    return (await this.#host()).storageQuery(collection, query);
+  async objectsWrite(operations: ObjectOperation[]): Promise<Array<number | null>> {
+    return (await this.#host()).objectsWrite(operations);
   }
 
-  async storageCount(collection: string, where?: PluginStorageQuery["where"]): Promise<number> {
-    return (await this.#host()).storageCount(collection, where);
+  async objectsQuery(object: string, query?: PluginObjectQuery): Promise<ObjectQueryResult> {
+    return (await this.#host()).objectsQuery(object, query);
+  }
+
+  async objectsCount(object: string, where?: PluginObjectQuery["where"]): Promise<number> {
+    return (await this.#host()).objectsCount(object, where);
   }
 
   async kvGet(key: string): Promise<{ value: unknown; revision: number } | null> {

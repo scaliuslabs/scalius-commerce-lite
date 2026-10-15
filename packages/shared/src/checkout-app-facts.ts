@@ -31,9 +31,11 @@ export interface AppliedAppDiscount {
  * Built by the platform from a validated answer (size and index columns
  * checked), never taken from the app as is.
  */
-export interface AppStorageCommit {
+export interface AppObjectCommit {
   pluginId: string;
-  collection: string;
+  object: string;
+  public: boolean;
+  events: boolean;
   id: string;
   expectedRevision: number | null;
   /** The record as JSON, at most the storage record size. */

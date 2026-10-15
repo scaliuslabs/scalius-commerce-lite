@@ -70,6 +70,43 @@ describe("delivery zone settings API", () => {
 
   });
 
+  it("keeps calculated rates on delivery and rejects malformed courier identities", async () => {
+    const { send } = createTestApp();
+    const pickup = await send("PUT", "/admin/settings/shipping-methods/pickup", {
+      expectedRevision: 0,
+      rates: [{ name: "Pickup", fee: 0, kind: "pickup", pickupAddress: "House 1", isActive: true, rateSource: "example.courier:express" }],
+    });
+    expect(pickup.status).toBe(400);
+    expect(JSON.stringify(await pickup.json())).toContain("Pickup uses a fixed charge.");
+
+    for (const fields of [{ rateSource: "unqualified" }, { rateSource: "flat", fallbackFee: 60 }, { rateSource: "flat", rateService: "express" }]) {
+      const response = await send("POST", "/admin/settings/shipping-methods", {
+        ...insideDhaka,
+        rates: [{ ...insideDhaka.rates[0], ...fields }],
+      });
+      expect(response.status).toBe(400);
+    }
+  });
+
+  it("round-trips courier rates with an optional fallback in major units", async () => {
+    const { send } = createTestApp();
+    const response = await send("POST", "/admin/settings/shipping-methods", {
+      ...insideDhaka,
+      rates: [{ name: "Courier delivery", fee: 0, isActive: true, rateSource: "example.courier:express", rateService: "next-day", fallbackFee: 90 }],
+    });
+    expect(response.status).toBe(201);
+    const list = await (await send("GET", "/admin/settings/shipping-methods")).json() as { data: { zones: Array<{ rates: unknown[] }> } };
+    expect(list.data.zones[0]?.rates).toMatchObject([
+      { name: "Courier delivery", fee: 0, rateSource: "example.courier:express", rateService: "next-day", fallbackFee: 90 },
+    ]);
+    const invalid = await send("POST", "/admin/settings/shipping-methods", {
+      ...insideDhaka,
+      rates: [{ name: "Courier delivery", fee: 0, isActive: true, rateSource: "example.courier:express", fallbackFee: 90.5 }],
+    });
+    expect(invalid.status).toBe(400);
+    expect(JSON.stringify(await invalid.json())).toContain("fallbackFee");
+  });
+
   it("answers a huge charge with a 400 naming the field, never a 500", async () => {
     const { send } = createTestApp();
     const response = await send("PUT", "/admin/settings/shipping-methods/pickup", {

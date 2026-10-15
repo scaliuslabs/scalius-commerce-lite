@@ -5,7 +5,7 @@ import { ConfigStore } from "./config.js";
 import { asCliError, CliError } from "./errors.js";
 import { collectFile, readBatchInput, readInput } from "./input.js";
 import { uploadMediaFiles } from "./media.js";
-import { loadOpenApi } from "./openapi.js";
+import { isObjectOperationId, loadOpenApi } from "./openapi.js";
 import { operationsBatch, operationsDescribe, operationsRefresh, operationsRun, operationsSearch } from "./operations.js";
 import { writeError, writeResult } from "./output.js";
 import { listProfiles, showProfile, useProfile } from "./profiles.js";
@@ -75,9 +75,9 @@ async function resolve(runtime: Runtime, command: Command, requireToken = true) 
 }
 
 function resourceForOperationId(operationId: string): "dashboard" | "storefront" {
-  if (operationId.startsWith("dashboard.")) return "dashboard";
+  if (operationId.startsWith("dashboard.") || isObjectOperationId(operationId)) return "dashboard";
   if (operationId.startsWith("storefront.")) return "storefront";
-  throw new CliError(2, "invalid_operation_id", "Operation IDs must start with dashboard. or storefront..");
+  throw new CliError(2, "invalid_operation_id", "Use a dashboard, storefront or supported objects operation ID.");
 }
 
 function resourceForBatch(input: StructuredInput): "dashboard" | "storefront" {

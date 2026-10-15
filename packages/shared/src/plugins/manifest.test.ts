@@ -39,7 +39,15 @@ const FULL: PluginManifestInput = {
     webhooks: ["acme-callback"],
   },
   cron: [{ name: "expire-points", schedule: "0 3 * * *" }],
-  storage: { ledger: { indexes: ["customerId", ["customerId", "createdAt"]], unique: [] } },
+  objects: { ledger: {
+    name: "Ledger",
+    fields: [
+      { key: "customer_id", name: "Customer", type: "single_line_text" },
+      { key: "created_at", name: "Created at", type: "integer" },
+    ],
+    indexes: ["customer_id", ["customer_id", "created_at"]],
+    unique: [],
+  } },
   customFields: [{ ownerType: "customer", key: "points", name: "Points", type: "integer" }],
   settings: [
     { key: "points_per_taka", label: "Points per taka", type: "number", default: 1, min: 0, max: 100 },
@@ -59,6 +67,15 @@ const FULL: PluginManifestInput = {
 };
 
 describe("plugin manifest", () => {
+  it("requires an exact qualified target for Object custom fields", () => {
+    const field = { ownerType: "product", key: "size_chart", name: "Size chart", type: "object_reference", to: "acme.loyalty.size_chart" };
+    expect(parsePluginManifest({ ...FULL, customFields: [field] }).ok).toBe(true);
+    expect(parsePluginManifest({ ...FULL, customFields: [{ ...field, type: "list.object_reference" }] }).ok).toBe(true);
+    for (const to of [undefined, "size_chart", "custom.SizeChart"]) {
+      expect(parsePluginManifest({ ...FULL, customFields: [{ ...field, to }] }).ok).toBe(false);
+    }
+    expect(parsePluginManifest({ ...FULL, customFields: [{ ...field, type: "single_line_text" }] }).ok).toBe(false);
+  });
   it("gates real-staff admin routes with one of the app's own scopes, on admin routes only", () => {
     const route = { name: "adjust", methods: ["POST"], scope: "write_marketing" };
     const manifest = { ...FULL, scopes: [...FULL.scopes!, "write_marketing"], routes: { ...FULL.routes, admin: [...FULL.routes!.admin!.filter((item) => item.name !== "adjust"), route] } };
@@ -128,6 +145,7 @@ describe("plugin manifest", () => {
     ["a wildcard with a port", { allowedHosts: ["*.acme.example:8443"] }, "allowedHosts.0"],
     ["a port out of range", { allowedHosts: ["api.acme.example:70000"] }, "allowedHosts.0"],
     ["an http script", { storefront: { scripts: [{ src: "http://cdn.acme.example/w.js" }] } }, "storefront.scripts.0.src"],
+    ["a script on cart", { storefront: { scripts: [{ src: "https://cdn.acme.example/w.js", pages: ["cart"] }] } }, "storefront.scripts.0.pages.0"],
     ["a script on checkout", { storefront: { scripts: [{ src: "https://cdn.acme.example/w.js", pages: ["checkout"] }] } }, "storefront.scripts.0.pages.0"],
     ["a script on the order receipt", { storefront: { scripts: [{ src: "https://cdn.acme.example/w.js", pages: ["order-success"] }] } }, "storefront.scripts.0.pages.0"],
     ["a page whose route is missing", { admin: { pages: [{ id: "p", title: "P", route: "nope" }] } }, "admin.pages.0.route"],
@@ -139,9 +157,9 @@ describe("plugin manifest", () => {
     ["a translation of a page in another language it doesn't have", { translations: { fr: { pages: { missing: "Page" } } } }, "translations.fr.pages.missing"],
     ["twenty-one translations", { translations: Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`a${String.fromCharCode(97 + index)}`, { name: "X" }])) }, "translations"],
     ["a discount that blocks checkout", { functions: [{ point: "checkout.discounts", onError: "block" }] }, "functions.0.onError"],
-    ["a snapshot outside checkout.discounts", { functions: [{ point: "cart.validate", snapshot: { collection: "visits" } }] }, "functions.0.snapshot"],
-    ["a snapshot of an undeclared collection", { functions: [{ point: "checkout.discounts", snapshot: { collection: "nope" } }] }, "functions.0.snapshot.collection"],
-    ["a collection named batch", { storage: { batch: {} } }, "storage.batch"],
+    ["a snapshot outside checkout.discounts", { functions: [{ point: "cart.validate", snapshot: { object: "visits" } }] }, "functions.0.snapshot"],
+    ["a snapshot of an undeclared object", { functions: [{ point: "checkout.discounts", snapshot: { object: "nope" } }] }, "functions.0.snapshot.object"],
+    ["an object named batch", { objects: { batch: { name: "Batch", fields: [{ key: "value", name: "Value", type: "integer" }] } } }, "objects.batch"],
     ["an icon outside the plugin", { icon: "../secret.svg" }, "icon"],
     ["a JPEG icon", { icon: "assets/icon.jpg" }, "icon"],
     ["an SVG screenshot", { screenshots: ["assets/one.svg"] }, "screenshots.0"],
@@ -267,7 +285,7 @@ describe("storefront surfaces in the manifest", () => {
   const base = {
     ...FULL,
     routes: { admin: [], public: [{ name: "draw", methods: ["GET"] }], webhooks: [] },
-    storage: { reviews: { indexes: ["productId"] } },
+    objects: { reviews: { name: "Reviews", fields: [{ key: "product_id", name: "Product", type: "single_line_text" }], indexes: ["product_id"] } },
     customFields: [],
     admin: { pages: [], cards: [], actions: [], widgets: [] },
   } satisfies PluginManifestInput;
@@ -294,16 +312,12 @@ describe("storefront surfaces in the manifest", () => {
     expect(issues({ ...base, storefront: { productBlocks: [block, block] } })).toEqual(["storefront.productBlocks Product block types must be unique."]);
   });
 
-  it("draws checkout and account blocks at Shopify's extension targets, from declared routes and collections", () => {
-    const block = { type: "note", name: "Note", target: "purchase.checkout.contact.render-after", route: "draw" } as const;
-    const parsed = parsePluginManifest({ ...base, storefront: { blocks: [{ ...block, reads: ["reviews"] }] } });
-    expect(parsed.ok && parsed.manifest.storefront.blocks).toEqual([{ ...block, reads: ["reviews"] }]);
-    // Drawing on the storefront is consented to, like sections.
-    expect(parsed.ok && pluginGrantRequest(parsed.manifest).storefrontSurfaces).toBe(true);
-    expect(issues({ ...base, storefront: { blocks: [{ ...block, target: "purchase.checkout.header.render" }] } })).toHaveLength(1);
-    expect(issues({ ...base, storefront: { blocks: [block, block] } })).toEqual(["storefront.blocks Block types must be unique."]);
-    expect(issues({ ...base, storefront: { blocks: [{ ...block, route: "missing" }] } })).toEqual(["storefront.blocks.0.route Public route missing is not declared."]);
-    expect(issues({ ...base, storefront: { blocks: [{ ...block, reads: ["ledger"] }] } })).toEqual(["storefront.blocks.0.reads.0 Storage collection ledger is not declared."]);
+  it("rejects retired route-rendered buyer blocks", () => {
+    const manifest = { id: "acme.notes", name: "Notes", version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "Buyer notes", author: { name: "Acme" } };
+    const block = { type: "note", name: "Note", target: "purchase.checkout.contact.render-after", route: "draw" };
+    expect(parsePluginManifest(manifest).ok).toBe(true);
+    expect(parsePluginManifest({ ...manifest, storefront: { blocks: [block] } }).ok).toBe(false);
+    expect(parsePluginManifest({ ...manifest, features: [{ id: "notes", name: "Notes", description: "Buyer notes", storefront: { blocks: ["note"] } }] }).ok).toBe(false);
   });
 });
 
@@ -403,9 +417,9 @@ describe("plugin functions", () => {
 
   it("lets cart.transform and cart.line_prices block, and cart.line_prices read a snapshot it never commits", () => {
     const withFunctions = (functions: PluginManifestInput["functions"]) => parsePluginManifest({ ...FULL, functions });
-    expect(withFunctions([{ point: "cart.transform", onError: "block" }, { point: "cart.line_prices", onError: "block", snapshot: { collection: "ledger" } }]).ok).toBe(true);
+    expect(withFunctions([{ point: "cart.transform", onError: "block" }, { point: "cart.line_prices", onError: "block", snapshot: { object: "ledger" } }]).ok).toBe(true);
     expect(withFunctions([{ point: "checkout.shipping_rates", onError: "block" }]).ok).toBe(false);
-    expect(withFunctions([{ point: "cart.transform", snapshot: { collection: "ledger" } }]).ok).toBe(false);
+    expect(withFunctions([{ point: "cart.transform", snapshot: { object: "ledger" } }]).ok).toBe(false);
     const prices = PLUGIN_FUNCTION_SCHEMAS["cart.line_prices"].output;
     expect(prices.safeParse({ prices: [{ lineId: "cart:0:v", unitPriceMinor: 0 }] }).success).toBe(false);
     expect(prices.safeParse({ prices: [{ lineId: "cart:0:v", unitPriceMinor: 12.5 }] }).success).toBe(false);

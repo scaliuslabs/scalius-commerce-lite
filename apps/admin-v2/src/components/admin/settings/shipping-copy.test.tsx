@@ -25,8 +25,9 @@ vi.mock("~/hooks/use-currency", () => ({
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setStoreRegion } from "~/lib/store-time-zone";
-import { areaCountsQuery, deliveryZonesQuery } from "~/lib/api-query-options/settings-screens";
-import { LocalPickupCard } from "./DeliveryZones";
+import { appProvidersQuery, areaCountsQuery, deliveryZonesQuery } from "~/lib/api-query-options/settings-screens";
+import { addressCountriesQueryOptions } from "~/lib/api-query-options/address-rules";
+import { DeliveryZonesCard, LocalPickupCard } from "./DeliveryZones";
 import { DeliveryAreasCard } from "./ShippingSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -68,6 +69,35 @@ describe("shipping settings copy", () => {
     await render(<LocalPickupCard />, (client) => client.setQueryData(deliveryZonesQuery.queryKey, zones([rate])));
     expect(container.textContent).toContain("Pickup is offered for every address.");
     expect(container.textContent).not.toContain("off until");
+  });
+
+  it("shows the calculated charge and lets the merchant return it to a fixed charge", async () => {
+    await render(<DeliveryZonesCard />, (client) => {
+      client.setQueryData(areaCountsQuery.queryKey, { cities: 0, zones: 0, areas: 0 });
+      client.setQueryData(addressCountriesQueryOptions().queryKey, ["BD"]);
+      client.setQueryData(appProvidersQuery("courier").queryKey, [
+        { id: "example.courier:express", name: "Express courier", appName: "Courier app", operations: ["rates"], readiness: { usable: true } },
+      ]);
+      client.setQueryData(deliveryZonesQuery.queryKey, {
+        zones: [{ id: "z1", name: "Bangladesh", revision: 1, regions: [{ countryCode: "BD", adminArea: null, postalPrefix: null }], locations: [], rates: [
+          { id: "r1", name: "Express", kind: "delivery", fee: 0, freeOver: null, rateSource: "example.courier:express", rateService: null, fallbackFee: null, isActive: true },
+        ] }],
+        pickup: { revision: 0, rates: [] },
+      });
+    });
+    expect(container.textContent).toContain("Express Calculated at checkout");
+    expect(container.textContent).not.toContain("Express Free");
+    const zone = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.includes("Express Calculated at checkout"));
+    expect(zone).toBeDefined();
+    await act(async () => zone!.click());
+    expect(document.querySelector("#rate-0-fallbackFee")).not.toBeNull();
+    expect(document.querySelector("#rate-0-fee")).toBeNull();
+    await act(async () => document.querySelector<HTMLButtonElement>("#rate-0-rateSource")!.click());
+    const fixed = [...document.querySelectorAll<HTMLElement>("[role=option]")].find((option) => option.textContent?.includes("Fixed charge"));
+    expect(fixed).toBeDefined();
+    await act(async () => fixed!.click());
+    expect(document.querySelector("#rate-0-fallbackFee")).toBeNull();
+    expect(document.querySelector("#rate-0-fee")).not.toBeNull();
   });
 
   it("names thanas only for a store in Bangladesh", async () => {

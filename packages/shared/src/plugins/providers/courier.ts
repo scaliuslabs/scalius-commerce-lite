@@ -239,7 +239,39 @@ export const courierCodSchema = z.object({
   status: z.enum(["pending", "collected", "remitted", "disputed"]),
 }).strict();
 
+/** Checkout rates disclose parcel and region facts only, never buyer contact or street data. */
+export const courierRatesInputSchema = z.object({
+  destination: z.object({
+    country: providerCountrySchema,
+    adminArea: text(128).nullable(),
+    city: text(200).nullable(),
+    postalCode: text(40).nullable(),
+    placeIds: z.object({ city: text(128).nullable(), zone: text(128).nullable(), area: text(128).nullable() }).strict().optional(),
+  }).strict(),
+  origin: z.object({ locationId: text(128), country: providerCountrySchema, postalCode: text(40).nullable() }).strict().nullable(),
+  parcel: z.object({
+    lines: z.array(z.object({
+      variantId: text(128), quantity: z.number().int().min(1).max(1_000_000),
+      weightGrams: z.number().min(0).max(10_000_000).nullable(), unitPriceMinor: providerMinorSchema,
+    }).strict()).max(100),
+    weightGrams: z.number().min(0).max(1_000_000_000).nullable(),
+  }).strict(),
+  currency: providerCurrencySchema,
+  decimalPlaces: z.number().int().min(0).max(4),
+  cod: z.boolean(),
+}).strict();
+export type CourierRatesInput = z.infer<typeof courierRatesInputSchema>;
+export const courierRatesSchema = z.object({
+  rates: z.array(z.object({
+    service: text(128).min(1), name: text(200).min(1), amountMinor: providerMinorSchema,
+    estimatedDays: z.object({ min: z.number().int().min(0).max(365), max: z.number().int().min(0).max(365) }).strict()
+      .refine((days) => days.max >= days.min).nullable(),
+  }).strict()).max(10),
+}).strict();
+export type CourierRates = z.infer<typeof courierRatesSchema>;
+
 export const COURIER_PORT = {
+  rates: { input: courierRatesInputSchema, output: courierRatesSchema },
   createShipment: { input: courierShipmentInputSchema, output: courierShipmentSchema },
   trackShipment: { input: courierTrackInputSchema, output: courierTrackingSchema },
   findShipment: { input: courierFindInputSchema, output: courierFindSchema },

@@ -37,6 +37,16 @@ afterEach(() => {
 });
 
 describe("createOrder", () => {
+  it("carries the reviewed courier rate only in the delivery order body", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ success: true, data: { id: "ord_1" } }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await createOrder({ ...checkoutData, deliveryMode: "delivery", shippingRateToken: "rate_signed" }, "cod");
+    expect(fetchMock.mock.calls[0]![0]).toBe("/api/checkout/create-order");
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body)).shippingRateToken).toBe("rate_signed");
+    await createOrder({ ...checkoutData, deliveryMode: "none", shippingRateToken: "rate_signed" }, "stripe");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).not.toHaveProperty("shippingRateToken");
+  });
+
   it("sends marketing consent only when the buyer ticked the box, with the label's language", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       success: true,

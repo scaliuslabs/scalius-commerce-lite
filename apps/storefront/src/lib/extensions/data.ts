@@ -25,7 +25,9 @@ import {
   resolveCoreSectionSettings,
   storefrontProductSourceKey,
   storefrontVisibleSection,
+  type CoreSectionSettings,
   type StorefrontSectionOf,
+  type StorefrontSection,
   type StorefrontSkinnableSectionType,
 } from "@scalius/shared/storefront-theme";
 import { resolveBuyerAvailabilityBand, type BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
@@ -48,6 +50,7 @@ import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
 import { productCardModel, type ProductCardModel, type ProductCardProduct } from "@/components/cards/card-model";
 import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
 import { productGalleryItems } from "@/components/product/lib/gallery-media";
+import { objectFieldViews } from "@/lib/object-fields";
 import { isVariantAvailable } from "@/lib/product-sellable-variants";
 import { navigationFromCategoryTree, sourceNavigation, type NavigationSource } from "@/components/header/nav-tree";
 import type { RequestTheme } from "@/lib/storefront-theme-context";
@@ -210,6 +213,7 @@ export function productCardData(product: ProductCardProduct, model: ProductCardM
     quickAdd: model.quickAddEligible,
     needsOptions: model.needsOptions,
     facts,
+    fields: product.fields ?? {},
   };
 }
 
@@ -229,8 +233,7 @@ export function componentSectionSettings(
 // ── Skins of the product page, listings and core sections ────────────────
 //
 // The projections a skin gets are built from exactly what the core renderer
-// draws from (the page's batch data, the same card model and price engine),
-// and only when a skin will draw: a page without skins builds none of this.
+// draws from: the page's batch data, the same card model and price engine.
 
 /** Cards for a list of products, through the core card model (market prices, photo renditions, quick-add rules). */
 export function productCardsOf(
@@ -347,15 +350,16 @@ export function listingPageData(input: {
  * (`resolveCoreSectionSettings`), each product source to as many cards as
  * the core section shows.
  */
-export function coreSectionSkinData(
-  section: StorefrontSectionOf<StorefrontSkinnableSectionType>,
+export function coreSectionSkinData<Type extends StorefrontSkinnableSectionType>(
+  section: StorefrontSectionOf<Type>,
   content: HomepageContent,
   money: { currencySymbol: string; currencyCode: string; ratings: boolean },
-): StorefrontSectionSkinData {
+): StorefrontSectionSkinData<CoreSectionSettings<Type>> {
   const shown = storefrontVisibleSection(section);
+  const visible: StorefrontSection = shown;
   const cards = (products: readonly unknown[]) => productCardsOf(products as ProductCardProduct[], money);
   const limits = new Map(homeSectionProductLists(shown).map((list) => [storefrontProductSourceKey(list.source), list.limit]));
-  const settings = resolveCoreSectionSettings(shown, {
+  const settings = resolveCoreSectionSettings<Type>(shown, {
     image: (id) => storefrontImageOf(homepageMedia(content, id)),
     products: (source) => {
       const list = homepageSourceProducts(source, limits.get(storefrontProductSourceKey(source)) ?? HOME_PRODUCT_LIST_LIMIT, content);
@@ -386,12 +390,19 @@ export function coreSectionSkinData(
       return endsAt && Date.parse(endsAt) > Date.now() ? { endsAt } : null;
     },
     deliveryFacts: () => content.deliveryFacts.map((fact) => ({ title: fact.title, detail: fact.detail })),
+    objectField: (qualifiedKey) => {
+      const object = content.resourceFields?.find((field) => field.type === "object_reference"
+        && `${field.namespace}.${field.key}` === qualifiedKey)?.object;
+      return objectFieldViews(object?.fields ?? [], {
+        ...money, media: content.media, language: content.language ?? "en",
+      });
+    },
   });
   return {
-    type: shown.type,
-    version: shown.version,
-    settings: settings as Record<string, unknown>,
-    tiles: shown.type === "brand-wall"
+    type: visible.type,
+    version: visible.version,
+    settings,
+    tiles: visible.type === "brand-wall"
       ? content.brands.map((brand) => ({
         id: brand.id,
         title: brand.name,
@@ -400,6 +411,6 @@ export function coreSectionSkinData(
         cards: [],
       }))
       : [],
-    cards: shown.type === "collections" ? cards(homepageCollectionsFallback(shown, content)) : [],
+    cards: visible.type === "collections" ? cards(homepageCollectionsFallback(visible, content)) : [],
   };
 }

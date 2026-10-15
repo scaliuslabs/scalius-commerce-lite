@@ -7,6 +7,7 @@ export * from "./storefront-theme/fit";
 export * from "./storefront-theme/links";
 export * from "./storefront-theme/brand";
 export * from "./storefront-theme/apps";
+export * from "./storefront-theme/bindings";
 export * from "./storefront-theme/app-templates";
 export * from "./storefront-theme/blocks";
 export * from "./storefront-theme/sections";

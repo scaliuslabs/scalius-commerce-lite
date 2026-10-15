@@ -166,6 +166,12 @@ function specWithContinuations(): Record<string, unknown> {
 }
 
 describe("CLI program", () => {
+  it("routes objects operations through a dashboard profile", async () => {
+    const runtime = await storefrontRuntime(vi.fn());
+    expect(await runProgram(runtime, ["--profile", "storefront", "--output", "json", "operations", "describe", "objects.types.list"])).not.toBe(0);
+    expect(runtime.stderrText()).toContain("requires a dashboard profile");
+  });
+
   it("reports the version from the published package manifest", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-version-test-"));
     const runtime = createTestRuntime({ directory });

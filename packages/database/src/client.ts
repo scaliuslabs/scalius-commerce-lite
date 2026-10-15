@@ -1,4 +1,6 @@
 import * as schema from "./schema";
+import { sql, type SQL } from "drizzle-orm";
+import { FIRST_ORDER_NUMBER } from "@scalius/shared/order-utils";
 import { drizzleD1 } from "./drizzle-clients";
 import {
   registerDatabaseProvider,
@@ -99,6 +101,14 @@ export function getDatabaseProviderForClient(
   database: Database,
 ): DatabaseProvider {
   return registeredDatabaseProvider(database as object);
+}
+
+/** Allocate inside the order INSERT; PostgreSQL sequences may leave gaps on rollback. */
+export function nextOrderNumberSql(database: Database): SQL<number> {
+  if (getDatabaseProviderForClient(database) === "postgres") {
+    return sql<number>`nextval('scalius_compat.order_number_seq')`;
+  }
+  return sql<number>`(SELECT coalesce(max("order_number"), ${FIRST_ORDER_NUMBER - 1}) + 1 FROM "orders")`;
 }
 
 export { schema };

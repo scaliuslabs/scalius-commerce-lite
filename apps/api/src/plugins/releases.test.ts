@@ -17,6 +17,7 @@ import {
   type PluginInstallation,
 } from "@scalius/core/modules/plugins";
 import { PLUGIN_API_VERSION } from "@scalius/shared/plugins";
+import { getObjectRecord } from "@scalius/core/modules/objects";
 import { sha256Hex } from "@scalius/shared/plugins/registry";
 import { definePlugin } from "@scalius/plugin-sdk";
 import { BundledLoader } from "./loaders/bundled";
@@ -177,13 +178,18 @@ describe("app releases", () => {
     it("loads the new code, runs its data updates once and records them", async () => {
       const v1 = await installV1();
       const migrations = [{ version: 1, description: "Seed the counter" }];
+      const objects = { counters: { name: "Counters", fields: [{ key: "value", name: "Value", type: "integer" }] } };
       modules["2.0.0"] = definePlugin({
-        manifest: manifest("2.0.0", { migrations }) as never,
-        migrations: { 1: async (ctx) => { await ctx.kv.set("counter", 0); } },
+        manifest: manifest("2.0.0", { migrations, objects }) as never,
+        migrations: { 1: async (ctx) => {
+          await ctx.kv.set("counter", 0);
+          await ctx.objects.counters!.put("initial", { value: 0 });
+        } },
       });
-      const result = await update(v1, "2.0.0", { migrations });
+      const result = await update(v1, "2.0.0", { migrations, objects });
       expect(result).toMatchObject({ rolledBack: false, error: null, installation: { version: "2.0.0", status: "active", migratedVersion: 1 } });
       expect(await getPluginKv(db, "acme.points", "counter")).toBe(0);
+      expect(await getObjectRecord(db, "acme.points", "counters", "initial")).toEqual({ value: 0 });
       expect((await listPluginMigrations(db, "acme.points")).map((entry) => [entry.version, entry.pluginVersion])).toEqual([[1, "2.0.0"]]);
     });
 

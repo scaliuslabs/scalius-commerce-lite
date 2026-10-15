@@ -26,7 +26,7 @@ import {
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
-import { storefrontCustomFieldsSchema } from "../schemas/custom-fields";
+import { storefrontCustomFieldsSchema, storefrontCardFieldsSchema } from "../schemas/custom-fields";
 // Create an OpenAPIHono app for category routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -154,6 +154,7 @@ const storefrontCategoryProductSchema = z.object({
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
   cardFacts: optionalProductCardFacts,
+  fields: storefrontCardFieldsSchema.optional(),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   subcategoryId: z.string().nullable().optional().openapi({
     description: "A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself).",
@@ -575,7 +576,8 @@ app.openapi(getCategoryProductsRoute, async (c) => {
   if (params.hasDiscount !== undefined) appliedFilters.hasDiscount = params.hasDiscount;
   if (params.inStock !== undefined) appliedFilters.inStock = params.inStock;
 
-  return ok(c, {
+  // Keep the recursive custom-field codec behind the public JSON schema.
+  const response: z.infer<typeof getCategoryProductsRoute.responses[200]["content"]["application/json"]["schema"]>["data"] = {
     category: categoryForProducts,
     products: result.products,
     shelfProducts: result.shelfProducts,
@@ -585,7 +587,8 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     facets: result.facets,
     ratingFacet: result.ratingFacet,
     appliedFilters,
-  });
+  };
+  return ok(c, response);
 });
 
 const getCategoryProductSummariesRoute = createRoute({
@@ -669,7 +672,7 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
   if (params.freeDelivery !== undefined) appliedFilters.freeDelivery = params.freeDelivery;
   if (params.hasDiscount !== undefined) appliedFilters.hasDiscount = params.hasDiscount;
   if (params.inStock !== undefined) appliedFilters.inStock = params.inStock;
-  return ok(c, {
+  const response: z.infer<typeof getCategoryProductSummariesRoute.responses[200]["content"]["application/json"]["schema"]>["data"] = {
     category: {
       id: category.id,
       name: category.name,
@@ -683,7 +686,8 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
     },
     ...result,
     appliedFilters,
-  });
+  };
+  return ok(c, response);
 });
 
 // Export the category routes

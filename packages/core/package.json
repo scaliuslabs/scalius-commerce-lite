@@ -55,7 +55,7 @@
     "./modules/payments": "./src/modules/payments/index.ts",
     "./modules/payments/browser": "./src/modules/payments/browser.ts",
     "./modules/platform": "./src/modules/platform/index.ts",
-    "./modules/metaobjects": "./src/modules/metaobjects/index.ts",
+    "./modules/objects": "./src/modules/objects/index.ts",
     "./modules/plugins": "./src/modules/plugins/index.ts",
     "./modules/price-lists": "./src/modules/price-lists/index.ts",
     "./modules/sales-channels": "./src/modules/sales-channels/index.ts",

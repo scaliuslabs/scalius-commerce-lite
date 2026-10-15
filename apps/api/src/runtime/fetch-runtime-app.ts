@@ -19,6 +19,7 @@ const PUBLIC_PREFIXES = [
   "/api/v1/meta",
   "/api/v1/navigation",
   "/api/v1/orders",
+  "/api/v1/objects",
   "/api/v1/pages",
   "/api/v1/platform",
   "/api/v1/products",

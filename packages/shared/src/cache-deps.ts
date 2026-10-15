@@ -91,8 +91,6 @@ export const CACHE_DEP_KINDS = [
    * cached on it.
    */
   "plg",
-  /** `plgs:<pluginId>:<collection>`: one storage collection of an app, advanced with every record write in it. */
-  "plgs",
   /**
    * `mk:<marketId>`: one market (status, name, handle, countries, presences);
    * `mk:*`: any market (the active presence matrix); `mk:backup`: the backup
@@ -119,11 +117,8 @@ export const CACHE_DEP_KINDS = [
    * default locale, and which languages are published.
    */
   "tr",
-  /**
-   * `mo:<definitionId>`: one metaobject definition (its fields, storefront
-   * access) and its entries; `mo:*`: any definition.
-   */
-  "mo",
+  /** `obj:<typeId>`: one public object type and its published records. */
+  "obj",
   /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
   "t",
   /** `store`: everything (dashboard "clear cache", catalogue-wide rebuilds). */
@@ -193,8 +188,6 @@ export const cacheDep = {
   plugin: (pluginId: string) => `plg:${pluginId}`,
   /** Any app installation: the set of active apps and what they put on the storefront. */
   anyPlugin: () => `plg:${CACHE_DEP_ANY}`,
-  /** One storage collection of an app. */
-  pluginCollection: (pluginId: string, collection: string) => `plgs:${pluginId}:${collection}`,
   /** One market: its status, identity, countries and presences. */
   market: (marketId: string) => `mk:${marketId}`,
   /** Any market: the set of markets, their countries and presences (the presence matrix). */
@@ -217,10 +210,8 @@ export const cacheDep = {
   localizedSlugSpace: (resourceType: string) => `tr:slugs:${resourceType}`,
   /** The locale and market of each presence, the default locale and the published languages. */
   translationLocales: () => "tr:locales",
-  /** One metaobject definition and its entries. */
-  metaobjects: (definitionId: string) => `mo:${definitionId}`,
-  /** Any metaobject definition (which types exist, by handle). */
-  anyMetaobjects: () => `mo:${CACHE_DEP_ANY}`,
+  /** One public object type and its published records. */
+  objects: (typeId: string) => `obj:${typeId}`,
   table: (table: string) => `t:${table}`,
   store: () => "store",
 } as const;
@@ -851,24 +842,17 @@ const CACHE_DEP_TABLE_RULES = {
     note: "Derived from the manifest in the batch of every installation write; read with the installation (which providers and functions an active app has).",
     rules: everyChange(own("plg", "plugin_id")),
   },
-  // --- Metaobjects (0126; docs/platform/PLUGINS.md, "Metaobjects") ---------------
-  metaobject_definitions: {
-    kinds: ["mo"],
-    noise: ["revision", "created_at", "updated_at"],
-    note: "A section that shows a definition's entries declares `mo:<id>`; a read that finds a definition by its handle declares `mo:*`.",
-    rules: everyChange(own("mo")),
+  // --- Objects: private writes have no cache cost. -------------------------------
+  object_types: {
+    kinds: ["obj"],
+    noise: ["revision", "created_at", "updated_at", "admin", "events", "indexes_json", "unique_json"],
+    rules: everyChange([{ prefix: "obj:", columns: ["id"] }]).map((rule) => ({ ...rule, where: { equals: { storefront: 1 } } })),
   },
-  metaobject_entries: {
-    kinds: ["mo"],
-    noise: ["revision", "created_at", "updated_at"],
-    note: "An entry belongs to its definition's key: a section declares one key per definition it shows, never one per entry.",
-    rules: everyChange([{ prefix: "mo:", columns: ["definition_id"] }]),
-  },
-  plugin_records: {
-    kinds: ["plgs"],
-    noise: ["revision", "created_at", "updated_at", "idx1", "idx2", "idx3", "idx4", "uq1", "uq2"],
-    note: "A storefront render reads only the collections its section declares in reads; the index columns are derived from data_json.",
-    rules: everyChange([{ prefix: "plgs:", columns: ["plugin_id", "collection"] }]),
+  object_records: {
+    kinds: ["obj"],
+    noise: ["revision", "created_at", "updated_at", "ev", "k1", "k2", "k3", "k4", "u1", "u2"],
+    note: "Only public rows advance the type's dependency, including a row leaving publication.",
+    rules: everyChange([{ prefix: "obj:", columns: ["type_id"] }]).map((rule) => ({ ...rule, where: { equals: { pub: 1 } } })),
   },
 
   // --- Markets (docs/MARKETS-DESIGN.md D4) -----------------------------------------
@@ -1148,6 +1132,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   notification_outbox: PRIVATE,
   notification_delivery_receipts: PRIVATE,
   event_outbox: PRIVATE,
+  event_demand: PRIVATE,
   webhook_subscriptions: PRIVATE,
   webhook_event_deliveries: PRIVATE,
   // Plugin runtime (installations, registrations and records are registered above).

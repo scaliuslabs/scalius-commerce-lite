@@ -1,3 +1,4 @@
+import { collectObjectBindingRequests, type SettingBindings } from "./bindings";
 // What the homepage sections read: product lists by source, media by id
 // (hero slides included), the category tiles' categories, the collections
 // section's collections, the brand wall's brands, the deal countdowns'
@@ -31,8 +32,8 @@ export const HOME_COLLECTIONS_FALLBACK_LIMIT = 8;
 export const HOME_BRAND_LIMIT = 24;
 /** Promotions whose end times the deal countdowns read. */
 export const HOME_MAX_PROMOTIONS = 4;
-/** Metaobject content types the Metaobjects sections of one page read. */
-export const HOME_MAX_METAOBJECT_TYPES = 4;
+/** Object content types the Objects sections of one page read. */
+export const HOME_MAX_OBJECT_TYPES = 4;
 
 export interface HomeProductListRequest {
   /** `storefrontProductSourceKey(source)`. */
@@ -56,13 +57,14 @@ export interface HomeSectionRequests {
   homeProductId: string | null;
   /** App sections in document order (`PLUGIN_HOME_SECTIONS_MAX` at most); the API asks each app to draw its own. */
   apps?: HomeAppSectionRequest[];
-  /** The Metaobjects sections' content types, each with the most entries any of its sections shows. */
-  metaobjects?: HomeMetaobjectRequest[];
+  /** The Objects sections' content types, each with the most entries any of its sections shows. */
+  objects?: HomeObjectRequest[];
+  bindingObjects?: ReturnType<typeof collectObjectBindingRequests>;
 }
 
-/** One content type a Metaobjects section shows, and how many entries. */
-export interface HomeMetaobjectRequest {
-  definitionId: string;
+/** One content type a Objects section shows, and how many entries. */
+export interface HomeObjectRequest {
+  typeId: string;
   limit: number;
 }
 
@@ -72,6 +74,7 @@ export interface HomeAppSectionRequest {
   pluginId: string;
   type: string;
   values: Record<string, PluginSettingValue>;
+  bindings?: SettingBindings;
 }
 
 /** One key per source: `newest`, `on-sale`, `popular`, `collection:<id>`, `category:<id>`. */
@@ -125,6 +128,8 @@ export function homeSectionMediaIds(section: StorefrontSection): string[] {
       ];
     case "banner":
     case "lookbook":
+    case "deal-block":
+    case "newsletter":
       return section.settings.mediaId ? [section.settings.mediaId] : [];
     case "editorial":
       return section.settings.layout === "image-with-text" && section.settings.mediaId ? [section.settings.mediaId] : [];
@@ -163,7 +168,7 @@ export function homeSectionRequests(
   const collectionIds = new Set<string>();
   const promotionIds = new Set<string>();
   const apps: HomeAppSectionRequest[] = [];
-  const metaobjects = new Map<string, HomeMetaobjectRequest>();
+  const objects = new Map<string, HomeObjectRequest>();
   let brandLimit = 0;
   for (const shown of sections) {
     if (shown.hidden) continue;
@@ -172,7 +177,7 @@ export function homeSectionRequests(
     if (section.type === "app") {
       const key = parsePluginSurfaceKey(section.settings.app);
       if (key && apps.length < PLUGIN_HOME_SECTIONS_MAX) {
-        apps.push({ sectionId: section.id, pluginId: key.pluginId, type: key.type, values: section.settings.values });
+        apps.push({ sectionId: section.id, pluginId: key.pluginId, type: key.type, values: section.settings.values, bindings: section.bindings });
       }
       continue;
     }
@@ -193,11 +198,11 @@ export function homeSectionRequests(
       for (const id of section.settings.collectionIds) if (collectionIds.size < HOME_MAX_COLLECTIONS) collectionIds.add(id);
     }
     if (section.type === "brand-wall") brandLimit = HOME_BRAND_LIMIT;
-    if (section.type === "metaobjects" && section.settings.definitionId) {
-      const existing = metaobjects.get(section.settings.definitionId);
+    if (section.type === "objects" && section.settings.typeId) {
+      const existing = objects.get(section.settings.typeId);
       if (existing) existing.limit = Math.max(existing.limit, section.settings.limit);
-      else if (metaobjects.size < HOME_MAX_METAOBJECT_TYPES) {
-        metaobjects.set(section.settings.definitionId, { definitionId: section.settings.definitionId, limit: section.settings.limit });
+      else if (objects.size < HOME_MAX_OBJECT_TYPES) {
+        objects.set(section.settings.typeId, { typeId: section.settings.typeId, limit: section.settings.limit });
       }
     }
     if (section.type === "deal-block" && section.settings.promotionId && promotionIds.size < HOME_MAX_PROMOTIONS) {
@@ -213,7 +218,8 @@ export function homeSectionRequests(
     promotionIds: [...promotionIds],
     homeProductId: homeMode.kind === "product" ? homeMode.productId : null,
     apps,
-    metaobjects: [...metaobjects.values()],
+    objects: [...objects.values()],
+    bindingObjects: collectObjectBindingRequests(sections.filter((section) => !section.hidden)),
   };
 }
 
@@ -223,5 +229,5 @@ export function homeSectionRequestsEmpty(requests: HomeSectionRequests): boolean
     && requests.categoryIds.length === 0 && requests.collectionIds.length === 0
     && requests.brandLimit === 0 && requests.promotionIds.length === 0
     && requests.homeProductId === null && (requests.apps ?? []).length === 0
-    && (requests.metaobjects ?? []).length === 0;
+    && (requests.objects ?? []).length === 0 && (requests.bindingObjects ?? []).length === 0;
 }

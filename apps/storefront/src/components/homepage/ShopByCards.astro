@@ -16,7 +16,7 @@ import Container from "@/components/ui/Container.astro";
 interface Props {
   sectionId: string;
   title: string;
-  cards: Array<{ title: string; href: string; photo: HomepageMediaAsset }>;
+  cards: Array<{ title: string; subtitle?: string; href: string; photo: HomepageMediaAsset }>;
   aboveFold: boolean;
 }
 
@@ -59,6 +59,7 @@ const columns = cards.length >= 4 ? "lg:grid-cols-4" : cards.length === 3 ? "lg:
               <span class="mt-2 block text-center text-sm font-semibold text-foreground [overflow-wrap:anywhere] group-hover:underline md:text-base">
                 {card.title}
               </span>
+              {card.subtitle?.trim() && <span class="mt-1 block text-center text-sm text-muted-foreground [overflow-wrap:anywhere]">{card.subtitle}</span>}
             </a>
           </li>
         );

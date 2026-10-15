@@ -6,7 +6,7 @@
 //   would use (a plain form, so it works without JavaScript).
 // - Identity: the storefront proxy tells public routes who is signed in
 //   (`request.customer.id`); the app never sees a cookie or token.
-// - Storage: `wishes` (one record per customer and product) and `products`
+// - Objects: `wishes` (one record per customer and product) and `products`
 //   (name, link, image and wish count of every wished product, refreshed by
 //   `product.updated`/`product.deleted`).
 // - Dashboard: "Most wished" (products, ranked) and a card on each product.
@@ -48,9 +48,29 @@ export const manifest = {
       { name: "wishlist", methods: ["GET"], description: "The signed-in buyer's wishlist (a store page)." },
     ],
   },
-  storage: {
-    wishes: { indexes: [["customerId", "addedAt"], "productId"], unique: [["customerId", "productId"]] },
-    products: { indexes: ["wishes"] },
+  objects: {
+    wishes: {
+      name: "Wishes",
+      fields: [
+        { key: "customer_id", name: "Customer", type: "single_line_text" },
+        { key: "product_id", name: "Product", type: "single_line_text" },
+        { key: "added_at", name: "Added at", type: "integer" },
+      ],
+      indexes: [["customer_id", "added_at"], "product_id"],
+      unique: [["customer_id", "product_id"]],
+    },
+    products: {
+      name: "Wished products",
+      fields: [
+        { key: "product_id", name: "Product", type: "single_line_text" },
+        { key: "name", name: "Name", type: "single_line_text" },
+        { key: "slug", name: "Slug", type: "single_line_text" },
+        { key: "image_url", name: "Image", type: "single_line_text" },
+        { key: "available", name: "Available", type: "boolean" },
+        { key: "wishes", name: "Wishes", type: "integer" },
+      ],
+      indexes: ["wishes"],
+    },
   },
   settings: [
     { key: "max_items", label: "Most products one buyer can save", type: "number", integer: true, min: 1, max: 500, default: 100 },
@@ -116,17 +136,17 @@ const PRODUCT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const PAGE_SIZE = 24;
 
 interface Wish extends Record<string, unknown> {
-  customerId: string;
-  productId: string;
-  addedAt: number;
+  customer_id: string;
+  product_id: string;
+  added_at: number;
 }
 
 /** What the app keeps of a wished product. */
 interface ProductFacts extends Record<string, unknown> {
-  productId: string;
+  product_id: string;
   name: string;
   slug: string;
-  imageUrl: string | null;
+  image_url?: string | null;
   /** False once the product is trashed or deleted: the page leaves it out. */
   available: boolean;
 }
@@ -139,8 +159,8 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => `&#${character.charCodeAt(0)};`);
 }
 
-const wishes = (ctx: PluginContext) => ctx.storage.wishes!;
-const products = (ctx: PluginContext) => ctx.storage.products!;
+const wishes = (ctx: PluginContext) => ctx.objects.wishes!;
+const products = (ctx: PluginContext) => ctx.objects.products!;
 
 /** A same-store path to come back to after a form post without JavaScript. */
 function returnPath(value: unknown, fallback: string): string {
@@ -169,17 +189,17 @@ async function readProduct(ctx: PluginContext, productId: string): Promise<Produ
   if (!product) return null;
   const image = summary.ok ? summary.data?.products?.find((entry) => entry.id === productId)?.primaryImage : null;
   return {
-    productId,
+    product_id: productId,
     name: String(product.name ?? "").slice(0, 200),
     slug: String(product.slug ?? "").slice(0, 200),
-    imageUrl: typeof image === "string" && image ? image : null,
+    image_url: typeof image === "string" && image ? image : null,
     available: product.isActive !== false && !product.deletedAt,
   };
 }
 
 /** Recounts a product's wishes and keeps its name, link and image (read once, when it is first wished). */
 async function refreshWishedProduct(ctx: PluginContext, productId: string): Promise<void> {
-  const [count, stored] = await Promise.all([wishes(ctx).count({ productId }), products(ctx).get(productId)]);
+  const [count, stored] = await Promise.all([wishes(ctx).count({ product_id: productId }), products(ctx).get(productId)]);
   const existing = stored as WishedProduct | null;
   if (count === 0 && existing) {
     await products(ctx).delete(productId);
@@ -188,7 +208,7 @@ async function refreshWishedProduct(ctx: PluginContext, productId: string): Prom
   if (count === 0) return;
   const facts: ProductFacts = existing
     ?? await readProduct(ctx, productId)
-    ?? { productId, name: "", slug: "", imageUrl: null, available: true };
+    ?? { product_id: productId, name: "", slug: "", image_url: null, available: true };
   if (existing && existing.wishes === count) return;
   await products(ctx).put(productId, { ...facts, wishes: count } satisfies WishedProduct);
 }
@@ -209,7 +229,7 @@ export default definePlugin({
       if (!existing) return;
       const facts = await readProduct(ctx, event.resource.id);
       if (!facts) return;
-      if (facts.name === existing.name && facts.slug === existing.slug && facts.imageUrl === existing.imageUrl && facts.available === existing.available) return;
+      if (facts.name === existing.name && facts.slug === existing.slug && (facts.image_url ?? null) === (existing.image_url ?? null) && facts.available === existing.available) return;
       await products(ctx).put(event.resource.id, { ...existing, ...facts });
     },
     "product.deleted": async (event, ctx) => {
@@ -235,10 +255,10 @@ export default definePlugin({
           pressed = false;
         } else {
           const limit = Number(ctx.settings.max_items ?? 100);
-          if (await wishes(ctx).count({ customerId: customer.id }) >= limit) {
+          if (await wishes(ctx).count({ customer_id: customer.id }) >= limit) {
             return answer(request, { message: `Your wishlist is full (${limit} products).`, pressed: false }, back, 409);
           }
-          await wishes(ctx).put(id, { customerId: customer.id, productId, addedAt: Date.now() } satisfies Wish);
+          await wishes(ctx).put(id, { customer_id: customer.id, product_id: productId, added_at: Date.now() } satisfies Wish);
           pressed = true;
         }
         await refreshWishedProduct(ctx, productId);
@@ -266,26 +286,26 @@ export default definePlugin({
           };
         }
         const page = await wishes(ctx).query({
-          where: { customerId: customer.id },
-          orderBy: { field: "addedAt", direction: "desc" },
+          where: { customer_id: customer.id },
+          orderBy: { field: "added_at", direction: "desc" },
           limit: PAGE_SIZE,
           cursor: request.query.cursor ?? null,
         });
-        const facts = await Promise.all(page.records.map((record) => products(ctx).get(String(record.data.productId)) as Promise<WishedProduct | null>));
+        const facts = await Promise.all(page.records.map((record) => products(ctx).get(String(record.data.product_id)) as Promise<WishedProduct | null>));
         const items = page.records.flatMap((record, index) => {
           const product = facts[index];
-          return product && product.available && product.slug ? [{ product, addedAt: Number(record.data.addedAt) || 0 }] : [];
+          return product && product.available && product.slug ? [{ product, addedAt: Number(record.data.added_at) || 0 }] : [];
         });
         if (!wantsPage(request)) {
-          return { body: { items: items.map(({ product }) => ({ productId: product.productId, name: product.name, url: `/products/${product.slug}`, imageUrl: product.imageUrl })), nextCursor: page.nextCursor } };
+          return { body: { items: items.map(({ product }) => ({ productId: product.product_id, name: product.name, url: `/products/${product.slug}`, imageUrl: product.image_url ?? null })), nextCursor: page.nextCursor } };
         }
         const rows = items.map(({ product }) => {
           const href = `/products/${escapeHtml(encodeURIComponent(product.slug))}`;
-          const image = product.imageUrl
-            ? `<img src="${escapeHtml(product.imageUrl)}" alt="" width="80" height="80" class="h-20 w-20 rounded-md object-cover">`
+          const image = product.image_url
+            ? `<img src="${escapeHtml(product.image_url)}" alt="" width="80" height="80" class="h-20 w-20 rounded-md object-cover">`
             : '<span class="h-20 w-20 rounded-md bg-muted" aria-hidden="true"></span>';
           return `<li class="flex items-center gap-4 border-b border-border py-4">${image}<a class="flex-1 font-medium hover:underline" href="${href}">${escapeHtml(product.name || "Product")}</a>`
-            + `<form action="${APP}/toggle" method="post"><input type="hidden" name="productId" value="${escapeHtml(product.productId)}"><input type="hidden" name="returnTo" value="${APP}/wishlist">`
+            + `<form action="${APP}/toggle" method="post"><input type="hidden" name="productId" value="${escapeHtml(product.product_id)}"><input type="hidden" name="returnTo" value="${APP}/wishlist">`
             + `<button type="submit" class="text-sm underline">Remove</button></form></li>`;
         }).join("");
         const more = page.nextCursor
@@ -337,7 +357,7 @@ export default definePlugin({
         const { id, locale } = adminContext(request);
         const t = ADMIN_TEXT[locale];
         if (!id) return { body: ui.view([ui.text(t.openProduct)]) };
-        const count = await wishes(ctx).count({ productId: id });
+        const count = await wishes(ctx).count({ product_id: id });
         return {
           body: ui.view([
             ui.stat(t.savedBy, count),

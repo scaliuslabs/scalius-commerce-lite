@@ -15,6 +15,7 @@
  *   ever changes the frame's box, and edits show in it before they are
  *   saved (use-preview-sync.ts).
  */
+import { DynamicSourceResource, SettingBindingScope } from "../schema-form/binding-context";
 import { PresenceSlot } from "~/lib/realtime/store";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
@@ -461,7 +462,12 @@ export function ThemeEditor({ workspace, refetch }: {
     removeSection: remove,
     addSectionAt: (index: number) => setLibraryAt(index),
     toggleBlock: (sectionId: string, path: string, index: number) => editSection(sectionId, (section) => toggleBlockHidden(section, path, index)),
-    duplicateBlock: (sectionId: string, path: string, index: number) => editSection(sectionId, (section) => duplicateBlock(section, path, index) ?? section),
+    duplicateBlock: (sectionId: string, path: string, index: number) => {
+      const section = sections?.find((each) => each.id === sectionId);
+      const result = section ? duplicateBlock(section, path, index) : null;
+      if (result) editSection(sectionId, () => result);
+      else toast.error(t("cannotDuplicate"));
+    },
     removeBlock: (sectionId: string, path: string, index: number) => {
       editSection(sectionId, (section) => removeBlock(section, path, index));
       setSelected(sectionId);
@@ -790,6 +796,9 @@ export function ThemeEditor({ workspace, refetch }: {
       />
     );
   }
+  if (selectedSection && !block && paneContent) {
+    paneContent = <SettingBindingScope bindings={selectedSection.bindings} onChange={(bindings) => editSection(selectedSection.id, (section) => ({ ...section, bindings }))}>{paneContent}</SettingBindingScope>;
+  }
   const pane = selected && paneContent !== null ? (
     <SettingsPane
       title={paneTitle}
@@ -800,7 +809,7 @@ export function ThemeEditor({ workspace, refetch }: {
       actions={paneActions}
       readOnly={!canEdit}
     >
-      <Suspense fallback={null}>{paneContent}</Suspense>
+      <DynamicSourceResource.Provider value={resourceKind}><Suspense fallback={null}>{paneContent}</Suspense></DynamicSourceResource.Provider>
     </SettingsPane>
   ) : null;
 

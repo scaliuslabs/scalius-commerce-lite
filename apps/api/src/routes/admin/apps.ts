@@ -201,7 +201,7 @@ const appSummarySchema = z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
     priority: z.number().int().openapi({ description: "Lower runs first among apps at the same point." }),
     onError: z.enum(["skip", "block"]).openapi({ description: "block: the app pauses checkout when it cannot answer (needs approval)." }),
-    snapshotCollection: z.string().nullable().openapi({ description: "checkout.discounts and cart.line_prices: the app reads the signed-in buyer's record in this collection (checkout.discounts also updates it with each order)." }),
+    snapshotObject: z.string().nullable().openapi({ description: "checkout.discounts and cart.line_prices: the app reads the signed-in buyer's record in this object type (checkout.discounts also updates it with each order)." }),
   })).openapi({ description: "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)." }),
 }).openapi("AppSummary");
 
@@ -297,7 +297,7 @@ const appDetailSchema = appSummarySchema.extend({
       error: z.string().nullable(),
     }).nullable(),
   })),
-  storage: z.array(z.string()),
+  objects: z.array(z.string()),
   customFields: z.array(z.object({ ownerType: z.string(), key: z.string(), name: z.string(), type: z.string() })),
   storefront: z.object({
     proxy: z.boolean(),
@@ -388,7 +388,7 @@ function summary(installation: PluginInstallation) {
       point: fn.point,
       priority: fn.priority,
       onError: fn.onError,
-      snapshotCollection: fn.snapshot?.collection ?? null,
+      snapshotObject: fn.snapshot?.object ?? null,
     })),
   };
 }
@@ -540,7 +540,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
           : null,
       };
     }),
-    storage: Object.keys(manifest.storage),
+    objects: Object.keys(manifest.objects),
     customFields: manifest.customFields.map((field) => ({ ownerType: field.ownerType, key: field.key, name: field.name, type: field.type })),
     storefront: {
       proxy: manifest.storefront.proxy,

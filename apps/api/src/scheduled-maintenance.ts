@@ -1,4 +1,7 @@
 import { getDb } from "@scalius/database/client";
+import { runWithReadObserver } from "@scalius/database/read-observer";
+import { createEventWriteObserver } from "./middleware/event-dispatch";
+import { publishRealtime, tableChanges } from "./realtime/publish";
 import { compactCacheDeps } from "@scalius/database/cache-dep-writes";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
 import { sweepReviewRequests } from "@scalius/core/modules/reviews";
@@ -662,9 +665,11 @@ async function runScheduledMaintenanceInner(
   const timed = <T>(operation: string, fn: () => Promise<T>) =>
     timedScheduledOperation(runContext, operation, fn);
   const failures: unknown[] = [];
+  const writes = createEventWriteObserver();
+  const publishChanges = () => publishRealtime(env, tableChanges(writes.realtimeTopics));
   const isolated = async (sweep: () => Promise<unknown>) => {
     try {
-      await sweep();
+      await runWithReadObserver(writes, sweep);
     } catch (error) {
       failures.push(error);
     }
@@ -675,6 +680,7 @@ async function runScheduledMaintenanceInner(
   // invocation to itself; the drains and the rotation continue next minute.
   if (isNightlyCatalogTick(runContext.scheduledAt, storeTimeZoneOf(env))) {
     await isolated(() => runNightlyPass(context));
+    await publishChanges();
     if (failures.length > 0) throw failures[0];
     return;
   }
@@ -690,6 +696,7 @@ async function runScheduledMaintenanceInner(
     await isolated(() => sweep.run(context));
   }
 
+  await publishChanges();
   if (failures.length > 0) throw failures[0];
 }
 

@@ -387,6 +387,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
         variantIds={matrixSnapshot.variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id)}
         customizationSchemaInvalid={formSnapshot.customizationSchemaInvalid}
         brandName={formSnapshot.brandName}
+        relatedObjects={formSnapshot.relatedObjects}
         presence={(dirty, readOnly) => (
           <PresenceSlot
             presenceKey={presenceKey("product", productId)}

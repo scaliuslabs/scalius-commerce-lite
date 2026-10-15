@@ -5,7 +5,7 @@ import type { OrderNotificationType } from "../notifications/browser";
 import type { ActiveRefundOperationView, OrderRefundAttemptView } from "../payments/browser";
 import type { TaxQuote } from "../tax/browser";
 import type { PromotionCheckoutSnapshot } from "../promotions/browser";
-import type { AppliedAppDiscount, AppStorageCommit, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
+import type { AppliedAppDiscount, AppObjectCommit, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import type { CustomerRequestType } from "../settings/browser";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
@@ -294,6 +294,7 @@ export interface OrderDetails extends OrderListItem, OrderBillingAddressFields {
      */
     fulfillmentLocation: { id: string; name: string; explicit: boolean } | null;
     notes: string | null;
+    attributes?: Record<string, string>;
     /** Null when nothing ships (pickup, service-only or digital orders): the first street line. */
     shippingAddress: string | null;
     shippingAddressLine2: string | null;
@@ -450,6 +451,7 @@ export interface CreateStorefrontOrderInput {
     billingAdminArea?: string | null;
     billingPostalCode?: string | null;
     notes: string | null;
+    attributes?: Record<string, string>;
     items: StorefrontOrderItem[];
     /** Discount codes the buyer applied; each must still apply at commit. */
     discountCodes: string[];
@@ -565,6 +567,7 @@ export interface StorefrontOrderCommitPayload {
         customerEmail: string | null;
         customerWhatsapp?: string | null;
         notes: string | null;
+        attributes?: string;
         /** Null when nothing physical was bought (no delivery method). */
         shippingMethodId: string | null;
         shippingMethodName: string | null;
@@ -650,7 +653,7 @@ export interface StorefrontOrderCommitPayload {
      * the commit batch at the revision each app saw: a concurrent change
      * fails the whole order. Each belongs to an app with an applied discount.
      */
-    appStorageCommits?: AppStorageCommit[];
+    appObjectCommits?: AppObjectCommit[];
     /**
      * Gift-card debits (the hold), written in the commit batch after the
      * order; the ledger guards refuse a card that changed since the quote.

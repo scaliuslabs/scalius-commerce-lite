@@ -10,6 +10,8 @@
 // (`loadCatalogCardData`), and homepage and collection plans put it in the
 // batch they already run (`selectProductCardFactRows` with the same id
 // subquery as their media statement).
+import { selectProductCardFields, resolveProductCardFields, type ProductCardFieldsById } from "./card-fields";
+import type { StorefrontCustomFieldRow } from "../custom-fields";
 import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
@@ -337,21 +339,25 @@ export async function loadCatalogCardData(
     products: ReadonlyArray<{ id: string; freeDelivery?: boolean | number | null }>,
     decimalPlaces: number,
     presentShopAmount?: (shopMinor: number) => number,
-): Promise<{ media: Map<string, ProductMediaProjection[]>; facts: (productId: string) => ProductCardFacts }> {
+    cardFields: readonly string[] = [],
+): Promise<{ media: Map<string, ProductMediaProjection[]>; facts: (productId: string) => ProductCardFacts; fields: ProductCardFieldsById }> {
     const uniqueIds = [...new Set(products.map((product) => product.id.trim()).filter(Boolean))];
     const media = new Map<string, ProductMediaProjection[]>();
     const factRows: ProductCardFactRow[] = [];
+    const fieldRows: StorefrontCustomFieldRow[] = [];
     for (let index = 0; index < uniqueIds.length; index += PRODUCT_MEDIA_QUERY_CHUNK) {
         const chunk = uniqueIds.slice(index, index + PRODUCT_MEDIA_QUERY_CHUNK);
-        const [mediaRows, chunkFacts] = await safeBatch(db, [
+        const [mediaRows, chunkFacts, chunkFields] = await safeBatch(db, [
             selectProductMediaProjectionRows(db, chunk),
             selectProductCardFactRows(db, chunk),
-        ] as const);
+            ...(cardFields.length ? [selectProductCardFields(db, chunk, cardFields)] : []),
+        ] as Parameters<typeof safeBatch>[1]);
         for (const [productId, projections] of resolveProductMediaProjectionRows(mediaRows as ProductMediaProjectionRow[])) {
             media.set(productId, [...(media.get(productId) ?? []), ...projections]);
         }
         factRows.push(...(chunkFacts as ProductCardFactRow[]));
+        if (chunkFields) fieldRows.push(...(chunkFields as StorefrontCustomFieldRow[]));
     }
     const freeDelivery = new Set(products.filter((product) => Boolean(product.freeDelivery)).map((product) => product.id));
-    return { media, facts: resolveProductCardFacts(factRows, decimalPlaces, freeDelivery, presentShopAmount) };
+    return { media, facts: resolveProductCardFacts(factRows, decimalPlaces, freeDelivery, presentShopAmount), fields: resolveProductCardFields(fieldRows) };
 }

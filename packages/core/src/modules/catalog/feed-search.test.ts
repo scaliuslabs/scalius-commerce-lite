@@ -123,6 +123,20 @@ function insertAttribute(
 }
 
 describe("storefront feed category search", () => {
+    it("resolves a storefront SKU without feed publication but denies hidden products and retired SKUs", async () => {
+        sqlite.prepare("DELETE FROM product_channel_publications WHERE product_id = 'prod_runner' AND channel_id <> 'sc_online_store'").run();
+        const read = () => getStorefrontProducts(db, { ids: "var_default_prod_runner", page: 1, limit: 1 });
+        expect((await read()).products.map((product) => product.id)).toEqual(["prod_runner"]);
+        sqlite.prepare("UPDATE product_channel_publications SET unpublished_at = published_at WHERE product_id = 'prod_runner' AND channel_id = 'sc_online_store'").run();
+        expect((await read()).products).toEqual([]);
+        sqlite.prepare("UPDATE product_channel_publications SET unpublished_at = NULL WHERE product_id = 'prod_runner' AND channel_id = 'sc_online_store'").run();
+        sqlite.prepare("UPDATE products SET is_active = 0 WHERE id = 'prod_runner'").run();
+        expect((await read()).products).toEqual([]);
+        sqlite.prepare("UPDATE products SET is_active = 1 WHERE id = 'prod_runner'").run();
+        sqlite.prepare("UPDATE product_variants SET deleted_at = 1 WHERE id = 'var_default_prod_runner'").run();
+        expect((await read()).products).toEqual([]);
+    });
+
     beforeEach(() => {
         maxBoundParameters = 0;
         readQueries = [];

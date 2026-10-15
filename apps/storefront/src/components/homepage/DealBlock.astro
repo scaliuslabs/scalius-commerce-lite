@@ -8,6 +8,8 @@
 // all. The line's box is laid out (invisible) from the first paint, so
 // showing it shifts nothing.
 import type { Product } from "@/lib/api";
+import type { HomepageMediaAsset } from "@/lib/api/storefront";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import ProductRail from "./ProductRail.astro";
 import Container from "@/components/ui/Container.astro";
@@ -28,9 +30,10 @@ interface Props {
   aboveFold: boolean;
   /** The running promotion's end (`dealEndsAt`), or null for no countdown. */
   endsAt: string | null;
+  photo?: HomepageMediaAsset | null;
 }
 
-const { section, title, href, products, currencySymbol, currencyCode, aboveFold, endsAt } = Astro.props;
+const { section, title, href, products, currencySymbol, currencyCode, aboveFold, endsAt, photo } = Astro.props;
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).home;
 const headingId = `home-${section.id}-title`;
@@ -52,6 +55,7 @@ const line = endsAt ? lineAt(endsAt, Date.now()) : null;
 <section class="home-section w-full" aria-labelledby={headingId} data-deal-block>
   <Container>
     <div class="deal-surface">
+      {photo && <img src={mediaImageUrl(photo.url, 1280)} srcset={mediaImageSrcSet(photo.url)} sizes="100vw" width={photo.width ?? 1280} height={photo.height ?? 720} alt="" loading={aboveFold ? "eager" : "lazy"} decoding="async" class="deal-image" />}
       <SectionHeader id={headingId} title={title} href={href} linkLabel={copy.shopAll} />
       {endsAt && line && (
         <p
@@ -138,6 +142,9 @@ const line = endsAt ? lineAt(endsAt, Date.now()) : null;
 
 <style>
   .deal-surface {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
     padding: var(--theme-surface-pad-phone, 0.75rem);
     border: var(--theme-surface-border, 1px solid var(--border));
     border-radius: var(--radius);
@@ -145,8 +152,13 @@ const line = endsAt ? lineAt(endsAt, Date.now()) : null;
     box-shadow: var(--theme-surface-shadow, none);
   }
 
+  .deal-image { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; object-fit: cover; opacity: 0.06; }
+
   @media (min-width: 64rem) {
-    .deal-surface { padding: var(--theme-surface-pad-desktop, 1.25rem); }
+    .deal-surface {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden; padding: var(--theme-surface-pad-desktop, 1.25rem); }
   }
 
   .deal-line {

@@ -13,7 +13,7 @@ import {
   type PaymentRefundProbe,
   type PaymentRefundProbeInput,
   type PluginContext,
-  type PluginStorageCollection,
+  type PluginObjectCollection,
 } from "@scalius/plugin-sdk";
 import {
   BKASH_ID,
@@ -55,8 +55,13 @@ const REFUND_BUDGET_MS = 25_000;
 /** bKash's statuses for a refund that did not happen. */
 const REFUND_FAILED = new Set(["Failed", "Declined", "Cancelled"]);
 
-function refunds(ctx: PluginContext): PluginStorageCollection<RefundRecord> {
-  return ctx.storage["bkash-refunds"] as PluginStorageCollection<RefundRecord>;
+function refunds(ctx: PluginContext) {
+  const objects = ctx.objects.bkash_refunds as PluginObjectCollection<{ refund_trx_id: string | null; data: RefundRecord }>;
+  return {
+    get: async (id: string) => (await objects.get(id))?.data ?? null,
+    put: (id: string, data: RefundRecord) => objects.put(id, { refund_trx_id: data.refundTrxId, data }),
+    delete: (id: string) => objects.delete(id),
+  };
 }
 
 /** Idempotency keys may be 256 characters; record ids at most 128. */
@@ -202,7 +207,7 @@ async function claim(ctx: PluginContext, id: string, record: RefundRecord, repor
   try {
     await refunds(ctx).put(id, { ...record, state: "completed", refundTrxId: reported.refundTrxId });
   } catch (error) {
-    if (platformErrorCode(error) !== "storage.unique_violation") throw error;
+    if (platformErrorCode(error) !== "object.unique_violation") throw error;
     return { outcome: "unknown", providerRefundId: reported.refundTrxId, manualReview: true, error: "This bKash refund already settles another refund; check the payment in the bKash merchant portal." };
   }
   return { outcome: "accepted", providerRefundId: reported.refundTrxId, providerStatus: reported.status };

@@ -1,3 +1,4 @@
+import { putObjectRecord } from "@scalius/core/modules/objects";
 // App list columns and filters on the dashboard's customers, orders and
 // products lists, on the migrated schema: values come from the app's records
 // (keyed by the row's id) and its own custom fields in one statement for the
@@ -9,7 +10,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { activatePlugin, deactivatePlugin, installPlugin, putPluginRecord, requirePluginInstallation } from "@scalius/core/modules/plugins";
+import { activatePlugin, deactivatePlugin, installPlugin, requirePluginInstallation } from "@scalius/core/modules/plugins";
 import { PLUGIN_API_VERSION, parsePluginManifest, type PluginManifestInput } from "@scalius/shared/plugins";
 import { errorResponseFromError } from "../../utils/api-response";
 import { pluginBridgeAuthority } from "../../plugins/host";
@@ -25,14 +26,23 @@ const MANIFEST: PluginManifestInput = {
   apiVersion: PLUGIN_API_VERSION,
   description: "Member tiers and points.",
   author: { name: "Acme" },
-  storage: { members: { indexes: ["tier", ["points", "tier"], "wallet"] } },
+  objects: { members: {
+    name: "Members",
+    fields: [
+      { key: "tier", name: "Tier", type: "single_line_text" },
+      { key: "points", name: "Points", type: "integer" },
+      { key: "vip", name: "VIP", type: "boolean" },
+      { key: "wallet", name: "Wallet", type: "money" },
+    ],
+    indexes: ["tier", ["points", "tier"], "wallet"],
+  } },
   customFields: [{ ownerType: "order", key: "pack_note", name: "Pack note", type: "single_line_text" }],
   admin: {
     listColumns: [
-      { id: "points", resource: "customer", title: "Points", type: "number", source: { kind: "storage", collection: "members", field: "points" } },
-      { id: "tier", resource: "customer", title: "Tier", type: "text", filterable: true, source: { kind: "storage", collection: "members", field: "tier" } },
-      { id: "vip", resource: "customer", title: "VIP", type: "boolean", source: { kind: "storage", collection: "members", field: "vip" } },
-      { id: "wallet", resource: "customer", title: "Wallet", type: "money", filterable: true, source: { kind: "storage", collection: "members", field: "wallet" } },
+      { id: "points", resource: "customer", title: "Points", type: "number", source: { kind: "object", object: "members", field: "points" } },
+      { id: "tier", resource: "customer", title: "Tier", type: "text", filterable: true, source: { kind: "object", object: "members", field: "tier" } },
+      { id: "vip", resource: "customer", title: "VIP", type: "boolean", source: { kind: "object", object: "members", field: "vip" } },
+      { id: "wallet", resource: "customer", title: "Wallet", type: "money", filterable: true, source: { kind: "object", object: "members", field: "wallet" } },
       { id: "pack", resource: "order", title: "Pack note", type: "text", source: { kind: "customField", key: "pack_note" } },
     ],
   },
@@ -56,9 +66,9 @@ beforeEach(async () => {
   await installPlugin(db, { manifest: MANIFEST, source: "upload", bundleSha256: "6".repeat(64), actorUserId: "owner" });
   await activatePlugin(db, "acme.members", { actorUserId: "owner", expectedRevision: 1 });
   const installation = await requirePluginInstallation(db, "acme.members");
-  const declaration = installation.manifest.storage.members!;
-  await putPluginRecord(db, "acme.members", "members", declaration, "cus_a", { tier: "gold", points: 1200, vip: true, wallet: 25050 });
-  await putPluginRecord(db, "acme.members", "members", declaration, "cus_b", { tier: "silver", points: 40, vip: false, wallet: 0 });
+  const declaration = installation.manifest.objects.members!;
+  await putObjectRecord(db, "acme.members", "members", declaration, "cus_a", { tier: "gold", points: 1200, vip: true, wallet: 250.5 });
+  await putObjectRecord(db, "acme.members", "members", declaration, "cus_b", { tier: "silver", points: 40, vip: false, wallet: 0 });
   await setPluginCustomFieldValues(db, "acme.members", pluginBridgeAuthority(installation).customFields, "order", "ord_1", { pack_note: "Gift wrap" });
 });
 afterEach(() => sqlite.close());
@@ -86,7 +96,7 @@ async function get(path: string) {
 }
 
 describe("app list columns and filters", () => {
-  it("adds the page's values of storage and custom-field columns in one statement", async () => {
+  it("adds the page's values of object and custom-field columns in one statement", async () => {
     queries = [];
     const plain = await get("/customers?limit=10");
     expect(plain.status, JSON.stringify(plain.body)).toBe(200);
@@ -117,11 +127,11 @@ describe("app list columns and filters", () => {
     expect(gold.status).toBe(200);
     expect(gold.body.data.customers.map((customer: { id: string }) => customer.id)).toEqual(["cus_a"]);
     expect(gold.body.data.pagination.total).toBe(1);
-    const index = queries.find((query) => query.includes("plugin_records") && query.includes("idx1"));
+    const index = queries.find((query) => query.includes("object_records") && query.includes("k1"));
     expect(index).toBeDefined();
   });
 
-  it("shows and filters money in major units: the app stores minor units", async () => {
+  it("shows and filters money in major units: the object stores minor units", async () => {
     const page = await get("/customers?limit=10&appColumns=acme.members/wallet&appFilter=acme.members/wallet:250.50");
     expect(page.status, JSON.stringify(page.body)).toBe(200);
     expect(page.body.data.customers.map((customer: { id: string }) => customer.id)).toEqual(["cus_a"]);
@@ -150,8 +160,8 @@ describe("app list columns and filters", () => {
     expect(issues({ ...MANIFEST, admin: { listColumns: [{ ...column, filterable: true }] } })).toEqual([]);
     expect(issues({ ...MANIFEST, admin: { listColumns: [{ ...MANIFEST.admin!.listColumns![2]!, filterable: true }] } }))
       .toEqual(["Index vip first in collection members to filter by it."]);
-    expect(issues({ ...MANIFEST, admin: { listColumns: [{ ...column, source: { kind: "storage", collection: "ledger", field: "points" } }] } }))
-      .toEqual(["Storage collection ledger is not declared."]);
+    expect(issues({ ...MANIFEST, admin: { listColumns: [{ ...column, source: { kind: "object", object: "ledger", field: "points" } }] } }))
+      .toEqual(["Object type ledger is not declared."]);
     expect(issues({ ...MANIFEST, admin: { listColumns: [{ ...column, resource: "product", source: { kind: "customField", key: "pack_note" } }] } }))
       .toEqual(["Custom field product.pack_note is not declared."]);
   });

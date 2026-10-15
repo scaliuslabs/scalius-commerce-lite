@@ -26,7 +26,7 @@ import { WEBHOOK_ROUTE_PERMISSIONS } from "./webhooks";
 import { CUSTOM_FIELD_ROUTE_PERMISSIONS } from "./custom-fields";
 import { APP_ROUTE_PERMISSIONS } from "./apps";
 import { STORE_TRANSFER_ROUTE_PERMISSIONS } from "./store-transfer";
-import { METAOBJECT_ROUTE_PERMISSIONS } from "./metaobjects";
+import { OBJECT_ROUTE_PERMISSIONS } from "./objects";
 import type { HttpMethod, RoutePermission, RoutePermissionMap } from "./shared";
 
 /**
@@ -59,7 +59,7 @@ export const ROUTE_PERMISSION_MAPS: readonly RoutePermissionMap[] = [
   CUSTOM_FIELD_ROUTE_PERMISSIONS,
   APP_ROUTE_PERMISSIONS,
   STORE_TRANSFER_ROUTE_PERMISSIONS,
-  METAOBJECT_ROUTE_PERMISSIONS,
+  OBJECT_ROUTE_PERMISSIONS,
 ];
 
 /**

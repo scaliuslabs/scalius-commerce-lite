@@ -246,6 +246,7 @@ export function PromoTiles({ settings }: SectionProps<PromosSettings>) {
 // ── Sale banner with a countdown ─────────────────────────────────────────
 
 export interface CountdownSettings {
+  image?: StorefrontImage | null;
   eyebrow: string | null;
   heading: string | null;
   text: string | null;
@@ -281,7 +282,7 @@ export function Countdown({ end, context, size = "m" }: { end: number; context: 
   ];
   return (
     <Island name="countdown" hydrate="idle" props={{ end }} class={cx("noor-timer", `is-${size}`)}>
-      <ol class="noor-timer-list" role="timer" aria-live="off">
+      <ol class="noor-timer-list" aria-live="off">
         {units.map((unit) => (
           <li><span class="noor-timer-value" data-unit={unit.key}>--</span><span class="noor-timer-label">{t(context, unit)}</span></li>
         ))}
@@ -296,7 +297,8 @@ export function PromoCountdown({ settings, context }: SectionProps<CountdownSett
   const tone = choice(settings.tone, ["ink", "accent", "soft"] as const, "ink");
   return (
     <Section name="sale" space={settings.spacing}>
-      <div class={cx("noor-sale", `is-${tone}`)}>
+      <div class={cx("noor-sale", `is-${tone}`, settings.image && "has-image")}>
+        {settings.image ? <Image image={settings.image} alt="" class="noor-sale-image noor-cover" sizes="100vw" /> : null}
         <div class="noor-sale-copy">
           {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
           <h2 class="noor-h2" {...editable(context, "heading")}>{heading}</h2>

@@ -677,13 +677,16 @@ importers:
 
   packages/plugin-sdk:
     dependencies:
-      '@scalius/shared':
-        specifier: workspace:*
-        version: link:../shared
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^5.20261014.1
         version: 5.20261014.1
+      '@scalius/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@scalius/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig

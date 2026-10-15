@@ -1,7 +1,7 @@
 // Pathao and Steadfast over the SDK harness (the platform's runtime, inputs
 // and answers validated against the courier port). Courier HTTP is scripted.
 import { describe, expect, it } from "vitest";
-import type { CourierShipmentInput } from "@scalius/plugin-sdk";
+import type { CourierRatesInput, CourierShipmentInput } from "@scalius/plugin-sdk";
 import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
 import pack, { manifest } from "./index";
 import { mapPathaoStatus, mapSteadfastStatus, steadfastPushEventId } from "./couriers";
@@ -64,6 +64,16 @@ const booking = (codAmountMinor: number, overrides: Partial<CourierShipmentInput
   options: { deliveryType: null, itemType: null, itemWeightKg: null },
 });
 
+const rateInput = (overrides: Partial<CourierRatesInput> = {}): CourierRatesInput => ({
+  destination: { country: "BD", adminArea: null, city: "Dhaka", postalCode: null, placeIds: { city: "1", zone: "52", area: null } },
+  origin: null,
+  parcel: { lines: [{ variantId: "var_1", quantity: 2, weightGrams: 750, unitPriceMinor: 10_000 }], weightGrams: 1500 },
+  currency: "BDT",
+  decimalPlaces: 2,
+  cod: true,
+  ...overrides,
+});
+
 const push = (body: unknown, headers: Record<string, string>) => ({ method: "POST", rawBody: JSON.stringify(body), headers, query: {} });
 
 describe("the Bangladesh pack's courier declarations", () => {
@@ -71,6 +81,7 @@ describe("the Bangladesh pack's courier declarations", () => {
     expect(manifest.providers.courier).toEqual([
       expect.objectContaining({
         id: "pathao", countries: ["BD"], icon: "assets/pathao.svg",
+        operations: ["rates", "verifyWebhook", "testConnection"],
         trackingUrl: "https://merchant.pathao.com/tracking?consignment_id={trackingId}",
         locations: { key: "pathao", required: ["city", "zone"], numeric: true },
       }),
@@ -109,6 +120,81 @@ describe("Pathao", () => {
     if (call.url.endsWith("/aladdin/api/v1/orders")) return json({ code: 200, data: { consignment_id: "DL1001", order_status: "Pending", delivery_fee: 60, merchant_order_id: "ORD-1" } });
     return json({}, 404);
   };
+
+  describe("carrier rates", () => {
+    const pricePlan = (data: unknown = { final_price: 80.25, cod_enabled: 1, cod_percentage: 0.01 }) => (call: Call): Reply =>
+      call.url.endsWith("/issue-token") ? json({ access_token: "rate-token" }) : json({ code: 200, data });
+
+    it("quotes the configured service with provider place IDs, measured kg and integer minor transport cost", async () => {
+      const { instance, calls } = harness(PATHAO, pricePlan());
+      expect(await instance.provider("pathao", "rates", rateInput())).toMatchObject({
+        ok: true,
+        value: { rates: [{ service: "regular", name: "Pathao Regular", amountMinor: 8025, estimatedDays: null }] },
+      });
+      expect(calls.map((call) => call.url)).toEqual([
+        "https://api-hermes.pathao.com/aladdin/api/v1/issue-token",
+        "https://api-hermes.pathao.com/aladdin/api/v1/merchant/price-plan",
+      ]);
+      expect(calls[1]!.headers.Authorization).toBe("Bearer rate-token");
+      expect(JSON.parse(calls[1]!.body!)).toEqual({ store_id: 924, item_type: 2, delivery_type: 48, item_weight: 1.5, recipient_city: 1, recipient_zone: 52 });
+    });
+
+    it("uses the merchant's express and missing-weight defaults and Pathao's minimum billable weight", async () => {
+      const { instance, calls } = harness({ ...PATHAO, pathao_delivery_type: "12", pathao_item_type: "1", pathao_item_weight: 2 }, pricePlan());
+      const parcel = rateInput().parcel;
+      expect(await instance.provider("pathao", "rates", rateInput({ parcel: { ...parcel, weightGrams: null } }))).toMatchObject({
+        ok: true, value: { rates: [{ service: "express", name: "Pathao Express" }] },
+      });
+      expect(JSON.parse(calls[1]!.body!)).toMatchObject({ delivery_type: 12, item_type: 1, item_weight: 2 });
+      await instance.provider("pathao", "rates", rateInput({ parcel: { ...parcel, weightGrams: 100 } }));
+      expect(JSON.parse(calls[3]!.body!)).toMatchObject({ item_weight: 0.5 });
+    });
+
+    it("omits unsupported countries, currencies and weights before contacting Pathao", async () => {
+      const { instance, calls } = harness(PATHAO, pricePlan());
+      const input = rateInput();
+      for (const candidate of [
+        rateInput({ destination: { ...input.destination, country: "US" } }),
+        rateInput({ currency: "USD" }),
+        rateInput({ parcel: { ...input.parcel, weightGrams: 10_001 } }),
+      ]) expect(await instance.provider("pathao", "rates", candidate)).toMatchObject({ ok: true, value: { rates: [] } });
+      expect(calls).toHaveLength(0);
+    });
+
+    it("checks COD eligibility without charging a settlement percentage as transport", async () => {
+      const { instance } = harness(PATHAO, pricePlan({ final_price: 60, cod_enabled: 0, cod_percentage: 0.01 }));
+      expect(await instance.provider("pathao", "rates", rateInput())).toMatchObject({ ok: true, value: { rates: [] } });
+      expect(await instance.provider("pathao", "rates", rateInput({ cod: false }))).toMatchObject({
+        ok: true, value: { rates: [{ amountMinor: 6000 }] },
+      });
+    });
+
+    it("rejects invalid place mappings and store settings before requesting a token", async () => {
+      const { instance, calls } = harness(PATHAO, pricePlan());
+      const destination = rateInput().destination;
+      for (const city of [null, "city_1", "0", "-1", "1.5"]) {
+        expect(await instance.provider("pathao", "rates", rateInput({ destination: { ...destination, placeIds: { city, zone: "52", area: null } } })))
+          .toMatchObject({ ok: false, error: { category: "declined", code: "pathao.locations" } });
+      }
+      expect(calls).toHaveLength(0);
+      const invalid = harness({ ...PATHAO, pathao_store_id: "924oops" }, pricePlan());
+      expect(await invalid.instance.provider("pathao", "rates", rateInput())).toMatchObject({ ok: false, error: { category: "misconfigured" } });
+      expect(invalid.calls).toHaveLength(0);
+    });
+
+    it.each([undefined, null, -1, "80", Number.MAX_SAFE_INTEGER])("refuses an unusable final price %s without guessing a fee", async (finalPrice) => {
+      const { instance } = harness(PATHAO, pricePlan({ final_price: finalPrice, price: 80, cod_enabled: 1 }));
+      expect(await instance.provider("pathao", "rates", rateInput())).toMatchObject({ ok: false, error: { code: "pathao.rates_failed", uncertain: false } });
+    });
+
+    it("keeps provider errors private and never retries a rate call", async () => {
+      const { instance, calls } = harness(PATHAO, (call) => call.url.endsWith("/issue-token") ? json({ access_token: "rate-token" }) : json({ code: 422, message: "private provider detail" }, 422));
+      const result = await instance.provider("pathao", "rates", rateInput());
+      expect(result).toMatchObject({ ok: false, error: { category: "retryable", code: "pathao.rates_failed" } });
+      expect(JSON.stringify(result)).not.toContain("private provider detail");
+      expect(calls).toHaveLength(2);
+    });
+  });
 
   it("refuses fractional taka before any request", async () => {
     const { instance, calls } = harness(PATHAO, answers);

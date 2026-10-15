@@ -33,6 +33,10 @@ import { BACKUP_MARKET_ID, categoryClosure, collections, customerTagLinks, custo
 import {
   functionCartSchema,
   type FunctionCart,
+  type CheckoutAttribute,
+  type BuyerUiBlock,
+  type BuyerUiInput,
+  type PluginBlockTarget,
   type PluginFunctionInput,
   type PluginFunctionOutput,
   type PluginFunctionPoint,
@@ -42,8 +46,8 @@ import { and, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { collectionMembershipForConfig } from "../collections";
 import { orderMarketIdSql } from "../markets";
 import { allocateMinorAmount, type TaxDiscountAllocationInput } from "../tax";
-import type { AppDiscountTarget, AppliedAppDiscount, AppStorageCommit, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
-export type { AppDiscountTarget, AppliedAppDiscount, AppStorageCommit, CheckoutRateOption };
+import type { AppDiscountTarget, AppliedAppDiscount, AppObjectCommit, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
+export type { AppDiscountTarget, AppliedAppDiscount, AppObjectCommit, CheckoutRateOption };
 
 // ── The runner checkout is given ────────────────────────────────────────────
 
@@ -57,7 +61,7 @@ export interface CheckoutAppFunctionResult<P extends PluginFunctionPoint> {
   priority: number;
   output: PluginFunctionOutput<P>;
   /** checkout.discounts: the snapshot write the answer commits with the order, checked by the platform. */
-  commit?: AppStorageCommit;
+  commit?: AppObjectCommit;
 }
 
 /**
@@ -70,6 +74,8 @@ export interface CheckoutAppFunctionResult<P extends PluginFunctionPoint> {
  */
 export interface CheckoutAppFunctions {
   readonly points: ReadonlySet<PluginFunctionPoint>;
+  readonly attributes?: ReadonlyArray<{ appId: string; fields: CheckoutAttribute[] }>;
+  buyerUi?(input: Partial<Omit<BuyerUiInput, "target">> & { targets: readonly PluginBlockTarget[]; currency: string }): Promise<BuyerUiBlock[]>;
   run<P extends PluginFunctionPoint>(point: P, input: PluginFunctionInput<P>): Promise<Array<CheckoutAppFunctionResult<P>>>;
   /** A valid-looking output checkout could not use (an unknown line or rate): logged for the merchant. */
   report(pluginId: string, point: PluginFunctionPoint, message: string): void;
@@ -88,6 +94,7 @@ const CART_POINTS: readonly PluginFunctionPoint[] = [
   "checkout.shipping_rates",
   "checkout.payment_methods",
   "order.risk",
+  "buyer.ui",
 ];
 
 export function wantsAppCart(apps: CheckoutAppFunctions | undefined, points: readonly PluginFunctionPoint[] = CART_POINTS): boolean {
@@ -255,6 +262,7 @@ export function buildAppFunctionCart(input: {
    */
   destination: AppCartDestinationSource | null;
   discountCodes: readonly string[];
+  attributes?: Record<string, string>;
 }): FunctionCart {
   const lines = input.lines.map((line) => {
     const product = input.facts.products.get(line.productId);
@@ -293,8 +301,7 @@ export function buildAppFunctionCart(input: {
       .slice(0, 10)
       .map((code) => code.slice(0, 64)),
     market: input.facts.market,
-    // Checkout attributes arrive with the apps that declare them.
-    attributes: {},
+    attributes: input.attributes ?? {},
   };
   // A cart that fails its own schema is a platform bug, not an app's.
   return functionCartSchema.parse(cart);
@@ -358,7 +365,7 @@ export interface AppDiscountLineInput {
 export interface AppDiscountResolution {
   applied: AppliedAppDiscount[];
   /** The snapshot writes of apps whose discounts applied: committed with the order, or the order fails. */
-  commits: AppStorageCommit[];
+  commits: AppObjectCommit[];
   /** Codes an app discount answered to: not "not found" any more. */
   claimedCodes: string[];
   /** Off the items, all app discounts. */

@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { PLUGIN_API_VERSION, type PluginManifestInput } from "@scalius/shared/plugins";
+import { objectTypeDeclarationSchema } from "@scalius/shared/plugins/objects";
+import { getObjectRecord, putObjectRecord } from "../objects";
 import {
   activatePlugin,
   installPlugin,
@@ -16,7 +18,6 @@ import {
   measurePluginStorage,
   pendingPluginMigrations,
   pluginDueForStorageMeasurement,
-  putPluginRecord,
   recordPluginBreach,
   recordPluginMigration,
   requirePluginInstallation,
@@ -30,6 +31,14 @@ import {
 
 const SHA = "a".repeat(64);
 const SHA2 = "b".repeat(64);
+const LEDGER = objectTypeDeclarationSchema.parse({
+  name: "Ledger",
+  fields: [
+    { key: "customer_id", name: "Customer", type: "single_line_text" },
+    { key: "note", name: "Note", type: "single_line_text" },
+  ],
+  indexes: ["customer_id"],
+});
 
 function manifest(overrides: Partial<PluginManifestInput> = {}): PluginManifestInput {
   return {
@@ -40,7 +49,7 @@ function manifest(overrides: Partial<PluginManifestInput> = {}): PluginManifestI
     description: "Points for orders.",
     author: { name: "Acme" },
     scopes: ["read_orders"],
-    storage: { ledger: { indexes: ["customerId"] } },
+    objects: { ledger: LEDGER },
     ...overrides,
   };
 }
@@ -143,18 +152,21 @@ describe("app safety", () => {
 
   it("measures stored bytes and picks the longest-unmeasured app once a day", async () => {
     await installActive(db);
-    await putPluginRecord(db, "acme.loyalty", "ledger", { indexes: ["customerId"], unique: [] }, "r1", { customerId: "c1", note: "x".repeat(100) });
+    await installActive(db, { id: "beta.other", name: "Other" });
+    await putObjectRecord(db, "beta.other", "ledger", LEDGER, "other", { note: "other app".repeat(200) });
+    await putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, "r1", { customer_id: "c1", note: "x".repeat(100) });
     await setPluginKv(db, "acme.loyalty", "cursor", { at: 1 });
     expect(await pluginDueForStorageMeasurement(db)).toBe("acme.loyalty");
     const bytes = await measurePluginStorage(db, "acme.loyalty");
     expect(bytes).toBeGreaterThan(100);
+    expect(bytes).toBeLessThan(200);
     expect((await requirePluginInstallation(db, "acme.loyalty")).storageBytes).toBe(bytes);
-    expect(await pluginDueForStorageMeasurement(db)).toBeNull();
+    expect(await pluginDueForStorageMeasurement(db)).toBe("beta.other");
   });
 
   it("measures the app due in one statement, and nothing when none is due", async () => {
     await installActive(db);
-    await putPluginRecord(db, "acme.loyalty", "ledger", { indexes: ["customerId"], unique: [] }, "r1", { customerId: "c1", note: "y".repeat(50) });
+    await putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, "r1", { customer_id: "c1", note: "y".repeat(50) });
     const [measured] = await measureDuePluginStorageStatement(db);
     expect(measured).toMatchObject({ pluginId: "acme.loyalty" });
     expect(measured!.bytes).toBeGreaterThan(50);
@@ -165,7 +177,7 @@ describe("app safety", () => {
   it("puts back the release an update replaced, with its grant, status and settings", async () => {
     const before = await installActive(db, { settings: [{ key: "rate", label: "Rate", type: "number", default: 1 }] });
     const updated = await updatePluginInstallation(db, "acme.loyalty", {
-      manifest: manifest({ version: "2.0.0", storage: { ledger: { indexes: ["customerId"] }, extra: {} } }),
+      manifest: manifest({ version: "2.0.0", objects: { ledger: LEDGER, extra: LEDGER } }),
       source: "upload",
       bundleSha256: SHA2,
       expectedRevision: before.revision,
@@ -182,9 +194,33 @@ describe("app safety", () => {
       storedSettings: { rate: 1 },
     });
     expect(restored.grant).toEqual(before.grant);
-    expect(Object.keys(restored.manifest.storage)).toEqual(["ledger"]);
+    expect(Object.keys(restored.manifest.objects)).toEqual(["ledger"]);
+    expect(sqlite.prepare("SELECT type FROM object_types WHERE namespace = 'acme.loyalty'").all()).toEqual([{ type: "ledger" }]);
     await expect(restorePluginRelease(db, before, { expectedRevision: updated.revision, reason: "again" }))
       .rejects.toMatchObject({ pluginCode: "installation.revision_conflict" });
+  });
+
+  it("keeps app objects on keep-data uninstall and cascades them on delete-data uninstall", async () => {
+    const active = await installActive(db);
+    await putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, "r1", { note: "kept" });
+    await uninstallPlugin(db, "acme.loyalty", { keepData: true, expectedRevision: active.revision });
+    expect(await getObjectRecord(db, "acme.loyalty", "ledger", "r1")).toEqual({ note: "kept" });
+    const reinstalled = await installPlugin(db, { manifest: manifest(), source: "upload", bundleSha256: SHA });
+    await uninstallPlugin(db, "acme.loyalty", { keepData: false, expectedRevision: reinstalled.revision });
+    expect(sqlite.prepare("SELECT count(*) AS n FROM object_types WHERE namespace = 'acme.loyalty'").get()).toEqual({ n: 0 });
+    expect(await getObjectRecord(db, "acme.loyalty", "ledger", "r1")).toBeNull();
+  });
+
+  it("stops an update whose object schema cannot preserve stored values", async () => {
+    const active = await installActive(db);
+    await putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, "r1", { note: "kept" });
+    const changed = { ...LEDGER, fields: LEDGER.fields.map((field) => field.key === "note" ? { ...field, type: "boolean" as const } : field) };
+    await expect(updatePluginInstallation(db, "acme.loyalty", {
+      manifest: manifest({ version: "2.0.0", objects: { ledger: changed } }),
+      source: "upload", bundleSha256: SHA2, expectedRevision: active.revision,
+    })).rejects.toMatchObject({ pluginCode: "installation.objects_invalid" });
+    expect(await requirePluginInstallation(db, "acme.loyalty")).toMatchObject({ status: "failed" });
+    expect(await getObjectRecord(db, "acme.loyalty", "ledger", "r1")).toEqual({ note: "kept" });
   });
 
   it("refuses a manifest built for another plugin API or a newer platform with a plain reason", async () => {

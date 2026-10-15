@@ -6,8 +6,9 @@
 // facts. Collection records, their membership config and admin writes live
 // in modules/collections.
 
+import { cardFieldsOfTheme, cardFieldsThemeSql, selectProductCardFields, resolveProductCardFields, type ProductCardFieldsById } from "./card-fields";
 import { collections, products, categories, productVariants } from "@scalius/database/schema";
-import { sql, and, isNull, eq, inArray, asc, desc, max, getTableColumns, type SQL } from "drizzle-orm";
+import { sql, and, isNull, eq, inArray, asc, desc, max, getTableColumns, type SQL, type SQLWrapper } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
 import { categoryScope } from "@scalius/shared/cache-deps";
@@ -300,7 +301,7 @@ export async function getPublicCollectionCatalog(
     // The row and its storefront-visible custom fields: one round trip.
     const [collectionRows, customFieldRows] = await db.batch([
         db
-            .select({ ...getTableColumns(collections), ...translationColumns(translation, "collection", collections.id, { slug: false }) })
+            .select({ ...getTableColumns(collections), ...translationColumns(translation, "collection", collections.id, { slug: false }), cardFieldsTheme: cardFieldsThemeSql() })
             .from(collections)
             .where(and(
                 eq(collections.id, id),
@@ -309,9 +310,10 @@ export async function getPublicCollectionCatalog(
             ))
             .limit(1),
         selectStorefrontCustomFieldRows(db, "collection", id),
-    ] as never) as unknown as [Array<typeof collections.$inferSelect & { trRows?: string | null }>, StorefrontCustomFieldRow[]];
-    const collection = translateRow(translation, "collection", collectionRows[0], COLLECTION_FIELDS);
-    if (!collection) return null;
+    ] as never) as unknown as [Array<typeof collections.$inferSelect & { trRows?: string | null; cardFieldsTheme?: string | null }>, StorefrontCustomFieldRow[]];
+    const row = translateRow(translation, "collection", collectionRows[0], COLLECTION_FIELDS);
+    if (!row) return null;
+    const { cardFieldsTheme, ...collection } = row;
 
     const config = normalizeCollectionConfig(collection.config);
     declareCollectionMembership(config);
@@ -361,6 +363,7 @@ export async function getPublicCollectionCatalog(
         db,
         await priceProductCards(db, await marketPriceContextOf(pricing), featuredRows),
         translation,
+        cardFieldsOfTheme(cardFieldsTheme),
     );
 
     return {
@@ -381,8 +384,16 @@ async function enrichProductsWithMedia(
     db: Database,
     rows: readonly RawProduct[],
     translation: TranslationScope | null,
+    cardFields: readonly string[] = [],
 ): Promise<Map<string, ResolvedProduct>> {
-    const mediaByProduct = await loadProductMediaProjections(db, rows.map((row) => row.id));
+    const ids = rows.map((row) => row.id);
+    if (cardFields.length && ids.length) {
+        const [mediaRows, fieldRows] = await safeBatch(db, [selectProductMediaProjectionRows(db, ids), selectProductCardFields(db, ids, cardFields)]);
+        const mediaByProduct = resolveProductMediaProjectionRows(mediaRows as ProductMediaProjectionRow[]);
+        declareProductCards(ids, mediaByProduct);
+        return resolveProductCards(rows, mediaByProduct, undefined, translation, resolveProductCardFields(fieldRows as StorefrontCustomFieldRow[]));
+    }
+    const mediaByProduct = await loadProductMediaProjections(db, ids);
     declareProductCards(rows.map((row) => row.id), mediaByProduct);
     return resolveProductCards(rows, mediaByProduct, undefined, translation);
 }
@@ -419,10 +430,11 @@ export function planCollectionProducts(
     translation: TranslationScope | null = null,
 ): {
     statements: BatchStatement[];
+    productIdQueries: SQLWrapper[];
     /** The statements whose rows are cards (`priceCardRowsInResults`). */
     productRowSlots: number[];
     /** `presentShopAmount`: a shop-currency fee in the page market's currency (none at the root). */
-    resolve(results: readonly unknown[], presentShopAmount?: (shopMinor: number) => number): Map<string, CollectionProductResult>;
+    resolve(results: readonly unknown[], presentShopAmount?: (shopMinor: number) => number, fields?: ProductCardFieldsById): Map<string, CollectionProductResult>;
 } {
     const allProductIds = new Set<string>();
     const categoryProductLimitsById = new Map<string, number>();
@@ -461,6 +473,7 @@ export function planCollectionProducts(
                 )`;
 
     const statements: BatchStatement[] = [];
+    const productIdQueries: SQLWrapper[] = [];
     const productSlots: number[] = [];
     const mediaSlots: number[] = [];
     const factSlots: number[] = [];
@@ -482,6 +495,7 @@ export function planCollectionProducts(
         const scopedIds = order
             ? ids.orderBy(desc(products.createdAt), asc(products.id)).limit(order.limit)
             : ids;
+        productIdQueries.push(scopedIds);
         mediaSlots.push(push(selectProductMediaProjectionRows(db, scopedIds)));
         factSlots.push(push(selectProductCardFactRows(db, scopedIds)));
         return productSlots.length - 1;
@@ -508,8 +522,9 @@ export function planCollectionProducts(
 
     return {
         statements,
+        productIdQueries,
         productRowSlots: productSlots,
-        resolve(results, presentShopAmount) {
+        resolve(results, presentShopAmount, fields) {
             const rowsOf = (list: number | null) =>
                 list === null ? [] : results[productSlots[list]!] as RawProduct[];
             const mediaRows = mediaSlots.flatMap((slot) => results[slot] as ProductMediaProjectionRow[]);
@@ -525,6 +540,7 @@ export function planCollectionProducts(
                     presentShopAmount,
                 ),
                 translation,
+                fields,
             );
 
             const specificProductsById = new Map<string, ResolvedProduct>();

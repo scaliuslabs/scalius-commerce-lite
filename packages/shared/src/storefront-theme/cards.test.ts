@@ -21,6 +21,14 @@ const accepts = (card: unknown) => {
 };
 
 describe("the one product card", () => {
+  it("accepts up to three distinct qualified custom fields", () => {
+    const card = { variant: "standard", settings: { facts: "none", action: "none", hoverImage: false } };
+    expect(accepts({ ...card, fields: ["custom.care", "acme.loyalty.points"] })).toBe(true);
+    for (const fields of [["care"], ["custom.care", "custom.care"], ["custom.one", "custom.two", "custom.three", "custom.four"]]) {
+      expect(accepts({ ...card, fields })).toBe(false);
+    }
+  });
+
   it("is the only card variant, with facts, action and hover image as its settings", () => {
     expect(storefrontBlockVariants("card")).toEqual(["standard"]);
     expect(Object.keys(STOREFRONT_CARD_VARIANTS)).toEqual(["standard"]);

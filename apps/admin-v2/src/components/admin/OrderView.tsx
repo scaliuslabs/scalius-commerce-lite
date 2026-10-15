@@ -46,6 +46,8 @@ import type { Order } from "./orderview/types";
 import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
+import { RelatedObjectsCard } from "./objects/RelatedObjectsCard";
+import { OrderAttributesCard } from "./orderview/OrderAttributesCard";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
 
@@ -258,6 +260,8 @@ export function OrderView({ order }: { order: Order }) {
               <div className="order-1 lg:order-none"><OrderStatusCard order={order} /></div>
               <div className="order-6 lg:order-none"><OrderCustomerCard order={order} /></div>
               <div className="order-7 empty:hidden lg:order-none"><LazyCustomFieldsCard ownerType="order" ownerId={order.id} canEdit={canEditCustomData} /></div>
+              <div className="order-7 empty:hidden lg:order-none"><OrderAttributesCard attributes={order.attributes} /></div>
+              <div className="order-7 empty:hidden lg:order-none"><RelatedObjectsCard records={order.relatedObjects} /></div>
               {order.notes ? <div className="order-7 lg:order-none"><OrderNotesCard notes={order.notes} /></div> : null}
               <AppResourceCards target="order" id={order.id} className="order-7 space-y-4 lg:order-none" />
             </div>

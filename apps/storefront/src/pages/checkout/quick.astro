@@ -4,6 +4,7 @@
 // the order needs, then the API's reviewed total, then a cash-on-delivery
 // order (lib/checkout/quick-checkout.ts). Private and never cached.
 import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
+import BuyerField from "@/components/apps/BuyerField.astro";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
@@ -54,7 +55,7 @@ import {
   fetchQuickCheckoutQuote,
   fetchQuickCheckoutRates,
 } from "@/lib/checkout/quick-checkout-server";
-import { overlayQuotedRates } from "@/lib/checkout/shipping-methods";
+import { hasPendingShippingRate, overlayQuotedRates } from "@/lib/checkout/shipping-methods";
 import { phoneHintCopy, phoneHints } from "@/lib/checkout/phone-hint";
 import { phoneCountryMeta } from "@scalius/shared/phone-example";
 import { cartRuleRefusal } from "@/lib/checkout/tax-quote-error-contract";
@@ -91,7 +92,12 @@ try {
 } catch {
   return new Response(null, { status: 400 });
 }
-const form = readQuickCheckoutForm(posted);
+let form: ReturnType<typeof readQuickCheckoutForm>;
+try {
+  form = readQuickCheckoutForm(posted);
+} catch {
+  return new Response(null, { status: 400 });
+}
 const lines = readQuickCheckoutLines(form.cartItems);
 if (!lines) {
   return Astro.redirect("/cart", 303);
@@ -176,6 +182,12 @@ if (quoteResult && !quoteResult.ok && quoteResult.reason === "rate" && quoteResu
   quoteResult = quoteInput ? await fetchQuickCheckoutQuote(quoteInput, customerSessionToken) : null;
 }
 const quote = quoteResult?.ok ? quoteResult.quote : null;
+const buyerFields = [...new Map((quote?.buyerUi ?? []).flatMap((block) =>
+  block.attributes.filter((attribute) => attribute.required).map((attribute) => {
+    const key = `${block.appId}.${attribute.key}`;
+    return [key, { key, attribute, value: form.attributes?.[key] ?? block.values[attribute.key] ?? "" }] as const;
+  }),
+)).values()];
 // The options as a store app left them on the quote: its order, names and fees.
 if (quote?.shippingRates) rates = overlayQuotedRates(rates, quote.shippingRates);
 
@@ -289,8 +301,8 @@ const dueText = mode === "pickup" ? copy.dueAtPickupText : mode === "none" ? cop
 // (its market's, MARKETS-DESIGN step 6), which checkout charges.
 const pageCurrency = { code: layoutData?.currency?.code ?? "BDT", symbol: layoutData?.currency?.symbol };
 const quoteMoney = (amount: number) => formatMoney(amount, quote && quote.currencyCode !== pageCurrency.code ? { code: quote.currencyCode } : pageCurrency);
-const rateLabel = (rate: ShippingMethod) =>
-  rate.fee === 0 ? copy.freeText : formatMoney(rate.fee, pageCurrency);
+const rateLabel = (rate: ShippingMethod & { quoted?: true }) =>
+  hasPendingShippingRate(rate) ? copy.loadingText : rate.fee === 0 ? copy.freeText : formatMoney(rate.fee, pageCurrency);
 
 const labelClass = "mb-1 block text-sm font-medium text-foreground";
 const fieldClass =
@@ -329,6 +341,7 @@ const secondaryButtonClass =
       <button type="submit" name="intent" value="review" class="sr-only" tabindex="-1" aria-hidden="true">{copy.continueText}</button>
       <input type="hidden" name="cartItems" value={form.cartItems} />
       <input type="hidden" name="checkoutId" value={form.checkoutId} />
+      {form.attributes && <input type="hidden" name="attributes" value={JSON.stringify(form.attributes)} />}
       {quote && <input type="hidden" name="expectedQuoteFingerprint" value={quote.quoteFingerprint} />}
 
       <div class="order-2 min-w-0 space-y-6 rounded-xl border border-border bg-card p-4 sm:p-5 lg:order-1 lg:col-span-7">
@@ -517,11 +530,16 @@ const secondaryButtonClass =
         </BillingAddressFields>
 
         {lang.fieldVisibility.showOrderNotesField && (
-          <div>
-            <label for="notes" class={labelClass}>{copy.orderNotesLabel}</label>
-            <textarea id="notes" name="notes" rows={2} maxlength="500" placeholder={copy.orderNotesPlaceholder} class={`${fieldClass} h-auto min-h-16 resize-none py-2`}>{form.notes}</textarea>
-          </div>
+          <BuyerField attribute={{ key: "notes", label: copy.orderNotesLabel, type: "multiline", maxLength: 500 }}
+            id="notes" name="notes" value={form.notes} rows={2} placeholder={copy.orderNotesPlaceholder}
+            labelClass={labelClass} controlClass={`${fieldClass} h-auto min-h-16 resize-none py-2`} />
         )}
+
+        {buyerFields.map(({ key, attribute, value }) => (
+          <div>
+            <BuyerField attribute={attribute} name={`attributes.${key}`} id={`buyer-${key}`} value={value} labelClass={labelClass} controlClass={fieldClass} />
+          </div>
+        ))}
 
         <MarketingConsentField consent={marketingConsent} selected={Object.keys(form.marketingConsent).map((key) => key.replace("marketingConsent_", ""))} idPrefix="quick" />
 

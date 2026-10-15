@@ -151,6 +151,10 @@ export const shippingMethods = sqliteTable("shipping_methods", {
     name: text("name").notNull(),
     /** Integer minor units of the store currency. */
     feeMinor: integer("fee_minor").notNull().default(0),
+    /** Flat fee, or a qualified courier provider that quotes this delivery method. */
+    rateSource: text("rate_source").notNull().default("flat"),
+    rateService: text("rate_service"),
+    fallbackFeeMinor: integer("fallback_fee_minor"),
     description: text("description"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),

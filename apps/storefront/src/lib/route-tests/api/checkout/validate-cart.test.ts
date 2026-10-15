@@ -22,6 +22,27 @@ beforeEach(() => {
 });
 
 describe("checkout validate-cart proxy", () => {
+  it("forwards private buyer attributes and session without exposing either in a URL", async () => {
+    const attributes = { "test.gift.message": "Happy birthday" };
+    mocks.validateCartItems.mockResolvedValue({ success: true, data: { valid: true, items: [], issues: [], buyerUi: [] } });
+    const response = await POST({ request: new Request("https://storefront.example.test/api/checkout/validate-cart", {
+      method: "POST", headers: { "Content-Type": "application/json", Cookie: "cs_tok=buyer_session" },
+      body: JSON.stringify({ attributes, items: [{ productId: "prod_1", variantId: "var_1", quantity: 1, price: 100 }] }),
+    }) } as never);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(mocks.validateCartItems).toHaveBeenCalledWith(expect.any(Array), { attributes }, "buyer_session", expect.any(Headers));
+  });
+
+  it("rejects malformed buyer attributes before calling the API", async () => {
+    const response = await POST({ request: new Request("https://storefront.example.test/api/checkout/validate-cart", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attributes: { "test.gift.message": 42 }, items: [{ productId: "prod_1", variantId: "var_1", quantity: 1, price: 100 }] }),
+    }) } as never);
+    expect(response.status).toBe(400);
+    expect(mocks.validateCartItems).not.toHaveBeenCalled();
+  });
+
   it("rejects cross-origin cookie cart-validation requests before backend validation", async () => {
     mocks.shouldRejectCrossOriginCookieRequest.mockReturnValue(true);
 

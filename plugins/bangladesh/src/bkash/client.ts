@@ -91,7 +91,7 @@ export function takaToMinor(amount: string): number | null {
   return Number.isSafeInteger(minor) ? minor : null;
 }
 
-/** The stable code of a platform refusal (`http.timeout`, `storage.unique_violation`), as the SDK runtime raises it. */
+/** The stable code of a platform refusal (`http.timeout`, `object.unique_violation`), as the SDK runtime raises it. */
 export function platformErrorCode(error: unknown): string | null {
   if (!(error instanceof Error) || !("code" in error)) return null;
   return typeof error.code === "string" ? error.code : null;

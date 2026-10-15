@@ -23,7 +23,7 @@ import type { ShippingMethod } from "@/lib/api";
 import type { CheckoutDeliveryMode } from "./delivery-mode";
 import type { QuotedShippingRate } from "./tax-quote-contract";
 
-export type DeliveryRate = Pick<ShippingMethod, "id" | "name" | "fee" | "description"> & {
+export type DeliveryRate = Pick<ShippingMethod, "id" | "name" | "fee" | "description" | "rateSource"> & {
   freeOver: number | null;
   kind: "delivery" | "pickup";
   pickupAddress: string | null;
@@ -34,6 +34,7 @@ export type DeliveryRate = Pick<ShippingMethod, "id" | "name" | "fee" | "descrip
 
 export interface ShippingMethodDetail {
   id: string;
+  rateSource?: string;
   /** The rate's own charge; see `getEffectiveCartShippingFee` for what the buyer pays. */
   fee: number;
   freeOver: number | null;
@@ -44,6 +45,11 @@ export interface ShippingMethodDetail {
   pickupHours?: string | null;
   /** The fee is the quote's (a store app priced this option): no free-over threshold applies. */
   quoted?: true;
+}
+
+/** A carrier's stored fee is a placeholder until checkout receives a quote. */
+export function hasPendingShippingRate(rate: { rateSource?: string; quoted?: true }): boolean {
+  return Boolean(rate.rateSource && rate.rateSource !== "flat" && !rate.quoted);
 }
 
 /**
@@ -112,6 +118,7 @@ export function toDeliveryRate(method: ShippingMethod): DeliveryRate {
     id: method.id,
     name: method.name,
     fee: method.fee,
+    ...(method.rateSource ? { rateSource: method.rateSource } : {}),
     description: method.description ?? null,
     freeOver: typeof method.freeOver === "number" ? method.freeOver : null,
     kind: method.kind === "pickup" ? "pickup" : "delivery",
@@ -262,6 +269,7 @@ export function enhanceShippingMethods(
       ? {
           id: rate.id,
           fee: rate.fee,
+          ...(rate.rateSource ? { rateSource: rate.rateSource } : {}),
           freeOver: rate.freeOver,
           name: rate.name,
           kind: rate.kind,
@@ -300,14 +308,19 @@ export function enhanceShippingMethods(
 
   const effectiveFee = (rate: DeliveryRate) => rate.quoted
     ? rate.fee
-    : options.isFeeWaived() || (rate.freeOver !== null && options.readSubtotal() >= rate.freeOver)
+    : options.isFeeWaived()
       ? 0
-      : rate.fee;
+      : hasPendingShippingRate(rate)
+        ? null
+        : rate.freeOver !== null && options.readSubtotal() >= rate.freeOver ? 0 : rate.fee;
 
   const feeFacts = (rate: DeliveryRate) => {
     // The quote's fee is what the buyer pays: nothing left to explain.
     if (rate.quoted) {
       return { label: rate.fee === 0 ? copy.freeText : options.formatMoney(rate.fee), note: "" };
+    }
+    if (hasPendingShippingRate(rate)) {
+      return { label: options.isFeeWaived() ? copy.freeText : copy.loadingText, note: "" };
     }
     const subtotal = options.readSubtotal();
     if (options.isFeeWaived() && rate.fee > 0) {
@@ -440,7 +453,7 @@ export function enhanceShippingMethods(
 
   /** What changed between the rate the buyer chose and the rates now offered. */
   const describeChange = (previous: DeliveryRate): string => {
-    const money = (rate: DeliveryRate) => effectiveFee(rate) === 0 ? copy.freeText : options.formatMoney(effectiveFee(rate));
+    const money = (rate: DeliveryRate) => feeFacts(rate).label;
     const now = shown().find((rate) => rate.id === previous.id);
     if (now) {
       return effectiveFee(now) === effectiveFee(previous)
@@ -611,7 +624,7 @@ export function enhanceShippingMethods(
       // Unreadable rates don't block the order: the checkout verifies the rate itself.
       if (!loaded || current !== sequence) return false;
       const now = loaded.find((rate) => rate.id === previous.id);
-      if (now && now.fee === previous.fee && now.freeOver === previous.freeOver) return false;
+      if (now && now.fee === previous.fee && now.freeOver === previous.freeOver && now.rateSource === previous.rateSource) return false;
       const priceChanged = !now || effectiveFee(now) !== effectiveFee(previous);
       applyLoaded(loaded);
       emit();

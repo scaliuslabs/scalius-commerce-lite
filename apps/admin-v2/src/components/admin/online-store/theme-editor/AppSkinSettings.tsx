@@ -113,6 +113,11 @@ export function AppSkinSettings({ unit, theme, apps, media, setDraft, children }
               idPrefix={appSkinFieldPrefix(unit)}
               fields={entry.skin.settings}
               values={chosen.values}
+              bindings={chosen.bindings}
+              onBindingsChange={(bindings) => setDraft((current) => {
+                const now = themeAppSkin(current, unit);
+                return now ? setThemeAppSkin(current, unit, { ...now, bindings }) : current;
+              })}
               media={media}
               onChange={(values) => setDraft((current) => {
                 const now = themeAppSkin(current, unit);

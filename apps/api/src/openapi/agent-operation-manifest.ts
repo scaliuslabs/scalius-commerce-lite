@@ -1,3 +1,4 @@
+import { objectOperationResponseLimit } from "./operation-registry/dashboard-objects";
 import type { AgentWorkflowCatalog } from "../agent-access/workflows/types";
 import {
   inlineComponentSchemaRefs,
@@ -8,10 +9,11 @@ import {
   CONTINUATION_OUTPUTS,
   DEVICE_OPERATION_IDS,
   ONE_TIME_SECRET_OPERATION_IDS,
+  operationSurface,
 } from "./operation-registry";
 
 export const AGENT_OPERATION_ID_PATTERN =
-  /^(dashboard|storefront|system)(\.[a-z][a-z0-9_]*){2,}$/;
+  /^(?:(dashboard|storefront|system)(\.[a-z][a-z0-9_]*){2,}|objects\.(?:types\.(?:list|get|create|update|delete)|list|get|upsert|delete))$/;
 
 export const AGENT_OPERATION_HTTP_METHODS = [
   "DELETE",
@@ -386,10 +388,10 @@ export function parseAgentOperationMetadata(
     typeof maximumResponseBytes !== "number" ||
     !Number.isSafeInteger(maximumResponseBytes) ||
     maximumResponseBytes < 1 ||
-    maximumResponseBytes > 65_536
+    maximumResponseBytes > objectOperationResponseLimit(operationLabel)
   ) {
     throw new Error(
-      `${operationLabel} requires x-scalius-agent.maximumResponseBytes from 1 through 65536.`,
+      `${operationLabel} requires x-scalius-agent.maximumResponseBytes from 1 through ${objectOperationResponseLimit(operationLabel)}.`,
     );
   }
 
@@ -852,7 +854,7 @@ function assertSurfaceMatchesOperationId(
   operationId: string,
   surface: AgentOperationSurface,
 ): void {
-  const operationIdSurface = operationId.split(".", 1)[0];
+  const operationIdSurface = operationSurface(operationId);
   if (operationIdSurface !== surface) {
     throw new Error(
       `${operationId} has surface ${surface}; its operationId prefix must match.`,

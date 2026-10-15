@@ -37,6 +37,8 @@ import {
     type ResolvedProduct,
 } from "./cards";
 
+import type { ProductCardFieldsById } from "./card-fields";
+
 type BatchStatement = Parameters<typeof safeBatch>[1][number];
 
 /**
@@ -140,12 +142,14 @@ export function planHomeProductLists(
     translation: TranslationScope | null = null,
 ): {
     statements: BatchStatement[];
+    productIdQueries: SQLWrapper[];
     /** The statements whose rows are cards (`priceCardRowsInResults`), relative to the plan. */
     productRowSlots: number[];
     /** `presentShopAmount`: a shop-currency fee in the page market's currency (none at the root). */
-    resolve(results: readonly unknown[], offset: number, presentShopAmount?: (shopMinor: number) => number): HomeProductList[];
+    resolve(results: readonly unknown[], offset: number, presentShopAmount?: (shopMinor: number) => number, fields?: ProductCardFieldsById): HomeProductList[];
 } {
     const statements: BatchStatement[] = [];
+    const productIdQueries: SQLWrapper[] = [];
     const slots: Array<{ key: string; rows: number; media: number; facts: number; members: number }> = [];
     const categoryIds: string[] = [];
 
@@ -154,6 +158,7 @@ export function planHomeProductLists(
      * members, or the on-sale candidate window), which it depends on.
      */
     const add = (key: string, rows: BatchStatement, ids: SQLWrapper, members: BatchStatement) => {
+        productIdQueries.push(ids);
         const rowsSlot = statements.push(rows) - 1;
         const mediaSlot = statements.push(selectProductMediaProjectionRows(db, ids)) - 1;
         const factsSlot = statements.push(selectProductCardFactRows(db, ids)) - 1;
@@ -237,8 +242,9 @@ export function planHomeProductLists(
 
     return {
         statements,
+        productIdQueries,
         productRowSlots: slots.map((slot) => slot.rows),
-        resolve(results, offset, presentShopAmount) {
+        resolve(results, offset, presentShopAmount, fields) {
             const categoryRows = categorySlot === null
                 ? []
                 : translateRows(translation, "category", results[offset + categorySlot] as NonNullable<HomeProductList["category"]>[], NAME_FIELDS);
@@ -256,6 +262,7 @@ export function planHomeProductLists(
                         presentShopAmount,
                     ),
                     translation,
+                    fields,
                 );
                 const source = lists.find((list) => list.key === key)!.source;
                 const memberIds = (results[offset + members] as Array<{ id: string }>).map((row) => row.id);

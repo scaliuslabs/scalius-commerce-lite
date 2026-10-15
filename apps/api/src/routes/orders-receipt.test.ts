@@ -13,6 +13,14 @@ const orderSupportMocks = vi.hoisted(() => ({
 const notificationMocks = vi.hoisted(() => ({
   sendOrderSupportRequestNotification: vi.fn(),
 }));
+const buyerUi = vi.hoisted(() => vi.fn(async () => [] as unknown[]));
+vi.mock("../plugins/checkout-functions", () => ({
+  createCheckoutAppFunctions: () => ({ points: new Set(["buyer.ui"]), buyerUi }),
+}));
+vi.mock("@scalius/core/modules/plugins", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@scalius/core/modules/plugins")>(),
+  listActiveCheckoutRegistrations: vi.fn(async () => []),
+}));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@scalius/core/modules/orders")>();
@@ -313,6 +321,7 @@ describe("order receipt route", () => {
 
     expect(response.status).toBe(404);
     expect(db.select).toHaveBeenCalled();
+    expect(buyerUi).not.toHaveBeenCalled();
   });
 
   it("returns a minimal receipt DTO for a valid token", async () => {
@@ -320,7 +329,7 @@ describe("order receipt route", () => {
 
     const response = await app.request(
       "/api/v1/orders/receipt/order_1",
-      { headers: { "X-Receipt-Token": "chk_valid" } },
+      { headers: { "X-Receipt-Token": "chk_valid", "x-storefront-language": "bn", "x-storefront-locale": "bn-BD" } },
       {} as never,
     );
     const body = await response.json() as {
@@ -329,6 +338,7 @@ describe("order receipt route", () => {
 
     expect(response.status).toBe(200);
     expect(body.data?.order).toMatchObject({
+      buyerUi: [],
       id: "order_1",
       customerName: "Receipt Customer",
       shippingAddress: "123 Receipt Street",
@@ -379,6 +389,15 @@ describe("order receipt route", () => {
         paidAmountMinor: 10_000,
       }),
     );
+    expect(buyerUi).toHaveBeenCalledWith({
+      targets: ["purchase.thank-you.customer-information.render-after", "customer-account.order-status.block.render"],
+      language: "bn",
+      locale: "bn-BD",
+      currency: "BDT",
+      attributes: {},
+      customer: null,
+      order: { orderId: "order_1", status: "pending", paymentStatus: "partial", lines: [] },
+    });
   });
 
   it.each([

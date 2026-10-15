@@ -8,6 +8,11 @@ import { countBuyerDownloads } from "@scalius/core/modules/digital";
 import { countBuyerGiftCards } from "@scalius/core/modules/gift-cards";
 import { countReviewableLinesForCustomer, countWrittenReviewsForCustomer } from "@scalius/core/modules/reviews";
 import { countActiveBuyerWarranties } from "@scalius/core/modules/warranty";
+import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
+import { buyerUiBlockSchema } from "@scalius/shared/plugins";
+import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { ok } from "../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { UnauthorizedError } from "../../utils/api-error";
@@ -24,6 +29,7 @@ export const customerAccountSummarySchema = z.object({
   downloads: count,
   giftCards: count,
   activeWarranties: count,
+  buyerUi: z.array(buyerUiBlockSchema),
 }).openapi("CustomerAccountSummary");
 
 app.openapi(createRoute({
@@ -31,6 +37,10 @@ app.openapi(createRoute({
   path: "/account-summary",
   tags: ["Customer Auth"],
   summary: "Counts behind the account tabs (inbox, reviews, downloads, gift cards, warranties)",
+  request: { headers: z.object({
+    "x-storefront-language": z.string().min(1).max(35).optional(),
+    "x-storefront-locale": z.string().min(1).max(35).optional(),
+  }) },
   responses: {
     200: {
       description: "Account summary",
@@ -52,7 +62,22 @@ app.openapi(createRoute({
   const downloads = await countBuyerDownloads(db, customerId);
   const giftCards = await countBuyerGiftCards(db, customerId);
   const activeWarranties = await countActiveBuyerWarranties(db, customerId);
-  return ok(c, { unreadInbox, reviewsToWrite, reviewsWritten, downloads, giftCards, activeWarranties });
+  const apps = createCheckoutAppFunctions({
+    env: c.env,
+    ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
+    db,
+    registrations: await listActiveCheckoutRegistrations(db),
+  });
+  const buyerUi = apps.points.has("buyer.ui")
+    ? await apps.buyerUi?.({
+      targets: ["customer-account.order-index.block.render", "customer-account.profile.block.render"],
+      language: c.req.header("x-storefront-language"),
+      locale: c.req.header("x-storefront-locale"),
+      currency: (await readStoreCurrency(db)).code,
+      customer: { id: customerId },
+    }) ?? []
+    : [];
+  return ok(c, { unreadInbox, reviewsToWrite, reviewsWritten, downloads, giftCards, activeWarranties, buyerUi });
 });
 
 export { app as customerAccountSummaryRoutes };

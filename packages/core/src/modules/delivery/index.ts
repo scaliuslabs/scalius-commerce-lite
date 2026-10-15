@@ -10,3 +10,5 @@ export * from "./location-validation";
 // pack's); core has none of its own.
 export * from "./couriers/port";
 export * from "./couriers/registry";
+
+export * from "./calculated-rates";

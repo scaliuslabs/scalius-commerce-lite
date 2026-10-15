@@ -1,3 +1,5 @@
+import { readBuyerAttributes, renderBuyerUi } from "@/lib/buyer-ui";
+import { cartStore, hydrateCartFromStorage } from "@/store/cart";
 import type { CheckoutConfig, PaymentContext } from "./types";
 import { registerGateway, getGateway } from "./registry";
 import { codHandler } from "./handlers/cod";
@@ -1101,6 +1103,31 @@ async function selectMethod(
     return;
   }
 
+  // Courier rates may charge differently for cash collection. Review that
+  // quote before enabling the selected payment method.
+  const courierCod = methodId === "cod" || Boolean(checkoutConfig && authoritativeTaxQuote
+    && checkoutPaymentRequestFor(checkoutConfig, authoritativeTaxQuote).request.paymentType === "deposit");
+  if (checkoutData && authoritativeTaxQuote?.shippingRateToken && (checkoutData.cod === true) !== courierCod) {
+    try {
+      const quote = await fetchAuthoritativeTaxQuote({ ...checkoutData, cod: courierCod, shippingRateToken: undefined });
+      if (selectionId !== selectionVersion) return;
+      checkoutData = { ...checkoutData, cod: courierCod };
+      adoptQuote(quote);
+      renderSummary(quote);
+      if (!quote.allowedPaymentMethods.includes(methodId)) {
+        showError(checkoutCopy.paymentMethodUnavailableMessage);
+        setPayButton(checkoutCopy.paymentMethodUnavailableText, true);
+        return;
+      }
+    } catch {
+      if (selectionId !== selectionVersion) return;
+      retrySelection = { methodId, gateway: gw };
+      showError(checkoutCopy.taxVerificationFailedText);
+      setPayButton(checkoutCopy.retryPaymentFormText, false);
+      return;
+    }
+  }
+
   if (testNotice && testNotice.parentElement !== details) details.prepend(testNotice);
   if (actionHost) {
     if (actionHost.parentElement !== details) details.appendChild(actionHost);
@@ -1164,6 +1191,9 @@ async function processPayment(): Promise<void> {
     !authoritativeTaxQuote
   ) return;
 
+  for (const control of document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-buyer-attribute]")) {
+    if (!control.reportValidity()) return;
+  }
   const processingMethod = selectedMethod;
   const existingRecovery = readHostedPaymentRecoverySession();
   const recoveryMatches = matchesCheckoutRecoverySession(
@@ -1184,7 +1214,7 @@ async function processPayment(): Promise<void> {
     if (recovered) return;
   }
   if (giftCardBusy) return;
-  const submittedCheckoutData = checkoutData;
+  const submittedCheckoutData: Record<string, unknown> = { ...checkoutData, attributes: readBuyerAttributes() };
   const submitInitVersion = initVersion;
   isProcessing = true;
   setGiftCardControlsDisabled(true);
@@ -1470,6 +1500,7 @@ function renderGiftCardChips(): void {
 /** One quote with the current handles. */
 function quoteWithGiftCards(): Promise<CheckoutTaxQuote> {
   syncGiftCardsIntoCheckoutData();
+  checkoutData!.attributes = readBuyerAttributes();
   return fetchAuthoritativeTaxQuote(checkoutData!);
 }
 
@@ -1500,9 +1531,23 @@ async function fetchQuoteForCheckout(): Promise<{ quote: CheckoutTaxQuote; notic
 /** Makes a quote the page's truth: the order carries its fingerprint and amount due. */
 function adoptQuote(quote: CheckoutTaxQuote): void {
   authoritativeTaxQuote = quote;
+  renderBuyerUi(quote.buyerUi, { onChange: async () => {
+    if (!checkoutData || isProcessing) return;
+    hydrateCartFromStorage();
+    const cart = cartStore.get();
+    checkoutData = {
+      ...checkoutData,
+      ...(Object.keys(cart.items).length > 0 ? {
+        cartItems: JSON.stringify(cart.items), discountCodes: cart.discountCodes,
+      } : {}),
+      attributes: readBuyerAttributes(),
+    };
+    await requoteForGiftCards();
+  } });
   const next: Record<string, unknown> = {
     ...checkoutData!,
     expectedQuoteFingerprint: quote.quoteFingerprint,
+    shippingRateToken: quote.shippingRateToken ?? null,
   };
   if (appliedGiftCards.length > 0) next.expectedAmountDueMinor = quoteAmountDue(quote).amountDueMinor;
   else delete next.expectedAmountDueMinor;
@@ -1511,17 +1556,20 @@ function adoptQuote(quote: CheckoutTaxQuote): void {
   renderGiftCardChips();
 }
 
-/** Prices the order again after the cards changed; false when checkout cannot go on. */
+let requoteSequence = 0;
+
+/** Prices the order again after the cards or app fields changed. */
 async function requoteForGiftCards(): Promise<boolean> {
   if (!checkoutData) return false;
   const currentInitVersion = initVersion;
+  const sequence = ++requoteSequence;
   setPaymentControlsDisabled(true);
   setPayButton(checkoutCopy.preparingPaymentText, true);
   let result: Awaited<ReturnType<typeof fetchQuoteForCheckout>>;
   try {
     result = await fetchQuoteForCheckout();
   } catch (error) {
-    if (currentInitVersion !== initVersion) return false;
+    if (currentInitVersion !== initVersion || sequence !== requoteSequence) return false;
     if (redirectForCartRefusal(error)) return false;
     showReturnToCartAction();
     showError(error instanceof Error ? error.message : checkoutCopy.totalVerificationFailedText);
@@ -1529,7 +1577,7 @@ async function requoteForGiftCards(): Promise<boolean> {
     renderGiftCardChips();
     return false;
   }
-  if (currentInitVersion !== initVersion) return false;
+  if (currentInitVersion !== initVersion || sequence !== requoteSequence) return false;
   adoptQuote(result.quote);
   showGiftCardMessage(result.notice);
   renderSummary();

@@ -1,6 +1,6 @@
 // An SMS, email and fraud provider app written without the SDK, run by the
 // bundled loader in the messaging and fraud port tests: it sends idempotently
-// (its own storage, keyed by the platform's idempotency key), fails in the
+// (its own objects, keyed by the platform's idempotency key), fails in the
 // ways the ports define (the message text picks the failure), and reads its
 // secret setting.
 
@@ -17,7 +17,7 @@ export const NOTIFY_FIXTURE_MANIFEST = {
   description: "An SMS, email and fraud check provider fixture.",
   author: { name: "Acme" },
   settings: [{ key: "api_key", label: "API key", type: "secret", required: true }],
-  storage: { sent: { indexes: [], unique: [] } },
+  objects: { sent: { name: "Sent messages", fields: [{ key: "answer", name: "Answer", type: "json" }] } },
   providers: {
     sms: [{ id: "texts", name: "Acme Texts", operations: ["testConnection"] }],
     email: [{ id: "mail", name: "Acme Mail" }],
@@ -38,11 +38,11 @@ function providerError(category, message, options = {}) {
 }
 async function sendOnce(ctx, key, prefix, recipient) {
   if (key) {
-    const sent = await ctx.storage.sent.get(key);
+    const sent = await ctx.objects.sent.get(key);
     if (sent) return sent.answer;
   }
   const answer = { success: true, providerRef: prefix + "-" + (key ? key.slice(0, 12) : "unkeyed"), rawStatus: "Queued for " + recipient };
-  if (key) await ctx.storage.sent.put(key, { answer });
+  if (key) await ctx.objects.sent.put(key, { answer });
   return answer;
 }
 function failure(text, ctx) {

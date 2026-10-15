@@ -64,6 +64,7 @@ interface Draft {
   max: string;
   regex: string;
   choices: string;
+  to: string;
 }
 
 type Errors = Partial<Record<"name" | "key" | "validations", string>>;
@@ -86,6 +87,7 @@ function draftOf(definition: CustomFieldDefinition | null): Draft {
     max: definition ? boundDraft(definition.type, definition.validations.max) : "",
     regex: definition?.validations.regex ?? "",
     choices: definition?.validations.choices?.join("\n") ?? "",
+    to: definition?.validations.to ?? "",
   };
 }
 
@@ -113,6 +115,7 @@ function validationsOf(draft: Draft): CustomFieldWireValidations {
     max: kind ? bound(draft.max) : null,
     regex: customFieldSupportsRegex(type) && draft.regex.trim() ? draft.regex.trim() : null,
     choices: customFieldSupportsChoices(type) && choices.length > 0 ? choices : null,
+    ...(draft.itemType === "object_reference" ? { to: draft.to.trim() } : {}),
   };
 }
 
@@ -309,7 +312,7 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
                 onValueChange={(value) => {
                   const next = CUSTOM_FIELD_SCALAR_TYPES.find((item) => item === value);
                   if (!next) return;
-                  setDraft((current) => ({ ...current, itemType: next, list: LISTABLE.has(next) && current.list, min: "", max: "", regex: "", choices: "" }));
+                  setDraft((current) => ({ ...current, itemType: next, list: LISTABLE.has(next) && current.list, min: "", max: "", regex: "", choices: "", to: "" }));
                   setErrors({});
                 }}
                 options={CUSTOM_FIELD_SCALAR_TYPES.map((item) => ({ value: item, label: t(`type.${item}` as CustomFieldMessageKey) }))}
@@ -325,6 +328,19 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
                 />
                 <Label htmlFor="custom-field-definition-list">{t("list")}</Label>
               </div>
+            ) : null}
+            {draft.itemType === "object_reference" ? (
+              <Field id="custom-field-definition-to" label={t("objectTarget")} help={t("objectTargetHelp")}>
+                <Input
+                  id="custom-field-definition-to"
+                  value={draft.to}
+                  maxLength={150}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-invalid={errors.validations ? true : undefined}
+                  onChange={(event) => set("to", event.target.value)}
+                />
+              </Field>
             ) : null}
             <ChoiceField
               id="custom-field-definition-storefront"
@@ -374,10 +390,10 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
                     />
                   </Field>
                 ) : null}
-                {errors.validations ? (
-                  <p id="custom-field-definition-validations" tabIndex={-1} className="text-body text-destructive">{errors.validations}</p>
-                ) : null}
               </fieldset>
+            ) : null}
+            {errors.validations ? (
+              <p id="custom-field-definition-validations" tabIndex={-1} className="text-body text-destructive">{errors.validations}</p>
             ) : null}
           </form>
           <DialogFooter>

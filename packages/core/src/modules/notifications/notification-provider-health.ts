@@ -171,25 +171,30 @@ async function recoverProviderBlockFromReceipts(
     if (!settingsCategories?.length) return null;
 
     const provider = normalizeProvider(options.provider);
-    const latestSettingsUpdatedAt = await getLatestSettingsUpdateTime(db, settingsCategories);
-    const rows = await db
-        .select({
-            providerStatus: notificationDeliveryReceipts.providerStatus,
-            rawResponse: notificationDeliveryReceipts.rawResponse,
-            lastError: notificationDeliveryReceipts.lastError,
-            skippedAt: notificationDeliveryReceipts.skippedAt,
-            failedAt: notificationDeliveryReceipts.failedAt,
-            updatedAt: notificationDeliveryReceipts.updatedAt,
-        })
-        .from(notificationDeliveryReceipts)
-        .where(and(
-            eq(notificationDeliveryReceipts.channel, options.channel),
-            eq(notificationDeliveryReceipts.provider, provider),
-            inArray(notificationDeliveryReceipts.status, ["skipped", "failed"]),
-        ))
-        .orderBy(desc(notificationDeliveryReceipts.updatedAt))
-        .limit(RECENT_RECEIPT_SCAN_LIMIT)
-        .all();
+    const [settingsRows, rows] = await db.batch([
+        db.select({ updatedAt: settings.updatedAt })
+            .from(settings)
+            .where(inArray(settings.category, settingsCategories))
+            .orderBy(desc(settings.updatedAt))
+            .limit(1),
+        db.select({
+                providerStatus: notificationDeliveryReceipts.providerStatus,
+                rawResponse: notificationDeliveryReceipts.rawResponse,
+                lastError: notificationDeliveryReceipts.lastError,
+                skippedAt: notificationDeliveryReceipts.skippedAt,
+                failedAt: notificationDeliveryReceipts.failedAt,
+                updatedAt: notificationDeliveryReceipts.updatedAt,
+            })
+            .from(notificationDeliveryReceipts)
+            .where(and(
+                eq(notificationDeliveryReceipts.channel, options.channel),
+                eq(notificationDeliveryReceipts.provider, provider),
+                inArray(notificationDeliveryReceipts.status, ["skipped", "failed"]),
+            ))
+            .orderBy(desc(notificationDeliveryReceipts.updatedAt))
+            .limit(RECENT_RECEIPT_SCAN_LIMIT),
+    ]);
+    const latestSettingsUpdatedAt = timestampSeconds(settingsRows[0]?.updatedAt);
 
     for (const row of rows) {
         const blockedAt = Math.max(
@@ -218,21 +223,6 @@ async function recoverProviderBlockFromReceipts(
     }
 
     return null;
-}
-
-async function getLatestSettingsUpdateTime(
-  db: Database,
-  categories: string[],
-): Promise<number> {
-    const row = await db
-        .select({ updatedAt: settings.updatedAt })
-        .from(settings)
-        .where(inArray(settings.category, categories))
-        .orderBy(desc(settings.updatedAt))
-        .limit(1)
-        .get();
-
-    return timestampSeconds(row?.updatedAt);
 }
 
 function timestampSeconds(value: unknown): number {

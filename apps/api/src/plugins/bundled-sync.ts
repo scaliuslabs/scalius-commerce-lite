@@ -38,7 +38,6 @@ import {
 import { pluginDefinitionOf } from "@scalius/shared/plugins/handlers";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
 import type { BundledPluginEntry } from "./loaders/bundled";
-import { syncPluginMetaobjects } from "./metaobjects";
 
 export type BundledPluginRegistry = Readonly<Record<string, BundledPluginEntry>>;
 
@@ -90,14 +89,12 @@ async function syncOne(
       }
       return;
     }
-    const updated = await updatePluginInstallation(db, pluginId, {
+    await updatePluginInstallation(db, pluginId, {
       manifest,
       source: "bundled",
       bundleSha256: entry.sha256,
       expectedRevision: installation.revision,
     });
-    // An app that stays active keeps its content types in step with the new manifest.
-    if (updated.status === "active") await syncPluginMetaobjects(db, updated);
     result.updated.push(pluginId);
   } catch (error) {
     if (error instanceof PluginError && error.pluginCode === "installation.revision_conflict") return; // another sync won

@@ -1,6 +1,5 @@
 // Scalius Hello: the reference plugin. It touches every capability so both
-// loaders are exercised end to end: settings (with secrets), a storage
-// collection with a compound and a unique index, KV with a TTL, event
+// loaders are exercised end to end: settings (with secrets), a typed object with a compound and a unique index, KV with a TTL, event
 // handlers that call an /api/v1 operation, an admin page, an order card, a
 // bulk product action and a home widget (declarative UI), public routes on
 // the storefront proxy with head tags, a signed provider webhook, a cron
@@ -47,8 +46,19 @@ export const manifest = {
     webhooks: ["ping"],
   },
   cron: [{ name: "tidy", schedule: "0 * * * *" }],
-  storage: {
-    greetings: { indexes: ["orderId", ["kind", "createdAt"]], unique: ["orderId"] },
+  objects: {
+    greetings: {
+      name: "Greetings",
+      fields: [
+        { key: "order_id", name: "Order", type: "single_line_text" },
+        { key: "kind", name: "Kind", type: "single_line_text" },
+        { key: "created_at", name: "Created at", type: "integer" },
+        { key: "greeting", name: "Greeting", type: "single_line_text" },
+        { key: "order_status", name: "Order status", type: "single_line_text" },
+      ],
+      indexes: ["order_id", ["kind", "created_at"]],
+      unique: ["order_id"],
+    },
   },
   settings: [
     { key: "greeting", label: "Greeting", type: "text", default: "Hello" },
@@ -93,8 +103,8 @@ export const manifest = {
 } satisfies PluginManifestInput;
 
 function greetings(ctx: PluginContext) {
-  const collection = ctx.storage.greetings;
-  if (!collection) throw new Error("The greetings collection is not declared.");
+  const collection = ctx.objects.greetings;
+  if (!collection) throw new Error("The greetings object is not declared.");
   return collection;
 }
 
@@ -120,11 +130,11 @@ export default definePlugin({
       const orderId = event.resource.id;
       const order = await ctx.api.call<{ id?: string; status?: string }>("dashboard.orders.get", { path: { id: orderId } });
       await greetings(ctx).put(orderId, {
-        orderId,
+        order_id: orderId,
         kind: "paid",
-        createdAt: Date.parse(event.occurredAt) || 0,
+        created_at: Date.parse(event.occurredAt) || 0,
         greeting: String(ctx.settings.greeting ?? "Hello"),
-        orderStatus: order.ok ? order.data?.status ?? null : null,
+        order_status: order.ok ? order.data?.status ?? null : null,
       });
       const paid = (await ctx.kv.get<number>("paid_count")) ?? 0;
       await ctx.kv.set("paid_count", paid + 1);
@@ -162,7 +172,7 @@ export default definePlugin({
           greetings(ctx).count(),
           ctx.kv.get<number>("paid_count"),
           ctx.kv.get<number>("created_count"),
-          greetings(ctx).query({ where: { kind: "paid" }, orderBy: { field: "createdAt", direction: "desc" }, limit: 10, cursor: adminContext(request).cursor }),
+          greetings(ctx).query({ where: { kind: "paid" }, orderBy: { field: "created_at", direction: "desc" }, limit: 10, cursor: adminContext(request).cursor }),
         ]);
         return {
           body: ui.page([
@@ -180,7 +190,7 @@ export default definePlugin({
                   cells: {
                     order: { text: record.id, to: ui.to.resource("order", record.id) },
                     greeting: String(record.data.greeting ?? ""),
-                    at: { date: new Date(Number(record.data.createdAt) || 0).toISOString() },
+                    at: { date: new Date(Number(record.data.created_at) || 0).toISOString() },
                   },
                 })),
                 pagination: { next: page.nextCursor },
@@ -278,12 +288,12 @@ export default definePlugin({
       const cutoff = Date.parse(run.scheduledAt) - 30 * DAY_MS;
       const page = await greetings(ctx).query({
         where: { kind: "paid" },
-        orderBy: { field: "createdAt", direction: "asc" },
+        orderBy: { field: "created_at", direction: "asc" },
         limit: 100,
       });
       let removed = 0;
       for (const record of page.records) {
-        if (Number(record.data.createdAt) >= cutoff) break;
+        if (Number(record.data.created_at) >= cutoff) break;
         if (await greetings(ctx).delete(record.id)) removed += 1;
       }
       ctx.log.info("Tidied old greetings", { removed });

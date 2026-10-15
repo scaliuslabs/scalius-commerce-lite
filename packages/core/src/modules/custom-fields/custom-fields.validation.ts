@@ -21,6 +21,7 @@ const expectedRevisionSchema = z.number().int().min(1);
 
 /** Validations as sent: bounds in the field's own units (money in major units). */
 export const customFieldValidationsInputSchema = z.object({
+    to: z.string().max(150).nullable().optional().describe("Object references: qualified target type, for example custom.size_chart."),
     min: z.union([z.string(), z.number()]).nullable().optional()
         .describe("Text and URL: minimum length. Numbers, money, dates: minimum value (money in decimal major units)."),
     max: z.union([z.string(), z.number()]).nullable().optional()

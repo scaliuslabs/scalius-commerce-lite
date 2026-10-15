@@ -25,6 +25,7 @@ import type { CoreSectionSettings, StorefrontSkinnableSectionType } from "@scali
 import { toHtml, type Renderable } from "./html";
 
 export interface SectionProps<Settings = StorefrontResolvedSettings> {
+  objects: NonNullable<Extract<StorefrontRenderJob, { kind: "section" }>["objects"]>;
   settings: Settings;
   /** The theme's id of this placement (stable while the merchant keeps it). */
   instanceId: string;
@@ -101,7 +102,7 @@ function renderJob(definition: StorefrontDefinition, job: StorefrontRenderJob, c
     case "section": {
       const component = definition.sections?.[job.type];
       if (!component) throw new Error(`No component for section ${job.type}.`);
-      return toHtml(component({ settings: job.settings, instanceId: job.instanceId, context })).value;
+      return toHtml(component({ settings: job.settings, instanceId: job.instanceId, objects: job.objects ?? {}, context })).value;
     }
     case "block": {
       const component = definition.blocks?.[job.type];

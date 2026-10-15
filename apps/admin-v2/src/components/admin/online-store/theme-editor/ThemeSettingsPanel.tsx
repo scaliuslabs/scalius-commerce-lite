@@ -5,6 +5,7 @@
  * their settings are here too, for the editor's settings panel. An app can
  * skin the header, the footer or the product card (AppSkinSettings.tsx).
  */
+import { CardCustomFields } from "../schema-form/CardCustomFields";
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { Link } from "@tanstack/react-router";
@@ -231,6 +232,7 @@ export function ThemeSettingsPanel({ theme, resolved, media, apps, setDraft, rev
             </>
           )}
         </AppSkinSettings>
+        <CardCustomFields theme={theme} setDraft={setDraft} />
       </SettingsGroup>
     </OpenGroup.Provider>
     </ThemeRevealContext.Provider>

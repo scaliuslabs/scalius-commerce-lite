@@ -35,7 +35,7 @@ import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { homeSectionsShowDeliveryFacts } from "@scalius/shared/storefront-theme";
-import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { applyRequestThemeBindings, resolveRequestTheme } from "@/lib/storefront-theme-context";
 
 // One batch: layout, homepage (with every section's products, images,
 // categories and collections), and the delivery facts a delivery-facts strip
@@ -60,13 +60,15 @@ if (!layoutData || !homepageData) {
 // only under the preview cookie), so slides, tiles, collections and the
 // product home all preview with the draft.
 const requestTheme = await resolveRequestTheme(Astro, layoutData);
-const homeSections = requestTheme.resolved.pages.home;
 let sectionData = homepageData.sections ?? EMPTY_HOMEPAGE_SECTION_DATA;
 if (requestTheme.preview && requestTheme.previewToken) {
   const previewData = await getThemePreviewHomepageSections(requestTheme.previewToken, { presence: getRuntimePresence() });
   if (previewData === null) return storefrontDataUnavailableResponse();
   sectionData = previewData;
 }
+
+if (sectionData.bindingObjects) applyRequestThemeBindings(requestTheme, { objects: sectionData.bindingObjects, mediaIds: new Set(sectionData.media.map((asset) => asset.id)) });
+const homeSections = requestTheme.resolved.pages.home;
 
 // A product homepage answers `/` with its product's own page while that
 // product is public; otherwise `/` renders the sections.

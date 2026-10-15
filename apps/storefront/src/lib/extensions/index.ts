@@ -5,6 +5,7 @@
 // the page already read: no extra API call.
 
 import type { StorefrontSkinRef, StorefrontThemeSkinUnit } from "@scalius/shared/storefront-theme";
+import { resolvePluginSettingBindings } from "@scalius/shared/storefront-theme/bindings";
 import { parsePluginSurfaceKey } from "@scalius/shared/plugins/storefront";
 import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
 import {
@@ -147,7 +148,8 @@ export async function appSkin(locals: object, url: URL, target: StorefrontSkinTa
   const extension = byId.get(key.pluginId);
   const declaration = extension?.skins.find((entry) => entry.id === key.type && entry.target === target);
   if (!extension || !declaration) return null;
-  return { extension, target, component: declaration.id, settings: resolveSkinSettings(declaration.settings, chosen.values) };
+  const { bindingContext } = await currentRequestTheme(locals);
+  return { extension, target, component: declaration.id, settings: resolveSkinSettings(declaration.settings, resolvePluginSettingBindings(declaration.settings, chosen.values, chosen.bindings, bindingContext)) };
 }
 
 /** A skin's or block's settings: no images or products (the manifest forbids them), so nothing to read. */
@@ -232,6 +234,6 @@ export async function appProductBlocks(locals: object, url: URL): Promise<AppPro
     const extension = key ? byId.get(key.pluginId) : undefined;
     const declaration = extension?.blocks.find((entry) => entry.type === key!.type);
     if (!extension || !declaration) return [];
-    return [{ extension, id: block.id, type: declaration.type, target: declaration.target, settings: resolveSkinSettings(declaration.settings, block.values) }];
+    return [{ extension, id: block.id, type: declaration.type, target: declaration.target, settings: resolveSkinSettings(declaration.settings, resolvePluginSettingBindings(declaration.settings, block.values, block.bindings, theme.bindingContext)) }];
   });
 }

@@ -65,11 +65,14 @@ import { matchingResultSchema, matchingSchema, requireOneSelection, type Matchin
 import { BULK_MATCHING_SLICE, readMatchingCursor } from "@scalius/core/utils/bulk-matching";
 import { planLimits } from "@scalius/shared/plan-limits";
 import type { Database } from "@scalius/database/client";
+import { relatedObjectsProjection, withRelatedObjects } from "./related-objects";
+import { relatedObjectRecordSchema } from "../../schemas/related-objects";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 /** The editor's product detail, with the Wave B warranty reference. */
 const adminProductDetailSchema = productDetailSchema.extend({
+    relatedObjects: z.array(relatedObjectRecordSchema),
     /** The product's warranty policy (wrp_…), or null. Checkout freezes its current revision onto order lines. */
     warrantyPolicyId: z.string().nullable(),
 });
@@ -980,9 +983,9 @@ const getByIdRoute = createRoute({
 app.openapi(getByIdRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const product = await getProductDetails(db, id);
+    const product = await getProductDetails(db, id, relatedObjectsProjection(c, "product", id));
     if (!product) throw new NotFoundError("Product not found");
-    return ok(c, presentSkuCosts(c, product));
+    return ok(c, presentSkuCosts(c, withRelatedObjects(product)));
 });
 
 // ── Update Product ──

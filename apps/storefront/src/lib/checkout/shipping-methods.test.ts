@@ -84,6 +84,34 @@ function setup(options: {
 }
 
 describe("delivery options follow the address", () => {
+  it("shows a pending carrier price until the quote arrives and keeps the known product waiver", async () => {
+    let waived = false;
+    const { methods, events, options } = setup({
+      byCity: { dhaka: [rate("carrier", 0, { rateSource: "app.carrier:standard" })] },
+      waived: () => waived,
+    });
+    await methods.setAddress(DHAKA);
+    expect(options()[0]).toMatchObject({ fee: "Loading…", note: "" });
+    expect(events.at(-1)).toMatchObject({ rateSource: "app.carrier:standard" });
+    methods.applyQuotedRates([{ id: "carrier", name: "Carrier", kind: "delivery", amount: 125, amountMinor: 12_500 }]);
+    expect(options()[0]).toMatchObject({ fee: "৳125", note: "" });
+    methods.applyQuotedRates(null);
+    waived = true;
+    methods.refreshFees();
+    expect(options()[0]).toMatchObject({ fee: "Free", note: "" });
+  });
+
+  it("rechecks a flat zero fee changed to a carrier quote without calling it free", async () => {
+    const loadRates = vi.fn()
+      .mockResolvedValueOnce([rate("standard", 0)])
+      .mockResolvedValueOnce([rate("standard", 0, { rateSource: "app.carrier:standard" })]);
+    const { methods, options } = setup({ loadRates });
+    await methods.setAddress(DHAKA);
+    expect(await methods.recheck()).toBe(true);
+    expect(options()[0]).toMatchObject({ fee: "Loading…" });
+    expect(document.querySelector("[data-shipping-notice]")?.textContent).toBe("Delivery fee changed from Free to Loading….");
+  });
+
   it("offers only pickup before an address, with nothing chosen", () => {
     const { events, options, note, standIn } = setup();
     expect(options()).toEqual([{ id: "pickup", checked: false, fee: "Free", note: "" }]);

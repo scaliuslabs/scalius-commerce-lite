@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import type { CheckoutAppFunctions } from "@scalius/core/modules/checkout";
 import { UnauthorizedError, ValidationError } from "../../errors";
 import {
   submitAgentStorefrontCheckout,
@@ -14,6 +15,7 @@ import {
   mutateAgentStorefrontCart,
   quoteAgentStorefrontCheckout,
   setAgentStorefrontDelivery,
+  validateAgentStorefrontCheckout,
 } from "./service";
 
 const GRANT = "agr_storefront0123456789";
@@ -62,9 +64,9 @@ describe("agent storefront checkout submission on D1 storage", () => {
     sqlite.exec(`UPDATE agent_storefront_contexts SET customer_session_token_hash = '${"s".repeat(64)}'`);
   }
 
-  async function submit(overrides: Partial<AgentStorefrontCheckoutSubmitInput> = {}) {
+  async function submit(overrides: Partial<AgentStorefrontCheckoutSubmitInput> = {}, apps?: CheckoutAppFunctions) {
     const expectedQuoteFingerprint = overrides.expectedQuoteFingerprint
-      ?? (await quoteAgentStorefrontCheckout(db, GRANT, CONTEXT)).quoteFingerprint;
+      ?? (await quoteAgentStorefrontCheckout(db, GRANT, CONTEXT, { apps, attributes: overrides.attributes })).quoteFingerprint;
     return submitAgentStorefrontCheckout(db, GRANT, CONTEXT, {
       expectedRevision: 2,
       expectedQuoteFingerprint,
@@ -76,7 +78,7 @@ describe("agent storefront checkout submission on D1 storage", () => {
       notes: null,
       paymentMethod: "cod",
       ...overrides,
-    }, { requestUrl: "https://shop.example.com/api/v1/agent" });
+    }, { requestUrl: "https://shop.example.com/api/v1/agent", apps });
   }
 
   function expectNothingCommitted(): void {
@@ -87,6 +89,37 @@ describe("agent storefront checkout submission on D1 storage", () => {
     expect(sqlite.prepare("SELECT revision, cart_json FROM agent_storefront_contexts").get())
       .toEqual({ revision: 2, cart_json: '[{"variantId":"variant_1","quantity":2}]' });
   }
+
+  it("validates, fingerprints and persists declared checkout attributes on the agent path", async () => {
+    const seen: Array<Record<string, string>> = [];
+    const apps: CheckoutAppFunctions = {
+      points: new Set(["cart.validate"]),
+      attributes: [{ appId: "acme.gift", fields: [{ key: "message", label: "Gift message", type: "text", required: true }] }],
+      async run(_point, input) {
+        if ("cart" in input && input.cart) seen.push(input.cart.attributes);
+        return [];
+      },
+      report() {},
+    };
+    const attributes = { "acme.gift.message": "Happy birthday" };
+    await validateAgentStorefrontCheckout(db, GRANT, CONTEXT, { apps, attributes: { ...attributes, unknown: "discard me" } });
+    expect(seen).toEqual([attributes]);
+
+    const reviewed = await quoteAgentStorefrontCheckout(db, GRANT, CONTEXT, { apps, attributes });
+    await expect(submit({ expectedQuoteFingerprint: reviewed.quoteFingerprint }, apps))
+      .rejects.toMatchObject({ code: "attribute_invalid" });
+    await expect(submit({ expectedQuoteFingerprint: reviewed.quoteFingerprint, attributes: { "acme.gift.message": "Changed" } }, apps))
+      .rejects.toBeInstanceOf(AgentStorefrontCheckoutQuoteConflictError);
+    expectNothingCommitted();
+
+    const input = { attributes, expectedQuoteFingerprint: reviewed.quoteFingerprint };
+    const result = await submit(input, apps);
+    expect(sqlite.prepare("SELECT attributes FROM orders WHERE id = ?").get(result.response.orderId))
+      .toEqual({ attributes: JSON.stringify(attributes) });
+    expect((await submit(input, apps)).response).toEqual(result.response);
+    await expect(submit({ ...input, attributes: { "acme.gift.message": "Changed" } }, apps))
+      .rejects.toThrow("different checkout details");
+  });
 
   it.each([
     ["a SKU price", "UPDATE product_variants SET price_minor = 12000"],

@@ -19,7 +19,7 @@ import { resolveAgentOperationById } from "../agent-access/direct-operation";
 import type { PluginPrincipal } from "../agent-access/types";
 import { authorizePluginOperation, pluginTierAllows, pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
 
-const OPERATION_ID = /^dashboard(\.[a-z][a-z0-9_]*){2,}$/;
+const OPERATION_ID = /^(?:dashboard(\.[a-z][a-z0-9_]*){2,}|objects\.(?:types\.(?:list|get|create|update|delete)|list|get|upsert|delete))$/;
 
 function refusal(status: number, code: string, message: string): PluginApiResult<never> {
   return { ok: false, status, data: null, error: { code, message } };
@@ -120,7 +120,7 @@ export async function callPluginOperation(options: {
   ctx: ExecutionContext;
 }): Promise<PluginApiResult> {
   if (typeof options.operationId !== "string" || !OPERATION_ID.test(options.operationId)) {
-    return refusal(404, "api.unknown_operation", "Plugins call dashboard operations by id (dashboard.orders.get).");
+    return refusal(404, "api.unknown_operation", "Plugins call dashboard or objects operations by their reviewed id.");
   }
   const operation = resolveAgentOperationById(options.operationId);
   if (!operation) return refusal(404, "api.unknown_operation", `Unknown operation ${options.operationId}.`);

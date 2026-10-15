@@ -30,8 +30,8 @@ import {
  * with their own projection).
  */
 export const STOREFRONT_SKINNABLE_SECTION_TYPES = STOREFRONT_SECTION_RENDERERS.filter(
-  (type) => type !== "recently-viewed" && type !== "endless-grid" && type !== "metaobjects",
-) as Array<Exclude<StorefrontSectionRenderer, "recently-viewed" | "endless-grid" | "metaobjects">>;
+  (type) => type !== "recently-viewed" && type !== "endless-grid" && type !== "objects",
+) as Array<Exclude<StorefrontSectionRenderer, "recently-viewed" | "endless-grid" | "objects">>;
 export type StorefrontSkinnableSectionType = (typeof STOREFRONT_SKINNABLE_SECTION_TYPES)[number];
 
 /** `section:<type>`: the skin target of a core section type. */
@@ -63,6 +63,19 @@ export interface CoreDeliveryFacts {
   items: Array<{ title: string; detail: string }>;
 }
 
+/** Public object fields, formatted once by core for its renderer and skins. */
+export interface CoreObjectFieldView {
+  key: string;
+  name: string;
+  parts: Array<
+    | { kind: "text"; text: string }
+    | { kind: "link"; href: string; label: string; external: boolean }
+    | { kind: "color"; value: string }
+    | { kind: "image"; asset: { id: string; url: string; alt: string; width: number | null; height: number | null } }
+  >;
+  list: boolean;
+}
+
 type ImageKey = "image" | "phoneImage" | "mediaId";
 type TileKey = keyof typeof TILE_KEYS;
 
@@ -75,7 +88,8 @@ export type CoreSectionValue<Value> =
           [Key in keyof Value]: Key extends ImageKey ? StorefrontImage | null
             : Key extends TileKey ? StorefrontTile[]
               : Key extends "promotionId" ? { endsAt: string } | null
-                : CoreSectionValue<Value[Key]>
+                : Key extends "objectField" ? CoreObjectFieldView[]
+                  : CoreSectionValue<Value[Key]>
         }
           : Value;
 
@@ -90,6 +104,7 @@ export interface CoreSectionResolver {
   /** A running promotion's end; null when it has ended or is unknown. */
   promotion(promotionId: string): { endsAt: string } | null;
   deliveryFacts(): CoreDeliveryFacts["items"];
+  objectField?(qualifiedKey: string): CoreObjectFieldView[];
 }
 
 function resolveValue(key: string | null, value: unknown, resolver: CoreSectionResolver): unknown {
@@ -99,6 +114,7 @@ function resolveValue(key: string | null, value: unknown, resolver: CoreSectionR
     return resolver.tiles(TILE_KEYS[key as TileKey], ids);
   }
   if (key === "promotionId") return typeof value === "string" && value ? resolver.promotion(value) : null;
+  if (key === "objectField") return typeof value === "string" && value ? resolver.objectField?.(value) ?? [] : [];
   if (Array.isArray(value)) return value.map((item) => resolveValue(null, item, resolver));
   if (typeof value !== "object" || value === null) return value;
   if ((value as { kind?: unknown }).kind === "delivery-facts") return { kind: "delivery-facts", items: resolver.deliveryFacts() };

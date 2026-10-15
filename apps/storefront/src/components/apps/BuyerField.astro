@@ -1,0 +1,26 @@
+---
+import type { CheckoutAttribute } from "@scalius/shared/plugins/buyer-ui";
+import { buyerFieldModel } from "@/lib/buyer-ui/field";
+
+interface Props {
+  attribute: CheckoutAttribute;
+  name?: string; id?: string; value?: string; placeholder?: string;
+  class?: string; labelClass?: string; controlClass?: string; rows?: number;
+}
+const { attribute, name, id = name ?? attribute.key, value = "", placeholder, class: className, labelClass, controlClass, rows = 2 } = Astro.props;
+const field = buyerFieldModel(attribute, name, value);
+---
+<div class={className}>
+  <label for={id} class={labelClass}>{attribute.label}</label>
+  {field.tag === "textarea" ? (
+    <textarea {...field.attributes} id={id} rows={rows} placeholder={placeholder} class={controlClass} aria-describedby={attribute.help ? `${id}-help` : undefined}>{value}</textarea>
+  ) : field.tag === "select" ? (
+    <select {...field.attributes} id={id} class={controlClass} aria-describedby={attribute.help ? `${id}-help` : undefined}>
+      <option value=""></option>
+      {field.choices.map((choice) => <option value={choice.value} selected={choice.value === value}>{choice.label}</option>)}
+    </select>
+  ) : (
+    <input {...field.attributes} id={id} value={attribute.type === "boolean" ? "true" : value} checked={attribute.type === "boolean" ? field.checked : undefined} placeholder={placeholder} class={controlClass} aria-describedby={attribute.help ? `${id}-help` : undefined} />
+  )}
+  {attribute.help && <p id={`${id}-help`} class="mt-1 text-sm text-muted-foreground">{attribute.help}</p>}
+</div>

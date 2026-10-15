@@ -65,6 +65,7 @@ import {
   type MediaOptimizationSettings,
 } from "./documents";
 import type { SettingsDocument, SettingsDocumentWriteResult } from "../../settings-store";
+import { assertThemeBindings } from "./theme-bindings";
 
 /** The revision the merchant's editor loaded; a stale one is a 409 conflict. */
 export interface SettingsSaveOptions {
@@ -445,6 +446,7 @@ export function themeStatus(workspace: ThemeWorkspaceDocument): ThemeStatus {
  * still renders only what is public when it reads the theme.
  */
 async function assertThemeReferences(db: Database, theme: StorefrontThemeDocument): Promise<void> {
+  await assertThemeBindings(db, theme);
   const references = storefrontThemeMediaReferences(theme);
   const mediaIds = [...new Set(references.map((reference) => reference.mediaId))];
   const productId = theme.pages.homeMode.kind === "product" ? theme.pages.homeMode.productId : null;

@@ -1,23 +1,7 @@
-// Storefront surfaces of a plugin (docs/platform/PLUGINS.md, "Storefront
-// surfaces"): checkout and customer-account blocks, head tags and proxy
-// pages. Theme sections, product blocks and skins are components drawn at the
-// edge (storefront-components.ts); no app section or product block is drawn
-// by a route.
-//
-// - a checkout or account block route gets `request.render` (what to draw,
-//   with the app's settings) and answers `{ html, head? }`. The API
-//   sanitizes the HTML (html.ts) and stores it inside the app-blocks batch
-//   part under dependency validation, so a cache hit runs no plugin code.
-//   While rendering, a plugin may read only its own settings and the storage
-//   collections the block declares in `reads`;
-// - a proxy page (`/apps/<id>/<route>`, a browser navigation) answers
-//   `{ page: { title, html, … } }` and is drawn inside the store layout, or
-//   `{ redirect: "/same/store/path" }` after a form post.
-//
-// Part of the versioned plugin API.
+// Public storefront head contributions and proxy pages, plus the targets
+// core uses for declarative Buyer UI. Components render at the edge.
 
 import { z } from "zod";
-import type { PluginSettingValue } from "./settings-schema";
 import { serializeSchemaJsonLd } from "./html";
 
 export { serializeJsonLd } from "./html";
@@ -29,12 +13,8 @@ export { serializeJsonLd } from "./html";
 export const PLUGIN_HOME_SECTIONS_MAX = 24;
 /** At most this many app blocks render on one product page. */
 export const PLUGIN_PRODUCT_BLOCKS_MAX = 10;
-/** A storefront render shares the page's time: its wall time is capped below the manifest's. */
-export const PLUGIN_RENDER_WALL_MS = 1_500;
 /** A failed render is retried after this long (the page stays cacheable meanwhile). */
 export const PLUGIN_RENDER_RETRY_SECONDS = 60;
-/** App sections and blocks rendered at once. */
-export const PLUGIN_RENDER_CONCURRENCY = 4;
 
 /** `<plugin id>/<section or block type>`: how a theme names an app's section or block. */
 export const PLUGIN_SURFACE_KEY_PATTERN = /^([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?)\/([a-z][a-z0-9-]{0,47})$/;
@@ -50,14 +30,7 @@ export function parsePluginSurfaceKey(key: string): { pluginId: string; type: st
 
 // ── Checkout and customer-account blocks ─────────────────────────────────
 
-/**
- * Where an app block draws, by Shopify's extension target names (checkout
- * and customer-account UI extensions). A block is the same for every buyer:
- * it is drawn once from the app's settings and declared collections, cached
- * under dependency validation and served as plain sanitized HTML, so the
- * page stays usable before hydration and without JavaScript. Never per-buyer
- * data, never app JavaScript.
- */
+/** Targets for declarative Buyer UI. App code never renders on these pages. */
 export const PLUGIN_BLOCK_TARGETS = [
   // Checkout: the information step (cart page) and the payment step.
   "purchase.checkout.contact.render-after",
@@ -74,7 +47,7 @@ export const PLUGIN_BLOCK_TARGETS = [
 ] as const;
 export type PluginBlockTarget = (typeof PLUGIN_BLOCK_TARGETS)[number];
 
-/** The storefront page groups whose batch reads one blocks part each. */
+/** Buyer UI page groups. */
 export const PLUGIN_BLOCK_PAGES = ["checkout", "order", "account"] as const;
 export type PluginBlockPage = (typeof PLUGIN_BLOCK_PAGES)[number];
 
@@ -83,30 +56,6 @@ export function pluginBlockPage(target: PluginBlockTarget): PluginBlockPage {
   if (target.startsWith("purchase.checkout.")) return "checkout";
   if (target === "purchase.thank-you.customer-information.render-after" || target === "customer-account.order-status.block.render") return "order";
   return "account";
-}
-
-/**
- * Targets inside the checkout form: their HTML may hold no form of its own
- * (a nested form would break the buyer's), so forms are dropped there.
- */
-export function pluginBlockAllowsForms(target: PluginBlockTarget): boolean {
-  return pluginBlockPage(target) !== "checkout";
-}
-
-/** At most this many app blocks draw on one page group. */
-export const PLUGIN_PAGE_BLOCKS_MAX = 12;
-
-/** What a checkout or customer-account block route is asked to draw (`request.render`). */
-export interface PluginRenderContext {
-  kind: "block";
-  /** Where it draws. */
-  target: PluginBlockTarget;
-  /** The manifest block type. */
-  type: string;
-  /** `<plugin id>/<block type>`. */
-  instanceId: string;
-  /** The block has no settings of its own: the app reads its own. */
-  settings: Record<string, PluginSettingValue>;
 }
 
 // ── Head contributions ────────────────────────────────────────────────────
@@ -178,14 +127,6 @@ export function sanitizePluginHead(value: unknown): PluginHead {
   }
   return { meta, jsonLd };
 }
-
-// ── What a section or block route answers ────────────────────────────────
-
-export const pluginRenderOutputSchema = z.object({
-  html: z.string(),
-  head: z.unknown().optional(),
-}).strict();
-export type PluginRenderOutput = z.infer<typeof pluginRenderOutputSchema>;
 
 // ── Proxy pages ──────────────────────────────────────────────────────────
 

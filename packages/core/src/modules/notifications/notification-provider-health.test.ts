@@ -74,6 +74,7 @@ describe("notification provider health", () => {
             source: "receipt",
         });
         expect(db.calls.receiptReads).toBe(1);
+        expect(db.calls.batches).toBe(1);
     });
 
     it("recovers WhatsApp provider pauses from receipt evidence", async () => {
@@ -160,6 +161,7 @@ describe("notification provider health", () => {
             source: "marker",
         });
         expect(db.calls.receiptReads).toBe(0);
+        expect(db.calls.batches).toBe(0);
     });
 
     it("masks email and phone data in stored provider failure reasons", async () => {
@@ -190,10 +192,14 @@ function createProviderHealthDb(options: {
     };
     latestSettingsUpdatedAt?: number | Date | string;
     receipts?: ProviderBlockTestReceipt[];
-}): Database & { calls: { receiptReads: number } } {
-    const calls = { receiptReads: 0 };
+}): Database & { calls: { receiptReads: number; batches: number } } {
+    const calls = { receiptReads: 0, batches: 0 };
     const db = {
         calls,
+        async batch(queries: Array<{ all(): unknown[] }>) {
+            calls.batches += 1;
+            return queries.map((query) => query.all());
+        },
         select() {
             let table: unknown;
             let ordered = false;
@@ -222,6 +228,11 @@ function createProviderHealthDb(options: {
                         : { updatedAt: options.latestSettingsUpdatedAt };
                 },
                 all() {
+                    if (table === settings && ordered) {
+                        return options.latestSettingsUpdatedAt === undefined
+                            ? []
+                            : [{ updatedAt: options.latestSettingsUpdatedAt }];
+                    }
                     if (table === notificationDeliveryReceipts) {
                         calls.receiptReads += 1;
                         return options.receipts ?? [];
@@ -233,5 +244,5 @@ function createProviderHealthDb(options: {
         },
     };
 
-    return db as unknown as Database & { calls: { receiptReads: number } };
+    return db as unknown as Database & { calls: { receiptReads: number; batches: number } };
 }

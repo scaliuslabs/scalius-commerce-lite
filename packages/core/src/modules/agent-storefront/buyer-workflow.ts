@@ -27,7 +27,9 @@ import {
   NO_CHECKOUT_APP_FUNCTIONS,
   resolveCartPaymentMethods,
   resolveExistingCheckoutAttempt,
+  validateCheckoutAttributes,
   type CheckoutAppFunctions,
+  type CalculatedRateOptions,
 } from "@scalius/core/modules/checkout";
 import { type StorefrontOrderCommitPayload } from "@scalius/core/modules/orders/browser";
 import type { CreateStorefrontOrderResult } from "../orders";
@@ -120,6 +122,8 @@ export interface AgentStorefrontCheckoutSubmitInput {
   billingPostalCode?: string | null;
   notes: string | null;
   paymentMethod: string;
+  shippingRateToken?: string | null;
+  attributes?: Record<string, string>;
 }
 
 /** The billing fields an agent submit sent, trimmed (only those sent, so earlier hashes are unchanged). */
@@ -216,6 +220,9 @@ export async function buildAgentStorefrontCheckoutRequestHash(
     ...agentBillingHashFields(input),
     notes: input.notes?.trim() || null,
     paymentMethod: input.paymentMethod,
+    ...(Object.keys(input.attributes ?? {}).length ? {
+      attributes: Object.keys(input.attributes!).sort().map((key) => [key, input.attributes![key]]),
+    } : {}),
   });
   return `${AGENT_CHECKOUT_REQUEST_HASH_PREFIX}${await sha256Hex(normalized)}`;
 }
@@ -396,6 +403,7 @@ export async function submitAgentStorefrontCheckout(
     paymentProviders?: PaymentProviders;
     /** The request's app providers (an app tax provider). */
     appProviders?: AppProviders;
+    calculatedRates?: CalculatedRateOptions;
   },
 ): Promise<AgentStorefrontCheckoutSubmitResult> {
   const now = options.now ?? new Date();
@@ -408,6 +416,7 @@ export async function submitAgentStorefrontCheckout(
   const replay = await replayCommittedCheckout(db, contextId, requestKey, requestHash);
   if (replay) return { response: replay, postCommitPayload: null, availabilityVariantIds: [] };
   assertActiveContext(owned, input.expectedRevision, now);
+  const attributes = validateCheckoutAttributes(apps, input.attributes, true);
 
   const cart = await resolveContextCartIdentities(db, owned);
   // The same rule as storefront checkout: the delivery preflight in the
@@ -427,6 +436,9 @@ export async function submitAgentStorefrontCheckout(
       shippingAdminArea: owned.adminArea,
       shippingPostalCode: owned.postalCode,
       shippingMethodId: owned.shippingMethodId,
+      shippingRateToken: input.shippingRateToken,
+      cod: input.paymentMethod === "cod",
+      calculatedRates: options.calculatedRates,
       customerEmail: input.customerEmail,
       customerPhone: input.customerPhone,
       // The order's market prices the lines (MARKETS-DESIGN D5): a cart with
@@ -464,6 +476,7 @@ export async function submitAgentStorefrontCheckout(
   const data = {
     checkoutRequestId: requestId,
     expectedQuoteFingerprint: input.expectedQuoteFingerprint,
+    attributes,
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone,
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
@@ -558,6 +571,7 @@ export async function submitAgentStorefrontCheckout(
     },
     createTrustedStorefrontCheckoutPolicySnapshot({
       partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
+      partialPaymentAmount: checkoutSettings.partialPaymentAmount,
       authorityRevision: authority.authorityRevision,
       orderCreatedNotificationEnabled: authority.sideEffects.orderCreatedNotification,
       metaPurchaseEnabled: authority.sideEffects.metaPurchase,
@@ -575,6 +589,7 @@ export async function submitAgentStorefrontCheckout(
     shippingMethodId,
     discountCode: owned.discountCode,
     quote: prepared.taxQuote,
+    attributes,
   });
   assertAgentStorefrontCheckoutQuoteFingerprint(
     input.expectedQuoteFingerprint,

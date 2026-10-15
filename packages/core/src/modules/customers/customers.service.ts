@@ -12,7 +12,7 @@ import {
     firstCustomerAddressId,
     orders,
 } from "@scalius/database/schema";
-import { sql, isNull, asc, desc, eq, and, or, inArray, type SQL, type SQLWrapper } from "drizzle-orm";
+import { sql, isNull, asc, desc, eq, and, or, inArray, getTableColumns, type SQL, type SQLWrapper } from "drizzle-orm";
 import { BULK_MATCHING_SLICE, matchingSliceCondition, nextMatchingCursor } from "../../utils/bulk-matching";
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
@@ -536,9 +536,10 @@ export async function getCustomerById(db: Database, id: string) {
  * The customer row plus its paid spend, derived from its orders, its tags and
  * its marketing consent status per channel (Customers & marketing).
  */
-export async function getCustomerDetail(db: Database, id: string) {
+export async function getCustomerDetail(db: Database, id: string, relatedObjectsProjection?: SQL<string | null>) {
     const [customer, spend, latest, tags, consentRows, addresses] = await Promise.all([
-        getCustomerById(db, id),
+        db.select({ ...getTableColumns(customers), relatedObjectsJson: relatedObjectsProjection ?? sql<string | null>`null` })
+            .from(customers).where(eq(customers.id, id)).get(),
         db.select(paidSpendProjection()).from(orders)
             .where(and(eq(orders.customerId, id), isNull(orders.deletedAt)))
             .get(),

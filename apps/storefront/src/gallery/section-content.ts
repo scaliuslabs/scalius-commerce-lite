@@ -80,7 +80,7 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
     alternatives: { ...sourceAlternatives, "two-products": { columns: 2, rows: 1 } },
   },
   "deal-block": {
-    settings: { title: "Flash sale", source: SOURCES["on-sale"], promotionId: "promo-flash" },
+    settings: { title: "Flash sale", source: SOURCES["on-sale"], promotionId: "promo-flash", mediaId: "banner-eid" },
     alternatives: { "no-countdown": { promotionId: null } },
   },
   "product-tabs": {
@@ -99,7 +99,7 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
     settings: {
       title: "Shop by occasion",
       cards: [
-        { mediaId: "square-occasion-eid", title: "Eid", href: "/collections/col-eid" },
+        { mediaId: "square-occasion-eid", title: "Eid", subtitle: "Made for the celebration", href: "/collections/col-eid" },
         { mediaId: "square-occasion-wedding", title: "Wedding season", href: "/categories/sarees" },
         { mediaId: "square-occasion-office", title: "Office wear", href: "/categories/panjabi" },
         { mediaId: "square-occasion-boishakh", title: "পহেলা বৈশাখ", href: "/collections/col-bangla" },
@@ -174,15 +174,16 @@ export const SECTION_CONTENT: Record<StorefrontSectionType, SectionContent> = {
     },
   },
   "recently-viewed": { settings: { title: "Recently viewed" } },
-  metaobjects: {
-    settings: { heading: "Visit our stores", definitionId: "mo-locations", layout: "grid", limit: 12 },
+  objects: {
+    settings: { heading: "Visit our stores", typeId: "oty_custom.locations", layout: "grid", limit: 12 },
     alternatives: {
-      "type=faq": { heading: "Frequently asked questions", definitionId: "mo-faq", layout: "accordion" },
-      "type=size-chart": { heading: "Size chart", definitionId: "mo-size-chart", layout: "list" },
+      "type=faq": { heading: "Frequently asked questions", typeId: "oty_custom.faq", layout: "accordion" },
+      "type=size-chart": { heading: "Size chart", typeId: "oty_custom.size_chart", layout: "list" },
       "limit=2": { limit: 2 },
     },
   },
+  specifications: { settings: { heading: "Specifications", rows: [{ label: "Fabric", value: "Cotton" }, { label: "Care", value: "Hand wash" }] } },
   newsletter: {
-    settings: { heading: "Get Eid offers first", text: "SMS and email, twice a month. Unsubscribe any time.", email: "optional", whatsapp: false, buttonLabel: "Subscribe" },
+    settings: { mediaId: "banner-eid", heading: "Get Eid offers first", text: "SMS and email, twice a month. Unsubscribe any time.", email: "optional", whatsapp: false, buttonLabel: "Subscribe" },
   },
 };

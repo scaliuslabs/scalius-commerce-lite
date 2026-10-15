@@ -14,14 +14,13 @@ import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
   customFieldDefinitions,
-  metaobjectDefinitions,
+  objectTypes,
   pluginCronRuns,
   pluginEventDeliveries,
   pluginInstallations,
   pluginKv,
   pluginLogEntries,
   pluginMigrations,
-  pluginRecords,
   pluginRegistrations,
   salesChannels,
   type PluginInstallationRow,
@@ -59,7 +58,7 @@ import {
   openPluginSecret,
   sealPluginSecret,
 } from "./settings-crypto";
-import { reindexPluginCollection } from "./storage";
+import { syncAppObjectTypes } from "../objects";
 
 export interface PluginInstallation {
   pluginId: string;
@@ -295,8 +294,7 @@ export async function readPluginInstallations(db: Database): Promise<{
 /**
  * What an update replaces. A row whose stored manifest no longer reads is
  * replaced too (its grant and settings still read on their own): the old
- * declarations are then unknown, so every storage collection is re-indexed
- * and the app's sales channels are reconciled.
+ * declarations are reconciled from the new manifest, along with its sales channels.
  */
 interface InstallationBeforeUpdate {
   status: PluginInstallationStatus;
@@ -521,6 +519,7 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
     if (isPrimaryKeyConflict(error)) throw new PluginError("installation.exists", `Plugin ${manifest.id} is already installed.`);
     throw error;
   }
+  await syncInstallationObjects(db, manifest.id, manifest);
   return requirePluginInstallation(db, manifest.id);
 }
 
@@ -591,6 +590,7 @@ export async function activatePlugin(
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
     throw error;
   }
+  await syncInstallationObjects(db, pluginId, installation.manifest);
   return requirePluginInstallation(db, pluginId);
 }
 
@@ -710,6 +710,21 @@ export async function markPluginFailed(db: Database, pluginId: string, reason: s
   ] as never);
 }
 
+/** An app cannot run against an object schema its release could not apply. */
+async function syncInstallationObjects(db: Database, pluginId: string, manifest: PluginManifest): Promise<void> {
+  let reason: string;
+  try {
+    const problems = await syncAppObjectTypes(db, pluginId, manifest.objects);
+    if (problems.length === 0) return;
+    reason = `${manifest.name}'s object types could not be saved: ${problems.join("; ")}`;
+  } catch (error) {
+    console.warn(`[plugins] ${pluginId} object types could not be synced (${error instanceof Error ? error.name : "error"})`);
+    reason = `${manifest.name}'s object types could not be saved.`;
+  }
+  await markPluginFailed(db, pluginId, reason);
+  throw new PluginError("installation.objects_invalid", reason);
+}
+
 /** Stored values that are still valid under a new settings schema; new fields take their defaults. */
 function migrateStoredSettings(stored: Record<string, unknown>, schema: readonly PluginSettingField[]): Record<string, unknown> {
   const next: Record<string, unknown> = { ...pluginSettingDefaults([...schema]) };
@@ -742,7 +757,7 @@ export interface UpdatePluginInput {
  * narrower one stays active. A `failed` plugin was running when it failed
  * (only active plugins run), so an update resumes it the same way: active
  * when its grant still covers the new request, else waiting for approval.
- * Storage collections whose index declaration changed are re-indexed. A
+ * Object types and their indexes are reconciled before new code runs. A
  * row whose stored manifest no longer reads is replaced the same way
  * (`installationBeforeUpdate`): its approved grant still decides.
  */
@@ -792,20 +807,16 @@ export async function updatePluginInstallation(
     throw error;
   }
 
-  for (const [collection, declaration] of Object.entries(manifest.storage)) {
-    const before = current.manifest?.storage[collection];
-    if (before && JSON.stringify(before) === JSON.stringify(declaration)) continue;
-    await reindexPluginCollection(db, pluginId, collection, declaration);
-  }
+  await syncInstallationObjects(db, pluginId, manifest);
   return requirePluginInstallation(db, pluginId);
 }
 
 /**
  * Puts back the release an update replaced (its code, manifest, grant,
  * status and settings as they were), after the update failed: a data update
- * threw or the new code could not load. Data updates that ran stay recorded
- * (a rollback never reverses data). `reason` is kept as the failure reason
- * the dashboard shows.
+ * threw or the new code could not load. Data updates stay recorded; object
+ * declarations follow the restored release, removing types it does not
+ * declare and their records. `reason` is the failure reason the dashboard shows.
  */
 export async function restorePluginRelease(
   db: Database,
@@ -842,11 +853,7 @@ export async function restorePluginRelease(
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
     throw error;
   }
-  for (const [collection, declaration] of Object.entries(declared.storage)) {
-    const after = current.manifest.storage[collection];
-    if (after && JSON.stringify(after) === JSON.stringify(declaration)) continue;
-    await reindexPluginCollection(db, pluginId, collection, declaration);
-  }
+  await syncInstallationObjects(db, pluginId, declared);
   return requirePluginInstallation(db, pluginId);
 }
 
@@ -883,7 +890,6 @@ export async function uninstallPlugin(
           }).where(and(eq(pluginEventDeliveries.pluginId, pluginId), inArray(pluginEventDeliveries.status, [...waiting]))),
         ]
         : [
-          db.delete(pluginRecords).where(eq(pluginRecords.pluginId, pluginId)),
           db.delete(pluginKv).where(eq(pluginKv.pluginId, pluginId)),
           db.delete(pluginLogEntries).where(eq(pluginLogEntries.pluginId, pluginId)),
           db.delete(pluginEventDeliveries).where(eq(pluginEventDeliveries.pluginId, pluginId)),
@@ -892,8 +898,8 @@ export async function uninstallPlugin(
           db.delete(pluginMigrations).where(eq(pluginMigrations.pluginId, pluginId)),
           // Plugin namespaces are plugin ids (COMMERCE-HOOKS H4); values cascade.
           db.delete(customFieldDefinitions).where(eq(customFieldDefinitions.namespace, pluginId)),
-          // Its content types and, by cascade, their entries.
-          db.delete(metaobjectDefinitions).where(eq(metaobjectDefinitions.namespace, pluginId)),
+          // Its object types and, by cascade, their records.
+          db.delete(objectTypes).where(eq(objectTypes.namespace, pluginId)),
         ]),
     ] as never);
   } catch (error) {

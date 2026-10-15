@@ -24,12 +24,20 @@ import { refund, refundStatus } from "./refunds";
 
 export { BKASH_HOSTS };
 
-/** Storage collections (the pack's `storage`). */
-export const BKASH_STORAGE = {
+/** Object types (the pack's `objects`). */
+export const BKASH_OBJECTS = {
   // paymentID → the attempt it pays; a retried session is found by its attempt.
-  "bkash-payments": { indexes: ["attemptHash"] },
+  "bkash_payments": {
+    name: "bKash payments",
+    fields: [{ key: "attempt_hash", name: "Attempt hash", type: "single_line_text" as const }, { key: "data", name: "Payment", type: "json" as const }],
+    indexes: ["attempt_hash"],
+  },
   // Hashed idempotency key → the refund sent; one bKash refund settles one Scalius refund.
-  "bkash-refunds": { unique: ["refundTrxId"] },
+  "bkash_refunds": {
+    name: "bKash refunds",
+    fields: [{ key: "refund_trx_id", name: "Refund transaction", type: "single_line_text" as const }, { key: "data", name: "Refund", type: "json" as const }],
+    unique: ["refund_trx_id"],
+  },
 };
 
 /** The fields of the bKash setup sheet (`group: "bkash"`). */

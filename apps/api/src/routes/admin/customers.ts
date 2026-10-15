@@ -40,6 +40,8 @@ import { appListQuerySchema, appListValuesSchema, planAppList } from "../../plug
 import { ok, created, noContent } from "../../utils/api-response";
 import { successEnvelope, keysetPaginatedEnvelope, keysetQuerySchema, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
 import { customerAddressSchema, customerSummarySchema, customerDetailSchema } from "../../schemas/entities";
+import { relatedObjectsProjection, withRelatedObjects } from "./related-objects";
+import { relatedObjectRecordSchema } from "../../schemas/related-objects";
 import { timestampSchema, nullableTimestampSchema, optionalNullableTimestampSchema } from "../../schemas/timestamps";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -280,7 +282,7 @@ const getByIdRoute = createRoute({
         params: z.object({ id: z.string() }),
     },
     responses: {
-        200: { description: "Customer details", content: { "application/json": { schema: successEnvelope(customerDetailSchema) } } },
+        200: { description: "Customer details", content: { "application/json": { schema: successEnvelope(customerDetailSchema.extend({ relatedObjects: z.array(relatedObjectRecordSchema) })) } } },
         ...errorResponses,
     }
 });
@@ -288,9 +290,9 @@ const getByIdRoute = createRoute({
 app.openapi(getByIdRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const customer = await getCustomerDetail(db, id);
+    const customer = await getCustomerDetail(db, id, relatedObjectsProjection(c, "customer", id));
     if (!customer) throw new NotFoundError("Customer not found");
-    return ok(c, customer);
+    return ok(c, withRelatedObjects(customer));
 });
 
 // ── Update Customer ──

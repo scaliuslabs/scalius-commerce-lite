@@ -38,6 +38,8 @@ import { PageHeader } from "./resource/PageHeader";
 import { ReadOnlyNotice } from "./resource/ReadOnlyNotice";
 import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
+import { RelatedObjectsCard } from "./objects/RelatedObjectsCard";
+import type { RelatedObjectRecord } from "@scalius/shared/plugins/objects";
 import { ProductStatusBadge } from "./product-list/ProductStatusBadge";
 import { ProductPager } from "./product-form/ProductPager";
 import {
@@ -99,6 +101,7 @@ const BundlesCard = React.lazy(() => loadCards().then((cards) => ({ default: car
 const ProductPageCard = React.lazy(() => loadCards().then((cards) => ({ default: cards.ProductPageCard })));
 
 interface ProductFormProps {
+  relatedObjects?: RelatedObjectRecord[];
   categories: Category[];
   defaultValues?: Partial<ProductFormValues>;
   isEdit?: boolean;
@@ -185,6 +188,7 @@ export function ProductForm(props: ProductFormProps) {
 }
 
 function ProductEditor({
+  relatedObjects,
   categories,
   defaultValues,
   isEdit = false,
@@ -563,6 +567,7 @@ function ProductEditor({
               <fieldset disabled={readOnly} className="min-w-0 space-y-4">
               <WarrantyCard form={form} readOnly={readOnly} />
               {isEdit && productId ? <LazyCustomFieldsCard ownerType="product" ownerId={productId} canEdit={!readOnly} /> : null}
+              {isEdit && productId ? <RelatedObjectsCard records={relatedObjects} /> : null}
               {isEdit && productId ? <AppResourceCards target="product" id={productId} /> : null}
               </fieldset>
             </div>

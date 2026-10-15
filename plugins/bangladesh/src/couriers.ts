@@ -210,6 +210,42 @@ function feeMinor(fee: unknown, decimalPlaces: number): number | null {
 const PATHAO_SECRET_HEADER = "x-pathao-merchant-webhook-integration-secret";
 
 const pathao = defineCourierProvider({
+  async rates(input, ctx) {
+    if (input.destination.country !== "BD" || input.currency !== "BDT" || input.decimalPlaces !== 2) return { rates: [] };
+    const city = Number(input.destination.placeIds?.city);
+    const zone = Number(input.destination.placeIds?.zone);
+    if (![city, zone].every((id) => Number.isSafeInteger(id) && id > 0)) {
+      throw new ProviderError("declined", "Pathao requires mapped city and zone IDs before quoting delivery.", { code: "pathao.locations" });
+    }
+    const storeId = Number(optionalText(ctx, "pathao_store_id"));
+    const deliveryType = Number(ctx.settings.pathao_delivery_type ?? 48);
+    const itemType = Number(ctx.settings.pathao_item_type ?? 2);
+    // Pathao's minimum billable weight is 0.5 kg; missing catalog weights use the merchant's booking default.
+    const weight = Math.max(0.5, input.parcel.weightGrams === null ? Number(ctx.settings.pathao_item_weight ?? 0.5) : input.parcel.weightGrams / 1000);
+    if (!Number.isSafeInteger(storeId) || storeId <= 0 || ![48, 12].includes(deliveryType) || ![1, 2].includes(itemType) || !Number.isFinite(weight)) {
+      throw new ProviderError("misconfigured", "Check Pathao's store, delivery type, item type and weight settings.", { code: "pathao.rates_settings" });
+    }
+    if (weight > 10) return { rates: [] };
+    try {
+      const account = pathaoAccount(ctx);
+      const token = await pathaoToken(ctx, account);
+      const response = await ctx.http.fetch(`${account.baseUrl}/aladdin/api/v1/merchant/price-plan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ store_id: storeId, item_type: itemType, delivery_type: deliveryType, item_weight: weight, recipient_city: city, recipient_zone: zone }),
+      });
+      const answer = await response.json();
+      const data = OBJECT(answer) && OBJECT(answer.data) ? answer.data : null;
+      const amountMinor = feeMinor(data?.final_price, input.decimalPlaces);
+      if (!response.ok || !OBJECT(answer) || answer.code !== 200 || !data || amountMinor === null) throw new Error("Invalid Pathao price plan");
+      if (input.cod && data.cod_enabled !== 1) return { rates: [] };
+      // This is transport only: COD settlement fees depend on the eventual collection amount, not cart line totals.
+      return { rates: [{ service: deliveryType === 12 ? "express" : "regular", name: deliveryType === 12 ? "Pathao Express" : "Pathao Regular", amountMinor, estimatedDays: null }] };
+    } catch {
+      throw new ProviderError("retryable", "Pathao could not quote delivery. Try again or choose another delivery method.", { code: "pathao.rates_failed" });
+    }
+  },
+
   async testConnection(_input, ctx) {
     try {
       const account = pathaoAccount(ctx);

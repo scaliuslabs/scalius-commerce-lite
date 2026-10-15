@@ -8,6 +8,9 @@
 import AppComponent from "@/components/apps/AppComponent.astro";
 import OrderForm from "@/components/checkout/OrderForm.astro";
 import type { StorefrontAppSection } from "@scalius/shared/storefront-theme";
+import { resolvePluginSettingBindings } from "@scalius/shared/storefront-theme/bindings";
+import { storefrontSettingNeeds } from "@scalius/shared/plugins/storefront-components";
+import { bindingResourceMedia } from "@/lib/setting-bindings";
 import type { HomepageAppSurface } from "@/lib/app-surfaces";
 import { appMarkup, requestExtensions, type AppMarkup } from "@/lib/extensions";
 import { orderFormEmbed, type EmbedRender } from "@/lib/extensions/embeds";
@@ -15,15 +18,17 @@ import { componentSectionSettings, productCardData, storefrontImageOf } from "@/
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { productCardModel, type ProductCardProduct } from "@/components/cards/card-model";
 import { getLayoutData } from "@/lib/api/storefront";
+import type { HomepageMediaAsset } from "@/lib/api/storefront";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 interface Props {
   section: StorefrontAppSection;
   surface: HomepageAppSurface;
   headerLead?: boolean;
+  sourceMedia?: readonly HomepageMediaAsset[];
 }
 
-const { section, surface, headerLead = false } = Astro.props;
+const { section, surface, headerLead = false, sourceMedia = [] } = Astro.props;
 const { component } = surface;
 const libraryPreview = (Astro.locals as { sectionLibraryPreview?: boolean }).sectionLibraryPreview === true;
 let html: string | null = null;
@@ -35,10 +40,10 @@ const { byId, host } = await requestExtensions(Astro.locals, Astro.url);
 const extension = byId.get(component.pluginId);
 const schema = extension?.sectionSettings[component.type];
 if (extension && schema && extension.sections.includes(component.type)) {
-  const [{ resolved, preview: themePreview }, layoutData] = await Promise.all([currentRequestTheme(Astro.locals), getLayoutData()]);
+  const [{ resolved, preview: themePreview, bindingContext }, layoutData] = await Promise.all([currentRequestTheme(Astro.locals), getLayoutData()]);
   preview = themePreview !== null;
   const currency = { symbol: layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol, code: layoutData?.currency?.code ?? DEFAULT_CURRENCY.code };
-  const media = new Map(component.media.flatMap((asset) => {
+  const media = new Map([...component.media, ...sourceMedia, ...bindingResourceMedia(bindingContext.resource)].flatMap((asset) => {
     const image = storefrontImageOf(asset);
     return image ? [[asset.id, image] as const] : [];
   }));
@@ -54,11 +59,18 @@ if (extension && schema && extension.sections.includes(component.type)) {
     });
     return productCardData(card, model);
   })]));
+  const values = resolvePluginSettingBindings(schema, { ...component.values, ...section.settings.values }, section.bindings, { ...bindingContext, mediaIds: new Set(media.keys()) });
+  for (const field of schema) {
+    if (!["image", "product", "products"].includes(field.type)) continue;
+    const needs = storefrontSettingNeeds([field], values);
+    if (needs.mediaIds.some((id) => !media.has(id)) || needs.products.some(({ source }) => !(products.get(source)?.length))) values[field.key] = component.values[field.key] ?? null;
+  }
   html = await host.render(extension, {
     kind: "section",
     type: component.type,
     instanceId: section.id,
-    settings: componentSectionSettings(schema, component.values, media, products),
+    objects: component.objects,
+    settings: componentSectionSettings(schema, values, media, products),
   });
   markup = appMarkup(extension, "section", html);
 }

@@ -42,6 +42,7 @@ const DEFINITION_TAGS = ["Admin - Custom data"];
 
 const wireBoundSchema = z.union([z.string(), z.number()]).nullable();
 const validationsSchema = z.object({
+  to: z.string().nullable().optional(),
   min: wireBoundSchema.optional(),
   max: wireBoundSchema.optional(),
   regex: z.string().nullable().optional(),

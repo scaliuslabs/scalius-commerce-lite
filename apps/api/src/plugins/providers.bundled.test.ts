@@ -10,10 +10,10 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
+import { getObjectRecord } from "@scalius/core/modules/objects";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
   activatePlugin,
-  getPluginRecord,
   installPlugin,
   listPluginLogs,
   writePluginSettings,
@@ -69,14 +69,14 @@ describe("app providers through the bundled loader", () => {
   });
   afterEach(() => sqlite.close());
 
-  it("creates a session with the app's own storage, idempotently per attempt", async () => {
+  it("creates a session with the app's own objects, idempotently per attempt", async () => {
     const first = await host.invokeProvider(installation, "payment", "wallet", "createSession", walletSessionInput(12_550));
     expect(first).toEqual({
       providerRef: "W-ORD1_full_12550",
       redirectUrl: "https://wallet.acme.test/pay?amount=125.50&currency=BDT",
     });
     expect(await host.invokeProvider(installation, "payment", "wallet", "createSession", walletSessionInput(12_550))).toEqual(first);
-    expect(await getPluginRecord(db, WALLET_FIXTURE_ID, "sessions", "attempt-12550")).toMatchObject({ orderId: "ORD1" });
+    expect(await getObjectRecord(db, WALLET_FIXTURE_ID, "sessions", "attempt-12550")).toMatchObject({ order_id: "ORD1" });
     expect((await listPluginLogs(db, WALLET_FIXTURE_ID)).map((line) => line.source)).toContain("provider:wallet.createSession");
   });
 
@@ -117,7 +117,7 @@ describe("app providers through the bundled loader", () => {
       .rejects.toMatchObject({ category: "misconfigured" });
     await expect(host.invokeProvider(installation, "payment", "wallet", "createSession", { ...walletSessionInput(100), amountMinor: 1.5 } as never))
       .rejects.toBeInstanceOf(TypeError);
-    expect(await getPluginRecord(db, WALLET_FIXTURE_ID, "sessions", "attempt-100")).toBeNull();
+    expect(await getObjectRecord(db, WALLET_FIXTURE_ID, "sessions", "attempt-100")).toBeNull();
   });
 
   it("fails closed when the app's credentials cannot be opened", async () => {

@@ -3,6 +3,7 @@
 // its post-commit side effects, and abandoned-checkout snapshots.
 export * from "./browser";
 export * from "./prepare";
+export { DELIVERY_RATE_UNAVAILABLE_REASON, type CalculatedRateOptions } from "../delivery";
 export * from "./reads";
 export * from "./commit";
 export * from "./post-commit";
@@ -23,3 +24,5 @@ export * from "./cart-transform";
 export * from "./manual-order-apps";
 export * from "./pricing";
 export * from "./store-copy";
+
+export * from "./attributes";

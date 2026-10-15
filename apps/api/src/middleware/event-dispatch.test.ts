@@ -77,7 +77,14 @@ describe("eventDispatchMiddleware", () => {
     // The subscription's delivery was recorded and attempted (its test secret cannot sign: retried later).
     expect(sqlite.prepare("SELECT status, attempts FROM webhook_event_deliveries").get()).toEqual({ status: "failed", attempts: 1 });
     expect(publish).toHaveBeenCalledTimes(1);
-    expect(publish).toHaveBeenCalledWith([{ topic: "orders", kind: "order.created", id: "ord_mw", status: expect.any(String) }]);
+    expect(publish).toHaveBeenCalledWith([{ topic: "orders", kind: "changed" }, { topic: "orders", kind: "order.created", id: "ord_mw", status: expect.any(String) }]);
+  });
+
+  it("keeps dashboard notices when nobody subscribes to durable events", async () => {
+    sqlite.exec("DELETE FROM webhook_subscriptions");
+    expect(await request("POST", "/orders")).toEqual({ status: 200, waited: 1 });
+    expect(sqlite.prepare("SELECT count(*) AS n FROM event_outbox").get()).toEqual({ n: 0 });
+    expect(publish).toHaveBeenCalledExactlyOnceWith([{ topic: "orders", kind: "changed" }]);
   });
 
   it("sends a table-level notice for a realtime table without events, with no read", async () => {

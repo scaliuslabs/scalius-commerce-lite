@@ -2,23 +2,23 @@
 // runs, the frozen ctx, bridge refusals rehydrated with their stable code,
 // bounded logs, and no throw ever escaping an invocation.
 import { describe, expect, it, vi } from "vitest";
-import type { PluginContext, PluginStorageCollection } from "./context";
+import type { PluginContext, PluginObjectCollection } from "./context";
 import { invokePluginDefinition, type PluginContextSeed, type PluginRuntimeBridge } from "./runtime";
 
 const seed: PluginContextSeed = {
   plugin: { id: "acme.test", version: "1.0.0" },
   store: { name: "Shop", url: "https://shop.test", currency: "BDT", decimalPlaces: 2, timezone: "Asia/Dhaka", locale: "en" },
   settings: { greeting: "Hi" },
-  collections: ["notes"],
+  objects: ["notes"],
   inventory: { events: ["order.*"], functions: ["checkout.discounts"], routes: { admin: [], public: ["ping"], webhooks: [] }, cron: [], providers: [] },
 };
 
 function bridge(overrides: Partial<PluginRuntimeBridge> = {}): PluginRuntimeBridge {
   const refuse = async () => {
-    throw new Error("[storage.undeclared_collection] Collection is not declared.");
+    throw new Error("[object.undeclared_type] Object type is not declared.");
   };
   return {
-    apiCall: vi.fn(), storageGet: vi.fn(refuse), storageWrite: vi.fn(), storageQuery: vi.fn(), storageCount: vi.fn(),
+    apiCall: vi.fn(), objectsGet: vi.fn(refuse), objectsGetByHandle: vi.fn(refuse), objectsWrite: vi.fn(), objectsQuery: vi.fn(), objectsCount: vi.fn(),
     kvGet: vi.fn(async () => ({ value: 3, revision: 1 })), kvSet: vi.fn(), kvDelete: vi.fn(), kvList: vi.fn(), httpFetch: vi.fn(async () => ({ status: 201, headers: {}, body: "{\"a\":1}" })),
     customFieldsGet: vi.fn(), customFieldsSet: vi.fn(), messagingEmail: vi.fn(), messagingSms: vi.fn(), messagingNotifyStaff: vi.fn(),
     ...overrides,
@@ -52,14 +52,14 @@ describe("invokePluginDefinition", () => {
     let seen: unknown;
     const module = definition({
       events: {
-        "order.*": async (_event: unknown, ctx: PluginContext & { storage: Record<string, PluginStorageCollection | undefined> }) => {
+        "order.*": async (_event: unknown, ctx: PluginContext & { objects: Record<string, PluginObjectCollection | undefined> }) => {
           expect(Object.isFrozen(ctx) && Object.isFrozen(ctx.settings)).toBe(true);
-          expect(ctx.storage.secrets).toBeUndefined();
+          expect(ctx.objects.secrets).toBeUndefined();
           expect(await ctx.kv.get("n")).toBe(3);
           const response = await ctx.http.fetch("https://api.acme.example/x");
           expect([response.ok, response.status, await response.json()]).toEqual([true, 201, { a: 1 }]);
           try {
-            await ctx.storage.notes!.get("x");
+            await ctx.objects.notes!.get("x");
           } catch (error) {
             seen = error;
           }
@@ -69,7 +69,7 @@ describe("invokePluginDefinition", () => {
     });
     const result = await invokePluginDefinition(module, { kind: "event", event: { id: "evt_1", topic: "order.paid", apiVersion: "2026-10", occurredAt: "", resource: { type: "order", id: "o" }, facts: {} } }, seed, bridge());
     expect(result.ok).toBe(true);
-    expect(seen).toMatchObject({ name: "PluginPlatformError", code: "storage.undeclared_collection", message: "Collection is not declared." });
+    expect(seen).toMatchObject({ name: "PluginPlatformError", code: "object.undeclared_type", message: "Object type is not declared." });
     expect(result.logs).toHaveLength(100);
     expect(result.droppedLogs).toBe(5);
   });

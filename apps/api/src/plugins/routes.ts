@@ -286,7 +286,6 @@ export async function handlePluginRoute(c: Context<{ Bindings: Env }>, deps: Plu
     body: parsed.body,
     rawBody: target.surface === "webhooks" ? raw ?? "" : null,
     staffId: user?.id ?? null,
-    render: null,
     customer: proxied ? await proxiedCustomer(c, db) : null,
   };
 

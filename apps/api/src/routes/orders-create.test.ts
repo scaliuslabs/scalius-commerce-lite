@@ -903,6 +903,7 @@ describe("authoritative tax quote", () => {
       expect.objectContaining({ totalMinor: 16_800 }),
       DEFAULT_SHIPPING_METHOD_SNAPSHOT,
       ["none"],
+      {},
     );
     const validatedRequestItem = mocks.validateStorefrontCartItems.mock.calls[0]?.[1]?.[0];
     expect(validatedRequestItem).not.toHaveProperty("price");

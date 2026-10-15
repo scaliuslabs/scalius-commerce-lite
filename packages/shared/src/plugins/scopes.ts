@@ -26,7 +26,7 @@ export interface PluginScopeDefinition {
 }
 
 const PRODUCTS_READ = ["products.view", "categories.view", "collections.view", "attributes.view"] as const;
-const OBJECTS_READ = ["metaobjects.view"] as const;
+const OBJECTS_READ = ["objects.view"] as const;
 
 export const PLUGIN_SCOPES = {
   /** Products, variants, stock levels, collections, categories, brands and attributes. */
@@ -70,9 +70,9 @@ export const PLUGIN_SCOPES = {
   /** Create, edit, publish and trash content pages; set their custom fields. */
   write_content: { rbac: ["pages.view", "pages.create", "pages.edit", "pages.delete", "pages.publish"], staff: "pages.edit" },
   /** The store's object types and records outside the app's own namespace (`custom.*`). */
-  read_objects: { rbac: OBJECTS_READ, staff: "metaobjects.view" },
+  read_objects: { rbac: OBJECTS_READ, staff: "objects.view" },
   /** Create, edit and delete records of the store's object types. */
-  write_objects: { rbac: [...OBJECTS_READ, "metaobjects.edit"], staff: "metaobjects.edit" },
+  write_objects: { rbac: [...OBJECTS_READ, "objects.edit"], staff: "objects.edit" },
   /** Files in the media library. */
   read_files: { rbac: ["media.view"], staff: "media.view" },
   /** Import files from an HTTPS address, rename, move and trash them. */

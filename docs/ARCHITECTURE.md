@@ -98,7 +98,7 @@ Other code reaches a domain only through these entries: `../<domain>` or `../<do
 | `markets` | Markets, their countries and URL presences, the presence matrix, the backup market's price increment and the store pricing currency, an order's market |
 | `media` | The Files library: uploads, usage index, permanent delete |
 | `media-references` | Stored-file key and URL projection, deleting-reference guard |
-| `metaobjects` | Content types (merchant and app) and their entries, the storefront section read |
+| `objects` | Typed app and merchant records, indexed queries, atomic writes, and published storefront content |
 | `navigation` | Menus, publications, placements |
 | `notifications` | Channel rules and templates, order notification outbox, delivery receipts, provider health, Web Push subscriptions and delivery |
 | `order-kernel` | What every order writer shares: state machine, shipment claim lease, payment-session and refund-attempt locks, app facts |
@@ -133,23 +133,23 @@ The graph has no cycle, and no file cycle crosses a unit. So importing a domain 
 
 ### The dependency graph
 
-The allowlist holds 169 directed edges. A domain sits one layer above the highest domain it imports. There are 12 layers:
+The allowlist holds 170 directed edges. A domain sits one layer above the highest domain it imports. There are 10 layers:
 
 ```text
-L11  agent-storefront
-L10  checkout · storefront · warranty
-L9   analytics · conversations · fulfilment
-L8   orders · store-transfer
-L7   customer-marketing · payments · reviews
-L6   navigation · notifications
-L5   catalog · delivery · digital · product-admin
-L4   brands · categories · inventory · pages · price-lists · promotions · sales-channels
-L3   custom-fields · metaobjects · onboarding · products · tax
+L9   agent-storefront
+L8   checkout · storefront · warranty
+L7   analytics · conversations · fulfilment
+L6   navigation · orders · store-transfer
+L5   catalog · delivery · digital · payments · product-admin
+L4   brands · categories · customer-marketing · inventory · pages · plugins · price-lists · promotions · reviews · sales-channels
+L3   custom-fields · notifications · objects · onboarding · products · tax
 L2   customers · markets · media · platform
-L1   plugins · settings
+L1   settings
 L0   agent-access · attributes · collections · events · fraud-checker
      gift-cards · media-references · order-kernel · translations
 ```
+
+Objects consolidates the former metaobjects and plugin-record engines. Plugin lifecycle sync and checkout snapshot commits use this domain; its only domain dependencies are the existing market and settings currency readers. The dependency graph remains acyclic.
 
 Rules that keep it acyclic:
 

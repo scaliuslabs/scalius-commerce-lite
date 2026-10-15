@@ -1,3 +1,5 @@
+import { isDepositPaymentRequired } from "@scalius/shared/checkout-payment";
+export { isDepositPaymentRequired } from "@scalius/shared/checkout-payment";
 import type { CheckoutConfig } from "./types";
 
 export type CheckoutPaymentRequest =
@@ -21,21 +23,9 @@ export function resolveCheckoutPaymentRequest(
   totalAmount: number,
 ): CheckoutPaymentRequest {
   const configuredDeposit = Number(config.partialPaymentAmount);
-  if (
-    config.partialPaymentEnabled &&
-    Number.isFinite(configuredDeposit) &&
-    configuredDeposit > 0 &&
-    configuredDeposit < totalAmount
-  ) {
+  if (isDepositPaymentRequired(config, totalAmount)) {
     return { paymentType: "deposit", depositAmount: configuredDeposit };
   }
 
   return { paymentType: "full" };
-}
-
-export function isDepositPaymentRequired(
-  config: Pick<CheckoutConfig, "partialPaymentEnabled" | "partialPaymentAmount">,
-  totalAmount: number,
-): boolean {
-  return resolveCheckoutPaymentRequest(config, totalAmount).paymentType === "deposit";
 }

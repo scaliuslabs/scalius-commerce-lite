@@ -17,7 +17,7 @@ import {
   type PaymentSessionInput,
   type PaymentVerification,
   type PluginContext,
-  type PluginStorageCollection,
+  type PluginObjectCollection,
   type ProviderHttpRequest,
 } from "@scalius/plugin-sdk";
 import {
@@ -64,8 +64,16 @@ const EVENT_TYPE = "bkash.payment";
 /** A return may grant a token, Execute and Query: its share of the app's 30 s wall time. */
 const RETURN_BUDGET_MS = 25_000;
 
-function payments(ctx: PluginContext): PluginStorageCollection<PaymentRecord> {
-  return ctx.storage["bkash-payments"] as PluginStorageCollection<PaymentRecord>;
+function payments(ctx: PluginContext) {
+  const objects = ctx.objects.bkash_payments as PluginObjectCollection<{ attempt_hash: string; data: PaymentRecord }>;
+  return {
+    get: async (id: string) => (await objects.get(id))?.data ?? null,
+    put: (id: string, data: PaymentRecord) => objects.put(id, { attempt_hash: data.attemptHash, data }),
+    query: async (attemptHash: string) => {
+      const page = await objects.query({ where: { attempt_hash: attemptHash }, limit: 1 });
+      return { records: page.records.map((record) => ({ ...record, data: record.data.data })) };
+    },
+  };
 }
 
 /** bKash pre-fills the wallet number from payerReference: the buyer's mobile number as 01XXXXXXXXX, else a blank. */
@@ -88,7 +96,7 @@ function returnStatusOf(value: string | undefined): ReturnStatus | null {
 export async function createSession(input: PaymentSessionInput, ctx: PluginContext): Promise<PaymentSession> {
   if (input.currency !== "BDT") throw new ProviderError("declined", "bKash charges only BDT.", { code: "bkash.currency" });
   const attemptHash = await sha256Hex(input.attemptKey);
-  const { records } = await payments(ctx).query({ where: { attemptHash }, limit: 1 });
+  const { records } = await payments(ctx).query(attemptHash);
   const existing = records[0];
   // A retry of the same attempt gets the same bKash payment, never a second one.
   if (existing) return { providerRef: existing.id, redirectUrl: existing.data.redirectUrl };

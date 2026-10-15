@@ -58,7 +58,7 @@ describe("order timeline lines from apps", () => {
       ["placed", null, null],
     ]);
     // The same event again (its own record is gone, say): the idempotency key adds nothing.
-    sqlite.prepare("DELETE FROM plugin_records WHERE plugin_id = 'acme.order-tagger'").run();
+    sqlite.prepare("DELETE FROM object_records WHERE type_id = 'oty_acme.order-tagger.tagged'").run();
     expect(await host.invokeEvent(installation, event)).toEqual({ ok: true, value: null, error: null });
     expect((await listOrderTimeline(db, "ord_t1")).filter((line) => line.kind === "app_event")).toHaveLength(1);
   });

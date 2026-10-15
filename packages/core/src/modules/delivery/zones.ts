@@ -15,6 +15,7 @@
  * and what it costs.
  */
 import { z } from "zod";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { and, asc, eq, inArray, isNull, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { alias, unionAll } from "drizzle-orm/sqlite-core";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -126,6 +127,13 @@ export interface DeliveryRateRow {
     name: string;
     description: string | null;
     feeMinor: number;
+    rateSource?: string;
+    rateService?: string | null;
+    fallbackFeeMinor?: number | null;
+    /** Set only after a carrier quote is verified; this fee is already in presentment currency. */
+    rateCurrency?: string;
+    rateCod?: boolean;
+    rateToken?: string;
     freeOverMinor: number | null;
     isActive: boolean;
     deletedAt?: Date | number | null;
@@ -160,6 +168,9 @@ export function selectDeliveryRateRowsByIds(
             name: shippingMethods.name,
             description: shippingMethods.description,
             feeMinor: shippingMethods.feeMinor,
+            rateSource: shippingMethods.rateSource,
+            rateService: shippingMethods.rateService,
+            fallbackFeeMinor: shippingMethods.fallbackFeeMinor,
             freeOverMinor: shippingMethods.freeOverMinor,
             isActive: shippingMethods.isActive,
             deletedAt: shippingMethods.deletedAt,
@@ -171,7 +182,11 @@ export function selectDeliveryRateRowsByIds(
         .from(shippingMethods);
     if (ids.length === 0) return query.limit(0);
     return query.where(and(
-        inArray(shippingMethods.id, ids),
+        or(
+            sql`${shippingMethods.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`,
+            inArray(shippingMethods.zoneId, db.select({ zoneId: shippingMethods.zoneId }).from(shippingMethods).where(sql`${shippingMethods.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))`)),
+            eq(shippingMethods.kind, "pickup"),
+        ),
         eq(shippingMethods.isActive, true),
         isNull(shippingMethods.deletedAt),
     ));
@@ -209,7 +224,7 @@ export function resolveDeliveryRate(input: {
     subtotalMinor: number;
 }): ResolvedDeliveryRate {
     const { rate, addressZoneId, subtotalMinor } = input;
-    if (!rate || !rate.isActive || rate.deletedAt != null) {
+    if (!rate || !rate.isActive || rate.deletedAt != null || (rate.rateSource && rate.rateSource !== "flat" && !rate.rateCurrency)) {
         throw new ValidationError(
             "A valid active shipping method is required for this order.",
             { reason: DELIVERY_RATE_UNAVAILABLE_REASON },
@@ -258,12 +273,12 @@ export function resolveDeliveryRate(input: {
  * threshold (shop currency) converted at the locked rate and rounded to the
  * market's increment (Shopify's rule). The shop currency keeps the row.
  */
-export function deliveryRateInCurrency<T extends { feeMinor: number; freeOverMinor: number | null }>(
+export function deliveryRateInCurrency<T extends { feeMinor: number; freeOverMinor: number | null; rateCurrency?: string }>(
     row: T,
     money: PresentmentMoney | null | undefined,
 ): T {
     if (!money || !isForeignPresentment(money)) return row;
-    return { ...row, feeMinor: presentShopMinor(money, row.feeMinor), freeOverMinor: presentShopMinorOrNull(money, row.freeOverMinor) };
+    return { ...row, feeMinor: row.rateCurrency === money.currencyCode ? row.feeMinor : presentShopMinor(money, row.feeMinor), freeOverMinor: presentShopMinorOrNull(money, row.freeOverMinor) };
 }
 
 // ── Storefront: rates for a destination ────────────────────────────────
@@ -320,6 +335,13 @@ export interface OfferedDeliveryRate {
     name: string;
     description: string | null;
     feeMinor: number;
+    rateSource?: string;
+    rateService?: string | null;
+    fallbackFeeMinor?: number | null;
+    /** Set only after a carrier quote is verified; this fee is already in presentment currency. */
+    rateCurrency?: string;
+    rateCod?: boolean;
+    rateToken?: string;
     freeOverMinor: number | null;
     kind: DeliveryRateKind;
     pickupAddress: string | null;
@@ -373,6 +395,9 @@ export async function listDeliveryRatesForDestination(
             name: shippingMethods.name,
             description: shippingMethods.description,
             feeMinor: shippingMethods.feeMinor,
+            rateSource: shippingMethods.rateSource,
+            rateService: shippingMethods.rateService,
+            fallbackFeeMinor: shippingMethods.fallbackFeeMinor,
             freeOverMinor: shippingMethods.freeOverMinor,
             kind: shippingMethods.kind,
             pickupAddress: shippingMethods.pickupAddress,
@@ -452,6 +477,9 @@ export interface DeliveryRateView {
     kind: DeliveryRateKind;
     name: string;
     fee: number;
+    rateSource: string;
+    rateService: string | null;
+    fallbackFee: number | null;
     freeOver: number | null;
     description: string | null;
     pickupAddress: string | null;
@@ -508,6 +536,9 @@ export async function listDeliveryZones(db: Database, decimalPlaces: number): Pr
             kind: rate.kind,
             name: rate.name,
             fee: fromMinor(rate.feeMinor, decimalPlaces),
+            rateSource: rate.rateSource,
+            rateService: rate.rateService,
+            fallbackFee: rate.fallbackFeeMinor === null ? null : fromMinor(rate.fallbackFeeMinor, decimalPlaces),
             freeOver: rate.freeOverMinor === null ? null : fromMinor(rate.freeOverMinor, decimalPlaces),
             description: rate.description,
             pickupAddress: rate.pickupAddress,
@@ -548,6 +579,9 @@ export interface DeliveryRateInput {
     pickupHours?: string | null;
     name: string;
     fee: number;
+    rateSource?: string;
+    rateService?: string | null;
+    fallbackFee?: number | null;
     freeOver?: number | null;
     description?: string | null;
     isActive: boolean;
@@ -581,6 +615,9 @@ interface ParsedRate {
     pickupHours: string | null;
     name: string;
     feeMinor: number;
+    rateSource?: string;
+    rateService?: string | null;
+    fallbackFeeMinor?: number | null;
     freeOverMinor: number | null;
     description: string | null;
     isActive: boolean;
@@ -637,6 +674,15 @@ function parseRates(
         }
         seen.add(name.toLowerCase());
         const freeOver = rate.freeOver ?? null;
+        const rateSource = rate.rateSource ?? "flat";
+        const rateService = rate.rateService?.trim() || null;
+        const fallbackFee = rate.fallbackFee ?? null;
+        if (rateSource !== "flat" && (!isQualifiedProviderId(rateSource) || kind !== "delivery")) {
+            issues.push({ path: ["rates", index, "rateSource"], message: "Choose a courier for a delivery rate." });
+        }
+        if ((rateService?.length ?? 0) > 128 || (rateSource === "flat" && (rateService || fallbackFee !== null))) {
+            issues.push({ path: ["rates", index, "rateService"], message: "Service and fallback apply only to calculated delivery rates." });
+        }
         return {
             id: rate.id?.trim() || null,
             kind,
@@ -644,6 +690,9 @@ function parseRates(
             pickupHours,
             name,
             feeMinor: amountToMinor(rate.fee, currency, ["rates", index, "fee"], issues),
+            rateSource,
+            rateService,
+            fallbackFeeMinor: fallbackFee === null ? null : amountToMinor(fallbackFee, currency, ["rates", index, "fallbackFee"], issues),
             freeOverMinor: freeOver === null
                 ? null
                 : amountToMinor(freeOver, currency, ["rates", index, "freeOver"], issues),
@@ -763,6 +812,9 @@ function rateWriteStatements(
             pickupHours: rate.pickupHours,
             name: rate.name,
             feeMinor: rate.feeMinor,
+            rateSource: rate.rateSource ?? "flat",
+            rateService: rate.rateService ?? null,
+            fallbackFeeMinor: rate.fallbackFeeMinor ?? null,
             freeOverMinor: rate.freeOverMinor,
             description: rate.description,
             isActive: rate.isActive,

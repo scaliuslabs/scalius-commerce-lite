@@ -74,8 +74,8 @@ const proxyModule = {
     manifest: proxyManifest,
     routes: {
       public: {
-        who: async (request: { customer?: unknown; render?: unknown; headers: Record<string, string> }) => ({
-          body: { customer: request.customer ?? null, render: request.render ?? null, cookie: request.headers.cookie ?? null },
+        who: async (request: { customer?: unknown; headers: Record<string, string> }) => ({
+          body: { customer: request.customer ?? null, cookie: request.headers.cookie ?? null },
         }),
       },
     },
@@ -217,7 +217,6 @@ describe("plugin routes", { timeout: 30_000 }, () => {
       body: null,
       rawBody: null,
       staffId: null,
-      render: null,
       customer: null,
     });
     // Its own cache wish beyond 300 s is refused; it can never redirect.
@@ -267,7 +266,7 @@ describe("plugin routes", { timeout: 30_000 }, () => {
     await activatePlugin(db, "acme.who", { actorUserId: "owner", expectedRevision: 1 });
 
     const signedIn = await call("/api/v1/plugins/acme.who/public/who", { headers: { "x-scalius-app-proxy": "1", Cookie: "cs_tok=cs-session-token-buyer; other=1" } });
-    expect(signedIn.json).toEqual({ customer: { id: "cust_buyer" }, render: null, cookie: null });
+    expect(signedIn.json).toEqual({ customer: { id: "cust_buyer" }, cookie: null });
     // Guests, unknown sessions and requests that did not come through the storefront proxy carry no customer.
     expect((await call("/api/v1/plugins/acme.who/public/who", { headers: { "x-scalius-app-proxy": "1" } })).json.customer).toBeNull();
     expect((await call("/api/v1/plugins/acme.who/public/who", { headers: { "x-scalius-app-proxy": "1", Cookie: "cs_tok=forged" } })).json.customer).toBeNull();

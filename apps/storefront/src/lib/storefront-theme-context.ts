@@ -11,6 +11,8 @@ import {
   EMPTY_STORE_SHAPE,
   EMPTY_STOREFRONT_BRAND_ASSETS,
   resolveStorefrontTheme,
+  resolveDocumentBindings,
+  hasSettingBindings,
   storeShapeSchema,
   storefrontThemeDocumentSchema,
   type ResolvedStorefrontTheme,
@@ -20,6 +22,7 @@ import {
   type StorefrontBrandAssets,
   type StorefrontThemeBrand,
   type StorefrontThemeDocument,
+  type SettingBindingContext,
 } from "@scalius/shared/storefront-theme";
 import { resolveThemePreview, type ThemePreviewData } from "./api/storefront";
 import { readThemePreviewCookie } from "./theme-preview-cookie";
@@ -38,6 +41,8 @@ export interface RequestTheme {
   preview: ThemePreviewData | null;
   /** The store's language for the storefront's own words (lib/storefront-copy.ts). */
   language: StorefrontLanguage;
+  bindingContext: SettingBindingContext;
+  shape: StoreShape;
 }
 
 interface ThemeLocals {
@@ -108,8 +113,10 @@ export function readStorefrontBrandAssets(value: unknown, brand: StorefrontTheme
 export function requestThemeFor(
   theme: StorefrontThemeDocument,
   shape: StoreShape = EMPTY_STORE_SHAPE,
-  options: { previewToken?: string | null; preview?: ThemePreviewData | null; brand?: unknown; languageCode?: unknown } = {},
+  options: { previewToken?: string | null; preview?: ThemePreviewData | null; brand?: unknown; languageCode?: unknown; bindings?: SettingBindingContext } = {},
 ): RequestTheme {
+  const bindingContext = { language: storefrontLanguage(options.languageCode), ...options.bindings };
+  theme = boundTheme(theme, bindingContext);
   const resolved = resolveStorefrontTheme(theme, shape);
   return {
     theme,
@@ -119,12 +126,15 @@ export function requestThemeFor(
     previewToken: options.previewToken ?? null,
     preview: options.preview ?? null,
     language: storefrontLanguage(options.languageCode),
+    bindingContext,
+    shape,
   };
 }
 
 export function resolveRequestTheme(
   astro: { request: Request; locals: object },
   layoutData: { theme?: unknown; storeShape?: unknown; brand?: unknown; storefrontCopy?: { languageCode?: unknown } | null } | null | undefined,
+  bindings?: SettingBindingContext,
 ): Promise<RequestTheme> {
   const locals = astro.locals as ThemeLocals;
   locals.storefrontTheme ??= (async () => {
@@ -141,10 +151,25 @@ export function resolveRequestTheme(
         preview,
         brand: preview ? preview.brand : layoutData?.brand,
         languageCode: layoutData?.storefrontCopy?.languageCode,
+        bindings,
       },
     );
   })();
   return locals.storefrontTheme;
+}
+
+/** Object data joins the existing page part after the layout resolves. */
+export function applyRequestThemeBindings(requestTheme: RequestTheme, bindings: SettingBindingContext): void {
+  requestTheme.bindingContext = { ...requestTheme.bindingContext, ...bindings };
+  requestTheme.theme = boundTheme(requestTheme.theme, requestTheme.bindingContext);
+  requestTheme.resolved = resolveStorefrontTheme(requestTheme.theme, requestTheme.shape);
+  requestTheme.layout = requestTheme.resolved.layout;
+}
+
+function boundTheme(theme: StorefrontThemeDocument, context: SettingBindingContext): StorefrontThemeDocument {
+  if (!hasSettingBindings(theme)) return theme;
+  const bound = storefrontThemeDocumentSchema.safeParse(resolveDocumentBindings(theme, context, storefrontThemeDocumentSchema));
+  return bound.success ? bound.data : theme;
 }
 
 const DEFAULT_REQUEST_THEME = requestThemeFor(DEFAULT_STOREFRONT_THEME);

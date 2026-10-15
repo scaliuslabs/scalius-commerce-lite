@@ -6,6 +6,7 @@ import type { OrderShipmentRecoveryReason } from "@scalius/core/modules/orders/b
 import type { DeliveryMethodKind, FulfillmentRecordStatus, FulfillmentType } from "@scalius/shared/fulfilment";
 import type { CustomizationFieldType } from "@scalius/shared/line-properties";
 import type { OrderChannel } from "@scalius/shared/order-channel";
+import type { RelatedObjectRecord } from "@scalius/shared/plugins/objects";
 
 export type OrderTimestamp = Date | string | number;
 export type ShipmentMetadata = Record<string, unknown> | string | null;
@@ -183,6 +184,8 @@ export interface OrderSupportRequest {
 }
 
 export interface Order {
+  relatedObjects?: RelatedObjectRecord[];
+  attributes?: Record<string, string>;
   id: string;
   version: number;
   customerName: string;

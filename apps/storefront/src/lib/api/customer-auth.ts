@@ -1,3 +1,4 @@
+import { clearBuyerAttributes } from "../buyer-ui/state";
 // src/lib/api/customer-auth.ts
 // API client for storefront customer sign-in (one-time codes by email, SMS or WhatsApp).
 //
@@ -18,6 +19,8 @@ import type {
   OrderReceiptDiscount,
 } from "./types";
 import type { DeliveryMethodKind } from "@scalius/shared/fulfilment";
+import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 import type { OrderLineExtras } from "../order-line-extras";
 import { reconcileCheckoutAfterSignIn } from "../checkout/session-state";
 
@@ -395,6 +398,7 @@ export async function getCustomerSession(): Promise<AuthState> {
  * silently dropped by modern browsers.
  */
 export async function logoutCustomer(): Promise<void> {
+  clearBuyerAttributes();
   clearInFlightCustomerSessionRead();
   clearReadableCustomerAuthMirrorCookie();
   try {
@@ -686,6 +690,7 @@ export interface CustomerOrderDetailOrder {
 }
 
 export interface CustomerOrderDetail {
+  buyerUi?: BuyerUiBlock[];
   order: CustomerOrderDetailOrder & OrderFulfilmentFacts;
   /** Each handed-over action: a parcel sent, a pickup, a performed service. */
   fulfillments?: BuyerOrderFulfilment[];
@@ -904,6 +909,7 @@ export async function getCustomerOrderDetail(orderId: string): Promise<{
     const res = await customerAuthFetch(authUrl(`orders/${encodeURIComponent(orderId)}`), {
       credentials: "include",
       cache: "no-store",
+      headers: await buyerUiLocaleHeaders(),
     });
     const raw = await readEnvelope<CustomerOrderDetail>(res);
     const detail = raw.data ?? (raw as unknown as CustomerOrderDetail);

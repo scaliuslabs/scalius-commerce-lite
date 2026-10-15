@@ -1,10 +1,11 @@
-import { and, asc, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { abandonedCheckouts } from "@scalius/database/schema";
 import { isOnlinePaymentMethod } from "../../payments";
 
 export const DEFAULT_ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const DEFAULT_EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
+export const ABANDONED_CHECKOUT_IDLE_MINUTES = 60;
 export const DEFAULT_ABANDONED_CHECKOUT_CLEANUP_LIMIT = 100;
 export const MAX_ABANDONED_CHECKOUT_CLEANUP_LIMIT = 500;
 
@@ -150,6 +151,17 @@ export async function cleanupStaleAbandonedCheckouts(
         await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, emptyIds));
         result.deletedEmpty = emptyIds.length;
     }
+
+    // The NULL-to-timestamp edge emits checkout.abandoned once, even after a buyer resumes.
+    await db.run(sql`
+        UPDATE abandoned_checkouts SET abandoned_at = ${Math.floor(nowSeconds)}
+        WHERE id IN (
+            SELECT id FROM abandoned_checkouts
+            WHERE abandoned_at IS NULL
+                AND updated_at <= ${Math.floor(nowSeconds - ABANDONED_CHECKOUT_IDLE_MINUTES * 60)}
+            ORDER BY updated_at, id LIMIT ${limit}
+        ) AND abandoned_at IS NULL
+    `);
 
     return result;
 }

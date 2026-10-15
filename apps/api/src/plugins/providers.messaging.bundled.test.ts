@@ -105,7 +105,7 @@ describe("app messaging and fraud providers through the bundled loader", () => {
   });
 
   const apps = (key = KEY) => createAppProviders(createAppProviderRuntime({ env, db, ctx: pluginTestCtx() }), key);
-  const sentRecords = () => (sqlite.prepare("SELECT count(*) AS count FROM plugin_records WHERE plugin_id = ? AND collection = 'sent'").get(NOTIFY_FIXTURE_ID) as { count: number }).count;
+  const sentRecords = () => (sqlite.prepare("SELECT count(*) AS count FROM object_records WHERE type_id = ?").get(`oty_${NOTIFY_FIXTURE_ID}.sent`) as { count: number }).count;
 
   it("keeps the SMS port on every outcome, never sending twice what may have gone", async () => {
     const sms = (await apps().resolve("sms", TEXTS)).provider!;
@@ -115,7 +115,7 @@ describe("app messaging and fraud providers through the bundled loader", () => {
 
     const sent = await send("Your order shipped", "outbox1smsrecipient");
     expect(port.parse(sent)).toEqual({ success: true, providerRef: "T-outbox1smsre", rawStatus: "Queued for [phone]" });
-    // A retry with the same reference is applied once (the app's own storage).
+    // A retry with the same reference is applied once (the app's own objects).
     expect(await send("Your order shipped", "outbox1smsrecipient")).toEqual(sent);
     expect(sentRecords()).toBe(1);
 

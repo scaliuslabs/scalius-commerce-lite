@@ -153,6 +153,48 @@ describe("Noor skins of the store's sections", () => {
     expect(html).not.toContain('data-island="countdown"');
   });
 
+  it("draws saved tile subtitles and optional sale/signup images", () => {
+    const tiles = draw("noor-tiles-cards", "collection-tiles", {}, { title: "Linen", cards: [{ mediaId: image("tile"), title: "Summer", subtitle: "Made for warm days", href: "/linen" }] });
+    expect(tiles).toContain("Made for warm days");
+    for (const [skin, type, data] of [
+      ["noor-sale", "sale-countdown", { title: "Season sale", source: list("on-sale", 0), promotionId: null, mediaId: image("sale") }],
+      ["noor-signup", "signup", { heading: "Stay in touch", text: "News", mediaId: image("signup") }],
+    ] as const) {
+      const html = draw(skin, type, {}, data);
+      expect(html).toContain(`src="${data.mediaId.url}"`);
+      expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
+    }
+  });
+
+  it("draws Specifications from the same resolved core rows", () => {
+    const html = draw("noor-specifications", "specifications", {}, { heading: "Specifications", rows: [
+      { label: "Fabric", value: "Cotton" }, { label: "Unfilled", value: "" },
+    ] });
+    expect(html).toContain("<dt>Fabric</dt><dd>Cotton</dd>");
+    expect(html).not.toContain("Unfilled");
+    expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
+  });
+
+  it("draws the same resolved size chart object fields and keeps literal fallback", () => {
+    const settings = { heading: "Size chart", rows: [{ label: "Fit", value: "Ask us" }], objectField: [
+      { key: "chest", name: "Chest", list: false, parts: [{ kind: "text", text: "38 inches" }] },
+      { key: "guide", name: "Guide", list: false, parts: [{ kind: "link", href: "/size-guide", label: "Size guide", external: false }] },
+    ] };
+    const html = draw("noor-specifications", "specifications", {}, settings);
+    expect(html).toContain("<dt>Chest</dt>");
+    expect(html).toContain("38 inches");
+    expect(html).toContain('href="/size-guide"');
+    expect(html).not.toContain("Ask us");
+    expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
+    expect(draw("noor-specifications", "specifications", {}, { ...settings, objectField: [] })).toContain("Ask us");
+  });
+
+  it("keeps countdown units in a semantic list", () => {
+    const html = draw("noor-sale", "sale-countdown", {}, { title: "Sale", source: list("on-sale", 0), promotionId: { endsAt: "2026-12-31T00:00:00Z" } });
+    expect(html).toContain('<ol class="noor-timer-list" aria-live="off">');
+    expect(html).not.toContain('role="timer"');
+  });
+
   it("falls back to the products' own listing for a view-all link", () => {
     const html = draw("noor-products-rail", "products", { link_label: "View all" }, { title: "Popular", source: list("popular"), limit: 12 });
     expect(html).toContain('<a class="noor-more" href="/collections/popular">');

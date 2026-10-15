@@ -25,6 +25,8 @@ Public entries: `index.ts` (the server API) and `browser.ts` (the quote fingerpr
 | `pricing.ts` | `priceStorefrontCheckout()`, `checkStorefrontCartRules()`, `resolveAppPaymentMethods()`, ... | The one price of a checkout: promotions or bundles, then the apps' functions, then tax (quote and order alike) |
 | `app-functions.ts` | `buildAppFunctionCart()`, `resolveAppDiscounts()`, `applyAppShippingRateOperations()`, ... | The cart apps see and the pure rules that merge app function outputs |
 
+The abandoned-checkout maintenance sweep sets `abandoned_at` once after 60 minutes without a snapshot update. The bounded update supplies the transactional `checkout.abandoned` trigger edge; resumed checkouts keep their first marker and never emit it again.
+
 ## Data Flow
 
 ### Storefront Order Creation (synchronous, idempotent)
@@ -62,6 +64,7 @@ language with the merchant's edits).
   the signed-in customer's order count and spend (no tags exist yet: always
   empty); the delivery region (city and thana names) when something ships;
   the typed codes. One extra read batch, only when an app implements a point.
+- **Buyer UI and checkout attributes** (`attributes.ts`, shared `plugins/buyer-ui.ts`): private cart/quote/receipt/account responses carry declarative `buyer.ui` blocks. Active declarations validate values; unknown keys are dropped, invalid values return `attribute_invalid`, and required fields are checked only on placement so the initial quote can draw them. The accepted map (at most 8 KiB) joins quote/replay identity and the existing order insert. Attributes never enter events or URLs. Buyer UI sees only its app's attributes; object snapshots are shared within the request.
 - **`cart.validate`**: on the cart page (catalog totals, no codes), the quote
   and the order. Errors land on their line (`index`, `cartKey`) or the whole
   cart; any error blocks: `400 details.reason = "cart_rules"` with
@@ -80,10 +83,10 @@ language with the merchant's edits).
   quoted after every discount (the platform and app allocations together).
 - **Snapshot commits** (`checkout.discounts` with `snapshot`): the API reads
   the signed-in buyer's record in the declared collection and passes it in
-  with its revision; an answer's `commit` becomes an `AppStorageCommit`
+  with its revision; an answer's `commit` becomes an `AppObjectCommit`
   (checked and indexed by the platform). `resolveAppDiscounts` keeps the
   commits of apps whose discounts applied; the order payload carries them as
-  `appStorageCommits` and `commitStorefrontOrderPayload` writes them in the
+  `appObjectCommits` and `commitStorefrontOrderPayload` writes them in the
   same batch behind revision guards (`plugins/storage.ts`). A record changed
   since pricing fails the whole order with `APP_OFFER_CHANGED` and the store's
   `checkoutAppOfferChangedText`: a balance is never spent twice. Staff orders
@@ -229,3 +232,20 @@ language with the merchant's edits).
   and receipt lines keep reading promotion allocations only. Stacking needs a
   recorded bundle part per line (a lead-numbered migration); then only the
   interplay function changes.
+
+### Calculated delivery rates
+
+A zone rate can name a courier's optional `rates` operation. The existing
+shipping and location reads carry its service/fallback and external place ids;
+SKU weights ride the existing cart read. One preflight calls at most three
+providers within two seconds, memoizes each, and uses a versioned ten-minute
+Cache API hint. Failure hides the method unless the merchant saved a fallback.
+Functions adjust the resulting rates after carriers finish.
+
+The response's body-only `shippingRateToken` signs the method, service, amount,
+currency, destination/parcel hashes and cash-collection mode for fifteen minutes
+under the `checkout-rate-quote` HKDF purpose. Commit consumes a matching token
+without carrier calls or quote rows. Its signed cash-collection mode must match
+the final payment policy, including an online deposit's outstanding balance;
+otherwise checkout refuses before writing and asks the buyer to review delivery.
+Changed or expired tokens re-quote, with the existing fingerprint guarding totals.

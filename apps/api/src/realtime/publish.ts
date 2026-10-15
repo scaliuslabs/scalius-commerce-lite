@@ -1,9 +1,9 @@
 // Producer side of the realtime hub: the change notices the API sends after a
 // write commits. Two sources, both free of database reads:
 //
-//   1. Event outbox rows, as the flush claims or settles them (the rows it
+//   1. Event outbox rows, as the flush dispatches them (the rows it
 //      already returns): ids, states and revisions from the catalog facts.
-//   2. Tables without events (the inbox and reviews): the write observer of the
+//   2. Table changes, including topics without event demand: the write observer of the
 //      request or background run saw the write, so a table-level `changed`.
 //
 // One RPC to the hub per flush or write, never per row. Failures are dropped:

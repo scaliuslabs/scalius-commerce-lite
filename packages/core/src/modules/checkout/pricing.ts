@@ -22,7 +22,7 @@ import {
   type TaxQuote,
 } from "../tax";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
-import { DELIVERY_RATE_UNAVAILABLE_REASON, deliveryRateInCurrency, destinationCountry, listDeliveryRatesForDestination } from "../delivery";
+import { DELIVERY_RATE_UNAVAILABLE_REASON, deliveryRateInCurrency, destinationCountry, listDeliveryRatesForDestination, type DeliveryRateRow } from "../delivery";
 import { BUILT_IN_PAYMENT_PROVIDERS, COD_LABEL, type PaymentProviders } from "../payments";
 import { GIFT_CARD_PAYMENT_METHOD } from "../gift-cards";
 import type { StorefrontOrderCommitPayload, StorefrontOrderShippingMethodSnapshot } from "../orders";
@@ -41,7 +41,7 @@ import {
   wantsAppCart,
   type AppDiscountResolution,
   type AppliedAppDiscount,
-  type AppStorageCommit,
+  type AppObjectCommit,
   type CheckoutAppFunctions,
   type CheckoutPaymentMethodOption,
   type CheckoutRateOption,
@@ -51,6 +51,7 @@ import {
 
 /** The delivery facts pricing needs (a delivery preflight result has them). */
 export interface CheckoutPricingDelivery {
+  rateRows?: DeliveryRateRow[];
   kind: "delivery" | "pickup" | null;
   shippingMinor: number;
   shippingMethod: StorefrontOrderShippingMethodSnapshot | null;
@@ -76,6 +77,7 @@ export interface StorefrontCheckoutPricingInput {
   };
   delivery: CheckoutPricingDelivery;
   discountCodes: readonly string[];
+  attributes?: Record<string, string>;
   customerId?: string | null;
   /** The signed-in account whose segments may unlock segment-limited promotions (never a guest). */
   segmentCustomerId?: string | null;
@@ -124,7 +126,7 @@ export interface StorefrontCheckoutPricing {
   bundleLines: BundlePromotionInterplay["bundleLines"];
   appDiscounts: AppliedAppDiscount[];
   /** Snapshot writes the applied app discounts commit with the order. */
-  appStorageCommits: AppStorageCommit[];
+  appObjectCommits: AppObjectCommit[];
   /** The delivery charge before discounts (an app may have priced the chosen rate). */
   shippingMinor: number;
   /** The chosen rate as the buyer sees it (an app may have renamed or priced it). */
@@ -159,7 +161,7 @@ async function listRateOptions(
   // Bangladesh needs its city; another country is a destination by itself.
   const hasDestination = country === DELIVERY_HIERARCHY_COUNTRY ? Boolean(source?.city?.trim()) : Boolean(source);
   const money = input.cartValidation.money;
-  const rows = (await listDeliveryRatesForDestination(db, hasDestination
+  const rows = (input.delivery.rateRows ?? await listDeliveryRatesForDestination(db, hasDestination
     ? {
       countryCode: country,
       city: source?.city,
@@ -171,7 +173,7 @@ async function listRateOptions(
     : null)).map((row) => deliveryRateInCurrency(row, money));
   return rows
     // Without a destination only pickup is offered; apps adjust what the buyer can choose.
-    .filter((row) => hasDestination || row.kind === "pickup")
+    .filter((row) => (hasDestination || row.kind === "pickup") && (!row.rateSource || row.rateSource === "flat" || row.rateCurrency !== undefined))
     .map((row) => {
       const freeOver = row.freeOverMinor ?? null;
       const waived = input.cartValidation.hasFreeDeliveryProduct
@@ -251,13 +253,13 @@ export async function priceStorefrontCheckout(
   let shippingMethod = delivery.shippingMethod;
   let platform = await platformPricing(shippingMinor);
   let appDiscounts: AppliedAppDiscount[] = [];
-  let appStorageCommits: AppStorageCommit[] = [];
+  let appObjectCommits: AppObjectCommit[] = [];
   let claimedCodes: string[] = [];
   let ruleErrors: CheckoutRuleError[] = [];
-  let shippingRates: CheckoutRateOption[] | null = null;
+  let shippingRates: CheckoutRateOption[] | null = delivery.rateRows ? await listRateOptions(db, input) : null;
   let appCart: FunctionCart | null = null;
 
-  if (apps && wantsAppCart(apps, ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods"])) {
+  if (apps && wantsAppCart(apps, ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", "buyer.ui"])) {
     const wantsRates = apps.points.has("checkout.shipping_rates") && delivery.kind !== null && shippingMethod !== null;
     const appDestination = delivery.fulfilment.requiresShipping
       ? { country: delivery.address?.countryCode ?? null, city: delivery.cityName, zone: delivery.zoneName }
@@ -289,6 +291,7 @@ export async function priceStorefrontCheckout(
       facts,
       destination: appDestination,
       discountCodes: input.discountCodes,
+      attributes: input.attributes,
     }));
     const cart = appCart;
     // One wave of app calls: every point sees the same cart.
@@ -353,7 +356,7 @@ export async function priceStorefrontCheckout(
         apps,
       });
       appDiscounts = resolution.applied;
-      appStorageCommits = resolution.commits;
+      appObjectCommits = resolution.commits;
       claimedCodes = resolution.claimedCodes;
     }
   }
@@ -421,7 +424,7 @@ export async function priceStorefrontCheckout(
     bundleDiscountMinor: platform.bundleDiscountMinor,
     bundleLines: platform.bundleLines,
     appDiscounts,
-    appStorageCommits,
+    appObjectCommits,
     shippingMinor,
     shippingMethod,
     taxQuote,
@@ -459,10 +462,12 @@ export async function checkStorefrontCartRules(
     currency: { code: string; decimalPlaces: number };
     customerId?: string | null;
     channel: FunctionCart["channel"];
+    attributes?: Record<string, string>;
+    onCart?: (cart: FunctionCart) => void;
   },
 ): Promise<CheckoutRuleError[]> {
   const { apps, cartValidation } = input;
-  if (!apps?.points.has("cart.validate") || cartValidation.items.length === 0) return [];
+  if ((!apps?.points.has("cart.validate") && !apps?.points.has("buyer.ui")) || cartValidation.items.length === 0) return [];
   const lineIds = cartValidation.items.map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId));
   const destination = input.delivery?.fulfilment.requiresShipping
     ? { country: input.delivery.address?.countryCode ?? null, city: input.delivery.cityName, zone: input.delivery.zoneName }
@@ -489,8 +494,11 @@ export async function checkStorefrontCartRules(
     facts,
     destination,
     discountCodes: [],
+    attributes: input.attributes,
   }));
   if (!cart) return [];
+  input.onCart?.(cart);
+  if (!apps?.points.has("cart.validate")) return [];
   return collectCheckoutRuleErrors(
     await apps.run("cart.validate", { cart }),
     new Map(cartValidation.items.map((item, position) => [lineIds[position]!, { index: item.index, cartKey: item.cartKey ?? null }])),

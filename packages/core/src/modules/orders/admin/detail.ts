@@ -1,3 +1,4 @@
+import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
 // The dashboard order detail read.
 import { orderShippingAddressSelection } from "../shipping-address";
 import { orderBillingAddressSelection } from "../billing-address";
@@ -15,7 +16,7 @@ import {
 import { listOrderDiscountLines } from "../../promotions";
 import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../../order-kernel";
 import { listOrderHolds } from "../holds";
-import { sql, desc, eq } from "drizzle-orm";
+import { sql, desc, eq, type SQL } from "drizzle-orm";
 import { customerKind } from "../../customers";
 import { fromMinor } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -75,18 +76,21 @@ function omitOrderEditEvidence<T extends Record<OrderEditEvidenceKey, unknown>>(
 export async function getOrderDetails(
     db: Database,
     id: string,
-): Promise<OrderDetails | null> {
-    return retryTransientD1(() => getOrderDetailsOnce(db, id));
+    relatedObjectsProjection?: SQL<string | null>,
+): Promise<(OrderDetails & { relatedObjectsJson: string | null }) | null> {
+    return retryTransientD1(() => getOrderDetailsOnce(db, id, relatedObjectsProjection));
 }
 
 async function getOrderDetailsOnce(
     db: Database,
     id: string,
-): Promise<OrderDetails | null> {
+    relatedObjectsProjection?: SQL<string | null>,
+): Promise<(OrderDetails & { relatedObjectsJson: string | null }) | null> {
     // Every read is keyed by the order id, so they all go out in one wave
     // rather than waiting for the order row first.
     const orderRead = db
         .select({
+            relatedObjectsJson: relatedObjectsProjection ?? sql<string | null>`null`,
             id: orders.id,
             customerName: orders.customerName,
             customerPhone: orders.customerPhone,
@@ -106,6 +110,7 @@ async function getOrderDetailsOnce(
             pricesIncludeTax: orders.pricesIncludeTax,
             status: orders.status,
             notes: orders.notes,
+            attributes: orders.attributes,
             ...orderShippingAddressSelection(orders),
             ...orderBillingAddressSelection(orders),
             pickupAddress: orders.pickupAddress,
@@ -301,6 +306,7 @@ async function getOrderDetailsOnce(
 
     return {
         ...publicOrder,
+        attributes: readCheckoutAttributes(order.attributes),
         ...orderMoneyAmounts(order),
         moneyChain: order.currencyCode && shopCurrency && order.currencyCode !== shopCurrency
             ? {

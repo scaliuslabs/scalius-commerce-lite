@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
  * Raw text between JSX tags, or in a text attribute, would stay English in
  * the Bangla dashboard.
  */
-const SCREENS = ["settings", "apps", "metaobjects", "address"];
+const SCREENS = ["settings", "apps", "objects", "address"];
 const ROOT = join(__dirname, "..", "components", "admin");
 const TEXT_ATTRIBUTES = new Set(["title", "placeholder", "aria-label", "alt", "label", "description", "aria-description", "tooltip"]);
 /** Values that are the same in every language: formats, hosts, ids. */

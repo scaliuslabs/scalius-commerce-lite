@@ -28,6 +28,38 @@ function cart(options: { codes?: string[]; signedIn?: boolean; itemsMinor?: numb
 const snapshot = (points: number, revision = 4) => ({ revision, data: { points, earned: points, spent: 0 } });
 
 describe("acme.loyalty", () => {
+  const buyer = {
+    target: "purchase.checkout.actions.render-before", language: "en", locale: "en-BD", currency: "BDT",
+    cart: cart({ codes: [] }), attributes: {}, order: null, customer: { id: "cust_1" }, snapshot: snapshot(300),
+  };
+
+  it("shows snapshot points and redeems through the existing checkout discount code", async () => {
+    const harness = createPluginTestHarness(loyalty);
+    expect((await harness.fn("buyer.ui", buyer)).value).toEqual({ ui: { type: "stack", children: [
+      { type: "key-value", items: [{ label: "Loyalty points", value: "300" }] },
+      { type: "button", label: "Redeem points", action: { kind: "apply_code", code: "POINTS" } },
+    ] } });
+    const result = await harness.fn("checkout.discounts", { cart: cart({ codes: ["POINTS"] }), snapshot: buyer.snapshot });
+    expect(result.value).toMatchObject({ commit: { record: { points: 0, spent: 300 } } });
+    expect(harness.records.get("balances")!.size).toBe(0);
+  });
+
+  it("omits redemption for guests, account pages, missing balances, and an already-applied code", async () => {
+    const harness = createPluginTestHarness(loyalty);
+    expect((await harness.fn("buyer.ui", { ...buyer, customer: null, snapshot: null })).value).toEqual({ ui: null });
+    for (const input of [
+      { ...buyer, target: "customer-account.order-index.block.render", cart: null },
+      { ...buyer, snapshot: null },
+      { ...buyer, snapshot: snapshot(49) },
+      { ...buyer, cart: cart({ codes: ["points"] }) },
+    ]) {
+      const result = await harness.fn("buyer.ui", input);
+      expect(result.ok).toBe(true);
+      expect(result.value).toMatchObject({ ui: { type: "stack", children: [{ type: "key-value" }] } });
+      expect((result.value as { ui: { children: unknown[] } }).ui.children).toHaveLength(1);
+    }
+  });
+
   it("prices points in minor units and earns per 100 spent", () => {
     expect(pointValueMinor({ point_value: 1 }, 2)).toBe(100);
     expect(pointValueMinor({ point_value: 0.5 }, 0)).toBe(1);

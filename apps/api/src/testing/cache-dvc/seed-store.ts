@@ -25,7 +25,7 @@ import {
   type StorefrontSection,
 } from "@scalius/shared/storefront-theme";
 import { PLUGIN_API_VERSION, parsePluginManifest, pluginGrantKey, pluginGrantRequest } from "@scalius/shared/plugins";
-import { recordIndexColumns } from "@scalius/core/modules/plugins";
+import { recordIndexColumns } from "@scalius/core/modules/objects";
 
 /** Seconds; 2026-09-21T14:13:20Z. Simulated time starts here. */
 export const DVC_SEED_EPOCH = 1_790_000_000;
@@ -73,7 +73,7 @@ export function everySectionTheme() {
   set("editorial", { layout: "image-with-text", heading: "Story", body: "Woven by hand.", mediaId: "media_story", imageSide: "end" });
   set("product-rail", { title: "", source: { kind: "newest" }, limit: 8 }, "rail-newest");
   // A content type with storefront access: its published entries show; a change to the type or an entry must too.
-  set("metaobjects", { heading: "FAQ", definitionId: "mod_faq_000001", layout: "accordion", limit: 6 });
+  set("objects", { heading: "FAQ", typeId: "oty_custom.faq", layout: "accordion", limit: 6 });
   theme.pages.home = sections;
   theme.pages.landing = {
     eid: { title: "ঈদের বাছাই", description: "", sections: structuredClone(sections) },
@@ -89,17 +89,21 @@ const q = (value: unknown) => `'${(typeof value === "string" ? value : JSON.stri
 const T = DVC_SEED_EPOCH;
 
 /**
- * Installed apps and their records (0110 registers the plugin tables): an
+ * Installed apps and their typed objects: an
  * active app with every index slot filled and a disabled one, so the
  * generator can insert, update and delete each plugin table and move every
  * noise column (revisions, index columns, timestamps, actors).
  */
 function pluginSeedSql(): string {
-  const storage = { notes: { indexes: ["owner", "kind", "at", "tag"], unique: ["ref", "code"] } };
+  const objects = { notes: {
+    name: "Notes", admin: "edit",
+    fields: ["owner", "kind", "at", "tag", "ref", "code"].map((key) => ({ key, name: key, type: key === "at" ? "integer" : "single_line_text" })),
+    indexes: ["owner", "kind", "at", "tag"], unique: ["ref", "code"],
+  } };
   const manifestOf = (id: string) => {
     const parsed = parsePluginManifest({
       id, name: `DVC app ${id}`, version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "A DVC seed app.",
-      author: { name: "DVC" }, events: ["order.paid"], functions: [{ point: "checkout.discounts" }], storage,
+      author: { name: "DVC" }, events: ["order.paid"], functions: [{ point: "checkout.discounts" }], objects,
     });
     if (!parsed.ok) throw new Error(`DVC seed manifest: ${JSON.stringify(parsed.issues)}`);
     return parsed.manifest;
@@ -108,9 +112,9 @@ function pluginSeedSql(): string {
   const disabled = manifestOf("acme.dvc-disabled");
   const grant = (manifest: ReturnType<typeof manifestOf>) => pluginGrantRequest(manifest);
   const record = (id: string, data: Record<string, unknown>, at: number) => {
-    const columns = recordIndexColumns(storage.notes, data);
+    const columns = recordIndexColumns(active.objects.notes!, data);
     const value = (column: string) => (columns[column] === null ? "NULL" : q(columns[column]));
-    return `('acme.dvc-active', 'notes', ${q(id)}, ${q(data)}, ${at - T + 1}, ${value("idx1")}, ${value("idx2")}, ${value("idx3")}, ${value("idx4")}, ${value("uq1")}, ${value("uq2")}, ${at}, ${at})`;
+    return `('oty_acme.dvc-active.notes', ${q(id)}, 'active', ${q(data)}, ${at - T + 1}, ${value("k1")}, ${value("k2")}, ${value("k3")}, ${value("k4")}, ${value("u1")}, ${value("u2")}, ${at}, ${at})`;
   };
   return `
   INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES
@@ -123,7 +127,9 @@ function pluginSeedSql(): string {
     ('function', 'checkout.discounts', 'acme.dvc-active', 100),
     ('event', 'order.paid', 'acme.dvc-active', 100),
     ('function', 'checkout.discounts', 'acme.dvc-disabled', 200);
-  INSERT INTO plugin_records (plugin_id, collection, id, data_json, revision, idx1, idx2, idx3, idx4, uq1, uq2, created_at, updated_at) VALUES
+  INSERT INTO object_types (id, namespace, type, name, fields_json, indexes_json, unique_json, admin, storefront, events, created_at, updated_at) VALUES
+    ('oty_acme.dvc-active.notes', 'acme.dvc-active', 'notes', 'Notes', ${q(active.objects.notes!.fields)}, ${q(active.objects.notes!.indexes)}, ${q(active.objects.notes!.unique)}, 'edit', 0, 0, ${T}, ${T});
+  INSERT INTO object_records (type_id, id, status, data_json, revision, k1, k2, k3, k4, u1, u2, created_at, updated_at) VALUES
     ${record("n1", { owner: "c1", kind: "earn", at: 1, tag: "eid", ref: "r1", code: "A" }, T + 1)},
     ${record("n2", { owner: "c2", kind: "spend", at: 2, tag: "vip", ref: "r2", code: "B" }, T + 2)},
     ${record("n3", { owner: "c3", kind: "earn", at: 3, tag: "new", ref: "r3", code: "C" }, T + 3)};
@@ -465,23 +471,23 @@ function seedSql(): string {
     ('cfd_origin_01', 'brand', 'custom', 'origin', 'Origin', 'single_line_text', '{}', 1, 0, ${T}, ${T}),
     ('cfd_hero_0001', 'page', 'custom', 'hero_colour', 'Hero colour', 'color', '{}', 1, 0, ${T}, ${T}),
     ('cfd_vip_00001', 'customer', 'custom', 'vip', 'VIP', 'boolean', '{}', 0, 0, ${T}, ${T});
-  -- Metaobjects: a public FAQ type (the homepage section reads it) and a private app type.
-  INSERT INTO metaobject_definitions (id, namespace, type, name, fields, display_field, storefront_access, revision, created_at, updated_at) VALUES
-    ('mod_faq_000001', 'custom', 'faq', 'FAQ', ${q([{ key: "question", name: "Question", type: "single_line_text", required: true }, { key: "answer", name: "Answer", type: "multi_line_text", required: false }])}, 'question', 1, 1, ${T}, ${T}),
-    ('mod_tiers_0001', 'acme.loyalty', 'tiers', 'Tiers', ${q([{ key: "label", name: "Label", type: "single_line_text", required: true }])}, 'label', 0, 1, ${T}, ${T}),
-    ('mod_sizes_0001', 'custom', 'size_chart', 'Size chart', ${q([{ key: "size", name: "Size", type: "single_line_text", required: true }, { key: "chest", name: "Chest", type: "integer", required: false }])}, 'size', 1, 1, ${T}, ${T}),
-    ('mod_shops_0001', 'custom', 'locations', 'Locations', ${q([{ key: "name", name: "Name", type: "single_line_text", required: true }])}, 'name', 1, 1, ${T}, ${T});
-  INSERT INTO metaobject_entries (id, definition_id, handle, status, fields, position, revision, created_at, updated_at) VALUES
-    ('moe_faq_000001', 'mod_faq_000001', 'returns', 'published', ${q({ question: "Returns?", answer: "Within 7 days." })}, 0, 1, ${T}, ${T}),
-    ('moe_faq_000002', 'mod_faq_000001', 'delivery', 'draft', ${q({ question: "Delivery?", answer: "Two days." })}, 1, 1, ${T}, ${T}),
-    ('moe_faq_000003', 'mod_faq_000001', 'sizes', 'published', ${q({ question: "Sizes?", answer: "S to XXL." })}, 2, 1, ${T}, ${T}),
-    ('moe_tiers_0001', 'mod_tiers_0001', 'gold', 'published', ${q({ label: "Gold" })}, 0, 1, ${T}, ${T}),
-    ('moe_tiers_0002', 'mod_tiers_0001', 'silver', 'published', ${q({ label: "Silver" })}, 1, 1, ${T}, ${T}),
-    ('moe_tiers_0003', 'mod_tiers_0001', 'bronze', 'draft', ${q({ label: "Bronze" })}, 2, 1, ${T}, ${T}),
-    ('moe_sizes_0001', 'mod_sizes_0001', 'm', 'published', ${q({ size: "M", chest: "40" })}, 0, 1, ${T}, ${T}),
-    ('moe_sizes_0002', 'mod_sizes_0001', 'l', 'published', ${q({ size: "L", chest: "42" })}, 1, 1, ${T}, ${T}),
-    ('moe_shops_0001', 'mod_shops_0001', 'dhanmondi', 'published', ${q({ name: "Dhanmondi" })}, 0, 1, ${T}, ${T}),
-    ('moe_shops_0002', 'mod_shops_0001', 'gulshan', 'published', ${q({ name: "Gulshan" })}, 1, 1, ${T}, ${T});
+  -- Objects: public content types (the homepage reads FAQ) and a private app type.
+  INSERT INTO object_types (id, namespace, type, name, fields_json, display_field, storefront, admin, handle, revision, created_at, updated_at) VALUES
+    ('oty_custom.faq', 'custom', 'faq', 'FAQ', ${q([{ key: "question", name: "Question", type: "single_line_text", required: true }, { key: "answer", name: "Answer", type: "multi_line_text", required: false }])}, 'question', 1, 'edit', 1, 1, ${T}, ${T}),
+    ('oty_acme.loyalty.tiers', 'acme.loyalty', 'tiers', 'Tiers', ${q([{ key: "label", name: "Label", type: "single_line_text", required: true }])}, 'label', 0, 'read', 1, 1, ${T}, ${T}),
+    ('oty_custom.size_chart', 'custom', 'size_chart', 'Size chart', ${q([{ key: "size", name: "Size", type: "single_line_text", required: true }, { key: "chest", name: "Chest", type: "integer", required: false }])}, 'size', 1, 'edit', 1, 1, ${T}, ${T}),
+    ('oty_custom.locations', 'custom', 'locations', 'Locations', ${q([{ key: "name", name: "Name", type: "single_line_text", required: true }])}, 'name', 1, 'edit', 1, 1, ${T}, ${T});
+  INSERT INTO object_records (id, type_id, handle, status, data_json, pub, position, revision, created_at, updated_at) VALUES
+    ('obj_faq_000001', 'oty_custom.faq', 'returns', 'published', ${q({ question: "Returns?", answer: "Within 7 days." })}, 1, 0, 1, ${T}, ${T}),
+    ('obj_faq_000002', 'oty_custom.faq', 'delivery', 'draft', ${q({ question: "Delivery?", answer: "Two days." })}, 0, 1, 1, ${T}, ${T}),
+    ('obj_faq_000003', 'oty_custom.faq', 'sizes', 'published', ${q({ question: "Sizes?", answer: "S to XXL." })}, 1, 2, 1, ${T}, ${T}),
+    ('obj_tiers_0001', 'oty_acme.loyalty.tiers', 'gold', 'active', ${q({ label: "Gold" })}, 0, 0, 1, ${T}, ${T}),
+    ('obj_tiers_0002', 'oty_acme.loyalty.tiers', 'silver', 'active', ${q({ label: "Silver" })}, 0, 1, 1, ${T}, ${T}),
+    ('obj_tiers_0003', 'oty_acme.loyalty.tiers', 'bronze', 'active', ${q({ label: "Bronze" })}, 0, 2, 1, ${T}, ${T}),
+    ('obj_sizes_0001', 'oty_custom.size_chart', 'm', 'published', ${q({ size: "M", chest: 40 })}, 1, 0, 1, ${T}, ${T}),
+    ('obj_sizes_0002', 'oty_custom.size_chart', 'l', 'published', ${q({ size: "L", chest: 42 })}, 1, 1, 1, ${T}, ${T}),
+    ('obj_shops_0001', 'oty_custom.locations', 'dhanmondi', 'published', ${q({ name: "Dhanmondi" })}, 1, 0, 1, ${T}, ${T}),
+    ('obj_shops_0002', 'oty_custom.locations', 'gulshan', 'published', ${q({ name: "Gulshan" })}, 1, 1, 1, ${T}, ${T});
   INSERT INTO custom_field_values (definition_id, owner_type, owner_id, value, updated_at) VALUES
     ('cfd_care_0001', 'product', 'p_linen', 'Hand wash cold.', ${T}),
     ('cfd_care_0001', 'product', 'p_cotton', 'Machine wash.', ${T}),

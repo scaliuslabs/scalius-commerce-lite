@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { serializeJsonLd, type PluginHead } from "@scalius/shared/plugins/storefront";
-import { layoutHasAppBlocks, mergeAppHeads, readAppBlocks, readHomepageAppSurfaces } from "./app-surfaces";
+import { mergeAppHeads, readAppComponent, readHomepageAppSurfaces } from "./app-surfaces";
 import { appComponentsRenderOn, appScriptOrigins, appScriptsForPage, readAppScripts, storefrontAppPage } from "./app-scripts";
 import { setPageCspHeader } from "./middleware-helper/csp-handler";
 
@@ -25,36 +25,22 @@ describe("app surfaces from the API", () => {
     expect(readHomepageAppSurfaces(undefined).size).toBe(0);
   });
 
+  it("preserves bounded public object records through the component decoder", () => {
+    const objects = { "custom.testimonials": { fields: { title: "single_line_text" }, records: [{ id: "obj_one", handle: "one", data: { title: "Loved it" } }] } };
+    const component = { pluginId: "acme.studio", type: "quote", values: {}, media: [], lists: [], objects };
+    expect(readAppComponent(component)?.objects).toEqual(objects);
+    expect(readHomepageAppSurfaces([{ sectionId: "quote", component }]).get("quote")?.component.objects).toEqual(objects);
+    expect(readAppComponent({ ...component, objects: { "custom.testimonials": { ...objects["custom.testimonials"], records: Array(25).fill(objects["custom.testimonials"].records[0]) } } })).toBeNull();
+    expect(readAppComponent({ ...component, objects: { "custom.testimonials": { fields: { buyer: "customer_reference" }, records: [] } } })).toBeNull();
+    expect(readAppComponent({ ...component, objects: { "custom.testimonials": { fields: { title: "single_line_text" }, records: [{ id: "one", handle: null, data: { undeclared: "secret" } }] } } })).toBeNull();
+  });
+
   it("merges several surfaces' head tags: each meta once (first wins), each JSON-LD once", () => {
     const thing = { "@context": "https://schema.org", "@type": "Thing", name: "A" };
     expect(mergeAppHeads([
       head([["name", "acme-verify", "first"]], [thing]),
       head([["name", "acme-verify", "second"], ["property", "product:brand", "Acme"]], [thing]),
     ])).toEqual(head([["name", "acme-verify", "first"], ["property", "product:brand", "Acme"]], [thing]));
-  });
-});
-
-describe("checkout and account app blocks", () => {
-  it("keeps blocks with a known target and HTML, each once, in order", () => {
-    expect(readAppBlocks([
-      { id: "acme.notes/delivery", target: "purchase.checkout.contact.render-after", html: "<p>Ships today</p>" },
-      { id: "acme.notes/delivery", target: "purchase.checkout.contact.render-after", html: "<p>Again</p>" },
-      { id: "acme.notes/odd", target: "purchase.checkout.header.render", html: "<p>Unknown target</p>" },
-      { id: "acme.notes/empty", target: "customer-account.profile.block.render", html: "  " },
-      { id: "not a key", target: "customer-account.profile.block.render", html: "<p>x</p>" },
-      { id: "acme.notes/points", target: "customer-account.order-index.block.render", html: "<p>Points</p>" },
-    ])).toEqual([
-      { id: "acme.notes/delivery", target: "purchase.checkout.contact.render-after", html: "<p>Ships today</p>" },
-      { id: "acme.notes/points", target: "customer-account.order-index.block.render", html: "<p>Points</p>" },
-    ]);
-    expect(readAppBlocks(null)).toEqual([]);
-  });
-
-  it("reads a page group's blocks only when the layout names it", () => {
-    expect(layoutHasAppBlocks({ appBlockPages: ["checkout"] }, "checkout")).toBe(true);
-    expect(layoutHasAppBlocks({ appBlockPages: ["checkout"] }, "account")).toBe(false);
-    expect(layoutHasAppBlocks({}, "checkout")).toBe(false);
-    expect(layoutHasAppBlocks(null, "order")).toBe(false);
   });
 });
 
@@ -75,8 +61,7 @@ describe("app scripts", () => {
     for (const path of ["/categories/bags", "/categories", "/brands/acme", "/collections/col_1", "/collections/", "/search"]) {
       expect(storefrontAppPage(path), path).toBe("listing");
     }
-    expect(storefrontAppPage("/cart")).toBe("cart");
-    for (const path of ["/checkout", "/checkout/", "/checkout/quick", "/order-success", "/account", "/account/profile", "/account/orders/ord_1", "/payment-recovery", "/track-order", "/newsletter/confirm"]) {
+    for (const path of ["/cart", "/cart/", "/cart/quick", "/checkout", "/checkout/", "/checkout/quick", "/order-success", "/account", "/account/profile", "/account/orders/ord_1", "/payment-recovery", "/track-order", "/newsletter/confirm"]) {
       expect(storefrontAppPage(path), path).toBe("private");
     }
     for (const path of ["/about-us", "/apps/acme.wishlist/wishlist", "/blog", "/accounts"]) expect(storefrontAppPage(path), path).toBeNull();
@@ -90,22 +75,21 @@ describe("app scripts", () => {
     expect(appScriptsForPage(undefined, "home")).toEqual([]);
   });
 
-  it("loads no app script on checkout, order or account pages, not even one that names them", () => {
-    // A stale payload (from before manifests lost "checkout" and "order-success") cannot bring a script back.
+  it("loads no app script on cart, checkout, order or account pages, not even one that names them", () => {
+    // A stale payload (from before manifests lost buyer-page script targets) cannot bring a script back.
     const buyer = [
       ...scripts,
-      { pluginId: "acme.pay", src: "https://pay.example/p.js", placement: "body-end", pages: ["checkout", "order-success"] },
+      { pluginId: "acme.pay", src: "https://pay.example/p.js", placement: "body-end", pages: ["cart", "checkout", "order-success"] },
     ];
     expect(readAppScripts(buyer).map((script) => script.pluginId)).not.toContain("acme.pay");
-    for (const path of ["/checkout", "/checkout/quick", "/order-success", "/account/orders/ord_1", "/payment-recovery", "/track-order"]) {
+    for (const path of ["/cart", "/cart/", "/cart/quick", "/checkout", "/checkout/quick", "/order-success", "/account/orders/ord_1", "/payment-recovery", "/track-order"]) {
       expect(appScriptsForPage(buyer, storefrontAppPage(path)), path).toEqual([]);
     }
-    expect(appScriptsForPage(buyer, "cart").map((script) => script.pluginId)).toEqual(["acme.chat"]);
   });
 
   it("renders app components only off the buyer's pages", () => {
-    for (const path of ["/", "/products/x", "/cart", "/about-us"]) expect(appComponentsRenderOn(storefrontAppPage(path)), path).toBe(true);
-    for (const path of ["/checkout", "/order-success", "/account/orders/ord_1", "/payment-recovery", "/track-order"]) {
+    for (const path of ["/", "/products/x", "/about-us"]) expect(appComponentsRenderOn(storefrontAppPage(path)), path).toBe(true);
+    for (const path of ["/cart", "/cart/", "/cart/quick", "/checkout", "/order-success", "/account/orders/ord_1", "/payment-recovery", "/track-order"]) {
       expect(appComponentsRenderOn(storefrontAppPage(path)), path).toBe(false);
     }
   });
@@ -133,6 +117,11 @@ describe("app scripts", () => {
     const listing = csp(scripts, "/categories/bags");
     expect(listing).toContain("https://list.example");
     expect(listing).not.toContain("https://cdn.acme.example");
+
+    for (const path of ["/cart", "/checkout", "/account/orders/ord_1"]) {
+      const buyer = csp(scripts, path);
+      for (const host of ["cdn.acme.example", "chat.example", "list.example"]) expect(buyer, path).not.toContain(host);
+    }
 
     // No app scripts in the layout payload: no app host in the CSP.
     const none = csp([], "/products/linen");

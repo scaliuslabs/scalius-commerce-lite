@@ -123,7 +123,7 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
    * one invocation) Free's absolute ceilings. FREE_PLAN_BUDGET_RECORD=1 only
    * measures: it is how the budgets are regenerated.
    */
-  function expectWithin(measurement: Measurement, { invocation = true } = {}): void {
+  function expectWithin(measurement: Measurement): void {
     const { counters } = measurement;
     if (process.env.FREE_PLAN_BUDGET_RECORD === "1") return;
     const budget: Budget | undefined = BUDGETS[plan][measurement.id];
@@ -141,7 +141,6 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
       // Means are floating point sums; the budget is their ceiling to 1/100.
       expect({ ...actual, ...steady }[key], `${plan} ${measurement.id} ${key}`).toBeLessThanOrEqual(max + 1e-6);
     }
-    if (!invocation) return;
     const ceiling = INVOCATION_LIMITS[plan];
     expect(counters.d1Calls, `${plan} ${measurement.id} stays under ${ceiling.d1Calls} D1 queries per invocation`).toBeLessThanOrEqual(ceiling.d1Calls);
     expect(internalSubrequests(counters), `${plan} ${measurement.id} stays under ${ceiling.internalSubrequests} service subrequests`).toBeLessThanOrEqual(ceiling.internalSubrequests);
@@ -326,9 +325,7 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     }, async () => {
       orderId = await placeOrder(3, quoteFingerprint);
     });
-    // The first (cold) run reads settings and warms caches: 71 D1 queries, over Free's 50 for one invocation.
-    // The recorded budget keeps it from growing; fixing it is a platform change, not a gate change.
-    expectWithin(m, { invocation: false });
+    expectWithin(m);
   });
 
   it("order refund (cash collected, part refunded)", async () => {
@@ -350,7 +347,7 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
       } as never, { type: "admin", id: null });
       await processCodAction(store.db, orderId, { action: "collected", collectedBy: "Rider", collectedAmount: 366 });
     });
-    expectWithin(m, { invocation: false }); // 80 D1 queries cold, as above
+    expectWithin(m);
   });
 
   it("SKU stock change (received stock)", async () => {

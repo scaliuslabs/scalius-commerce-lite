@@ -19,6 +19,7 @@ import {
 } from "@scalius/shared/storefront-theme";
 import type { ThemeApp, ThemeAppSection } from "~/lib/api-query-options/online-store";
 import { appValuesInvalid, type AppSettingValues } from "../schema-form/app-settings";
+import { reindexSettingBindings } from "../schema-form/dynamic-sources";
 import { settingDefault, type ListSpec, type SettingSpec } from "../schema-form/introspect";
 import { sectionSettingSpec } from "../schema-form/registry-forms";
 
@@ -327,17 +328,25 @@ export function duplicateBlock(section: Section, path: string, index: number): S
   const list = blockList(section, path);
   const spec = section.type === "app" ? null : blockListSpec(section.type, path, section.settings);
   if (index < 0 || index >= list.length || (spec?.max !== null && spec?.max !== undefined && list.length >= spec.max)) return null;
+  const bindings = reindexSettingBindings(section.bindings, path, index, index + 1, true);
+  if (bindings && Object.keys(bindings).length > 20) return null;
   const next = [...list];
   next.splice(index + 1, 0, structuredClone(list[index]));
-  return withBlockList(section, path, next);
+  return withBlockList({ ...section, bindings }, path, next);
 }
 
 export function removeBlock(section: Section, path: string, index: number): Section {
-  return withBlockList(section, path, blockList(section, path).filter((_, at) => at !== index));
+  const list = blockList(section, path);
+  if (index < 0 || index >= list.length) return section;
+  const bindings = reindexSettingBindings(section.bindings, path, index, null);
+  return withBlockList({ ...section, bindings }, path, list.filter((_, at) => at !== index));
 }
 
 export function moveBlock(section: Section, path: string, from: number, to: number): Section {
-  return withBlockList(section, path, moveItem(blockList(section, path), from, to));
+  const list = blockList(section, path);
+  if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return section;
+  const bindings = reindexSettingBindings(section.bindings, path, from, to);
+  return withBlockList({ ...section, bindings }, path, moveItem(list, from, to));
 }
 
 export function toggleBlockHidden(section: Section, path: string, index: number): Section {

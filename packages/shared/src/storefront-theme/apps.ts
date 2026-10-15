@@ -9,6 +9,7 @@
 import { z } from "zod";
 import { PLUGIN_SETTING_KEY, PLUGIN_SETTING_LIST_MAX } from "../plugins/settings-schema";
 import { PLUGIN_PRODUCT_BLOCKS_MAX, PLUGIN_SURFACE_KEY_PATTERN } from "../plugins/storefront";
+import { storefrontSettingBindingsSchema } from "./bindings";
 
 /** One `list` item's field value. */
 const appSettingItemValue = z.union([z.string().max(5000), z.number().finite(), z.boolean(), z.null()]);
@@ -36,6 +37,7 @@ export const storefrontProductAppBlockSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/),
   app: storefrontAppKeySchema,
   values: storefrontAppValuesSchema,
+  bindings: storefrontSettingBindingsSchema.optional(),
 }).strict();
 export type StorefrontProductAppBlock = z.infer<typeof storefrontProductAppBlockSchema>;
 
@@ -53,6 +55,7 @@ export const storefrontProductAppBlocksSchema = z.array(storefrontProductAppBloc
 export const storefrontSkinRefSchema = z.object({
   app: storefrontAppKeySchema,
   values: storefrontAppValuesSchema,
+  bindings: storefrontSettingBindingsSchema.optional(),
 }).strict();
 export type StorefrontSkinRef = z.infer<typeof storefrontSkinRefSchema>;
 

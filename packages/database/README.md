@@ -65,7 +65,7 @@ For a cutover, an operator sets the `DATABASE_MIGRATION_FREEZE` secret to `1`, `
 - **Money** is an integer `*_minor` column in minor units. Rates are basis points (`discount_bps`, `rate_bps`).
 - **Concurrency**: a `revision`, `version`, `aggregate_revision` or `stock_version` column is a compare-and-swap counter. Writers read it and update `WHERE` it still matches.
 - **Entity ids** are text primary keys. Code generates `<prefix>_<nanoid>` for most tables (`prod_`, `var_` for SKUs, `cat_`, `brd_`, `cust_`, `media_`, `page_`, `rev_`, `gc_` and so on). The Better Auth tables use Better Auth's own ids. An event outbox row is `evt_` + milliseconds + 12 hex characters. An article is a `page_` row with `content_type = 'article'`.
-- **Order ids** come from `generateOrderId()` (`@scalius/shared/order-utils`): 16 Crockford base32 characters. Older six-character ids stay valid. `orders.order_number` is a separate unique sequence that starts at 1001.
+- **Order ids** come from `generateOrderId()` (`@scalius/shared/order-utils`): 16 Crockford base32 characters. Older six-character ids stay valid. `orders.order_number` starts at 1001 and is allocated by `nextOrderNumberSql(db)` in the order INSERT. SQLite retains `MAX + 1`; PostgreSQL uses a native sequence (0154), initialized above historical/imported numbers, so unrelated orders do not contend on a maximum read. PostgreSQL rollbacks/retries may leave gaps; issued numbers remain unique.
 - **JSON columns** are `text()` columns, some with a `json_valid` check. The owning domain validates their shape.
 - **Enums** are `const` objects with derived union types in `src/schema/enums.ts`. `orders.payment_method` and `delivery_providers.type` are plain text because they can also hold an app provider id (`<plugin id>:<provider id>`).
 
@@ -134,12 +134,14 @@ Both generators emit a PostgreSQL form. Remote D1 rejects a trigger body that em
 
 ## Migrations
 
-`migrations/` holds 122 SQL files, `0000` to `0121`. The latest is `0121_translations`. `0000_blushing_jack_power.sql` is the baseline and holds the raw SQL Drizzle cannot express (FTS5, partial indexes, guard triggers). Never delete or squash a released migration. Installed D1 databases depend on Wrangler's history, and installed TursoDB and PostgreSQL databases depend on the release ledger.
+`migrations/` holds 157 SQL files, `0000` to `0156`. The latest is `0156_custom_field_object_references`. `0000_blushing_jack_power.sql` is the baseline and holds the raw SQL Drizzle cannot express (FTS5, partial indexes, guard triggers). Never delete or squash a released migration. Installed D1 databases depend on Wrangler's history, and installed TursoDB and PostgreSQL databases depend on the release ledger.
+
+Migration 0155 installs transactional event demand and the expanded event catalog, replaces the disposable pre-beta metaobject/plugin-record tables with object types/records, adds private checkout attributes, carrier-rate fields and abandonment timestamps, and resets all saved theme documents for strict version 10 readers. Object permissions retain their existing IDs while their names and stored agent grants move to `objects.view/edit`. Public object changes and carrier settings have generated cache-dependency triggers; prior migrations remain immutable. Migration 0156 adds scalar/list object-reference custom fields while preserving existing definitions, values and triggers. Apply 0154–0156 before deploying the corresponding application code.
 
 | Path | Content |
 |------|---------|
 | `migrations/NNNN_<name>.sql` | The canonical SQLite SQL (D1 and TursoDB) |
-| `migrations/postgres/NNNN_<name>.sql` | The transaction-safe PostgreSQL sidecar (`0050` to `0121`, 72 files) |
+| `migrations/postgres/NNNN_<name>.sql` | The transaction-safe PostgreSQL sidecar (`0050` to `0156`, 107 files) |
 | `migrations/meta/` | Drizzle journal and snapshots |
 
 ### Private staff notification history

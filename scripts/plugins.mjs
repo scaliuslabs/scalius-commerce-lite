@@ -8,6 +8,8 @@
 //
 //   pnpm plugin create <vendor.name> [--dir plugins/<name>]   scaffold a plugin package
 //   pnpm plugin validate [path]                                check a plugin the way a store loads it
+//   pnpm plugin preview <path> [--out <html>]                  render storefront fixtures to a static HTML file
+//   pnpm plugin dev <path>                                    rebuild and preview fixtures as sources change
 //   pnpm plugin pack <path> [--key <pem>] [--developer <name>] pack, sign and zip a plugin for upload or a registry
 //   pnpm plugin keygen <out-dir>                               make an Ed25519 signing key
 //   pnpm plugin index <dist-dir> ... --out <dir> --name <name> [--base-url <url>]   build a static registry
@@ -54,6 +56,7 @@ import {
 } from "./plugin-registry.mjs";
 import { scaffoldFiles } from "./plugin-scaffold.mjs";
 import { runValidate } from "./plugin-validate.mjs";
+import { devPlugin, previewPlugin } from "./plugin-dev.mjs";
 import { stripJsonc } from "./check-worker-env.mjs";
 import { resolvePlan, withPlanProfile } from "./plan.mjs";
 
@@ -195,6 +198,7 @@ function create(id, args) {
   const where = relative(root, directory);
   console.log(`Created ${where}. Run pnpm install, then:
   pnpm --dir ${where} test         run its tests
+  pnpm plugin dev ${where}         watch and preview its components
   pnpm plugin validate ${where}    check it the way a store loads it
   pnpm plugin add ${where}         bundle it into this store`);
 }
@@ -278,6 +282,17 @@ async function main(argv) {
       return create(positional[0], rest);
     case "validate":
       return validate(parseCommandArgs(rest).positional[0]);
+    case "dev":
+    case "preview": {
+      const parsed = parseCommandArgs(rest);
+      if (!parsed.positional[0]) throw new Error(`Usage: pnpm plugin ${command} <path>`);
+      const directory = userPath(parsed.positional[0]);
+      if (command === "dev") return devPlugin(directory);
+      const out = parsed.flags.get("--out");
+      const preview = await previewPlugin(directory, typeof out === "string" ? userPath(out) : undefined);
+      console.log(`${preview.id}: ${preview.views} fixture view(s). Open ${pathToFileURL(preview.output).href}`);
+      return undefined;
+    }
     case "pack": {
       const parsed = parseCommandArgs(rest);
       return pack(parsed.positional[0], parsed.flags);

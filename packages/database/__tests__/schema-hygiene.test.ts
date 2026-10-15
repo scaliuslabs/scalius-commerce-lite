@@ -25,8 +25,9 @@ describe("canonical schema hygiene", () => {
       expect(d1Tables).toContain("recommendation_order_products");
       expect(d1Tables).toContain("product_facet_public_counts");
       for (const table of ["analytics_order_facts", "analytics_sales_buckets", "analytics_sealed_days"]) expect(d1Tables).toContain(table);
-      // 0126: metaobjects, Web Push subscriptions and buyer identities.
-      for (const table of ["metaobject_definitions", "metaobject_entries", "push_subscriptions", "customer_identities"]) expect(d1Tables).toContain(table);
+      // 0155: one Objects store replaces metaobjects and plugin records.
+      for (const table of ["object_types", "object_records", "event_demand", "push_subscriptions", "customer_identities"]) expect(d1Tables).toContain(table);
+      for (const table of ["metaobject_definitions", "metaobject_entries", "plugin_records"]) expect(d1Tables).not.toContain(table);
       // 0125: the data updates each app ran.
       expect(d1Tables).toContain("plugin_migrations");
       // 0124: the draft a theme restore or discard replaced.
@@ -56,7 +57,7 @@ describe("canonical schema hygiene", () => {
       // The homepage hero is the theme document's hero section (0106).
       expect(d1Tables).not.toContain("hero_sliders");
       expect(d1Tables).not.toContain("hero_sections");
-      for (const plugins of ["plugin_installations", "plugin_registrations", "plugin_records", "plugin_kv", "plugin_log_entries", "plugin_event_deliveries", "plugin_cron_runs"]) {
+      for (const plugins of ["plugin_installations", "plugin_registrations", "plugin_kv", "plugin_log_entries", "plugin_event_deliveries", "plugin_cron_runs"]) {
         expect(d1Tables).toContain(plugins);
       }
       expect(d1Tables).toContain("custom_field_definitions");

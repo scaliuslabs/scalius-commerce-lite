@@ -49,8 +49,8 @@ function issue(type: CustomFieldType, input: unknown, validations: CustomFieldVa
 describe("custom field vocabulary", () => {
   it("names the owners and every type with its list form (no list of flags or JSON)", () => {
     expect(CUSTOM_FIELD_OWNER_TYPES).toEqual(["product", "variant", "customer", "order", "category", "collection", "brand", "page"]);
-    expect(CUSTOM_FIELD_SCALAR_TYPES).toHaveLength(15);
-    expect(CUSTOM_FIELD_TYPES).toHaveLength(28);
+    expect(CUSTOM_FIELD_SCALAR_TYPES).toHaveLength(16);
+    expect(CUSTOM_FIELD_TYPES).toHaveLength(30);
     expect(CUSTOM_FIELD_TYPES).not.toContain("list.boolean");
     expect(CUSTOM_FIELD_TYPES).not.toContain("list.json");
     for (const type of CUSTOM_FIELD_TYPES) expect(isCustomFieldType(type)).toBe(true);
@@ -58,6 +58,7 @@ describe("custom field vocabulary", () => {
     expect(customFieldItemType("list.money")).toBe("money");
     expect(customFieldReferenceTarget("list.variant_reference")).toBe("variant");
     expect(customFieldReferenceTarget("media_reference")).toBe("media");
+    expect(customFieldReferenceTarget("list.object_reference")).toBe("object");
     expect(customFieldReferenceTarget("url")).toBeNull();
   });
 
@@ -228,6 +229,22 @@ describe("custom field value codec", () => {
 });
 
 describe("custom field validations", () => {
+  it("requires a qualified Object target and retains it through storage and wire conversion", () => {
+    const validations = { to: "custom.size_chart" };
+    expect(parseCustomFieldValidations("object_reference", validations, USD)).toEqual({ ok: true, value: validations });
+    expect(parseCustomFieldValidations("list.object_reference", { to: "acme.loyalty.tiers" }, USD).ok).toBe(true);
+    for (const to of [undefined, "size_chart", "custom.SizeChart", "other.app.extra.type"]) {
+      expect(parseCustomFieldValidations("object_reference", { to }, USD).ok).toBe(false);
+    }
+    expect(parseCustomFieldValidations("single_line_text", validations, USD).ok).toBe(false);
+    expect(readCustomFieldValidations(serializeCustomFieldValidations(validations))).toEqual(validations);
+    expect(customFieldValidationsToWire("object_reference", validations, USD).to).toBe(validations.to);
+    expect(stored("object_reference", " chart_a ", validations)).toBe("chart_a");
+    const list = stored("list.object_reference", ["chart_a", "chart_b"], validations);
+    if (list === null) throw new Error("Expected a serialized object-reference list.");
+    expect(customFieldReferenceIds("list.object_reference", list)).toEqual(["chart_a", "chart_b"]);
+    expect(customFieldWireValue("list.object_reference", list, USD)).toEqual(["chart_a", "chart_b"]);
+  });
   it("bounds text length, numbers, money, dates and date-times", () => {
     const length = { min: "2", max: "4" };
     expect(issue("single_line_text", "a", length)).toMatchObject({ code: "too_short", limit: 2 });

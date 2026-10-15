@@ -109,7 +109,7 @@ export function describeSetting(schema: unknown): SettingSpec {
       // A block's `hidden` is the editor's show/hide toggle in its tree, not a field.
       return {
         kind: "object",
-        fields: Object.entries(shape).filter(([key]) => key !== BLOCK_HIDDEN_KEY).map(([key, value]) => ({ key, spec: describeSetting(value) })),
+        fields: Object.entries(shape).filter(([key]) => key !== BLOCK_HIDDEN_KEY && key !== "bindings").map(([key, value]) => ({ key, spec: describeSetting(value) })),
       };
     }
     case "array":

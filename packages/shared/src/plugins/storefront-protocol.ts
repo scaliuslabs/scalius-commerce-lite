@@ -4,6 +4,8 @@
 // so it stays small and dependency-free. The rest of the contract (manifest
 // schemas, settings resolution) is ./storefront-components.ts.
 
+import type { CustomFieldWireValue } from "../custom-fields";
+
 // ── Protocol ──────────────────────────────────────────────────────────────
 
 /** The render protocol between the storefront and a storefront module. */
@@ -201,6 +203,8 @@ export interface StorefrontProductCard {
   needsOptions: boolean;
   /** Short facts the store shows on cards (key specs, delivery). */
   facts: string[];
+  /** Requested storefront-visible custom fields, keyed by namespace.key. */
+  fields: Record<string, CustomFieldWireValue>;
 }
 
 /** A navigation entry: a title, a store path or https link, and its children (three levels at most). */
@@ -438,6 +442,8 @@ export type StorefrontRenderJob =
   | {
     id: string;
     kind: "section";
+    /** Published records from the section's declared public object reads. */
+    objects?: Record<string, { records: Array<{ id: string; handle: string | null; data: Record<string, unknown> }>; fields: Record<string, string> }>;
     /** The manifest section type. */
     type: string;
     /** The theme's id of this placement. */

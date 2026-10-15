@@ -86,6 +86,15 @@ describe("homepage section data requests", () => {
     expect(homeSectionsShowDeliveryFacts([storefrontSectionDefault("hero", "h")])).toBe(false);
   });
 
+  it("reads optional deal and newsletter images once through the page media batch", () => {
+    const requests = homeSectionRequests([
+      section({ id: "sale", type: "deal-block", version: 1, settings: { title: "Sale", source: { kind: "on-sale" }, mediaId: "campaign" } }),
+      section({ id: "news", type: "newsletter", version: 1, settings: { heading: "Updates", text: "", mediaId: "campaign" } }),
+      section({ id: "hidden-news", type: "newsletter", version: 1, hidden: true, settings: { heading: "Hidden", text: "", mediaId: "hidden-photo" } }),
+    ]);
+    expect(requests.mediaIds).toEqual(["campaign"]);
+  });
+
   it("reads no brands or promotions for a homepage without a brand wall or a promotion deal", () => {
     const requests = homeSectionRequests([
       section({ id: "c", type: "deal-block", version: 1, settings: { title: "", source: { kind: "on-sale" }, promotionId: null } }),
@@ -98,7 +107,7 @@ describe("homepage section data requests", () => {
   it("flags sections whose own words or photos are missing, never data-driven ones", () => {
     const needs = STOREFRONT_SECTION_TYPES.filter((type) => storefrontSectionNeedsContent(storefrontSectionDefault(type, "x")));
     // A hero without slides and category tiles without categories have nothing to show either.
-    expect(needs.sort()).toEqual(["banner", "banner-mosaic", "category-tiles", "editorial", "faq", "hero", "metaobjects", "seo-text", "shop-by", "utility-cards"]);
+    expect(needs.sort()).toEqual(["banner", "banner-mosaic", "category-tiles", "editorial", "faq", "hero", "objects", "seo-text", "shop-by", "specifications", "utility-cards"]);
     expect(storefrontSectionNeedsContent(section({ id: "b", type: "banner", version: 1, settings: { layout: "full", heading: "Eid", text: "", mediaId: null, cta: null } }))).toBe(false);
   });
 

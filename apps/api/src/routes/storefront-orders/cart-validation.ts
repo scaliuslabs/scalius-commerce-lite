@@ -1,3 +1,4 @@
+import { buyerUiBlockSchema, checkoutAttributesSchema, type FunctionCart } from "@scalius/shared/plugins";
 // Authoritative cart validation preflight.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { InventoryPool } from "@scalius/database/schema";
@@ -5,6 +6,7 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import {
   checkStorefrontCartRules,
+  validateCheckoutAttributes,
   createAppLinePricer,
   createCartTransformer,
   presentTransformedCartLines,
@@ -50,6 +52,8 @@ import {
   resolveGiftCardTenderCards,
 } from "@scalius/core/modules/gift-cards";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
+import { workerCacheHint } from "@scalius/shared/worker-cache-hint";
+import { requestCourierProviders } from "../../plugins/providers/courier";
 import type { Database } from "@scalius/database/client";
 import type { StorefrontGiftCardIssue } from "@scalius/core/modules/orders";
 import { shopPresentment, type StoreCurrencyRate } from "@scalius/shared/presentment";
@@ -112,10 +116,12 @@ const cartValidationRoute = createRoute({
   tags: ["Orders"],
   summary: "Validate a storefront cart before checkout",
   request: {
+    headers: z.object({ "x-storefront-language": z.string().min(1).max(35).optional(), "x-storefront-locale": z.string().min(1).max(35).optional() }),
     body: {
       content: {
         "application/json": {
           schema: z.object({
+            attributes: checkoutAttributesSchema.optional(),
             items: z.array(cartValidationItemSchema).min(1).max(99),
             inventoryPool: z
               .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
@@ -130,6 +136,8 @@ const cartValidationRoute = createRoute({
             shippingPostalCode: z.string().trim().max(20).optional().nullable(),
             /** A delivery or pickup rate. A pickup rate needs no city or zone. */
             shippingMethodId: z.string().optional().nullable(),
+            shippingRateToken: z.string().min(1).max(2048).optional().nullable(),
+            cod: z.boolean().optional(),
             presence: checkoutPresenceSchema,
             giftCards: giftCardHandlesSchema,
           }),
@@ -143,6 +151,7 @@ const cartValidationRoute = createRoute({
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
+            buyerUi: z.array(buyerUiBlockSchema),
             /** False with any issue or any app rule error. */
             valid: z.boolean(),
             issues: z.array(cartIssueSchema),
@@ -253,18 +262,23 @@ app.openapi(cartValidationRoute, async (c) => {
     db,
     registrations,
   });
+  const attributes = validateCheckoutAttributes(apps, data.attributes);
+  let appCart: FunctionCart | null = null;
+  const buyerUi = () => apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: ["purchase.checkout.contact.render-after", "purchase.checkout.shipping-option-list.render-after", "purchase.checkout.cart-line-list.render-after", "purchase.checkout.payment-method-list.render-after", "purchase.checkout.actions.render-before"], currency: money.currencyCode, cart: appCart, attributes }) ?? [];
   /** App rules, once the platform finds nothing to repair (the signed-in buyer's segments included). */
   const ruleErrorsFor = async (
     valid: boolean,
     delivery: Parameters<typeof checkStorefrontCartRules>[1]["delivery"],
   ) => {
-    if (!valid || !apps.points.has("cart.validate")) return [];
+    if (!valid || (!apps.points.has("cart.validate") && !apps.points.has("buyer.ui"))) return [];
     const token = getCustomerSessionTokenFromRequest(c);
     const session = token
       ? await getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>)).catch(() => null)
       : null;
     return checkStorefrontCartRules(db, {
       cartValidation: result,
+      attributes,
+      onCart: (cart) => { appCart = cart; },
       delivery,
       apps,
       // Apps see the cart in its currency (its market's).
@@ -276,6 +290,7 @@ app.openapi(cartValidationRoute, async (c) => {
   const sessionCustomerId = lazySessionCustomerId(c, (token) =>
     getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>)));
   const appContext = {
+    attributes,
     channel: "online_store" as const,
     customerId: sessionCustomerId,
     destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
@@ -329,6 +344,7 @@ app.openapi(cartValidationRoute, async (c) => {
   if (!cartValid || !cartOnly.requiresDeliveryMethod || !wantsDelivery) {
     const ruleErrors = onBuyerLines(await ruleErrorsFor(cartValid, null));
     return ok(c, {
+      buyerUi: await buyerUi(),
       ...presentCart(cartOnly, propertiesHashes),
       valid: cartValid && ruleErrors.length === 0,
       ruleErrors,
@@ -347,12 +363,21 @@ app.openapi(cartValidationRoute, async (c) => {
       shippingAdminArea: data.shippingAdminArea,
       shippingPostalCode: data.shippingPostalCode,
       shippingMethodId: data.shippingMethodId,
+      shippingRateToken: data.shippingRateToken,
+      cod: data.cod,
     },
     result,
+    {
+      couriers: requestCourierProviders(c),
+      masterSecret: readMasterSecret(c.env) ?? undefined,
+      cache: workerCacheHint(c.env, "courier-rates", 600) ?? undefined,
+      credentialEncryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+    },
   );
   const presented = presentStorefrontDeliveryPreflight(delivery, decimalPlaces);
   const ruleErrors = onBuyerLines(await ruleErrorsFor(cartValid, delivery));
   return ok(c, {
+    buyerUi: await buyerUi(),
     ...presentCart(delivery.fulfilment, propertiesHashes),
     valid: cartValid && ruleErrors.length === 0,
     ruleErrors,

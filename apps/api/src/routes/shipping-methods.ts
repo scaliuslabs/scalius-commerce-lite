@@ -41,6 +41,7 @@ const listShippingMethodsRoute = createRoute({
           id: z.string().max(128),
           name: z.string().max(100),
           fee: z.number().min(0),
+          rateSource: z.string().max(200).openapi({ description: "flat for a configured fee; otherwise the courier provider. Calculated fees are available only in the checkout quote." }),
           freeOver: z.number().min(0).nullable(),
           kind: z.enum(["delivery", "pickup"]),
           countries: z.array(z.object({
@@ -100,8 +101,9 @@ app.openapi(listShippingMethodsRoute, async (c) => {
 
   return ok(c, {
     // zoneId and updatedAt are left out: they change without changing what a buyer sees.
-    shippingMethods: (money === null ? [] : rates).map(({ zoneId: _zoneId, feeMinor, freeOverMinor, createdAt, updatedAt: _updatedAt, presenceMarket: _presenceMarket, ...rate }) => ({
+    shippingMethods: (money === null ? [] : rates).map(({ zoneId: _zoneId, feeMinor, freeOverMinor, createdAt, updatedAt: _updatedAt, presenceMarket: _presenceMarket, rateService: _rateService, fallbackFeeMinor: _fallbackFeeMinor, rateToken: _rateToken, rateCurrency: _rateCurrency, rateCod: _rateCod, ...rate }) => ({
       ...applyTranslation(rate, chains.get(rate.id) ?? [], { name: "name", description: "description", pickupHours: "pickupHours" }),
+      rateSource: rate.rateSource ?? "flat",
       fee: fromMinor(present(feeMinor), decimalPlaces),
       freeOver: freeOverMinor === null ? null : fromMinor(present(freeOverMinor), decimalPlaces),
       createdAt: createdAt instanceof Date ? createdAt.toISOString() : null,

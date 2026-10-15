@@ -31,7 +31,7 @@ describe("skin targets", () => {
     expect(isStorefrontSkinTarget("section:hero")).toBe(true);
     expect(isStorefrontSkinTarget(storefrontSectionSkinTarget("faq"))).toBe(true);
     // The buyer's history, an endless feed and content types have no projection.
-    for (const type of ["recently-viewed", "endless-grid", "metaobjects", "app", "nope"]) {
+    for (const type of ["recently-viewed", "endless-grid", "objects", "app", "nope"]) {
       expect(isStorefrontSkinTarget(`section:${type}`)).toBe(false);
     }
     expect(isStorefrontSkinTarget("sidebar")).toBe(false);
@@ -56,6 +56,30 @@ describe("skin targets", () => {
 });
 
 describe("a core section's projection", () => {
+  it("resolves a qualified Specifications object field without changing its literal fallback", () => {
+    const section = storefrontSectionDefault("specifications", "size-chart");
+    section.settings.objectField = "custom.size_chart";
+    section.settings.rows = [{ label: "Fit", value: "Ask us" }];
+    const fields = [{ key: "chest", name: "Chest", list: false, parts: [{ kind: "text" as const, text: "38 inches" }] }];
+    expect(resolveCoreSectionSettings(section, { ...resolver, objectField: (key) => key === "custom.size_chart" ? fields : [] }))
+      .toMatchObject({ objectField: fields, rows: section.settings.rows });
+    expect(resolveCoreSectionSettings(section, resolver).objectField).toEqual([]);
+  });
+
+  it("resolves restored section images and preserves a tile's subtitle", () => {
+    const deal = storefrontSectionDefault("deal-block", "sale");
+    deal.settings.mediaId = "sale-photo";
+    expect(resolveCoreSectionSettings(deal, resolver).mediaId).toEqual(image("sale-photo"));
+    const newsletter = storefrontSectionDefault("newsletter", "newsletter");
+    newsletter.settings.mediaId = "signup-photo";
+    expect(resolveCoreSectionSettings(newsletter, resolver).mediaId).toEqual(image("signup-photo"));
+    newsletter.settings.mediaId = "gone";
+    expect(resolveCoreSectionSettings(newsletter, resolver).mediaId).toBeNull();
+    const cards = storefrontSectionDefault("shop-by", "cards");
+    cards.settings.cards = [{ mediaId: "tile", title: "Linen", subtitle: "Made for summer", href: "/linen" }];
+    expect(resolveCoreSectionSettings(cards, resolver).cards[0]).toMatchObject({ subtitle: "Made for summer", mediaId: image("tile") });
+  });
+
   it("resolves media, product sources, tiles, promotions and delivery facts by fixed rules", () => {
     const hero: StorefrontSectionOf<"hero"> = {
       ...storefrontSectionDefault("hero", "hero"),

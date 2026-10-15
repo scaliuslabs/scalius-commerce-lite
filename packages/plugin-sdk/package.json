@@ -2,7 +2,6 @@
   "name": "@scalius/plugin-sdk",
   "version": "0.1.0",
   "description": "Build Scalius Commerce plugins: one format for sandboxed (Workers Paid) and bundled (Workers Free) installs",
-  "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
   "sideEffects": false,
@@ -21,14 +20,77 @@
   "scripts": {
     "lint": "oxlint -c ../../.oxlintrc.json src/",
     "test": "vitest run",
-    "typecheck": "../../node_modules/typescript7/bin/tsc --build"
+    "typecheck": "../../node_modules/typescript7/bin/tsc --build",
+    "build": "node ../../scripts/build-plugin-sdk.mjs",
+    "prepack": "pnpm run build"
   },
   "dependencies": {
-    "@scalius/shared": "workspace:*"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261014.1",
     "@scalius/tsconfig": "workspace:*",
-    "vitest": "^5.0.4"
+    "vitest": "^5.0.4",
+    "@scalius/shared": "workspace:*"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/types/plugin-sdk/src/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./fixtures": {
+        "types": "./dist/types/plugin-sdk/src/fixtures.d.ts",
+        "import": "./dist/fixtures.js",
+        "default": "./dist/fixtures.js"
+      },
+      "./manifest": {
+        "types": "./dist/types/plugin-sdk/src/manifest.d.ts",
+        "import": "./dist/manifest.js",
+        "default": "./dist/manifest.js"
+      },
+      "./runtime": {
+        "types": "./dist/types/plugin-sdk/src/runtime.d.ts",
+        "import": "./dist/runtime.js",
+        "default": "./dist/runtime.js"
+      },
+      "./testing": {
+        "types": "./dist/types/plugin-sdk/src/testing.d.ts",
+        "import": "./dist/testing.js",
+        "default": "./dist/testing.js"
+      },
+      "./storefront": {
+        "types": "./dist/types/plugin-sdk/src/storefront/index.d.ts",
+        "import": "./dist/storefront/index.js",
+        "default": "./dist/storefront/index.js"
+      },
+      "./storefront/jsx-runtime": {
+        "types": "./dist/types/plugin-sdk/src/storefront/jsx-runtime.d.ts",
+        "import": "./dist/storefront/jsx-runtime.js",
+        "default": "./dist/storefront/jsx-runtime.js"
+      },
+      "./storefront/jsx-dev-runtime": {
+        "types": "./dist/types/plugin-sdk/src/storefront/jsx-dev-runtime.d.ts",
+        "import": "./dist/storefront/jsx-dev-runtime.js",
+        "default": "./dist/storefront/jsx-dev-runtime.js"
+      },
+      "./storefront/testing": {
+        "types": "./dist/types/plugin-sdk/src/storefront/testing.d.ts",
+        "import": "./dist/storefront/testing.js",
+        "default": "./dist/storefront/testing.js"
+      },
+      "./island": {
+        "types": "./dist/types/plugin-sdk/src/storefront/island.d.ts",
+        "import": "./dist/storefront/island.js",
+        "default": "./dist/storefront/island.js"
+      }
+    }
   }
 }

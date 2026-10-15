@@ -21,14 +21,14 @@ function render(type: string, values: Record<string, unknown>) {
 }
 
 /** The store's hero with one slide, drawn by Noor's hero skin. */
-function renderHero(slide: { image?: string; phoneImage?: string }) {
+function renderHero(slide: { image?: string; phoneImage?: string }, next?: { image: string }) {
   const photo = (id: string | undefined) => (id
     ? { url: `https://media.example/${id}.webp`, srcset: `https://media.example/${id}-600.webp 600w, https://media.example/${id}.webp 1200w`, width: 1200, height: 800, alt: id }
     : null);
   const skin = parsePluginManifest(manifest);
   if (!skin.ok) throw new Error("Invalid Noor manifest");
   const settings = resolveStorefrontSettings(skin.manifest.storefront.skins.find((entry) => entry.id === "noor-hero")!.settings, {}, { image: () => null, products: () => [] });
-  const data = fixtureSectionSkinData("hero", { layout: "full-bleed", slides: [{ image: photo(slide.image), phoneImage: photo(slide.phoneImage), alt: "", focalPoint: { x: 50, y: 50 }, link: null }] });
+  const data = fixtureSectionSkinData("hero", { layout: "full-bleed", slides: [slide, ...(next ? [next] : [])].map((entry) => ({ image: photo(entry.image), phoneImage: photo("phoneImage" in entry ? entry.phoneImage : undefined), alt: "", focalPoint: { x: 50, y: 50 }, link: null })) });
   const result = storefrontShown(renderSkin(storefront, "noor-hero", "section:hero", settings, data), "scalius.noor");
   expect(result.dropped).toBe(0);
   document.body.innerHTML = result.html;
@@ -55,9 +55,14 @@ describe("Noor responsive media", () => {
     expect(root.querySelector("img")!.className).toBe("noor-hero-img");
   });
 
-  it("only prioritizes the first slideshow image and provides an explicit autoplay control", () => {
-    const root = render("slideshow", { autoplay: true, slides: [{ image: "first", phone_image: "phone" }, { image: "second" }] });
+  it("only prioritizes the first hero-skin slideshow image and provides an explicit autoplay control", () => {
+    const root = renderHero({ image: "first", phoneImage: "phone" }, { image: "second" });
     expect([...root.querySelectorAll("img")].map((image) => image.loading)).toEqual(["eager", "lazy"]);
+    expect(root.querySelector("[data-autoplay-toggle]")!.getAttribute("aria-label")).toBe("Pause slideshow");
+  });
+
+  it("keeps the standalone slideshow's autoplay control", () => {
+    const root = render("slideshow", { autoplay: true, slides: [{ image: "first" }, { image: "second" }] });
     expect(root.querySelector("[data-autoplay-toggle]")!.getAttribute("aria-label")).toBe("Pause slideshow");
   });
 

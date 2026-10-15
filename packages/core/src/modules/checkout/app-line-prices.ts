@@ -1,3 +1,4 @@
+import { validateCheckoutAttributes } from "./attributes";
 // App line prices (`cart.line_prices`, docs/platform/PLUGINS.md): a checkout
 // function's unit price for a cart line takes the app place in
 // `resolvePrice()` (sale > segment > market list > app > FX > base), so B2B
@@ -52,6 +53,7 @@ export interface AppLinePricerContext {
     /** The region the order ships to, when known. */
     destination?: { country?: string | null; city: string | null; zone: string | null } | null;
     discountCodes?: readonly string[];
+    attributes?: Record<string, string>;
 }
 
 /** The pricer for this request, or undefined when no active app implements `cart.line_prices`. */
@@ -61,6 +63,7 @@ export function createAppLinePricer(
     context: AppLinePricerContext,
 ): AppLinePricer | undefined {
     if (!apps?.points.has("cart.line_prices")) return undefined;
+    const attributes = validateCheckoutAttributes(apps, context.attributes);
     return async (preliminary) => {
         const items = preliminary.items;
         if (items.length === 0) return new Map();
@@ -90,6 +93,7 @@ export function createAppLinePricer(
                 facts,
                 destination: context.destination ?? null,
                 discountCodes: context.discountCodes ?? [],
+                attributes,
             });
         } catch (error) {
             // A cart that fails its own schema is a platform fault: no app runs (fail-open).

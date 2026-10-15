@@ -127,11 +127,12 @@ const SECTION_PURPOSE: Record<(typeof STOREFRONT_SECTION_RENDERERS)[number], str
   "brand-wall": "The store's brands as a wall or rail.",
   editorial: "Words: rich text, image with text, columns or testimonials.",
   faq: "Questions and answers.",
+  specifications: "Product details as label and value rows, optionally connected to the product's custom fields.",
   "utility-cards": "Small link cards (track an order, contact us).",
   "endless-grid": "A long grid of the newest products that keeps loading.",
   "seo-text": "Long copy below everything, for search engines and readers.",
   "recently-viewed": "The products this buyer viewed (filled in their browser).",
-  metaobjects: "The published entries of one content type (an FAQ, a size chart, store locations): a content type id from Content types; leave it empty when you have none.",
+  objects: "The published entries of one content type (an FAQ, a size chart, store locations): a content type id from Content types; leave it empty when you have none.",
   newsletter: "A signup: phone always, e-mail as chosen, optional WhatsApp.",
 };
 

@@ -6691,6 +6691,36 @@
           "updatedAt"
          ]
         }
+       },
+       "relatedObjects": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "typeId": {
+           "type": "string"
+          },
+          "typeHandle": {
+           "type": "string"
+          },
+          "typeName": {
+           "type": "string"
+          },
+          "recordId": {
+           "type": "string"
+          },
+          "displayName": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "typeId",
+          "typeHandle",
+          "typeName",
+          "recordId",
+          "displayName"
+         ]
+        }
        }
       },
       "required": [
@@ -6710,7 +6740,8 @@
        "mergedInto",
        "tags",
        "marketing",
-       "addresses"
+       "addresses",
+       "relatedObjects"
       ]
      }
     },
@@ -11868,483 +11899,6 @@
     ]
    }
   },
-  "dashboard.metaobjects.definitions_get": {
-   "method": "GET",
-   "path": "/api/v1/admin/metaobjects/definitions/{id}",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_objects",
-    "write_objects"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 68
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "definition": {
-        "$ref": "#/components/schemas/MetaobjectDefinition"
-       }
-      },
-      "required": [
-       "definition"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.metaobjects.definitions_list": {
-   "method": "GET",
-   "path": "/api/v1/admin/metaobjects/definitions",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_objects",
-    "write_objects"
-   ],
-   "input": {},
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "items": {
-        "type": "array",
-        "items": {
-         "$ref": "#/components/schemas/MetaobjectDefinition"
-        }
-       }
-      },
-      "required": [
-       "items"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.metaobjects.entries_create": {
-   "method": "POST",
-   "path": "/api/v1/admin/metaobjects/definitions/{id}/entries",
-   "risk": "write",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "write_objects"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 68
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     }
-    ],
-    "requestBody": {
-     "content": {
-      "application/json": {
-       "schema": {
-        "type": "object",
-        "properties": {
-         "handle": {
-          "type": "string",
-          "maxLength": 100,
-          "description": "Lowercase letters, digits and dashes; made from the display field when left out."
-         },
-         "status": {
-          "type": "string",
-          "enum": [
-           "draft",
-           "published"
-          ]
-         },
-         "fields": {
-          "type": "object",
-          "additionalProperties": {}
-         },
-         "position": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 1000000
-         }
-        }
-       }
-      }
-     },
-     "required": true
-    }
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "entry": {
-        "$ref": "#/components/schemas/MetaobjectEntry"
-       }
-      },
-      "required": [
-       "entry"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.metaobjects.entries_delete": {
-   "method": "DELETE",
-   "path": "/api/v1/admin/metaobjects/definitions/{id}/entries/{entryId}",
-   "risk": "destructive",
-   "idempotency": "none",
-   "revision": "required",
-   "scopes": [
-    "write_objects"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 68
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 68
-      },
-      "required": true,
-      "name": "entryId",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1
-      },
-      "required": true,
-      "name": "expectedRevision",
-      "in": "query"
-     }
-    ]
-   },
-   "output": null
-  },
-  "dashboard.metaobjects.entries_get": {
-   "method": "GET",
-   "path": "/api/v1/admin/metaobjects/definitions/{id}/entries/{entryId}",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_objects",
-    "write_objects"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 68
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 68
-      },
-      "required": true,
-      "name": "entryId",
-      "in": "path"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "entry": {
-        "$ref": "#/components/schemas/MetaobjectEntry"
-       }
-      },
-      "required": [
-       "entry"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.metaobjects.entries_list": {
-   "method": "GET",
-   "path": "/api/v1/admin/metaobjects/definitions/{id}/entries",
-   "risk": "read",
-   "idempotency": "none",
-   "revision": "none",
-   "scopes": [
-    "read_objects",
-    "write_objects"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 68
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "enum": [
-        "draft",
-        "published"
-       ]
-      },
-      "required": false,
-      "name": "status",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "maximum": 100,
-       "default": 50
-      },
-      "required": false,
-      "name": "limit",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "nullable": true,
-       "minimum": 0,
-       "maximum": 1000,
-       "default": 0
-      },
-      "required": false,
-      "name": "offset",
-      "in": "query"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "definition": {
-        "$ref": "#/components/schemas/MetaobjectDefinition"
-       },
-       "entries": {
-        "type": "array",
-        "items": {
-         "$ref": "#/components/schemas/MetaobjectEntry"
-        }
-       },
-       "total": {
-        "type": "integer"
-       }
-      },
-      "required": [
-       "definition",
-       "entries",
-       "total"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
-  "dashboard.metaobjects.entries_update": {
-   "method": "PATCH",
-   "path": "/api/v1/admin/metaobjects/definitions/{id}/entries/{entryId}",
-   "risk": "write",
-   "idempotency": "none",
-   "revision": "required",
-   "scopes": [
-    "write_objects"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 68
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 68
-      },
-      "required": true,
-      "name": "entryId",
-      "in": "path"
-     }
-    ],
-    "requestBody": {
-     "content": {
-      "application/json": {
-       "schema": {
-        "type": "object",
-        "properties": {
-         "handle": {
-          "type": "string",
-          "maxLength": 100,
-          "description": "Lowercase letters, digits and dashes; made from the display field when left out."
-         },
-         "status": {
-          "type": "string",
-          "enum": [
-           "draft",
-           "published"
-          ]
-         },
-         "fields": {
-          "type": "object",
-          "additionalProperties": {}
-         },
-         "position": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 1000000
-         },
-         "expectedRevision": {
-          "type": "integer",
-          "minimum": 1
-         }
-        },
-        "required": [
-         "expectedRevision"
-        ]
-       }
-      }
-     },
-     "required": true
-    }
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "entry": {
-        "$ref": "#/components/schemas/MetaobjectEntry"
-       }
-      },
-      "required": [
-       "entry"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
   "dashboard.orders.comment_add": {
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/timeline",
@@ -13627,6 +13181,12 @@
         "type": "string",
         "nullable": true
        },
+       "attributes": {
+        "type": "object",
+        "additionalProperties": {
+         "type": "string"
+        }
+       },
        "shippingAddress": {
         "type": "string",
         "nullable": true
@@ -14780,6 +14340,36 @@
          "id",
          "unread"
         ]
+       },
+       "relatedObjects": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "typeId": {
+           "type": "string"
+          },
+          "typeHandle": {
+           "type": "string"
+          },
+          "typeName": {
+           "type": "string"
+          },
+          "recordId": {
+           "type": "string"
+          },
+          "displayName": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "typeId",
+          "typeHandle",
+          "typeName",
+          "recordId",
+          "displayName"
+         ]
+        }
        }
       },
       "required": [
@@ -14815,6 +14405,7 @@
        "paymentMethod",
        "fulfillmentStatus",
        "notes",
+       "attributes",
        "shippingAddress",
        "shippingAddressLine2",
        "shippingCountryCode",
@@ -14876,7 +14467,8 @@
        "supportRequests",
        "pickup",
        "fulfillments",
-       "conversation"
+       "conversation",
+       "relatedObjects"
       ]
      }
     },
@@ -23283,6 +22875,757 @@
      "data"
     ]
    }
+  },
+  "objects.delete": {
+   "method": "DELETE",
+   "path": "/api/v1/admin/objects/{type}/{id}",
+   "risk": "destructive",
+   "idempotency": "none",
+   "revision": "required",
+   "scopes": [
+    "write_objects"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 160
+      },
+      "required": true,
+      "name": "type",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "required": true,
+      "name": "expectedRevision",
+      "in": "query"
+     }
+    ]
+   },
+   "output": null
+  },
+  "objects.get": {
+   "method": "GET",
+   "path": "/api/v1/admin/objects/{type}/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_objects",
+    "write_objects"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 160
+      },
+      "required": true,
+      "name": "type",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "record": {
+        "$ref": "#/components/schemas/ObjectRecord"
+       }
+      },
+      "required": [
+       "record"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "objects.list": {
+   "method": "GET",
+   "path": "/api/v1/admin/objects/{type}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_objects",
+    "write_objects"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 160
+      },
+      "required": true,
+      "name": "type",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 4096
+      },
+      "required": false,
+      "name": "where",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 4096
+      },
+      "required": false,
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 50
+      },
+      "required": false,
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "active",
+        "draft",
+        "published"
+       ]
+      },
+      "required": false,
+      "name": "status",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 64
+      },
+      "required": false,
+      "name": "orderBy",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "asc",
+        "desc"
+       ]
+      },
+      "required": false,
+      "name": "direction",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "type": {
+        "$ref": "#/components/schemas/ObjectType"
+       },
+       "records": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/ObjectRecord"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true
+       },
+       "total": {
+        "type": "integer"
+       }
+      },
+      "required": [
+       "type",
+       "records",
+       "nextCursor",
+       "total"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "objects.types.create": {
+   "method": "POST",
+   "path": "/api/v1/admin/objects/types",
+   "risk": "write",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "write_objects"
+   ],
+   "input": {
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,47}$"
+         },
+         "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+         },
+         "description": {
+          "type": "string",
+          "maxLength": 300
+         },
+         "fields": {
+          "type": "array",
+          "items": {
+           "$ref": "#/components/schemas/ObjectField"
+          },
+          "minItems": 1,
+          "maxItems": 40
+         },
+         "display": {
+          "type": "string"
+         },
+         "indexes": {
+          "type": "array",
+          "items": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "array",
+             "items": {
+              "type": "string"
+             },
+             "minItems": 1,
+             "maxItems": 4
+            }
+           ]
+          },
+          "maxItems": 4
+         },
+         "unique": {
+          "type": "array",
+          "items": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "array",
+             "items": {
+              "type": "string"
+             },
+             "minItems": 1,
+             "maxItems": 4
+            }
+           ]
+          },
+          "maxItems": 2
+         },
+         "handle": {
+          "type": "boolean"
+         },
+         "storefront": {
+          "type": "boolean"
+         },
+         "admin": {
+          "type": "string",
+          "enum": [
+           "none",
+           "read",
+           "edit"
+          ]
+         },
+         "events": {
+          "type": "boolean"
+         }
+        },
+        "required": [
+         "type",
+         "name",
+         "fields"
+        ],
+        "additionalProperties": false
+       }
+      }
+     },
+     "required": true
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "type": {
+        "$ref": "#/components/schemas/ObjectType"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "objects.types.delete": {
+   "method": "DELETE",
+   "path": "/api/v1/admin/objects/types/{type}",
+   "risk": "destructive",
+   "idempotency": "none",
+   "revision": "required",
+   "scopes": [
+    "write_objects"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 160
+      },
+      "required": true,
+      "name": "type",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "required": true,
+      "name": "expectedRevision",
+      "in": "query"
+     }
+    ]
+   },
+   "output": null
+  },
+  "objects.types.get": {
+   "method": "GET",
+   "path": "/api/v1/admin/objects/types/{type}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_objects",
+    "write_objects"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 160
+      },
+      "required": true,
+      "name": "type",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "type": {
+        "$ref": "#/components/schemas/ObjectType"
+       },
+       "jsonSchema": {
+        "type": "object",
+        "additionalProperties": {}
+       }
+      },
+      "required": [
+       "type",
+       "jsonSchema"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "objects.types.list": {
+   "method": "GET",
+   "path": "/api/v1/admin/objects/types",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_objects",
+    "write_objects"
+   ],
+   "input": {},
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "items": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/ObjectType"
+        }
+       }
+      },
+      "required": [
+       "items"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "objects.types.update": {
+   "method": "PATCH",
+   "path": "/api/v1/admin/objects/types/{type}",
+   "risk": "write",
+   "idempotency": "none",
+   "revision": "required",
+   "scopes": [
+    "write_objects"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 160
+      },
+      "required": true,
+      "name": "type",
+      "in": "path"
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+         },
+         "description": {
+          "type": "string",
+          "maxLength": 300
+         },
+         "fields": {
+          "type": "array",
+          "items": {
+           "$ref": "#/components/schemas/ObjectField"
+          },
+          "minItems": 1,
+          "maxItems": 40
+         },
+         "display": {
+          "type": "string"
+         },
+         "indexes": {
+          "type": "array",
+          "items": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "array",
+             "items": {
+              "type": "string"
+             },
+             "minItems": 1,
+             "maxItems": 4
+            }
+           ]
+          },
+          "maxItems": 4
+         },
+         "unique": {
+          "type": "array",
+          "items": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "array",
+             "items": {
+              "type": "string"
+             },
+             "minItems": 1,
+             "maxItems": 4
+            }
+           ]
+          },
+          "maxItems": 2
+         },
+         "handle": {
+          "type": "boolean"
+         },
+         "storefront": {
+          "type": "boolean"
+         },
+         "admin": {
+          "type": "string",
+          "enum": [
+           "none",
+           "read",
+           "edit"
+          ]
+         },
+         "events": {
+          "type": "boolean"
+         },
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1
+         }
+        },
+        "required": [
+         "name",
+         "fields",
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     },
+     "required": true
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "type": {
+        "$ref": "#/components/schemas/ObjectType"
+       }
+      },
+      "required": [
+       "type"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "objects.upsert": {
+   "method": "PUT",
+   "path": "/api/v1/admin/objects/{type}/{id}",
+   "risk": "write",
+   "idempotency": "none",
+   "revision": "required",
+   "scopes": [
+    "write_objects"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 160
+      },
+      "required": true,
+      "name": "type",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "data": {
+          "type": "object",
+          "additionalProperties": {}
+         },
+         "expectedRevision": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1
+         },
+         "handle": {
+          "type": "string",
+          "maxLength": 100
+         },
+         "status": {
+          "type": "string",
+          "enum": [
+           "active",
+           "draft",
+           "published"
+          ]
+         },
+         "position": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+         }
+        },
+        "required": [
+         "data",
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     },
+     "required": true
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "record": {
+        "$ref": "#/components/schemas/ObjectRecord"
+       }
+      },
+      "required": [
+       "record"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
   }
  },
  "components": {
@@ -23336,6 +23679,7 @@
       "variant_reference",
       "collection_reference",
       "media_reference",
+      "object_reference",
       "list.single_line_text",
       "list.multi_line_text",
       "list.integer",
@@ -23348,12 +23692,17 @@
       "list.product_reference",
       "list.variant_reference",
       "list.collection_reference",
-      "list.media_reference"
+      "list.media_reference",
+      "list.object_reference"
      ]
     },
     "validations": {
      "type": "object",
      "properties": {
+      "to": {
+       "type": "string",
+       "nullable": true
+      },
       "min": {
        "anyOf": [
         {
@@ -23588,139 +23937,24 @@
     "updatedAt"
    ]
   },
-  "MetaobjectDefinition": {
-   "type": "object",
-   "properties": {
-    "id": {
+  "NullableTimestamp": {
+   "type": "string",
+   "nullable": true,
+   "anyOf": [
+    {
      "type": "string"
     },
-    "handle": {
-     "type": "string",
-     "description": "<namespace>.<type>: custom.faq, or an app's acme.loyalty.tiers."
-    },
-    "namespace": {
-     "type": "string"
-    },
-    "type": {
-     "type": "string"
-    },
-    "name": {
-     "type": "string"
-    },
-    "description": {
-     "type": "string",
-     "nullable": true
-    },
-    "fields": {
-     "type": "array",
-     "items": {
-      "$ref": "#/components/schemas/MetaobjectFieldDefinition"
-     }
-    },
-    "displayField": {
-     "type": "string",
-     "nullable": true
-    },
-    "storefrontAccess": {
-     "type": "boolean",
-     "description": "Published entries are readable by the storefront (theme sections)."
-    },
-    "owner": {
-     "type": "string",
-     "enum": [
-      "merchant",
-      "app"
-     ]
-    },
-    "entryCount": {
-     "type": "integer"
-    },
-    "revision": {
-     "type": "integer"
-    },
-    "createdAt": {
-     "type": "string"
-    },
-    "updatedAt": {
-     "type": "string"
+    {
+     "type": "number"
     }
-   },
-   "required": [
-    "id",
-    "handle",
-    "namespace",
-    "type",
-    "name",
-    "description",
-    "fields",
-    "displayField",
-    "storefrontAccess",
-    "owner",
-    "entryCount",
-    "revision",
-    "createdAt",
-    "updatedAt"
    ]
   },
-  "MetaobjectEntry": {
-   "type": "object",
-   "properties": {
-    "id": {
-     "type": "string"
-    },
-    "definitionId": {
-     "type": "string"
-    },
-    "handle": {
-     "type": "string"
-    },
-    "displayName": {
-     "type": "string"
-    },
-    "status": {
-     "type": "string",
-     "enum": [
-      "draft",
-      "published"
-     ]
-    },
-    "fields": {
-     "type": "object",
-     "additionalProperties": {},
-     "description": "Field key → value in the custom-field contract (money in major units)."
-    },
-    "position": {
-     "type": "integer"
-    },
-    "revision": {
-     "type": "integer"
-    },
-    "createdAt": {
-     "type": "string"
-    },
-    "updatedAt": {
-     "type": "string"
-    }
-   },
-   "required": [
-    "id",
-    "definitionId",
-    "handle",
-    "displayName",
-    "status",
-    "fields",
-    "position",
-    "revision",
-    "createdAt",
-    "updatedAt"
-   ]
-  },
-  "MetaobjectFieldDefinition": {
+  "ObjectField": {
    "type": "object",
    "properties": {
     "key": {
      "type": "string",
-     "pattern": "^[a-z][a-z0-9_]{1,63}$"
+     "pattern": "^[a-z][a-z0-9_]{0,63}$"
     },
     "name": {
      "type": "string",
@@ -23745,6 +23979,7 @@
       "variant_reference",
       "collection_reference",
       "media_reference",
+      "object_reference",
       "list.single_line_text",
       "list.multi_line_text",
       "list.integer",
@@ -23757,9 +23992,14 @@
       "list.product_reference",
       "list.variant_reference",
       "list.collection_reference",
-      "list.media_reference"
-     ],
-     "description": "A custom-field type."
+      "list.media_reference",
+      "list.object_reference",
+      "customer_reference",
+      "order_reference"
+     ]
+    },
+    "to": {
+     "type": "string"
     },
     "required": {
      "type": "boolean",
@@ -23768,24 +24008,236 @@
     "description": {
      "type": "string",
      "maxLength": 300
+    },
+    "validations": {
+     "type": "object",
+     "properties": {
+      "min": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "number"
+        },
+        {}
+       ]
+      },
+      "max": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "number"
+        },
+        {}
+       ]
+      },
+      "regex": {
+       "type": "string",
+       "nullable": true,
+       "maxLength": 200
+      },
+      "choices": {
+       "type": "array",
+       "nullable": true,
+       "items": {
+        "type": "string"
+       },
+       "maxItems": 128
+      }
+     },
+     "default": {},
+     "additionalProperties": false
     }
    },
    "required": [
     "key",
     "name",
     "type"
-   ]
+   ],
+   "additionalProperties": false
   },
-  "NullableTimestamp": {
-   "type": "string",
-   "nullable": true,
-   "anyOf": [
-    {
+  "ObjectRecord": {
+   "type": "object",
+   "properties": {
+    "id": {
      "type": "string"
     },
-    {
-     "type": "number"
+    "typeId": {
+     "type": "string"
+    },
+    "handle": {
+     "type": "string",
+     "nullable": true
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "active",
+      "draft",
+      "published"
+     ]
+    },
+    "displayName": {
+     "type": "string"
+    },
+    "data": {
+     "type": "object",
+     "additionalProperties": {}
+    },
+    "position": {
+     "type": "integer"
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "createdAt": {
+     "type": "string"
+    },
+    "updatedAt": {
+     "type": "string"
     }
+   },
+   "required": [
+    "id",
+    "typeId",
+    "handle",
+    "status",
+    "displayName",
+    "data",
+    "position",
+    "revision",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
+  "ObjectType": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "handle": {
+     "type": "string"
+    },
+    "namespace": {
+     "type": "string"
+    },
+    "type": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "description": {
+     "type": "string",
+     "nullable": true
+    },
+    "fields": {
+     "type": "array",
+     "items": {
+      "$ref": "#/components/schemas/ObjectField"
+     }
+    },
+    "indexes": {
+     "type": "array",
+     "items": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        },
+        "minItems": 1,
+        "maxItems": 4
+       }
+      ]
+     }
+    },
+    "unique": {
+     "type": "array",
+     "items": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "array",
+        "items": {
+         "type": "string"
+        },
+        "minItems": 1,
+        "maxItems": 4
+       }
+      ]
+     }
+    },
+    "display": {
+     "type": "string",
+     "nullable": true
+    },
+    "storefront": {
+     "type": "boolean"
+    },
+    "admin": {
+     "type": "string",
+     "enum": [
+      "none",
+      "read",
+      "edit"
+     ]
+    },
+    "events": {
+     "type": "boolean"
+    },
+    "handleEnabled": {
+     "type": "boolean"
+    },
+    "owner": {
+     "type": "string",
+     "enum": [
+      "merchant",
+      "app"
+     ]
+    },
+    "recordCount": {
+     "type": "integer"
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "createdAt": {
+     "type": "string"
+    },
+    "updatedAt": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "handle",
+    "namespace",
+    "type",
+    "name",
+    "description",
+    "fields",
+    "indexes",
+    "unique",
+    "display",
+    "storefront",
+    "admin",
+    "events",
+    "handleEnabled",
+    "owner",
+    "recordCount",
+    "revision",
+    "createdAt",
+    "updatedAt"
    ]
   },
   "OrderLineDownloadExtra": {

@@ -966,6 +966,8 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 .noor-sale { --n-muted: color-mix(in oklab, var(--n-bg) 74%, transparent); position: relative; display: grid; gap: 1.25rem; justify-items: center; overflow: hidden; padding: clamp(1.75rem, 1.2rem + 2.5vw, 3rem) clamp(1.25rem, 4vw, 3.5rem); border-radius: var(--n-radius-lg); color: var(--n-bg); background: var(--n-ink); text-align: center; isolation: isolate; }
 .noor-sale.is-accent { --n-muted: color-mix(in oklab, var(--n-brand-ink) 80%, transparent); color: var(--n-brand-ink); background: var(--n-brand); }
 .noor-sale.is-soft { --n-muted: var(--muted-foreground, #625a50); color: var(--n-ink); background: var(--n-soft); }
+.noor-sale-image { position: absolute; inset: 0; z-index: -2; }
+.noor-sale.has-image::before { content: ""; position: absolute; inset: 0; z-index: -1; background: inherit; opacity: 0.92; }
 .noor-sale-copy { display: grid; gap: 0.5rem; justify-items: center; }
 .noor-sale .noor-eyebrow { color: var(--n-muted); }
 .noor-sale .noor-lede { color: var(--n-muted); }
@@ -1081,6 +1083,8 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 .noor-callout { display: grid; overflow: hidden; border-radius: var(--n-radius-lg); color: var(--n-ink); background: var(--n-soft); }
 .noor-callout.is-ink { --n-muted: color-mix(in oklab, var(--n-bg) 72%, transparent); color: var(--n-bg); background: var(--n-ink); }
 .noor-callout.is-accent { --n-muted: color-mix(in oklab, var(--n-brand-ink) 80%, transparent); color: var(--n-brand-ink); background: var(--n-brand); }
+.noor-callout-image { aspect-ratio: 4 / 3; }
+@media (min-width: 48rem) { .noor-callout.has-image { grid-template-columns: 1fr 1fr; } .noor-callout-image { height: 100%; min-height: 0; } }
 .noor-callout-copy { display: grid; gap: 0.75rem; justify-items: center; padding: clamp(1.5rem, 1rem + 2.5vw, 3rem); text-align: center; }
 .noor-callout .noor-actions-row { margin-block-start: 0.5rem; }
 .noor-callout .noor-lede { margin-inline: auto; }
@@ -1226,3 +1230,10 @@ body:has(.noor-bar) { padding-block-end: 4.5rem; }
 
 /* Focus: the store's ring, visible on every control Noor draws. */
 :is(.noor-s, .noor-header-shell, .noor-footer) :is(a, button, summary, input:not(.noor-field input)):focus-visible { outline: 2px solid var(--ring, var(--n-brand)); outline-offset: 2px; }
+
+.noor-specifications { margin-block-start: 1.25rem; }
+.noor-specifications > div { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding-block: 0.75rem; border-block-end: 1px solid var(--n-line); overflow-wrap: anywhere; }
+.noor-specifications dt { font-weight: 600; }
+.noor-specifications dd { margin: 0; white-space: pre-line; color: var(--n-muted); }
+.noor-specifications dd a { text-decoration: underline; text-underline-offset: 0.2em; }
+.noor-specifications dd img { display: block; max-inline-size: 100%; block-size: auto; margin-block: 0.5rem; }

@@ -35,6 +35,25 @@ export const EVENT_TOPICS = [
   "customer.created",
   "customer.updated",
   "customer.consent_changed",
+  "fulfillment.created",
+  "fulfillment.voided",
+  "shipment.updated",
+  "payment.updated",
+  "checkout.abandoned",
+  "discount.created",
+  "discount.updated",
+  "discount.deleted",
+  "discount.redeemed",
+  "review.created",
+  "review.updated",
+  "gift_card.created",
+  "gift_card.updated",
+  "gift_card.transaction",
+  "object.created",
+  "object.updated",
+  "object.deleted",
+  "customer.redact_requested",
+  "customer.data_requested",
 ] as const;
 export type EventTopic = (typeof EVENT_TOPICS)[number];
 
@@ -47,6 +66,15 @@ export const EVENT_RESOURCE_TYPES = [
   "customer",
   "purchase_order",
   "inventory_transfer",
+  "fulfillment",
+  "shipment",
+  "payment",
+  "checkout",
+  "discount",
+  "review",
+  "gift_card",
+  "transaction",
+  "object",
 ] as const;
 export type EventResourceType = (typeof EVENT_RESOURCE_TYPES)[number];
 
@@ -69,6 +97,25 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "customer.created": "customer",
   "customer.updated": "customer",
   "customer.consent_changed": "customer",
+  "fulfillment.created": "fulfillment",
+  "fulfillment.voided": "fulfillment",
+  "shipment.updated": "shipment",
+  "payment.updated": "payment",
+  "checkout.abandoned": "checkout",
+  "discount.created": "discount",
+  "discount.updated": "discount",
+  "discount.deleted": "discount",
+  "discount.redeemed": "discount",
+  "review.created": "review",
+  "review.updated": "review",
+  "gift_card.created": "gift_card",
+  "gift_card.updated": "gift_card",
+  "gift_card.transaction": "transaction",
+  "object.created": "object",
+  "object.updated": "object",
+  "object.deleted": "object",
+  "customer.redact_requested": "customer",
+  "customer.data_requested": "customer",
 };
 
 const id = z.string().min(1).max(128);
@@ -196,6 +243,111 @@ export const EVENT_FACT_SCHEMAS = {
     state: z.enum(["subscribed", "unsubscribed", "pending"]),
     source: state,
   }),
+  "fulfillment.created": z.object({
+    fulfillmentId: id,
+    orderId: id,
+    kind: state,
+    locationId: nullableId,
+  }),
+  "fulfillment.voided": z.object({
+    fulfillmentId: id,
+    orderId: id,
+    kind: state,
+    locationId: nullableId,
+  }),
+  "shipment.updated": z.object({
+    shipmentId: id,
+    orderId: id,
+    providerId: nullableId,
+    previousStatus: state,
+    status: state,
+  }),
+  "payment.updated": z.object({
+    paymentId: id,
+    orderId: id,
+    provider: z.string().min(1).max(150),
+    previousStatus: nullableState,
+    status: state,
+  }),
+  "checkout.abandoned": z.object({
+    abandonedCheckoutId: id,
+    checkoutId: id,
+  }),
+  "discount.created": z.object({
+    promotionId: id,
+    previousStatus: nullableState,
+    status: state,
+  }),
+  "discount.updated": z.object({
+    promotionId: id,
+    previousStatus: nullableState,
+    status: state,
+  }),
+  "discount.deleted": z.object({
+    promotionId: id,
+    previousStatus: nullableState,
+    status: state,
+  }),
+  "discount.redeemed": z.object({
+    promotionId: id,
+    orderId: id,
+    codeId: nullableId,
+  }),
+  "review.created": z.object({
+    reviewId: id,
+    productId: id,
+    previousStatus: nullableState,
+    status: state,
+    rating: z.number().int().min(1).max(5),
+  }),
+  "review.updated": z.object({
+    reviewId: id,
+    productId: id,
+    previousStatus: nullableState,
+    status: state,
+    rating: z.number().int().min(1).max(5),
+  }),
+  "gift_card.created": z.object({
+    giftCardId: id,
+    previousStatus: nullableState,
+    status: state,
+  }),
+  "gift_card.updated": z.object({
+    giftCardId: id,
+    previousStatus: nullableState,
+    status: state,
+  }),
+  "gift_card.transaction": z.object({
+    giftCardId: id,
+    transactionId: id,
+    kind: state,
+    orderId: nullableId,
+  }),
+  "object.created": z.object({
+    objectType: z.string().min(1).max(192),
+    objectId: id,
+    revision: z.number().int().positive(),
+    status: state,
+  }),
+  "object.updated": z.object({
+    objectType: z.string().min(1).max(192),
+    objectId: id,
+    revision: z.number().int().positive(),
+    status: state,
+  }),
+  "object.deleted": z.object({
+    objectType: z.string().min(1).max(192),
+    objectId: id,
+    revision: z.number().int().positive(),
+    status: state,
+  }),
+  // Reserved until the core provides an erasure/data-request flow.
+  "customer.redact_requested": z.object({
+    customerId: id,
+  }),
+  "customer.data_requested": z.object({
+    customerId: id,
+  }),
 } as const satisfies Record<EventTopic, z.ZodType>;
 
 export type EventFacts<T extends EventTopic = EventTopic> = z.infer<(typeof EVENT_FACT_SCHEMAS)[T]>;
@@ -232,7 +384,10 @@ export function parseEventFacts<T extends EventTopic>(topic: T, raw: unknown): E
  * `*` (every topic). Prefixes are limited to the catalog's resource prefixes
  * so a typo never subscribes to nothing silently.
  */
-export const EVENT_TOPIC_PREFIXES = ["order", "return", "product", "inventory", "customer"] as const;
+export const EVENT_TOPIC_PREFIXES = [
+  "order", "return", "product", "inventory", "customer", "fulfillment",
+  "shipment", "payment", "checkout", "discount", "review", "gift_card", "object",
+] as const;
 export type EventTopicPrefix = (typeof EVENT_TOPIC_PREFIXES)[number];
 export type EventTopicFilter = EventTopic | `${EventTopicPrefix}.*` | "*";
 

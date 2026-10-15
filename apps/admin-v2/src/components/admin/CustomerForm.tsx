@@ -37,6 +37,8 @@ import { CustomerTrashNotice, type TrashedCustomer } from "./CustomerTrashNotice
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
+import { RelatedObjectsCard } from "./objects/RelatedObjectsCard";
+import type { RelatedObjectRecord } from "@scalius/shared/plugins/objects";
 import { CustomerMarketingCard } from "./customers/CustomerMarketingCard";
 import { CustomerTagsCard } from "./customers/CustomerTagsCard";
 import { Field, ReadOnlyValue } from "~/components/ui/field";
@@ -50,6 +52,7 @@ interface CustomerFormProps {
    * phone), says if it's in Trash and carries its tags.
    */
   record?: CustomerTitleInput & TrashedCustomer & {
+    relatedObjects?: RelatedObjectRecord[];
     deletedAt: unknown;
     tags?: readonly string[];
     addresses?: CustomerDto["addresses"];
@@ -250,6 +253,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <CustomerMarketingCard customerId={defaultValues.id} canEdit={canSave} />
           <CustomerTagsCard customerId={defaultValues.id} tags={record?.tags ?? []} canEdit={canSave} />
           <CustomFieldsCard ownerType="customer" ownerId={defaultValues.id} canEdit={canSave} />
+          <RelatedObjectsCard records={record?.relatedObjects} />
         </>
       ) : null}
       {isEdit && defaultValues?.id && !trashed ? (

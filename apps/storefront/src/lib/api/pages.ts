@@ -1,6 +1,6 @@
 // src/lib/api/pages.ts
 
-import { getConfiguredSdkClient } from "./transport";
+import { apiFetch, getConfiguredSdkClient } from "./transport";
 import type { Page, PaginatedResponse } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
@@ -82,9 +82,13 @@ export async function getLandingPageData(slug: string): Promise<LandingPageData 
  * the page renders without them. Starts beside the layout read and joins
  * its one public batch.
  */
-export async function getTemplateSectionsData(kind: StorefrontPageTemplate): Promise<HomepageSectionData | null> {
-  return withEdgeCache<HomepageSectionData | null>(`template_${kind}_${BUILD_ID}`, async () => {
+export async function getTemplateSectionsData(kind: StorefrontPageTemplate, resource?: string): Promise<HomepageSectionData | null> {
+  return withEdgeCache<HomepageSectionData | null>(`template_${kind}_${resource ?? ""}_${BUILD_ID}`, async () => {
     try {
+      if (resource) {
+        const response = await apiFetch(`/storefront/template/${kind}?resource=${encodeURIComponent(resource)}`, {}, { auth: false });
+        return response.ok ? unwrapEnvelope<{ sections: HomepageSectionData }>(await response.json())?.sections ?? null : null;
+      }
       const { data, response } = await getApiV1StorefrontTemplateByKind({
         client: getConfiguredSdkClient(), path: { kind },
       });

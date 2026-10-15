@@ -26,6 +26,7 @@ import {
   productAppBlocks,
   removeProductAppBlock,
   setProductAppBlockValues,
+  setProductAppBlockBindings,
   type AppBlockEntry,
 } from "../theme-settings";
 
@@ -72,6 +73,8 @@ function AppBlockItem({ block, entry, index, count, media, setDraft }: {
           idPrefix={productAppBlockFieldPrefix(block.id)}
           fields={entry.block.settings}
           values={block.values}
+          bindings={block.bindings}
+          onBindingsChange={(bindings) => setDraft((current) => setProductAppBlockBindings(current, block.id, bindings))}
           media={media}
           onChange={(values) => setDraft((current) => setProductAppBlockValues(current, block.id, values))}
         />

@@ -9,7 +9,11 @@
  * refuse as soon as it is there (app-settings.ts); a rejected save's message
  * takes its place.
  */
-import { useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { reindexSettingBindings } from "./dynamic-sources";
+import { bindingSettingType, type SettingBindings } from "@scalius/shared/storefront-theme/bindings";
+import { DynamicSourcePicker } from "./DynamicSourcePicker";
+import { SettingBindingScope, useSettingBindings } from "./binding-context";
+import { createContext, useContext, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, ChevronDown, ImageIcon, Plus, Trash2 } from "lucide-react";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
@@ -231,6 +235,9 @@ function ListControl({ id, field, value, error, media, onChange }: {
   const items = Array.isArray(value) ? (value as AppSettingItem[]) : [];
   const { keys, update, fresh } = useItemKeys(items.length);
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const bindingPrefix = useContext(AppBindingPath);
+  const bindings = useSettingBindings();
+  const listPath = bindingPrefix ? `${bindingPrefix}.${field.key}` : field.key;
   const itemFields = field.fields ?? [];
   const min = field.min ?? 0;
   const max = field.max ?? Number.POSITIVE_INFINITY;
@@ -246,12 +253,14 @@ function ListControl({ id, field, value, error, media, onChange }: {
     if (to < 0 || to >= items.length) return;
     update((current) => moveAt(current, index, delta));
     onChange(moveAt(items, index, delta));
+    if (bindings) bindings.onChange(reindexSettingBindings(bindings.bindings, listPath, index, to));
     focusSoon(focus);
   };
   const remove = (index: number) => {
     const next = keys[index + 1] ?? keys[index - 1];
     update((current) => removeAt(current, index));
     onChange(removeAt(items, index));
+    if (bindings) bindings.onChange(reindexSettingBindings(bindings.bindings, listPath, index, null));
     // Focus stays in the list: the next item's title, else the one before, else Add.
     focusSoon(next ? toggleId(next) : `${id}-add`);
   };
@@ -318,8 +327,8 @@ function ListControl({ id, field, value, error, media, onChange }: {
                     {itemFields.map((each) => {
                       const problem = problems.get(each.key);
                       return (
+                        <AppBindingPath.Provider key={each.key} value={`${listPath}.${index}`}>
                         <AppSettingControl
-                          key={each.key}
                           id={appSettingFieldId(prefix, each.key)}
                           field={each}
                           // An item's fields take no defaults: it holds what it shows.
@@ -333,6 +342,7 @@ function ListControl({ id, field, value, error, media, onChange }: {
                             onChange(replaceAt(items, index, changed));
                           }}
                         />
+                        </AppBindingPath.Provider>
                       );
                     })}
                   </div>
@@ -354,7 +364,7 @@ function ListControl({ id, field, value, error, media, onChange }: {
   );
 }
 
-function AppSettingControl({ id, field, value, error, media, onChange }: {
+function AppSettingInput({ id, field, value, error, media, onChange }: {
   id: string;
   field: ThemeAppSettingField;
   value: unknown;
@@ -555,11 +565,21 @@ function AppSettingControl({ id, field, value, error, media, onChange }: {
   }
 }
 
+const AppBindingPath = createContext("");
+function AppSettingControl(props: Parameters<typeof AppSettingInput>[0]) {
+  const prefix = useContext(AppBindingPath);
+  const path = prefix ? `${prefix}.${props.field.key}` : props.field.key;
+  return <div className="space-y-1">
+    <AppSettingInput {...props} />
+    <DynamicSourcePicker id={props.id} path={path} type={bindingSettingType(props.field.type, props.field.key)} label={props.field.label} />
+  </div>;
+}
+
 /**
  * Every setting of one app placement. `errors` (a rejected save's, by
  * setting key) take the place of each field's own problem.
  */
-export function AppSettingFields({ idPrefix, fields, values, errors, media, onChange }: {
+export function AppSettingFields({ idPrefix, fields, values, errors, media, onChange, bindings, onBindingsChange }: {
   /** Starts every field id; unique on the page. */
   idPrefix: string;
   fields: readonly ThemeAppSettingField[];
@@ -568,9 +588,11 @@ export function AppSettingFields({ idPrefix, fields, values, errors, media, onCh
   /** Previews of the draft's images and this session's picks (`image` settings). */
   media: MediaPreviews;
   onChange: (values: AppSettingValues) => void;
+  bindings?: SettingBindings;
+  onBindingsChange?: (bindings: SettingBindings | undefined) => void;
 }) {
   const own = useAppSettingErrors(fields, values);
-  return (
+  const content = (
     <div className="space-y-4">
       {themeAppFields(fields).map((field) => (
         <AppSettingControl
@@ -585,4 +607,5 @@ export function AppSettingFields({ idPrefix, fields, values, errors, media, onCh
       ))}
     </div>
   );
+  return onBindingsChange ? <SettingBindingScope bindings={bindings} onChange={onBindingsChange}>{content}</SettingBindingScope> : content;
 }

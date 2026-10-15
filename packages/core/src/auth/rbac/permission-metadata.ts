@@ -517,21 +517,21 @@ export const PERMISSION_METADATA: Record<
     isSensitive: false,
   },
 
-  // Metaobjects
-  [PERMISSIONS.METAOBJECTS_VIEW]: {
-    name: PERMISSIONS.METAOBJECTS_VIEW,
+  // Objects
+  [PERMISSIONS.OBJECTS_VIEW]: {
+    name: PERMISSIONS.OBJECTS_VIEW,
     displayName: "View Content Types",
-    description: "View content types (metaobjects) and their entries",
-    resource: "metaobjects",
+    description: "View content types (objects) and their entries",
+    resource: "objects",
     action: "view",
     category: "Pages",
     isSensitive: false,
   },
-  [PERMISSIONS.METAOBJECTS_EDIT]: {
-    name: PERMISSIONS.METAOBJECTS_EDIT,
+  [PERMISSIONS.OBJECTS_EDIT]: {
+    name: PERMISSIONS.OBJECTS_EDIT,
     displayName: "Edit Content Types",
     description: "Create, change and delete content types and their entries",
-    resource: "metaobjects",
+    resource: "objects",
     action: "edit",
     category: "Pages",
     isSensitive: false,

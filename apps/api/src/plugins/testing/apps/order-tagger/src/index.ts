@@ -30,8 +30,17 @@ export const manifest = {
     public: [],
     webhooks: [],
   },
-  storage: {
-    tagged: { indexes: ["taggedAt"] },
+  objects: {
+    tagged: {
+      name: "Tagged orders",
+      fields: [
+        { key: "order_id", name: "Order", type: "single_line_text" },
+        { key: "order_number", name: "Order number", type: "integer" },
+        { key: "tag", name: "Tag", type: "single_line_text" },
+        { key: "tagged_at", name: "Tagged at", type: "integer" },
+      ],
+      indexes: ["tagged_at"],
+    },
   },
   timeline: [{ kind: "tagged", title: "Order tagged" }],
   customFields: [
@@ -57,12 +66,12 @@ export const manifest = {
 } satisfies PluginManifestInput;
 
 interface TaggedRecord extends Record<string, unknown> {
-  orderId: string;
+  order_id: string;
   /** The order's number staff know it by (#1073); missing on records kept before 0.1.2. */
-  orderNumber?: number | null;
+  order_number?: number | null;
   /** Null when the order was below the minimum and left alone. */
   tag: string | null;
-  taggedAt: number;
+  tagged_at: number;
 }
 
 /** The dashboard page's words, in the staff member's dashboard language (`adminContext().locale`). */
@@ -96,8 +105,8 @@ const ADMIN_TEXT = {
 } as const;
 
 function tagged(ctx: PluginContext) {
-  const collection = ctx.storage.tagged;
-  if (!collection) throw new Error("The tagged collection is not declared.");
+  const collection = ctx.objects.tagged;
+  if (!collection) throw new Error("The tagged object is not declared.");
   return collection;
 }
 
@@ -115,7 +124,7 @@ export default definePlugin({
       const orderNumber = typeof order.data?.orderNumber === "number" ? order.data.orderNumber : null;
       const minimum = Number(ctx.settings.min_total ?? 0);
       if (Number(order.data?.totalAmount ?? 0) < minimum) {
-        await tagged(ctx).put(orderId, { orderId, orderNumber, tag: null, taggedAt } satisfies TaggedRecord);
+        await tagged(ctx).put(orderId, { order_id: orderId, order_number: orderNumber, tag: null, tagged_at: taggedAt } satisfies TaggedRecord);
         ctx.log.info("Left an order below the minimum untagged", { orderId });
         return;
       }
@@ -130,7 +139,7 @@ export default definePlugin({
         idempotencyKey: event.id,
       });
       await ctx.customFields.set("order", orderId, { tag });
-      await tagged(ctx).put(orderId, { orderId, orderNumber, tag, taggedAt } satisfies TaggedRecord);
+      await tagged(ctx).put(orderId, { order_id: orderId, order_number: orderNumber, tag, tagged_at: taggedAt } satisfies TaggedRecord);
       ctx.log.info("Tagged a paid order", { orderId, tag });
     },
   },
@@ -143,7 +152,7 @@ export default definePlugin({
         const t = ADMIN_TEXT[locale];
         const [count, recent] = await Promise.all([
           tagged(ctx).count(),
-          tagged(ctx).query({ orderBy: { field: "taggedAt", direction: "desc" }, limit: 10, cursor }),
+          tagged(ctx).query({ orderBy: { field: "tagged_at", direction: "desc" }, limit: 10, cursor }),
         ]);
         return {
           body: ui.page([
@@ -152,18 +161,18 @@ export default definePlugin({
               ui.table({
                 columns: [{ key: "order", label: t.order }, { key: "tag", label: t.tag }, { key: "at", label: t.paid }],
                 rows: recent.records.map((record) => {
-                  const orderId = String(record.data.orderId);
-                  const orderNumber = Number(record.data.orderNumber);
+                  const orderId = String(record.data.order_id);
+                  const orderNumber = Number(record.data.order_number);
                   return {
                     id: record.id,
                     to: ui.to.resource("order", orderId),
                     cells: {
                       // Staff know an order by its number, never its internal id.
                       order: { text: orderNumber > 0 ? `#${orderNumber}` : t.openOrder, to: ui.to.resource("order", orderId) },
-                      tag: record.data.tag === null
+                      tag: record.data.tag == null
                         ? { badge: t.belowMinimum, tone: "neutral" as const }
                         : { badge: `#${String(record.data.tag)}`, tone: "success" as const },
-                      at: { date: new Date(Number(record.data.taggedAt) || 0).toISOString() },
+                      at: { date: new Date(Number(record.data.tagged_at) || 0).toISOString() },
                     },
                   };
                 }),

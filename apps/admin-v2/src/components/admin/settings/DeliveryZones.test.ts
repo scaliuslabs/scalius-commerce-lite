@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countryDraftsOf, countryIssue, rateErrors, zoneRegionsBody } from "./DeliveryZones";
+import { countryDraftsOf, countryIssue, rateErrors, toRateInput, zoneRegionsBody } from "./DeliveryZones";
 
 const rate = (patch: Partial<Parameters<typeof rateErrors>[0]> = {}) => ({
   key: "k",
@@ -8,6 +8,9 @@ const rate = (patch: Partial<Parameters<typeof rateErrors>[0]> = {}) => ({
   name: "Inside Dhaka",
   fee: "60",
   freeOver: "",
+  rateSource: "flat",
+  rateService: "",
+  fallbackFee: "",
   description: "",
   pickupAddress: "",
   pickupHours: "",
@@ -43,6 +46,29 @@ describe("delivery charge validation", () => {
       name: "rateNameRequired",
       pickupAddress: "pickupAddressRequired",
     });
+  });
+
+  it("lets a courier calculate a rate without a fixed charge and keeps fallback opt-in", () => {
+    const calculated = rate({ rateSource: "example.courier:express", fee: "", rateService: " next-day " });
+    expect(rateErrors(calculated)).toEqual({});
+    expect(toRateInput(calculated)).toMatchObject({ rateSource: "example.courier:express", fee: 0, rateService: "next-day", fallbackFee: null });
+    expect(toRateInput({ ...calculated, fallbackFee: "০" })).toMatchObject({ fallbackFee: 0 });
+    expect(toRateInput({ ...calculated, rateService: " " })).toMatchObject({ rateService: null });
+  });
+
+  it("validates a courier fallback with the same currency rules as fixed charges", () => {
+    const calculated = rate({ rateSource: "example.courier:express", fee: "" });
+    expect(rateErrors({ ...calculated, fallbackFee: "abc" })).toEqual({ fallbackFee: "feeInvalid" });
+    expect(rateErrors({ ...calculated, fallbackFee: "100001" })).toEqual({ fallbackFee: "feeTooHigh" });
+    expect(rateErrors({ ...calculated, fallbackFee: "৬০.৫০" }, true)).toEqual({ fallbackFee: "wholeTaka" });
+    expect(rateErrors({ ...calculated, fallbackFee: "৬০.৫০" }, false)).toEqual({});
+  });
+
+  it("clears courier-only fields when returning to fixed charges or pickup", () => {
+    const saved = rate({ rateService: "next-day", fallbackFee: "60" });
+    expect(toRateInput(saved)).toMatchObject({ rateSource: "flat", rateService: null, fallbackFee: null, fee: 60 });
+    expect(toRateInput({ ...saved, kind: "pickup", rateSource: "example.courier:express" }))
+      .toMatchObject({ rateSource: "flat", rateService: null, fallbackFee: null, fee: 60 });
   });
 });
 

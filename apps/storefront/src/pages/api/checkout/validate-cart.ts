@@ -1,3 +1,4 @@
+import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import {
@@ -5,7 +6,7 @@ import {
   type CartValidationOptions,
   type CartValidationRequestItem,
 } from "@/lib/api/orders";
-import { parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
+import { parseCheckoutAttributes, parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
 import { isMarketSubfolder } from "@scalius/shared/markets";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -56,6 +57,11 @@ function normalizeOptions(payload: unknown): CartValidationOptions {
   const city = optionalString(payload, "city");
   const zone = optionalString(payload, "zone");
   const shippingMethodId = optionalString(payload, "shippingMethodId");
+  const token = optionalString(payload, "shippingRateToken");
+  const rateQuote = {
+    ...(token && token.length <= 2048 ? { shippingRateToken: token } : {}),
+    ...(typeof payload.cod === "boolean" ? { cod: payload.cod } : {}),
+  };
   // The page's presence (`en-in`): its market prices the cart before an address.
   const presenceValue = optionalString(payload, "presence");
   const presence = isMarketSubfolder(presenceValue) ? { presence: presenceValue } : {};
@@ -65,17 +71,18 @@ function normalizeOptions(payload: unknown): CartValidationOptions {
       zone,
       area: optionalString(payload, "area"),
       shippingMethodId,
+      ...rateQuote,
       ...presence,
     };
   }
-  return shippingMethodId ? { shippingMethodId, ...presence } : presence;
+  return shippingMethodId ? { shippingMethodId, ...rateQuote, ...presence } : presence;
 }
 
 export const POST: APIRoute = async ({ request }) => {
   if (shouldRejectCrossOriginCookieRequest(request)) {
     return new Response(JSON.stringify({ success: false, error: "Cross-origin cookie request denied" }), {
       status: 403,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
     });
   }
 
@@ -92,12 +99,23 @@ export const POST: APIRoute = async ({ request }) => {
             ? "Your cart is empty. Please add items before checkout."
             : "Every cart item must include a saved product variant.",
         }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
+        { status: 400, headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" } },
       );
     }
     const items = normalizedItems as CartValidationRequestItem[];
 
-    const result = await validateCartItems(items, normalizeOptions(payload));
+    let attributes: Record<string, string> | undefined;
+    try {
+      attributes = parseCheckoutAttributes(isRecord(payload) ? payload.attributes : undefined);
+    } catch {
+      return new Response(JSON.stringify({ success: false, error: "Checkout details are invalid" }), {
+        status: 400, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
+    const result = await validateCartItems(items, {
+      ...normalizeOptions(payload),
+      ...(attributes ? { attributes } : {}),
+    }, getCustomerSessionTokenFromCookie(request.headers.get("cookie")), request.headers);
     if (!result.success) {
       return new Response(
         JSON.stringify({
@@ -107,20 +125,20 @@ export const POST: APIRoute = async ({ request }) => {
         }),
         {
           status: result.status && result.status >= 400 ? result.status : 400,
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
         },
       );
     }
 
     return new Response(JSON.stringify({ success: true, data: result.data }), {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
     });
   } catch (error) {
     console.error("[checkout/validate-cart] Error:", error);
     return new Response(JSON.stringify({ success: false, error: "We couldn't check your cart. Try again." }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
     });
   }
 };

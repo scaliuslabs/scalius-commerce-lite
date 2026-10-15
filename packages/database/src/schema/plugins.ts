@@ -8,12 +8,9 @@
 // or "who listens to topic Y" is one index read that returns nothing when no
 // plugin declares it.
 //
-// `plugin_records` (declared storage collections), `plugin_kv` and
-// `plugin_log_entries` are owned by the plugin id, not by the installation row: an
-// uninstall that keeps data leaves them for a reinstall. Indexed values are
-// stored as lowercase hex of an order-preserving tuple encoding, so equality,
-// prefix ranges and ordering behave identically under every provider's text
-// collation (D1, TursoDB, PostgreSQL).
+// `plugin_kv` and `plugin_log_entries` are owned by the plugin id, not the
+// installation row: uninstalling with retained data keeps them for reinstall.
+// Typed app records live in object_records (./objects).
 
 import { sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
@@ -35,8 +32,7 @@ const pluginIdShape = (column: ReturnType<typeof text>) =>
     sql`length(${column}) BETWEEN 3 AND 100 AND ${column} NOT GLOB '*[^a-z0-9.-]*' AND instr(${column}, '.') > 1 AND instr(${column}, '.') < length(${column})`;
 const jsonObject = (column: ReturnType<typeof text>, maxLength: number) =>
     sql`json_valid(${column}) AND json_type(${column}) = 'object' AND length(${column}) <= ${sql.raw(String(maxLength))}`;
-const hexIndex = (column: ReturnType<typeof text>) =>
-    sql`${column} IS NULL OR (length(${column}) BETWEEN 2 AND 2048 AND ${column} NOT GLOB '*[^0-9a-f]*')`;
+
 
 export const pluginInstallations = sqliteTable("plugin_installations", {
     pluginId: text("plugin_id").primaryKey(),
@@ -65,7 +61,7 @@ export const pluginInstallations = sqliteTable("plugin_installations", {
     migratedVersion: integer("migrated_version").notNull().default(0),
     /** The trusted key id that verified the bundle (registry or signed upload); null for bundled code and unsigned uploads. */
     signerKeyId: text("signer_key_id"),
-    /** Bytes the app keeps in plugin_records and plugin_kv, as last measured (the scheduled sweep). */
+    /** Bytes the app keeps in object_records and plugin_kv, as last measured (the scheduled sweep). */
     storageBytes: integer("storage_bytes").notNull().default(0),
     storageMeasuredAt: integer("storage_measured_at"),
     /** Limit breaches in the current window (one counted a minute); enough of them stop the app. */
@@ -125,45 +121,6 @@ export const pluginRegistrations = sqliteTable("plugin_registrations", {
     check("plugin_registrations_kind_check", sql`${table.kind} IN ('event', 'function', 'cron', 'provider')`),
     check("plugin_registrations_name_length", sql`length(${table.name}) BETWEEN 1 AND 64`),
     check("plugin_registrations_priority_range", sql`${table.priority} BETWEEN 0 AND 1000`),
-]);
-
-/** One record of a plugin's declared storage collection. */
-export const pluginRecords = sqliteTable("plugin_records", {
-    pluginId: text("plugin_id").notNull(),
-    collection: text("collection").notNull(),
-    id: text("id").notNull(),
-    dataJson: text("data_json").notNull(),
-    /** Advances by one with every write of the record: the compare-and-set token (`expectedRevision`). */
-    revision: integer("revision").notNull().default(1),
-    /** Encoded values of the collection's declared indexes, in declaration order. */
-    idx1: text("idx1"),
-    idx2: text("idx2"),
-    idx3: text("idx3"),
-    idx4: text("idx4"),
-    /** Encoded values of the collection's declared unique indexes (null exempts a record). */
-    uq1: text("uq1"),
-    uq2: text("uq2"),
-    createdAt: integer("created_at").notNull().default(UNIX_NOW),
-    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
-}, (table) => [
-    primaryKey({ columns: [table.pluginId, table.collection, table.id] }),
-    index("plugin_records_idx1").on(table.pluginId, table.collection, table.idx1, table.id),
-    index("plugin_records_idx2").on(table.pluginId, table.collection, table.idx2, table.id),
-    index("plugin_records_idx3").on(table.pluginId, table.collection, table.idx3, table.id),
-    index("plugin_records_idx4").on(table.pluginId, table.collection, table.idx4, table.id),
-    uniqueIndex("plugin_records_uq1").on(table.pluginId, table.collection, table.uq1).where(sql`${table.uq1} IS NOT NULL`),
-    uniqueIndex("plugin_records_uq2").on(table.pluginId, table.collection, table.uq2).where(sql`${table.uq2} IS NOT NULL`),
-    check("plugin_records_plugin_id_shape", pluginIdShape(table.pluginId)),
-    check("plugin_records_collection_shape", sql`length(${table.collection}) BETWEEN 1 AND 48 AND ${table.collection} NOT GLOB '*[^a-z0-9-]*'`),
-    check("plugin_records_id_length", sql`length(${table.id}) BETWEEN 1 AND 128`),
-    check("plugin_records_data_json", jsonObject(table.dataJson, 65536)),
-    check("plugin_records_revision_positive", sql`${table.revision} >= 1`),
-    check("plugin_records_idx1_hex", hexIndex(table.idx1)),
-    check("plugin_records_idx2_hex", hexIndex(table.idx2)),
-    check("plugin_records_idx3_hex", hexIndex(table.idx3)),
-    check("plugin_records_idx4_hex", hexIndex(table.idx4)),
-    check("plugin_records_uq1_hex", hexIndex(table.uq1)),
-    check("plugin_records_uq2_hex", hexIndex(table.uq2)),
 ]);
 
 /** A plugin's small key/value store (database-backed, not Workers KV). */
@@ -298,7 +255,6 @@ export const pluginCronRuns = sqliteTable("plugin_cron_runs", {
 ]);
 
 export type PluginInstallationRow = InferSelectModel<typeof pluginInstallations>;
-export type PluginRecordRow = InferSelectModel<typeof pluginRecords>;
 export type PluginKvRow = InferSelectModel<typeof pluginKv>;
 export type PluginLogRow = InferSelectModel<typeof pluginLogEntries>;
 export type PluginEventDeliveryRow = InferSelectModel<typeof pluginEventDeliveries>;

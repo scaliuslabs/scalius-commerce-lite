@@ -46,6 +46,11 @@ import {
   withOrderLineExtras,
 } from "../shared/order-line-extras";
 import { notificationSender } from "../../background/notification-sender";
+import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
+import { buyerUiBlockSchema, readCheckoutAttributes } from "@scalius/shared/plugins";
+import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { getOptionalExecutionContext } from "../../utils/execution-context";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -183,6 +188,7 @@ const customerOrderSupportRequestActionSchema = z.object({
 });
 
 const customerOrderDetailSchema = z.object({
+  buyerUi: z.array(buyerUiBlockSchema),
   order: z.object({
     id: z.string(),
     orderNumber: z.number().int().nullable(),
@@ -315,6 +321,10 @@ const getCustomerOrderDetailRoute = createRoute({
   tags: ["Customer Auth"],
   summary: "Get one authenticated customer order with timeline",
   request: {
+    headers: z.object({
+      "x-storefront-language": z.string().min(1).max(35).optional(),
+      "x-storefront-locale": z.string().min(1).max(35).optional(),
+    }),
     params: z.object({
       id: z.string(),
     }),
@@ -358,9 +368,35 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     currencyDecimalPlaces: order.currencyDecimalPlaces,
   });
   const giftCardTenders = await presentOrderGiftCardTenders(c.get("db"), orderId, order.currencyDecimalPlaces);
+  const db = c.get("db");
+  const apps = createCheckoutAppFunctions({
+    env: c.env,
+    ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
+    db,
+    registrations: await listActiveCheckoutRegistrations(db),
+  });
+  const buyerUi = apps.points.has("buyer.ui")
+    ? await apps.buyerUi?.({
+      targets: ["customer-account.order-status.block.render"],
+      language: c.req.header("x-storefront-language"),
+      locale: c.req.header("x-storefront-locale"),
+      currency: order.currencyCode ?? (await readStoreCurrency(db)).code,
+      attributes: readCheckoutAttributes(order.attributes),
+      customer: { id: session.customerId },
+      order: {
+        orderId,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        lines: detail.items.flatMap((item) => item.variantId
+          ? [{ productId: item.productId, variantId: item.variantId, quantity: item.quantity }]
+          : []),
+      },
+    }) ?? []
+    : [];
 
   return ok(c, {
     ...detail,
+    buyerUi,
     giftCardTenders,
     items: detail.items.map((item) => withOrderLineExtras(item, lineExtras)),
     discounts: presentOrderDiscountLines(discountLines, order.currencyDecimalPlaces),

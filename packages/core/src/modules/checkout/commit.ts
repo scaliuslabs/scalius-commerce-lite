@@ -66,7 +66,7 @@ import {
     type AtomicCheckoutAttempt,
 } from "./attempts";
 import { buildAppDiscountFactInserts } from "../order-kernel";
-import { appStorageCommitStatements, isAppStorageCommitConflict } from "../plugins";
+import { appObjectCommitStatements, isAppObjectCommitConflict } from "../objects";
 import { orderMarketIdSql } from "../markets";
 import { orderBillingAddressInsertColumns, orderShippingAddressInsertColumns, orderShippingCountry } from "../orders";
 import { readCheckoutCopy } from "./store-copy";
@@ -403,7 +403,7 @@ function buildOrderWriteBatch(
 
     writes.push(
         db.insert(orders).values({
-            orderNumber: nextOrderNumberSql(),
+            orderNumber: nextOrderNumberSql(db),
             id: od.id,
             customerName: od.customerName,
             customerPhone: storedPhone(od.customerPhone),
@@ -416,6 +416,7 @@ function buildOrderWriteBatch(
             // shipped order binds nothing more than it did before 0119.
             ...orderBillingAddressInsertColumns(od),
             notes: od.notes,
+            attributes: od.attributes ?? "{}",
             currencyCode: od.currencyCode,
             currencyDecimalPlaces: od.currencyDecimalPlaces,
             subtotalAmountMinor: od.subtotalAmountMinor,
@@ -718,13 +719,13 @@ function buildOrderWriteBatch(
 
     // App snapshot writes (a balance the discount spends) commit with the
     // order, each at the revision its app saw: a lost race fails the order.
-    const storageCommits = payload.appStorageCommits ?? [];
+    const storageCommits = payload.appObjectCommits ?? [];
     if (storageCommits.length > 0) {
         const discounted = new Set(appDiscounts.map((discount) => discount.pluginId));
         if (storageCommits.some((commit) => !discounted.has(commit.pluginId))) {
             throw new ValidationError("Committed app storage write has no applied discount.");
         }
-        const { guards, writes: commitWrites } = appStorageCommitStatements(db, storageCommits);
+        const { guards, writes: commitWrites } = appObjectCommitStatements(db, storageCommits);
         writes.push(...guards as SQLiteBatchItem[], ...commitWrites as SQLiteBatchItem[]);
     }
 
@@ -917,7 +918,7 @@ export async function commitStorefrontOrderPayload(
             }
 
             // Checked first: its marker is specific; the others' fallbacks are not.
-            if (isAppStorageCommitConflict(error)) {
+            if (isAppObjectCommitConflict(error)) {
                 throw new ValidationError(await readCheckoutCopy(db, "checkoutAppOfferChangedText"), { reason: APP_OFFER_CHANGED_REASON });
             }
             const guardError = checkoutGuardError(error);

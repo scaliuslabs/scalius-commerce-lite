@@ -58,7 +58,8 @@ export class SandboxLoader implements PluginLoader {
     }
     const { installation, invocation } = target;
     const bucket = this.env.BUCKET;
-    const isolateId = `${installation.pluginId}:${installation.version}:${installation.bundleSha256}`;
+    const buyerUi = invocation.kind === "function" && invocation.point === "buyer.ui";
+    const isolateId = `${installation.pluginId}:${installation.version}:${installation.bundleSha256}${buyerUi ? ":buyer-ui" : ""}`;
     // The callback runs only when no warm isolate holds this version; its
     // failures surface on the call, so they are kept to report precisely.
     const load: { failure: PluginLoadError | null } = { failure: null };
@@ -82,7 +83,7 @@ export class SandboxLoader implements PluginLoader {
           env: {},
           globalOutbound: null,
           limits: {
-            cpuMs: Math.min(installation.manifest.limits.cpuMs, planLimits().plugins.cpuMs),
+            cpuMs: Math.min(installation.manifest.limits.cpuMs, planLimits().plugins.cpuMs, buyerUi ? 50 : Number.POSITIVE_INFINITY),
             subRequests: pluginSandboxSubrequests(),
           },
         };

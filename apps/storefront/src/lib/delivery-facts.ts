@@ -123,6 +123,13 @@ function deliveryFact(
       detail: "Delivery is free on any order with this item.",
     };
   }
+  if (delivery.some((method) => method.rateSource && method.rateSource !== "flat")) {
+    return {
+      kind: "delivery",
+      title: "Delivery calculated at checkout",
+      detail: "Price depends on your address and order.",
+    };
+  }
 
   const fee = (amount: number) => (amount === 0 ? "free" : formatMoney(amount));
   const fees = delivery.map((method) => method.fee);

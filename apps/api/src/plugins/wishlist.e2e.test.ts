@@ -11,8 +11,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./bundled.gen", async (importOriginal) => (await import("./testing/fixture-apps")).withFixtureApps(await importOriginal()));
 import type { Database } from "@scalius/database/client";
+import { getObjectRecord } from "@scalius/core/modules/objects";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { activatePlugin, getPluginRecord, installPlugin, requirePluginInstallation } from "@scalius/core/modules/plugins";
+import { activatePlugin, installPlugin, requirePluginInstallation } from "@scalius/core/modules/plugins";
 import { hashCustomerSessionToken } from "@scalius/core/modules/customers";
 import { parsePluginUiDocument } from "@scalius/shared/plugins";
 import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
@@ -83,9 +84,9 @@ describe("acme.wishlist end to end", { timeout: 30_000 }, () => {
       body: "productId=p_linen&returnTo=%2Fproducts%2Flinen-panjabi",
     });
     expect(saved).toEqual({ status: 200, json: { pressed: true, message: "Saved to your wishlist." } });
-    expect(await getPluginRecord(db, "acme.wishlist", "wishes", "cust_buyer:p_linen")).toMatchObject({ customerId: "cust_buyer", productId: "p_linen" });
+    expect(await getObjectRecord(db, "acme.wishlist", "wishes", "cust_buyer:p_linen")).toMatchObject({ customer_id: "cust_buyer", product_id: "p_linen" });
     // The app read the product through /api/v1 under its own grant (products.view).
-    expect(await getPluginRecord(db, "acme.wishlist", "products", "p_linen")).toMatchObject({ name: "Linen Panjabi", slug: "linen-panjabi", wishes: 1 });
+    expect(await getObjectRecord(db, "acme.wishlist", "products", "p_linen")).toMatchObject({ name: "Linen Panjabi", slug: "linen-panjabi", wishes: 1 });
     expect(sqlite.prepare("SELECT plugin_id, operation_id, outcome FROM agent_audit_events ORDER BY operation_id").all()).toEqual([
       { plugin_id: "acme.wishlist", operation_id: "dashboard.products.get_by_ids", outcome: "success" },
       { plugin_id: "acme.wishlist", operation_id: "dashboard.products.get_section", outcome: "success" },
@@ -115,7 +116,7 @@ describe("acme.wishlist end to end", { timeout: 30_000 }, () => {
       id: "evt_1", topic: "product.updated", apiVersion: "2026-10", occurredAt: new Date().toISOString(),
       resource: { type: "product", id: "p_linen" }, facts: { productId: "p_linen", revision: 2 },
     })).toEqual({ ok: true, value: null, error: null });
-    expect(await getPluginRecord(db, "acme.wishlist", "products", "p_linen")).toMatchObject({ name: "Linen Panjabi (Eid)", wishes: 1 });
+    expect(await getObjectRecord(db, "acme.wishlist", "products", "p_linen")).toMatchObject({ name: "Linen Panjabi (Eid)", wishes: 1 });
 
     // Removing it without JavaScript: a navigation, redirected back to the product.
     const removed = await call("/api/v1/plugins/acme.wishlist/public/toggle", {
@@ -124,7 +125,7 @@ describe("acme.wishlist end to end", { timeout: 30_000 }, () => {
       body: "productId=p_linen&returnTo=%2Fproducts%2Flinen-panjabi",
     });
     expect(removed.json).toEqual({ redirect: "/products/linen-panjabi" });
-    expect(await getPluginRecord(db, "acme.wishlist", "products", "p_linen")).toBeNull();
+    expect(await getObjectRecord(db, "acme.wishlist", "products", "p_linen")).toBeNull();
   });
 
   it("never lets a direct API call act as a buyer without the store's session", async () => {

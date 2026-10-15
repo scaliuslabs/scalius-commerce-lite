@@ -152,6 +152,8 @@ export const orders = sqliteTable("orders", {
     /** Valid: pending | processing | confirmed | shipped | delivered | completed | cancelled | refunded | returned | incomplete (see OrderStatus enum) */
     status: text("status").notNull().default(OrderStatus.PENDING),
     notes: text("notes"),
+    /** Validated app checkout attributes; private, never part of events. */
+    attributes: text("attributes").notNull().default("{}"),
     paymentMethod: text("payment_method").notNull().default(PaymentMethod.COD),
     /** Valid: unpaid | partial | paid | partially_refunded | refunded | failed (see PaymentStatus enum) */
     paymentStatus: text("payment_status").notNull().default(PaymentStatus.UNPAID),
@@ -1138,6 +1140,7 @@ export const abandonedCheckouts = sqliteTable(
         checkoutId: text("checkout_id").notNull(),
         customerPhone: text("customer_phone"),
         checkoutData: text("checkout_data").notNull(),
+        abandonedAt: integer("abandoned_at", { mode: "timestamp" }),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
             .default(UNIX_NOW),
@@ -1149,6 +1152,7 @@ export const abandonedCheckouts = sqliteTable(
         unique("ab_checkout_id_unique").on(table.checkoutId),
         index("abandoned_checkouts_created_at_idx").on(table.createdAt, table.id),
         index("abandoned_checkouts_empty_candidate_idx").on(table.customerPhone, table.updatedAt, table.id),
+        index("abandoned_checkouts_pending_idx").on(table.abandonedAt, table.updatedAt, table.id),
     ],
 );
 

@@ -35,7 +35,7 @@ import {
   mediaAsset,
   productDetail,
 } from "./fixtures";
-import { fixtureMetaobject, metaobjectMediaIds } from "./metaobjects";
+import { fixtureObject, objectMediaIds } from "./objects";
 import { NOOR_EXTENSION, noorSectionSurfaces } from "./noor";
 
 /**
@@ -132,7 +132,6 @@ function layout(entry: GalleryEntry) {
     // browser reads (the cart's delivery rates) have an API to call.
     platform: { apiUrl: fixtureOrigin(), storefrontUrl: fixtureOrigin() },
     policies: FIXTURE_POLICIES,
-    ...(entry.scenario.checkoutBlocks ? { appBlockPages: ["checkout"] } : {}),
     ...(entry.scenario.addressApp ? { appServices: { search: null, address: { id: ADDRESS_APP_ID, countries: ["GB"] }, signIn: [] } } : {}),
   };
 }
@@ -187,7 +186,7 @@ function catalogCollection(entry: GalleryEntry, id: string, presentation: "grid"
 function sectionData(entry: GalleryEntry, sections: readonly StorefrontSection[]) {
   const requests = homeSectionRequests(sections);
   // A type that is private or gone is missing, as the API leaves it out.
-  const metaobjects = (requests.metaobjects ?? []).flatMap((request) => fixtureMetaobject(request.definitionId, request.limit) ?? []);
+  const objects = (requests.objects ?? []).flatMap((request) => fixtureObject(request.typeId, request.limit) ?? []);
   return {
     lists: requests.lists.map((list, index) => ({
       key: list.key,
@@ -195,13 +194,13 @@ function sectionData(entry: GalleryEntry, sections: readonly StorefrontSection[]
       category: list.source.kind === "category" ? { id: list.source.categoryId, name: "Sarees", slug: "sarees", canonicalPath: null } : null,
       collection: list.source.kind === "collection" ? { id: list.source.collectionId, title: "Eid edit" } : null,
     })),
-    media: entry.scenario.missingSectionMedia ? [] : [...new Set([...requests.mediaIds, ...metaobjectMediaIds(metaobjects)])].map((id) => mediaAsset(id, `Photo: ${id.replace(/-/g, " ")}`)),
+    media: entry.scenario.missingSectionMedia ? [] : [...new Set([...requests.mediaIds, ...objectMediaIds(objects)])].map((id) => mediaAsset(id, `Photo: ${id.replace(/-/g, " ")}`)),
     brands: requests.brandLimit > 0 ? fixtureBrands(requests.brandLimit) : [],
     promotions: requests.promotionIds.map((id) => ({ id, endsAt: "2026-12-31T18:00:00.000Z" })),
     categories: requests.categoryIds.map(homeCategory),
     collections: requests.collectionIds.map((id, index) => catalogCollection(entry, id, index % 2 === 0 ? "carousel" : "grid")),
     homeProduct: null,
-    metaobjects,
+    objects,
     ...(entry.scenario.noor ? { apps: entry.scenario.noor === "active" ? noorSectionSurfaces(sections, entry.scenario.product) : [] } : {}),
   };
 }
@@ -239,35 +238,20 @@ function listing(entry: GalleryEntry, search: URLSearchParams) {
   };
 }
 
-/** The blocks apps draw at the checkout targets (sanitized HTML: content and links, no forms or scripts). */
+/** Buyer UI travels with the private cart answer, just as it does in production. */
 function checkoutApps(entry: GalleryEntry) {
-  if (!entry.scenario.checkoutBlocks) return { blocks: [] };
-  const head = { meta: [], jsonLd: [] };
-  return {
-    blocks: [
-      {
-        id: "acme.delivery/promise",
-        app: "acme.delivery/promise",
-        target: "purchase.checkout.contact.render-after",
-        html: '<div class="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"><p><strong>Delivery promise.</strong> Order before 12 pm and it arrives today inside Dhaka, or tomorrow everywhere else.</p><p class="mt-1"><a class="font-medium underline underline-offset-4" href="/pages/delivery">See delivery times by district</a></p></div>',
-        head,
-      },
-      {
-        id: "acme.trust/returns",
-        app: "acme.trust/returns",
-        target: "purchase.checkout.shipping-option-list.render-after",
-        html: '<ul class="space-y-1 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"><li><strong>7-day returns.</strong> Free pickup from your door in Dhaka.</li><li><strong>Official warranty</strong> on every phone and laptop.</li><li><strong>Cash on delivery</strong> checked before you pay.</li></ul>',
-        head,
-      },
-      {
-        id: "acme.loyalty/points",
-        app: "acme.loyalty/points",
-        target: "purchase.checkout.cart-line-list.render-after",
-        html: '<p class="rounded-lg bg-secondary px-3 py-2 text-sm text-secondary-foreground">You will earn <strong>120 Nakshi points</strong> with this order. <a class="underline underline-offset-4" href="/account/rewards">View your rewards</a></p>',
-        head,
-      },
-    ],
-  };
+  if (!entry.scenario.checkoutBuyerUi) return [];
+  return [
+    {
+      appId: "acme.notes", releaseId: "gallery", target: "purchase.checkout.contact.render-after",
+      attributes: [{ key: "gift_note", type: "multiline", label: "Gift message", maxLength: 500 }], values: {},
+      ui: { type: "field", attribute: "gift_note" },
+    },
+    {
+      appId: "acme.loyalty", releaseId: "gallery", target: "purchase.checkout.cart-line-list.render-after", attributes: [], values: {},
+      ui: { type: "banner", tone: "info", text: "You will earn 120 Nakshi points with this order." },
+    },
+  ];
 }
 
 /** Recorded reads nothing answered (gallery index "missing reads"). */
@@ -288,8 +272,6 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   }
   if (path === "/api/v1/shipping-methods") return { shippingMethods: fixtureShippingMethods() };
   if (path === "/api/v1/checkout/config") return { gateways: entry.scenario.checkout === "no-cod" ? [] : [{ id: "cod", name: "Cash on delivery", countries: ["BD"] }] };
-  const checkoutApp = /^\/api\/v1\/storefront\/app-blocks\/(checkout)$/.exec(path);
-  if (checkoutApp) return checkoutApps(entry);
   if (path === "/api/v1/products/recommendations") {
     const limit = Math.min(positiveInteger(search.get("limit"), 8), 20);
     const sources = new Set((search.get("productIds") ?? "").split(",").filter(Boolean));
@@ -411,7 +393,7 @@ export async function answerFixtureApi(entry: GalleryEntry, request: Request): P
   url.pathname = apiPath(url.pathname);
   const json = { "Content-Type": "application/json" };
   if (url.pathname === "/api/v1/orders/cart-validation" && request.method === "POST") {
-    return new Response(envelope(await cartValidation(request)), { headers: json });
+    return new Response(envelope({ ...await cartValidation(request), buyerUi: checkoutApps(entry) }), { headers: json });
   }
   if (url.pathname === "/api/v1/auth/token") {
     return new Response(envelope({ token: "gallery-token", expiresIn: 3600 }), { headers: json });

@@ -383,7 +383,8 @@ export function createFreePlanMeter(options: CreateFreePlanMeterOptions): FreePl
         current.cpuMs = Math.max(0, (cpuTotal - clock.engineMicros) / 1000);
         current.wallMs = performance.now() - wallStart;
         current.d1RowsChanged = totalChanges() - changesBefore;
-        return { value, counters: current };
+        // Setup for the next run uses these bindings too; freeze this invocation's report.
+        return { value, counters: { ...current } };
       } finally {
         globalThis.fetch = originalFetch;
         (globalThis as { caches?: unknown }).caches = originalCaches;

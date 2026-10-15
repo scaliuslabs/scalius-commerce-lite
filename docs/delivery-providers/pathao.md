@@ -25,9 +25,16 @@ Paths start with `/aladdin/api/v1`. Each operation requests a new token (`plugin
 |---------|---------|
 | Token | `POST /issue-token` with `client_id`, `client_secret`, `grant_type: "password"`, `username`, `password`. Later calls send `Authorization: Bearer <token>`. |
 | Connection test | `GET /stores`, following `?page=n` up to 10 pages. The configured `store_id` must appear with `is_active` of 1. |
+| Carrier rates | `POST /merchant/price-plan` with the configured store, item/delivery type, parcel weight and mapped Pathao city/zone ids. |
 | Book | `POST /orders` |
 | Status | `GET /orders/{consignmentId}/info` |
 | Place refresh | `GET /city-list`, `GET /cities/{cityId}/zone-list`, `GET /zones/{zoneId}/area-list` |
+
+## Carrier rates
+
+The optional `rates` operation returns Pathao's `final_price` as BDT minor units for the configured regular or express service. The configured Pathao store is the pickup origin. Parcel weight uses catalog grams when complete, otherwise the merchant's booking default, with Pathao's 0.5 kg minimum; parcels over 10 kg and non-BD/non-BDT requests return no service. City and zone use the same external place mappings as booking. A missing mapping or unusable provider response fails closed. COD requires `cod_enabled: 1`; the quote is the transport charge only, since the separate COD settlement percentage depends on the eventual collection amount. Pathao supplies no delivery-day estimate here, so none is invented.
+
+The request and response contract was checked against the public developer API documentation on 2026-10-15. Tests script provider HTTP; live account pricing remains unverified.
 
 ## Booking
 

@@ -41,7 +41,7 @@ import { DASHBOARD_DIGITAL_OPERATIONS } from "./dashboard-digital";
 import { DASHBOARD_WARRANTY_OPERATIONS } from "./dashboard-warranty";
 import { DASHBOARD_WEBHOOK_OPERATIONS } from "./dashboard-webhooks";
 import { DASHBOARD_CUSTOM_FIELD_OPERATIONS } from "./dashboard-custom-fields";
-import { DASHBOARD_METAOBJECT_OPERATIONS } from "./dashboard-metaobjects";
+import { DASHBOARD_OBJECT_OPERATIONS } from "./dashboard-objects";
 import { DASHBOARD_APP_OPERATIONS as APP_ROWS } from "./dashboard-apps";
 import { DASHBOARD_STORE_TRANSFER_OPERATIONS } from "./dashboard-store-transfer";
 import { STOREFRONT_REVIEW_OPERATIONS } from "./storefront-reviews";
@@ -112,7 +112,7 @@ export const OPERATIONS = {
   ...DASHBOARD_WARRANTY_OPERATIONS,
   ...DASHBOARD_WEBHOOK_OPERATIONS,
   ...DASHBOARD_CUSTOM_FIELD_OPERATIONS,
-  ...DASHBOARD_METAOBJECT_OPERATIONS,
+  ...DASHBOARD_OBJECT_OPERATIONS,
   ...DASHBOARD_APP_OPERATIONS,
   ...DASHBOARD_STORE_TRANSFER_OPERATIONS,
   ...STOREFRONT_REVIEW_OPERATIONS,
@@ -152,7 +152,7 @@ export const OPERATION_GROUPS: readonly Readonly<Record<string, OperationRegistr
   DASHBOARD_WARRANTY_OPERATIONS,
   DASHBOARD_WEBHOOK_OPERATIONS,
   DASHBOARD_CUSTOM_FIELD_OPERATIONS,
-  DASHBOARD_METAOBJECT_OPERATIONS,
+  DASHBOARD_OBJECT_OPERATIONS,
   DASHBOARD_APP_OPERATIONS,
   DASHBOARD_STORE_TRANSFER_OPERATIONS,
   STOREFRONT_REVIEW_OPERATIONS,
@@ -172,6 +172,7 @@ export function registryEntry(operationId: string): OperationRegistryEntry | und
 }
 
 export function operationSurface(operationId: string): AgentOperationSurface {
+  if (Object.hasOwn(DASHBOARD_OBJECT_OPERATIONS, operationId)) return "dashboard";
   const prefix = operationId.split(".", 1)[0];
   if (prefix === "dashboard" || prefix === "storefront" || prefix === "system") {
     return prefix;

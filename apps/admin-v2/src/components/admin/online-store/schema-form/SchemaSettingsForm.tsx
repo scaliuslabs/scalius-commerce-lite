@@ -8,6 +8,8 @@
  * (the hero's slides) and `visible` hides settings their siblings make
  * irrelevant. Labels come from the theme setting catalog (labels.ts).
  */
+import { bindingSettingType } from "@scalius/shared/storefront-theme/bindings";
+import { DynamicSourcePicker } from "./DynamicSourcePicker";
 import { createContext, useContext, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Minus, Plus, Trash2 } from "lucide-react";
 import { STOREFRONT_CATEGORY_TILES_LIMIT, storefrontCategoryTilesMinimum, type StorefrontCategoryTileStyle } from "@scalius/shared/storefront-theme";
@@ -32,7 +34,7 @@ import {
   type VariantsSpec,
 } from "./introspect";
 import { settingHelpKey, settingLabelKey, type LabelScope } from "./labels";
-import { MetaobjectDefinitionWidget } from "./MetaobjectDefinitionWidget";
+import { ObjectTypeWidget } from "./ObjectTypeWidget";
 import {
   CategoryPicks,
   CategorySelect,
@@ -166,7 +168,7 @@ const KEY_WIDGETS: Readonly<Record<string, SettingWidget>> = {
       onChange={onChange}
     />
   ),
-  definitionId: MetaobjectDefinitionWidget,
+  typeId: ObjectTypeWidget,
   promotionId: ({ id, label, help, value, onChange, error }) => (
     <Field id={id} label={label} help={help} error={error()} noteId={`${id}-note`}>
       <PromotionSelect id={id} value={(value as string | null | undefined) ?? null} onChange={onChange} />
@@ -482,7 +484,7 @@ function ListSetting({ id, label, help, path, dataPath, value, spec, onChange }:
 }
 
 /** One setting with its label: a key widget, a path widget or the control its spec calls for. */
-function Setting({ fieldKey, spec, path, dataPath, value, parent, onChange }: {
+function SettingControl({ fieldKey, spec, path, dataPath, value, parent, onChange }: {
   fieldKey: string;
   spec: SettingSpec;
   path: string;
@@ -554,6 +556,16 @@ function Setting({ fieldKey, spec, path, dataPath, value, parent, onChange }: {
     case "variants":
       return <VariantFields id={id} label={label} help={help} spec={spec} path={path} dataPath={dataPath} value={value} onChange={onChange} />;
   }
+}
+
+function Setting(props: Parameters<typeof SettingControl>[0]) {
+  const form = useForm();
+  const labels = useLabels();
+  return <div className="space-y-1">
+    <SettingControl {...props} />
+    <DynamicSourcePicker id={settingFieldId(form.idPrefix, props.dataPath)} path={props.dataPath}
+      type={bindingSettingType(props.spec.kind, props.fieldKey)} label={labels.label(props.path, props.fieldKey)} />
+  </div>;
 }
 
 /** A value without a label of its own: a list item, or the root settings. */

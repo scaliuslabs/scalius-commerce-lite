@@ -559,9 +559,10 @@ export interface CatalogListingSummary {
     max: number | null;
     storeCurrencyCode: string | null;
     categoryAncestors: string | null;
+    cardFieldsTheme: string | null;
 }
 
-type ListingSummaryInput = { categoryAncestors?: SQL<string | null> };
+type ListingSummaryInput = { categoryAncestors?: SQL<string | null>; cardFieldsTheme?: SQL<string | null> };
 type FacetRead = { rows: CatalogFacetCountRow[]; summary: CatalogListingSummary | null };
 type FacetResultRow = CatalogFacetCountRow & {
     recordType?: string;
@@ -570,6 +571,7 @@ type FacetResultRow = CatalogFacetCountRow & {
     listingMax?: number | null;
     listingCurrency?: string | null;
     listingAncestors?: string | null;
+    listingTheme?: string | null;
 };
 
 /**
@@ -951,7 +953,7 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
                 WHERE sample_variant.id = facet_ranked.sample_sku
             ) END AS sampleProductId
             ${summary ? sql`, 'facet' AS recordType, NULL AS listingCount, NULL AS listingMin,
-                NULL AS listingMax, NULL AS listingCurrency, NULL AS listingAncestors` : sql``}
+                NULL AS listingMax, NULL AS listingCurrency, NULL AS listingAncestors, NULL AS listingTheme` : sql``}
         FROM facet_ranked
         WHERE (facet_kind <> 'attribute' OR facet_rank <= ${sql.raw(String(boundedLimit(input.attributeLimit, FACET_ATTRIBUTE_LIMIT)))})
           AND (value_rank <= CASE facet_kind WHEN 'brand' THEN ${sql.raw(String(brandValueLimit))} ELSE ${sql.raw(String(valueLimit))} END OR is_selected = 1)
@@ -961,24 +963,25 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
         SELECT NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
             'summary', listing_count, listing_min, listing_max,
-            ${storeCurrencyCodeSql()}, ${summary.categoryAncestors ?? sql`NULL`}
+            ${storeCurrencyCodeSql()}, ${summary.categoryAncestors ?? sql`NULL`}, ${summary.cardFieldsTheme ?? sql`NULL`}
         FROM (${scopeSummary}) AS listing_summary` : sql``}
     `), [
         "facetKind", "facetId", "valueKey", "valueCount", "valueLabel", "valueSort", "valueNumber", "facetName",
         "facetSlug", "facetDisplay", "facetUnit", "facetOrder", "urlValue", "swatch", "rangeMin", "rangeMax",
         "sampleProductId",
-        ...(summary ? ["recordType", "listingCount", "listingMin", "listingMax", "listingCurrency", "listingAncestors"] as const : []),
+        ...(summary ? ["recordType", "listingCount", "listingMin", "listingMax", "listingCurrency", "listingAncestors", "listingTheme"] as const : []),
     ]).then<FacetRead>((results) => {
         const summaryRow = results.find(row => row.recordType === "summary");
         const rows = results.filter(row => row.recordType !== "summary").map((row) => {
             const { recordType: _recordType, listingCount: _count, listingMin: _min, listingMax: _max,
-                listingCurrency: _currency, listingAncestors: _ancestors, ...facet } = row;
+                listingCurrency: _currency, listingAncestors: _ancestors, listingTheme: _theme, ...facet } = row;
             return facet;
         });
         return { rows, summary: summaryRow ? {
             count: Number(summaryRow.listingCount), min: summaryRow.listingMin ?? null,
             max: summaryRow.listingMax ?? null, storeCurrencyCode: summaryRow.listingCurrency ?? null,
             categoryAncestors: summaryRow.listingAncestors ?? null,
+            cardFieldsTheme: summaryRow.listingTheme ?? null,
         } : null };
     });
 }

@@ -33,7 +33,7 @@ import {
   homepageSectionRenders,
   type HomepageContent,
 } from "@/lib/homepage-sections";
-import type { HomepageMetaobject } from "@/lib/api/storefront";
+import type { HomepageObject } from "@/lib/api/storefront";
 import { SHELF_CARD_SIZES, productCardImageSizes, productGridSpec } from "@/lib/product-card-layout";
 import { capPhoneSizesDensity, scaleSizes } from "@/lib/responsive-image";
 
@@ -181,8 +181,8 @@ const HERO_SLIDES = [
 const media = (id: string) => ({ id, url: image(id), alt: `Photo ${id}`, width: 1600, height: 1000 });
 
 /** A content type with every field kind the section draws (and ones it must not). */
-const METAOBJECT_STORES: HomepageMetaobject = {
-  id: "mo-stores",
+const OBJECT_STORES: HomepageObject = {
+  id: "oty_custom.stores",
   name: "Store locations",
   entries: [
     {
@@ -253,7 +253,7 @@ function store(size: "tiny" | "large"): HomepageContent {
       logo: index % 2 === 0 ? { mediaId: `m-logo-${index}`, url: image(`logo-${index}`), alt: "", width: 240, height: 120 } : null,
     })),
     promotionEnds: new Map([["promo-eid", new Date(Date.now() + 86_400_000 * 2).toISOString()]]),
-    metaobjects: new Map([["mo-stores", METAOBJECT_STORES]]),
+    objects: new Map([["oty_custom.stores", OBJECT_STORES]]),
   };
 }
 
@@ -307,10 +307,11 @@ const EVERY_SECTION: StorefrontSection[] = [
   section("banner", "banner-1", { layout: "two-up", heading: "Eid sale", text: BANGLA, mediaId: "m-banner", cta: { label: "Shop", href: "/sale" } }),
   section("banner", "banner-2", { layout: "two-up", heading: "", text: "", mediaId: "m-banner-2", cta: null }),
   { id: "story", type: "editorial", version: 1, settings: { layout: "image-with-text", heading: "Our story", body: BANGLA, mediaId: "m-story", imageSide: "end" } },
+  section("specifications", "specifications", { heading: "Specifications", rows: [{ label: "Fabric", value: "Cotton" }] }),
   section("faq", "faq", { heading: "", items: [{ question: "Do you deliver outside Dhaka?", answer: BANGLA }] }),
   section("utility-cards", "utility", { cards: [{ title: "Track order", text: "Where is my parcel", href: "/track-order" }, { title: "Stores", text: "", href: "/pages/stores" }] }),
   section("endless-grid", "endless", { title: "", pageSize: 24 }),
-  section("metaobjects", "meta", { heading: "", definitionId: "mo-stores", layout: "list", limit: 12 }),
+  section("objects", "meta", { heading: "", typeId: "oty_custom.stores", layout: "list", limit: 12 }),
   section("seo-text", "seo", { heading: "About us", body: "## Sarees in Bangladesh\nHandwoven.\n\nMore text." }),
   section("newsletter", "news", { heading: "", text: "", email: "optional", whatsapp: true }),
 ];
@@ -361,11 +362,11 @@ describe("homepage section library", () => {
   it("renders nothing for sections without data", async () => {
     const page = await render(EVERY_SECTION, EMPTY);
     // Only the merchant's own words remain: a banner with a heading (the
-    // photo-only one is gone), the story, the FAQ, the cards and the copy,
+    // photo-only one is gone), the story, Specifications, the FAQ, the cards and the copy,
     // plus the recently-viewed island, which ships hidden and fills itself
     // from the buyer's own browser, and the newsletter signup (no data).
     expect(Array.from(page.querySelectorAll("[data-home-section]")).map((node) => node.getAttribute("data-section-id")))
-      .toEqual(["recent", "banner-1", "story", "faq", "utility", "seo", "news"].sort((a, b) =>
+      .toEqual(["recent", "banner-1", "story", "specifications", "faq", "utility", "seo", "news"].sort((a, b) =>
         EVERY_SECTION.findIndex((each) => each.id === a) - EVERY_SECTION.findIndex((each) => each.id === b)));
     expect(page.querySelector("[data-recently-viewed]")!.hasAttribute("hidden")).toBe(true);
     // No placeholders: no product grid, no rail, no hero, no empty list.
@@ -700,6 +701,58 @@ describe("homepage section library", () => {
     expect(single.querySelector("h2")).not.toBeNull();
   });
 
+  it("renders Specifications from custom-field bindings with literal fallback", async () => {
+    const { resolveDocumentBindings } = await import("@scalius/shared/storefront-theme");
+    const source = { ...section("specifications", "specifications", { heading: "Specifications", rows: [
+      { label: "Fabric", value: "Unknown" },
+      { label: "Care", value: "Ask us" },
+      { label: "Private", value: "" },
+    ] }), bindings: { "rows.0.value": { source: "resource.cf.custom.fabric" }, "rows.1.value": { source: "resource.cf.custom.missing" } } };
+    const resolved = resolveDocumentBindings(source, { resource: { customFields: [{ namespace: "custom", key: "fabric", type: "single_line_text", value: "Cotton <script>unsafe</script>" }] }, language: "en" });
+    const page = await render([resolved], EMPTY);
+    const rows = [...page.querySelectorAll("dl > div")];
+    expect(rows.map((row) => text(row.querySelector("dt")))).toEqual(["Fabric", "Care"]);
+    expect(rows.map((row) => text(row.querySelector("dd")))).toEqual(["Cotton <script>unsafe</script>", "Ask us"]);
+    expect(page.querySelector("dl script")).toBeNull();
+  });
+
+  it("renders a product's public size chart object and falls back for unavailable references", async () => {
+    const specifications = section("specifications", "size-chart", {
+      heading: "Size chart", objectField: "custom.size_chart", rows: [{ label: "Fit", value: "Ask us" }],
+    });
+    const page = await render([specifications], { ...EMPTY, resourceFields: [{
+      namespace: "custom", key: "size_chart", type: "object_reference", value: "obr_size",
+      object: { handle: "shirt-size", fields: [
+        { key: "chest", name: "Chest", type: "single_line_text", value: "38 inches" },
+        { key: "care", name: "Care", type: "multi_line_text", value: "Wash <script>unsafe</script>" },
+        { key: "private", name: "Internal", type: "json", value: { internal: "hidden" } },
+      ] },
+    }] });
+    expect([...page.querySelectorAll("dl dt")].map(text)).toEqual(["Chest", "Care"]);
+    expect(text(page.querySelector("dl"))).toContain("38 inches");
+    expect(page.querySelector("dl script")).toBeNull();
+    expect(text(page.querySelector("dl"))).not.toContain("Ask us");
+    const missing = await render([specifications], EMPTY);
+    expect(text(missing.querySelector("dl"))).toContain("Ask us");
+    expect(homepageSectionRenders(section("specifications", "empty-chart", { objectField: "custom.size_chart", rows: [] }), EMPTY)).toBe(false);
+  });
+
+  it("renders restored core tile subtitles and deal/newsletter media, omitting missing images", async () => {
+    const sections = [
+      section("shop-by", "shop-by", { cards: [{ mediaId: "m-card-1", title: "Linen", subtitle: "Made for summer", href: "/linen" }] }),
+      section("deal-block", "sale", { title: "Sale", mediaId: "m-banner" }),
+      section("newsletter", "news", { heading: "News", mediaId: "m-story" }),
+    ];
+    const page = await render(sections, store("large"));
+    expect(text(page.querySelector('[data-home-section="shop-by"]'))).toContain("Made for summer");
+    expect(page.querySelector('[data-deal-block] .deal-image')).not.toBeNull();
+    expect(page.querySelector('[data-newsletter-section] img')).not.toBeNull();
+    const withoutMedia = await render(sections, { ...store("large"), media: new Map() });
+    expect(withoutMedia.querySelector('[data-deal-block] .deal-image')).toBeNull();
+    expect(withoutMedia.querySelector('[data-newsletter-section] img')).toBeNull();
+    expect(withoutMedia.querySelector('[data-newsletter-section] form')).not.toBeNull();
+  });
+
   it("draws shop-by cards and mosaic tiles only for photos that exist", async () => {
     const page = await render([
       EVERY_SECTION.find((each) => each.id === "shop-by")!,
@@ -733,8 +786,8 @@ describe("homepage section library", () => {
     expect(page.querySelector("script")!.textContent).toContain("localStorage");
   });
 
-  it("draws a metaobject type's entries by field type, escaped, in all three layouts", async () => {
-    const list = await render([section("metaobjects", "meta", { heading: "Visit us", definitionId: "mo-stores", layout: "list", limit: 12 })], store("large"));
+  it("draws a object type's entries by field type, escaped, in all three layouts", async () => {
+    const list = await render([section("objects", "meta", { heading: "Visit us", typeId: "oty_custom.stores", layout: "list", limit: 12 })], store("large"));
     const root = list.querySelector('[data-section-id="meta"]')!;
     expect(text(root.querySelector("h2"))).toBe("Visit us");
     expect(Array.from(root.querySelectorAll("h3")).map(text)).toEqual(["Dhanmondi showroom", BANGLA, "Online only"]);
@@ -763,13 +816,13 @@ describe("homepage section library", () => {
     // A photo that did not resolve, JSON and references are not shown.
     for (const name of ["Missing photo", "Raw", "Product"]) expect(rows.has(name), name).toBe(false);
 
-    const grid = await render([section("metaobjects", "meta", { heading: "", definitionId: "mo-stores", layout: "grid", limit: 12 })], store("large"));
+    const grid = await render([section("objects", "meta", { heading: "", typeId: "oty_custom.stores", layout: "grid", limit: 12 })], store("large"));
     expect(text(grid.querySelector("h2"))).toBe("Store locations"); // the type's name when the section has no heading
     expect(grid.querySelectorAll('[data-section-id="meta"] ul > li')).toHaveLength(3);
     // The card leads with its first single photo; the photo is not repeated as a row.
     expect(grid.querySelector('[data-section-id="meta"] li > img')!.getAttribute("alt")).toBe("Photo m-story");
 
-    const accordion = await render([section("metaobjects", "meta", { heading: "", definitionId: "mo-stores", layout: "accordion", limit: 12 })], store("large"));
+    const accordion = await render([section("objects", "meta", { heading: "", typeId: "oty_custom.stores", layout: "accordion", limit: 12 })], store("large"));
     expect(accordion.querySelectorAll("details")).toHaveLength(2);
     expect(text(accordion.querySelector("details summary"))).toBe("Dhanmondi showroom");
     // A question with one answer field shows the answer alone; an entry with nothing to open is a plain row.
@@ -779,15 +832,15 @@ describe("homepage section library", () => {
   });
 
   it("limits the entries and renders nothing for an unset, unknown or empty type", async () => {
-    const one = await render([section("metaobjects", "meta", { definitionId: "mo-stores", layout: "list", limit: 1 })], store("large"));
+    const one = await render([section("objects", "meta", { typeId: "oty_custom.stores", layout: "list", limit: 1 })], store("large"));
     expect(one.querySelectorAll('[data-section-id="meta"] h3')).toHaveLength(1);
-    for (const definitionId of ["", "mo-gone"]) {
-      const page = await render([section("metaobjects", "meta", { definitionId, layout: "list", limit: 12 })], store("large"));
-      expect(page.querySelector('[data-section-id="meta"]'), definitionId).toBeNull();
+    for (const typeId of ["", "mo-gone"]) {
+      const page = await render([section("objects", "meta", { typeId, layout: "list", limit: 12 })], store("large"));
+      expect(page.querySelector('[data-section-id="meta"]'), typeId).toBeNull();
     }
     const content = store("large");
-    const empty: HomepageContent = { ...content, metaobjects: new Map([["mo-stores", { id: "mo-stores", name: "Stores", entries: [] }]]) };
-    expect((await render([section("metaobjects", "meta", { definitionId: "mo-stores" })], empty)).querySelector('[data-section-id="meta"]')).toBeNull();
+    const empty: HomepageContent = { ...content, objects: new Map([["oty_custom.stores", { id: "oty_custom.stores", name: "Stores", entries: [] }]]) };
+    expect((await render([section("objects", "meta", { typeId: "oty_custom.stores" })], empty)).querySelector('[data-section-id="meta"]')).toBeNull();
   });
 
   it("maps each registry type to its own renderer", () => {

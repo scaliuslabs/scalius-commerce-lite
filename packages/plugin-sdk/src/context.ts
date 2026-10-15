@@ -5,7 +5,7 @@
 // bundled one (in-process, Workers Free). Part of the versioned plugin API.
 
 import type { EventTopic, EventsApiVersion } from "@scalius/shared/events";
-import type { PluginRenderContext, PluginSettingValue } from "@scalius/shared/plugins";
+import type { PluginSettingValue } from "@scalius/shared/plugins";
 
 /** Store facts every handler may read. */
 export interface PluginStoreInfo {
@@ -44,7 +44,7 @@ export interface PluginApi {
   call<T = unknown>(operationId: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
 }
 
-export interface PluginStorageQuery {
+export interface PluginObjectQuery {
   /** Equality on declared index fields. */
   where?: Record<string, string | number | boolean | null>;
   orderBy?: { field: string; direction?: "asc" | "desc" };
@@ -56,28 +56,31 @@ export interface PluginStorageQuery {
 export interface PluginRecordVersion<T extends Record<string, unknown> = Record<string, unknown>> {
   data: T;
   revision: number;
+  handle: string | null;
+  status: "active" | "draft" | "published";
 }
 
 /**
  * The revision a write requires: the one you read (the record is unchanged
  * since), or null (the record must not exist). A write that finds anything
- * else changes nothing and fails with `storage.conflict`.
+ * else changes nothing and fails with `object.conflict`.
  */
 export interface PluginWriteCondition {
   expectedRevision?: number | null;
 }
 
 /**
- * One app collection. Every write advances the record's revision; pass the
+ * One app object. Every write advances the record's revision; pass the
  * revision you read to write only if nobody wrote since (compare-and-set).
  */
-export interface PluginStorageCollection<T extends Record<string, unknown> = Record<string, unknown>> {
+export interface PluginObjectCollection<T extends Record<string, unknown> = Record<string, unknown>> {
   get(id: string): Promise<T | null>;
+  getByHandle(handle: string): Promise<(PluginRecordVersion<T> & { id: string }) | null>;
   /** The record and its revision, for a conditional write. */
   getVersion(id: string): Promise<PluginRecordVersion<T> | null>;
-  put(id: string, record: T, options?: PluginWriteCondition): Promise<{ revision: number }>;
+  put(id: string, record: T, options?: PluginWriteCondition & { handle?: string | null; status?: "active" | "draft" | "published" }): Promise<{ revision: number }>;
   /**
-   * Merges top-level fields into an existing record (`storage.not_found`
+   * Merges top-level fields into an existing record (`object.not_found`
    * otherwise). Without `expectedRevision` a concurrent write is re-read and
    * merged again, so no update is lost.
    */
@@ -85,29 +88,29 @@ export interface PluginStorageCollection<T extends Record<string, unknown> = Rec
   /**
    * Adds `delta` to a whole-number field (absent: 0; a missing record is
    * created), atomically. A result outside `min`/`max` changes nothing and
-   * fails with `storage.out_of_range`: a balance never goes below its floor,
+   * fails with `object.out_of_range`: a balance never goes below its floor,
    * however many debits race.
    */
   increment(id: string, field: string, delta: number, options?: { min?: number; max?: number }): Promise<{ value: number; revision: number }>;
   delete(id: string, options?: PluginWriteCondition): Promise<boolean>;
-  query(query?: PluginStorageQuery): Promise<{ records: Array<{ id: string; data: T }>; nextCursor: string | null }>;
-  count(where?: PluginStorageQuery["where"]): Promise<number>;
+  query(query?: PluginObjectQuery): Promise<{ records: Array<PluginRecordVersion<T> & { id: string }>; nextCursor: string | null }>;
+  count(where?: PluginObjectQuery["where"]): Promise<number>;
 }
 
-/** One write of an atomic `ctx.storage.batch`; `check` writes nothing and only adds its condition. */
-export type PluginStorageOperation =
-  | { op: "put"; collection: string; id: string; record: Record<string, unknown>; expectedRevision?: number | null }
-  | { op: "delete"; collection: string; id: string; expectedRevision?: number | null }
-  | { op: "check"; collection: string; id: string; expectedRevision: number | null };
+/** One write of an atomic `ctx.objects.batch`; `check` writes nothing and only adds its condition. */
+export type PluginObjectOperation =
+  | { op: "put"; object: string; id: string; record: Record<string, unknown>; expectedRevision?: number | null; handle?: string | null; status?: "active" | "draft" | "published" }
+  | { op: "delete"; object: string; id: string; expectedRevision?: number | null }
+  | { op: "check"; object: string; id: string; expectedRevision: number | null };
 
 /**
- * The app's declared collections by name (`ctx.storage.points`), and
- * `batch`: up to 25 puts, deletes and checks across collections, written
+ * The app's declared objects by name (`ctx.objects.points`), and
+ * `batch`: up to 25 puts, deletes and checks across objects, written
  * all-or-nothing in one database batch. Any failed condition aborts it with
- * `storage.conflict` (`error.details.index` is not exposed; re-read and retry).
+ * `object.conflict` (`error.details.index` is not exposed; re-read and retry).
  */
-export type PluginStorage = Record<string, PluginStorageCollection> & {
-  batch(operations: PluginStorageOperation[]): Promise<{ revisions: Array<number | null> }>;
+export type PluginObjects = Record<string, PluginObjectCollection> & {
+  batch(operations: PluginObjectOperation[]): Promise<{ revisions: Array<number | null> }>;
 };
 
 export interface PluginKv {
@@ -200,7 +203,7 @@ export interface PluginContext {
    */
   features: readonly string[];
   api: PluginApi;
-  storage: PluginStorage;
+  objects: PluginObjects;
   kv: PluginKv;
   http: PluginHttp;
   customFields: PluginCustomFields;
@@ -263,17 +266,6 @@ export interface PluginRouteRequest {
   rawBody: string | null;
   /** Admin routes: the staff member's id. */
   staffId: string | null;
-  /**
-   * Public routes asked to draw a checkout or account block: what to
-   * draw. Answer `{ body: { html } }`.
-   * The platform sanitizes the HTML and caches it until the app's settings,
-   * version or a collection the block declares in `reads` change, so the
-   * answer must depend only on those and this context: while rendering, the
-   * app may read its settings and those collections; `ctx.api`, `ctx.http`,
-   * `ctx.kv`, custom fields, messaging and every write are refused. Never
-   * per-buyer: there is no customer here. Null on every other request.
-   */
-  render?: PluginRenderContext | null;
   /**
    * Public routes reached through the storefront proxy (`/apps/<id>/...`):
    * the signed-in customer's id, resolved by the platform from the store's

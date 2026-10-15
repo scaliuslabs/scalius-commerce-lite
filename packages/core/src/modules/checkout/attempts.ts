@@ -439,6 +439,7 @@ function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<str
     zone: input.zone ?? null,
     area: input.area ?? null,
     notes: input.notes ?? null,
+    ...(Object.keys(input.attributes ?? {}).length ? { attributes: Object.entries(input.attributes!).sort(([a], [b]) => a.localeCompare(b)) } : {}),
     items: input.items.map((item) => ({
       productId: item.productId,
       variantId: item.variantId,

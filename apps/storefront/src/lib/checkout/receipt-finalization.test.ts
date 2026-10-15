@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
+import { readBuyerAttributes, writeBuyerAttribute } from "@/lib/buyer-ui/state";
 
 import {
   addToCart,
@@ -139,6 +140,7 @@ describe("finalizeCheckoutReceipt", () => {
     rememberSubmittedCart(submitted);
     sessionStorage.setItem("checkoutId", "chk_session_a");
     writeCheckoutFormDraft({ customerName: "Buyer", notes: "Call first" });
+    writeBuyerAttribute("test.gift.message", "Ordered gift");
     // The second tab adds a cap after this tab submitted the tee.
     await addToCart({ id: "cap", variantId: "cap_1", name: "Cap", price: 200 });
 
@@ -146,6 +148,7 @@ describe("finalizeCheckoutReceipt", () => {
 
     expect(Object.keys(cartStore.get().items)).toEqual([createCartItemKey({ id: "cap", variantId: "cap_1" })]);
     expect(readCheckoutFormDraft()).toBeNull();
+    expect(readBuyerAttributes()).toEqual({});
     expect(readLastPlacedOrderId()).toBe("ORDER1");
   });
 
@@ -217,6 +220,7 @@ describe("finalizeCheckoutReceipt", () => {
     await addToCart({ id: "cap", variantId: "cap_1", name: "Cap", price: 200 });
     sessionStorage.setItem("checkoutId", "chk_session_a");
     writeCheckoutFormDraft({ customerName: "Buyer", notes: "New checkout draft" });
+    writeBuyerAttribute("test.gift.message", "New gift");
     writeHostedPaymentRecoverySession("/order-success?orderId=ORDER1", { checkoutId: "chk_session_a" }, "cod");
 
     await finalizeCheckoutReceipt(receipt("ORDER1", "chk_session_a", "cartfp_unmatched"));
@@ -225,6 +229,7 @@ describe("finalizeCheckoutReceipt", () => {
     expect(sessionStorage.getItem("checkoutId")).toBeNull();
     expect(readHostedPaymentRecoverySession()).toBeNull();
     expect(readCheckoutFormDraft()).toEqual({ customerName: "Buyer", notes: "New checkout draft" });
+    expect(readBuyerAttributes()).toEqual({ "test.gift.message": "New gift" });
   });
 
   it.each([

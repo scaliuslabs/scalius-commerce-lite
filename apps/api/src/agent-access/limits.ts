@@ -1,3 +1,4 @@
+import { objectOperationResponseLimit } from "../openapi/operation-registry/dashboard-objects";
 import { isWithinRateLimit } from "../utils/rate-limit";
 
 export const AGENT_MAX_REQUEST_BODY_BYTES = 1024 * 1024;
@@ -27,9 +28,9 @@ export function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
-export function clampAgentResultBytes(requested: number): number {
+export function clampAgentResultBytes(requested: number, operationId?: string): number {
   if (!Number.isFinite(requested) || requested <= 0) return AGENT_MAX_RESULT_BYTES;
-  return Math.min(Math.floor(requested), AGENT_MAX_RESULT_BYTES);
+  return Math.min(Math.floor(requested), objectOperationResponseLimit(operationId));
 }
 
 export async function bufferBoundedAgentRequest(

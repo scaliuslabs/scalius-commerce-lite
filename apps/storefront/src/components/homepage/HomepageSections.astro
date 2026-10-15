@@ -15,6 +15,8 @@
 // from its projection, and through its core component whenever the skin
 // cannot (SectionSkin.astro).
 import type { StorefrontSection } from "@scalius/shared/storefront-theme";
+import { resolveDocumentBindings, storefrontSectionSchema } from "@scalius/shared/storefront-theme";
+import { bindingResourceMedia } from "@/lib/setting-bindings";
 import {
   dealEndsAt,
   homepageAppSurface,
@@ -24,7 +26,7 @@ import {
   homepageCollectionsFallback,
   homepageHero,
   homepageMedia,
-  homepageMetaobject,
+  homepageObject,
   homepageMosaicTiles,
   homepagePhoneSections,
   homepageRenderUnits,
@@ -44,7 +46,9 @@ import Lookbook from "./Lookbook.astro";
 import BannerRow from "./BannerRow.astro";
 import EditorialSection from "./EditorialSection.astro";
 import FaqSection from "./FaqSection.astro";
-import MetaobjectsSection from "./MetaobjectsSection.astro";
+import SpecificationsSection from "./SpecificationsSection.astro";
+import { coreSectionSkinData } from "@/lib/extensions/data";
+import ObjectsSection from "./ObjectsSection.astro";
 import UtilityCards from "./UtilityCards.astro";
 import EndlessGrid from "./EndlessGrid.astro";
 import SeoText from "./SeoText.astro";
@@ -79,12 +83,17 @@ interface Props {
   languageCode?: string | null;
 }
 
-const { sections, content: stored, leadSectionId, headerLeadSectionId = null, currencySymbol, currencyCode, previewMarks = false, region = "page", only, languageCode } = Astro.props;
+const { sections: storedSections, content: stored, leadSectionId, headerLeadSectionId = null, currencySymbol, currencyCode, previewMarks = false, region = "page", only, languageCode } = Astro.props;
 const language = newsletterLanguage(languageCode);
 // The storefront's own words (default titles, "View more") follow the request's language.
-const { language: storeLanguage } = await currentRequestTheme(Astro.locals);
+const { language: storeLanguage, bindingContext } = await currentRequestTheme(Astro.locals);
+const sourceContext = { ...bindingContext, objects: stored.bindingObjects ?? bindingContext.objects, mediaIds: new Set(stored.media.keys()) };
+const sections = storedSections.map((section) => {
+  const bound = storefrontSectionSchema.safeParse(resolveDocumentBindings(section, sourceContext, storefrontSectionSchema));
+  return bound.success ? bound.data : section;
+});
 const copy = storefrontCopy(storeLanguage).home;
-const content: HomepageContent = { ...stored, language: storeLanguage };
+const content: HomepageContent = { ...stored, resourceFields: sourceContext.resource?.customFields ?? stored.resourceFields, language: storeLanguage, media: new Map([...stored.media, ...bindingResourceMedia(sourceContext.resource).map((asset) => [asset.id, asset] as const)]) };
 const units = homepageRenderUnits(sections, content);
 const phoneSections = homepagePhoneSections(sections, content);
 const phoneHeroAfterCategories = phoneSections !== sections;
@@ -128,7 +137,7 @@ const root = only
     const lead = section.id === leadSectionId;
     const list = homepageSectionProducts(section, content);
     const appSurface = homepageAppSurface(section, content);
-    const metaobject = homepageMetaobject(section, content);
+    const object = homepageObject(section, content);
     const headingId = `home-${section.id}-title`;
     return (
       <div {...wrapper} data-home-section={section.type} data-section-id={section.id} data-theme-section-id={marks ? section.id : undefined}>
@@ -193,6 +202,7 @@ const root = only
             products={list.products}
             aboveFold={lead}
             endsAt={dealEndsAt(section, content)}
+            photo={homepageMedia(content, section.settings.mediaId)}
             {...money}
           />
         )}
@@ -244,8 +254,10 @@ const root = only
 
         {section.type === "faq" && <FaqSection previewMarks={marks} section={section} />}
 
-        {section.type === "metaobjects" && metaobject && (
-          <MetaobjectsSection section={section} metaobject={metaobject} media={content.media} {...money} {language} />
+        {section.type === "specifications" && <SpecificationsSection sectionId={section.id} data={coreSectionSkinData(section, content, { ...money, ratings: false })} />}
+
+        {section.type === "objects" && object && (
+          <ObjectsSection section={section} object={object} media={content.media} {...money} {language} />
         )}
 
         {section.type === "utility-cards" && <UtilityCards section={section} />}
@@ -256,9 +268,9 @@ const root = only
 
         {section.type === "seo-text" && <SeoText section={section} />}
 
-        {section.type === "newsletter" && <NewsletterSection section={section} language={language} />}
+        {section.type === "newsletter" && <NewsletterSection section={section} language={language} photo={homepageMedia(content, section.settings.mediaId)} aboveFold={lead} />}
 
-        {section.type === "app" && appSurface && <AppSection section={section} surface={appSurface} headerLead={section.id === headerLeadSectionId} />}
+        {section.type === "app" && appSurface && <AppSection section={section} surface={appSurface} sourceMedia={[...content.media.values()]} headerLead={section.id === headerLeadSectionId} />}
         </SectionSkin>
       </div>
     );

@@ -4,6 +4,7 @@ import {
   type DeliveryMethodKind,
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
+import { buyerUiBlockSchema, checkoutAttributesSchema, type BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
 import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
 import { GIFT_CARD_HANDLE_PATTERN, MAX_GIFT_CARDS_PER_ORDER } from "./gift-cards";
 
@@ -47,6 +48,7 @@ export interface TaxQuoteRequestItem {
 }
 
 export interface TaxQuoteRequest {
+  attributes?: Record<string, string>;
   items: TaxQuoteRequestItem[];
   inventoryPool?: TaxQuoteInventoryPool;
   /** Delivery only; pickup and carts with nothing physical send no address. */
@@ -70,6 +72,8 @@ export interface TaxQuoteRequest {
   billingPostalCode?: string;
   /** A delivery or pickup rate; absent when nothing is physical. */
   shippingMethodId?: string;
+  shippingRateToken?: string;
+  cod?: boolean;
   discountCodes: string[];
   customerPhone?: string;
   /** Applied gift cards by apply handle (never a code); absent without cards. */
@@ -244,6 +248,7 @@ export interface CheckoutGiftCardQuoteFacts {
 }
 
 export interface CheckoutTaxQuote extends CheckoutDiscountFacts, CheckoutGiftCardQuoteFacts {
+  buyerUi?: BuyerUiBlock[];
   valid: true;
   quoteFingerprint: string;
   displayLabel: string;
@@ -264,6 +269,7 @@ export interface CheckoutTaxQuote extends CheckoutDiscountFacts, CheckoutGiftCar
   totalAmount: number;
   /** Null when the cart has nothing physical (no delivery method, no fee). */
   shippingMethod: TaxQuoteShippingMethod | null;
+  shippingRateToken?: string | null;
   deliveryMethodKind: DeliveryMethodKind | null;
   /** Some line ships: the order needs the delivery address. */
   requiresShipping: boolean;
@@ -417,6 +423,17 @@ function parseRequestItem(value: unknown): TaxQuoteRequestItem {
   };
 }
 
+/** Buyer fields travel only in bodies; form handoffs serialize the same bounded map. */
+export function parseCheckoutAttributes(value: unknown): Record<string, string> | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { fail(); }
+  }
+  const parsed = checkoutAttributesSchema.safeParse(value);
+  if (!parsed.success) fail();
+  return Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
+}
+
 export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
   if (!isRecord(value) || !Array.isArray(value.items)) fail();
   if (value.items.length === 0 || value.items.length > TAX_QUOTE_MAX_ITEMS) fail();
@@ -437,6 +454,8 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
   if (Boolean(city) !== Boolean(zone)) fail();
   const area = city ? optionalString(value.area, MAX_LOCATION_LENGTH) : undefined;
   const shippingMethodId = optionalString(value.shippingMethodId, MAX_ID_LENGTH);
+  const shippingRateToken = optionalString(value.shippingRateToken, 2048);
+  if (value.cod !== undefined && typeof value.cod !== "boolean") fail();
   if (city && !shippingMethodId) fail();
   // Another country's delivery: its country, admin area and postal code, never Bangladesh's ids.
   const country = optionalString(value.shippingCountryCode, 2)?.toUpperCase();
@@ -456,6 +475,7 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
   const customerPhone = optionalString(value.customerPhone, MAX_PHONE_LENGTH);
   if (customerPhone && customerPhone.length < 7) fail();
   const giftCards = parseRequestGiftCards(value.giftCards);
+  const attributes = parseCheckoutAttributes(value.attributes);
 
   return {
     items: value.items.map(parseRequestItem),
@@ -469,9 +489,12 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
     ...(billingAdminArea ? { billingAdminArea } : {}),
     ...(billingPostalCode ? { billingPostalCode } : {}),
     ...(shippingMethodId ? { shippingMethodId } : {}),
+    ...(shippingRateToken ? { shippingRateToken } : {}),
+    ...(value.cod === undefined ? {} : { cod: value.cod as boolean }),
     discountCodes: [...new Set(discountCodes)],
     ...(customerPhone ? { customerPhone } : {}),
     ...(giftCards ? { giftCards } : {}),
+    ...(attributes ? { attributes } : {}),
   };
 }
 
@@ -646,10 +669,12 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     return sum + lineSubtotalMinor;
   }, 0);
   if (itemSubtotalMinor !== subtotalMinor) fail();
+  const buyerUi = buyerUiBlockSchema.array().max(40).safeParse(data.buyerUi);
 
   return {
     valid: true,
     quoteFingerprint,
+    ...(buyerUi.success ? { buyerUi: buyerUi.data } : {}),
     displayLabel,
     pricesIncludeTax: data.pricesIncludeTax,
     shippingTaxed: data.shippingTaxed,
@@ -667,6 +692,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     totalMinor,
     totalAmount,
     shippingMethod,
+    ...(data.shippingRateToken == null ? {} : { shippingRateToken: requiredString(data.shippingRateToken, 2048) }),
     deliveryMethodKind,
     requiresShipping,
     pickup,

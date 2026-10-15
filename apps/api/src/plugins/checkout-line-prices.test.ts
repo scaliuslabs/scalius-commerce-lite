@@ -1,3 +1,5 @@
+import { putObjectRecord } from "@scalius/core/modules/objects";
+import { objectTypeDeclarationSchema } from "@scalius/shared/plugins/objects";
 // `cart.line_prices` end to end on the real migrated schema: an app's unit
 // price takes the app place in resolvePrice() (below every list, above FX and
 // base), the buyer's submitted price is checked against the final price,
@@ -14,7 +16,6 @@ import {
   installPlugin,
   listActiveFunctionRegistrations,
   listPluginLogs,
-  putPluginRecord,
 } from "@scalius/core/modules/plugins";
 import {
   buildCheckoutAttemptIdentity,
@@ -36,6 +37,7 @@ import type { PluginLoader } from "./loaders/types";
 import { createCheckoutAppFunctions } from "./checkout-functions";
 import { pluginTestCtx, pluginTestEnv } from "./testing/fixtures";
 
+const contracts = objectTypeDeclarationSchema.parse({ name: "Contracts", fields: [{ key: "skus", name: "SKU prices", type: "json" }] });
 const ok = (value: unknown): PluginInvocationResult => ({ ok: true, value, error: null, logs: [], droppedLogs: 0 });
 const failed = (message: string): PluginInvocationResult => ({ ok: false, value: null, error: { code: null, message }, logs: [], droppedLogs: 0 });
 
@@ -99,9 +101,9 @@ describe("cart.line_prices (real schema, test apps)", () => {
         point: "cart.line_prices",
         priority: options.priority ?? 100,
         onError: options.onError ?? "skip",
-        ...(options.snapshot ? { snapshot: { collection: options.snapshot } } : {}),
+        ...(options.snapshot ? { snapshot: { object: options.snapshot } } : {}),
       }],
-      ...(options.snapshot ? { storage: { [options.snapshot]: {} } } : {}),
+      ...(options.snapshot ? { objects: { [options.snapshot]: contracts } } : {}),
       limits: { cpuMs: 50, wallMs: 100 },
     };
     await installPlugin(db, { manifest, source: "upload", bundleSha256: "4".repeat(64), actorUserId: "owner" });
@@ -246,7 +248,7 @@ describe("cart.line_prices (real schema, test apps)", () => {
 
   it("prices a signed-in buyer from their contract record (snapshot)", async () => {
     await installPricer("acme.b2b", { snapshot: "contracts" });
-    await putPluginRecord(db, "acme.b2b", "contracts", { indexes: [], unique: [] }, "cus_b2b", { skus: { "MUG-1": 21_000 } });
+    await putObjectRecord(db, "acme.b2b", "contracts", contracts, "cus_b2b", { skus: { "MUG-1": 21_000 } });
     answers["acme.b2b"] = (fn) => {
       const snapshot = fn.snapshot as { data: { skus: Record<string, number> } } | null;
       const cart = fn.cart as { lines: Array<{ lineId: string; sku: string | null }> };

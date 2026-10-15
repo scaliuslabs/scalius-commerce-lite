@@ -43,6 +43,7 @@ export * from "./storefront-sections";
 export * from "./cards";
 export * from "./public-sku-cards";
 export * from "./card-facts";
+export * from "./card-fields";
 export * from "./home-lists";
 export { planHomeBrands, type HomeBrand } from "./home-brands";
 export * from "./recommendation-refresh";

@@ -6,9 +6,6 @@
 // Every edit is a plain POST handled here (Post/Redirect/Get), so it works
 // without JavaScript; with it, the thana and area lists follow the city and
 // another country's fields follow its rules. Only an outcome flag enters a URL.
-import AppBlocks from "@/components/apps/AppBlocks.astro";
-import { getAppBlocks } from "@/lib/api/app-blocks";
-import { layoutHasAppBlocks } from "@/lib/app-surfaces";
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import AccountDialog from "@/components/account/AccountDialog.astro";
@@ -150,8 +147,6 @@ const [layoutData, read, summary, marketingRead, addressesRead] = await Promise.
   readAccountMarketing(Astro.request),
   readAccountAddresses(Astro.request),
 ]);
-// Apps' account blocks: read only when the layout says an active app draws one.
-const appBlocks = layoutHasAppBlocks(layoutData, "account") ? await getAppBlocks("account") : [];
 // News and offers speaks the store's language (the rest of the account is English today).
 const marketingLanguage = newsletterLanguage(layoutData?.storefrontCopy?.languageCode);
 const marketingCopy = newsletterCopy(marketingLanguage).account;
@@ -417,7 +412,7 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
         )}
       </div>
     )}
-    <AppBlocks blocks={appBlocks} target="customer-account.profile.block.render" class="mt-8" />
+    <div data-buyer-ui-target="customer-account.profile.block.render" data-buyer-ui={JSON.stringify(summary?.buyerUi ?? [])} class="mt-8 empty:hidden"></div>
   </AccountShell>
 </Layout>
 
@@ -425,6 +420,9 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
   import { getAreas, getZones } from "@/lib/api/shipping";
   import { enhanceLocationSelects } from "@/lib/checkout/location-select";
   import { enhanceShippingCountry } from "@/lib/checkout/country-address";
+  import { enhanceBuyerUi } from "@/lib/buyer-ui";
+
+  enhanceBuyerUi();
 
   // The same search-or-scroll pickers as checkout; without JavaScript the
   // server answers "choose a thana" with the new city's list. Another

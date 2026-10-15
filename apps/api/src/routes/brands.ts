@@ -24,7 +24,7 @@ import {
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
-import { storefrontCustomFieldsSchema } from "../schemas/custom-fields";
+import { storefrontCustomFieldsSchema, storefrontCardFieldsSchema } from "../schemas/custom-fields";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -117,6 +117,7 @@ const brandProductSchema = z.object({
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
   cardFacts: optionalProductCardFacts,
+  fields: storefrontCardFieldsSchema.optional(),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
   rating: cardRatingSchema,
@@ -272,7 +273,8 @@ app.openapi(getBrandProductsRoute, async (c) => {
   if (params.hasDiscount !== undefined) appliedFilters.hasDiscount = params.hasDiscount;
   if (params.inStock !== undefined) appliedFilters.inStock = params.inStock;
 
-  return ok(c, {
+  // The HTTP schema keeps custom JSON opaque instead of recursively expanding the codec type.
+  const response: z.infer<typeof getBrandProductsRoute.responses[200]["content"]["application/json"]["schema"]>["data"] = {
     brand,
     products: result.products,
     pagination: result.pagination,
@@ -281,7 +283,8 @@ app.openapi(getBrandProductsRoute, async (c) => {
     facets: result.facets,
     ratingFacet: result.ratingFacet,
     appliedFilters,
-  });
+  };
+  return ok(c, response);
 });
 
 export { app as brandRoutes };

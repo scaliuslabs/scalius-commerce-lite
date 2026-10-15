@@ -1,3 +1,6 @@
+import type { StorefrontObjectLoader } from "@scalius/core/modules/objects";
+import type { BindingResource } from "@scalius/shared/storefront-theme/bindings";
+import { parseBindingResourceSelector } from "@scalius/shared/storefront-theme/bindings";
 // src/server/routes/storefront.ts
 // Storefront API — thin HTTP layer.
 // All query logic lives in src/modules/storefront/storefront.service.ts.
@@ -13,20 +16,13 @@ import {
   getTemplateSectionsData,
   getPageRenderData,
   readAppComponentData,
-  readPluginBlockContext,
   readThemeBrandAssets,
   type AppComponentPlacement,
   type HomepageAppSection,
 } from "@scalius/core/modules/storefront";
 import { activePluginInstallationsFromRows, selectActivePluginInstallations } from "@scalius/core/modules/plugins";
 import type { MarketPricing } from "@scalius/core/modules/price-lists";
-import {
-  PLUGIN_BLOCK_PAGES,
-  PLUGIN_BLOCK_TARGETS,
-  PLUGIN_HOME_SECTIONS_MAX,
-  PLUGIN_PAGE_BLOCKS_MAX,
-  pluginSurfaceKey,
-} from "@scalius/shared/plugins";
+import { PLUGIN_HOME_SECTIONS_MAX } from "@scalius/shared/plugins";
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings";
 import { CATEGORY_NAVIGATION_LAYOUT_NODES } from "@scalius/core/modules/navigation";
 import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
@@ -78,7 +74,7 @@ import { assertOnlyPresenceQuery, publicMarketPresence, publicMarketPricing, pub
 import { readMarketMatrix } from "@scalius/core/modules/markets";
 import { startMarketPricing } from "@scalius/core/modules/price-lists";
 import { MARKET_SUBFOLDER_PATTERN } from "@scalius/shared/markets";
-import { publicPageDetailSchema } from "../schemas/custom-fields";
+import { publicPageDetailSchema, storefrontCardFieldsSchema } from "../schemas/custom-fields";
 import { storeTimeZoneOf } from "../utils/store-time-zone";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -105,6 +101,7 @@ const storefrontProductCardSchema = z.object({
     description: "Published-review average and count; null without a published review.",
   }),
   cardFacts: optionalProductCardFacts,
+  fields: storefrontCardFieldsSchema.optional(),
 });
 const storefrontCategoryCardSchema = z.object({
   id: z.string(),
@@ -164,7 +161,12 @@ const homepagePromotionSchema = z.object({
  * category tiles' categories, the collections sections' collections, the
  * brand wall's brands, the deal promotions and a product homepage's product.
  */
+const publicObjectDataSchema = z.object({
+  records: z.array(z.object({ id: z.string(), handle: z.string().nullable(), data: z.record(z.string(), z.unknown()) })).max(24),
+  fields: z.record(z.string(), z.string()),
+});
 const homepageSectionsSchema = z.object({
+  bindingObjects: z.record(z.string(), publicObjectDataSchema).optional(),
   lists: z.array(homepageProductListSchema).max(HOME_MAX_PRODUCT_LISTS),
   media: z.array(homepageMediaSchema).max(HOME_MAX_MEDIA),
   brands: z.array(homepageBrandSchema).max(HOME_BRAND_LIMIT),
@@ -198,13 +200,14 @@ const homepageSectionsSchema = z.object({
       values: z.record(z.string(), z.unknown()),
       media: z.array(z.object({ id: z.string(), url: z.string(), alt: z.string(), width: z.number().nullable(), height: z.number().nullable() })),
       lists: z.array(z.object({ source: z.string(), products: z.array(z.unknown()) })),
+      objects: z.record(z.string(), publicObjectDataSchema).optional(),
     }).openapi({
       description: "A component section: the storefront draws it at the edge with the app's storefront module, from these resolved values, images and product cards.",
     }),
   })).max(PLUGIN_HOME_SECTIONS_MAX).openapi({
     description: "The app sections to show, by section id, each a component section's data. An app section missing here renders nothing.",
   }),
-  metaobjects: z.array(z.object({
+  objects: z.array(z.object({
     id: z.string(),
     name: z.string(),
     entries: z.array(z.object({
@@ -218,7 +221,7 @@ const homepageSectionsSchema = z.object({
       })),
     })),
   })).optional().openapi({
-    description: "The Metaobjects sections' content types (only those with storefront access) and their published entries, by definition id.",
+    description: "The Objects sections' content types (only those with storefront access) and their published entries, by definition id.",
   }),
 }).openapi("StorefrontHomepageSections");
 const homepageDataSchema = z.object({
@@ -416,9 +419,6 @@ const layoutDataSchema = z.object({
   })).openapi({
     description: "Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections, component product blocks and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
   }),
-  appBlockPages: z.array(z.enum(PLUGIN_BLOCK_PAGES)).openapi({
-    description: "The page groups where an active app draws a checkout or customer-account block. Only these pages read /storefront/app-blocks/{page}.",
-  }),
   appServices: z.object({
     search: z.string().nullable().openapi({ description: "The search app predictive search passes as `provider` to /search; null: built-in search." }),
     address: z.object({
@@ -458,7 +458,7 @@ const homepageRoute = createRoute({
  * from one read of the apps.
  */
 function homeAppRenderer(c: Context<{ Bindings: Env }>) {
-  return async (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null }) => {
+  return async (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null; cardFields: string[]; loadObjects: StorefrontObjectLoader; resource?: BindingResource }) => {
     const db = c.get("db");
     // The active apps among these (`plg:<id>` each: an app that starts, stops or drops a type changes the answer).
     const installations = activePluginInstallationsFromRows(await selectActivePluginInstallations(db, [...new Set(requests.map((request) => request.pluginId))]));
@@ -469,22 +469,14 @@ function homeAppRenderer(c: Context<{ Bindings: Env }>) {
       if (!installation || !section) continue;
       // Drawn at the edge only while the approved grant covers storefront code.
       if (installation.grant?.storefrontCode === true) {
-        components.push({ sectionId: request.sectionId, pluginId: request.pluginId, type: request.type, schema: section.settings, values: request.values });
+        components.push({ sectionId: request.sectionId, pluginId: request.pluginId, type: request.type, schema: section.settings, values: request.values, reads: section.reads, bindings: request.bindings, resource: page.resource });
       }
     }
-    const data = await readAppComponentData(db, components, page.pricing);
+    const data = await readAppComponentData(db, components, page.pricing, page.cardFields, page.loadObjects);
     const bySection = new Map<string, HomepageAppSection>(data.map((each) => [each.sectionId, each] as const));
     // Document order.
     return requests.flatMap((request) => bySection.get(request.sectionId) ?? []);
   };
-}
-
-function executionContextOf(c: Context<{ Bindings: Env }>): ExecutionContext {
-  try {
-    return c.executionCtx as unknown as ExecutionContext;
-  } catch {
-    return { waitUntil: () => undefined, passThroughOnException: () => undefined, props: {}, exports: {} } as unknown as ExecutionContext;
-  }
 }
 
 app.openapi(homepageRoute, async (c) => {
@@ -525,7 +517,10 @@ app.openapi(landingPageRoute, async (c) => {
   assertOnlyPresenceQuery(c.req.url, "The landing page read takes no query parameters");
   const data = await getLandingPageData(c.get("db"), c.req.valid("param").slug, { renderApps: homeAppRenderer(c), pricing: publicMarketPricing(c) });
   if (!data) throw new NotFoundError("Landing page not found");
-  return ok(c, { title: data.landing.title, description: data.landing.description, sections: data.sections });
+  const response: z.infer<typeof landingPageRoute.responses[200]["content"]["application/json"]["schema"]>["data"] = {
+    title: data.landing.title, description: data.landing.description, sections: data.sections,
+  };
+  return ok(c, response);
 });
 
 // GET /storefront/template/:kind — a page template's sections' data (the
@@ -538,8 +533,8 @@ const templateSectionsRoute = createRoute({
   tags: ["Storefront"],
   summary: "Get what a page template's sections show",
   description:
-    "The published theme's sections around the fixed part of every product, collection, cart or CMS page: their product lists, images and the rest, like a landing page's. Takes only the page's market presence; a template without sections answers empty sections.",
-  request: { params: z.object({ kind: z.enum(STOREFRONT_PAGE_TEMPLATES) }), query: marketPresenceQuerySchema },
+    "The published theme's sections around a page's fixed content. Accepts its market presence and an optional public resource selector for dynamic bindings; a template without sections answers empty sections.",
+  request: { params: z.object({ kind: z.enum(STOREFRONT_PAGE_TEMPLATES) }), query: marketPresenceQuerySchema.extend({ resource: z.string().refine((value) => Boolean(parseBindingResourceSelector(value)), "Use a public resource type and id.").optional() }).strict() },
   responses: {
     200: {
       description: "The template's section data",
@@ -550,9 +545,9 @@ const templateSectionsRoute = createRoute({
   },
 });
 app.openapi(templateSectionsRoute, async (c) => {
-  assertOnlyPresenceQuery(c.req.url, "The template read takes no query parameters");
-  const sections = await getTemplateSectionsData(c.get("db"), c.req.valid("param").kind, { renderApps: homeAppRenderer(c), pricing: publicMarketPricing(c) });
-  return ok(c, { sections });
+  const sections = await getTemplateSectionsData(c.get("db"), c.req.valid("param").kind, { renderApps: homeAppRenderer(c), pricing: publicMarketPricing(c), resource: parseBindingResourceSelector(c.req.valid("query").resource) });
+  const response: z.infer<typeof templateSectionsRoute.responses[200]["content"]["application/json"]["schema"]>["data"] = { sections };
+  return ok(c, response);
 });
 
 // GET /storefront/extensions/:pluginId/:release?path= — an app's storefront file
@@ -602,49 +597,6 @@ app.openapi(extensionFileRoute, async (c) => {
       ...(file.contentType === "image/svg+xml" ? { "Content-Security-Policy": "sandbox" } : {}),
     },
   }) as never;
-});
-
-// GET /storefront/app-blocks/:page — the checkout or customer-account app blocks
-const appBlocksRoute = createRoute({
-  method: "get",
-  path: "/app-blocks/{page}",
-  operationId: "storefront.app_blocks.get",
-  tags: ["Storefront"],
-  summary: "Get the app blocks a checkout, order or account page shows",
-  description:
-    "Every active app's blocks for one page group (checkout, order, account), drawn by the app at its Shopify-style extension target: sanitized HTML with no scripts, the same for every buyer. Read it only when the layout's appBlockPages lists the page. Takes no query; cached under dependency validation (each app's installation and declared storage), so a cached answer runs no app code.",
-  request: { params: z.object({ page: z.enum(PLUGIN_BLOCK_PAGES) }) },
-  responses: {
-    200: {
-      description: "The drawn blocks, in app id then manifest order",
-      content: { "application/json": { schema: successEnvelope(z.object({
-        blocks: z.array(z.object({
-          id: z.string().openapi({ description: "<app id>/<block type>" }),
-          app: z.string(),
-          target: z.enum(PLUGIN_BLOCK_TARGETS),
-          html: z.string().openapi({ description: "Sanitized HTML. Checkout blocks hold no forms." }),
-        })).max(PLUGIN_PAGE_BLOCKS_MAX),
-      })) } },
-    },
-    400: errorResponses[400],
-    500: errorResponses[500],
-  },
-});
-app.openapi(appBlocksRoute, async (c) => {
-  if (new URL(c.req.url).search) throw new ValidationError("The app blocks read takes no query parameters");
-  const db = c.get("db");
-  const context = await readPluginBlockContext(db, c.req.valid("param").page);
-  if (context.requests.length === 0) return ok(c, { blocks: [] });
-  const { renderAppBlocks } = await import("../plugins/storefront-render");
-  const drawn = await renderAppBlocks(context.requests, {
-    env: c.env,
-    ctx: executionContextOf(c),
-    db,
-    context: { installations: context.installations, store: context.store },
-  });
-  return ok(c, {
-    blocks: drawn.map((each) => ({ id: pluginSurfaceKey(each.pluginId, each.type), app: each.pluginId, target: each.target, html: each.html })),
-  });
 });
 
 // GET /storefront/pages/slug/:slug — consolidated CMS page render data
@@ -932,6 +884,7 @@ const themePreviewHomepageRoute = createRoute({
             sections: storefrontSectionListApiSchema.optional(),
             /** The previewed market presence (`en-in`); none: the root. */
             presence: z.string().regex(MARKET_SUBFOLDER_PATTERN).optional(),
+            resource: z.string().refine((value) => Boolean(parseBindingResourceSelector(value)), "Use a public resource type and id.").optional(),
           }).strict(),
         },
       },
@@ -953,7 +906,7 @@ app.openapi(themePreviewHomepageRoute, async (c) => {
   const db = c.get("db");
   const preview = await resolveThemePreviewSession(db, c.req.valid("json").token);
   if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
-  const { pageSlug, template, sections, presence } = c.req.valid("json");
+  const { pageSlug, template, sections, presence, resource } = c.req.valid("json");
   const landing = pageSlug ? preview.theme.pages.landing[pageSlug] : null;
   if (pageSlug && !landing && !sections) throw new NotFoundError("Landing page not found");
   const requests = sections
@@ -968,6 +921,7 @@ app.openapi(themePreviewHomepageRoute, async (c) => {
     requests,
     renderApps: homeAppRenderer(c),
     pricing: presence ? startMarketPricing(db, presence) : null,
+    resource: parseBindingResourceSelector(resource),
   })).sections;
   return ok(c, data as unknown as HomepageData["sections"]);
 });

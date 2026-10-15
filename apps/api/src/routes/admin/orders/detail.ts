@@ -1,5 +1,8 @@
 // One order: detail, items, payments, timeline and comments, notifications, edits, restore, recovery links and form data.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { listGiftCardPaymentLinks } from "../../shared/gift-card-payment-links";
+import { relatedObjectsProjection, withRelatedObjects } from "../related-objects";
+import { relatedObjectRecordSchema } from "../../../schemas/related-objects";
 import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import {
     ORDER_COMMENT_MAX_LENGTH,
@@ -39,14 +42,8 @@ import {
     productVariants,
     media,
     orders,
-    giftCards,
-    giftCardTransactions,
-    refundAttempts,
 } from "@scalius/database/schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/sqlite-core";
-import type { Database } from "@scalius/database/client";
-import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
+import { and, eq, sql } from "drizzle-orm";
 import { NotFoundError, ServiceUnavailableError } from "../../../utils/api-error";
 import { ok, created, noContent } from "../../../utils/api-response";
 import {
@@ -159,56 +156,6 @@ const orderPaymentSchema = z.object({
         description: "The gift card this row moved money on (last 4 only): a tender, a refund to that card, or (storeCredit) the card a store-credit refund issued.",
     }),
 });
-
-type GiftCardPaymentLink = { id: string; last4: string; storeCredit: boolean };
-
-/**
- * The gift card behind each payment row: a tender and a refund back to its
- * card name their row in the ledger; a store-credit card names its refund
- * attempt, and every row of that refund group points to it. Two bounded
- * reads, run only when the order has such rows.
- */
-async function listGiftCardPaymentLinks(
-    db: Database,
-    orderId: string,
-    rows: ReadonlyArray<{ paymentMethod: string; paymentType: string }>,
-): Promise<Map<string, GiftCardPaymentLink>> {
-    const links = new Map<string, GiftCardPaymentLink>();
-    if (rows.some((row) => row.paymentMethod === GIFT_CARD_PAYMENT_METHOD)) {
-        const ledger = await db.select({
-            orderPaymentId: giftCardTransactions.orderPaymentId,
-            giftCardId: giftCards.id,
-            last4: giftCards.codeLast4,
-        })
-            .from(giftCardTransactions)
-            .innerJoin(giftCards, eq(giftCards.id, giftCardTransactions.giftCardId))
-            .where(and(
-                eq(giftCardTransactions.orderId, orderId),
-                inArray(giftCardTransactions.kind, ["redeem", "refund"]),
-            ))
-            .all();
-        for (const row of ledger) {
-            if (row.orderPaymentId) links.set(row.orderPaymentId, { id: row.giftCardId, last4: row.last4, storeCredit: false });
-        }
-    }
-    if (rows.some((row) => row.paymentType === "refund")) {
-        const creditAttempt = alias(refundAttempts, "credit_attempt");
-        const credits = await db.select({
-            refundPaymentId: refundAttempts.refundPaymentId,
-            giftCardId: giftCards.id,
-            last4: giftCards.codeLast4,
-        })
-            .from(giftCards)
-            .innerJoin(creditAttempt, eq(creditAttempt.id, giftCards.sourceRefundAttemptId))
-            .innerJoin(refundAttempts, eq(refundAttempts.refundGroupId, creditAttempt.refundGroupId))
-            .where(and(eq(giftCards.sourceOrderId, orderId), eq(giftCards.source, "refund")))
-            .all();
-        for (const row of credits) {
-            links.set(row.refundPaymentId, { id: row.giftCardId, last4: row.last4, storeCredit: true });
-        }
-    }
-    return links;
-}
 
 const paymentPlanSchema = z.object({
     id: z.string(),
@@ -522,6 +469,7 @@ app.openapi(createPaymentRecoveryLinkRoute, async (c) => {
 
 /** Order detail whose items may carry per-line extras (downloads, gift cards, warranty, review). */
 const orderDetailWithLineExtrasSchema = orderDetailSchema.extend({
+    relatedObjects: z.array(relatedObjectRecordSchema),
     items: z.array(orderItemSchema.extend(orderLineExtrasShape)),
 });
 
@@ -546,7 +494,7 @@ const getOrderRoute = createRoute({
 app.openapi(getOrderRoute, (async (c: AdminRouteContext<typeof getOrderRoute>) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const result = await getOrderDetails(db, orderId);
+    const result = await getOrderDetails(db, orderId, relatedObjectsProjection(c, "order", orderId));
     if (!result) throw new NotFoundError("Order not found");
     const lineExtras = await composeOrderLineExtras(db, {
         orderId,
@@ -554,7 +502,7 @@ app.openapi(getOrderRoute, (async (c: AdminRouteContext<typeof getOrderRoute>) =
         audience: "staff",
         currencyDecimalPlaces: result.currencyDecimalPlaces ?? 2,
     });
-    return ok(c, { ...result, items: result.items.map((item) => withOrderLineExtras(item, lineExtras)) });
+    return ok(c, { ...withRelatedObjects(result), items: result.items.map((item) => withOrderLineExtras(item, lineExtras)) });
 }) as unknown as AdminRouteHandler<typeof getOrderRoute>);
 
 // ─── PUT /:id/details ───────────────────────────────────────────────────────

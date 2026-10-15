@@ -15,7 +15,7 @@ import { nanoid } from "nanoid";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import type { ShippingMethod } from "@/lib/api/types";
-import type { CheckoutTaxQuote } from "./tax-quote-contract";
+import { parseCheckoutAttributes, type CheckoutTaxQuote } from "./tax-quote-contract";
 import {
   FOREIGN_ADDRESS_FIELDS,
   LOCATION_COUNTRY,
@@ -59,6 +59,7 @@ export interface QuickCheckoutForm {
   billingSameAsShipping: boolean;
   shippingLocation: string;
   notes: string;
+  attributes?: Record<string, string>;
   discountCode: string;
   expectedQuoteFingerprint: string;
   /** The marketing consent box's value when ticked (the label's language), else "". */
@@ -99,6 +100,10 @@ export function newQuickCheckoutId(): string {
 export function readQuickCheckoutForm(form: FormData): QuickCheckoutForm {
   const checkoutId = text(form, "checkoutId", 80);
   const fingerprint = text(form, "expectedQuoteFingerprint", 40);
+  const attributes = { ...parseCheckoutAttributes(form.get("attributes")) };
+  for (const [name, value] of form) {
+    if (name.startsWith("attributes.") && typeof value === "string") attributes[name.slice(11)] = value;
+  }
   return {
     cartItems: withLineQuantity(text(form, "cartItems", 24 * 1024), form.get("lineQuantity")),
     checkoutId: CHECKOUT_ID_PATTERN.test(checkoutId) ? checkoutId : newQuickCheckoutId(),
@@ -119,6 +124,7 @@ export function readQuickCheckoutForm(form: FormData): QuickCheckoutForm {
     billingSameAsShipping: form.has("intent") ? form.get("billingSameAsShipping") === "1" : true,
     shippingLocation: id(form, "shippingLocation"),
     notes: text(form, "notes", 500),
+    attributes: parseCheckoutAttributes(attributes),
     discountCode: text(form, "discountCode", 50).toUpperCase(),
     expectedQuoteFingerprint: FINGERPRINT_PATTERN.test(fingerprint) ? fingerprint : "",
     marketingConsent: marketingConsentFormValues(form),
@@ -289,7 +295,9 @@ export function quickCheckoutQuoteInput(
   }
   return {
     cartItems: form.cartItems,
+    ...(form.attributes ? { attributes: form.attributes } : {}),
     deliveryMode: mode,
+    cod: true,
     ...(mode === "delivery"
       ? isQuickCheckoutAbroad(form)
         ? {
@@ -332,7 +340,7 @@ export function quickCheckoutOrderForm(
   form: QuickCheckoutForm,
   mode: QuickCheckoutMode,
   rateId: string,
-  quote: Pick<CheckoutTaxQuote, "discounts" | "items">,
+  quote: Pick<CheckoutTaxQuote, "discounts" | "items" | "shippingRateToken">,
 ): FormData {
   const data = new FormData();
   const codes = quote.discounts.flatMap(({ code }) => (code ? [code] : []));
@@ -341,12 +349,13 @@ export function quickCheckoutOrderForm(
     cartItems: repriceQuickCheckoutLines(form.cartItems, quote),
     checkoutId: form.checkoutId,
     expectedQuoteFingerprint: form.expectedQuoteFingerprint,
+    ...(quote.shippingRateToken ? { shippingRateToken: quote.shippingRateToken } : {}),
     customerName: form.customerName,
     customerPhone: form.customerPhone,
     customerEmail: form.customerEmail,
     customerWhatsapp: form.customerWhatsapp,
     notes: form.notes,
-    ...form.marketingConsent,
+    ...(form.attributes ? { attributes: JSON.stringify(form.attributes) } : {}),    ...form.marketingConsent,
     discountCodes: codes.length > 0 ? JSON.stringify(codes) : "",
     deliveryMode: mode === "pickup" ? "pickup" : "delivery",
     ...(mode === "none" ? {} : { shippingLocation: rateId }),

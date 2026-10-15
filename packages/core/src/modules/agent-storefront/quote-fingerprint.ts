@@ -6,6 +6,7 @@ export interface AgentStorefrontCheckoutQuoteFingerprintInput {
   /** The method the order uses; null when nothing in the cart needs one. */
   shippingMethodId: string | null;
   discountCode: string | null;
+  attributes?: Record<string, string>;
   quote: TaxQuote;
 }
 
@@ -22,6 +23,9 @@ export async function buildAgentStorefrontCheckoutQuoteFingerprint(
     contextRevision: input.contextRevision,
     shippingMethodId: input.shippingMethodId,
     discountCode: input.discountCode?.trim().toUpperCase() ?? null,
+    ...(Object.keys(input.attributes ?? {}).length ? {
+      attributes: Object.keys(input.attributes!).sort().map((key) => [key, input.attributes![key]]),
+    } : {}),
     calculationVersion: input.quote.calculationVersion,
     settingsVersion: input.quote.settingsVersion,
     currencyCode: input.quote.currencyCode,

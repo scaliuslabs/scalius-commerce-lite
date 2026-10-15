@@ -36,6 +36,8 @@ export type {
   CourierRecipient,
   CourierShipment,
   CourierShipmentInput,
+  CourierRatesInput,
+  CourierRates,
   CourierShipmentStatus,
   CourierTracking,
   CourierWebhook,
@@ -75,7 +77,6 @@ export type {
   PluginFeatureInput,
   PluginManifest,
   PluginManifestInput,
-  PluginRenderContext,
   PluginUiActionResult,
   PluginUiDocument,
   PluginUiNode,
@@ -150,7 +151,7 @@ export function definePlugin<const T extends PluginDefinition>(definition: T): T
 // A provider implements one port: the same interface the platform's own
 // adapters implement (`@scalius/shared/plugins/providers`). Each operation
 // gets its input and the full `ctx` (settings with decrypted secrets, http,
-// storage, kv, log). Inputs and outputs are validated by the platform on
+// objects, kv, log). Inputs and outputs are validated by the platform on
 // both sides. Raise `ProviderError` to fail: `retryable` (with `uncertain:
 // true` when the provider may already have acted), `declined` or
 // `misconfigured`. Never put credentials or buyer contact data in a message.

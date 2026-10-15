@@ -45,6 +45,7 @@ export const CUSTOM_FIELD_TYPE_VALUES = [
     "variant_reference",
     "collection_reference",
     "media_reference",
+    "object_reference",
     "list.single_line_text",
     "list.multi_line_text",
     "list.integer",
@@ -58,6 +59,7 @@ export const CUSTOM_FIELD_TYPE_VALUES = [
     "list.variant_reference",
     "list.collection_reference",
     "list.media_reference",
+    "list.object_reference",
 ] as const;
 
 const inList = (values: readonly string[]) => values.map((value) => `'${value}'`).join(", ");

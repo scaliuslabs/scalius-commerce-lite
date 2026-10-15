@@ -1,3 +1,5 @@
+import { readBuyerAttributes, renderBuyerUi } from "@/lib/buyer-ui";
+import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 // src/lib/cart/client.ts
 import { billingQuoteFields } from "@/lib/checkout/billing-address";
 import {
@@ -96,7 +98,7 @@ function rejectDeliveryLocation(field: DeliveryLocationLevel): void {
 function rejectDeliveryRate(shippingRates: QuotedShippingRate[] | null): void {
   window.dispatchEvent(new CustomEvent("delivery-rate-rejected", { detail: { shippingRates } }));
 }
-import type { ShippingMethodDetail } from "../checkout/shipping-methods";
+import { hasPendingShippingRate, type ShippingMethodDetail } from "../checkout/shipping-methods";
 import type {
   CheckoutDiscountFacts,
   CheckoutDiscountOffer,
@@ -562,6 +564,7 @@ function cartTaxQuoteInput(): Record<string, unknown> | null {
   if (!cartItems || cartItems === "{}") return null;
   const common = {
     cartItems,
+    attributes: readBuyerAttributes(),
     deliveryMode: mode,
     discountCodes: cartStore.get().discountCodes,
     customerPhone: formCanonicalPhoneValue() || undefined,
@@ -980,11 +983,18 @@ function applyPendingCartRepairState(): boolean {
   return true;
 }
 
+async function refreshBuyerUi(): Promise<void> {
+  await validateCartSnapshot();
+}
+
 export async function validateCartSnapshot(
   /** Re-render the lines even when the check changed nothing (a page shown again). */
   { renderUnchanged = true }: { renderUnchanged?: boolean } = {},
 ): Promise<boolean> {
   const { items } = cartStore.get();
+  const attributes = readBuyerAttributes();
+  const attributesInput = document.getElementById("attributesInput") as HTMLInputElement | null;
+  if (attributesInput) attributesInput.value = JSON.stringify(attributes);
   const payloadItems = cartValidationPayload(items);
   const sequence = ++cartValidationSequence;
   cartValidationAbort?.abort();
@@ -992,6 +1002,7 @@ export async function validateCartSnapshot(
   cartValidationAbort = controller;
 
   if (payloadItems.length === 0) {
+    renderBuyerUi([]);
     cartValidationRetryable = false;
     cartValidationIssues = {};
     validationRuleErrors = [];
@@ -1009,9 +1020,10 @@ export async function validateCartSnapshot(
       "/api/checkout/validate-cart",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...await buyerUiLocaleHeaders() },
         body: JSON.stringify({
           items: payloadItems,
+          ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
           ...cartValidationDeliveryPayload(),
           // The page's market prices the cart (MARKETS-DESIGN D5).
           ...cartPresencePayload(),
@@ -1067,6 +1079,7 @@ export async function validateCartSnapshot(
         latestAllowedPaymentMethods = json.data.allowedPaymentMethods;
       }
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
+      renderBuyerUi(json.data.buyerUi, { onChange: refreshBuyerUi });
     }
     setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
     const deliveryRateRefused =
@@ -1156,6 +1169,7 @@ export async function updateTotals() {
   const quoteSequence = ++cartTaxQuoteSequence;
   const { items, totalAmount, discountCodes } = cartStore.get();
   const selectedMethod = window.lastShippingEventDetail;
+  const pendingShipping = selectedMethod ? hasPendingShippingRate(selectedMethod) : false;
   const shippingFee = selectedMethod
     ? getEffectiveCartShippingFee(items, selectedMethod.fee, selectedMethod.freeOver, selectedMethod.quoted)
     : 0;
@@ -1185,7 +1199,7 @@ export async function updateTotals() {
   subtotalEl.textContent = formatMoney(totalAmount);
   // Before a delivery option applies to the address, shipping isn't known yet.
   const estimateShipping = (discounts: CheckoutDiscountFacts["discounts"]) =>
-    renderShippingLine(shippingEl, selectedMethod
+    renderShippingLine(shippingEl, selectedMethod && !pendingShipping
       ? { baseFee: selectedMethod.fee, charged: shippingFee, discounts }
       : null);
   estimateShipping(latestDiscountFacts?.discounts ?? []);
@@ -1198,7 +1212,7 @@ export async function updateTotals() {
       discountCodes,
       Object.values(items),
       // No delivery option yet: delivery discounts wait for the address instead of failing.
-      selectedMethod ? shippingFee : undefined,
+      selectedMethod && !pendingShipping ? shippingFee : undefined,
       formCanonicalPhoneValue() || undefined,
     );
     if (quoteSequence !== cartTaxQuoteSequence) return;
@@ -1227,6 +1241,7 @@ export async function updateTotals() {
     setQuoteRuleErrors([]);
     updateCheckoutButtonState();
     renderAuthoritativeCartQuote(quote, elements);
+    renderBuyerUi(quote.buyerUi, { onChange: refreshBuyerUi });
   } catch (error) {
     if (quoteSequence !== cartTaxQuoteSequence) return;
     // An item that changed is shown on its line and a refused delivery rate

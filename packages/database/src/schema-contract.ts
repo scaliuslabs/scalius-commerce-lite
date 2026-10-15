@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 153,
-  name: "0153_theme_skins",
+  version: 156,
+  name: "0156_custom_field_object_references",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -546,6 +546,21 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 153,
     name: "0153_theme_skins",
     sourceSha256: "d0be879752ec302b137e897dea2cd1bd0c1778240d556dbd9ab5e310f5f8ed02",
+  },
+  {
+    version: 154,
+    name: "0154_order_number_sequence",
+    sourceSha256: "417d5e9f53ea735a4d49aa74b85a3cbe3450c0c8e348808daa21689243552ac7",
+  },
+  {
+    version: 155,
+    name: "0155_v2_beta_contract",
+    sourceSha256: "5c507b12e9e4f51c1124cf2d804b34e179e6c5eb755eef62ef7bb7a7342e5112",
+  },
+  {
+    version: 156,
+    name: "0156_custom_field_object_references",
+    sourceSha256: "801e0c8d279cdc8a0df80ddea09bfecf60f9592fa2bf10f5fed1728e3d1bf4da",
   },
 ] as const;
 

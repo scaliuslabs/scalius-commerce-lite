@@ -256,6 +256,10 @@ describe("storefront orders API client", () => {
   });
 
   it("fetches private receipts with header proof instead of URL proof", async () => {
+    const buyerUi = [{
+      appId: "example.loyalty", releaseId: "release_1", target: "purchase.thank-you.customer-information.render-after",
+      ui: { type: "text", text: "You earned 20 points" }, attributes: [], values: {},
+    }];
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: true,
       data: {
@@ -283,6 +287,7 @@ describe("storefront orders API client", () => {
           supportRequests: [],
           supportRequestActions: [],
           supportRequestIntro: "Send a request and the store will review it.",
+          buyerUi,
         },
       },
     }), { status: 200 }));
@@ -290,11 +295,12 @@ describe("storefront orders API client", () => {
     const receipt = await getOrderReceipt("order_1", "chk_secret");
 
     expect(receipt?.id).toBe("order_1");
+    expect(receipt?.buyerUi).toEqual(buyerUi);
     expect(mocks.apiFetch).toHaveBeenCalledWith(
       "/orders/receipt/order_1",
       expect.objectContaining({
         cache: "no-store",
-        headers: { "X-Receipt-Token": "chk_secret" },
+        headers: { "X-Receipt-Token": "chk_secret", "x-storefront-language": "en", "x-storefront-locale": "en-BD" },
       }),
       { retries: 2, timeout: 5000, auth: false },
     );

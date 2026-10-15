@@ -69,6 +69,12 @@ const delivery = {
 };
 
 describe("storefront checkout quote fingerprint", () => {
+  it("binds checkout attributes independent of object key order", async () => {
+    const attrs = { "test.notes.message": "one", "test.notes.gift": "true" };
+    const first = await buildStorefrontCheckoutQuoteFingerprint(quote, delivery, [], attrs);
+    expect(await buildStorefrontCheckoutQuoteFingerprint(quote, delivery, [], { "test.notes.gift": "true", "test.notes.message": "one" })).toBe(first);
+    expect(await buildStorefrontCheckoutQuoteFingerprint(quote, delivery, [], { ...attrs, "test.notes.message": "two" })).not.toBe(first);
+  });
   it("is stable for the exact reviewed billable facts", async () => {
     const first = await buildStorefrontCheckoutQuoteFingerprint(quote, delivery);
     const second = await buildStorefrontCheckoutQuoteFingerprint(

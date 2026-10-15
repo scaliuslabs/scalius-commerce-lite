@@ -71,6 +71,7 @@ function authorityRows(): Record<string, unknown>[][] {
     }],
     [{
       id: "variant_1",
+      weight: null,
       productId: "product_1",
       optionCombinationKey: null,
       optionLabel: null,
@@ -91,8 +92,8 @@ function authorityRows(): Record<string, unknown>[][] {
     }],
     [],
     [
-      { id: "city_1", name: "Dhaka", type: "city", parentId: null, isActive: 1, deletedAt: null },
-      { id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1", isActive: 1, deletedAt: null },
+      { id: "city_1", name: "Dhaka", externalIds: "{}", type: "city", parentId: null, isActive: 1, deletedAt: null },
+      { id: "zone_1", name: "Mirpur", externalIds: "{}", type: "zone", parentId: "city_1", isActive: 1, deletedAt: null },
     ],
     [{
       id: "shipping_1",
@@ -100,6 +101,9 @@ function authorityRows(): Record<string, unknown>[][] {
       name: "Standard delivery",
       description: "Delivered within 2–3 business days",
       feeMinor: 6_000,
+      rateSource: "flat",
+      rateService: null,
+      fallbackFeeMinor: null,
       freeOverMinor: null,
       isActive: 1,
       deletedAt: null,

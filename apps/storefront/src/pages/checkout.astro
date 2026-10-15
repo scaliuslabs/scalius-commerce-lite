@@ -19,9 +19,6 @@ import {
 } from "@/lib/api";
 import { markRenderUncacheable } from "@/lib/cache-policy";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
-import AppBlocks from "@/components/apps/AppBlocks.astro";
-import { getAppBlocks } from "@/lib/api/app-blocks";
-import { layoutHasAppBlocks } from "@/lib/app-surfaces";
 import { giftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
@@ -33,8 +30,6 @@ const [layoutData, checkoutConfig, checkoutLanguageResponse] = await Promise.all
   getCheckoutConfig(),
   getActiveCheckoutLanguage(),
 ]);
-// Apps' checkout blocks: read only when the layout says an active app draws one.
-const appBlocks = layoutHasAppBlocks(layoutData, "checkout") ? await getAppBlocks("checkout") : [];
 // A failed read renders the fail-closed page (checkout unavailable, English
 // copy); that answer is for this request only, never the shared cache.
 if (!layoutData || checkoutLanguageResponse === null || isCheckoutConfigReadFailure(checkoutConfig)) {
@@ -179,8 +174,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(checkoutLanguage
           <div class="h-16 animate-pulse rounded-xl border border-border bg-muted/50" aria-hidden="true"></div>
           <span class="sr-only" role="status">{copy.loadingPaymentMethodsText}</span>
         </div>
-        <AppBlocks blocks={appBlocks} target="purchase.checkout.payment-method-list.render-after" class="mt-4" />
-        <AppBlocks blocks={appBlocks} target="purchase.checkout.actions.render-before" class="mt-4" />
+        <div data-buyer-ui-target="purchase.checkout.payment-method-list.render-after" class="mt-4"></div>
+        <div data-buyer-ui-target="purchase.checkout.actions.render-before" class="mt-4"></div>
 
         <div id="paymentActionParking" class="hidden">
           <div

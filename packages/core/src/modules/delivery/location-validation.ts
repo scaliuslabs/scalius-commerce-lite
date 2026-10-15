@@ -36,6 +36,8 @@ export interface ActiveDeliveryLocationRow {
     deletedAt: Date | number | null;
     /** The delivery zone this location is assigned to, if any. */
     deliveryZoneId?: string | null;
+    /** Carrier mappings ride in the existing place read. */
+    externalIds?: string | null;
 }
 
 function deliveryLocationIds(data: DeliveryLocationSelectionInput): string[] {
@@ -54,6 +56,7 @@ export function selectActiveDeliveryLocationRowsByIds(
         .select({
             id: places.id,
             name: places.name,
+            externalIds: places.externalIds,
             type: placeAddressFieldSql,
             parentId: places.parentId,
             isActive: places.isActive,

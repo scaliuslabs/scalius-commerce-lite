@@ -11,6 +11,7 @@ import { cartLineInputs, readDiscountCodes } from "./tax-quote-client";
 import { checkoutAddressForMode, isCheckoutDeliveryMode } from "./delivery-mode";
 import { storedCheckoutBillingFields } from "./billing-address";
 import { giftCardRequestFields } from "./gift-cards";
+import { parseCheckoutAttributes } from "./tax-quote-contract";
 import { marketingConsentOrderField } from "./marketing-consent";
 
 /**
@@ -20,6 +21,7 @@ import { marketingConsentOrderField } from "./marketing-consent";
  */
 export type CheckoutOrderRequest = Omit<CreateOrderPayload, "paymentMethod"> & {
   paymentMethod: string;
+  shippingRateToken?: string;
   giftCards?: Array<{ handle: string }>;
   expectedAmountDueMinor?: number;
 };
@@ -181,6 +183,7 @@ export async function createOrder(
   }
 
   const tender = giftCardOrderFields(checkoutData);
+  const attributes = parseCheckoutAttributes(checkoutData.attributes);
 
   const payload: CheckoutOrderRequest = {
     checkoutRequestId,
@@ -194,6 +197,7 @@ export async function createOrder(
     // Only what the cart page asked for (Shopify's rule): none, "same as shipping" or a billing address.
     ...storedCheckoutBillingFields(checkoutData),
     notes: readOptionalString(checkoutData.notes),
+    ...(attributes ? { attributes } : {}),
     items,
     shippingCharge: deliveryMode === "none"
       ? 0
@@ -201,6 +205,9 @@ export async function createOrder(
     shippingMethodId: deliveryMode === "none"
       ? null
       : readOptionalString(checkoutData.shippingMethodId),
+    ...(deliveryMode === "delivery" && typeof checkoutData.shippingRateToken === "string"
+      ? { shippingRateToken: checkoutData.shippingRateToken }
+      : {}),
     discountCodes: readDiscountCodes(checkoutData),
     paymentMethod,
     ...tender,

@@ -125,10 +125,10 @@ describe("missing records and pages (R2, R4)", () => {
   });
 
   it("fills a nested list's params: a missing entry goes back to its content type", () => {
-    Object.assign(match, { fullPath: "/admin/metaobjects/$definitionId/entries/$entryId", params: { definitionId: "def_1", entryId: "e_9" } });
+    Object.assign(match, { fullPath: "/admin/objects/$type/records/$recordId", params: { type: "def_1", recordId: "e_9" } });
     act(() => root.render(<RouteNotFoundComponent />));
     expect(text("h1")).toBe("This entry doesn't exist or was deleted");
-    expect(container.querySelector("a")?.getAttribute("href")).toBe("/admin/metaobjects/def_1");
+    expect(container.querySelector("a")?.getAttribute("href")).toBe("/admin/objects/def_1");
   });
 
   it("sends an address that is no page at all to Home, and a forbidden one says who to ask", async () => {

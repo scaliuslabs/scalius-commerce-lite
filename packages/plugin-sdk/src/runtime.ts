@@ -23,12 +23,12 @@ import {
 } from "@scalius/shared/plugins/handlers";
 import { providerErrorOf, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
 
-/** What the host hands every invocation: identity, store facts, settings, declared collections, handler inventory. */
+/** What the host hands every invocation: identity, store facts, settings, declared objects, handler inventory. */
 export interface PluginContextSeed {
   plugin: { id: string; version: string };
   store: PluginStoreInfo;
   settings: Record<string, PluginSettingValue>;
-  collections: string[];
+  objects: string[];
   inventory: PluginHandlerInventory;
   /** The app's features that are on (`manifest.features`); absent from hosts before features: none. */
   features?: string[];
@@ -69,11 +69,12 @@ export interface PluginInvocationResult {
 export interface PluginRuntimeBridge {
   apiCall(operationId: string, input?: unknown): Promise<unknown>;
   /** `{ data, revision }` or null. */
-  storageGet(collection: string, id: string): Promise<unknown>;
+  objectsGet(object: string, id: string): Promise<unknown>;
+  objectsGetByHandle(object: string, handle: string): Promise<unknown>;
   /** Atomic puts/deletes/checks; each operation's new revision (null for a delete or check). */
-  storageWrite(operations: unknown[]): Promise<Array<number | null>>;
-  storageQuery(collection: string, query?: unknown): Promise<unknown>;
-  storageCount(collection: string, where?: unknown): Promise<number>;
+  objectsWrite(operations: unknown[]): Promise<Array<number | null>>;
+  objectsQuery(object: string, query?: unknown): Promise<unknown>;
+  objectsCount(object: string, where?: unknown): Promise<number>;
   /** `{ value, revision }` or null. */
   kvGet(key: string): Promise<unknown>;
   kvSet(key: string, value: unknown, options?: { ttlSeconds?: number; expectedRevision?: number | null }): Promise<{ revision: number }>;
@@ -94,7 +95,7 @@ export interface PluginRuntimeBridge {
 const MAX_LOGS = 100;
 const MAX_ERROR_MESSAGE = 300;
 
-/** A refusal from the platform, as plugin code sees it: `error.code` is stable (`storage.unique_violation`). */
+/** A refusal from the platform, as plugin code sees it: `error.code` is stable (`object.unique_violation`). */
 export class PluginPlatformError extends Error {
   readonly code: string;
 
@@ -119,17 +120,17 @@ const ttlOf = (options: unknown): { ttlSeconds?: number } =>
     ? { ttlSeconds: (options as { ttlSeconds?: number }).ttlSeconds }
     : {};
 
-const isConflict = (error: unknown): boolean => error instanceof PluginPlatformError && error.code === "storage.conflict";
+const isConflict = (error: unknown): boolean => error instanceof PluginPlatformError && error.code === "object.conflict";
 
 /**
- * One collection over the bridge. `update` and `increment` are loops of a
+ * One object over the bridge. `update` and `increment` are loops of a
  * versioned read and a write at that revision, here in the app's runtime, so
  * both loaders give the same answers.
  */
-function collectionOf(name: string, bridge: PluginRuntimeBridge, call: <T>(work: () => Promise<T>) => Promise<T>) {
-  type Version = { data: Record<string, unknown>; revision: number } | null;
-  const getVersion = (id: string) => call(() => bridge.storageGet(name, id)) as Promise<Version>;
-  const write = async (operation: Record<string, unknown>) => (await call(() => bridge.storageWrite([{ collection: name, ...operation }])))[0] ?? null;
+function objectOf(name: string, bridge: PluginRuntimeBridge, call: <T>(work: () => Promise<T>) => Promise<T>) {
+  type Version = { data: Record<string, unknown>; revision: number; handle: string | null; status: "active" | "draft" | "published" } | null;
+  const getVersion = (id: string) => call(() => bridge.objectsGet(name, id)) as Promise<Version>;
+  const write = async (operation: Record<string, unknown>) => (await call(() => bridge.objectsWrite([{ object: name, ...operation }])))[0] ?? null;
   const condition = (options: unknown) => {
     const expected = typeof options === "object" && options !== null ? (options as { expectedRevision?: unknown }).expectedRevision : undefined;
     return expected === undefined ? {} : { expectedRevision: expected };
@@ -137,7 +138,8 @@ function collectionOf(name: string, bridge: PluginRuntimeBridge, call: <T>(work:
   return {
     get: async (id: string) => (await getVersion(id))?.data ?? null,
     getVersion,
-    put: async (id: string, record: unknown, options?: unknown) => ({ revision: (await write({ op: "put", id, record, ...condition(options) })) ?? 1 }),
+    getByHandle: (handle: string) => call(() => bridge.objectsGetByHandle(name, handle)),
+    put: async (id: string, record: unknown, options?: unknown) => ({ revision: (await write({ op: "put", id, record, ...condition(options), ...(typeof options === "object" && options !== null ? { handle: (options as { handle?: unknown }).handle, status: (options as { status?: unknown }).status } : {}) })) ?? 1 }),
     async delete(id: string, options?: unknown) {
       const expected = condition(options);
       if ("expectedRevision" in expected) {
@@ -158,18 +160,18 @@ function collectionOf(name: string, bridge: PluginRuntimeBridge, call: <T>(work:
     },
     async update(id: string, patch: unknown, options?: unknown) {
       if (typeof patch !== "object" || patch === null || Array.isArray(patch)) {
-        throw new PluginPlatformError("storage.invalid_record", "A patch is a plain object of top-level fields.");
+        throw new PluginPlatformError("object.invalid_record", "A patch is a plain object of top-level fields.");
       }
       const pinned = condition(options);
       for (let attempt = 1; ; attempt += 1) {
         const current = await getVersion(id);
-        if (!current) throw new PluginPlatformError("storage.not_found", `${name}/${id} does not exist.`);
+        if (!current) throw new PluginPlatformError("object.not_found", `${name}/${id} does not exist.`);
         if ("expectedRevision" in pinned && current.revision !== pinned.expectedRevision) {
-          throw new PluginPlatformError("storage.conflict", `${name}/${id} changed since it was read: read it again and retry.`);
+          throw new PluginPlatformError("object.conflict", `${name}/${id} changed since it was read: read it again and retry.`);
         }
         const data = { ...current.data, ...(patch as Record<string, unknown>) };
         try {
-          return { data, revision: (await write({ op: "put", id, record: data, expectedRevision: current.revision })) ?? current.revision + 1 };
+          return { data, handle: current.handle, status: current.status, revision: (await write({ op: "put", id, record: data, expectedRevision: current.revision })) ?? current.revision + 1 };
         } catch (error) {
           if (!isConflict(error) || "expectedRevision" in pinned || attempt >= CAS_ATTEMPTS) throw error;
         }
@@ -178,15 +180,15 @@ function collectionOf(name: string, bridge: PluginRuntimeBridge, call: <T>(work:
     async increment(id: string, field: string, delta: number, options: { min?: number; max?: number } = {}) {
       const whole = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value);
       if (typeof field !== "string" || !whole(delta) || (options.min !== undefined && !whole(options.min)) || (options.max !== undefined && !whole(options.max))) {
-        throw new PluginPlatformError("storage.invalid_record", "increment takes a field name, a whole-number delta and whole-number bounds.");
+        throw new PluginPlatformError("object.invalid_record", "increment takes a field name, a whole-number delta and whole-number bounds.");
       }
       for (let attempt = 1; ; attempt += 1) {
         const current = await getVersion(id);
         const before = current?.data[field] ?? 0;
-        if (!whole(before)) throw new PluginPlatformError("storage.invalid_record", `${name}/${id}.${field} is not a whole number.`);
+        if (!whole(before)) throw new PluginPlatformError("object.invalid_record", `${name}/${id}.${field} is not a whole number.`);
         const value = (before as number) + delta;
         if (!Number.isSafeInteger(value) || (options.min !== undefined && value < options.min) || (options.max !== undefined && value > options.max)) {
-          throw new PluginPlatformError("storage.out_of_range", `${field} would be ${value}, outside its bounds; nothing changed.`);
+          throw new PluginPlatformError("object.out_of_range", `${field} would be ${value}, outside its bounds; nothing changed.`);
         }
         try {
           const revision = await write({ op: "put", id, record: { ...(current?.data ?? {}), [field]: value }, expectedRevision: current?.revision ?? null });
@@ -196,8 +198,8 @@ function collectionOf(name: string, bridge: PluginRuntimeBridge, call: <T>(work:
         }
       }
     },
-    query: (query?: unknown) => call(() => bridge.storageQuery(name, query ?? {})),
-    count: (where?: unknown) => call(() => bridge.storageCount(name, where ?? {})),
+    query: (query?: unknown) => call(() => bridge.objectsQuery(name, query ?? {})),
+    count: (where?: unknown) => call(() => bridge.objectsCount(name, where ?? {})),
   };
 }
 
@@ -216,11 +218,11 @@ function createContext(seed: PluginContextSeed, bridge: PluginRuntimeBridge, log
     }
     logs.lines.push({ level, message: typeof message === "string" ? message : String(message), ...(fields ? { fields } : {}) });
   };
-  const storage: Record<string, unknown> = {
-    batch: async (operations: unknown) => ({ revisions: await call(() => bridge.storageWrite(Array.isArray(operations) ? operations : [operations])) }),
+  const objects: Record<string, unknown> = {
+    batch: async (operations: unknown) => ({ revisions: await call(() => bridge.objectsWrite(Array.isArray(operations) ? operations : [operations])) }),
   };
-  for (const name of seed.collections) {
-    storage[name] = Object.freeze(collectionOf(name, bridge, call));
+  for (const name of seed.objects) {
+    objects[name] = Object.freeze(objectOf(name, bridge, call));
   }
   return Object.freeze({
     plugin: Object.freeze({ ...seed.plugin }),
@@ -230,7 +232,7 @@ function createContext(seed: PluginContextSeed, bridge: PluginRuntimeBridge, log
     api: Object.freeze({
       call: (operationId: string, input?: unknown) => call(() => bridge.apiCall(operationId, input)),
     }),
-    storage: Object.freeze(storage),
+    objects: Object.freeze(objects),
     kv: Object.freeze({
       get: async (key: string) => ((await call(() => bridge.kvGet(key))) as { value: unknown } | null)?.value ?? null,
       getVersion: (key: string) => call(() => bridge.kvGet(key)),

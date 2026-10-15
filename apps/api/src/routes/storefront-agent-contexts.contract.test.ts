@@ -24,6 +24,16 @@ function buildSpec(): { paths?: Record<string, Record<string, Operation>> } {
 }
 
 describe("storefront agent context OpenAPI contract", () => {
+  it("carries courier rate proofs only in bounded checkout bodies", () => {
+    const spec = buildSpec();
+    for (const operation of ["quote", "validate", "submit"]) {
+      const route = spec.paths?.[`/api/v1/storefront/agent-contexts/{contextId}/checkout/${operation}`]?.post;
+      expect(route?.requestBody?.content?.["application/json"]?.schema?.properties?.shippingRateToken)
+        .toMatchObject({ type: "string", maxLength: 2048 });
+      expect(route?.parameters?.some((parameter) => parameter.name === "shippingRateToken")).toBe(false);
+    }
+  });
+
   it("assigns the locked stable operation IDs", () => {
     const spec = buildSpec();
     const expected = [
@@ -107,6 +117,13 @@ describe("storefront agent context OpenAPI contract", () => {
 
     expect(schema?.required).toContain("expectedQuoteFingerprint");
     expect(schema?.properties?.expectedQuoteFingerprint?.description).toContain("reviewed");
+  });
+
+  it.each(["validate", "quote", "submit"])("accepts checkout attributes on %s", (operation) => {
+    const schema = buildSpec().paths?.[
+      `/api/v1/storefront/agent-contexts/{contextId}/checkout/${operation}`
+    ]?.post?.requestBody?.content?.["application/json"]?.schema;
+    expect(schema?.properties?.attributes).toMatchObject({ type: "object", additionalProperties: { type: "string", maxLength: 500 } });
   });
 
   it("teaches agents to send unambiguous international phone numbers", () => {

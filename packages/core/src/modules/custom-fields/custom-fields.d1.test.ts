@@ -20,6 +20,9 @@ import {
 } from "./custom-fields.service";
 import { createCustomFieldDefinitionSchema } from "./custom-fields.validation";
 import { presentStorefrontCustomFields, selectStorefrontCustomFieldRows } from "./custom-fields.storefront";
+import { deps, withDependencyScope } from "../../cache-deps";
+import { withPublicMediaUrl } from "../../integrations/storage";
+import { rebuildCatalogProjections } from "../products";
 
 const merchant = { writer: MERCHANT_CUSTOM_FIELD_WRITER };
 const plugin = (pluginId: string): { writer: CustomFieldWriter } => ({ writer: { kind: "plugin", pluginId } });
@@ -30,8 +33,8 @@ afterEach(() => {
     sqlite = null;
 });
 
-function database(): Database {
-    const harness = createSqliteD1Database();
+function database(onQuery?: () => void): Database {
+    const harness = createSqliteD1Database({ onQuery });
     sqlite = harness.sqlite;
     sqlite.exec(`
         INSERT INTO categories (id, name, slug, status) VALUES ('cat_a', 'A', 'a', 'published');
@@ -251,5 +254,113 @@ describe("custom field values", () => {
             { namespace: "custom", key: "care", name: "Care", type: "single_line_text", value: "Hand wash" },
             { namespace: "custom", key: "msrp", name: "MSRP", type: "money", value: 1200 },
         ]);
+    });
+
+    it("resolves public scalar references in one statement and tracks hidden targets precisely", async () => {
+        let statements = 0;
+        const db = database(() => { statements++; });
+        const product = await define(db, { name: "Related product", type: "product_reference", storefrontVisible: true });
+        const collection = await define(db, { name: "Collection", type: "collection_reference", storefrontVisible: true });
+        const photo = await define(db, { name: "Photo", type: "media_reference", storefrontVisible: true });
+        await setCustomFieldValues(db, "product", "prod_a", { values: [
+            { definitionId: product.id, value: "prod_a" },
+            { definitionId: collection.id, value: "col_a" },
+            { definitionId: photo.id, value: "med_a" },
+        ] }, merchant);
+        sqlite!.exec(`
+            UPDATE products SET canonical_path = '/products/linen-panjabi' WHERE id = 'prod_a';
+            UPDATE collections SET canonical_path = '/collections/col_featured' WHERE id = 'col_a';
+            UPDATE media SET alt_text = 'Linen weave', width = 800, height = 600, variant_width = 640 WHERE id = 'med_a';
+        `);
+        await rebuildCatalogProjections(db);
+        const read = () => withPublicMediaUrl("https://cdn.example.com", () => withDependencyScope(async () => {
+            deps.product("prod_a");
+            return presentStorefrontCustomFields(await selectStorefrontCustomFieldRows(db, "product", "prod_a").all());
+        }, { strict: true }));
+        statements = 0;
+        const visible = await read();
+        expect(statements).toBe(1);
+        expect(visible.value.map(({ value, reference }) => ({ value, reference }))).toEqual([
+            { value: "prod_a", reference: { id: "prod_a", url: "/products/linen-panjabi" } },
+            { value: "col_a", reference: { id: "col_a", url: "/collections/col_featured" } },
+            { value: "med_a", reference: { id: "med_a", url: "https://cdn.example.com/media/a.png/640.webp", alt: "Linen weave", width: 800, height: 600 } },
+        ]);
+        expect(visible.dependencies.keys).toEqual(expect.arrayContaining(["p:prod_a", "col:col_a", "m:med_a"]));
+        expect(visible.dependencies.coarseTables).toEqual([]);
+        sqlite!.exec(`
+            UPDATE product_channel_publications SET unpublished_at = unixepoch() WHERE product_id = 'prod_a' AND channel_id = 'sc_online_store';
+            UPDATE collections SET is_active = 0 WHERE id = 'col_a';
+            UPDATE media SET status = 'trashed', trashed_at = unixepoch() WHERE id = 'med_a';
+        `);
+        const hidden = await read();
+        expect(hidden.value.map(({ reference }) => reference)).toEqual([undefined, undefined, undefined]);
+        expect(hidden.dependencies.keys).toEqual(visible.dependencies.keys);
+    });
+
+    it("keeps empty and ordinary-field reads precisely cacheable and refuses media without a public origin", async () => {
+        const db = database();
+        const read = () => withDependencyScope(async () => {
+            deps.product("prod_a");
+            return presentStorefrontCustomFields(await selectStorefrontCustomFieldRows(db, "product", "prod_a").all());
+        }, { strict: true });
+        expect((await read()).value).toEqual([]);
+        const photo = await define(db, { name: "Photo", type: "media_reference", storefrontVisible: true });
+        const care = await define(db, { name: "Care", type: "single_line_text", storefrontVisible: true });
+        await setCustomFieldValues(db, "product", "prod_a", { values: [
+            { definitionId: photo.id, value: "med_a" }, { definitionId: care.id, value: "Hand wash" },
+        ] }, merchant);
+        const result = await read();
+        expect(result.value.map(({ reference }) => reference)).toEqual([undefined, undefined]);
+        expect(result.dependencies.coarseTables).toEqual([]);
+    });
+
+    it("pins object references to their accessible type and nulls weak public references", async () => {
+        const db = database();
+        sqlite!.exec(`
+            INSERT INTO object_types (id, namespace, type, name, fields_json, admin, storefront) VALUES
+                ('oty_custom.charts', 'custom', 'charts', 'Charts', '[{"key":"chest","name":"Chest (cm)","type":"integer"},{"key":"buyer","name":"Buyer","type":"customer_reference"}]', 'edit', 1),
+                ('oty_custom.private', 'custom', 'private', 'Private', '[]', 'none', 0);
+            INSERT INTO object_records (type_id, id, data_json, status, pub) VALUES
+                ('oty_custom.charts', 'chart_a', '{"chest":96,"buyer":"cus_a","undeclared":"never-public"}', 'published', 1),
+                ('oty_custom.charts', 'chart_b', '{}', 'published', 1),
+                ('oty_custom.charts', 'chart_draft', '{}', 'draft', 0);
+        `);
+        await expect(define(db, { name: "Private", type: "object_reference", validations: { to: "custom.private" } })).rejects.toBeInstanceOf(ValidationError);
+        const chart = await define(db, { name: "Chart", type: "object_reference", validations: { to: "custom.charts" }, storefrontVisible: true });
+        const charts = await define(db, { name: "Charts", type: "list.object_reference", validations: { to: "custom.charts" }, storefrontVisible: true });
+        await expect(setCustomFieldValues(db, "product", "prod_a", { values: [{ definitionId: chart.id, value: "chart_draft" }] }, merchant)).rejects.toBeInstanceOf(ValidationError);
+        const saved = await setCustomFieldValues(db, "product", "prod_a", { values: [
+            { definitionId: chart.id, value: "chart_a" }, { definitionId: charts.id, value: ["chart_a", "chart_b"] },
+        ] }, merchant);
+        expect(saved.fields.map((entry) => entry.value)).toEqual(["chart_a", ["chart_a", "chart_b"]]);
+        const read = () => withDependencyScope(async () => {
+            deps.product("prod_a");
+            return presentStorefrontCustomFields(await selectStorefrontCustomFieldRows(db, "product", "prod_a").all());
+        }, { strict: true });
+        expect((await read()).dependencies.keys).toContain("obj:oty_custom.charts");
+        expect((await read()).value[0]?.object).toEqual({ handle: null, fields: [{ key: "chest", name: "Chest (cm)", type: "integer", value: 96 }] });
+        sqlite!.exec(`DELETE FROM object_records WHERE type_id = 'oty_custom.charts' AND id = 'chart_a';
+            UPDATE object_records SET pub = 0, status = 'draft' WHERE type_id = 'oty_custom.charts' AND id = 'chart_b';`);
+        expect((await read()).value.map(({ to, value }) => ({ to, value }))).toEqual([
+            { to: "custom.charts", value: null }, { to: "custom.charts", value: [null, null] },
+        ]);
+        expect((await readCustomFieldValues(db, "product", "prod_a")).fields.map((entry) => entry.value)).toEqual([null, [null, "chart_b"]]);
+        await setCustomFieldValues(db, "product", "prod_a", { values: [{ definitionId: chart.id, value: null }] }, merchant);
+    });
+
+    it("lets an app reference only its own object namespace and keeps a populated target fixed", async () => {
+        const db = database();
+        sqlite!.exec(`
+            INSERT INTO object_types (id, namespace, type, name, fields_json, admin) VALUES
+                ('oty_acme.fit.charts', 'acme.fit', 'charts', 'Charts', '[]', 'none'),
+                ('oty_custom.charts', 'custom', 'charts', 'Charts', '[]', 'edit'),
+                ('oty_custom.other', 'custom', 'other', 'Other', '[]', 'edit');
+            INSERT INTO object_records (type_id, id, data_json) VALUES ('oty_custom.charts', 'chart_a', '{}');
+        `);
+        await expect(define(db, { name: "Own", type: "object_reference", validations: { to: "acme.fit.charts" } }, plugin("acme.fit"))).resolves.toMatchObject({ validations: { to: "acme.fit.charts" } });
+        await expect(define(db, { name: "Foreign", type: "object_reference", validations: { to: "acme.fit.charts" } }, plugin("other.fit"))).rejects.toBeInstanceOf(ValidationError);
+        const field = await define(db, { name: "Chart", type: "object_reference", validations: { to: "custom.charts" } });
+        await setCustomFieldValues(db, "product", "prod_a", { values: [{ definitionId: field.id, value: "chart_a" }] }, merchant);
+        await expect(updateCustomFieldDefinition(db, field.id, { expectedRevision: field.revision, validations: { to: "custom.other" } }, merchant)).rejects.toBeInstanceOf(ValidationError);
     });
 });

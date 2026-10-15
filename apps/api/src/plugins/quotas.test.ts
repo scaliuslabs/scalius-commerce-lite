@@ -145,21 +145,21 @@ describe("app quotas and data updates", () => {
   it("refuses writes that add data once storage is full, but still allows deletes", async () => {
     const results: string[] = [];
     module = definePlugin({
-      manifest: manifest({ storage: { notes: { indexes: [] } } }) as never,
+      manifest: manifest({ objects: { notes: { name: "Notes", fields: [{ key: "text", name: "Text", type: "multi_line_text" }], indexes: [] } } }) as never,
       events: {
         "order.paid": async (_event, ctx) => {
           try {
-            await ctx.storage.notes!.put("n1", { text: "hello" });
+            await ctx.objects.notes!.put("n1", { text: "hello" });
             results.push("put ok");
           } catch (error) {
             results.push(`put ${(error as { code?: string }).code}`);
           }
-          await ctx.storage.notes!.delete("n0");
+          await ctx.objects.notes!.delete("n0");
           results.push("delete ok");
         },
       },
     });
-    await install({ storage: { notes: { indexes: [] } } });
+    await install({ objects: { notes: { name: "Notes", fields: [{ key: "text", name: "Text", type: "multi_line_text" }], indexes: [] } } });
     sqlite.prepare("UPDATE plugin_installations SET storage_bytes = ? WHERE plugin_id = 'acme.points'").run(10 * 1024 * 1024 * 1024);
     const full = await requirePluginInstallation(db, "acme.points");
     expect((await host().invokeEvent(full, event)).ok).toBe(true);

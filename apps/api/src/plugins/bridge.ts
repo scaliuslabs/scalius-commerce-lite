@@ -12,27 +12,23 @@
 import type { Database } from "@scalius/database/client";
 import type {
   PluginApiResult,
-  PluginStorageQuery,
+  PluginObjectQuery,
 } from "@scalius/plugin-sdk";
-import {
-  PluginError,
-  type PluginCollectionDeclaration,
-  type PluginRecordVersion,
-  type PluginStorageOperation,
-  type PluginStorageQueryResult,
-} from "@scalius/core/modules/plugins";
+import { PluginError } from "@scalius/core/modules/plugins";
+import { ObjectError, type ObjectRecordVersion, type ObjectOperation, type ObjectQueryResult } from "@scalius/core/modules/objects";
+import type { ObjectTypeDeclaration } from "@scalius/shared/plugins/objects";
 import { checkOutboundUrl, describeOutboundUrlIssue } from "@scalius/shared/outbound-url";
 import { isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
-import { pluginWithinRateLimit } from "./authority";
+import { pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
 
 /** What the host lets one installation do, derived from its manifest and approved grant. */
 export interface PluginBridgeAuthority {
   /** Effective RBAC permissions: the granted scopes' (`PLUGIN_SCOPES`) ∩ the live, grantable catalog. */
   permissions: string[];
   allowedHosts: string[];
-  collections: Record<string, PluginCollectionDeclaration>;
+  objects: Record<string, ObjectTypeDeclaration>;
   /** Declared custom fields (owner type + key), all in the plugin's own namespace. */
-  customFields: Array<{ ownerType: string; key: string; name: string; type: string; description?: string; storefrontVisible: boolean }>;
+  customFields: Array<{ ownerType: string; key: string; name: string; type: string; description?: string; storefrontVisible: boolean; to?: string }>;
   /** The app's name and the order timeline entry kinds it declares (`manifest.timeline`). */
   appName?: string;
   timeline?: Array<{ kind: string; title: string }>;
@@ -42,13 +38,6 @@ export interface PluginBridgeProps {
   pluginId: string;
   version: string;
   authority: PluginBridgeAuthority;
-  /**
-   * Set while the plugin draws storefront output that will be cached under
-   * dependency validation (storefront-render.ts): the bridge is read-only and
-   * reaches only these storage collections, the ones whose keys the cached
-   * entry carries. Every other method is refused.
-   */
-  render?: { collections: string[] };
   /**
    * Set while the plugin runs a provider operation: the store's messaging is
    * refused (an SMS or email provider sending through the store's messaging
@@ -65,9 +54,6 @@ export interface PluginBridgeProps {
    */
   limits?: { subrequests: number; storageFull: boolean; storageBytes: number; breachesBeforeStop: number };
 }
-
-/** Bridge methods a storefront render may call (reads of declared collections). */
-const RENDER_METHODS = new Set(["storageGet", "storageQuery", "storageCount"]);
 
 /** An `http.fetch` result as it crosses the bridge (the wrapper adds text()/json()). */
 export interface PluginHttpResult {
@@ -92,11 +78,12 @@ export interface PluginHttpInit {
 export interface PluginBridgeApi {
   apiCall(operationId: string, input?: unknown): Promise<PluginApiResult>;
   /** The record and its revision (what a conditional write names), or null. */
-  storageGet(collection: string, id: string): Promise<PluginRecordVersion | null>;
-  /** Puts and deletes across collections, all-or-nothing, each optionally at an expected revision. */
-  storageWrite(operations: PluginStorageOperation[]): Promise<Array<number | null>>;
-  storageQuery(collection: string, query?: PluginStorageQuery): Promise<PluginStorageQueryResult>;
-  storageCount(collection: string, where?: PluginStorageQuery["where"]): Promise<number>;
+  objectsGet(object: string, id: string): Promise<ObjectRecordVersion | null>;
+  objectsGetByHandle(object: string, handle: string): Promise<(ObjectRecordVersion & { id: string }) | null>;
+  /** Puts and deletes across objects, all-or-nothing, each optionally at an expected revision. */
+  objectsWrite(operations: ObjectOperation[]): Promise<Array<number | null>>;
+  objectsQuery(object: string, query?: PluginObjectQuery): Promise<ObjectQueryResult>;
+  objectsCount(object: string, where?: PluginObjectQuery["where"]): Promise<number>;
   kvGet(key: string): Promise<{ value: unknown; revision: number } | null>;
   /** With `expectedRevision` only while the live entry is still at it (null: absent). */
   kvSet(key: string, value: unknown, options?: PluginKvSetOptions): Promise<{ revision: number }>;
@@ -140,6 +127,7 @@ function fail(code: ConstructorParameters<typeof PluginError>[0], message: strin
 
 /** The error shape that crosses the bridge in both loaders. */
 export function toBridgeError(error: unknown, pluginId: string, method: string): Error {
+  if (error instanceof ObjectError) return new Error(`[${error.objectCode}] ${error.message}`);
   if (error instanceof PluginError) return new Error(`[${error.pluginCode}] ${error.message}`);
   // Never forward internals; log masked metadata only.
   const name = error instanceof Error ? error.name : typeof error;
@@ -181,9 +169,6 @@ export class PluginBridgeHost implements PluginBridgeApi {
       if (limit !== undefined && this.calls > limit) {
         await this.overQuota("subrequests", "quota.subrequests", `More than ${limit} platform calls in one run.`);
       }
-      if (this.props.render && !RENDER_METHODS.has(method)) {
-        fail("render.not_allowed", "While drawing storefront output an app may only read its settings and the collections the section declares in reads.");
-      }
       if (this.props.provider && method.startsWith("messaging")) {
         fail("messaging.not_allowed", "Provider operations reach their provider with ctx.http, not the store's messaging.");
       }
@@ -193,14 +178,11 @@ export class PluginBridgeHost implements PluginBridgeApi {
     }
   }
 
-  private collection(name: string): PluginCollectionDeclaration {
-    const declaration = typeof name === "string" && Object.prototype.hasOwnProperty.call(this.props.authority.collections, name)
-      ? this.props.authority.collections[name]
+  private object(name: string): ObjectTypeDeclaration {
+    const declaration = typeof name === "string" && Object.prototype.hasOwnProperty.call(this.props.authority.objects, name)
+      ? this.props.authority.objects[name]
       : undefined;
-    if (!declaration) fail("storage.undeclared_collection", `Collection "${String(name)}" is not declared in the manifest.`);
-    if (this.props.render && !this.props.render.collections.includes(name)) {
-      fail("render.not_allowed", `Collection "${name}" is not in this section's reads.`);
-    }
+    if (!declaration) fail("object.undeclared_type", `Object type "${String(name)}" is not declared in the manifest.`);
     return declaration;
   }
 
@@ -222,41 +204,49 @@ export class PluginBridgeHost implements PluginBridgeApi {
     });
   }
 
-  // ── storage ────────────────────────────────────────────────────────────
+  // ── objects ────────────────────────────────────────────────────────────
 
-  async storageGet(collection: string, id: string): Promise<PluginRecordVersion | null> {
-    return this.guard("storageGet", async () => {
-      this.collection(collection);
-      const { getPluginRecordVersion } = await import("@scalius/core/modules/plugins");
-      return getPluginRecordVersion(this.runtime.db(), this.pluginId, collection, id);
+  async objectsGet(object: string, id: string): Promise<ObjectRecordVersion | null> {
+    return this.guard("objectsGet", async () => {
+      this.object(object);
+      const { getObjectRecordVersion } = await import("@scalius/core/modules/objects");
+      return getObjectRecordVersion(this.runtime.db(), this.pluginId, object, id);
     });
   }
 
-  async storageWrite(operations: PluginStorageOperation[]): Promise<Array<number | null>> {
-    return this.guard("storageWrite", async () => {
-      if (!Array.isArray(operations)) fail("storage.invalid_batch", "A write is a list of operations.");
+  async objectsGetByHandle(object: string, handle: string): Promise<(ObjectRecordVersion & { id: string }) | null> {
+    return this.guard("objectsGetByHandle", async () => {
+      this.object(object);
+      const { getObjectRecordByHandle } = await import("@scalius/core/modules/objects");
+      return getObjectRecordByHandle(this.runtime.db(), this.pluginId, object, handle);
+    });
+  }
+
+  async objectsWrite(operations: ObjectOperation[]): Promise<Array<number | null>> {
+    return this.guard("objectsWrite", async () => {
+      if (!Array.isArray(operations)) fail("object.invalid_batch", "A write is a list of operations.");
       if (this.props.limits?.storageFull && operations.some((operation) => isRecord(operation) && operation.op === "put")) {
         await this.overQuota("storage", "quota.storage", `The app's storage is full (${formatBytes(this.props.limits.storageBytes)}); delete records to make room.`);
       }
-      const { writePluginRecords } = await import("@scalius/core/modules/plugins");
-      return writePluginRecords(this.runtime.db(), this.pluginId, (name) => this.collection(name), operations);
+      const { writeObjectRecords } = await import("@scalius/core/modules/objects");
+      return writeObjectRecords(this.runtime.db(), this.pluginId, (name) => this.object(name), operations);
     });
   }
 
-  async storageQuery(collection: string, query: PluginStorageQuery = {}): Promise<PluginStorageQueryResult> {
-    return this.guard("storageQuery", async () => {
-      const declaration = this.collection(collection);
-      if (!isRecord(query)) fail("storage.unindexed_query", "A query is an object with where, orderBy, limit and cursor.");
-      const { queryPluginRecords } = await import("@scalius/core/modules/plugins");
-      return queryPluginRecords(this.runtime.db(), this.pluginId, collection, declaration, query);
+  async objectsQuery(object: string, query: PluginObjectQuery = {}): Promise<ObjectQueryResult> {
+    return this.guard("objectsQuery", async () => {
+      const declaration = this.object(object);
+      if (!isRecord(query)) fail("object.unindexed_query", "A query is an object with where, orderBy, limit and cursor.");
+      const { queryObjectRecords } = await import("@scalius/core/modules/objects");
+      return queryObjectRecords(this.runtime.db(), this.pluginId, object, declaration, query);
     });
   }
 
-  async storageCount(collection: string, where: PluginStorageQuery["where"] = {}): Promise<number> {
-    return this.guard("storageCount", async () => {
-      const declaration = this.collection(collection);
-      const { countPluginRecords } = await import("@scalius/core/modules/plugins");
-      return countPluginRecords(this.runtime.db(), this.pluginId, collection, declaration, where ?? {});
+  async objectsCount(object: string, where: PluginObjectQuery["where"] = {}): Promise<number> {
+    return this.guard("objectsCount", async () => {
+      const declaration = this.object(object);
+      const { countObjectRecords } = await import("@scalius/core/modules/objects");
+      return countObjectRecords(this.runtime.db(), this.pluginId, object, declaration, where ?? {});
     });
   }
 
@@ -437,28 +427,28 @@ export class PluginBridgeHost implements PluginBridgeApi {
   async messagingEmail(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean }): Promise<{ queued: boolean }> {
     return this.guard("messagingEmail", async () => {
       const { sendPluginEmail } = await import("./messaging");
-      return sendPluginEmail(this.messagingContext(), input);
+      return sendPluginEmail(await this.messagingContext(), input);
     });
   }
 
   async messagingSms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }> {
     return this.guard("messagingSms", async () => {
       const { sendPluginSms } = await import("./messaging");
-      return sendPluginSms(this.messagingContext(), input);
+      return sendPluginSms(await this.messagingContext(), input);
     });
   }
 
   async messagingNotifyStaff(input: { title: string; body?: string; url?: string }): Promise<void> {
     return this.guard("messagingNotifyStaff", async () => {
       const { notifyPluginStaff } = await import("./messaging");
-      await notifyPluginStaff(this.messagingContext(), input);
+      await notifyPluginStaff(await this.messagingContext(), input);
     });
   }
 
   async messagingPush(input: { customerId: string; title: string; body?: string; url?: string; tag?: string }): Promise<{ delivered: boolean }> {
     return this.guard("messagingPush", async () => {
       const { pushPluginCustomer } = await import("./messaging");
-      return pushPluginCustomer(this.messagingContext(), input);
+      return pushPluginCustomer(await this.messagingContext(), input);
     });
   }
 
@@ -500,8 +490,13 @@ export class PluginBridgeHost implements PluginBridgeApi {
     });
   }
 
-  private messagingContext() {
-    return { pluginId: this.pluginId, permissions: this.props.authority.permissions, runtime: this.runtime };
+  private async messagingContext() {
+    const principal = await resolvePluginPrincipal(this.runtime.db(), this.pluginId);
+    if (!principal || principal.version !== this.props.version) {
+      fail("installation.inactive", "The plugin is not active.");
+    }
+    const permissions = this.props.authority.permissions.filter((permission) => principal.permissions.has(permission));
+    return { pluginId: this.pluginId, permissions, runtime: this.runtime };
   }
 }
 

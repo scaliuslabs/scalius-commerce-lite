@@ -18,7 +18,7 @@ import {
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
-import { storefrontCustomFieldsSchema } from "../schemas/custom-fields";
+import { storefrontCustomFieldsSchema, storefrontCardFieldsSchema } from "../schemas/custom-fields";
 
 // Create an OpenAPIHono app for collection routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -86,6 +86,7 @@ const collectionProductSchema = z.object({
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
   cardFacts: optionalProductCardFacts,
+  fields: storefrontCardFieldsSchema.optional(),
   discountedPrice: z.number(),
   priceVaries: z.boolean(),
   availableForSale: z.boolean(),
@@ -313,7 +314,8 @@ app.openapi(getCollectionByIdRoute, async (c) => {
   const { collection, categories, products, featuredProduct, pagination, pageInfo, priceRange, facets, ratingFacet } = result;
   const { version: _version, updatedAt: _updatedAt, deletedAt: _deletedAt, ...publicCollection } = collection;
 
-  return ok(c, {
+  // Keep the recursive custom-field codec behind the public JSON schema.
+  const response: z.infer<typeof getCollectionByIdRoute.responses[200]["content"]["application/json"]["schema"]>["data"] = {
     collection: {
       ...publicCollection,
       config: publicCollectionConfig(collection.config),
@@ -331,7 +333,8 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     priceRange,
     facets,
     ratingFacet,
-  });
+  };
+  return ok(c, response);
 });
 
 // Export the collection routes

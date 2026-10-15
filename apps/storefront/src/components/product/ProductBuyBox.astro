@@ -43,7 +43,7 @@ const { summary, reviewCopy, features, emi, contactLinks, componentBlocks, block
 const { product } = summary;
 ---
 
-<ProductSummary {...summary}>
+<ProductSummary {...summary} projection={blockData()}>
   <ReviewsSummary slot="after-title" product={product} copy={reviewCopy} />
   {features.shown && (
     <ProductFeatureList slot="after-actions" features={buyBoxFeatures(product)} variant="list" title={features.title} />

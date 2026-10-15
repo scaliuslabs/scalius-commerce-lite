@@ -1,4 +1,4 @@
-// The storefront theme document (version 9): the template it is based on
+// The storefront theme document (version 10): the template it is based on
 // (a label: no renderer reads it), the tokens, one variant per block (plus
 // the shared navigation source, the listing's filter style and page chrome),
 // the page sections and the page templates' sections. The dashboard
@@ -29,7 +29,7 @@ import { storefrontSectionListSchemaOf } from "./sections";
 import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefrontPageTemplateSchemaOf, storefrontPageTemplatesSchemaOf } from "./pages";
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 9 as const;
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 10 as const;
 
 /**
  * The five presets of one design system ("Scalius Base"), named by

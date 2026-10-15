@@ -40,6 +40,8 @@ export interface CourierCall<S = unknown> {
   signal: AbortSignal;
   /** The store's database, for the platform's own reads around a call (a courier's location ids). */
   db: Database;
+  /** Existing checkout place rows, avoiding carrier-specific location reads. */
+  locationExternalIds?: ReadonlyMap<string, Record<string, string | number>>;
 }
 
 /** A delivery provider row as one courier reads it. */

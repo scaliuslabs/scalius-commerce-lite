@@ -3,6 +3,7 @@
 import { productRoutes } from "./routes/products";
 import authRoutes from "./routes/auth";
 import { categoryRoutes } from "./routes/categories";
+import { publicObjectRoutes } from "./routes/objects";
 import { brandRoutes } from "./routes/brands";
 import { collectionRoutes } from "./routes/collections";
 import { attributeRoutes } from "./routes/attributes";
@@ -56,7 +57,7 @@ import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations"
 import { adminCategoryRoutes } from "./routes/admin/categories";
 import { adminBrandRoutes } from "./routes/admin/brands";
 import { adminPriceListRoutes } from "./routes/admin/price-lists";
-import { adminMetaobjectRoutes } from "./routes/admin/metaobjects";
+import { adminObjectRoutes } from "./routes/admin/objects";
 import { adminCollectionRoutes } from "./routes/admin/collections";
 import { adminCustomerRoutes } from "./routes/admin/customers";
 import { adminCustomerMarketingRoutes } from "./routes/admin/customer-marketing";
@@ -137,6 +138,7 @@ app.route("/agent-artifacts", agentArtifactRoutes);
 app.route("/attributes", attributeRoutes);
 app.route("/collections", collectionRoutes);
 app.route("/brands", brandRoutes);
+app.route("/objects", publicObjectRoutes);
 app.route("/search", searchRoutes);
 app.route("/navigation", navigationRoutes);
 app.route("/pages", pagesRoutes);
@@ -217,7 +219,7 @@ app.use("/admin/*", adminAuthMiddleware);
 app.route("/admin/categories", adminCategoryRoutes);
 app.route("/admin/brands", adminBrandRoutes);
 app.route("/admin/price-lists", adminPriceListRoutes);
-app.route("/admin/metaobjects", adminMetaobjectRoutes);
+app.route("/admin/objects", adminObjectRoutes);
 app.route("/admin/collections", adminCollectionRoutes);
 // Static customer paths (tags, segments, export) before the /{id} routes.
 app.route("/admin/customers", adminCustomerMarketingRoutes);

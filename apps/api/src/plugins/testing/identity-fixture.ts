@@ -19,7 +19,7 @@ export const IDENTITY_FIXTURE_MANIFEST = {
   description: "A buyer sign-in provider fixture.",
   author: { name: "Acme" },
   settings: [{ key: "client_secret", label: "Client secret", type: "secret", required: true }],
-  storage: { challenges: { indexes: [], unique: [] } },
+  objects: { challenges: { name: "Challenges", fields: [{ key: "challenge", name: "Challenge", type: "single_line_text" }] } },
   providers: {
     identity: [{ id: "google", name: "Google" }],
   },
@@ -52,7 +52,7 @@ export default {
     google: {
       kind: "identity",
       async authorize(input, ctx) {
-        await ctx.storage.challenges.put(input.nonce, { challenge: input.codeChallenge });
+        await ctx.objects.challenges.put(input.nonce, { challenge: input.codeChallenge });
         const query = new URLSearchParams({
           state: input.state,
           nonce: input.nonce,
@@ -65,7 +65,7 @@ export default {
       },
       async exchange(input, ctx) {
         if (input.code === "refused") throw providerError("declined", "The code was refused.", { code: "acme.refused" });
-        const seen = await ctx.storage.challenges.get(input.nonce);
+        const seen = await ctx.objects.challenges.get(input.nonce);
         if (!seen) throw providerError("declined", "Unknown sign-in.", { code: "acme.unknown" });
         const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input.codeVerifier));
         if (base64Url(new Uint8Array(digest)) !== seen.challenge) throw providerError("declined", "The PKCE verifier does not match.", { code: "acme.pkce" });

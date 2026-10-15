@@ -492,6 +492,13 @@ const skins = [
     settings: storySkinSettings(false),
   },
   {
+    id: "noor-specifications",
+    target: "section:specifications",
+    name: "Noor specifications",
+    description: "The product's specifications, including values connected to its custom fields.",
+    settings: [tone(), spacing()],
+  },
+  {
     id: "noor-faq",
     target: "section:faq",
     name: "Noor questions",

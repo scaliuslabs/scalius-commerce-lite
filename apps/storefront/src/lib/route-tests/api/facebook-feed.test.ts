@@ -1161,6 +1161,18 @@ describe("Facebook product feed route", () => {
     expect(item).toContain("<g:service>Standard</g:service>");
     expect(item).toContain("<g:price>110.00 BDT</g:price>");
 
+    mocks.getShippingMethods.mockResolvedValue([rate("Carrier", 0, { rateSource: "app.carrier:standard" })]);
+    for (const feedGet of [GET, GOOGLE_FEED_GET]) {
+      const feedItem = feedItemById(await (await feedGet(context())).text(), "prod_paid");
+      expect(feedItem).not.toContain("<g:shipping>");
+    }
+
+    mocks.getFeedProducts.mockResolvedValue({ ...products, data: [{ ...products.data[0], freeDelivery: true }] });
+    item = feedItemById(await (await GET(context())).text(), "prod_paid");
+    expect(item).toContain("<g:shipping>");
+    expect(item).toContain("<g:price>0.00 BDT</g:price>");
+    mocks.getFeedProducts.mockResolvedValue(products);
+
     mocks.getShippingMethods.mockResolvedValue([rate("Inside Dhaka", 60, { countries: [{ code: "BD", entire: false }] }), rate("Outside Dhaka", 120)]);
     item = feedItemById(await (await GET(context())).text(), "prod_paid");
     expect(item).not.toContain("<g:shipping>");

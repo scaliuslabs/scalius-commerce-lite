@@ -558,6 +558,18 @@ describe("customer auth API helpers", () => {
     expect(JSON.stringify(result)).not.toContain("reconcile_required");
     expect(JSON.stringify(result)).not.toContain("providerRefundId");
   });
+
+  it("uses the page language and store country for private buyer UI", async () => {
+    vi.stubGlobal("document", { documentElement: { lang: "bn", dataset: { storeRegion: "BD" } } });
+    const fetchMock = vi.fn(async () => Response.json({ success: true, data: { order: { id: "order_1" } } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getCustomerOrderDetail("order_1");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/customer-auth/orders/order_1", expect.objectContaining({
+      headers: { "x-storefront-language": "bn", "x-storefront-locale": "bn-BD" },
+    }));
+  });
   it("reads the account's own phone to verify, and nothing else about other orders", async () => {
     const reply = (data: unknown) => new Response(JSON.stringify({ success: true, data }), { status: 200 });
     vi.stubGlobal("fetch", vi.fn()

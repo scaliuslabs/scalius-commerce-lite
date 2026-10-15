@@ -1,6 +1,6 @@
 // The files `pnpm plugin create` writes: a small plugin that touches the
 // surfaces most apps need (an event, a checkout function, a storefront
-// section, an admin page and a data update), with a test for each. Copy the
+// section, an admin page and an object migration), with a test for each. Copy the
 // patterns in packages/plugin-sdk/README.md for the rest (settings, storage, cron, webhooks).
 
 export function scaffoldFiles(id, name) {
@@ -23,6 +23,8 @@ export function scaffoldFiles(id, name) {
       compilerOptions: {
         types: [],
         lib: ["ES2022", "DOM"],
+        jsx: "react-jsx",
+        jsxImportSource: "@scalius/plugin-sdk/storefront",
         paths: { "@scalius/shared/*": ["../../packages/shared/src/*"] },
         noEmit: true,
         tsBuildInfoFile: `../../node_modules/.cache/tsbuild/plugin-${name}.tsbuildinfo`,
@@ -52,9 +54,15 @@ export const manifest = {
   scopes: ["read_orders"],
   events: ["order.created"],
   functions: [{ point: "checkout.discounts", priority: 100 }],
+  objects: {
+    notes: {
+      name: "App notes",
+      fields: [{ key: "value", name: "Value", type: "single_line_text", required: true }],
+    },
+  },
   routes: {
     admin: [{ name: "overview", methods: ["GET"], description: "The app's page in the dashboard." }],
-    public: [{ name: "banner", methods: ["GET"], description: "Draws the banner section." }],
+    public: [],
     webhooks: [],
   },
   // Runs once after an install or an update, in order. Add new versions at
@@ -68,7 +76,6 @@ export const manifest = {
       type: "banner",
       name: "Banner",
       description: "A short message for the store.",
-      route: "banner",
       settings: [
         { key: "heading", label: "Heading", type: "text", default: "Hello from ${title}", maxLength: 120 },
         { key: "text", label: "Text", type: "textarea", default: "", maxLength: 500 },
@@ -77,17 +84,13 @@ export const manifest = {
   },
 } satisfies PluginManifestInput;
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => \`&#\${character.charCodeAt(0)};\`);
-}
-
 export default definePlugin({
   manifest,
 
   events: {
     // Delivery is at least once: keep a handler safe to run twice for the same event.
     "order.created": async (event, ctx) => {
-      await ctx.kv.set("last_order", event.resource.id);
+      await ctx.objects.notes!.put("last_order", { value: event.resource.id });
       ctx.log.info("Order created", { orderId: event.resource.id });
     },
   },
@@ -103,50 +106,56 @@ export default definePlugin({
         body: ui.page([
           ui.card("At a glance", [
             ui.keyValue([
-              { label: "Latest order", value: (await ctx.kv.get<string>("last_order")) ?? "None yet" },
-              { label: "Install note", value: (await ctx.kv.get<string>("install_note")) ?? "Not written" },
+              { label: "Latest order", value: String((await ctx.objects.notes!.get("last_order"))?.value ?? "None yet") },
+              { label: "Install note", value: String((await ctx.objects.notes!.get("install_note"))?.value ?? "Not written") },
             ]),
           ]),
         ], { title: ${JSON.stringify(title)}, description: "What this app did for the store." }),
       }),
-    },
-    public: {
-      // Storefront output: drawn from the section's settings alone, sanitized
-      // and cached by the platform until they change.
-      banner: (request) => {
-        const settings = request.render?.settings ?? {};
-        const heading = String(settings.heading ?? "").trim();
-        const text = String(settings.text ?? "").trim();
-        if (!heading && !text) return { body: { html: "" } };
-        return {
-          body: {
-            html: \`<div class="mx-auto max-w-7xl px-3 py-6 text-center sm:px-6">\${heading ? \`<h2 class="text-xl font-bold">\${escapeHtml(heading)}</h2>\` : ""}\${text ? \`<p class="mt-2 text-muted-foreground">\${escapeHtml(text)}</p>\` : ""}</div>\`,
-          },
-        };
-      },
     },
   },
 
   migrations: {
     // Idempotent: it may run again after a crash, so it keeps what is there.
     "1": async (ctx) => {
-      if ((await ctx.kv.get("install_note")) === null) await ctx.kv.set("install_note", "Installed");
+      if ((await ctx.objects.notes!.get("install_note")) === null) {
+        await ctx.objects.notes!.put("install_note", { value: "Installed" }, { expectedRevision: null });
+      }
     },
   },
 });
+`,
+    "src/storefront.tsx": `import { defineStorefront, type SectionProps } from "@scalius/plugin-sdk/storefront";
+
+// Components receive resolved settings and escape text automatically.
+function Banner({ settings }: SectionProps<{ heading: string; text: string }>) {
+  const heading = settings.heading.trim();
+  const text = settings.text.trim();
+  if (!heading && !text) return null;
+  return (
+    <section class="mx-auto max-w-7xl p-6 text-center">
+      {heading && <h2 class="text-xl font-bold">{heading}</h2>}
+      {text && <p class="mt-2 text-muted-foreground">{text}</p>}
+    </section>
+  );
+}
+
+export default defineStorefront({ sections: { banner: Banner } });
 `,
     "src/index.test.ts": `// Unit tests with the SDK's test harness: the platform's own runtime over an
 // in-memory bridge. Run them with \`pnpm test\`.
 import { describe, expect, it } from "vitest";
 import { createPluginTestHarness, fixtures, parsePluginUiDocument } from "@scalius/plugin-sdk/testing";
+import { renderSection } from "@scalius/plugin-sdk/storefront/testing";
 import plugin from "./index";
+import storefront from "./storefront";
 
 describe(${JSON.stringify(id)}, () => {
   it("remembers the latest order", async () => {
     const harness = createPluginTestHarness(plugin);
     const result = await harness.deliver(fixtures.event("order.created", { resource: { type: "order", id: "o1" } }));
     expect(result.ok).toBe(true);
-    expect(harness.kv.get("last_order")).toBe("o1");
+    expect(harness.records.get("notes")?.get("last_order")).toEqual({ value: "o1" });
   });
 
   it("offers no discounts at checkout", async () => {
@@ -158,16 +167,16 @@ describe(${JSON.stringify(id)}, () => {
   it("writes its install note once, however often the migration runs", async () => {
     const harness = createPluginTestHarness(plugin);
     expect((await harness.runMigrations()).ok).toBe(true);
-    harness.kv.set("install_note", "Changed by the merchant");
+    harness.records.get("notes")!.set("install_note", { value: "Changed by the merchant" });
     expect((await harness.runMigrations()).ok).toBe(true);
-    expect(harness.kv.get("install_note")).toBe("Changed by the merchant");
+    expect(harness.records.get("notes")?.get("install_note")).toEqual({ value: "Changed by the merchant" });
   });
 
-  it("draws the banner from its settings and escapes them", async () => {
-    const harness = createPluginTestHarness(plugin);
-    const result = await harness.render("section", "banner", { settings: { heading: "Sale <now>", text: "" } });
-    expect(result.value).toEqual({ body: { html: expect.stringContaining("Sale &#60;now&#62;") } });
-    expect(JSON.stringify(result.value)).not.toContain("<now>");
+  it("draws the banner from its settings and escapes them", () => {
+    const html = renderSection(storefront, "banner", { heading: "Sale <now>", text: "" });
+    expect(html).toContain("Sale &lt;now&gt;");
+    expect(html).not.toContain("<now>");
+    expect(renderSection(storefront, "banner", { heading: "", text: "" })).toBe("");
   });
 
   it("answers its admin page with a valid UI document", async () => {

@@ -1,3 +1,9 @@
+/**
+ * The colours a merchant picks; each writes every token that shares its
+ * role. Background also moves the card and popover surfaces, keeping the
+ * template's own card-to-page relationship (see setThemeColor).
+ */
+import type { SettingBindings } from "@scalius/shared/storefront-theme/bindings";
 import {
   STOREFRONT_BANGLA_FONTS,
   STOREFRONT_BENGALI_SYSTEM_FONT,
@@ -37,11 +43,6 @@ import { STOREFRONT_SKIN_UNITS } from "@scalius/shared/plugins/storefront-protoc
 import type { ThemeApp, ThemeAppBlock, ThemeAppSkin } from "~/lib/api-query-options/online-store";
 import { appValuesInvalid, type AppSettingValues } from "./schema-form/app-settings";
 
-/**
- * The colours a merchant picks; each writes every token that shares its
- * role. Background also moves the card and popover surfaces, keeping the
- * template's own card-to-page relationship (see setThemeColor).
- */
 export const COLOR_ROLES = {
   background: ["background", "card", "popover"],
   text: ["foreground", "card-foreground", "popover-foreground"],
@@ -423,6 +424,10 @@ export function moveProductAppBlock(theme: StorefrontThemeDocument, id: string, 
 
 export function setProductAppBlockValues(theme: StorefrontThemeDocument, id: string, values: AppSettingValues): StorefrontThemeDocument {
   return withProductAppBlocks(theme, productAppBlocks(theme).map((block) => (block.id === id ? { ...block, values } : block)));
+}
+
+export function setProductAppBlockBindings(theme: StorefrontThemeDocument, id: string, bindings: SettingBindings | undefined): StorefrontThemeDocument {
+  return withProductAppBlocks(theme, productAppBlocks(theme).map((block) => (block.id === id ? { ...block, bindings } : block)));
 }
 
 /** True while an app block's values break what its app declares (blocks of inactive apps are not judged). */

@@ -43,11 +43,12 @@ const CATEGORY_OF: Record<(typeof STOREFRONT_SECTION_RENDERERS)[number], Exclude
   "brand-wall": "products",
   editorial: "text",
   faq: "text",
+    specifications: "text",
   "seo-text": "text",
   "usp-strip": "text",
   "utility-cards": "text",
   newsletter: "text",
-  metaobjects: "text",
+  objects: "text",
 };
 
 export type LibraryChoice = { type: StorefrontSectionType } | { app: string };
@@ -106,7 +107,8 @@ function SectionSketch({ type }: { type: StorefrontSectionType | "app" }): React
     case "seo-text":
       return <span className="flex min-h-0 flex-1 flex-col justify-center gap-1 px-2"><Bar className="w-1/2" /><Line /><Line /><Line className="w-2/3" /></span>;
     case "faq":
-    case "metaobjects":
+    case "specifications":
+    case "objects":
       return <span className="flex min-h-0 flex-1 flex-col justify-center gap-1.5 px-1">{[0, 1, 2].map((index) => <span key={index} className="flex items-center justify-between border-b border-(--sk-edge) pb-1"><Line className="w-2/3" /><Line className="w-1.5" /></span>)}</span>;
     case "usp-strip":
       return <span className="grid min-h-0 flex-1 grid-cols-4 items-center gap-1">{[0, 1, 2, 3].map((index) => <span key={index} className="flex items-center gap-0.5"><span className="size-1.5 rounded-full bg-(--sk-accent)" /><Line className="flex-1" /></span>)}</span>;

@@ -30,7 +30,7 @@ describe("acme.order-tagger", () => {
       idempotencyKey: expect.stringMatching(/^evt_test_[0-9a-f]+$/),
     }]);
     expect(harness.customFields.get("order:ord_1")).toEqual({ tag: "vip" });
-    expect(harness.records.get("tagged")?.get("ord_1")).toMatchObject({ orderId: "ord_1", tag: "vip" });
+    expect(harness.records.get("tagged")?.get("ord_1")).toMatchObject({ order_id: "ord_1", tag: "vip" });
 
     // A redelivered event changes nothing and calls nothing.
     const before = calls.calls.length;
@@ -43,7 +43,11 @@ describe("acme.order-tagger", () => {
     const harness = createPluginTestHarness(tagger, { api: small.answer, settings: { min_total: 500 } });
     expect(await harness.event("order.paid", { type: "order", id: "ord_2" })).toMatchObject({ ok: true });
     expect(small.calls.map((call) => call.operationId)).toEqual(["dashboard.orders.get"]);
-    expect(harness.records.get("tagged")?.get("ord_2")).toMatchObject({ tag: null });
+    expect(harness.records.get("tagged")?.get("ord_2")).toMatchObject({ order_id: "ord_2" });
+    expect(harness.records.get("tagged")?.get("ord_2")?.tag).toBeUndefined();
+    const summary = await harness.route("admin", "summary");
+    expect(JSON.stringify(summary.value)).toContain("Below the minimum");
+    expect(JSON.stringify(summary.value)).not.toContain("#undefined");
 
     const broken = createPluginTestHarness(tagger, {
       api: async () => ({ ok: false, status: 503, data: null, error: { code: "unavailable", message: "down" } }),

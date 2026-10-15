@@ -1,7 +1,8 @@
+import { OBJECT_HANDLE_PATTERN, prepareObjectData, objectDataWire } from "@scalius/shared/plugins/objects";
 // `@scalius/plugin-sdk/testing`: run a plugin's handlers in a unit test with
 // the same runtime the platform uses (./runtime), over an in-memory bridge.
-// Storage enforces the manifest the way the platform does (declared
-// collections, queries through the leading fields of a declared index,
+// Objects enforce the manifest the way the platform does (declared
+// objects, queries through the leading fields of a declared index,
 // unique indexes), refusals carry the platform's error codes, and every
 // value is copied across the bridge. ctx.api and ctx.http answer from the
 // callbacks you pass; messages are recorded, not sent.
@@ -14,7 +15,6 @@ import {
   pluginScopePermissions,
   pluginSettingDefaults,
   type PluginManifest,
-  type PluginRenderContext,
   type PluginSettingValue,
 } from "@scalius/shared/plugins";
 import { providerOperationSchemas } from "@scalius/shared/plugins/providers";
@@ -87,7 +87,11 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const declared: PluginManifest = parsed.manifest;
   const features = options.features ?? declared.features.map((feature) => feature.id);
   const manifest: PluginManifest = pluginManifestWithFeatures(declared, features);
-  const records = new Map<string, Map<string, Record<string, unknown>>>(Object.keys(manifest.storage).map((name) => [name, new Map()]));
+  const records = new Map<string, Map<string, Record<string, unknown>>>(Object.keys(manifest.objects).map((name) => [name, new Map()]));
+  const metadata = new Map<string, { handle: string | null; status: "active" | "draft" | "published" }>();
+  const codec = { decimalPlaces: options.store?.decimalPlaces ?? 2, currencyCode: options.store?.currency ?? "BDT" };
+  const defaultStatus = (name: string) => manifest.objects[name]!.storefront ? "draft" as const : "active" as const;
+  const wire = (name: string, data: Record<string, unknown>) => objectDataWire(manifest.objects[name]!, data, codec);
   const kv = new Map<string, unknown>();
   // Revisions, as the platform keeps them: every write advances one.
   const revisions = new Map<string, number>();
@@ -97,9 +101,9 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const logs: PluginLogRecord[] = [];
   const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[] };
 
-  const collection = (name: string) => records.get(name) ?? refuse("storage.undeclared_collection", `Collection "${name}" is not declared in the manifest.`);
+  const object = (name: string) => records.get(name) ?? refuse("object.undeclared_type", `Object type "${name}" is not declared in the manifest.`);
   const indexFor = (name: string, whereFields: string[], orderField: string | undefined) => {
-    for (const entry of manifest.storage[name]!.indexes) {
+    for (const entry of manifest.objects[name]!.indexes) {
       const fields = fieldsOf(entry);
       const fixed = fields.slice(0, whereFields.length);
       if (whereFields.length > fields.length || fixed.length !== whereFields.length || !fixed.every((field) => whereFields.includes(field))) continue;
@@ -114,56 +118,83 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     apiCall: async (operationId, input) => copy(options.api
       ? await options.api(operationId, input as PluginApiCallInput | undefined)
       : { ok: false, status: 404, data: null, error: { code: "api.unknown_operation", message: `Unknown operation ${operationId}.` } }),
-    storageGet: async (name, id) => {
-      const data = collection(name).get(id);
-      return data ? copy({ data, revision: revisions.get(revisionKey(name, id)) ?? 1 }) : null;
+    objectsGet: async (name, id) => {
+      const data = object(name).get(id);
+      return data ? copy({ data: wire(name, data), revision: revisions.get(revisionKey(name, id)) ?? 1, ...(metadata.get(revisionKey(name, id)) ?? { handle: null, status: defaultStatus(name) }) }) : null;
+    },
+    objectsGetByHandle: async (name, handle) => {
+      for (const [id, data] of object(name)) {
+        if (metadata.get(revisionKey(name, id))?.handle === handle) {
+          return copy({ id, data: wire(name, data), revision: revisions.get(revisionKey(name, id)) ?? 1, ...metadata.get(revisionKey(name, id))! });
+        }
+      }
+      return null;
     },
     // All-or-nothing, as one platform batch: every condition and unique index
     // is checked against the state the whole batch leaves before anything changes.
-    storageWrite: async (operations) => {
-      if (!Array.isArray(operations) || operations.length < 1 || operations.length > 25) refuse("storage.invalid_batch", "A batch has 1 to 25 operations.");
+    objectsWrite: async (operations) => {
+      if (!Array.isArray(operations) || operations.length < 1 || operations.length > 25) refuse("object.invalid_batch", "A batch has 1 to 25 operations.");
       const staged = new Map([...records].map(([name, store]) => [name, new Map(store)]));
+      const stagedMetadata = new Map(metadata);
       const seen = new Set<string>();
       const touched: Array<{ name: string; id: string; written: boolean }> = [];
       for (const operation of operations as Array<Record<string, unknown>>) {
-        const { op, collection: name, id, expectedRevision } = operation as { op?: unknown; collection: string; id: string; expectedRevision?: unknown };
-        if (op !== "put" && op !== "delete" && op !== "check") refuse("storage.invalid_batch", "Each operation is a put, delete or check.");
-        const store = staged.get(name) ?? refuse("storage.undeclared_collection", `Collection "${name}" is not declared in the manifest.`);
-        if (typeof id !== "string" || id.length < 1 || id.length > 128) refuse("storage.invalid_id", "Record ids are 1 to 128 printable characters.");
-        if (seen.has(revisionKey(name, id))) refuse("storage.invalid_batch", "A batch writes each record once.");
+        const { op, object: name, id, expectedRevision } = operation as { op?: unknown; object: string; id: string; expectedRevision?: unknown };
+        if (op !== "put" && op !== "delete" && op !== "check") refuse("object.invalid_batch", "Each operation is a put, delete or check.");
+        const store = staged.get(name) ?? refuse("object.undeclared_type", `Object type "${name}" is not declared in the manifest.`);
+        if (typeof id !== "string" || id.length < 1 || id.length > 128) refuse("object.invalid_id", "Record ids are 1 to 128 printable characters.");
+        if (seen.has(revisionKey(name, id))) refuse("object.invalid_batch", "A batch writes each record once.");
         seen.add(revisionKey(name, id));
         if (expectedRevision !== undefined || op === "check") {
           if (expectedRevision !== null && !(typeof expectedRevision === "number" && Number.isSafeInteger(expectedRevision) && expectedRevision >= 1)) {
-            refuse("storage.invalid_batch", "expectedRevision is a revision you read, or null for a record that must not exist.");
+            refuse("object.invalid_batch", "expectedRevision is a revision you read, or null for a record that must not exist.");
           }
           const current = records.get(name)!.has(id) ? revisions.get(revisionKey(name, id)) ?? 1 : null;
-          if (current !== expectedRevision) refuse("storage.conflict", `${name}/${id} changed since it was read (or exists when it must not): read it again and retry.`);
+          if (current !== expectedRevision) refuse("object.conflict", `${name}/${id} changed since it was read (or exists when it must not): read it again and retry.`);
         }
         if (op === "check") {
           touched.push({ name, id, written: false });
         } else if (op === "delete") {
           store.delete(id);
+          stagedMetadata.delete(revisionKey(name, id));
           touched.push({ name, id, written: false });
         } else {
           const record = operation.record;
-          if (typeof record !== "object" || record === null || Array.isArray(record)) refuse("storage.invalid_record", "A record is a plain JSON object.");
-          store.set(id, copy(record as Record<string, unknown>));
+          if (typeof record !== "object" || record === null || Array.isArray(record)) refuse("object.invalid_record", "A record is a plain JSON object.");
+          const previous = stagedMetadata.get(revisionKey(name, id));
+          const handle = operation.handle === undefined ? previous?.handle ?? null : operation.handle;
+          const status = operation.status === undefined ? previous?.status ?? defaultStatus(name) : operation.status;
+          if (operation.handle !== undefined && (!manifest.objects[name]!.handle || (handle !== null && (typeof handle !== "string" || !OBJECT_HANDLE_PATTERN.test(handle))))) refuse("object.invalid", "This object does not accept that handle.");
+          if (status !== "active" && status !== "draft" && status !== "published") refuse("object.invalid_record", "Status is active, draft or published.");
+          if (manifest.objects[name]!.storefront ? status === "active" : status !== "active") refuse("object.invalid", "Only storefront objects have draft or published status.");
+          stagedMetadata.set(revisionKey(name, id), { handle, status } as { handle: string | null; status: "active" | "draft" | "published" });
+          const checked = prepareObjectData(manifest.objects[name]!, record as Record<string, unknown>, codec, status as "active" | "draft" | "published");
+          if (!checked.ok) refuse("object.invalid", checked.issues.map((issue) => `${issue.key}: ${issue.message}`).join("; "));
+          store.set(id, copy(checked.data));
           touched.push({ name, id, written: true });
         }
       }
       for (const [name, store] of staged) {
-        for (const entry of manifest.storage[name]!.unique) {
+        const handles = new Set<string>();
+        for (const id of store.keys()) {
+          const handle = stagedMetadata.get(revisionKey(name, id))?.handle;
+          if (handle && handles.has(handle)) refuse("object.unique_violation", "Another record already has this handle.");
+          if (handle) handles.add(handle);
+        }
+        for (const entry of manifest.objects[name]!.unique) {
           const fields = fieldsOf(entry);
           const values = new Set<string>();
           for (const data of store.values()) {
             if (fields.some((field) => scalar(data[field]) === null)) continue;
             const key = JSON.stringify(fields.map((field) => scalar(data[field])));
-            if (values.has(key)) refuse("storage.unique_violation", `Another record already has this ${fields.join(" + ")}.`);
+            if (values.has(key)) refuse("object.unique_violation", `Another record already has this ${fields.join(" + ")}.`);
             values.add(key);
           }
         }
       }
       for (const [name, store] of staged) records.set(name, store);
+      metadata.clear();
+      for (const [key, value] of stagedMetadata) metadata.set(key, value);
       return touched.map(({ name, id, written }) => {
         const key = revisionKey(name, id);
         if (!written) {
@@ -175,10 +206,10 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
         return revision;
       });
     },
-    storageQuery: async (name, query) => {
+    objectsQuery: async (name, query) => {
       const { where = {}, orderBy, limit = 50, cursor } = (query ?? {}) as { where?: Record<string, Scalar>; orderBy?: { field: string; direction?: string }; limit?: number; cursor?: string | null };
-      const store = collection(name);
-      if (!indexFor(name, Object.keys(where), orderBy?.field)) refuse("storage.unindexed_query", "Query by the leading fields of a declared index and order by its next field.");
+      const store = object(name);
+      if (!indexFor(name, Object.keys(where), orderBy?.field)) refuse("object.unindexed_query", "Query by the leading fields of a declared index and order by its next field.");
       const field = orderBy?.field ?? "id";
       const sign = orderBy?.direction === "desc" ? -1 : 1;
       const matches = [...store].filter(([, data]) => Object.entries(where).every(([key, value]) => compare(scalar(data[key]), scalar(value)) === 0))
@@ -186,14 +217,14 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       const offset = cursor ? Number(atob(cursor)) : 0;
       const page = matches.slice(offset, offset + Math.min(Math.max(1, limit), 100));
       return copy({
-        records: page.map(([id, data]) => ({ id, data })),
+        records: page.map(([id, data]) => ({ id, data: wire(name, data), revision: revisions.get(revisionKey(name, id)) ?? 1, ...(metadata.get(revisionKey(name, id)) ?? { handle: null, status: defaultStatus(name) }) })),
         nextCursor: offset + page.length < matches.length ? btoa(String(offset + page.length)) : null,
       });
     },
-    storageCount: async (name, where) => {
+    objectsCount: async (name, where) => {
       const filter = (where ?? {}) as Record<string, Scalar>;
-      if (!indexFor(name, Object.keys(filter), undefined)) refuse("storage.unindexed_query", "Count by the leading fields of a declared index.");
-      return [...collection(name).values()].filter((data) => Object.entries(filter).every(([key, value]) => compare(scalar(data[key]), scalar(value)) === 0)).length;
+      if (!indexFor(name, Object.keys(filter), undefined)) refuse("object.unindexed_query", "Count by the leading fields of a declared index.");
+      return [...object(name).values()].filter((data) => Object.entries(filter).every(([key, value]) => compare(scalar(data[key]), scalar(value)) === 0)).length;
     },
     kvGet: async (key) => (kv.has(key) ? copy({ value: kv.get(key), revision: kvRevisions.get(key) ?? 1 }) : null),
     kvSet: async (key, value, options) => {
@@ -261,7 +292,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     plugin: { id: manifest.id, version: manifest.version },
     store: { name: "Test store", url: "https://shop.test", currency: "BDT", decimalPlaces: 2, timezone: "Asia/Dhaka", locale: "en", ...options.store },
     settings: { ...pluginSettingDefaults(manifest.settings), ...options.settings },
-    collections: Object.keys(manifest.storage),
+    objects: Object.keys(manifest.objects),
     inventory: pluginHandlerInventory(manifest, declared),
     features: declared.features.map((feature) => feature.id).filter((id) => features.includes(id)),
   };
@@ -273,20 +304,6 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     const result = await invokePluginDefinition(module, copy(invocation), copy(seed), invocation.kind === "function" ? null : runBridge);
     logs.push(...result.logs);
     return copy(result);
-  };
-
-  /** The bridge as the platform narrows it while drawing storefront output: reads of the declared collections only. */
-  const renderBridge = (reads: readonly string[]): PluginRuntimeBridge => {
-    const denied = () => refuse("render.not_allowed", "While drawing storefront output an app may only read its settings and the collections the section declares in reads.");
-    const readable = (name: string) => {
-      if (!reads.includes(name)) refuse("render.not_allowed", `Collection "${name}" is not in this section's reads.`);
-    };
-    return {
-      ...Object.fromEntries(Object.keys(bridge).map((method) => [method, async () => denied()])) as unknown as PluginRuntimeBridge,
-      storageGet: async (name, id) => (readable(name), bridge.storageGet(name, id)),
-      storageQuery: async (name, query) => (readable(name), bridge.storageQuery(name, query)),
-      storageCount: async (name, where) => (readable(name), bridge.storageCount(name, where)),
-    };
   };
 
   return {
@@ -375,30 +392,6 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       name,
       request: { method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null, ...request },
     }),
-    /**
-     * Draws a checkout or customer-account block the way the platform does:
-     * `request.render`, and a bridge that refuses everything but reads of
-     * the collections the block declares in `reads`. Sections, product blocks
-     * and skins are components: test them with
-     * `@scalius/plugin-sdk/storefront/testing`.
-     */
-    render: (type: string, input: { instanceId?: string } = {}) => {
-      const block = manifest.storefront.blocks.find((entry) => entry.type === type);
-      if (!block) throw new Error(`The manifest declares no block of type ${type}.`);
-      const render: PluginRenderContext = {
-        kind: "block",
-        target: block.target,
-        type,
-        instanceId: input.instanceId ?? `${manifest.id}/${type}`,
-        settings: {},
-      };
-      return run({
-        kind: "route",
-        surface: "public",
-        name: block.route,
-        request: { method: "GET", subpath: "", query: {}, headers: { accept: "text/html" }, body: null, rawBody: null, staffId: null, render, customer: null },
-      }, renderBridge(block.reads));
-    },
     cron: (name: string, scheduledAt = new Date().toISOString()) => run({ kind: "cron", name, scheduledAt }),
     lifecycle: (hook: "install" | "activate" | "deactivate" | "uninstall", keepData = true) => run({ kind: "lifecycle", hook, keepData }),
     /** Runs the `enable` or `disable` hook for one feature, as the platform does when a person turns it on or off. */

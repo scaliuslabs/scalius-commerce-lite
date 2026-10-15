@@ -1,4 +1,5 @@
 import { fetchWithTransientRetry } from "../transient-fetch";
+import { buyerUiLocaleHeaders } from "../buyer-ui/locale";
 import { billingQuoteFields } from "./billing-address";
 import {
   normalizeTaxQuoteRequest,
@@ -159,6 +160,7 @@ export function buildTaxQuoteRequest(
   try {
     return normalizeTaxQuoteRequest({
       items,
+      attributes: data.attributes,
       inventoryPool: data.inventoryPool,
       ...(mode === "delivery" ? { city: data.city, zone: data.zone, area: data.area } : {}),
       // Another country's delivery: its shipping zone matches on these (a Bangladesh address sends none).
@@ -169,7 +171,11 @@ export function buildTaxQuoteRequest(
           shippingPostalCode: data.shippingPostalCode,
         }
         : {}),
-      ...(mode === "none" ? {} : { shippingMethodId: data.shippingMethodId }),
+      ...(mode === "none" ? {} : {
+        shippingMethodId: data.shippingMethodId,
+        shippingRateToken: data.shippingRateToken,
+        ...(typeof data.cod === "boolean" ? { cod: data.cod } : {}),
+      }),
       // Nothing physical: taxed at the billing country, region and postal code.
       ...billingQuoteFields(mode, data),
       discountCodes: readDiscountCodes(data),
@@ -195,6 +201,7 @@ async function postTaxQuote(
     {
       method: "POST",
       headers: {
+        ...await buyerUiLocaleHeaders(),
         Accept: "application/json",
         "Content-Type": "application/json",
       },

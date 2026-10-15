@@ -3,6 +3,7 @@ import {
   EVENT_FACT_SCHEMAS,
   EVENT_TOPICS,
   EVENT_TOPIC_FILTERS,
+  EVENT_TOPIC_PREFIXES,
   EVENT_TOPIC_RESOURCE,
   isEventTopicFilter,
   normalizeEventTopicFilters,
@@ -29,6 +30,43 @@ describe("event catalog", () => {
       expect(EVENT_FACT_SCHEMAS[topic], topic).toBeTruthy();
     }
     expect(Object.keys(EVENT_FACT_SCHEMAS).sort()).toEqual([...EVENT_TOPICS].sort());
+  });
+
+  it("accepts new commerce facts without contact, payment or object content", () => {
+    const cases = [
+      ["fulfillment.created", { fulfillmentId: "f", orderId: "o", kind: "ship", locationId: null }],
+      ["fulfillment.voided", { fulfillmentId: "f", orderId: "o", kind: "pickup", locationId: "loc" }],
+      ["shipment.updated", { shipmentId: "s", orderId: "o", providerId: null, previousStatus: "pending", status: "delivered" }],
+      ["payment.updated", { paymentId: "p", orderId: "o", provider: "cod", previousStatus: null, status: "confirmed" }],
+      ["checkout.abandoned", { abandonedCheckoutId: "a", checkoutId: "c" }],
+      ...(["created", "updated", "deleted"] as const).map((kind) => [`discount.${kind}`, { promotionId: "d", previousStatus: null, status: "draft" }] as const),
+      ["discount.redeemed", { promotionId: "d", orderId: "o", codeId: null }],
+      ...(["created", "updated"] as const).map((kind) => [`review.${kind}`, { reviewId: "r", productId: "p", previousStatus: null, status: "pending", rating: 5 }] as const),
+      ...(["created", "updated"] as const).map((kind) => [`gift_card.${kind}`, { giftCardId: "g", previousStatus: null, status: "active" }] as const),
+      ["gift_card.transaction", { giftCardId: "g", transactionId: "t", kind: "issue", orderId: null }],
+      ...(["created", "updated", "deleted"] as const).map((kind) => [`object.${kind}`, { objectType: "ot", objectId: "obj", revision: 1, status: "active" }] as const),
+      ["customer.redact_requested", { customerId: "c" }],
+      ["customer.data_requested", { customerId: "c" }],
+    ] as const;
+    for (const [topic, facts] of cases) {
+      expect(parseEventFacts(topic, { ...facts, email: "private", amount: 123, fields: { secret: true } }), topic).toEqual(facts);
+    }
+    expect(parseEventFacts("review.created", { reviewId: "r", productId: "p", previousStatus: null, status: "pending", rating: 6 })).toBeNull();
+    expect(parseEventFacts("object.updated", { objectType: "t", objectId: "o", revision: 0, status: "active" })).toBeNull();
+    const longProviderId = `${"v".repeat(40)}.${"a".repeat(60)}:${"p".repeat(48)}`;
+    expect(parseEventFacts("payment.updated", { paymentId: "p", orderId: "o", provider: longProviderId, previousStatus: null, status: "pending" }))
+      .toMatchObject({ provider: longProviderId });
+    const longTypeId = `oty_${"v".repeat(40)}.${"a".repeat(60)}.${"t".repeat(48)}`;
+    expect(parseEventFacts("object.created", { objectType: longTypeId, objectId: "o", revision: 1, status: "active" }))
+      .toMatchObject({ objectType: longTypeId });
+  });
+
+  it("provides a wildcard for every topic family", () => {
+    for (const topic of EVENT_TOPICS) {
+      const prefix = topic.split(".")[0];
+      expect(EVENT_TOPIC_PREFIXES).toContain(prefix);
+      expect(isEventTopicFilter(`${prefix}.*`)).toBe(true);
+    }
   });
 
   it("parses stored facts strictly by type and tolerates additive keys", () => {

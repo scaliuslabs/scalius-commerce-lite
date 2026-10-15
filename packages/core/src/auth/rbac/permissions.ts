@@ -108,10 +108,10 @@ export const PERMISSIONS = {
   PAGES_PUBLISH: "pages.publish",
 
   // =============================================
-  // Metaobjects (2 permissions): content types and their entries
+  // Objects (2 permissions): content types and their entries
   // =============================================
-  METAOBJECTS_VIEW: "metaobjects.view",
-  METAOBJECTS_EDIT: "metaobjects.edit",
+  OBJECTS_VIEW: "objects.view",
+  OBJECTS_EDIT: "objects.edit",
 
   // =============================================
   // Media (4 permissions)

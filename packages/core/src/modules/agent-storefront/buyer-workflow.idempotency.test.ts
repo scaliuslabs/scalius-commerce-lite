@@ -43,11 +43,19 @@ describe("agent storefront checkout idempotency", () => {
     ["address", { shippingAddress: "House 99, Dhaka" }],
     ["notes", { notes: "Call before delivery" }],
     ["payment", { paymentMethod: "stripe" as const }],
+    ["checkout attributes", { attributes: { "acme.gift.message": "Happy birthday" } }],
   ])("rejects a reused key when %s meaning changes", async (_label, change) => {
     const stored = await buildAgentStorefrontCheckoutRequestHash("asc_context", input);
     const changed = await buildAgentStorefrontCheckoutRequestHash("asc_context", { ...input, ...change });
 
     expect(() => assertAgentStorefrontCheckoutReplayHash(stored, changed)).toThrow(ConflictError);
+  });
+
+  it("hashes checkout attributes canonically without changing empty historical requests", async () => {
+    expect(await buildAgentStorefrontCheckoutRequestHash("asc_context", { ...input, attributes: {} }))
+      .toBe(await buildAgentStorefrontCheckoutRequestHash("asc_context", input));
+    expect(await buildAgentStorefrontCheckoutRequestHash("asc_context", { ...input, attributes: { b: "2", a: "1" } }))
+      .toBe(await buildAgentStorefrontCheckoutRequestHash("asc_context", { ...input, attributes: { a: "1", b: "2" } }));
   });
 
   it("keeps pre-version historical rows replayable", async () => {

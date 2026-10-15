@@ -145,6 +145,7 @@ function storeFeedShipping(
     freeCountries.push(country);
     if (zoned) continue;
     for (const method of delivery) {
+      if (method.rateSource && method.rateSource !== "flat") continue;
       const amount = formatCatalogFeedAmount(method.fee, currencyCode);
       if (amount) rates.push({ country, service: method.name, price: `${amount} ${currencyCode}` });
     }

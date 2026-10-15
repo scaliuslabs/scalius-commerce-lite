@@ -14,6 +14,7 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { useWholeUnitPrices } from "~/components/admin/shared/MoneyInput";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { useProviderPortAccess } from "~/lib/provider-port-access";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { apiClient, apiData } from "~/lib/api";
 import {
@@ -27,6 +28,7 @@ import { parseAmountInput } from "~/lib/money-input";
 import {
   ZONES_URL,
   areaCountsQuery,
+  appProvidersQuery,
   deliveryZonesQuery,
   type DeliveryZones,
 } from "~/lib/api-query-options/settings-screens";
@@ -44,6 +46,7 @@ import { PLACE_ADDRESS_COUNTRY, deliveryHierarchyField } from "@scalius/shared/p
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+import { InlineError } from "~/components/admin/states/InlineError";
 import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, SettingsRow } from "./SettingsPage";
 
 type Zone = DeliveryZones["zones"][number];
@@ -85,6 +88,9 @@ interface RateDraft {
   name: string;
   fee: string;
   freeOver: string;
+  rateSource: string;
+  rateService: string;
+  fallbackFee: string;
   description: string;
   pickupAddress: string;
   pickupHours: string;
@@ -101,6 +107,9 @@ function toDraft(rate: Rate): RateDraft {
     name: rate.name,
     fee: String(rate.fee),
     freeOver: rate.freeOver === null ? "" : String(rate.freeOver),
+    rateSource: rate.rateSource ?? "flat",
+    rateService: rate.rateService ?? "",
+    fallbackFee: rate.fallbackFee == null ? "" : String(rate.fallbackFee),
     description: rate.description ?? "",
     pickupAddress: rate.pickupAddress ?? "",
     pickupHours: rate.pickupHours ?? "",
@@ -117,6 +126,9 @@ function emptyDraft(kind: Kind = "delivery"): RateDraft {
     // Pickup is usually free: a new pickup charge starts at 0.
     fee: kind === "pickup" ? "0" : "",
     freeOver: "",
+    rateSource: "flat",
+    rateService: "",
+    fallbackFee: "",
     description: "",
     pickupAddress: "",
     pickupHours: "",
@@ -128,6 +140,7 @@ type RateErrorKey = "rateNameRequired" | "feeInvalid" | "feeTooHigh" | "freeOver
 
 /** A charge as typed; an empty pickup charge means free pickup. */
 function feeOf(rate: RateDraft): number | null {
+  if (rate.kind === "delivery" && rate.rateSource !== "flat") return 0;
   return rate.kind === "pickup" && !rate.fee.trim() ? 0 : parseAmountInput(rate.fee);
 }
 
@@ -139,9 +152,11 @@ function feeOf(rate: RateDraft): number | null {
 export function rateErrors(
   rate: RateDraft,
   wholeTaka = false,
-): Partial<Record<"name" | "fee" | "freeOver" | "pickupAddress", RateErrorKey>> {
+): Partial<Record<"name" | "fee" | "freeOver" | "fallbackFee" | "pickupAddress", RateErrorKey>> {
   const fee = feeOf(rate);
   const freeOver = rate.freeOver.trim() ? parseAmountInput(rate.freeOver) : null;
+  const hasFallback = rate.kind === "delivery" && rate.rateSource !== "flat" && Boolean(rate.fallbackFee.trim());
+  const fallbackFee = hasFallback ? parseAmountInput(rate.fallbackFee) : null;
   const fractional = (amount: number) => wholeTaka && !Number.isInteger(amount);
   return {
     ...(rate.name.trim() ? {} : { name: "rateNameRequired" as const }),
@@ -153,17 +168,26 @@ export function rateErrors(
       : freeOver !== null && freeOver > MAX_AMOUNT
         ? { freeOver: "freeOverTooHigh" as const }
         : freeOver !== null && fractional(freeOver) ? { freeOver: "wholeTaka" as const } : {}),
+    ...(hasFallback && fallbackFee === null
+      ? { fallbackFee: "feeInvalid" as const }
+      : fallbackFee !== null && fallbackFee > MAX_AMOUNT
+        ? { fallbackFee: "feeTooHigh" as const }
+        : fallbackFee !== null && fractional(fallbackFee) ? { fallbackFee: "wholeTaka" as const } : {}),
     ...(rate.kind === "pickup" && !rate.pickupAddress.trim() ? { pickupAddress: "pickupAddressRequired" as const } : {}),
   };
 }
 
-function toRateInput(rate: RateDraft) {
+export function toRateInput(rate: RateDraft) {
+  const calculated = rate.kind === "delivery" && rate.rateSource !== "flat";
   return {
     id: rate.id,
     kind: rate.kind,
     name: rate.name.trim(),
     fee: feeOf(rate) ?? 0,
     freeOver: rate.freeOver.trim() ? parseAmountInput(rate.freeOver) : null,
+    rateSource: calculated ? rate.rateSource : "flat",
+    rateService: calculated ? rate.rateService.trim() || null : null,
+    fallbackFee: calculated && rate.fallbackFee.trim() ? parseAmountInput(rate.fallbackFee) : null,
     description: rate.description.trim() || null,
     pickupAddress: rate.kind === "pickup" ? rate.pickupAddress.trim() : null,
     pickupHours: rate.kind === "pickup" ? rate.pickupHours.trim() || null : null,
@@ -192,24 +216,29 @@ function RatesEditor({
 }) {
   const t = useMessages(shippingMessages);
   const { symbol } = useCurrency();
+  const { canView: canViewCouriers } = useProviderPortAccess("courier");
+  const providers = useQuery({ ...appProvidersQuery("courier"), enabled: canViewCouriers && !pickupOnly });
+  const rateProviders = (providers.data ?? []).filter((provider) => provider.operations.includes("rates"));
   const wholeTaka = useWholeUnitPrices();
   const update = (index: number, patch: Partial<RateDraft>) =>
     onChange(rates.map((rate, i) => (i === index ? { ...rate, ...patch } : rate)));
   return (
     <section className="space-y-4 border-t border-border pt-4">
       <h3 className="text-heading-sm">{t("charges")}</h3>
+      {providers.isError && !pickupOnly ? <InlineError title={t("loadRateProviders")} error={providers.error} onRetry={() => void providers.refetch()} /> : null}
       {rates.map((rate, index) => {
         const errors = rateErrors(rate, wholeTaka);
         const id = (field: string) => `rate-${index}-${field}`;
+        const calculated = rate.kind === "delivery" && rate.rateSource !== "flat";
         return (
           <fieldset key={rate.key} className="space-y-4 border-t border-border pt-4 first-of-type:border-t-0 first-of-type:pt-0">
             <div className="grid gap-4 sm:grid-cols-3">
-              <div className="sm:col-span-2">
+              <div className={calculated ? "sm:col-span-3" : "sm:col-span-2"}>
                 <SettingsField id={id("name")} label={t("rateName")} error={errors.name ? t(errors.name) : null}>
                   <Input id={id("name")} value={rate.name} placeholder={t("rateNamePlaceholder")} onChange={(event) => update(index, { name: event.target.value })} />
                 </SettingsField>
               </div>
-              <SettingsField
+              {!calculated ? <SettingsField
                 id={id("fee")}
                 label={t("fee")}
                 help={rate.kind === "pickup" ? t("pickupFeeHelp") : undefined}
@@ -224,8 +253,42 @@ function RatesEditor({
                   aria-describedby={rate.kind === "pickup" ? `${id("fee")}-note` : undefined}
                   onChange={(event) => update(index, { fee: event.target.value })}
                 />
-              </SettingsField>
+              </SettingsField> : null}
             </div>
+            {rate.kind === "delivery" ? (
+              <SettingsField id={id("rateSource")} label={t("calculatedBy")} help={t("calculatedByHelp")}>
+                <SearchableSelect
+                  id={id("rateSource")}
+                  value={rate.rateSource}
+                  ariaLabel={t("calculatedBy")}
+                  busy={canViewCouriers && providers.isPending}
+                  options={[
+                    { value: "flat", label: t("fixedCharge") },
+                    ...rateProviders.map((provider) => ({ value: provider.id, label: provider.name, description: provider.readiness.usable ? provider.appName : `${provider.appName} · ${t("courierNeedsSetup")}`, disabled: !provider.readiness.usable })),
+                    ...(calculated && !rateProviders.some((provider) => provider.id === rate.rateSource)
+                      ? [{ value: rate.rateSource, label: t("unavailableCourier"), disabled: true }] : []),
+                  ]}
+                  onValueChange={(rateSource) => update(index, { rateSource })}
+                />
+              </SettingsField>
+            ) : null}
+            {calculated ? (
+              <>
+                <SettingsField id={id("rateService")} label={t("rateService")} help={t("rateServiceHelp")}>
+                  <Input id={id("rateService")} maxLength={128} value={rate.rateService} onChange={(event) => update(index, { rateService: event.target.value })} />
+                </SettingsField>
+                <SettingsField id={id("fallbackFee")} label={t("fallbackFee")} help={t("fallbackFeeHelp")} error={errors.fallbackFee ? t(errors.fallbackFee, { max: formatNumber(MAX_AMOUNT) }) : null}>
+                  <Input
+                    id={id("fallbackFee")}
+                    prefix={symbol}
+                    inputMode={wholeTaka ? "numeric" : "decimal"}
+                    autoComplete="off"
+                    value={rate.fallbackFee}
+                    onChange={(event) => update(index, { fallbackFee: event.target.value })}
+                  />
+                </SettingsField>
+              </>
+            ) : null}
             <SettingsField
               id={id("freeOver")}
               label={t("freeOver")}
@@ -863,7 +926,7 @@ function useRateSummary() {
       ? t("noCharges")
       : rates.map((rate) => [
           rate.name,
-          rate.fee === 0 ? t("free") : fmt(rate.fee),
+          rate.rateSource && rate.rateSource !== "flat" ? t("calculatedCharge") : rate.fee === 0 ? t("free") : fmt(rate.fee),
           rate.freeOver === null ? null : t("freeOverSummary", { amount: fmt(rate.freeOver) }),
           rate.isActive ? null : t("off"),
         ].filter(Boolean).join(" ")).join(" · ");

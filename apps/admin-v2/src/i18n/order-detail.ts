@@ -70,6 +70,7 @@ export const orderDetailMessages = defineMessages({
     "holds.releaseBody": "The order can then be shipped and moved on. {app} won't hold this order again.",
     "holds.releasedAt": "Hold released {when}",
     "notes.title": "Notes",
+    "attributes.title": "App details",
 
     "items.title": "Items ({count})",
     "items.unnamed": "Unnamed product",
@@ -641,6 +642,7 @@ export const orderDetailMessages = defineMessages({
     "holds.releaseBody": "এরপর অর্ডারটি পাঠানো ও এগিয়ে নেওয়া যাবে। {app} এই অর্ডার আর আটকাবে না।",
     "holds.releasedAt": "হোল্ড ছেড়ে দেওয়া হয়েছে {when}",
     "notes.title": "নোট",
+    "attributes.title": "অ্যাপের তথ্য",
 
     "items.title": "প্রোডাক্ট ({count})",
     "items.unnamed": "নামহীন প্রোডাক্ট",

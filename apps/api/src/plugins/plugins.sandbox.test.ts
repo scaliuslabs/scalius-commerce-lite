@@ -2,7 +2,7 @@
 // exactly as `pnpm plugin build` packs it, runs in its own Dynamic Worker
 // (Miniflare `workerLoaders`) with no network of its own, reaching the
 // platform only through the real PluginBridge entrypoint over RPC. The same
-// behaviour as the bundled loader: storage, KV, the /api/v1 call as the plugin
+// behaviour as the bundled loader: objects, KV, the /api/v1 call as the plugin
 // principal, routes, cron and the checkout function. Plus what only a sandbox
 // can prove: direct fetch is impossible and a tampered bundle never loads.
 // And acme.bulk-discount priced into a real checkout with Hello's discount
@@ -16,11 +16,11 @@ import { join, resolve } from "node:path";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
+import { getObjectRecord } from "@scalius/core/modules/objects";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
   activatePlugin,
   getPluginKv,
-  getPluginRecord,
   installPlugin,
   listPluginLogs,
   pluginEventFanOutTarget,
@@ -197,7 +197,7 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
       event: { id: "evt_box", topic: "order.paid", apiVersion: "2026-10", occurredAt: "2026-10-01T10:00:00.000Z", resource: { type: "order", id: "ord_box1" }, facts: {} },
     });
     expect(outcome).toEqual({ ok: true, value: null, error: null });
-    expect(await getPluginRecord(db, "acme.hello", "greetings", "ord_box1")).toMatchObject({ greeting: "Salam", orderStatus: "confirmed" });
+    expect(await getObjectRecord(db, "acme.hello", "greetings", "ord_box1")).toMatchObject({ greeting: "Salam", order_status: "confirmed" });
     expect(await getPluginKv(db, "acme.hello", "paid_count")).toBe(1);
     expect(sqlite.prepare("SELECT plugin_id, operation_id, outcome FROM agent_audit_events").all())
       .toEqual([{ plugin_id: "acme.hello", operation_id: "dashboard.orders.get", outcome: "success" }]);
@@ -215,7 +215,7 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
       });
     expect(await send({ action: "cron", pluginId: "acme.hello", name: "tidy", scheduledAt: "2027-01-01T00:00:00.000Z" }))
       .toEqual({ ok: true, value: null, error: null });
-    expect(await getPluginRecord(db, "acme.hello", "greetings", "ord_box1")).toBeNull();
+    expect(await getObjectRecord(db, "acme.hello", "greetings", "ord_box1")).toBeNull();
     // Every active implementation answers, in priority then id order (one unit: no bulk tier).
     expect(await send({ action: "function", pluginId: "acme.hello", point: "checkout.discounts", input: { cart: testCart(5000) } }))
       .toEqual([
@@ -251,7 +251,7 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
       value: { providerRef: "W-ORD1_full_12550", redirectUrl: "https://wallet.acme.test/pay?amount=125.50&currency=BDT" },
     });
     expect(await provider("createSession", walletSessionInput(12_550))).toEqual(session);
-    expect(await getPluginRecord(db, WALLET_FIXTURE_ID, "sessions", "attempt-12550")).toMatchObject({ orderId: "ORD1" });
+    expect(await getObjectRecord(db, WALLET_FIXTURE_ID, "sessions", "attempt-12550")).toMatchObject({ order_id: "ORD1" });
 
     const webhook = { method: "POST", rawBody: JSON.stringify({ id: "evt1", orderId: "ORD1", ref: "W-1", amountMinor: 12_550 }), headers: { "x-wallet-signature": WALLET_FIXTURE_SECRET }, query: {} };
     expect((await provider("verifyWebhook", webhook)).value).toMatchObject({ status: "event", event: { kind: "confirmed", amountMinor: 12_550 } });

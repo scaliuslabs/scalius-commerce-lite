@@ -3,6 +3,8 @@
  * colour fields, fit notes (why a choice shows something else on this
  * store) and a block variant's generated settings.
  */
+import type { SettingBindings } from "@scalius/shared/storefront-theme/bindings";
+import { SettingBindingScope } from "./schema-form/binding-context";
 import { useState, type CSSProperties } from "react";
 import {
   STOREFRONT_THEME_MIN_CONTRAST,
@@ -164,8 +166,8 @@ export function FitNote({ fallback, name, reason }: {
 }
 
 /** The document with a block's settings replaced, wherever the block sits. */
-function withBlockSettings(theme: Theme, slot: StorefrontBlockSlot, settings: Record<string, unknown>): Theme {
-  const block = { ...storefrontBlockValue(theme.blocks, slot), settings } as never;
+function withBlockSettings(theme: Theme, slot: StorefrontBlockSlot, settings: Record<string, unknown>, changes?: { bindings?: SettingBindings }): Theme {
+  const block = { ...storefrontBlockValue(theme.blocks, slot), settings, ...changes } as never;
   if (slot === "listing") return { ...theme, blocks: { ...theme.blocks, listing: { ...theme.blocks.listing, layout: block } } };
   if (slot === "gallery" || slot === "buyBox") {
     return { ...theme, blocks: { ...theme.blocks, product: { ...theme.blocks.product, [slot]: block } } };
@@ -194,6 +196,7 @@ export function BlockSettingsFields({ slot, theme, setDraft, media }: {
   const errors = new Map([...settingErrors(storefrontVariantSpec(slot, block.variant).settings, block.settings)]
     .map(([path, error]) => [path, t(error.key, error.values)]));
   return (
+    <SettingBindingScope bindings={block.bindings} onChange={(bindings) => setDraft((current) => withBlockSettings(current, slot, storefrontBlockValue(current.blocks, slot).settings, { bindings }))}>
     <SchemaSettingsForm
       key={block.variant}
       idPrefix={blockFieldPrefix(slot)}
@@ -205,5 +208,6 @@ export function BlockSettingsFields({ slot, theme, setDraft, media }: {
       onChange={(settings) => setDraft((current) =>
         storefrontBlockValue(current.blocks, slot).variant === block.variant ? withBlockSettings(current, slot, settings) : current)}
     />
+    </SettingBindingScope>
   );
 }

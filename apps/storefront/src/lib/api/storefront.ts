@@ -95,8 +95,8 @@ export interface HomepageProduct {
   slug: string;
 }
 
-/** One field of a metaobject entry as a section shows it: the stored canonical text of a custom-field type. */
-export interface HomepageMetaobjectField {
+/** One field of a object entry as a section shows it: the stored canonical text of a custom-field type. */
+export interface HomepageObjectField {
   key: string;
   name: string;
   /** A custom-field type id (`single_line_text`, `money`, `list.media_reference`...). */
@@ -105,11 +105,11 @@ export interface HomepageMetaobjectField {
   value: string | number | boolean | unknown[] | null;
 }
 
-/** A Metaobjects section's content type with its published entries (only types with storefront access are sent). */
-export interface HomepageMetaobject {
+/** A Objects section's content type with its published entries (only types with storefront access are sent). */
+export interface HomepageObject {
   id: string;
   name: string;
-  entries: Array<{ handle: string; title: string; fields: HomepageMetaobjectField[] }>;
+  entries: Array<{ handle: string; title: string; fields: HomepageObjectField[] }>;
 }
 
 /**
@@ -120,6 +120,7 @@ export interface HomepageMetaobject {
  * are left out.
  */
 export interface HomepageSectionData {
+  bindingObjects?: import("@scalius/shared/storefront-theme/bindings").BindingObjects;
   lists: HomepageProductList[];
   media: HomepageMediaAsset[];
   brands: HomepageBrand[];
@@ -134,11 +135,11 @@ export interface HomepageSectionData {
    */
   apps?: HomepageAppSurface[];
   /**
-   * The Metaobjects sections' content types and entries, by definition id.
+   * The Objects sections' content types and entries, by definition id.
    * A type that is private, unknown or without entries is missing, and its
    * section renders nothing. Absent from an older API.
    */
-  metaobjects?: HomepageMetaobject[];
+  objects?: HomepageObject[];
 }
 
 // =============================================
@@ -182,11 +183,6 @@ export interface LayoutData {
   /** The footer menus (Online store -> Navigation), in order. */
   footerMenus?: FooterMenu[];
   currency?: CurrencyData;
-  /**
-   * The page groups an active app draws blocks on (`lib/app-surfaces`
-   * `layoutHasAppBlocks`); absent from an older API: none.
-   */
-  appBlockPages?: Array<"checkout" | "order" | "account">;
   /**
    * Buyer services active apps provide: the search app predictive search
    * passes to /search, the address autocomplete app at checkout, and the
@@ -347,6 +343,8 @@ export interface ThemePreviewSectionsRead {
   sections?: unknown[];
   /** The previewed market presence (`en-in`); none: the root. */
   presence?: string | null;
+  /** Public page owner used only by connected product settings. */
+  resource?: string;
 }
 
 /**
@@ -374,6 +372,7 @@ export async function getThemePreviewHomepageSections(
           ...(read.template ? { template: read.template } : {}),
           ...(read.sections ? { sections: read.sections } : {}),
           ...(read.presence ? { presence: read.presence } : {}),
+          ...(read.resource ? { resource: read.resource } : {}),
         }),
         cache: "no-store",
       },

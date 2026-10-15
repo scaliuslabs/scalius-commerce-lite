@@ -436,7 +436,9 @@ export function buildOfferShippingDetails({
     if (delivery.length === 0 || (zoned && !freeDelivery)) return [];
     return freeDelivery
       ? [detail(country, 0)]
-      : delivery.map((method) => detail(country, method.fee, method.name));
+      : delivery
+          .filter((method) => !method.rateSource || method.rateSource === "flat")
+          .map((method) => detail(country, method.fee, method.name));
   });
 }
 

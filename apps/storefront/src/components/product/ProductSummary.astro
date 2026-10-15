@@ -29,11 +29,14 @@ import { describeBuyGetOffer, describeBundleTiers } from "./lib/product-offers";
 import { moneyPlaces, pickBuyerInputCopy } from "./lib/buyer-inputs";
 import { specificationValue } from "./lib/product-page-modules";
 import type { StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
+import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 
 const CLASSIC_LOOK: StorefrontBuyBoxLook = { cta: { layout: "row" }, facts: "list", features: "none", details: "buy-box" };
 
 interface Props {
   product: Product;
+  /** The same public facts a product-main skin draws. */
+  projection?: StorefrontProductPage;
   category: Product["category"] | null;
   variants: ProductVariant[];
   options: ProductOptionDefinition[];
@@ -65,6 +68,7 @@ interface Props {
 
 const {
   product,
+  projection,
   category,
   variants,
   options,
@@ -163,6 +167,8 @@ const pricePresentation = getBuyerVariantPricePresentation(productPricing, prici
 const showsStartingPrice =
   shouldShowStartingVariantPrice(options.length > 0, stockVariant) && pricePresentation.isStartingAt;
 const pricing = pricePresentation.pricing;
+const openingPrice = projection?.product.price.formatted ?? formatPrice(pricing.finalPrice);
+const openingRegularPrice = projection?.product.compareAt?.formatted ?? formatPrice(pricing.originalPrice);
 // Quantity tiers beside the price, worded from the tier alone ("Buy 2, save
 // 10%", "Buy 3 for ৳600") so they hold for every SKU; checkout prices them.
 const bundleTiers = describeBundleTiers(product.bundles ?? [], pageCopy, formatPrice);
@@ -255,7 +261,7 @@ function optionAriaLabel(
     <div class="buy-box-main">
     <div class="mb-2 border-b border-border pb-2">
       <div class="buy-box-title">
-        {title && <h1 class="mb-1 text-lg font-semibold leading-tight text-foreground lg:mb-2 lg:text-3xl">{product.name}</h1>}
+        {title && <h1 class="mb-1 text-lg font-semibold leading-tight text-foreground lg:mb-2 lg:text-3xl">{projection?.product.title ?? product.name}</h1>}
         <slot name="after-title" />
       </div>
       {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
@@ -263,13 +269,13 @@ function optionAriaLabel(
         <div class="buy-box-price-fact">
           <p class="product-price whitespace-nowrap text-2xl font-bold text-foreground" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
             {showsStartingPrice
-              ? formatCheckoutLanguageText(actionCopy.fromPriceText, { price: formatPrice(pricing.finalPrice) })
-              : formatPrice(pricing.finalPrice)}
+              ? formatCheckoutLanguageText(actionCopy.fromPriceText, { price: openingPrice })
+              : openingPrice}
           </p>
         </div>
         <div class="buy-box-regular-fact">
           <s class:list={["product-original-price whitespace-nowrap text-sm text-muted-foreground", { hidden: !pricing.hasDiscount }]}>
-            {formatPrice(pricing.originalPrice)}
+            {openingRegularPrice}
           </s>
         </div>
         <span class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary-ink", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>

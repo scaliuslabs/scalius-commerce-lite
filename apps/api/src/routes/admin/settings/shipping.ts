@@ -13,6 +13,7 @@ import {
 } from "@scalius/core/modules/delivery";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 
 import { ok, created, noContent } from "../../../utils/api-response";
 import { successEnvelope, noContentResponse, errorResponses, conflictResponse } from "../../../schemas/responses";
@@ -33,11 +34,22 @@ const rateInputSchema = z.object({
     name: z.string().trim().min(1, "Enter a name buyers will see.").max(100),
     fee: amount("Enter a charge up to 1,00,000."),
     freeOver: amount("Enter an amount up to 1,00,000.").optional().nullable(),
+    rateSource: z.string().max(160).refine((value) => value === "flat" || isQualifiedProviderId(value), "Choose a courier app or a fixed charge.").optional().default("flat"),
+    rateService: z.string().trim().max(128).optional().nullable(),
+    fallbackFee: amount("Enter a fallback charge up to 1,00,000.").optional().nullable(),
     description: z.string().max(255).optional().nullable(),
     kind: z.enum(["delivery", "pickup"]).optional().default("delivery"),
     pickupAddress: z.string().max(500, "Use 500 characters or fewer.").optional().nullable(),
     pickupHours: z.string().max(120, "Use 120 characters or fewer.").optional().nullable(),
     isActive: z.boolean(),
+}).superRefine((rate, ctx) => {
+    if (rate.kind === "pickup" && rate.rateSource !== "flat") {
+        ctx.addIssue({ code: "custom", path: ["rateSource"], message: "Pickup uses a fixed charge." });
+    }
+    if (rate.rateSource === "flat") {
+        if (rate.rateService?.trim()) ctx.addIssue({ code: "custom", path: ["rateService"], message: "A fixed charge has no courier service." });
+        if (rate.fallbackFee != null) ctx.addIssue({ code: "custom", path: ["fallbackFee"], message: "A fixed charge has no fallback charge." });
+    }
 });
 const ratesSchema = z.array(rateInputSchema).max(MAX_ZONE_RATES);
 
@@ -69,6 +81,9 @@ const rateSchema = z.object({
     name: z.string(),
     fee: z.number(),
     freeOver: z.number().nullable(),
+    rateSource: z.string(),
+    rateService: z.string().nullable(),
+    fallbackFee: z.number().nullable(),
     description: z.string().nullable(),
     pickupAddress: z.string().nullable(),
     pickupHours: z.string().nullable(),

@@ -2,7 +2,7 @@
 // app can hold money-like state without ever spending it twice.
 //
 // - Earn (`order.paid`): points for every 100 of the store currency paid,
-//   credited to the signed-in buyer's account in one atomic storage batch
+//   credited to the signed-in buyer's account in one atomic object batch
 //   with a ledger entry keyed by the order, so a redelivered event changes
 //   nothing.
 // - Redeem (`checkout.discounts` with a `snapshot` of `balances`): a buyer who
@@ -18,6 +18,7 @@
 // adjust by hand.
 
 import { definePlugin, PLUGIN_API_VERSION, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
+import { formatNumber } from "@scalius/shared/locale-format";
 
 export const manifest = {
   id: "acme.loyalty",
@@ -32,12 +33,30 @@ export const manifest = {
   minPlatformVersion: "1.0.0",
   scopes: ["read_orders"],
   events: ["order.paid"],
-  functions: [{ point: "checkout.discounts", priority: 200, snapshot: { collection: "balances" } }],
-  storage: {
+  functions: [
+    { point: "checkout.discounts", priority: 200, snapshot: { object: "balances" } },
+    { point: "buyer.ui", targets: ["purchase.checkout.actions.render-before", "customer-account.order-index.block.render"], snapshot: { object: "balances" } },
+  ],
+  objects: {
     // Record id: the buyer's customer id. `{ points, earned, spent }`.
-    balances: {},
+    balances: {
+      name: "Balances",
+      fields: [
+        { key: "points", name: "Points", type: "integer" },
+        { key: "earned", name: "Earned", type: "integer" },
+        { key: "spent", name: "Spent", type: "integer" },
+      ],
+    },
     // Record id: `earn:<order id>`. What an order earned, once.
-    ledger: { indexes: ["customerId"] },
+    ledger: {
+      name: "Ledger",
+      fields: [
+        { key: "customer_id", name: "Customer", type: "single_line_text" },
+        { key: "order_id", name: "Order", type: "single_line_text" },
+        { key: "points", name: "Points", type: "integer" },
+      ],
+      indexes: ["customer_id"],
+    },
   },
   settings: [
     { key: "title", label: "Discount name at checkout", type: "text", required: true, default: "Loyalty points", maxLength: 40 },
@@ -113,15 +132,15 @@ async function earn(orderId: string, ctx: PluginContext): Promise<void> {
 
   const entryId = `earn:${orderId}`;
   for (let attempt = 1; attempt <= EARN_ATTEMPTS; attempt += 1) {
-    if (await ctx.storage.ledger!.get(entryId)) return;
-    const current = await ctx.storage.balances!.getVersion(customerId);
+    if (await ctx.objects.ledger!.get(entryId)) return;
+    const current = await ctx.objects.balances!.getVersion(customerId);
     const balance = balanceOf(current?.data);
     try {
-      await ctx.storage.batch([
-        { op: "put", collection: "ledger", id: entryId, record: { customerId, orderId, points }, expectedRevision: null },
+      await ctx.objects.batch([
+        { op: "put", object: "ledger", id: entryId, record: { customer_id: customerId, order_id: orderId, points }, expectedRevision: null },
         {
           op: "put",
-          collection: "balances",
+          object: "balances",
           id: customerId,
           record: { ...balance, points: balance.points + points, earned: balance.earned + points },
           expectedRevision: current?.revision ?? null,
@@ -130,7 +149,7 @@ async function earn(orderId: string, ctx: PluginContext): Promise<void> {
       ctx.log.info("Points earned", { orderId, points });
       return;
     } catch (error) {
-      if ((error as { code?: string }).code !== "storage.conflict") throw error;
+      if ((error as { code?: string }).code !== "object.conflict") throw error;
     }
   }
   throw new Error("Points could not be credited after concurrent changes; the event will be retried.");
@@ -144,6 +163,18 @@ export default definePlugin({
   },
 
   functions: {
+    "buyer.ui": ({ target, cart, customer, snapshot, locale }, settings) => {
+      if (!customer) return { ui: null };
+      const balance = balanceOf(snapshot?.data);
+      const code = String(settings.code ?? "").trim().toUpperCase();
+      const canRedeem = target.startsWith("purchase.checkout.") && cart && code
+        && balance.points >= Math.max(1, wholeSetting(settings.min_redeem, 50))
+        && !cart.discountCodes.some((value) => value.trim().toUpperCase() === code);
+      return { ui: { type: "stack", children: [
+        { type: "key-value", items: [{ label: "Loyalty points", value: formatNumber(balance.points, locale) }] },
+        ...(canRedeem ? [{ type: "button" as const, label: "Redeem points", action: { kind: "apply_code" as const, code } }] : []),
+      ] } };
+    },
     "checkout.discounts": ({ cart, snapshot }, settings) => {
       const code = String(settings.code ?? "").trim().toUpperCase();
       const entered = cart.discountCodes.some((value) => value.trim().toUpperCase() === code);

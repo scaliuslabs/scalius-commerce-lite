@@ -6,7 +6,7 @@
 //   vi.mock("./bundled.gen", async (importOriginal) =>
 //     (await import("./testing/fixture-apps")).withFixtureApps(await importOriginal()));
 //
-// - acme.hello: every surface (settings with secrets, storage, KV, events,
+// - acme.hello: every surface (settings with secrets, objects, KV, events,
 //   admin pages, cards, actions and widgets, public routes and the proxy,
 //   cron, a signed webhook, a checkout function and head tags).
 // - acme.wishlist: a proxy page, a product.updated handler and a dashboard

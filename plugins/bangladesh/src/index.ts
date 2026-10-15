@@ -46,8 +46,8 @@ import { continuePathaoRefresh, pathaoRefreshRunning, readPathaoRefresh, startPa
 import { PLACES_TOTAL, PLACES_VERSION, placesCurrent, readPlacesState, seedPlaces, type PlacesState } from "./places";
 import { SMS_HOSTS, smsProviders } from "./sms";
 import { SSLCOMMERZ_AMOUNT_LIMITS, SSLCOMMERZ_HOSTS, paymentProviders } from "./sslcommerz";
-import { BKASH_HOSTS, BKASH_PROVIDER, BKASH_SETTINGS, BKASH_STORAGE, bkashProviders } from "./bkash";
-import { NAGAD_HOSTS, NAGAD_PROVIDER, NAGAD_SETTINGS, NAGAD_SETTINGS_BN, NAGAD_STORAGE, nagadProviders } from "./nagad";
+import { BKASH_HOSTS, BKASH_PROVIDER, BKASH_SETTINGS, BKASH_OBJECTS, bkashProviders } from "./bkash";
+import { NAGAD_HOSTS, NAGAD_PROVIDER, NAGAD_SETTINGS, NAGAD_SETTINGS_BN, NAGAD_OBJECTS, nagadProviders } from "./nagad";
 
 // Each field belongs to one provider (`group: <provider id>`): the dashboard
 // shows it only in that provider's setup sheet, where the provider is in
@@ -252,7 +252,7 @@ export const manifest = {
   scopes: [],
   allowedHosts: [],
   settings: SETTINGS,
-  storage: { ...BKASH_STORAGE, ...NAGAD_STORAGE },
+  objects: { ...BKASH_OBJECTS, ...NAGAD_OBJECTS },
   features: [
     // The place import (dashboard.delivery_locations.import): it adds and updates places, never deletes.
     feature("places", {
@@ -309,7 +309,7 @@ export const manifest = {
         name: "Pathao",
         icon: "assets/pathao.svg",
         countries: ["BD"],
-        operations: ["verifyWebhook", "testConnection"],
+        operations: ["rates", "verifyWebhook", "testConnection"],
         settings: ["pathao_base_url", "pathao_client_id", "pathao_client_secret", "pathao_username", "pathao_password", "pathao_store_id"],
         trackingUrl: "https://merchant.pathao.com/tracking?consignment_id={trackingId}",
         // Pathao books by its own city and zone (and area) ids, kept on the places.

@@ -9,7 +9,7 @@ import Layout from "../../layouts/Layout.astro";
 import LandingSections from "@/components/homepage/LandingSections.astro";
 import { getLandingPageData, getThemePreviewHomepageSections, getShippingMethods, getCheckoutConfig, isCheckoutConfigReadFailure } from "@/lib/api";
 import { loadPageWithLayout } from "@/lib/page-data";
-import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { applyRequestThemeBindings, resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { EMPTY_HOMEPAGE_SECTION_DATA } from "@/lib/homepage-sections";
 import { buildDeliveryFacts } from "@/lib/delivery-facts";
 import { formatMoney } from "@/lib/currency";
@@ -30,13 +30,15 @@ if (!requestTheme.preview && pageData === null) {
 }
 // The page's sections as the request's theme resolves them for this store
 // (hidden and unfit sections left out), exactly as the homepage does.
-const landing = requestTheme.resolved.pages.landing[slug];
+let landing = requestTheme.resolved.pages.landing[slug];
 if (!landing || (!requestTheme.preview && pageData === "missing")) return new Response(null, { status: 404 });
-const sections = landing.sections;
 const data = requestTheme.preview && requestTheme.previewToken
   ? await getThemePreviewHomepageSections(requestTheme.previewToken, { pageSlug: slug, presence: getRuntimePresence() })
   : pageData && pageData !== "missing" ? pageData.sections : EMPTY_HOMEPAGE_SECTION_DATA;
 if (data === null) return storefrontDataUnavailableResponse();
+if (data.bindingObjects) applyRequestThemeBindings(requestTheme, { objects: data.bindingObjects, mediaIds: new Set(data.media.map((asset) => asset.id)) });
+landing = requestTheme.resolved.pages.landing[slug]!;
+const sections = landing.sections;
 const currency = layoutData.currency ?? DEFAULT_CURRENCY;
 const [shippingMethods, checkoutConfig] = await Promise.all([shippingPromise, checkoutPromise]);
 if (requestTheme.preview && homeSectionsShowDeliveryFacts(sections) && (shippingMethods === null || isCheckoutConfigReadFailure(checkoutConfig))) {

@@ -52,41 +52,37 @@ describe("event outbox dispatch", () => {
 
   beforeEach(() => {
     ({ sqlite, db } = createSqliteD1Database());
+    sqlite.exec("INSERT INTO event_demand (filter) VALUES ('order.*')");
     representation.mockClear();
   });
   afterEach(() => sqlite.close());
 
-  it("settles events in place while nobody subscribes", async () => {
+  it("writes no events and makes only the empty indexed read while nobody subscribes", async () => {
+    sqlite.exec("DELETE FROM event_demand");
     insertOrder(sqlite, "ord_1");
     const result = await dispatchPendingEvents({ db, targets: EVENT_FAN_OUT_TARGETS });
-    expect(result).toMatchObject({ scanned: 1, settledWithoutSubscribers: 1, dispatched: 0, deliveries: [] });
-    expect(sqlite.prepare("SELECT status, dispatched_at IS NOT NULL AS done FROM event_outbox").all())
-      .toEqual([{ status: "dispatched", done: 1 }]);
-    // Nothing due: one read, nothing else.
-    await expect(dispatchPendingEvents({ db, targets: EVENT_FAN_OUT_TARGETS })).resolves.toMatchObject({ scanned: 0 });
+    expect(result).toMatchObject({ scanned: 0, dispatched: 0, deliveries: [] });
+    expect(sqlite.prepare("SELECT count(*) AS n FROM event_outbox").get()).toEqual({ n: 0 });
   });
 
-  it("reads and settles a backlog by bounded index walks, never every due row", async () => {
+  it("reads a backlog by bounded index walks and drains only the requested batch", async () => {
     const queries: Array<{ sql: string; params: unknown[] }> = [];
     sqlite.close();
     ({ sqlite, db } = createSqliteD1Database({ onQuery: (sql, params) => queries.push({ sql, params: [...params] }) }));
+    sqlite.exec("INSERT INTO event_demand (filter) VALUES ('order.*')");
     for (let index = 0; index < 60; index += 1) insertOrder(sqlite, `ord_${index}`);
     queries.length = 0;
     const result = await dispatchPendingEvents({ db, targets: EVENT_FAN_OUT_TARGETS, limit: 2 });
-    // A settle is one statement whatever it takes: a full batch, not the fan-out limit.
-    expect(result.settledWithoutSubscribers).toBe(50);
-    const outbox = queries.filter((query) => query.sql.includes("event_outbox"));
-    expect(outbox).toHaveLength(2);
-    for (const query of outbox) {
-      const plan = (sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...(query.params as never[])) as Array<{ detail: string }>)
-        .map((step) => step.detail.replace("USING COVERING INDEX", "USING INDEX"));
-      expect(plan.filter((step) => /^(SCAN|SEARCH) event_outbox\b/.test(step))).toEqual([
-        "SEARCH event_outbox USING INDEX sqlite_autoindex_event_outbox_1 (id=?)",
-        "SEARCH event_outbox USING INDEX event_outbox_due_idx (status=? AND next_attempt_at<?)",
-        "SEARCH event_outbox USING INDEX event_outbox_due_idx (status=? AND next_attempt_at<?)",
-        "SEARCH event_outbox USING INDEX event_outbox_claim_idx (status=? AND claim_expires_at<?)",
-      ]);
-    }
+    expect(result.dispatched).toBe(2);
+    const query = queries.find((query) => query.sql.includes("event_outbox") && query.sql.includes("UNION ALL"))!;
+    const plan = (sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...(query.params as never[])) as Array<{ detail: string }>)
+      .map((step) => step.detail.replace("USING COVERING INDEX", "USING INDEX"));
+    expect(plan.filter((step) => /^(SCAN|SEARCH) event_outbox\b/.test(step))).toEqual([
+      "SEARCH event_outbox USING INDEX sqlite_autoindex_event_outbox_1 (id=?)",
+      "SEARCH event_outbox USING INDEX event_outbox_due_idx (status=? AND next_attempt_at<?)",
+      "SEARCH event_outbox USING INDEX event_outbox_due_idx (status=? AND next_attempt_at<?)",
+      "SEARCH event_outbox USING INDEX event_outbox_claim_idx (status=? AND claim_expires_at<?)",
+    ]);
   });
 
   it("dispatches due events, fans out once per subscription and event, and is idempotent on redelivery", async () => {

@@ -71,9 +71,8 @@ export const pluginFeatureSchema = z.object({
   storefront: z.object({
     sections: names(32),
     productBlocks: names(10),
-    blocks: names(10),
     skins: names(30),
-  }).strict().default({ sections: [], productBlocks: [], blocks: [], skins: [] }),
+  }).strict().default({ sections: [], productBlocks: [], skins: [] }),
 }).strict();
 
 export type PluginFeature = z.output<typeof pluginFeatureSchema>;
@@ -104,7 +103,6 @@ export interface PluginFeatureOwners {
   admin: Map<string, string>;
   sections: Map<string, string>;
   productBlocks: Map<string, string>;
-  blocks: Map<string, string>;
   skins: Map<string, string>;
 }
 
@@ -113,7 +111,7 @@ export function pluginFeatureOwners(manifest: FeatureManifest): PluginFeatureOwn
   const owners: PluginFeatureOwners = {
     providers: new Map(), settingsGroups: new Map(), settings: new Map(), adminRoutes: new Map(), publicRoutes: new Map(),
     webhooks: new Map(), cron: new Map(), events: new Map(), functions: new Map(), admin: new Map(),
-    sections: new Map(), productBlocks: new Map(), blocks: new Map(), skins: new Map(),
+    sections: new Map(), productBlocks: new Map(), skins: new Map(),
   };
   const claim = (map: Map<string, string>, values: readonly string[], feature: string) => {
     for (const value of values) if (!map.has(value)) map.set(value, feature);
@@ -130,7 +128,6 @@ export function pluginFeatureOwners(manifest: FeatureManifest): PluginFeatureOwn
     claim(owners.admin, feature.admin, feature.id);
     claim(owners.sections, feature.storefront.sections, feature.id);
     claim(owners.productBlocks, feature.storefront.productBlocks, feature.id);
-    claim(owners.blocks, feature.storefront.blocks, feature.id);
     claim(owners.skins, feature.storefront.skins, feature.id);
   }
   // A field belongs to the feature of its group: a provider's or a settings group's.
@@ -190,7 +187,6 @@ export function pluginManifestWithFeatures(manifest: PluginManifest, enabled: It
       ...manifest.storefront,
       sections: manifest.storefront.sections.filter((section) => keep(owners.sections, section.type)),
       productBlocks: manifest.storefront.productBlocks.filter((block) => keep(owners.productBlocks, block.type)),
-      blocks: manifest.storefront.blocks.filter((block) => keep(owners.blocks, block.type)),
       skins: manifest.storefront.skins.filter((skin) => keep(owners.skins, skin.id)),
     },
   };
@@ -266,7 +262,6 @@ export function pluginFeatureIssues(manifest: PluginManifest): Issue[] {
     admin: new Set([...manifest.admin.pages, ...manifest.admin.cards, ...manifest.admin.actions, ...manifest.admin.widgets].map((item) => item.id)),
     sections: new Set(manifest.storefront.sections.map((section) => section.type)),
     productBlocks: new Set(manifest.storefront.productBlocks.map((block) => block.type)),
-    blocks: new Set(manifest.storefront.blocks.map((block) => block.type)),
     skins: new Set(manifest.storefront.skins.map((skin) => skin.id)),
   };
   const claimed = new Map<string, string>();
@@ -293,7 +288,6 @@ export function pluginFeatureIssues(manifest: PluginManifest): Issue[] {
     check("admin", feature.admin, at("admin"), "Admin surface");
     check("sections", feature.storefront.sections, at("storefront", "sections"), "Section");
     check("productBlocks", feature.storefront.productBlocks, at("storefront", "productBlocks"), "Product block");
-    check("blocks", feature.storefront.blocks, at("storefront", "blocks"), "Block");
     check("skins", feature.storefront.skins, at("storefront", "skins"), "Skin");
     feature.scopes.forEach((scope, scopeIndex) => {
       if (manifest.scopes.includes(scope)) issues.push({ path: at("scopes", scopeIndex), message: `${scope} is already a base scope of the app.` });
@@ -331,12 +325,6 @@ export function pluginFeatureIssues(manifest: PluginManifest): Issue[] {
     ...manifest.admin.widgets.map((widget, index) => ({ owner: owners.admin.get(widget.id), route: widget.route, path: ["admin", "widgets", index, "route"] as (string | number)[] })),
   ];
   for (const surface of surfaces) refer(surface.path, surface.owner, owners.adminRoutes.get(surface.route), `Admin route ${surface.route}`);
-  const publicSurfaces = [
-    ...manifest.storefront.blocks.map((block, index) => ({ owner: owners.blocks.get(block.type), route: block.route, path: ["storefront", "blocks", index, "route"] })),
-  ];
-  for (const surface of publicSurfaces) {
-    if (surface.route !== undefined) refer(surface.path, surface.owner, owners.publicRoutes.get(surface.route), `Public route ${surface.route}`);
-  }
   manifest.providers.forEach((provider, index) => {
     const owner = owners.providers.get(provider.id);
     for (const key of provider.settings ?? []) {

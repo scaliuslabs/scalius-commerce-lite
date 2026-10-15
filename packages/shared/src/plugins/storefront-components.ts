@@ -124,6 +124,10 @@ export function storefrontProductKey(productId: string): string {
   return `product:${productId}`;
 }
 
+export function storefrontProductsKey(productIds: readonly string[]): string {
+  return `products:${productIds.join(",")}`;
+}
+
 /** What a component's settings need read before it renders: images by media id, product lists by source. */
 export interface StorefrontSettingNeeds {
   mediaIds: string[];
@@ -144,6 +148,9 @@ export function storefrontSettingNeeds(schema: PluginSettingsSchema, stored: unk
     if (field.type === "image" && typeof value === "string") mediaIds.add(value);
     else if (field.type === "products" && typeof value === "string" && PLUGIN_PRODUCT_SOURCE.test(value)) {
       products.set(value, Math.max(products.get(value) ?? 0, field.limit));
+    } else if (field.type === "products" && Array.isArray(value) && value.length > 0 && value.every((id) => typeof id === "string" && PLUGIN_PRODUCT_ID.test(id))) {
+      const source = storefrontProductsKey(value as string[]);
+      products.set(source, Math.max(products.get(source) ?? 0, field.limit));
     } else if (field.type === "product" && typeof value === "string" && PLUGIN_PRODUCT_ID.test(value)) {
       products.set(storefrontProductKey(value), 1);
     } else if (field.type === "list" && Array.isArray(value)) {
@@ -179,7 +186,8 @@ export function resolveStorefrontSettings(schema: PluginSettingsSchema, stored: 
         settings[field.key] = typeof value === "string" ? data.image(value) : null;
         break;
       case "products":
-        settings[field.key] = typeof value === "string" ? data.products(value).slice(0, field.limit) : [];
+        settings[field.key] = typeof value === "string" ? data.products(value).slice(0, field.limit)
+          : Array.isArray(value) ? data.products(storefrontProductsKey(value as string[])).slice(0, field.limit) : [];
         break;
       case "product":
         settings[field.key] = typeof value === "string" ? data.products(storefrontProductKey(value))[0] ?? null : null;

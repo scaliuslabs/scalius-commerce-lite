@@ -20,6 +20,7 @@ import {
   cacheDepPostgresTrigger,
 } from "./cache-dep-triggers";
 import { eventOutboxPostgresTrigger } from "./event-outbox-triggers";
+import { eventDemandPostgresTrigger } from "./event-demand-triggers";
 import { conversationSearchPostgresCollation } from "./conversation-workspace";
 import {
   SEARCH_INDEX_TABLE,
@@ -30,6 +31,16 @@ import {
 
 export const POSTGRES_SCHEMA_BUNDLE_VERSION =
   "scalius-postgres-schema/v1" as const;
+
+/** Run after loading historical orders; never rewind a sequence on migration replay. */
+export const POSTGRES_ORDER_NUMBER_SEQUENCE_SQL = [
+  `LOCK TABLE "orders" IN ACCESS EXCLUSIVE MODE;`,
+  `CREATE SEQUENCE IF NOT EXISTS scalius_compat.order_number_seq AS bigint MINVALUE 1001 MAXVALUE 9007199254740991 START WITH 1001;`,
+  `SELECT setval('scalius_compat.order_number_seq', GREATEST(
+    (SELECT coalesce(max("order_number"), 1000) + 1 FROM "orders"),
+    (SELECT last_value + CASE WHEN is_called THEN 1 ELSE 0 END FROM scalius_compat.order_number_seq)
+  ), false);`,
+] as const;
 
 interface SqliteSchemaObject {
   type: string;
@@ -569,7 +580,7 @@ export async function compileCanonicalPostgresSchema(
       }
       const cacheDep = cacheDepPostgresTrigger(definition.name, definition.sql);
       if (cacheDep === null) return [];
-      return [cacheDep ?? eventOutboxPostgresTrigger(definition.name, definition.sql) ?? compileSqliteTriggerForPostgres(definition)];
+      return [cacheDep ?? eventOutboxPostgresTrigger(definition.name, definition.sql) ?? eventDemandPostgresTrigger(definition.name) ?? compileSqliteTriggerForPostgres(definition)];
     });
     const since0151 = !options.beforeMigration || options.beforeMigration > POSTGRES_SCALE_MIGRATION;
     const preDataSql = [
@@ -590,6 +601,7 @@ export async function compileCanonicalPostgresSchema(
       : [];
     const postDataSql = [
       "BEGIN;",
+      ...(!options.beforeMigration || options.beforeMigration > "0154_order_number_sequence.sql" ? POSTGRES_ORDER_NUMBER_SEQUENCE_SQL : []),
       ...indexObjects.map((object) => `${compileSqliteDdlForPostgres(object.sql)};`),
       ...(searchIndex?.table ?? []),
       ...cacheDepFunction,

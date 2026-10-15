@@ -3,9 +3,6 @@
 // (status, date, total, thumbnails, Buy again), dense rows on a phone like
 // Daraz and Amazon. Server-rendered from the session cookie, so it works
 // without JavaScript; "Older orders" pages with the API's opaque cursor.
-import AppBlocks from "@/components/apps/AppBlocks.astro";
-import { getAppBlocks } from "@/lib/api/app-blocks";
-import { layoutHasAppBlocks } from "@/lib/app-surfaces";
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import StoreContact from "@/components/StoreContact.astro";
@@ -26,8 +23,6 @@ const [layoutData, read, summary] = await Promise.all([
   readAccountOrders(Astro.request, cursor),
   readAccountSummaryForRequest(Astro.request),
 ]);
-// Apps' account blocks: read only when the layout says an active app draws one.
-const appBlocks = layoutHasAppBlocks(layoutData, "account") ? await getAppBlocks("account") : [];
 Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
 if (!read.ok && read.reason === "unavailable") Astro.response.status = 503;
 
@@ -158,7 +153,7 @@ const cards = orders.map((order) => {
         {olderHref && <a href={olderHref} data-astro-prefetch="false" class={ui.secondaryButton}>Older orders</a>}
       </div>
     )}
-    <AppBlocks blocks={appBlocks} target="customer-account.order-index.block.render" class="mt-8" />
+    <div data-buyer-ui-target="customer-account.order-index.block.render" data-buyer-ui={JSON.stringify(summary?.buyerUi ?? [])} class="mt-8 empty:hidden"></div>
   </AccountShell>
 </Layout>
 
@@ -167,6 +162,9 @@ const cards = orders.map((order) => {
   import { pagePath } from "@/lib/presence-url";
   import { renderPhoneVerification } from "@/lib/account-phone-verification";
   import { ACCOUNT_OFFLINE_MESSAGE } from "@/lib/account-format";
+  import { enhanceBuyerUi } from "@/lib/buyer-ui";
+
+  enhanceBuyerUi();
 
   // Buy again: the lines still sold go back in the cart at today's price.
   // Without JavaScript the link opens the order.

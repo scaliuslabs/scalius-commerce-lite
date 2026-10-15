@@ -17,6 +17,7 @@ import { formatMoney } from "@/lib/currency";
 import { ORDER_FORM_MAX_QUANTITY, orderFormOptionName, orderFormOptions } from "@/lib/checkout/order-form";
 import { QUICK_CHECKOUT_PATH } from "@/lib/checkout/quick-checkout";
 import LocationFields from "./LocationFields.astro";
+import BuyerField from "../apps/BuyerField.astro";
 
 interface Props {
   /** The product's handle (its URL's last segment). */
@@ -117,10 +118,7 @@ const missing = !data
       </div>
     )}
     {showNotes && (
-      <label class="scalius-order-form-field">
-        <span>{copy.orderNotesLabel}</span>
-        <textarea name="notes" rows="2" maxlength="500" placeholder={copy.orderNotesPlaceholder}></textarea>
-      </label>
+      <BuyerField attribute={{ key: "notes", label: copy.orderNotesLabel, type: "multiline", maxLength: 500 }} name="notes" id={`${id}-notes`} placeholder={copy.orderNotesPlaceholder} class="scalius-order-form-field" />
     )}
     <input type="hidden" name="intent" value="review" />
     <button type="submit" class="scalius-order-form-submit">{submitLabel?.trim() || copy.placeOrderText}</button>

@@ -1,3 +1,4 @@
+import { objectOperationResponseLimit } from "../../openapi/operation-registry/dashboard-objects";
 import { McpServer } from "@modelcontextprotocol/server";
 import { getMcpAuthContext } from "agents/mcp/server";
 import { z } from "zod";
@@ -16,7 +17,6 @@ import {
   AGENT_MAX_PARALLEL_READS,
   checkAgentRateLimit,
   utf8ByteLength,
-  AGENT_MAX_RESULT_BYTES,
 } from "../limits";
 import type { AgentOAuthProps, AgentPrincipal, AgentResource } from "../types";
 import { isAgentOAuthProps } from "./auth";
@@ -217,7 +217,9 @@ export function formatAgentToolResult(value: Record<string, unknown>) {
     };
   }
   const text = JSON.stringify(value);
-  if (utf8ByteLength(text) > AGENT_MAX_RESULT_BYTES) {
+  const directOperationId = typeof value.result === "object" && value.result !== null
+    ? (value.result as Partial<AgentOperationResult>).operationId : undefined;
+  if (utf8ByteLength(text) > objectOperationResponseLimit(directOperationId)) {
     const compactOperation = (candidate: unknown) => {
       if (typeof candidate !== "object" || candidate === null) return null;
       const result = candidate as Partial<AgentOperationResult>;

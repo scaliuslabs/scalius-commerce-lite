@@ -710,7 +710,7 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
 
     const { text, contentType } = await readBoundedResponse(
       response,
-      clampAgentResultBytes(operation.maxResponseBytes),
+      clampAgentResultBytes(operation.maxResponseBytes, operation.operationId),
     );
 
     return {

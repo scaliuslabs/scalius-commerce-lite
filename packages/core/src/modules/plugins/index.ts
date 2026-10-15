@@ -9,7 +9,7 @@ export * from "./cron-runs";
 export * from "./errors";
 export * from "./event-deliveries";
 export * from "./grants";
-export * from "./index-encoding";
+
 export * from "./installations";
 export * from "./kv";
 export * from "./list-columns";
@@ -18,5 +18,5 @@ export * from "./registry";
 export * from "./registry-trust";
 export * from "./safety";
 export * from "./settings-crypto";
-export * from "./storage";
+
 export * from "./storefront";

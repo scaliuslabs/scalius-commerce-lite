@@ -21,6 +21,7 @@ import {
 import { ValidationError } from "@scalius/core/errors";
 import { PLUGIN_FUNCTION_POINTS, type PluginFunctionInput, type PluginFunctionPoint } from "@scalius/shared/plugins";
 import type { PluginHost, PluginHostOptions } from "./host";
+import { prepareBuyerUiBlocks } from "./buyer-ui";
 import { PluginFunctionsBlockedError, runPluginFunctions } from "./functions";
 
 export interface CheckoutAppFunctionsOptions {
@@ -51,11 +52,14 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
     // The approved grant decides: an app runs only at the points it was approved for.
     .filter((registration) => (PLUGIN_FUNCTION_POINTS as readonly string[]).includes(registration.name)
       && registration.installation.grant?.functions.includes(registration.name as PluginFunctionPoint));
+  const attributeApps = new Map(registrations.map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, fields: installation.manifest.checkout?.attributes ?? [] }]));
+  const attributes = [...attributeApps.values()];
   const points = new Set(registrations.map((registration) => registration.name as PluginFunctionPoint));
-  if (points.size === 0) return { points, run: async () => [], report: () => undefined };
+  if (points.size === 0) return { points, attributes, buyerUi: async () => [], run: async () => [], report: () => undefined };
 
   const ctx = contextOf(options.ctx);
   const memo = new Map<string, Promise<unknown[]>>();
+  const snapshots = new Map<string, Promise<{ revision: number; data: Record<string, unknown> } | null>>();
   let host: Promise<PluginHost> | null = null;
   const sharedHost = () => {
     host ??= import("./host").then(({ PluginHost }) => new PluginHost({
@@ -67,8 +71,24 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
     return host;
   };
 
-  return {
+  const runtime: CheckoutAppFunctions = {
     points,
+    attributes,
+    async buyerUi(input) {
+      if (!points.has("buyer.ui")) return [];
+      const blocks = [];
+      for (const target of input.targets) {
+        const results = await runtime.run("buyer.ui", { target, language: input.language ?? "en", locale: input.locale ?? "en", currency: input.currency, cart: input.cart ?? null, attributes: input.attributes ?? {}, order: input.order ?? null, customer: input.customer ?? (input.cart?.customer ? { id: input.cart.customer.id } : null) });
+        for (const result of results) {
+          if (!result.output.ui) continue;
+          const installation = registrations.find((entry) => entry.installation.pluginId === result.pluginId)!.installation;
+          const prefix = `${result.pluginId}.`;
+          const values = Object.fromEntries(Object.entries(input.attributes ?? {}).filter(([key]) => key.startsWith(prefix)).map(([key, value]) => [key.slice(prefix.length), value]));
+          blocks.push({ appId: result.pluginId, releaseId: installation.bundleSha256, target, ui: result.output.ui, attributes: installation.manifest.checkout?.attributes ?? [], values });
+        }
+      }
+      try { return await prepareBuyerUiBlocks(options.db, blocks.slice(0, 12), registrations, options.env.CDN_DOMAIN_URL); } catch { return []; }
+    },
     run<P extends PluginFunctionPoint>(point: P, input: PluginFunctionInput<P>): Promise<Array<CheckoutAppFunctionResult<P>>> {
       if (!points.has(point)) return Promise.resolve([]);
       const key = `${point}\u0000${JSON.stringify(input)}`;
@@ -80,7 +100,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
         const blocking = forPoint.some((registration) => registration.installation.grant?.blockingFunctions.includes(point)
           && registration.installation.manifest.functions.some((fn) => fn.point === point && fn.onError === "block"));
         pending = sharedHost()
-          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared }))
+          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, snapshots }))
           .then((results) => results.map((result) => ({ ...result, appName: names.get(result.pluginId) ?? result.pluginId })))
           .catch(async (error: unknown) => {
             // An app the store made blocking could not answer: checkout stops, with the store's words.
@@ -106,4 +126,5 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
       if (options.ctx) options.ctx.waitUntil(write);
     },
   };
+  return runtime;
 }

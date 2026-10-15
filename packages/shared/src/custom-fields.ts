@@ -68,6 +68,7 @@ export const CUSTOM_FIELD_SCALAR_TYPES = [
   "variant_reference",
   "collection_reference",
   "media_reference",
+  "object_reference",
 ] as const;
 export type CustomFieldScalarType = (typeof CUSTOM_FIELD_SCALAR_TYPES)[number];
 
@@ -95,6 +96,7 @@ export const CUSTOM_FIELD_TYPES = [
   "list.variant_reference",
   "list.collection_reference",
   "list.media_reference",
+  "list.object_reference",
 ] as const satisfies readonly CustomFieldType[];
 
 export function isCustomFieldType(value: unknown): value is CustomFieldType {
@@ -110,7 +112,7 @@ export function customFieldItemType(type: CustomFieldType): CustomFieldScalarTyp
   return (isCustomFieldListType(type) ? type.slice(5) : type) as CustomFieldScalarType;
 }
 
-export type CustomFieldReferenceTarget = "product" | "variant" | "collection" | "media";
+export type CustomFieldReferenceTarget = "product" | "variant" | "collection" | "media" | "object";
 
 /** What a reference type points at, or null for a plain value type. */
 export function customFieldReferenceTarget(type: CustomFieldType): CustomFieldReferenceTarget | null {
@@ -119,6 +121,7 @@ export function customFieldReferenceTarget(type: CustomFieldType): CustomFieldRe
     case "variant_reference": return "variant";
     case "collection_reference": return "collection";
     case "media_reference": return "media";
+    case "object_reference": return "object";
     default: return null;
   }
 }
@@ -419,6 +422,7 @@ const TYPE_LABEL: Record<CustomFieldScalarType, string> = {
   variant_reference: "a variant id",
   collection_reference: "a collection id",
   media_reference: "a media id",
+  object_reference: "an object record id",
 };
 
 /**
@@ -491,7 +495,8 @@ function canonicalItem(type: CustomFieldScalarType, input: unknown, context: Cus
     case "product_reference":
     case "variant_reference":
     case "collection_reference":
-    case "media_reference": {
+    case "media_reference":
+    case "object_reference": {
       const value = canonicalReference(input);
       return value === null ? invalid() : ok(value);
     }
@@ -524,6 +529,7 @@ function compareItems(type: CustomFieldScalarType, left: string, right: string):
  * List validations apply to each item.
  */
 export interface CustomFieldValidations {
+  readonly to?: string;
   readonly min?: string;
   readonly max?: string;
   readonly regex?: string;
@@ -532,6 +538,7 @@ export interface CustomFieldValidations {
 
 /** Validations as the HTTP contract carries them (money bounds in major units). */
 export interface CustomFieldWireValidations {
+  to?: string | null;
   min?: string | number | null;
   max?: string | number | null;
   regex?: string | null;
@@ -577,6 +584,14 @@ function compileRegex(pattern: string): RegExp | null {
 
 const isBlank = (value: unknown) => value === undefined || value === null || (typeof value === "string" && value.trim() === "");
 
+/** A named Object type; kept here to avoid a codec/manifest dependency cycle. */
+export function isCustomFieldObjectTarget(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const split = value.lastIndexOf(".");
+  const namespace = value.slice(0, split);
+  return split > 0 && (namespace === "custom" || PLUGIN_ID_PATTERN.test(namespace)) && /^[a-z][a-z0-9_]{1,47}$/.test(value.slice(split + 1));
+}
+
 /** Parses wire validations for a type into their stored form. */
 export function parseCustomFieldValidations(
   type: CustomFieldType,
@@ -584,14 +599,18 @@ export function parseCustomFieldValidations(
   context: CustomFieldCodecContext,
 ): CustomFieldResult<CustomFieldValidations> {
   const invalid = (message: string) => fail("invalid_validation", message);
-  if (input === undefined || input === null) return ok({});
+  if (input === undefined || input === null) input = {};
   if (typeof input !== "object" || Array.isArray(input)) return invalid("Validations must be an object.");
   const raw = input as Record<string, unknown>;
-  const unknownKey = Object.keys(raw).find((key) => !["min", "max", "regex", "choices"].includes(key));
+  const unknownKey = Object.keys(raw).find((key) => !["min", "max", "regex", "choices", "to"].includes(key));
   if (unknownKey) return invalid(`Unknown validation ${unknownKey}.`);
   const item = customFieldItemType(type);
   const boundKind = customFieldBoundKind(type);
-  const result: { min?: string; max?: string; regex?: string; choices?: string[] } = {};
+  const result: { min?: string; max?: string; regex?: string; choices?: string[]; to?: string } = {};
+  if (item === "object_reference") {
+    if (!isCustomFieldObjectTarget(raw.to)) return invalid("Choose a qualified object type for this reference.");
+    result.to = raw.to;
+  } else if (!isBlank(raw.to)) return invalid("Only object reference fields declare a target type.");
 
   for (const side of ["min", "max"] as const) {
     if (isBlank(raw[side])) continue;
@@ -654,6 +673,7 @@ export function customFieldValidationsToWire(
     return typeof wire === "number" || typeof wire === "string" ? wire : null;
   };
   return {
+    ...(validations.to ? { to: validations.to } : {}),
     min: bound(validations.min),
     max: bound(validations.max),
     regex: validations.regex ?? null,
@@ -664,6 +684,7 @@ export function customFieldValidationsToWire(
 /** The canonical JSON text of stored validations (keys in a fixed order, unset ones omitted). */
 export function serializeCustomFieldValidations(validations: CustomFieldValidations): string {
   const ordered: Record<string, unknown> = {};
+  if (validations.to !== undefined) ordered.to = validations.to;
   if (validations.min !== undefined) ordered.min = validations.min;
   if (validations.max !== undefined) ordered.max = validations.max;
   if (validations.regex !== undefined) ordered.regex = validations.regex;
@@ -681,7 +702,8 @@ export function readCustomFieldValidations(text: string | null | undefined): Cus
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const record = raw as Record<string, unknown>;
-  const result: { min?: string; max?: string; regex?: string; choices?: string[] } = {};
+  const result: { min?: string; max?: string; regex?: string; choices?: string[]; to?: string } = {};
+  if (isCustomFieldObjectTarget(record.to)) result.to = record.to;
   if (typeof record.min === "string") result.min = record.min;
   if (typeof record.max === "string") result.max = record.max;
   if (typeof record.regex === "string") result.regex = record.regex;

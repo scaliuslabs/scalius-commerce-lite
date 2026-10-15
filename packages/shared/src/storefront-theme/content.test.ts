@@ -106,6 +106,23 @@ describe("theme media references", () => {
     expect(storefrontThemeMediaIds(theme)).toEqual(["media_logo", "media_footer_logo", "media_icon", "media_hero", "media_hero_phone"]);
   });
 
+  it("validates and removes missing deal/newsletter images on restore", async () => {
+    const { storefrontThemeMediaReferences, storefrontThemeWithoutMedia } = await import("./content");
+    const { storefrontSectionDefault } = await import("./sections");
+    const theme = withContent();
+    theme.pages.home = ["deal-block", "newsletter"].map((type) => {
+      const section = storefrontSectionDefault(type as "deal-block" | "newsletter", type);
+      return { ...section, settings: { ...section.settings, mediaId: "campaign-photo" } } as typeof section;
+    });
+    expect(storefrontThemeMediaReferences(theme).filter((ref) => ref.mediaId === "campaign-photo")).toEqual([
+      { path: "pages.home.0.settings.mediaId", mediaId: "campaign-photo" },
+      { path: "pages.home.1.settings.mediaId", mediaId: "campaign-photo" },
+    ]);
+    const restored = storefrontThemeWithoutMedia(theme, new Set(["campaign-photo"]));
+    expect(restored.pages.home.map((section) => "mediaId" in section.settings && section.settings.mediaId)).toEqual([null, null]);
+    expect(storefrontThemeDocumentSchema.safeParse(restored).success).toBe(true);
+  });
+
   it("validates hidden landing images while public section reads omit them", async () => {
     const { storefrontThemeMediaReferences } = await import("./content");
     const theme = withContent();

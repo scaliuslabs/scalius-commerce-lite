@@ -6,6 +6,8 @@ import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 // Draft, trashed and unknown brands are 404s.
 import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "@/layouts/Layout.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { resourceBindingContext } from "@/lib/setting-bindings";
 import CatalogListingPage from "@/components/catalog/CatalogListingPage.astro";
 import { storefrontFieldValues } from "@/lib/extensions/data";
 import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
@@ -109,6 +111,8 @@ const collectionJsonLd =
         },
       })
     : null;
+await resolveRequestTheme(Astro, layoutData, resourceBindingContext(brand, `/brands/${brand.slug}`));
+
 ---
 
 <Layout

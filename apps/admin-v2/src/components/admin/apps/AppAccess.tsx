@@ -86,8 +86,8 @@ export function AppAccess({ app }: { app: AppDetail }) {
         {request.blockingFunctions.map((point) =>
           row(`block:${point}`, t("checkoutBlocking", { point: pointLabel(point) }), isNew("blockingFunctions", point)),
         )}
-        {app.functions.flatMap((fn) => (fn.snapshotCollection
-          ? [row(`snapshot:${fn.point}`, t(fn.point === "checkout.discounts" ? "checkoutSnapshot" : "checkoutSnapshotRead", { collection: fn.snapshotCollection }), false)]
+        {app.functions.flatMap((fn) => (fn.snapshotObject
+          ? [row(`snapshot:${fn.point}`, t(fn.point === "checkout.discounts" ? "checkoutSnapshot" : "checkoutSnapshotRead", { collection: fn.snapshotObject }), false)]
           : []))}
       </Section>,
     );

@@ -21,10 +21,11 @@ export interface BundledPluginEntry {
 
 const BRIDGE_METHODS = [
   "apiCall",
-  "storageGet",
-  "storageWrite",
-  "storageQuery",
-  "storageCount",
+  "objectsGet",
+  "objectsGetByHandle",
+  "objectsWrite",
+  "objectsQuery",
+  "objectsCount",
   "kvGet",
   "kvSet",
   "kvDelete",

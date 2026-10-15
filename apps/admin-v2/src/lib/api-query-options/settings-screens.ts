@@ -152,6 +152,9 @@ interface Rate {
   name: string;
   fee: number;
   freeOver: number | null;
+  rateSource: string;
+  rateService: string | null;
+  fallbackFee: number | null;
   description: string | null;
   pickupAddress: string | null;
   pickupHours: string | null;

@@ -1,3 +1,4 @@
+import { observeStatement } from "@scalius/database/read-observer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -225,7 +226,7 @@ describe("runScheduledMaintenance", () => {
     mocks.drainCatalogProjectionRebuild.mockResolvedValue(0);
     mocks.rotateRecommendations.mockResolvedValue(0);
     mocks.runScheduledEventMaintenance.mockResolvedValue({
-      events: { scanned: 0, dispatched: 0, settledWithoutSubscribers: 0, failed: 0, skipped: 0, deliveries: [] },
+      events: { scanned: 0, dispatched: 0, failed: 0, skipped: 0, deliveries: [] },
       deliveries: 0,
       pluginDeliveries: 0,
     });
@@ -312,6 +313,17 @@ describe("runScheduledMaintenance", () => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it("publishes scheduled table changes even when no event subscribers exist", async () => {
+    const publish = vi.fn(async () => ({ sockets: 0 }));
+    const env = { ...createEnv(), REALTIME_HUB: { idFromName: () => ({}), get: () => ({ publish }) } } as unknown as Env;
+    mocks.archiveStaleIncompleteOrders.mockImplementationOnce(async () => {
+      observeStatement("UPDATE orders SET archived_at = 1 WHERE id = ?", ["order_expired"]);
+      return { found: 1, limit: 25, hasMore: false, archived: 1, failed: 0, archivedOrderIds: ["order_expired"], errors: [] };
+    });
+    await runScheduledMaintenance(env, createExecutionContext());
+    expect(publish).toHaveBeenCalledExactlyOnceWith([{ topic: "orders", kind: "changed" }]);
   });
 
   it("runs the drains, inventory expiry and the sweeps of a sweep tick", async () => {
@@ -788,7 +800,7 @@ describe("the sweep rotation", () => {
     mocks.drainNotificationOutbox.mockResolvedValue({ scanned: 0 });
     mocks.drainPaymentEvents.mockResolvedValue({ scanned: 0, processed: 0 });
     mocks.drainCatalogProjectionRebuild.mockResolvedValue(0);
-    mocks.runScheduledEventMaintenance.mockResolvedValue({ events: { scanned: 0, dispatched: 0, settledWithoutSubscribers: 0, failed: 0, skipped: 0, deliveries: [] }, deliveries: 0, pluginDeliveries: 0 });
+    mocks.runScheduledEventMaintenance.mockResolvedValue({ events: { scanned: 0, dispatched: 0, failed: 0, skipped: 0, deliveries: [] }, deliveries: 0, pluginDeliveries: 0 });
 
     // The minute whose rotation position is the inventory expiry job.
     const inventoryMinute = count * 1_000 + indexOf("inventory_expiry_sweep");

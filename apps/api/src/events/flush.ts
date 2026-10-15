@@ -33,8 +33,8 @@ export function realtimeFlushObserver(env: Env, tableTopics: Iterable<RealtimeTo
 }
 
 /**
- * After a write: dispatch that write's events (or settle them when nobody
- * listens) and send the deliveries they recorded, within this plan's drain
+ * After a write: dispatch subscribed events and send the deliveries they
+ * recorded, within this plan's drain
  * limits. The scheduled tick takes whatever is left.
  */
 export async function flushEventsAfterWrite(

@@ -1,3 +1,4 @@
+import { clearBuyerAttributes } from "../buyer-ui/state";
 import { isPaymentMethodIdShape } from "../payment-method-id";
 import { logicalPathname } from "@/lib/presence-url";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
@@ -206,6 +207,7 @@ export function discardCheckoutFormDraftOfOtherOwner(owner: string): boolean {
     // Storage may be unavailable.
   }
   clearCheckoutFormDraft();
+  clearBuyerAttributes();
   return true;
 }
 
@@ -220,6 +222,7 @@ export function reconcileCheckoutAfterSignIn(customerId: string): boolean {
   const changedAccount = Boolean(previousOwner && previousOwner !== "guest" && previousOwner !== "customer"
     && previousOwner !== customerId);
   if (changedAccount) {
+    clearBuyerAttributes();
     clearCheckoutAttemptSession();
     clearHostedPaymentRecoverySession();
     try {

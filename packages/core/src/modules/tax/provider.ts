@@ -11,6 +11,7 @@
 // reads no plugin table. Fail closed: when the chosen app cannot run or
 // cannot answer, checkout refuses (`tax_unavailable`) rather than charging
 // no tax.
+import { withCheckoutProviderDeadline } from "@scalius/shared/plugins/provider-deadline";
 import {
     bindProvider,
     resolveAppProvider,
@@ -87,7 +88,7 @@ export async function quoteTax(input: CalculateTaxQuoteInput, options: QuoteTaxO
     }
     let calculation;
     try {
-        calculation = await chosen.provider.calculate(prepared.request, { signal: options.signal });
+        calculation = await withCheckoutProviderDeadline((signal) => chosen.provider.calculate(prepared.request!, { signal }), options.signal);
     } catch {
         // Whatever the app raised (a ProviderError, a timeout, an invalid
         // answer), the buyer sees one refusal; its own words stay with it.

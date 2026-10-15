@@ -5,10 +5,17 @@ import {
   AgentRequestLengthMismatchError,
   bufferBoundedAgentRequest,
   checkAgentRateLimit,
+  clampAgentResultBytes,
   withAgentNoStoreHeaders,
 } from "./limits";
 
 describe("agent request limits", () => {
+  it("permits full object records without widening other operation responses", () => {
+    expect(clampAgentResultBytes(200_000, "objects.get")).toBe(131_072);
+    expect(clampAgentResultBytes(200_000, "objects.upsert")).toBe(131_072);
+    expect(clampAgentResultBytes(200_000, "dashboard.products.get")).toBe(65_536);
+    expect(clampAgentResultBytes(200_000, "objects.unreviewed")).toBe(65_536);
+  });
   it("rejects declared and streamed bodies over 1 MiB", async () => {
     const declared = new Request("https://api.example.test/oauth/token", {
       method: "POST",

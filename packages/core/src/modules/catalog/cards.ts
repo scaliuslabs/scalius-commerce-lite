@@ -18,6 +18,7 @@ import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import type { Database } from "@scalius/database/client";
 import { isNeutralMarketPricing, priceProductCards, type MarketPriceContext } from "../price-lists";
 import { presentCardRating, reviewStats, reviewStatsJoin, type CardRating } from "./shared";
+import type { ProductCardFields, ProductCardFieldsById } from "./card-fields";
 import { EMPTY_PRODUCT_CARD_FACTS, type ProductCardFacts } from "./card-facts";
 import {
     PRODUCT_CARD_FIELDS,
@@ -86,6 +87,7 @@ export type ResolvedProduct = {
     rating: CardRating;
     /** Brand, key specs, options, sold count, pack size and delivery line (card-facts.ts). */
     cardFacts: ProductCardFacts;
+    fields: ProductCardFields;
 } & ProductCardImages;
 
 function enrichProduct(
@@ -93,6 +95,7 @@ function enrichProduct(
     images: ProductCardImages,
     decimalPlaces: number,
     cardFacts: ProductCardFacts,
+    fields: ProductCardFields,
 ): ResolvedProduct {
     const {
         hasVariants,
@@ -111,6 +114,7 @@ function enrichProduct(
         rating: presentCardRating(ratingAvgCenti, reviewCount),
         ...images,
         cardFacts,
+        fields,
     };
 }
 
@@ -124,11 +128,12 @@ export function resolveProductCards(
     mediaByProductId: ReadonlyMap<string, ProductMediaProjection[]>,
     cardFacts: (productId: string) => ProductCardFacts = () => EMPTY_PRODUCT_CARD_FACTS,
     translation: TranslationScope | null = null,
+    fields?: ProductCardFieldsById,
 ): Map<string, ResolvedProduct> {
     const decimalPlaces = storeDecimalPlacesFromCode(rows[0]?.storeCurrencyCode);
     return new Map(translateRows(translation, "product", rows, PRODUCT_CARD_FIELDS).map((row) => [
         row.id,
-        enrichProduct(row, resolveProductCardImages(mediaByProductId.get(row.id) ?? []), decimalPlaces, cardFacts(row.id)),
+        enrichProduct(row, resolveProductCardImages(mediaByProductId.get(row.id) ?? []), decimalPlaces, cardFacts(row.id), fields?.get(row.id) ?? {}),
     ]));
 }
 

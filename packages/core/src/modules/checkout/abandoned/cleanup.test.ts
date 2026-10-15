@@ -39,6 +39,9 @@ function createDbMock(selectRows: unknown[][]) {
                 operations.push({ op: "delete.where" });
             },
         })),
+        run: vi.fn(async () => {
+            operations.push({ op: "run" });
+        }),
     };
 
     return { db: db as unknown as Database, rawDb: db, operations };
@@ -118,6 +121,7 @@ describe("abandoned checkout cleanup", () => {
             { op: "delete.where" },
             { op: "select.limit", limit: 4 },
             { op: "delete.where" },
+            { op: "run" },
         ]);
     });
 
@@ -160,6 +164,7 @@ describe("abandoned checkout cleanup", () => {
         expect(operations).toEqual([
             { op: "select.limit", limit: DEFAULT_ABANDONED_CHECKOUT_CLEANUP_LIMIT + 1 },
             { op: "select.limit", limit: DEFAULT_ABANDONED_CHECKOUT_CLEANUP_LIMIT + 1 },
+            { op: "run" },
         ]);
     });
 });

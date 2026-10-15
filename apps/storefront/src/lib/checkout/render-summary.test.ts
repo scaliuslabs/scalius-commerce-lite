@@ -23,6 +23,7 @@ import type { CheckoutConfig } from "./types";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
 import { CHECKOUT_CART_REPAIR_STORAGE_KEY } from "../cart/repair-state";
 import { writeHostedPaymentRecoverySession } from "./session-state";
+import { cartStore } from "@/store/cart";
 
 const baseConfig: CheckoutConfig = {
   gateways: [],
@@ -573,6 +574,43 @@ describe("resolveCheckoutPaymentRequest", () => {
 });
 
 describe("initCheckoutPage", () => {
+  it("quotes cash collection for the balance after an online deposit", async () => {
+    installStripePaymentFixture();
+    const config = (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__;
+    config.activeDefaultMethod = "stripe";
+    config.partialPaymentEnabled = true;
+    config.partialPaymentAmount = 1;
+    const requests: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input, init) => {
+      expect(String(input)).toBe("/api/checkout/tax-quote");
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      requests.push(body);
+      return new Response(JSON.stringify({ success: true, data: taxQuote({ shippingRateToken: body.cod ? "rate_cod" : "rate_online" }) }));
+    }));
+    await initCheckoutPage();
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({ cod: true });
+  });
+
+  it("reprices a courier quote for cash collection before enabling payment", async () => {
+    installStripePaymentFixture();
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__.activeDefaultMethod = "cod";
+    const requests: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input, init) => {
+      expect(String(input)).toBe("/api/checkout/tax-quote");
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      requests.push(body);
+      return new Response(JSON.stringify({ success: true, data: taxQuote({ shippingRateToken: body.cod ? "rate_cod" : "rate_online" }) }));
+    }));
+
+    await initCheckoutPage();
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({ cod: true });
+    expect(requests[1]).not.toHaveProperty("shippingRateToken");
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("draws the summary the cart page showed at once, before its own quote returns", async () => {
     document.body.innerHTML = `
       <section id="orderSummary" aria-busy="true"><span id="orderSummaryToggleTotal"></span><div id="summaryDetails"></div></section>
@@ -590,8 +628,9 @@ describe("initCheckoutPage", () => {
     sessionStorage.setItem("scalius_checkout_quote", JSON.stringify(reviewed));
     (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = baseConfig;
     let answerQuote: (response: Response) => void = () => undefined;
+    const pendingQuote = new Promise<Response>((resolve) => { answerQuote = resolve; });
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => String(input) === "/api/checkout/tax-quote"
-      ? new Promise<Response>((resolve) => { answerQuote = resolve; })
+      ? pendingQuote
       : Promise.reject(new Error(`Unexpected request: ${String(input)}`))) as typeof fetch);
 
     const init = initCheckoutPage();
@@ -1820,5 +1859,42 @@ describe("an app's wallet at checkout", () => {
     finishOrder(new Response(JSON.stringify({ success: false, error: "Checkout is unavailable." }), { status: 503 }));
     await vi.waitFor(() => expect(document.getElementById("loadingOverlay")?.classList.contains("hidden")).toBe(true));
     expect(window.location.pathname).not.toContain("order-success");
+  });
+});
+
+
+describe("private checkout buyer fields", () => {
+  it("requires an app field, requotes its value and sends it on the order", async () => {
+    installStripePaymentFixture();
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__.activeDefaultMethod = "cod";
+    const mount = document.createElement("div");
+    mount.dataset.buyerUiTarget = "purchase.checkout.actions.render-before";
+    document.body.append(mount);
+    cartStore.set({ items: { line_1: { id: "prod_1", variantId: "var_1", name: "Product", price: 100, quantity: 1 } }, totalItems: 1, totalAmount: 100, discountCodes: [] });
+    const buyerUi = [{ appId: "test.gift", releaseId: "release_1", target: "purchase.checkout.actions.render-before" as const,
+      ui: { type: "field" as const, attribute: "message" }, attributes: [{ key: "message", label: "Gift message", type: "text" as const, required: true }], values: {} }];
+    const quoteRequests: Record<string, unknown>[] = [];
+    const orderRequests: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input, init) => {
+      if (String(input) === "/api/checkout/create-order") {
+        orderRequests.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ error: "Checked request" }), { status: 400 });
+      }
+      quoteRequests.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ success: true, data: taxQuote({ buyerUi }) }));
+    }));
+    await initCheckoutPage();
+    document.getElementById("payButton")!.click();
+    expect(orderRequests).toHaveLength(0);
+    const field = document.querySelector<HTMLInputElement>("[data-buyer-attribute]")!;
+    field.value = "Happy birthday";
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+    await vi.waitFor(() => expect(quoteRequests).toHaveLength(2));
+    expect(quoteRequests[1]?.attributes).toEqual({ "test.gift.message": "Happy birthday" });
+    await vi.waitFor(() => expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false));
+    document.getElementById("payButton")!.click();
+    await vi.waitFor(() => expect(orderRequests).toHaveLength(1));
+    expect(orderRequests[0]?.attributes).toEqual({ "test.gift.message": "Happy birthday" });
   });
 });

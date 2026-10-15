@@ -249,6 +249,7 @@ function ItemInput(props: ItemProps) {
     case "media_reference":
       return <MediaReferenceInput {...props} />;
     case "variant_reference":
+    case "object_reference":
       return text({ placeholder: t("idPlaceholder"), autoComplete: "off", spellCheck: false });
     default:
       return text({ autoComplete: "off" });

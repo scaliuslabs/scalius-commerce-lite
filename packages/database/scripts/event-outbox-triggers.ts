@@ -1,15 +1,15 @@
 /**
  * Event outbox triggers (COMMERCE-HOOKS H3) for D1/Turso and PostgreSQL,
  * generated from one declarative table below. Each trigger writes one
- * `event_outbox` row in the same transaction as the domain write, so no write
- * commits without its event and a rolled-back write leaves none.
+ * `event_outbox` row when its topic has demand, in the same transaction as
+ * the domain write. A rolled-back write leaves no event.
  *
  * SQLite (D1, Turso): the guard is the WHEN clause and the body is one
  * `INSERT ... VALUES` (no CASE anywhere: remote D1 rejects trigger bodies that
  * embed one). The facts are `json_object(...)`.
  *
- * PostgreSQL: an AFTER ROW trigger whose WHEN holds the same column guard and
- * whose function inserts the same row with `jsonb_build_object(...)::text`.
+ * PostgreSQL: an AFTER ROW trigger whose WHEN holds the column guard, with
+ * demand checked in its function before `jsonb_build_object(...)::text`.
  * The generic SQLite-to-PostgreSQL trigger compiler cannot be used: the
  * PostgreSQL profile's `json_object` takes text only (numbers would become
  * strings) and PostgreSQL has no `randomblob`/`hex`. The canonical PostgreSQL
@@ -257,7 +257,7 @@ const productUpdatedFacts = [
  * is not yet an order: it emits `order.created` when it leaves that state
  * for anything but `cancelled`, and nothing while incomplete.
  */
-export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
+const LEGACY_EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
   // ── orders ────────────────────────────────────────────────────────────
   {
     name: "orders_created",
@@ -633,12 +633,92 @@ export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
   },
 ];
 
+/** Additive beta catalog; facts deliberately exclude contact, amount and object data fields. */
+const BETA_EVENT_TRIGGER_SPECS: EventTriggerSpec[] = [
+  ...(["insert", "update"] as const).map((event): EventTriggerSpec => ({
+    name: `fulfillments_${event === "insert" ? "created" : "voided"}`,
+    table: "order_fulfillments", event,
+    when: event === "insert" ? eq(NEW("status"), text("active")) : and(eq(OLD("status"), text("active")), eq(NEW("status"), text("voided"))),
+    topic: event === "insert" ? "fulfillment.created" : "fulfillment.voided",
+    resourceId: NEW("id"),
+    facts: [["fulfillmentId", NEW("id")], ["orderId", NEW("order_id")], ["kind", NEW("kind")], ["locationId", NEW("location_id")]],
+  })),
+  {
+    name: "shipments_status", table: "delivery_shipments", event: "update", when: changed("status"),
+    topic: "shipment.updated", resourceId: NEW("id"),
+    facts: [["shipmentId", NEW("id")], ["orderId", NEW("order_id")], ["providerId", NEW("provider_id")], ["previousStatus", OLD("status")], ["status", NEW("status")]],
+  },
+  ...(["insert", "update"] as const).map((event): EventTriggerSpec => ({
+    name: `payments_${event}`, table: "order_payments", event,
+    ...(event === "update" ? { when: changed("status") } : {}),
+    topic: "payment.updated", resourceId: NEW("id"),
+    facts: [["paymentId", NEW("id")], ["orderId", NEW("order_id")], ["provider", NEW("payment_method")], ["previousStatus", event === "insert" ? NULL : OLD("status")], ["status", NEW("status")]],
+  })),
+  {
+    name: "checkouts_abandoned", table: "abandoned_checkouts", event: "update",
+    when: and(isNull(OLD("abandoned_at")), notNull(NEW("abandoned_at"))),
+    topic: "checkout.abandoned", resourceId: NEW("id"),
+    facts: [["abandonedCheckoutId", NEW("id")], ["checkoutId", NEW("checkout_id")]],
+  },
+  {
+    name: "promotions_created", table: "promotions", event: "insert", when: isNull(NEW("deleted_at")),
+    topic: "discount.created", resourceId: NEW("id"),
+    facts: [["promotionId", NEW("id")], ["previousStatus", NULL], ["status", NEW("status")]],
+  },
+  {
+    name: "promotions_updated", table: "promotions", event: "update",
+    when: and(isNull(NEW("deleted_at")), changed("revision", "status", "deleted_at")),
+    topic: "discount.updated", resourceId: NEW("id"),
+    facts: [["promotionId", NEW("id")], ["previousStatus", OLD("status")], ["status", NEW("status")]],
+  },
+  ...(["update", "delete"] as const).map((event): EventTriggerSpec => ({
+    name: `promotions_${event === "update" ? "trashed" : "deleted"}`, table: "promotions", event,
+    ...(event === "update" ? { when: and(isNull(OLD("deleted_at")), notNull(NEW("deleted_at"))) } : {}),
+    topic: "discount.deleted", resourceId: OLD("id"),
+    facts: [["promotionId", OLD("id")], ["previousStatus", OLD("status")], ["status", text("deleted")]],
+  })),
+  {
+    name: "promotions_redeemed", table: "promotion_redemptions", event: "insert",
+    topic: "discount.redeemed", resourceId: NEW("promotion_id"),
+    facts: [["promotionId", NEW("promotion_id")], ["orderId", NEW("order_id")], ["codeId", lookup("promotion_codes", "id", "normalized_code", NEW("promotion_code"))]],
+  },
+  ...(["insert", "update"] as const).map((event): EventTriggerSpec => ({
+    name: `reviews_${event}`, table: "product_reviews", event,
+    ...(event === "update" ? { when: changed("status") } : {}),
+    topic: event === "insert" ? "review.created" : "review.updated", resourceId: NEW("id"),
+    facts: [["reviewId", NEW("id")], ["productId", NEW("product_id")], ["previousStatus", event === "insert" ? NULL : OLD("status")], ["status", NEW("status")], ["rating", NEW("rating")]],
+  })),
+  ...(["insert", "update"] as const).map((event): EventTriggerSpec => ({
+    name: `gift_cards_${event}`, table: "gift_cards", event,
+    ...(event === "update" ? { when: changed("status") } : {}),
+    topic: event === "insert" ? "gift_card.created" : "gift_card.updated", resourceId: NEW("id"),
+    facts: [["giftCardId", NEW("id")], ["previousStatus", event === "insert" ? NULL : OLD("status")], ["status", NEW("status")]],
+  })),
+  {
+    name: "gift_card_transactions_created", table: "gift_card_transactions", event: "insert",
+    topic: "gift_card.transaction", resourceId: NEW("id"),
+    facts: [["giftCardId", NEW("gift_card_id")], ["transactionId", NEW("id")], ["kind", NEW("kind")], ["orderId", NEW("order_id")]],
+  },
+  ...(["insert", "update", "delete"] as const).map((event): EventTriggerSpec => {
+    const row = event === "delete" ? OLD : NEW;
+    return {
+      name: `objects_${event}`, table: "object_records", event,
+      when: event === "update" ? and(eq(row("ev"), int(1)), changed("revision")) : eq(row("ev"), int(1)),
+      topic: event === "insert" ? "object.created" : event === "update" ? "object.updated" : "object.deleted",
+      resourceId: row("id"),
+      facts: [["objectType", row("type_id")], ["objectId", row("id")], ["revision", row("revision")], ["status", event === "delete" ? text("deleted") : row("status")]],
+    };
+  }),
+];
+
+export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [...LEGACY_EVENT_TRIGGER_SPECS, ...BETA_EVENT_TRIGGER_SPECS];
+
 /**
  * The migration that installed each trigger: 0103 installed the first set;
  * later migrations add theirs and must contain each generated statement
  * verbatim (`__tests__/event-outbox.test.ts`).
  */
-export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = {
+const HISTORICAL_EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = {
   customer_marketing_consents_created: "0108_customer_marketing",
   customer_marketing_consents_changed: "0108_customer_marketing",
   purchase_orders_created: "0109_inventory_purchasing",
@@ -717,9 +797,14 @@ export const SUPERSEDED_EVENT_TRIGGER_SPECS: ReadonlyArray<{ migration: string; 
   },
 ];
 
-/** The migration file name (without `.sql`) that installs a trigger spec. */
-export function eventTriggerMigration(spec: Pick<EventTriggerSpec, "name">): string {
-  return EVENT_TRIGGER_MIGRATIONS[spec.name] ?? "0103_order_channel_event_outbox";
+export const EVENT_DEMAND_MIGRATION = "0155_v2_beta_contract";
+export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = Object.fromEntries(
+  EVENT_TRIGGER_SPECS.map((spec) => [spec.name, EVENT_DEMAND_MIGRATION]),
+);
+
+/** The migration file name (without `.sql`) that installs the current trigger. */
+export function eventTriggerMigration(_spec: Pick<EventTriggerSpec, "name">): string {
+  return EVENT_DEMAND_MIGRATION;
 }
 
 // ---------------------------------------------------------------------------
@@ -800,10 +885,14 @@ export function eventTriggerName(spec: Pick<EventTriggerSpec, "name">): string {
   return `${EVENT_OUTBOX_TRIGGER_PREFIX}${spec.name}`;
 }
 
-function sqliteTrigger(spec: EventTriggerSpec): string {
+function demandGuard(spec: EventTriggerSpec): string {
+  return `EXISTS (SELECT 1 FROM event_demand WHERE filter IN ('*', ${literal(`${spec.topic.split(".")[0]}.*`)}, ${literal(spec.topic)}))`;
+}
+
+function sqliteTrigger(spec: EventTriggerSpec, demandGated = false): string {
   return [
     `CREATE TRIGGER ${id("sqlite", eventTriggerName(spec))} AFTER ${spec.event.toUpperCase()} ON ${id("sqlite", spec.table)}`,
-    ...(spec.when ? [`WHEN ${renderCondition("sqlite", spec.when)}`] : []),
+    ...((spec.when || demandGated) ? [`WHEN ${[spec.when && renderCondition("sqlite", spec.when), demandGated && demandGuard(spec)].filter(Boolean).join(" AND ")}`] : []),
     "BEGIN",
     `  ${insertSql("sqlite", spec)};`,
     "END",
@@ -827,7 +916,7 @@ function conditionHasLookup(condition: EventCondition): boolean {
   }
 }
 
-function postgresTrigger(spec: EventTriggerSpec): string {
+function postgresTrigger(spec: EventTriggerSpec, demandGated = false): string {
   const name = eventTriggerName(spec);
   const fn = `scalius_compat.${id("postgres", `${name}_fn`)}`;
   // A guard that reads another table runs inside the function instead.
@@ -839,6 +928,7 @@ function postgresTrigger(spec: EventTriggerSpec): string {
     "AS $trigger_function$",
     "BEGIN",
     ...(inBody ? [`  IF NOT coalesce((${renderCondition("postgres", spec.when!)}), false) THEN`, "    RETURN NULL;", "  END IF;"] : []),
+    ...(demandGated ? [`  IF NOT ${demandGuard(spec)} THEN`, "    RETURN NULL;", "  END IF;"] : []),
     `  ${insertSql("postgres", spec)};`,
     "  RETURN NULL;",
     "END",
@@ -928,14 +1018,20 @@ export function generateEventOutboxTriggers(): GeneratedEventTrigger[] {
     exprColumns(spec.table, spec.resourceId, name, spec.event);
     for (const [, value] of spec.facts) exprColumns(spec.table, value, name, spec.event);
     if (spec.when) conditionColumns(spec.table, spec.when, name, spec.event);
-    return { name, table: spec.table, topic: spec.topic, sqlite: sqliteTrigger(spec), postgres: postgresTrigger(spec) };
+    return { name, table: spec.table, topic: spec.topic, sqlite: sqliteTrigger(spec, true), postgres: postgresTrigger(spec, true) };
   });
 }
 
 const generated = generateEventOutboxTriggers();
 const postgresByName = new Map(generated.map((trigger) => [trigger.name, trigger.postgres]));
 const normalizeTriggerSql = (sql: string) => sql.trim().replace(/;$/, "").replace(/\s+/g, " ");
-const superseded = SUPERSEDED_EVENT_TRIGGER_SPECS.map(({ migration, spec }) => ({
+const superseded = [
+  ...SUPERSEDED_EVENT_TRIGGER_SPECS,
+  ...LEGACY_EVENT_TRIGGER_SPECS.map((spec) => ({
+    migration: HISTORICAL_EVENT_TRIGGER_MIGRATIONS[spec.name] ?? "0103_order_channel_event_outbox",
+    spec,
+  })),
+].map(({ migration, spec }) => ({
   migration,
   name: eventTriggerName(spec),
   sqlite: sqliteTrigger(spec),

@@ -56,6 +56,7 @@ import { pickReviewCopy, readProductReviews } from "@/components/product/reviews
 import { pickReviewFormCopy } from "@/lib/account-reviews";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { readStoreShape, resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { resourceBindingContext } from "@/lib/setting-bindings";
 import { resolveProductPageTheme } from "@/components/product/lib/product-page-theme";
 import { storeContactLinks } from "@/lib/store-contact";
 import { shopCopy } from "@/lib/storefront-shop-copy";
@@ -140,12 +141,12 @@ if (productResult.state === "unavailable" || !layoutData) {
 const productData = productResult.data;
 const { product, category, media, variants, recommendations } = productData;
 
-const requestTheme = await resolveRequestTheme(Astro, layoutData);
+const requestTheme = await resolveRequestTheme(Astro, layoutData, resourceBindingContext(product, `/products/${product.slug}`, media));
 // The theme editor's preview marks the page's parts so a click selects them.
 const editorMarks = requestTheme.preview !== null;
-const productTemplate = requestTheme.resolved.pages.templates.product;
 const shop = shopCopy(requestTheme.language);
 const templateData = await templateSectionData("product", requestTheme);
+const productTemplate = requestTheme.resolved.pages.templates.product;
 
 // Theme -> Layout -> Product page: the gallery, the buy box's look and the
 // modules below the fold, in the template's order.
@@ -537,7 +538,7 @@ const primarySchemaAvailability = selectedBuyerVariant
 // drawn from the page's projection around the store's own buy form, else
 // the core breadcrumbs, gallery and buy box. The reviews and related
 // products it places replace the template's modules of the same. The
-// projection is built once, only when a skin or a component block draws.
+// projection is built once and shared by the core buy box, skins and component blocks.
 const productPath = product.canonicalPath?.startsWith("/") ? product.canonicalPath : `/products/${product.slug}`;
 let pageProjection: StorefrontProductPage | null = null;
 const productPageProjection = (): StorefrontProductPage => pageProjection ??= productPageData({

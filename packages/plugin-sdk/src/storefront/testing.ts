@@ -74,6 +74,7 @@ export function fixtureProductCard(overrides: Partial<StorefrontProductCard> = {
     quickAdd: true,
     needsOptions: false,
     facts: [],
+    fields: {},
     ...overrides,
   };
 }

@@ -48,7 +48,7 @@ import {
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
-import { storefrontCustomFieldsSchema } from "../schemas/custom-fields";
+import { storefrontCustomFieldsSchema, storefrontCardFieldsSchema } from "../schemas/custom-fields";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const PRODUCT_FEED_CURSOR_PATTERN = /^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/;
@@ -158,6 +158,7 @@ const storefrontProductSchema = z.object({
     description: "The next photo in gallery order, for a card's hover swap. Never a video.",
   }),
   cardFacts: optionalProductCardFacts,
+  fields: storefrontCardFieldsSchema.optional(),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
   discountedPrice: z.number(),
@@ -620,7 +621,9 @@ app.openapi(listProductsRoute, async (c) => {
 
   const { presence: _presence, ...filters } = params;
   const result = await getStorefrontProducts(db, { ...filters, search, attributeFilters }, publicMarketPricing(c));
-  return ok(c, result);
+  // The HTTP schema keeps custom JSON opaque instead of recursively expanding the codec type.
+  const response: z.infer<typeof listProductsRoute.responses[200]["content"]["application/json"]["schema"]>["data"] = result;
+  return ok(c, response);
 });
 
 // GET /api/storefront/products/search

@@ -1,5 +1,5 @@
 // Plugin persistence on the real migrated schema (D1 semantics): installation
-// lifecycle and grants, sealed secret settings, declared storage with index
+// lifecycle and grants, sealed secret settings, declared objects with index
 // and unique behaviour, KV TTLs, the masked log ring and the function-point
 // registry.
 import type { DatabaseSync } from "node:sqlite";
@@ -7,24 +7,21 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { PLUGIN_API_VERSION, type PluginManifestInput } from "@scalius/shared/plugins";
+import { objectTypeDeclarationSchema, objectTypeId } from "@scalius/shared/plugins/objects";
+import { countObjectRecords, deleteObjectRecord, getObjectRecord, putObjectRecord, queryObjectRecords } from "../objects";
 import {
   PLUGIN_LOG_RING_SIZE,
   PluginError,
   activatePlugin,
-  countPluginRecords,
   deactivatePlugin,
   deletePluginKv,
-  deletePluginRecord,
   describePluginSettings,
   getPluginKv,
-  getPluginRecord,
   installPlugin,
   listActiveEventPlugins,
   listActiveFunctionPlugins,
   listPluginKv,
   listPluginLogs,
-  putPluginRecord,
-  queryPluginRecords,
   readPluginRuntimeSettings,
   requirePluginInstallation,
   setPluginKv,
@@ -32,7 +29,6 @@ import {
   updatePluginInstallation,
   writePluginLogs,
   writePluginSettings,
-  type PluginCollectionDeclaration,
 } from "./index";
 
 const KEY = Buffer.from(Array.from({ length: 32 }, (_, index) => index + 7)).toString("base64");
@@ -50,7 +46,7 @@ function manifest(overrides: Partial<PluginManifestInput> = {}): PluginManifestI
     scopes: ["read_orders"],
     events: ["order.*"],
     functions: [{ point: "checkout.discounts", priority: 50 }],
-    storage: { ledger: { indexes: ["customerId", ["kind", "at"]], unique: ["ref"] } },
+    objects: { ledger: LEDGER },
     settings: [
       { key: "rate", label: "Rate", type: "number", default: 1, min: 0, max: 10 },
       { key: "api_key", label: "API key", type: "secret", required: true },
@@ -59,7 +55,13 @@ function manifest(overrides: Partial<PluginManifestInput> = {}): PluginManifestI
   };
 }
 
-const LEDGER: PluginCollectionDeclaration = { indexes: ["customerId", ["kind", "at"]], unique: ["ref"] };
+const LEDGER = objectTypeDeclarationSchema.parse({ name: "Ledger", fields: [
+  { key: "customer_id", name: "Customer", type: "single_line_text" },
+  { key: "kind", name: "Kind", type: "single_line_text" },
+  { key: "at", name: "At", type: "integer" },
+  { key: "ref", name: "Reference", type: "single_line_text" },
+  { key: "points", name: "Points", type: "integer" },
+], indexes: ["customer_id", ["kind", "at"]], unique: ["ref"] });
 
 describe("plugin installations", () => {
   let sqlite: DatabaseSync;
@@ -181,78 +183,82 @@ describe("plugin installations", () => {
 
   it("uninstalls keeping or deleting data", async () => {
     await installPlugin(db, { manifest: manifest({ settings: [] }), source: "upload", bundleSha256: SHA });
-    await putPluginRecord(db, "acme.loyalty", "ledger", LEDGER, "r1", { customerId: "c1", kind: "earn", at: 1, ref: "x" });
+    await putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, "r1", { customer_id: "c1", kind: "earn", at: 1, ref: "x" });
     await setPluginKv(db, "acme.loyalty", "k", 1);
     await writePluginLogs(db, "acme.loyalty", [{ level: "info", source: "event:order.paid", message: "hi" }]);
     await uninstallPlugin(db, "acme.loyalty", { keepData: true, expectedRevision: 1 });
     expect(await requirePluginInstallation(db, "acme.loyalty").catch((error: unknown) => error)).toBeInstanceOf(PluginError);
-    expect(await getPluginRecord(db, "acme.loyalty", "ledger", "r1")).not.toBeNull();
+    expect(await getObjectRecord(db, "acme.loyalty", "ledger", "r1")).not.toBeNull();
     // Keeping data keeps the log too (phase 2: keep or delete everything the plugin owns).
     expect((await listPluginLogs(db, "acme.loyalty")).map((line) => line.message)).toEqual(["hi"]);
     expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_registrations").get()).toEqual({ n: 0 });
 
     await installPlugin(db, { manifest: manifest({ settings: [] }), source: "upload", bundleSha256: SHA });
     await uninstallPlugin(db, "acme.loyalty", { keepData: false, expectedRevision: 1 });
-    expect(await getPluginRecord(db, "acme.loyalty", "ledger", "r1")).toBeNull();
+    expect(await getObjectRecord(db, "acme.loyalty", "ledger", "r1")).toBeNull();
     expect(await getPluginKv(db, "acme.loyalty", "k")).toBeNull();
     expect(await listPluginLogs(db, "acme.loyalty")).toEqual([]);
   });
 });
 
-describe("plugin storage", () => {
+describe("plugin objects", () => {
   let sqlite: DatabaseSync;
   let db: Database;
-  const put = (id: string, record: Record<string, unknown>) => putPluginRecord(db, "acme.loyalty", "ledger", LEDGER, id, record);
+  const put = (id: string, record: Record<string, unknown>) => putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, id, record);
 
   beforeEach(async () => {
     ({ sqlite, db } = createSqliteD1Database());
+    for (const namespace of ["acme.loyalty", "acme.other"]) {
+      sqlite.prepare("INSERT INTO object_types (id,namespace,type,name,fields_json,indexes_json,unique_json) VALUES (?,?,?,?,?,?,?)")
+        .run(objectTypeId(namespace, "ledger"), namespace, "ledger", LEDGER.name, JSON.stringify(LEDGER.fields), JSON.stringify(LEDGER.indexes), JSON.stringify(LEDGER.unique));
+    }
   });
   afterEach(() => sqlite.close());
 
-  it("puts, gets, upserts and deletes records scoped to the plugin and collection", async () => {
-    await put("r1", { customerId: "c1", kind: "earn", at: 3, ref: "o1", points: 10 });
-    expect(await getPluginRecord(db, "acme.loyalty", "ledger", "r1")).toEqual({ customerId: "c1", kind: "earn", at: 3, ref: "o1", points: 10 });
-    expect(await getPluginRecord(db, "acme.other", "ledger", "r1")).toBeNull();
-    expect(await getPluginRecord(db, "acme.loyalty", "other", "r1")).toBeNull();
-    await put("r1", { customerId: "c1", kind: "earn", at: 3, ref: "o1", points: 20 });
-    expect((await getPluginRecord(db, "acme.loyalty", "ledger", "r1"))?.points).toBe(20);
-    expect(await deletePluginRecord(db, "acme.loyalty", "ledger", "r1")).toBe(true);
-    expect(await deletePluginRecord(db, "acme.loyalty", "ledger", "r1")).toBe(false);
+  it("puts, gets, upserts and deletes records scoped to the app namespace and object type", async () => {
+    await put("r1", { customer_id: "c1", kind: "earn", at: 3, ref: "o1", points: 10 });
+    expect(await getObjectRecord(db, "acme.loyalty", "ledger", "r1")).toEqual({ customer_id: "c1", kind: "earn", at: 3, ref: "o1", points: 10 });
+    expect(await getObjectRecord(db, "acme.other", "ledger", "r1")).toBeNull();
+    expect(await getObjectRecord(db, "acme.loyalty", "other", "r1")).toBeNull();
+    await put("r1", { customer_id: "c1", kind: "earn", at: 3, ref: "o1", points: 20 });
+    expect((await getObjectRecord(db, "acme.loyalty", "ledger", "r1"))?.points).toBe(20);
+    expect(await deleteObjectRecord(db, "acme.loyalty", "ledger", "r1")).toBe(true);
+    expect(await deleteObjectRecord(db, "acme.loyalty", "ledger", "r1")).toBe(false);
   });
 
   it("enforces declared unique indexes and exempts records missing the field", async () => {
     await put("r1", { ref: "o1" });
-    await expect(put("r2", { ref: "o1" })).rejects.toMatchObject({ pluginCode: "storage.unique_violation" });
-    await put("r3", { customerId: "c9" });
-    await put("r4", { customerId: "c9" });
+    await expect(put("r2", { ref: "o1" })).rejects.toMatchObject({ objectCode: "object.unique_violation" });
+    await put("r3", { customer_id: "c9" });
+    await put("r4", { customer_id: "c9" });
     // Another plugin may use the same value.
-    await putPluginRecord(db, "acme.other", "ledger", LEDGER, "r1", { ref: "o1" });
+    await putObjectRecord(db, "acme.other", "ledger", LEDGER, "r1", { ref: "o1" });
   });
 
   it("queries only through declared indexes: equality, prefix with order, keyset pages", async () => {
     for (let index = 0; index < 7; index += 1) {
-      await put(`r${index}`, { customerId: index % 2 === 0 ? "c-even" : "c-odd", kind: index < 5 ? "earn" : "burn", at: 100 - index * 10, ref: `o${index}` });
+      await put(`r${index}`, { customer_id: index % 2 === 0 ? "c-even" : "c-odd", kind: index < 5 ? "earn" : "burn", at: 100 - index * 10, ref: `o${index}` });
     }
-    const even = await queryPluginRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { customerId: "c-even" } });
+    const even = await queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { customer_id: "c-even" } });
     expect(even.records.map((record) => record.id)).toEqual(["r0", "r2", "r4", "r6"]);
-    expect(await countPluginRecords(db, "acme.loyalty", "ledger", LEDGER, { customerId: "c-odd" })).toBe(3);
-    expect(await countPluginRecords(db, "acme.loyalty", "ledger", LEDGER)).toBe(7);
+    expect(await countObjectRecords(db, "acme.loyalty", "ledger", LEDGER, { customer_id: "c-odd" })).toBe(3);
+    expect(await countObjectRecords(db, "acme.loyalty", "ledger", LEDGER)).toBe(7);
 
-    const firstPage = await queryPluginRecords(db, "acme.loyalty", "ledger", LEDGER, {
+    const firstPage = await queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, {
       where: { kind: "earn" },
       orderBy: { field: "at", direction: "asc" },
       limit: 2,
     });
     expect(firstPage.records.map((record) => record.data.at)).toEqual([60, 70]);
     expect(firstPage.nextCursor).toEqual(expect.any(String));
-    const secondPage = await queryPluginRecords(db, "acme.loyalty", "ledger", LEDGER, {
+    const secondPage = await queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, {
       where: { kind: "earn" },
       orderBy: { field: "at", direction: "asc" },
       limit: 2,
       cursor: firstPage.nextCursor,
     });
     expect(secondPage.records.map((record) => record.data.at)).toEqual([80, 90]);
-    const lastPage = await queryPluginRecords(db, "acme.loyalty", "ledger", LEDGER, {
+    const lastPage = await queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, {
       where: { kind: "earn" },
       orderBy: { field: "at", direction: "asc" },
       limit: 2,
@@ -260,31 +266,31 @@ describe("plugin storage", () => {
     });
     expect(lastPage).toEqual({ records: [expect.objectContaining({ id: "r0" })], nextCursor: null });
 
-    const descending = await queryPluginRecords(db, "acme.loyalty", "ledger", LEDGER, {
+    const descending = await queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, {
       where: { kind: "earn" },
       orderBy: { field: "at", direction: "desc" },
     });
     expect(descending.records.map((record) => record.data.at)).toEqual([100, 90, 80, 70, 60]);
     // Numbers order numerically, negatives included.
     await put("neg", { kind: "earn", at: -5 });
-    await put("frac", { kind: "earn", at: 60.5 });
-    const ordered = await queryPluginRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { kind: "earn" }, orderBy: { field: "at" } });
-    expect(ordered.records.map((record) => record.data.at)).toEqual([-5, 60, 60.5, 70, 80, 90, 100]);
+    await expect(put("frac", { kind: "earn", at: 60.5 })).rejects.toMatchObject({ objectCode: "object.invalid" });
+    const ordered = await queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { kind: "earn" }, orderBy: { field: "at" } });
+    expect(ordered.records.map((record) => record.data.at)).toEqual([-5, 60, 70, 80, 90, 100]);
 
-    await expect(queryPluginRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { points: 1 } }))
-      .rejects.toMatchObject({ pluginCode: "storage.unindexed_query" });
-    await expect(queryPluginRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { kind: "earn" }, orderBy: { field: "ref" } }))
-      .rejects.toMatchObject({ pluginCode: "storage.unindexed_query" });
-    await expect(queryPluginRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { kind: "burn" }, orderBy: { field: "at" }, cursor: firstPage.nextCursor }))
-      .rejects.toMatchObject({ pluginCode: "storage.invalid_cursor" });
+    await expect(queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { points: 1 } }))
+      .rejects.toMatchObject({ objectCode: "object.unindexed_query" });
+    await expect(queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { kind: "earn" }, orderBy: { field: "ref" } }))
+      .rejects.toMatchObject({ objectCode: "object.unindexed_query" });
+    await expect(queryObjectRecords(db, "acme.loyalty", "ledger", LEDGER, { where: { kind: "burn" }, orderBy: { field: "at" }, cursor: firstPage.nextCursor }))
+      .rejects.toMatchObject({ objectCode: "object.invalid_cursor" });
   });
 
   it("refuses invalid ids, oversized records and non-scalar indexed values", async () => {
-    await expect(put("", {})).rejects.toMatchObject({ pluginCode: "storage.invalid_id" });
-    await expect(put("x".repeat(129), {})).rejects.toMatchObject({ pluginCode: "storage.invalid_id" });
-    await expect(put("big", { blob: "x".repeat(70_000) })).rejects.toMatchObject({ pluginCode: "storage.record_too_large" });
-    await expect(put("obj", { customerId: { nested: true } })).rejects.toMatchObject({ pluginCode: "storage.invalid_index_value" });
-    await expect(putPluginRecord(db, "acme.loyalty", "ledger", LEDGER, "arr", [] as never)).rejects.toMatchObject({ pluginCode: "storage.invalid_record" });
+    await expect(put("", {})).rejects.toMatchObject({ objectCode: "object.invalid_id" });
+    await expect(put("x".repeat(129), {})).rejects.toMatchObject({ objectCode: "object.invalid_id" });
+    await expect(put("big", { blob: "x".repeat(70_000) })).rejects.toMatchObject({ objectCode: "object.record_too_large" });
+    await expect(put("obj", { customer_id: { nested: true } })).rejects.toMatchObject({ objectCode: "object.invalid" });
+    await expect(putObjectRecord(db, "acme.loyalty", "ledger", LEDGER, "arr", [] as never)).rejects.toMatchObject({ objectCode: "object.invalid_record" });
   });
 });
 

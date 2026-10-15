@@ -1,7 +1,4 @@
 ---
-import AppBlocks from "@/components/apps/AppBlocks.astro";
-import { getAppBlocks } from "@/lib/api/app-blocks";
-import { layoutHasAppBlocks } from "@/lib/app-surfaces";
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
 import { formatOrderPlaces } from "@/lib/account-format";
 import LineExtras from "@/components/order/LineExtras.astro";
@@ -20,7 +17,6 @@ import {
   getLayoutData,
   OrderReceiptAccessError,
   type CheckoutLanguageData,
-  type OrderReceipt,
   type OrderItem,
   type LayoutData,
 } from "@/lib/api";
@@ -141,7 +137,7 @@ const hostedRecoveryPayment = requestedPayment
   ? requestedPayment
   : null;
 
-let order: OrderReceipt | null = null;
+let order: Awaited<ReturnType<typeof getOrderReceipt>> = null;
 let recoveryState: {
   title: string;
   message: string;
@@ -158,8 +154,6 @@ const [layoutData, checkoutConfig, checkoutLanguageResponse]: [
   getCheckoutConfig(),
   getActiveCheckoutLanguage(),
 ]);
-// Apps' thank-you and order status blocks: read only when the layout says an active app draws one.
-const appBlocks = layoutHasAppBlocks(layoutData, "order") ? await getAppBlocks("order") : [];
 const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse ?? {
   id: "fallback",
   name: "English (Fallback)",
@@ -857,11 +851,11 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       </div>
     </div>
 
-    <AppBlocks
-      blocks={appBlocks}
-      target={statusView ? "customer-account.order-status.block.render" : "purchase.thank-you.customer-information.render-after"}
-      class="mt-6 print:hidden"
-    />
+    <div
+      data-buyer-ui-target={statusView ? "customer-account.order-status.block.render" : "purchase.thank-you.customer-information.render-after"}
+      data-buyer-ui={JSON.stringify(order.buyerUi ?? [])}
+      class="mt-6 empty:hidden print:hidden"
+    ></div>
     <OrderSuccessButtons
       orderId={order.id}
       accountLinked={order.accountLinked}
@@ -918,6 +912,9 @@ const orderRecommendations = order && showsSuccessHero && !statusView
   // A paid download is prepared in the background: the receipt checks back
   // and shows it when it is ready (lib/receipt-download-poll.ts).
   import { pollPreparingDownloads } from "@/lib/receipt-download-poll";
+  import { enhanceBuyerUi } from "@/lib/buyer-ui";
+
+  enhanceBuyerUi();
 
   const orderId = document.querySelector<HTMLElement>("[data-order-success-state][data-order-id]")?.dataset.orderId;
   const laterText = document.querySelector<HTMLElement>("[data-download-preparing]")?.dataset.laterText ?? "";

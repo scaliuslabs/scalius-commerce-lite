@@ -22,6 +22,8 @@ import {
 } from "./fit";
 import { storefrontProductAppBlocksSchema } from "./apps";
 import { storefrontLinkSchema } from "./links";
+import { storefrontSettingBindingsSchema, type StorefrontSettingBindings } from "./bindings";
+import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-fields";
 
 // ─── Primitives ───────────────────────────────────────────────────────────
 
@@ -722,16 +724,16 @@ export function storefrontVariantSpec(slot: StorefrontBlockSlot, id: string): St
 
 type BlockValue<Variants> = {
   [Id in keyof Variants & string]: Variants[Id] extends { settings: infer Settings extends z.ZodType }
-    ? { variant: Id; settings: z.infer<Settings> }
+    ? { variant: Id; settings: z.infer<Settings>; bindings?: StorefrontSettingBindings }
     : never;
 }[keyof Variants & string];
 
 /** `{ variant, settings }` with the settings schema of that variant. */
-function blockSchema<Variants extends Record<string, { settings: z.ZodType }>>(variants: Variants) {
+function blockSchema<Variants extends Record<string, { settings: z.ZodType }>, Extra extends z.ZodRawShape = Record<never, never>>(variants: Variants, extra?: Extra) {
   const options = Object.entries(variants).map(([id, spec]) =>
-    z.object({ variant: z.literal(id), settings: spec.settings }).strict());
+    z.object({ variant: z.literal(id), settings: spec.settings, bindings: storefrontSettingBindingsSchema.optional(), ...extra }).strict());
   return z.discriminatedUnion("variant", options as [typeof options[number], ...typeof options]) as unknown as z.ZodType<
-    BlockValue<Variants>
+    BlockValue<Variants> & (keyof Extra extends never ? unknown : z.infer<z.ZodObject<Extra>>)
   >;
 }
 
@@ -751,7 +753,12 @@ export const storefrontThemeBlocksSchema = z.object({
   navigation: storefrontNavigationSchema,
   desktopNav: blockSchema(STOREFRONT_DESKTOP_NAV_VARIANTS),
   mobileNav: blockSchema(STOREFRONT_MOBILE_NAV_VARIANTS),
-  card: blockSchema(STOREFRONT_CARD_VARIANTS),
+  card: blockSchema(STOREFRONT_CARD_VARIANTS, {
+    fields: z.array(z.string().refine((value) => {
+      const separator = value.lastIndexOf(".");
+      return isCustomFieldNamespace(value.slice(0, separator)) && isCustomFieldKey(value.slice(separator + 1));
+    }, "Use a custom-field namespace and key.")).max(3).refine((fields) => new Set(fields).size === fields.length, "Each card field appears once.").optional(),
+  }),
   listing: z.object({
     layout: blockSchema(STOREFRONT_LISTING_VARIANTS),
     /** Search can follow the category layout or start in its own card/list view. */
@@ -797,7 +804,7 @@ export type StorefrontThemeBlocks = z.infer<typeof storefrontThemeBlocksSchema>;
 export function storefrontBlockValue(
   blocks: StorefrontThemeBlocks,
   slot: StorefrontBlockSlot,
-): { variant: string; settings: Record<string, unknown> } {
+): { variant: string; settings: Record<string, unknown>; bindings?: StorefrontSettingBindings } {
   if (slot === "listing") return blocks.listing.layout;
   if (slot === "gallery") return blocks.product.gallery;
   if (slot === "buyBox") return blocks.product.buyBox;

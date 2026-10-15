@@ -31,7 +31,6 @@ import {
 } from "@scalius/core/modules/plugins";
 import type { PluginManifest } from "@scalius/shared/plugins";
 import { PluginHost, type PluginHostOptions } from "./host";
-import { syncPluginMetaobjects } from "./metaobjects";
 
 export interface LifecycleContext {
   db: Database;
@@ -50,10 +49,17 @@ export async function activatePluginWithHooks(
   options: { actorUserId: string; expectedRevision: number; expectedGrantKey: string; features?: readonly string[] },
 ): Promise<{ installation: PluginInstallation; hookError: string | null }> {
   const before = await requirePluginInstallation(context.db, pluginId);
-  const installation = await activatePlugin(context.db, pluginId, options);
+  let installation: PluginInstallation;
+  try {
+    installation = await activatePlugin(context.db, pluginId, options);
+  } catch (error) {
+    if (!(error instanceof PluginError) || error.pluginCode !== "installation.objects_invalid") throw error;
+    const failed = await requirePluginInstallation(context.db, pluginId);
+    const restored = pluginNeedsApproval(before) && before.source !== "bundled"
+      ? await rollBackApprovedUpdate(context, failed, error.message) : null;
+    return { installation: restored ?? failed, hookError: restored ? `The update was undone. ${error.message}` : error.message };
+  }
   const turnedOn = installation.features.filter((feature) => !before.features.includes(feature));
-  // The app's content types (manifest.metaobjects), created or updated in its namespace.
-  const typeProblems = await syncPluginMetaobjects(context.db, installation);
   const host = hostFor(context);
   // Approving an update that waited for more access: the new code loads and
   // its data updates run now, and a failure puts back the release it replaced.
@@ -78,7 +84,6 @@ export async function activatePluginWithHooks(
     const enabled = await host.invokeLifecycle(installation, "enable", { feature });
     if (!enabled.ok) hookError ??= enabled.error;
   }
-  if (typeProblems) hookError = hookError ? `${typeProblems} ${hookError}` : typeProblems;
   return { installation: await requirePluginInstallation(context.db, pluginId), hookError };
 }
 
@@ -130,8 +135,9 @@ export async function deactivatePluginWithHooks(
  *   2. an app that stays active loads the new code (`checkLoads`) and runs its
  *      pending data updates at once;
  *   3. when either fails, the previous release comes back as it was
- *      (`restorePluginRelease`) and the reason is reported. Data updates that
- *      ran stay (a rollback never reverses data).
+ *      (`restorePluginRelease`) and the reason is reported. Completed data
+ *      updates stay recorded; object types absent from the restored release
+ *      and their records are removed.
  */
 export async function updatePluginToRelease(
   context: LifecycleContext,
@@ -142,13 +148,24 @@ export async function updatePluginToRelease(
   if (current.source === "bundled") {
     throw new PluginError("installation.source_conflict", `${current.manifest.name} is compiled into this deployment: update it with pnpm plugin add, then deploy.`);
   }
-  const updated = await updatePluginInstallation(context.db, current.pluginId, {
-    manifest: release.manifest,
-    source: release.source,
-    bundleSha256: release.sha256,
-    expectedRevision: options.expectedRevision,
-    signerKeyId: release.signerKeyId,
-  });
+  let updated: PluginInstallation;
+  try {
+    updated = await updatePluginInstallation(context.db, current.pluginId, {
+      manifest: release.manifest,
+      source: release.source,
+      bundleSha256: release.sha256,
+      expectedRevision: options.expectedRevision,
+      signerKeyId: release.signerKeyId,
+    });
+  } catch (error) {
+    if (!(error instanceof PluginError) || error.pluginCode !== "installation.objects_invalid") throw error;
+    const latest = await requirePluginInstallation(context.db, current.pluginId);
+    const restored = await restorePluginRelease(context.db, current, {
+      expectedRevision: latest.revision,
+      reason: `Update to ${release.manifest.version} was rolled back. ${error.message}`,
+    });
+    return { installation: restored, rolledBack: true, error: error.message };
+  }
   if (updated.status !== "active") {
     // It waits for a Super Admin: keep the release it replaced so approval can still roll back.
     if (pluginNeedsApproval(updated)) await saveRollbackPoint(context.env, current);
@@ -157,8 +174,7 @@ export async function updatePluginToRelease(
   const host = hostFor(context);
   const failure = await startNewRelease(host, updated);
   if (!failure) {
-    const typeProblems = await syncPluginMetaobjects(context.db, updated);
-    return { installation: await requirePluginInstallation(context.db, current.pluginId), rolledBack: false, error: typeProblems };
+    return { installation: await requirePluginInstallation(context.db, current.pluginId), rolledBack: false, error: null };
   }
   const latest = await requirePluginInstallation(context.db, current.pluginId);
   const restored = await restorePluginRelease(context.db, current, {

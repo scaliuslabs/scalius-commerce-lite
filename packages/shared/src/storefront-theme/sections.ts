@@ -6,6 +6,8 @@ import { z } from "zod";
 import { storefrontAppKeySchema, storefrontAppValuesSchema, storefrontSkinRefSchema } from "./apps";
 import { atLeast, type FitCondition } from "./fit";
 import { storefrontLinkSchema } from "./links";
+import { storefrontSettingBindingsSchema } from "./bindings";
+import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-fields";
 
 const sectionIdSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/);
 
@@ -14,7 +16,7 @@ const sectionIdSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/);
  * merchant hid: it keeps its settings and renders nothing
  * (`storefrontVisibleSection`). Optional, so stored items stay valid.
  */
-const blockHidden = { hidden: z.boolean().optional() };
+const blockHidden = { hidden: z.boolean().optional(), bindings: storefrontSettingBindingsSchema.optional() };
 /**
  * A section an AI drafted that no one has opened in the editor yet. It
  * renders like any other; the editor marks it until it is opened, and the
@@ -112,6 +114,7 @@ function section<const Type extends string, Settings extends z.ZodType>(spec: {
       hidden: z.boolean().optional(),
       aiDraft,
       settings: spec.settings,
+      bindings: storefrontSettingBindingsSchema.optional(),
       /** An app skin draws this section from its projection; core draws it while the skin cannot. */
       skin: storefrontSkinRefSchema.optional(),
     }).strict(),
@@ -231,6 +234,7 @@ export const STOREFRONT_SECTION_REGISTRY = {
       title,
       source: storefrontProductSourceSchema,
       promotionId: recordId.nullable().optional(),
+      mediaId: mediaId.optional(),
     }).strict(),
     defaults: { title: "", source: { kind: "on-sale" }, promotionId: null },
   }),
@@ -264,7 +268,7 @@ export const STOREFRONT_SECTION_REGISTRY = {
     type: "shop-by",
     settings: z.object({
       title,
-      cards: z.array(z.object({ mediaId: recordId, title: z.string().trim().min(1).max(60), href, ...blockHidden }).strict()).max(8),
+      cards: z.array(z.object({ mediaId: recordId, title: z.string().trim().min(1).max(60), subtitle: z.string().trim().max(120).optional(), href, ...blockHidden }).strict()).max(8),
     }).strict(),
     defaults: { title: "", cards: [] },
   }),
@@ -340,6 +344,19 @@ export const STOREFRONT_SECTION_REGISTRY = {
     ]),
     defaults: { layout: "rich-text", heading: "", body: "" },
   }),
+  specifications: section({
+    type: "specifications",
+    settings: z.object({
+      heading,
+      objectField: z.string().trim().max(166).refine((value) => {
+        if (!value) return true;
+        const separator = value.lastIndexOf(".");
+        return isCustomFieldNamespace(value.slice(0, separator)) && isCustomFieldKey(value.slice(separator + 1));
+      }, "Use a qualified custom field, such as custom.size_chart.").optional(),
+      rows: z.array(z.object({ label: title, value: z.string().trim().max(1000), ...blockHidden }).strict()).max(24),
+    }).strict(),
+    defaults: { heading: "Specifications", rows: [] },
+  }),
   faq: section({
     type: "faq",
     settings: z.object({
@@ -379,22 +396,22 @@ export const STOREFRONT_SECTION_REGISTRY = {
     defaults: { title: "" },
   }),
   /**
-   * A metaobject content type's published entries (Shopify's metaobject
+   * A object content type's published entries (Shopify's object
    * sections): an FAQ, a size chart, designers, store locations. The
    * merchant picks the content type (it must allow storefront access); the
    * section shows up to `limit` entries in their order, each its display
    * field and the rest of its fields, as a list, cards or questions that
    * open. Nothing shows while the type is unset, gone or private.
    */
-  metaobjects: section({
-    type: "metaobjects",
+  objects: section({
+    type: "objects",
     settings: z.object({
       heading,
-      definitionId: z.string().trim().max(64),
+      typeId: z.string().trim().max(160),
       layout: z.enum(["list", "grid", "accordion"]),
       limit: z.number().int().min(1).max(24),
     }).strict(),
-    defaults: { heading: "", definitionId: "", layout: "list", limit: 12 },
+    defaults: { heading: "", typeId: "", layout: "list", limit: 12 },
   }),
   /**
    * The newsletter signup (Dawn's email signup, Fabrilife's band): the
@@ -410,6 +427,7 @@ export const STOREFRONT_SECTION_REGISTRY = {
     settings: z.object({
       heading,
       text: z.string().trim().max(300),
+      mediaId: mediaId.optional(),
       email: z.enum(STOREFRONT_NEWSLETTER_EMAIL_FIELDS).optional(),
       whatsapp: z.boolean().optional(),
       buttonLabel: z.string().trim().max(STOREFRONT_NEWSLETTER_BUTTON_LABEL_MAX).optional(),
@@ -434,6 +452,7 @@ export const storefrontAppSectionSchema = z.object({
   hidden: z.boolean().optional(),
   aiDraft,
   settings: z.object({ app: storefrontAppKeySchema, values: storefrontAppValuesSchema }).strict(),
+  bindings: storefrontSettingBindingsSchema.optional(),
 }).strict();
 export type StorefrontAppSection = z.infer<typeof storefrontAppSectionSchema>;
 
@@ -519,11 +538,12 @@ export const STOREFRONT_SECTION_RENDERERS = [
   "brand-wall",
   "editorial",
   "faq",
+  "specifications",
   "utility-cards",
   "endless-grid",
   "seo-text",
   "recently-viewed",
-  "metaobjects",
+  "objects",
   "newsletter",
 ] as const satisfies readonly StorefrontSectionType[];
 export type StorefrontSectionRenderer = (typeof STOREFRONT_SECTION_RENDERERS)[number];
@@ -576,13 +596,15 @@ export function storefrontSectionNeedsContent(section: StorefrontSection): boole
       }
     case "faq":
       return each.settings.items.length === 0;
+    case "specifications":
+      return !filled(each.settings.objectField) && !each.settings.rows.some((row) => filled(row.label) && filled(row.value));
     case "utility-cards":
       return each.settings.cards.length === 0;
     case "seo-text":
       return !filled(each.settings.body);
     // Nothing to show until a content type is picked; its entries are store data.
-    case "metaobjects":
-      return !each.settings.definitionId;
+    case "objects":
+      return !each.settings.typeId;
     // A signup always has its form and the storefront's default words.
     case "newsletter":
       return false;
@@ -605,6 +627,7 @@ export const STOREFRONT_SECTION_BLOCKS = {
   "banner-mosaic": [{ path: "tiles", kind: "tile" }],
   editorial: [{ path: "columns", kind: "column" }, { path: "quotes", kind: "quote" }],
   faq: [{ path: "items", kind: "question" }],
+  specifications: [{ path: "rows", kind: "specification" }],
   "utility-cards": [{ path: "cards", kind: "link-card" }],
 } as const satisfies Partial<Record<StorefrontSectionType, ReadonlyArray<{ path: string; kind: string }>>>;
 export type StorefrontBlockKind = (typeof STOREFRONT_SECTION_BLOCKS)[keyof typeof STOREFRONT_SECTION_BLOCKS][number]["kind"];

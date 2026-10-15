@@ -83,6 +83,7 @@ describe("agent storefront checkout quote fingerprint", () => {
     ["context revision", { contextRevision: 4 }],
     ["shipping method", { shippingMethodId: "shipping_express" }],
     ["discount", { discountCode: "SAVE10" }],
+    ["checkout attributes", { attributes: { "acme.gift.message": "Happy birthday" } }],
     ["tax settings", { quote: { ...quote, settingsVersion: 5 } }],
     ["line price", {
       quote: {
@@ -104,6 +105,13 @@ describe("agent storefront checkout quote fingerprint", () => {
     const current = await buildAgentStorefrontCheckoutQuoteFingerprint({ ...identity, ...change });
 
     expect(current).not.toBe(reviewed);
+  });
+
+  it("ignores attribute key order and preserves quotes with no attributes", async () => {
+    expect(await buildAgentStorefrontCheckoutQuoteFingerprint({ ...identity, attributes: {} }))
+      .toBe(await buildAgentStorefrontCheckoutQuoteFingerprint(identity));
+    expect(await buildAgentStorefrontCheckoutQuoteFingerprint({ ...identity, attributes: { b: "2", a: "1" } }))
+      .toBe(await buildAgentStorefrontCheckoutQuoteFingerprint({ ...identity, attributes: { a: "1", b: "2" } }));
   });
 
   it("returns a typed conflict instead of accepting changed checkout terms", () => {

@@ -17,7 +17,7 @@ import type {
   StorefrontRenderContext,
 } from "@scalius/plugin-sdk/storefront";
 import type { IconName } from "./icons";
-import { text } from "./ui";
+import { Section, text } from "./ui";
 import { Hero, Slideshow } from "./sections/hero";
 import { CollectionTiles, ProductShowcase, PromoCountdown, PromoTiles, ShopTheLook } from "./sections/commerce";
 import { Faq, Promises, RichText, SignupCall, Story } from "./sections/content";
@@ -60,7 +60,7 @@ export function HeroSkin({ settings, data, context, instanceId }: SectionSkinPro
   if (slides.length === 0) return null;
   if (slides.length > 1) {
     return (
-      <Slideshow instanceId={instanceId} context={context} settings={{
+      <Slideshow objects={{}} instanceId={instanceId} context={context} settings={{
         slides: slides.map((slide) => ({
           image: photo(slide.image, slide.alt),
           phone_image: photo(slide.phoneImage, slide.alt),
@@ -80,7 +80,7 @@ export function HeroSkin({ settings, data, context, instanceId }: SectionSkinPro
   }
   const slide = slides[0]!;
   return (
-    <Hero instanceId={instanceId} context={context} settings={{
+    <Hero objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow,
       heading: none(slide.heading),
       text: none(slide.text),
@@ -120,7 +120,7 @@ function Showcase({ settings, heading, tabs, link, layout, context, instanceId }
   instanceId: string;
 }) {
   return (
-    <ProductShowcase instanceId={instanceId} context={context} settings={{
+    <ProductShowcase objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow,
       heading: none(heading),
       text: settings.text,
@@ -150,7 +150,7 @@ export function ProductTabsSkin({ settings, data, context, instanceId }: Section
 export function ProductGridSkin({ settings, data, context, instanceId }: SectionSkinProps<"product-grid", ProductsSkinSettings>) {
   const { title, source, columns = 4, rows = 2 } = data.settings;
   return (
-    <ProductShowcase instanceId={instanceId} context={context} settings={{
+    <ProductShowcase objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow,
       heading: none(title),
       text: settings.text,
@@ -187,17 +187,17 @@ interface TilesSkinSettings extends Shell {
 function Tiles({ settings, heading, tiles, context, instanceId }: {
   settings: TilesSkinSettings;
   heading: string;
-  tiles: Array<{ image: StorefrontImage | null; title: string | null; link: string | null }>;
+  tiles: Array<{ image: StorefrontImage | null; title: string | null; subtitle?: string | null; link: string | null }>;
   context: StorefrontRenderContext;
   instanceId: string;
 }) {
   return (
-    <CollectionTiles instanceId={instanceId} context={context} settings={{
+    <CollectionTiles objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow,
       heading: none(heading),
       link: settings.link,
       link_label: settings.link_label,
-      tiles: tiles.map((tile) => ({ ...tile, subtitle: null })),
+      tiles: tiles.map((tile) => ({ ...tile, subtitle: tile.subtitle ?? null })),
       layout: settings.layout,
       tone: settings.tone,
       spacing: settings.spacing,
@@ -217,7 +217,7 @@ export function CategoryTilesSkin({ settings, data, context, instanceId }: Secti
 export function ShopByTilesSkin({ settings, data, context, instanceId }: SectionSkinProps<"shop-by", TilesSkinSettings>) {
   return (
     <Tiles settings={settings} heading={data.settings.title} context={context} instanceId={instanceId}
-      tiles={listOf(data.settings.cards).map((card) => ({ image: card.mediaId, title: card.title, link: card.href }))} />
+      tiles={listOf(data.settings.cards).map((card) => ({ image: card.mediaId, title: card.title, subtitle: card.subtitle, link: card.href }))} />
   );
 }
 
@@ -228,7 +228,7 @@ interface PromoSkinSettings extends Shell {
 /** The banner mosaic's photos as large promo tiles; a tile's alt text is its heading. */
 export function PromoTilesSkin({ settings, data, context, instanceId }: SectionSkinProps<"banner-mosaic", PromoSkinSettings>) {
   return (
-    <PromoTiles instanceId={instanceId} context={context} settings={{
+    <PromoTiles objects={{}} instanceId={instanceId} context={context} settings={{
       items: listOf(data.settings.tiles).slice(0, 3).map((tile) => ({ image: tile.mediaId, eyebrow: null, heading: text(tile.alt), label: null, link: tile.href })),
       height: settings.height,
       tone: settings.tone,
@@ -250,7 +250,7 @@ interface LookSkinSettings extends Shell {
 export function LookSkin({ settings, data, context, instanceId }: SectionSkinProps<"lookbook", LookSkinSettings>) {
   const { title, mediaId, source } = data.settings;
   return (
-    <ShopTheLook instanceId={instanceId} context={context} settings={{
+    <ShopTheLook objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow,
       heading: none(title),
       text: settings.text,
@@ -280,7 +280,8 @@ export function SaleSkin({ settings, data, context, instanceId }: SectionSkinPro
   const products = listOf(source?.cards);
   return (
     <>
-      <PromoCountdown instanceId={instanceId} context={context} settings={{
+      <PromoCountdown objects={{}} instanceId={instanceId} context={context} settings={{
+        image: data.settings.mediaId ?? null,
         eyebrow: settings.eyebrow,
         heading: none(title),
         text: settings.text,
@@ -291,7 +292,7 @@ export function SaleSkin({ settings, data, context, instanceId }: SectionSkinPro
         spacing: settings.spacing,
       }} />
       {products.length > 0 ? (
-        <ProductShowcase instanceId={`${instanceId}-products`} context={context} settings={{
+        <ProductShowcase objects={{}} instanceId={`${instanceId}-products`} context={context} settings={{
           eyebrow: null, heading: null, text: null, link: null, link_label: null,
           tabs: [{ label: null, products }], layout: "row", columns: 4, tone: "plain", spacing: "s",
         }} />
@@ -326,7 +327,7 @@ function promiseIcon(title: string): IconName {
 /** The store's delivery facts or the merchant's own points as Noor's icon promises. */
 export function PromisesSkin({ settings, data, context, instanceId }: SectionSkinProps<"usp-strip", PromisesSkinSettings>) {
   return (
-    <Promises instanceId={instanceId} context={context} settings={{
+    <Promises objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow,
       heading: settings.heading,
       items: listOf(data.settings.source?.items).map((item) => ({ icon: promiseIcon(item.title), title: item.title, text: none(item.detail) })),
@@ -354,7 +355,7 @@ export function StorySkin({ settings, data, context, instanceId }: SectionSkinPr
   const section = data.settings;
   if (section.layout === "rich-text") {
     return (
-      <RichText instanceId={instanceId} context={context} settings={{
+      <RichText objects={{}} instanceId={instanceId} context={context} settings={{
         eyebrow: settings.eyebrow, heading: none(section.heading), text: section.body,
         cta_label: settings.cta_label, cta_link: settings.cta_link, align: settings.align, size: settings.size,
         tone: settings.tone, spacing: settings.spacing,
@@ -363,7 +364,7 @@ export function StorySkin({ settings, data, context, instanceId }: SectionSkinPr
   }
   if (section.layout === "image-with-text") {
     return (
-      <Story instanceId={instanceId} context={context} settings={{
+      <Story objects={{}} instanceId={instanceId} context={context} settings={{
         eyebrow: settings.eyebrow, heading: none(section.heading), text: section.body, image: section.mediaId, image_side: section.imageSide,
         points: listOf(settings.points), stats: listOf(settings.stats),
         cta_label: settings.cta_label, cta_link: settings.cta_link, tone: settings.tone, spacing: settings.spacing,
@@ -376,7 +377,7 @@ export function StorySkin({ settings, data, context, instanceId }: SectionSkinPr
 /** Long text below the page as Noor's text block. */
 export function TextSkin({ settings, data, context, instanceId }: SectionSkinProps<"seo-text", StorySkinSettings>) {
   return (
-    <RichText instanceId={instanceId} context={context} settings={{
+    <RichText objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow, heading: none(data.settings.heading), text: data.settings.body,
       cta_label: settings.cta_label, cta_link: settings.cta_link, align: settings.align, size: settings.size,
       tone: settings.tone, spacing: settings.spacing,
@@ -397,7 +398,7 @@ interface FaqSkinSettings extends Shell {
 /** The store's questions as Noor's accordion, with FAQ markup unless turned off. */
 export function FaqSkin({ settings, data, context, instanceId }: SectionSkinProps<"faq", FaqSkinSettings>) {
   return (
-    <Faq instanceId={instanceId} context={context} settings={{
+    <Faq objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow,
       heading: none(data.settings.heading),
       text: settings.text,
@@ -420,7 +421,8 @@ interface SignupSkinSettings extends Shell {
 /** The newsletter section as Noor's call to join, linking to the store's sign-up page. */
 export function SignupSkin({ settings, data, context, instanceId }: SectionSkinProps<"newsletter", SignupSkinSettings>) {
   return (
-    <SignupCall instanceId={instanceId} context={context} settings={{
+    <SignupCall objects={{}} instanceId={instanceId} context={context} settings={{
+      image: data.settings.mediaId ?? null,
       eyebrow: settings.eyebrow,
       heading: none(data.settings.heading),
       text: none(data.settings.text),
@@ -430,4 +432,24 @@ export function SignupSkin({ settings, data, context, instanceId }: SectionSkinP
       spacing: settings.spacing,
     }} />
   );
+}
+
+/** Specifications use the same resolved custom-field values as the core section. */
+export function SpecificationsSkin({ settings, data }: SectionSkinProps<"specifications", Shell>) {
+  const rows = listOf(data.settings.rows).filter((row) => text(row.label) && text(row.value));
+  const fields = data.settings.objectField ?? [];
+  if (!rows.length && !fields.length) return null;
+  return <Section name="specifications" tone={settings.tone} space={settings.spacing}>
+    {text(data.settings.heading) ? <h2 class="noor-h2">{data.settings.heading}</h2> : null}
+    <dl class="noor-specifications">{fields.length ? fields.map((field) => <div>
+      <dt>{field.name}</dt>
+      <dd>{field.parts.map((part, index) => <span>
+        {index > 0 ? ", " : null}
+        {part.kind === "text" ? part.text : null}
+        {part.kind === "link" ? <a href={part.href} target={part.external ? "_blank" : undefined} rel={part.external ? "noopener noreferrer" : undefined}>{part.label}</a> : null}
+        {part.kind === "color" ? part.value : null}
+        {part.kind === "image" ? <img src={part.asset.url} alt={part.asset.alt || data.settings.heading} width={part.asset.width ?? 480} height={part.asset.height ?? 480} loading="lazy" /> : null}
+      </span>)}</dd>
+    </div>) : rows.map((row) => <div><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>
+  </Section>;
 }

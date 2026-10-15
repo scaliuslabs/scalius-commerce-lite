@@ -5,6 +5,8 @@
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { sessionCookieOf } from "@/lib/account-inbox-server";
 import { readAccountSummary, type AccountSummary } from "@/lib/account-tabs";
+import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 import {
   MARKETING_CONSENT_STATUSES,
   isMarketingChannel,
@@ -42,6 +44,9 @@ async function callAccountApi(
   const target = resolveBackendTarget(path);
   if (!target) return null;
   const headers = new Headers({ Accept: "application/json", Cookie: session });
+  if (path === "/api/v1/customer-auth/account-summary") {
+    for (const [key, value] of Object.entries(await buyerUiLocaleHeaders())) headers.set(key, value);
+  }
   const connectingIp = request.headers.get("cf-connecting-ip");
   if (connectingIp) headers.set("cf-connecting-ip", connectingIp);
   if (init.body !== undefined) headers.set("Content-Type", "application/json");
@@ -72,9 +77,12 @@ function failed(answer: ApiAnswer | null): { ok: false; reason: "signed_out" | "
 }
 
 /** The account tab counts; null when signed out or unreachable (the tabs then show only what always shows). */
-export async function readAccountSummaryForRequest(request: Request): Promise<AccountSummary | null> {
+export async function readAccountSummaryForRequest(request: Request): Promise<(AccountSummary & { buyerUi?: BuyerUiBlock[] }) | null> {
   const answer = await callAccountApi(request, "/api/v1/customer-auth/account-summary");
-  return answer?.status === 200 ? readAccountSummary(answer.data) : null;
+  const summary = answer?.status === 200 ? readAccountSummary(answer.data) : null;
+  if (!summary) return null;
+  const buyerUi = (answer?.data as { buyerUi?: BuyerUiBlock[] } | null)?.buyerUi;
+  return Array.isArray(buyerUi) ? { ...summary, buyerUi } : summary;
 }
 
 export interface AccountOrdersPage {

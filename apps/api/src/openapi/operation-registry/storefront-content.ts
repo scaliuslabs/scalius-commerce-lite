@@ -18,11 +18,6 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
   "storefront.homepage.get": { limits: { request: 16_384 } },
   "storefront.landing.get": { limits: { request: 16_384 } },
   "storefront.template.get": { limits: { request: 16_384 } },
-  "storefront.app_blocks.get": {
-    exposure: "excluded",
-    limits: { request: 16_384 },
-    reason: "Rendering infrastructure: apps' sanitized checkout and account HTML, not structured agent data.",
-  },
   "storefront.extension_file.get": {
     exposure: "excluded",
     limits: { request: 16_384 },
@@ -42,6 +37,7 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
   "storefront.navigation.menu_get": {},
   "storefront.navigation.menu_get_by_id": {},
   "storefront.navigation.placements_list": {},
+  "storefront.objects.list": { openWorld: true },
   "storefront.pages.get_by_id": {},
   "storefront.pages.get_by_slug": {},
   "storefront.pages.list": {},

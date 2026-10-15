@@ -31,6 +31,25 @@ function posted(values: Record<string, string>): FormData {
 }
 
 describe("checkout without JavaScript", () => {
+  it("quotes cash collection and carries the resulting courier token in the order form", () => {
+    const form = readQuickCheckoutForm(posted({ cartItems: line(), city: "dhaka", zone: "mirpur" }));
+    expect(quickCheckoutQuoteInput(form, "delivery", "courier")?.cod).toBe(true);
+    const order = quickCheckoutOrderForm(form, "delivery", "courier", { discounts: [], items: [], shippingRateToken: "rate_signed" });
+    expect(order.get("shippingRateToken")).toBe("rate_signed");
+  });
+
+  it("keeps buyer attributes through the quote and order POST handoff", () => {
+    const attributes = { "test.gift.message": "Happy birthday" };
+    const form = readQuickCheckoutForm(posted({ cartItems: line(), attributes: JSON.stringify(attributes) }));
+    expect(quickCheckoutQuoteInput(form, "none", "")?.attributes).toEqual(attributes);
+    const order = quickCheckoutOrderForm(form, "none", "", { discounts: [], items: [] });
+    expect(JSON.parse(String(order.get("attributes")))).toEqual(attributes);
+    expect(() => readQuickCheckoutForm(posted({ attributes: "broken" }))).toThrow();
+    expect(readQuickCheckoutForm(posted({
+      attributes: JSON.stringify(attributes), "attributes.test.gift.message": "New message", "attributes.test.gift.agree": "false",
+    })).attributes).toEqual({ "test.gift.message": "New message", "test.gift.agree": "false" });
+  });
+
   it("carries the quick-buy line in a form body, never a URL, escaped for HTML", () => {
     const html = quickBuyNoScriptForm(JSON.parse(line("physical")));
     expect(html).toContain('<form method="post" action="/checkout/quick">');

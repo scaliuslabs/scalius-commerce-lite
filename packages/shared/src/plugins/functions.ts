@@ -15,6 +15,8 @@
 // Part of the versioned plugin API.
 
 import { z } from "zod";
+import { buyerUiOutputSchema, checkoutAttributesSchema } from "./buyer-ui";
+import { PLUGIN_BLOCK_TARGETS } from "./storefront";
 import type { PluginFunctionPoint } from "./manifest";
 
 const id = z.string().min(1).max(128);
@@ -74,10 +76,9 @@ export const functionCartSchema = z.object({
     country: z.string().length(2).nullable(),
   }).strict(),
   /**
-   * Checkout attributes the buyer entered, by `<app id>.<key>`. Empty until
-   * apps can declare checkout attributes.
+   * Validated checkout attributes the buyer entered, by `<app id>.<key>`.
    */
-  attributes: z.record(z.string().max(128), z.string().max(500)),
+  attributes: checkoutAttributesSchema,
 }).strict();
 export type FunctionCart = z.infer<typeof functionCartSchema>;
 
@@ -248,7 +249,16 @@ export const cartLinePricesOutputSchema = z.object({
 
 // ── Registry ──────────────────────────────────────────────────────────────
 
+export const buyerUiInputSchema = z.object({
+  target: z.enum(PLUGIN_BLOCK_TARGETS), language: z.string().min(1).max(35), locale: z.string().min(1).max(35), currency: z.string().length(3),
+  cart: functionCartSchema.nullable(), attributes: checkoutAttributesSchema,
+  order: z.object({ orderId: id, status: z.string().max(64), paymentStatus: z.string().max(64), lines: z.array(z.object({ productId: id, variantId: id, quantity: z.number().int().min(1) }).strict()).max(250) }).strict().nullable(),
+  customer: z.object({ id }).strict().nullable(), snapshot: functionSnapshotSchema.optional(),
+}).strict();
+export type BuyerUiInput = z.infer<typeof buyerUiInputSchema>;
+
 export const PLUGIN_FUNCTION_SCHEMAS = {
+  "buyer.ui": { input: buyerUiInputSchema, output: buyerUiOutputSchema },
   "cart.transform": {
     input: z.object({ cart: functionCartSchema }).strict(),
     output: cartTransformOutputSchema,

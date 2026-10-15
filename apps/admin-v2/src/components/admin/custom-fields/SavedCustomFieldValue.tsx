@@ -53,6 +53,7 @@ export function SavedCustomFieldValue({ field, label, help }: { field: CustomFie
       case "date": return formatDateTime(new Date(`${saved}T00:00:00Z`), { dateStyle: "medium", timeZone: "UTC" });
       case "date_time": return formatDateTime(new Date(saved as string), { dateStyle: "medium", timeStyle: "medium" });
       case "variant_reference":
+      case "object_reference":
       case "media_reference": return <code>{saved as string}</code>;
       default: return <span className="whitespace-pre-wrap">{saved as string}</span>;
     }

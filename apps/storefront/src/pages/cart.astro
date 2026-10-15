@@ -12,10 +12,8 @@ import MarketingConsentField from "@/components/checkout/MarketingConsentField.a
 import ShippingCountryField from "@/components/checkout/ShippingCountryField.astro";
 import ForeignAddressFields from "@/components/checkout/ForeignAddressFields.astro";
 import BillingAddressFields from "@/components/checkout/BillingAddressFields.astro";
-import AppBlocks from "@/components/apps/AppBlocks.astro";
+import BuyerField from "@/components/apps/BuyerField.astro";
 import EmptyCartPopular from "@/components/checkout/EmptyCartPopular.astro";
-import { getAppBlocks } from "@/lib/api/app-blocks";
-import { layoutHasAppBlocks } from "@/lib/app-surfaces";
 import {
   LOCATION_COUNTRY,
   defaultShippingCountry,
@@ -83,8 +81,6 @@ const [
   // The empty cart's "Popular now" (store-wide, no source product).
   getProductRecommendations([], 8),
 ]);
-// Apps' checkout blocks: read only when the layout says an active app draws one.
-const appBlocks = layoutHasAppBlocks(layoutData, "checkout") ? await getAppBlocks("checkout") : [];
 const cities = citiesResponse ?? [];
 const shippingMethods: ShippingMethod[] = shippingMethodsResponse || [];
 // A failed read renders the fail-closed page (checkout unavailable, English
@@ -540,6 +536,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           >
             <input type="hidden" name="formIntent" value="checkout" />
             <input type="hidden" name="cartItems" id="cartItemsInput" />
+            <input type="hidden" name="attributes" id="attributesInput" />
             <input type="hidden" name="checkoutId" id="checkoutIdInput" />
             <input
               type="hidden"
@@ -655,7 +652,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 }
               </div>
             </section>
-            <AppBlocks blocks={appBlocks} target="purchase.checkout.contact.render-after" />
+            <div data-buyer-ui-target="purchase.checkout.contact.render-after"></div>
 
             {/* Nothing physical in the cart (services): no delivery section. */}
             <p
@@ -782,7 +779,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 goneText={copy.deliveryOptionGoneText}
               />
             </section>
-            <AppBlocks blocks={appBlocks} target="purchase.checkout.shipping-option-list.render-after" />
+            <div data-buyer-ui-target="purchase.checkout.shipping-option-list.render-after"></div>
 
             {/* The billing address (Shopify's rule): asked when nothing ships, or when the merchant requires one. */}
             <BillingAddressFields
@@ -810,19 +807,11 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
             {
               lang.fieldVisibility.showOrderNotesField && (
-                <div>
-                  <label for="notes" class={labelClass}>
-                    {copy.orderNotesLabel}
-                  </label>
-                  <textarea
-                    id="notes"
-                    name="notes"
-                    maxlength="500"
-                    placeholder={copy.orderNotesPlaceholder}
-                    rows={2}
-                    class={`${fieldClass} h-auto min-h-16 resize-none py-2`}
-                  ></textarea>
-                </div>
+                <BuyerField
+                  attribute={{ key: "notes", label: copy.orderNotesLabel, type: "multiline", maxLength: 500 }}
+                  id="notes" name="notes" placeholder={copy.orderNotesPlaceholder} rows={2}
+                  labelClass={labelClass} controlClass={`${fieldClass} h-auto min-h-16 resize-none py-2`}
+                />
               )
             }
 
@@ -1024,7 +1013,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             </div>
           </div>
         </section>
-        <AppBlocks blocks={appBlocks} target="purchase.checkout.cart-line-list.render-after" class="mt-4" />
+        <div data-buyer-ui-target="purchase.checkout.cart-line-list.render-after" class="mt-4"></div>
         {/* An empty cart still leads somewhere: the store's categories and popular products, shown while the cart is empty. */}
         <div class="mx-auto mt-8 hidden max-w-3xl space-y-8 group-data-[cart-state=empty]:block" data-cart-empty-extras>
           {emptyCartCategories.length > 0 && (
@@ -1077,6 +1066,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 />
 
 <script>
+  import { readBuyerAttributes } from "@/lib/buyer-ui";
   import { pagePath } from "@/lib/presence-url";
   import {
     initCartFunctionality,
@@ -1942,6 +1932,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       "submit",
       async (e) => {
         clearCheckoutFormError();
+        for (const control of document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-buyer-attribute]")) {
+          if (!control.reportValidity()) { e.preventDefault(); return; }
+        }
         if (isDiscountValidationPending()) {
           e.preventDefault();
           restoreSubmitButton();
@@ -2107,6 +2100,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         if (submitAfterCartValidation) {
           submitAfterCartValidation = false;
         }
+
+        const attributesInput = document.getElementById("attributesInput") as HTMLInputElement | null;
+        if (attributesInput) attributesInput.value = JSON.stringify(readBuyerAttributes());
 
         const submittedCart =
           (document.getElementById("cartItemsInput") as HTMLInputElement | null)?.value ?? "{}";

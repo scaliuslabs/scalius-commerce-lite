@@ -1,3 +1,5 @@
+import { getObjectRecordVersion, putObjectRecord } from "@scalius/core/modules/objects";
+import { parsePluginManifest } from "@scalius/shared/plugins";
 // acme.loyalty end to end through the real storefront checkout routes on
 // the migrated schema (bundled loader): the buyer's balance is the
 // function's snapshot, the redemption is committed with the order in the
@@ -12,9 +14,7 @@ import { getDb, type Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
   activatePlugin,
-  getPluginRecordVersion,
   installPlugin,
-  putPluginRecord,
   writePluginSettings,
 } from "@scalius/core/modules/plugins";
 import { hashCustomerSessionToken } from "@scalius/core/modules/customers";
@@ -37,7 +37,9 @@ const ENV = {
   PUBLIC_API_BASE_URL: "https://api.shop.test",
   STOREFRONT_URL: "https://shop.test",
 };
-const BALANCES = { indexes: [], unique: [] };
+const loyaltyParsed = parsePluginManifest(loyaltyManifest);
+if (!loyaltyParsed.ok) throw new Error("Invalid loyalty test manifest");
+const BALANCES = loyaltyParsed.manifest.objects.balances!;
 
 const QUOTE = {
   items: [{ productId: "p_tea", variantId: "v_tea", quantity: 2 }],
@@ -84,7 +86,7 @@ describe("loyalty points through storefront checkout", () => {
     });
     await activatePlugin(db, "acme.loyalty", { actorUserId: "owner", expectedRevision: configured.revision });
     // 300 points, worth 300 BDT.
-    await putPluginRecord(db, "acme.loyalty", "balances", BALANCES, "cust_1", { points: 300, earned: 300, spent: 0 });
+    await putObjectRecord(db, "acme.loyalty", "balances", BALANCES, "cust_1", { points: 300, earned: 300, spent: 0 });
   });
   afterEach(() => sqlite.close());
 
@@ -136,8 +138,8 @@ describe("loyalty points through storefront checkout", () => {
     const placed = await call("/orders", order(String(quoted.json.data.quoteFingerprint)));
     expect(placed.status, JSON.stringify(placed.json)).toBe(201);
     expect(placed.json.data).toMatchObject({ totalAmountMinor: 100_000 + 6_000 - 30_000 });
-    expect(await getPluginRecordVersion(db, "acme.loyalty", "balances", "cust_1"))
-      .toEqual({ data: { points: 0, earned: 300, spent: 300 }, revision: 2 });
+    expect(await getObjectRecordVersion(db, "acme.loyalty", "balances", "cust_1"))
+      .toEqual({ data: { points: 0, earned: 300, spent: 300 }, revision: 2, handle: null, status: "active" });
 
     // Spent: the next quote has no points to offer, and an order on the old quote is refused.
     expect((await call("/orders/tax-quote", QUOTE)).json.data).toMatchObject({ discountMinor: 0 });
@@ -156,8 +158,8 @@ describe("loyalty points through storefront checkout", () => {
     const refused = results.find((result) => result.status !== 201)!;
     // Lost the race at the commit (the guard), or saw the spent balance while pricing.
     expect(refused.json.error?.details?.reason ?? refused.json.error?.message).toBeTruthy();
-    expect(await getPluginRecordVersion(db, "acme.loyalty", "balances", "cust_1"))
-      .toEqual({ data: { points: 0, earned: 300, spent: 300 }, revision: 2 });
+    expect(await getObjectRecordVersion(db, "acme.loyalty", "balances", "cust_1"))
+      .toEqual({ data: { points: 0, earned: 300, spent: 300 }, revision: 2, handle: null, status: "active" });
     expect(sqlite.prepare("SELECT count(*) AS n FROM orders").get()).toEqual({ n: 1 });
     expect(sqlite.prepare("SELECT count(*) AS n FROM order_events WHERE kind = 'app_discount'").get()).toEqual({ n: 1 });
   });
@@ -176,7 +178,7 @@ describe("loyalty points through storefront checkout", () => {
           return (query: string) => {
             if (!bumped && /insert into "orders"/i.test(query)) {
               bumped = true;
-              sqlite.prepare("UPDATE plugin_records SET revision = revision + 1, data_json = '{\"points\":5,\"earned\":300,\"spent\":295}' WHERE plugin_id = 'acme.loyalty'").run();
+              sqlite.prepare("UPDATE object_records SET revision = revision + 1, data_json = '{\"points\":5,\"earned\":300,\"spent\":295}' WHERE type_id = 'oty_acme.loyalty.balances'").run();
             }
             return target.prepare(query);
           };
@@ -191,6 +193,6 @@ describe("loyalty points through storefront checkout", () => {
       details: { reason: "APP_OFFER_CHANGED" },
     });
     expect(sqlite.prepare("SELECT count(*) AS n FROM orders").get()).toEqual({ n: 0 });
-    expect((await getPluginRecordVersion(db, "acme.loyalty", "balances", "cust_1"))?.data).toEqual({ points: 5, earned: 300, spent: 295 });
+    expect((await getObjectRecordVersion(db, "acme.loyalty", "balances", "cust_1"))?.data).toEqual({ points: 5, earned: 300, spent: 295 });
   });
 });

@@ -27,6 +27,11 @@ export const EVENT_OUTBOX_STATUSES = [
 ] as const;
 export type EventOutboxStatus = (typeof EVENT_OUTBOX_STATUSES)[number];
 
+/** Active webhook/app topic filters, maintained atomically by subscription triggers. */
+export const eventDemand = sqliteTable("event_demand", {
+    filter: text("filter").primaryKey(),
+});
+
 export const eventOutbox = sqliteTable("event_outbox", {
     /** `evt_` + epoch milliseconds + 12 random hex: unique and time-sortable. */
     id: text("id").primaryKey(),

@@ -21,6 +21,7 @@ import {
   type DeliveryLocationLevel,
 } from "@/lib/checkout/tax-quote-error-contract";
 import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
+import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 
 export const prerender = false;
 
@@ -142,6 +143,7 @@ export const POST: APIRoute = async ({ request }) => {
       {
         method: "POST",
         headers: {
+          ...await buyerUiLocaleHeaders(request.headers),
           Accept: "application/json",
           "Content-Type": "application/json",
           ...(customerSessionToken

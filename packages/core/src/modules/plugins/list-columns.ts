@@ -15,7 +15,7 @@ import {
   customFieldDefinitions,
   customFieldValues,
   pluginInstallations,
-  pluginRecords,
+  objectRecords,
   type PluginInstallationRow,
 } from "@scalius/database/schema";
 import {
@@ -26,7 +26,8 @@ import {
 import { and, eq, inArray, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
-import { planPluginRecordQuery } from "./storage";
+import { planObjectRecordQuery } from "@scalius/core/modules/objects";
+import { objectTypeId } from "@scalius/shared/plugins/objects";
 
 /** One app column, as the dashboard shows it. */
 export interface AppListColumn {
@@ -41,7 +42,7 @@ export interface AppListColumn {
   titleBn: string | null;
   type: PluginListColumnType;
   filterable: boolean;
-  source: { kind: "storage"; collection: string; field: string } | { kind: "customField"; key: string };
+  source: { kind: "object"; object: string; field: string } | { kind: "customField"; key: string };
 }
 
 export type AppListValue = string | number | boolean | null;
@@ -146,18 +147,17 @@ export function appListFilterCondition(
   installations: ReadonlyMap<string, PluginInstallation>,
 ): SQL | undefined {
   const conditions = filters.map(({ column, value }) => {
-    if (column.source.kind !== "storage") throw new ValidationError("Only storage-backed app columns filter a list.");
-    const declaration = installations.get(column.pluginId)?.manifest.storage[column.source.collection];
-    if (!declaration) throw new ValidationError(`${column.key} reads a collection its app no longer declares.`);
-    let plan: ReturnType<typeof planPluginRecordQuery>;
+    if (column.source.kind !== "object") throw new ValidationError("Only object-backed app columns filter a list.");
+    const declaration = installations.get(column.pluginId)?.manifest.objects[column.source.object];
+    if (!declaration) throw new ValidationError(`${column.key} reads an object type its app no longer declares.`);
+    let plan: ReturnType<typeof planObjectRecordQuery>;
     try {
-      plan = planPluginRecordQuery(declaration, { where: { [column.source.field]: filterScalar(value) } });
+      plan = planObjectRecordQuery(declaration, { where: { [column.source.field]: filterScalar(value) } });
     } catch (error) {
       throw new ValidationError(`${column.key} cannot filter by this value: ${error instanceof Error ? error.message.slice(0, 200) : "invalid"}`);
     }
-    return inArray(idColumn, sql`(SELECT ${pluginRecords.id} FROM ${pluginRecords} WHERE ${and(
-      eq(pluginRecords.pluginId, column.pluginId),
-      eq(pluginRecords.collection, column.source.collection),
+    return inArray(idColumn, sql`(SELECT ${objectRecords.id} FROM ${objectRecords} WHERE ${and(
+      eq(objectRecords.typeId, objectTypeId(column.pluginId, column.source.object)),
       plan.condition,
     )})`);
   });
@@ -169,7 +169,7 @@ export function appListFilterCondition(
  * JSON boolean as 1 or 0, PostgreSQL may give a number as text). Objects and
  * arrays become null.
  */
-function storageCell(value: unknown, type: PluginListColumnType): AppListValue {
+function objectCell(value: unknown, type: PluginListColumnType): AppListValue {
   if (value === null || value === undefined) return null;
   if (type === "boolean") return value === true || value === 1 || value === "1" || value === "true" ? true : value === false || value === 0 || value === "0" || value === "false" ? false : null;
   if (type === "number" || type === "money") {
@@ -182,7 +182,7 @@ function storageCell(value: unknown, type: PluginListColumnType): AppListValue {
 
 /**
  * The page's values of these columns, in one statement: per row id, per
- * column key. Storage columns read the app's record whose id is the row id;
+ * column key. Object columns read the app's record whose id is the row id;
  * custom-field columns the app's own field on the resource.
  */
 export async function readAppListValues(
@@ -195,13 +195,12 @@ export async function readAppListValues(
   if (columns.length === 0 || ids.length === 0) return {};
   const cells = columns.map((column, index) => {
     const alias = sql.raw(`c${index}`);
-    if (column.source.kind === "storage") {
+    if (column.source.kind === "object") {
       // A record field as JSON text (json() keeps a string quoted), parsed below.
-      return sql`(SELECT json_extract(${pluginRecords.dataJson}, ${`$.${column.source.field}`})
-        FROM ${pluginRecords}
-        WHERE ${pluginRecords.pluginId} = ${column.pluginId}
-          AND ${pluginRecords.collection} = ${column.source.collection}
-          AND ${pluginRecords.id} = row_ids.value) AS ${alias}`;
+      return sql`(SELECT json_extract(${objectRecords.dataJson}, ${`$.${column.source.field}`})
+        FROM ${objectRecords}
+        WHERE ${objectRecords.typeId} = ${objectTypeId(column.pluginId, column.source.object)}
+          AND ${objectRecords.id} = row_ids.value) AS ${alias}`;
     }
     return sql`(SELECT ${customFieldValues.value}
       FROM ${customFieldValues}
@@ -222,7 +221,7 @@ export async function readAppListValues(
     const entry: Record<string, AppListValue> = {};
     columns.forEach((column, index) => {
       const value = ordered[index + 1];
-      entry[column.key] = column.source.kind === "customField" ? customFieldCell(value, column.type) : storageCell(value, column.type);
+      entry[column.key] = column.source.kind === "customField" ? customFieldCell(value, column.type) : objectCell(value, column.type);
     });
     values[String(ordered[0])] = entry;
   }

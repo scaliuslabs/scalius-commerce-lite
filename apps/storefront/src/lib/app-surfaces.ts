@@ -1,24 +1,10 @@
-/**
- * What installed apps give the storefront to draw (docs/platform: "Storefront
- * surfaces"): component sections (inside the homepage batch part, drawn at the
- * edge by the app's storefront module), and checkout and customer-account
- * blocks (the `app-blocks/<page>` batch part, read only when the layout's
- * `appBlockPages` names the page).
- *
- * The API sanitizes a block's HTML (`sanitizePluginHtml`) and caches the
- * result under dependency validation. The storefront does not sanitize that
- * HTML again; it only checks the payload's shape, so nothing that did not
- * come from those fields is ever injected, and a surface without HTML renders
- * nothing.
- */
-import {
-  PLUGIN_BLOCK_PAGES,
-  PLUGIN_BLOCK_TARGETS,
-  PLUGIN_SURFACE_KEY_PATTERN,
-  type PluginBlockPage,
-  type PluginBlockTarget,
-  type PluginHead,
-} from "@scalius/shared/plugins/storefront";
+/** Theme component data drawn at the edge from the public page batch. */
+import type { StorefrontRenderJob } from "@scalius/shared/plugins/storefront-protocol";
+import { OBJECT_FIELD_KEY_PATTERN, OBJECT_FIELD_TYPES, OBJECT_FIELDS_MAX, OBJECT_HANDLE_PATTERN, OBJECT_RECORD_MAX_BYTES, OBJECT_SECTION_RECORDS_MAX, parseObjectTypeHandle } from "@scalius/shared/plugins/objects";
+import { HOME_MAX_OBJECT_TYPES } from "@scalius/shared/storefront-theme/home-data";
+import type { PluginHead } from "@scalius/shared/plugins/storefront";
+
+type ComponentObjects = NonNullable<Extract<StorefrontRenderJob, { kind: "section" }>["objects"]>;
 
 /**
  * A component section's data (docs/STOREFRONT-COMPONENTS.md): the app's
@@ -29,6 +15,7 @@ export interface HomepageAppComponent {
   pluginId: string;
   type: string;
   values: Record<string, unknown>;
+  objects?: ComponentObjects;
   media: Array<{ id: string; url: string; alt: string; width: number | null; height: number | null }>;
   lists: Array<{ source: string; products: unknown[] }>;
 }
@@ -56,7 +43,35 @@ export function readAppComponent(value: unknown): HomepageAppComponent | null {
       ? [{ source: entry.source, products: entry.products as unknown[] }]
       : []
   ));
-  return { pluginId: value.pluginId, type: value.type, values: value.values, media, lists };
+  const objects = value.objects === undefined ? undefined : readComponentObjects(value.objects);
+  if (objects === null) return null;
+  return { pluginId: value.pluginId, type: value.type, values: value.values, media, lists, ...(objects === undefined ? {} : { objects }) };
+}
+
+/** Keeps the public object carrier bounded at the batch-to-component boundary. */
+function readComponentObjects(value: unknown): ComponentObjects | null {
+  if (!isRecord(value) || Object.keys(value).length > HOME_MAX_OBJECT_TYPES) return null;
+  const result: ComponentObjects = {};
+  for (const [type, data] of Object.entries(value)) {
+    if (!parseObjectTypeHandle(type) || !isRecord(data) || !isRecord(data.fields) || !Array.isArray(data.records)) return null;
+    if (Object.keys(data.fields).length > OBJECT_FIELDS_MAX || data.records.length > OBJECT_SECTION_RECORDS_MAX) return null;
+    const fields: Record<string, string> = {};
+    for (const [key, field] of Object.entries(data.fields)) {
+      if (!OBJECT_FIELD_KEY_PATTERN.test(key) || typeof field !== "string" || !(OBJECT_FIELD_TYPES as readonly string[]).includes(field)
+        || field === "customer_reference" || field === "order_reference") return null;
+      fields[key] = field;
+    }
+    const records: ComponentObjects[string]["records"] = [];
+    for (const record of data.records) {
+      if (!isRecord(record) || typeof record.id !== "string" || record.id.length < 1 || record.id.length > 128
+        || !(record.handle === null || typeof record.handle === "string" && OBJECT_HANDLE_PATTERN.test(record.handle)) || !isRecord(record.data)) return null;
+      if (Object.keys(record.data).some((key) => !Object.hasOwn(fields, key))) return null;
+      try { if (new TextEncoder().encode(JSON.stringify(record.data)).length > OBJECT_RECORD_MAX_BYTES) return null; } catch { return null; }
+      records.push({ id: record.id, handle: record.handle, data: record.data });
+    }
+    result[type] = { fields, records };
+  }
+  return result;
 }
 
 /** Theme section ids. */
@@ -64,10 +79,6 @@ const SURFACE_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function drawnHtml(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value : null;
 }
 
 /** The homepage's app sections (`sections.apps`) by section id; ones that are not component data are left out. */
@@ -97,32 +108,4 @@ export function mergeAppHeads(heads: Iterable<PluginHead>): PluginHead {
     for (const entry of head.jsonLd) jsonLd.add(entry);
   }
   return { meta, jsonLd: [...jsonLd] };
-}
-
-/** One drawn checkout or customer-account block. */
-export interface AppBlock {
-  /** `<plugin id>/<block type>`. */
-  id: string;
-  target: PluginBlockTarget;
-  html: string;
-}
-
-/** A page group's drawn blocks (`blocks`), in order; unknown targets and ones without HTML are left out. */
-export function readAppBlocks(value: unknown): AppBlock[] {
-  const seen = new Set<string>();
-  return (Array.isArray(value) ? value : []).flatMap((entry) => {
-    if (!isRecord(entry) || typeof entry.id !== "string" || !PLUGIN_SURFACE_KEY_PATTERN.test(entry.id) || seen.has(entry.id)) return [];
-    if (typeof entry.target !== "string" || !(PLUGIN_BLOCK_TARGETS as readonly string[]).includes(entry.target)) return [];
-    const html = drawnHtml(entry.html);
-    if (!html) return [];
-    seen.add(entry.id);
-    return [{ id: entry.id, target: entry.target as PluginBlockTarget, html }];
-  });
-}
-
-/** Whether the layout says an active app draws blocks on this page group (absent: none). */
-export function layoutHasAppBlocks(layout: { appBlockPages?: unknown } | null | undefined, page: PluginBlockPage): boolean {
-  return Array.isArray(layout?.appBlockPages)
-    && (PLUGIN_BLOCK_PAGES as readonly string[]).includes(page)
-    && layout.appBlockPages.includes(page);
 }

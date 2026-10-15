@@ -33,7 +33,7 @@ import CatalogEmbed from "./CatalogEmbed.astro";
 import { appSkin, renderAppSkin } from "@/lib/extensions";
 import { listingPageData, productCardsOf } from "@/lib/extensions/data";
 import type { EmbedRender, EmbedRenderers } from "@/lib/extensions/embeds";
-import type { StorefrontFieldValues } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontFieldValues, StorefrontListingPage } from "@scalius/shared/plugins/storefront-protocol";
 
 type ListingProps = ComponentProps<typeof CatalogListing>;
 
@@ -69,9 +69,9 @@ interface Props {
 
 const { kind, listing, hero, content, data = {}, template, fields = {} } = Astro.props;
 const requestTheme = await currentRequestTheme(Astro.locals);
+const templateData = template ? await templateSectionData("collection", requestTheme) : null;
 const { resolved, preview } = requestTheme;
 const collectionTemplate = template ? resolved.pages.templates.collection : null;
-const templateData = template ? await templateSectionData("collection", requestTheme) : null;
 const currency = template ? (await getLayoutData())?.currency ?? DEFAULT_CURRENCY : DEFAULT_CURRENCY;
 const toolbar = new Set(resolved.blocks.listing.toolbar);
 const banner = toolbar.has("category-banner") ? hero.banner : null;
@@ -86,20 +86,19 @@ const descriptionAbove = descriptionPlacement === "above";
 // The page behind the results (Dawn: the page colour). The side gutters are
 // the container's: the cards line up with the header and the title.
 const SURFACE_CLASS: Record<typeof surface, string> = { page: "bg-background", muted: "bg-muted/30" };
+const projection: StorefrontListingPage = listingPageData({
+  kind,
+  title: hero.title,
+  descriptionHtml: description,
+  image: banner ? { url: banner.src, srcset: banner.srcset ?? null, width: null, height: null, alt: banner.alt } : null,
+  cards: productCardsOf(listing.products, { currencySymbol: listing.currencySymbol, currencyCode: listing.currencyCode, ratings: resolved.facts.hasReviews }),
+  pagination: listing.pagination,
+  breadcrumbs: breadcrumb ?? [],
+  fields,
+});
 const listingSkin = await appSkin(Astro.locals, Astro.url, "listing-main");
 const listingMarkup = listingSkin
-  ? await renderAppSkin(Astro.locals, Astro.url, listingSkin, {
-    data: listingPageData({
-      kind,
-      title: hero.title,
-      descriptionHtml: description,
-      image: banner ? { url: banner.src, srcset: banner.srcset ?? null, width: null, height: null, alt: banner.alt } : null,
-      cards: productCardsOf(listing.products, { currencySymbol: listing.currencySymbol, currencyCode: listing.currencyCode, ratings: resolved.facts.hasReviews }),
-      pagination: listing.pagination,
-      breadcrumbs: breadcrumb ?? [],
-      fields,
-    }),
-  })
+  ? await renderAppSkin(Astro.locals, Astro.url, listingSkin, { data: projection })
   : null;
 const embed = (piece: "filters" | "toolbar" | "pagination") => (): EmbedRender => ({ component: CatalogEmbed as EmbedRender["component"], props: { kind: piece, listing } });
 const listingEmbeds: EmbedRenderers = { filters: embed("filters"), toolbar: embed("toolbar"), pagination: embed("pagination") };
@@ -134,12 +133,12 @@ const listingEmbeds: EmbedRenderers = { filters: embed("filters"), toolbar: embe
     <CatalogListing
       {...listing}
       kind={kind}
-      band={{ title: hero.title, breadcrumb, countLabel }}
+      band={{ title: projection.title, breadcrumb: projection.breadcrumbs.map((crumb) => ({ label: crumb.title, href: crumb.url })), countLabel }}
       pills={(hero.links ?? []).map((link) => ({ id: link.href, label: link.label, href: link.href }))}
     >
-      {description && descriptionAbove && (
-        <section slot="description" class="mb-4" aria-label={`About ${hero.title}`} data-catalog-content="above">
-          <CatalogDescription content={description} name={hero.title} clamp />
+      {projection.descriptionHtml && descriptionAbove && (
+        <section slot="description" class="mb-4" aria-label={`About ${projection.title}`} data-catalog-content="above">
+          <CatalogDescription content={projection.descriptionHtml} name={projection.title} clamp />
         </section>
       )}
       <slot name="empty" slot="empty" />
@@ -151,7 +150,7 @@ const listingEmbeds: EmbedRenderers = { filters: embed("filters"), toolbar: embe
         aria-label={guide?.label ?? `About ${hero.title}`}
         data-catalog-content="below"
       >
-        {description && !descriptionAbove && <CatalogDescription content={description} name={hero.title} />}
+        {projection.descriptionHtml && !descriptionAbove && <CatalogDescription content={projection.descriptionHtml} name={projection.title} />}
         {guide && (
           <RichContent
             content={guide.html}

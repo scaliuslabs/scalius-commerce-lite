@@ -24,6 +24,7 @@
  */
 import type { StorefrontBatchPartCache } from "./cache-frontier";
 import { MARKET_PRESENCE_QUERY_PARAM } from "./markets";
+import { parseBindingResourceSelector } from "./storefront-theme/bindings";
 
 /** How a public read relates to markets: keyed by the page's presence, or the same in every market (with the reason). */
 export type PublicApiMarketScope = { readonly keyed: true } | { readonly invariant: string };
@@ -64,6 +65,7 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   { path: "/api/v1/locations", market: { invariant: "The place directory (City, Thana, Area names) is the same in every market and language." } },
   // One country's address rules (libaddressinput): code, not data, the same for every market.
   { path: "/api/v1/address-rules", isEligible: (url) => url.searchParams.size === 0, market: { invariant: "Address rules are code (libaddressinput metadata), the same in every market." } },
+  { path: "/api/v1/objects", market: { invariant: "Published object content has no per-market pricing or translations." } },
   { path: "/api/v1/attributes", market: { invariant: "Attribute names and values show no price and are not translated yet (step 4b defers them)." } },
   // CMS pages, articles and store policies in the page's language (step 4b).
   { path: "/api/v1/pages", market: { keyed: true } },
@@ -75,12 +77,12 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   // A landing page's product lists are priced in the page's market.
   { path: "/api/v1/storefront/landing", isEligible: presenceOnly, market: { keyed: true } },
   // A page template's product lists are priced in the page's market, like a landing page's.
-  { path: "/api/v1/storefront/template", isEligible: presenceOnly, market: { keyed: true } },
+  { path: "/api/v1/storefront/template", isEligible: (url) => [...url.searchParams.keys()].every((key) => key === MARKET_PRESENCE_QUERY_PARAM || key === "resource")
+    && url.searchParams.getAll(MARKET_PRESENCE_QUERY_PARAM).length <= 1 && url.searchParams.getAll("resource").length <= 1
+    && (!url.searchParams.has("resource") || Boolean(parseBindingResourceSelector(url.searchParams.get("resource")))), market: { keyed: true } },
   // The layout: the whole presence matrix (the same everywhere), and the
   // page's menus, category tree, policies and storefront copy in its language (step 4b).
   { path: "/api/v1/storefront/layout", exact: true, isEligible: presenceOnly, market: { keyed: true } },
-  // The checkout, order and account pages' app blocks (`/app-blocks/<page>`): the same for every buyer; a query string is rejected.
-  { path: "/api/v1/storefront/app-blocks", isEligible: (url) => url.searchParams.size === 0, market: { invariant: "An app's checkout and account blocks are drawn store-wide, the same for every buyer and market." } },
   // The active presence matrix, for the storefront gateway's buyer-choice redirect.
   { path: "/api/v1/storefront/markets", exact: true, isEligible: (url) => url.searchParams.size === 0, market: { invariant: "The presence matrix is the same for every market." } },
 ];

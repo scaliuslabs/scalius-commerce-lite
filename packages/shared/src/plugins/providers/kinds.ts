@@ -30,7 +30,7 @@ export const PROVIDER_OPERATIONS = {
   },
   courier: {
     required: ["createShipment", "trackShipment"],
-    optional: ["quote", "cancelShipment", "findShipment", "verifyWebhook", "reconcileCod", "testConnection"],
+    optional: ["rates", "quote", "cancelShipment", "findShipment", "verifyWebhook", "reconcileCod", "testConnection"],
   },
   sms: { required: ["send"], optional: ["deliveryStatus", "testConnection"] },
   email: { required: ["send"], optional: ["deliveryStatus", "testConnection"] },

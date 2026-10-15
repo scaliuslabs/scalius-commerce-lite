@@ -19,6 +19,7 @@ import {
   SaleSkin,
   ShopByTilesSkin,
   SignupSkin,
+  SpecificationsSkin,
   StorySkin,
   TextSkin,
 } from "./components/skins";
@@ -80,5 +81,6 @@ export default defineStorefront({
     "noor-text": TextSkin,
     "noor-faq": FaqSkin,
     "noor-signup": SignupSkin,
+    "noor-specifications": SpecificationsSkin,
   },
 });

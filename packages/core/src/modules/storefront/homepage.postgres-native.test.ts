@@ -1,6 +1,6 @@
 // The storefront homepage read on a real PostgreSQL server, every section
 // kind at once: product lists from each source, media, category tiles,
-// collections, the brand wall, deal countdowns and metaobjects. The SQLite
+// collections, the brand wall, deal countdowns and objects. The SQLite
 // dialect accepts constructs PostgreSQL refuses (a derived table without an
 // alias); this read is what every homepage miss runs. Opt-in:
 // SCALIUS_TEST_POSTGRES_URL.
@@ -54,7 +54,7 @@ describe.runIf(nativePostgresUrl())("storefront homepage on PostgreSQL", { timeo
         brandLimit: 12,
         promotionIds: ["promo_missing"],
         homeProductId: null,
-        metaobjects: [{ definitionId: "mod_missing", limit: 4 }],
+        objects: [{ typeId: "oty_custom.missing", limit: 4 }],
       },
     });
 

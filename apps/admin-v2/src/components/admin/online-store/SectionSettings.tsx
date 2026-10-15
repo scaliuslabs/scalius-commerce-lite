@@ -4,6 +4,9 @@
  * slide has its own control: its crop on both screens and its focus points;
  * slides are added from Files, several at once.
  */
+import { DynamicSourcePicker } from "./schema-form/DynamicSourcePicker";
+import { SettingBindingScope } from "./schema-form/binding-context";
+import type { SettingBindings } from "@scalius/shared/storefront-theme/bindings";
 import type { CSSProperties } from "react";
 import { ImageIcon, Plus } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -120,6 +123,7 @@ function SlideImage({ id, name, label, help, viewport, mediaId, previews, focalP
         ) : null}
       </div>
       {shown ? <p id={`${id}-note`} role="alert" className="text-body text-destructive">{shown}</p> : null}
+      <DynamicSourcePicker id={id} path={viewport === "desktop" ? "image" : "phoneImage"} type="image" label={label} />
     </div>
   );
 }
@@ -215,11 +219,18 @@ export function HeroSlideFields({ id, index, slide, media, error, onChange }: {
         />
       </div>
       <SlideText id={field("alt")} label={labels("s.hero.slides.alt")} help={labels("s.hero.slides.alt.help")} value={slide.alt} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.alt} error={error("alt")} onChange={(alt) => onChange({ ...slide, alt })} />
+      <DynamicSourcePicker id={field("alt")} path="alt" type="text" label={labels("s.hero.slides.alt")} />
       <SlideText id={field("heading")} label={labels("s.hero.slides.heading")} help={labels("s.hero.slides.heading.help")} value={slide.heading ?? ""} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.heading} error={error("heading")} onChange={(heading) => onChange(withSlideText(slide, "heading", heading))} />
+      <DynamicSourcePicker id={field("heading")} path="heading" type="text" label={labels("s.hero.slides.heading")} />
       <SlideText id={field("text")} label={labels("s.hero.slides.text")} value={slide.text ?? ""} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.text} error={error("text")} onChange={(text) => onChange(withSlideText(slide, "text", text))} />
+      <DynamicSourcePicker id={field("text")} path="text" type="text" label={labels("s.hero.slides.text")} />
       <LinkField id={field("link")} label={labels("f.link")} value={slide.link} error={error("link")} onChange={(link) => onChange({ ...slide, link })} />
+      <DynamicSourcePicker id={field("link")} path="link" type="link" label={labels("f.link")} />
       {slide.link ? (
+        <>
         <SlideText id={field("button")} label={labels("s.hero.slides.buttonLabel")} help={labels("s.hero.slides.buttonLabel.help")} value={slide.buttonLabel ?? ""} max={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.buttonLabel} error={error("buttonLabel")} onChange={(buttonLabel) => onChange(withSlideText(slide, "buttonLabel", buttonLabel))} />
+        <DynamicSourcePicker id={field("button")} path="buttonLabel" type="text" label={labels("s.hero.slides.buttonLabel")} />
+        </>
       ) : null}
     </div>
   );
@@ -324,8 +335,11 @@ export function BlockSettingsForm({ section, path, index, media, onChange, error
   if (item === undefined || !spec) return null;
   const set = (next: unknown) => onChange(storefrontSettingWith(section.settings, path, replaceAt(items, index, next)));
   const prefix = sectionFieldPrefix(section.id);
+  const bindings = (item as { bindings?: SettingBindings }).bindings;
+  const bind = (next: SettingBindings | undefined) => set({ ...(item as Record<string, unknown>), bindings: next });
   if (section.type === "hero" && path === "slides") {
     return (
+      <SettingBindingScope bindings={bindings} onChange={bind}>
       <HeroSlideFields
         id={`${prefix}-slides`}
         index={index}
@@ -334,9 +348,11 @@ export function BlockSettingsForm({ section, path, index, media, onChange, error
         error={(part) => errors?.get(`slides.${index}.${part}`)}
         onChange={set}
       />
+      </SettingBindingScope>
     );
   }
   return (
+    <SettingBindingScope bindings={bindings} pathPrefix={`${path}.${index}.`} onChange={bind}>
     <SchemaSettingsForm
       idPrefix={prefix}
       scope={sectionLabelScope(section.type)}
@@ -348,5 +364,6 @@ export function BlockSettingsForm({ section, path, index, media, onChange, error
       errors={errors}
       media={media}
     />
+    </SettingBindingScope>
   );
 }

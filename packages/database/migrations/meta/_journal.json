@@ -1079,6 +1079,27 @@
       "when": 1792400000000,
       "tag": "0153_theme_skins",
       "breakpoints": true
+    },
+    {
+      "idx": 154,
+      "version": "6",
+      "when": 1792500000000,
+      "tag": "0154_order_number_sequence",
+      "breakpoints": true
+    },
+    {
+      "idx": 155,
+      "version": "6",
+      "when": 1792043237454,
+      "tag": "0155_v2_beta_contract",
+      "breakpoints": true
+    },
+    {
+      "idx": 156,
+      "version": "6",
+      "when": 1792044163487,
+      "tag": "0156_custom_field_object_references",
+      "breakpoints": true
     }
   ]
 }

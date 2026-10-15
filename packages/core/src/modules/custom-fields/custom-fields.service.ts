@@ -17,6 +17,8 @@ import {
     customers,
     media,
     orders,
+    objectTypes,
+    objectRecords,
     pages,
     productVariants,
     products,
@@ -273,6 +275,23 @@ function assertStorefrontOwner(ownerType: CustomFieldOwnerType, visible: boolean
     }
 }
 
+function objectTargetAllowed(typeId: string, storefrontVisible: boolean, writer: CustomFieldWriter): SQL {
+    return sql`EXISTS (SELECT 1 FROM ${objectTypes} WHERE ${objectTypes.id} = ${typeId}
+        AND ${writer.kind === "plugin" ? eq(objectTypes.namespace, writer.pluginId) : sql`${objectTypes.admin} <> 'none'`}
+        ${storefrontVisible ? sql`AND ${objectTypes.storefront} = 1` : sql``})`;
+}
+
+async function assertObjectTarget(db: Database, type: CustomFieldType, validations: string, storefrontVisible: boolean, writer: CustomFieldWriter): Promise<SQL | undefined> {
+    if (customFieldReferenceTarget(type) !== "object") return undefined;
+    const to = readCustomFieldValidations(validations).to;
+    if (!to) throw new ValidationError("Choose the object type this field references.");
+    const allowed = objectTargetAllowed(`oty_${to}`, storefrontVisible, writer);
+    const target = await db.select({ id: objectTypes.id }).from(objectTypes)
+        .where(and(eq(objectTypes.id, `oty_${to}`), allowed)).get();
+    if (!target) throw new ValidationError("Choose an accessible object type; storefront fields require a public object type.");
+    return allowed;
+}
+
 /**
  * Creates a definition at the end of its owner type's order. The key is the
  * normalised name when omitted; namespace, key, owner type and type are fixed
@@ -300,11 +319,12 @@ export async function createCustomFieldDefinition(
     assertStorefrontOwner(input.ownerType, input.storefrontVisible);
     const context = await readCustomFieldCodecContext(db);
     const validations = parseValidationsOrThrow(input.type, input.validations, context);
+    const objectTarget = await assertObjectTarget(db, input.type, validations, input.storefrontVisible ?? false, options.writer);
     const id = `${CUSTOM_FIELD_ID_PREFIX}${nanoid()}`;
     const ownerCount = sql`(SELECT count(*) FROM ${customFieldDefinitions} WHERE ${customFieldDefinitions.ownerType} = ${input.ownerType})`;
     try {
         await safeBatch(db, [
-            buildBatchGuard(db, sql`${ownerCount} < ${CUSTOM_FIELD_DEFINITIONS_PER_OWNER_MAX}`, GUARD_FAILED),
+            buildBatchGuard(db, and(sql`${ownerCount} < ${CUSTOM_FIELD_DEFINITIONS_PER_OWNER_MAX}`, objectTarget)!, GUARD_FAILED),
             db.insert(customFieldDefinitions).values({
                 id,
                 ownerType: input.ownerType,
@@ -328,6 +348,7 @@ export async function createCustomFieldDefinition(
             });
         }
         if (isBatchGuardError(error, GUARD_FAILED)) {
+            await assertObjectTarget(db, input.type, validations, input.storefrontVisible ?? false, options.writer);
             throw new ValidationError(`A ${input.ownerType} can have at most ${CUSTOM_FIELD_DEFINITIONS_PER_OWNER_MAX} custom fields.`);
         }
         throw error;
@@ -362,6 +383,14 @@ export async function updateCustomFieldDefinition(
     const validations = input.validations === undefined
         ? undefined
         : parseValidationsOrThrow(existing.type as CustomFieldType, input.validations, context);
+    const objectTarget = await assertObjectTarget(db, existing.type, validations ?? existing.validations,
+        input.storefrontVisible ?? existing.storefrontVisible, options.writer);
+    if (objectTarget && validations !== undefined
+        && readCustomFieldValidations(validations).to !== readCustomFieldValidations(existing.validations).to) {
+        const held = await db.select({ id: customFieldValues.definitionId }).from(customFieldValues)
+            .where(eq(customFieldValues.definitionId, id)).limit(1).get();
+        if (held) throw new ValidationError("This field holds object references. Add a new field to reference another object type.");
+    }
     const updated = await db.update(customFieldDefinitions)
         .set({
             ...(input.name !== undefined ? { name: input.name } : {}),
@@ -371,7 +400,9 @@ export async function updateCustomFieldDefinition(
             revision: sql`${customFieldDefinitions.revision} + 1`,
             updatedAt: sql`unixepoch()`,
         })
-        .where(and(eq(customFieldDefinitions.id, id), eq(customFieldDefinitions.revision, input.expectedRevision)))
+        .where(and(eq(customFieldDefinitions.id, id), eq(customFieldDefinitions.revision, input.expectedRevision), objectTarget,
+            objectTarget && validations !== undefined && readCustomFieldValidations(validations).to !== readCustomFieldValidations(existing.validations).to
+                ? sql`NOT EXISTS (SELECT 1 FROM ${customFieldValues} WHERE ${customFieldValues.definitionId} = ${id})` : undefined))
         .returning(definitionColumns)
         .get();
     if (!updated) {
@@ -477,7 +508,10 @@ function ownerExists(ownerType: CustomFieldOwnerType, ownerId: string): SQL {
 }
 
 /** Every id names a live record of the target. */
-function referencesExist(target: CustomFieldReferenceTarget, ids: readonly string[]): SQL {
+type RecordReferenceTarget = Exclude<CustomFieldReferenceTarget, "object">;
+type ObjectReferenceGroup = { typeId: string; storefrontVisible: boolean; references: Map<string, number[]> };
+
+function referencesExist(target: RecordReferenceTarget, ids: readonly string[]): SQL {
     const list = JSON.stringify(ids);
     const idSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${list}))`;
     switch (target) {
@@ -492,7 +526,7 @@ function referencesExist(target: CustomFieldReferenceTarget, ids: readonly strin
     }
 }
 
-async function missingReferences(db: Database, target: CustomFieldReferenceTarget, ids: readonly string[]): Promise<Set<string>> {
+async function missingReferences(db: Database, target: RecordReferenceTarget, ids: readonly string[]): Promise<Set<string>> {
     const found = new Set<string>();
     for (const chunk of chunkForD1(ids)) {
         const rows = target === "product"
@@ -514,7 +548,14 @@ async function missingReferences(db: Database, target: CustomFieldReferenceTarge
 const valueEntryColumns = {
     ...definitionColumns,
     storedValue: customFieldValues.value,
-    valueUpdatedAt: customFieldValues.updatedAt,
+    valueUpdatedAt: sql<number | null>`${customFieldValues.updatedAt}`.as("cf_value_updated_at"),
+    liveObjectIds: sql<string | null>`CASE WHEN ${customFieldDefinitions.type} IN ('object_reference', 'list.object_reference') THEN (
+        SELECT coalesce(json_group_array(${objectRecords.id}), '[]')
+        FROM json_each(CASE WHEN ${customFieldDefinitions.type} = 'list.object_reference' AND json_valid(${customFieldValues.value})
+            THEN ${customFieldValues.value} ELSE json_array(${customFieldValues.value}) END) AS cf_object_ref
+        JOIN ${objectTypes} ON ${objectTypes.id} = 'oty_' || json_extract(${customFieldDefinitions.validations}, '$.to')
+        JOIN ${objectRecords} ON ${objectRecords.typeId} = ${objectTypes.id} AND ${objectRecords.id} = CAST(cf_object_ref.value AS TEXT)
+    ) END`.as("live_object_ids"),
 };
 
 function ownerFieldsStatement(db: Database, ownerType: CustomFieldOwnerType, ownerId: string) {
@@ -528,14 +569,22 @@ function ownerFieldsStatement(db: Database, ownerType: CustomFieldOwnerType, own
         .orderBy(asc(customFieldDefinitions.position), asc(customFieldDefinitions.id));
 }
 
-type EntryRow = DefinitionRow & { storedValue: string | null; valueUpdatedAt: number | null };
+type EntryRow = DefinitionRow & { storedValue: string | null; valueUpdatedAt: number | null; liveObjectIds: string | null };
 
 function presentEntries(rows: readonly EntryRow[], context: CustomFieldCodecContext): CustomFieldEntry[] {
-    return rows.map(({ storedValue, valueUpdatedAt, ...definition }) => ({
-        definition: presentDefinition(definition, context),
-        value: storedValue === null ? null : customFieldWireValue(definition.type, storedValue, context),
-        updatedAt: storedValue === null ? null : iso(valueUpdatedAt),
-    }));
+    return rows.map(({ storedValue, valueUpdatedAt, liveObjectIds, ...definition }) => {
+        let value = storedValue === null ? null : customFieldWireValue(definition.type, storedValue, context);
+        if (customFieldReferenceTarget(definition.type) === "object") {
+            const live = new Set<string>(JSON.parse(liveObjectIds ?? "[]"));
+            value = Array.isArray(value) ? value.map((id) => typeof id === "string" && live.has(id) ? id : null)
+                : typeof value === "string" && live.has(value) ? value : null;
+        }
+        return {
+            definition: presentDefinition(definition, context),
+            value,
+            updatedAt: storedValue === null ? null : iso(valueUpdatedAt),
+        };
+    });
 }
 
 /** The owner (live for writes; in trash too for reads) and every field of its type with its value. */
@@ -639,7 +688,8 @@ export async function setCustomFieldValues(
     const issues: ReturnType<typeof codecIssueDetails>[] = [];
     const upserts: Array<{ definitionId: string; value: string }> = [];
     const clears: string[] = [];
-    const references = new Map<CustomFieldReferenceTarget, Map<string, number[]>>();
+    const references = new Map<RecordReferenceTarget, Map<string, number[]>>();
+    const objectReferences = new Map<string, ObjectReferenceGroup>();
     input.values.forEach((entry, index) => {
         const definition = byId.get(entry.definitionId);
         if (!definition) {
@@ -663,7 +713,15 @@ export async function setCustomFieldValues(
         if (parsed.value === definition.storedValue) return;
         upserts.push({ definitionId: definition.id, value: parsed.value });
         const target = customFieldReferenceTarget(definition.type);
-        if (target) {
+        if (target === "object") {
+            const typeId = `oty_${readCustomFieldValidations(definition.validations).to ?? ""}`;
+            const groupKey = `${typeId}:${Boolean(definition.storefrontVisible)}`;
+            const group = objectReferences.get(groupKey) ?? { typeId, storefrontVisible: Boolean(definition.storefrontVisible), references: new Map<string, number[]>() };
+            for (const referenceId of customFieldReferenceIds(definition.type, parsed.value)) {
+                group.references.set(referenceId, [...(group.references.get(referenceId) ?? []), index]);
+            }
+            objectReferences.set(groupKey, group);
+        } else if (target) {
             const byTarget = references.get(target) ?? new Map<string, number[]>();
             for (const referenceId of customFieldReferenceIds(definition.type, parsed.value)) {
                 byTarget.set(referenceId, [...(byTarget.get(referenceId) ?? []), index]);
@@ -687,6 +745,12 @@ export async function setCustomFieldValues(
             buildBatchGuard(db, sql`${ownerExists(ownerType, ownerId)} AND ${definitionsCurrent}`, GUARD_FAILED),
             ...[...references].map(([target, referenced]) =>
                 buildBatchGuard(db, referencesExist(target, [...referenced.keys()]), GUARD_FAILED)),
+            ...[...objectReferences.values()].map((group) => buildBatchGuard(db, sql`
+                ${objectTargetAllowed(group.typeId, group.storefrontVisible, options.writer)} AND
+                (SELECT count(*) FROM ${objectRecords} WHERE ${objectRecords.typeId} = ${group.typeId}
+                  AND ${objectRecords.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...group.references.keys()])}))
+                  ${group.storefrontVisible ? sql`AND ${objectRecords.pub} = 1 AND ${objectRecords.status} = 'published'` : sql``}) = ${group.references.size}
+            `, GUARD_FAILED)),
             ...chunkRowsForD1(upserts, 5).map((chunk) => db.insert(customFieldValues)
                 .values(chunk.map((upsert) => ({ definitionId: upsert.definitionId, ownerType, ownerId, value: upsert.value, updatedAt: now })))
                 .onConflictDoUpdate({
@@ -701,7 +765,7 @@ export async function setCustomFieldValues(
             await safeBatch(db, statements as never);
         } catch (error) {
             if (!isBatchGuardError(error, GUARD_FAILED)) throw error;
-            await explainFailedWrite(db, ownerType, ownerId, byId, references, touched);
+            await explainFailedWrite(db, ownerType, ownerId, byId, references, touched, objectReferences, options.writer);
         }
     }
 
@@ -713,7 +777,9 @@ export async function setCustomFieldValues(
         ownerType,
         ownerId,
         fields: presentEntries(rows.map((row) => written.has(row.id)
-            ? { ...row, storedValue: written.get(row.id)!, valueUpdatedAt: now }
+            ? { ...row, storedValue: written.get(row.id)!, valueUpdatedAt: now,
+                liveObjectIds: customFieldReferenceTarget(row.type) === "object"
+                    ? JSON.stringify(written.get(row.id) ? customFieldReferenceIds(row.type, written.get(row.id)!) : []) : row.liveObjectIds }
             : row), context),
     };
 }
@@ -724,8 +790,10 @@ async function explainFailedWrite(
     ownerType: CustomFieldOwnerType,
     ownerId: string,
     read: Map<string, { revision: number }>,
-    references: Map<CustomFieldReferenceTarget, Map<string, number[]>>,
+    references: Map<RecordReferenceTarget, Map<string, number[]>>,
     touched: readonly string[],
+    objectReferences: Map<string, ObjectReferenceGroup>,
+    writer: CustomFieldWriter,
 ): Promise<never> {
     const { ownerFound, rows } = await readOwnerState(db, ownerType, ownerId, { live: true });
     if (!ownerFound) throw new NotFoundError(`The ${ownerType} was not found.`);
@@ -734,6 +802,17 @@ async function explainFailedWrite(
         throw new AppError(409, CUSTOM_FIELD_REVISION_CONFLICT, "Custom field settings changed while you were editing. Reload and try again.");
     }
     const issues: Array<{ path: Array<string | number>; code: string; message: string }> = [];
+    for (const group of objectReferences.values()) {
+        const found = await db.select({ id: objectRecords.id }).from(objectRecords).where(and(
+            eq(objectRecords.typeId, group.typeId), objectTargetAllowed(group.typeId, group.storefrontVisible, writer),
+            sql`${objectRecords.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...group.references.keys()])}))`,
+            group.storefrontVisible ? and(eq(objectRecords.pub, true), eq(objectRecords.status, "published")) : undefined,
+        )).all();
+        const live = new Set(found.map((row) => row.id));
+        for (const [id, indices] of group.references) if (!live.has(id)) for (const index of indices) {
+            issues.push({ path: ["values", index, "value"], code: "missing_reference", message: "The object reference is unavailable or is not published for this storefront field." });
+        }
+    }
     for (const [target, referenced] of references) {
         const missing = await missingReferences(db, target, [...referenced.keys()]);
         for (const id of missing) {

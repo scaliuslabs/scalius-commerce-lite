@@ -120,6 +120,8 @@ function sectionMediaReferences(section: StorefrontSection, at: string): Storefr
       ];
     case "banner":
     case "lookbook":
+    case "deal-block":
+    case "newsletter":
       return ref("mediaId", section.settings.mediaId);
     case "editorial":
       return section.settings.layout === "image-with-text" ? ref("mediaId", section.settings.mediaId) : [];
@@ -171,6 +173,8 @@ function sectionWithoutMedia(section: StorefrontSection, missing: ReadonlySet<st
     }
     case "banner":
     case "lookbook":
+    case "deal-block":
+    case "newsletter":
       return gone(section.settings.mediaId) ? { ...section, settings: { ...section.settings, mediaId: null } } as StorefrontSection : section;
     case "editorial":
       return section.settings.layout === "image-with-text" && gone(section.settings.mediaId)

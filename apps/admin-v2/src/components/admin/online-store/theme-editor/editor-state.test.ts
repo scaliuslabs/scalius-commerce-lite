@@ -209,6 +209,22 @@ describe("blocks", () => {
     expect(duplicateBlock(faq, "items", 5)).toBeNull();
   });
 
+  it("moves, removes and duplicates indexed section sources with their blocks", () => {
+    const sourceA = { source: "resource.title" };
+    const sourceB = { source: "resource.description" };
+    const bound = { ...section("faq", "bound", { items: [{ question: "A?", answer: "a" }, { question: "B?", answer: "b" }] }),
+      bindings: { "items.0.question": sourceA, "items.1.answer": sourceB, title: sourceA } } as StorefrontSection;
+    expect(moveBlock(bound, "items", 0, 1).bindings).toEqual({ "items.1.question": sourceA, "items.0.answer": sourceB, title: sourceA });
+    expect(removeBlock(bound, "items", 0).bindings).toEqual({ "items.0.answer": sourceB, title: sourceA });
+    const copy = duplicateBlock(bound, "items", 0)!;
+    expect(copy.bindings).toEqual({ "items.0.question": sourceA, "items.1.question": sourceA, "items.2.answer": sourceB, title: sourceA });
+    expect(blockList(copy, "items")).toHaveLength(3);
+    expect(moveBlock(bound, "items", 0, 9)).toBe(bound);
+    expect(removeBlock(bound, "items", -1)).toBe(bound);
+    const full = { ...bound, bindings: Object.fromEntries(Array.from({ length: 20 }, (_, index) => [`items.0.field${index}`, sourceA])) };
+    expect(duplicateBlock(full, "items", 0)).toBeNull();
+  });
+
   it("stops at a list's maximum and keeps its minimum", () => {
     const full = section("faq", "faq", { items: Array.from({ length: 20 }, (_, index) => ({ question: `Q${index}?`, answer: "a" })) });
     expect(addBlock(full, "items")).toBeNull();

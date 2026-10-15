@@ -51,8 +51,8 @@ import { Route as AdminInboxIndexRouteImport } from './routes/admin/inbox/index'
 import { Route as AdminInboxConversationIdRouteImport } from './routes/admin/inbox/$conversationId'
 import { Route as AdminInventoryIndexRouteImport } from './routes/admin/inventory/index'
 import { Route as AdminInventoryLabelsRouteImport } from './routes/admin/inventory/labels'
-import { Route as AdminMetaobjectsIndexRouteImport } from './routes/admin/metaobjects/index'
-import { Route as AdminMetaobjectsNewRouteImport } from './routes/admin/metaobjects/new'
+import { Route as AdminObjectsIndexRouteImport } from './routes/admin/objects/index'
+import { Route as AdminObjectsNewRouteImport } from './routes/admin/objects/new'
 import { Route as AdminOnlineStoreIndexRouteImport } from './routes/admin/online-store/index'
 import { Route as AdminOnlineStorePreferencesRouteImport } from './routes/admin/online-store/preferences'
 import { Route as AdminOnlineStoreThemeRouteImport } from './routes/admin/online-store/theme'
@@ -100,8 +100,8 @@ import { Route as AdminInventoryPurchaseOrdersNewRouteImport } from './routes/ad
 import { Route as AdminInventorySuppliersIndexRouteImport } from './routes/admin/inventory/suppliers/index'
 import { Route as AdminInventoryTransfersIndexRouteImport } from './routes/admin/inventory/transfers/index'
 import { Route as AdminInventoryTransfersNewRouteImport } from './routes/admin/inventory/transfers/new'
-import { Route as AdminMetaobjectsDefinitionIdIndexRouteImport } from './routes/admin/metaobjects/$definitionId/index'
-import { Route as AdminMetaobjectsDefinitionIdSettingsRouteImport } from './routes/admin/metaobjects/$definitionId/settings'
+import { Route as AdminObjectsTypeIndexRouteImport } from './routes/admin/objects/$type/index'
+import { Route as AdminObjectsTypeSettingsRouteImport } from './routes/admin/objects/$type/settings'
 import { Route as AdminOnlineStoreNavigationIndexRouteImport } from './routes/admin/online-store/navigation/index'
 import { Route as AdminOnlineStoreNavigationMenuIdRouteImport } from './routes/admin/online-store/navigation/$menuId'
 import { Route as AdminOnlineStoreThemeEditorRouteImport } from './routes/admin/online-store/theme_.editor'
@@ -121,8 +121,8 @@ import { Route as AdminInventoryPurchaseOrdersPurchaseOrderIdIndexRouteImport } 
 import { Route as AdminInventoryPurchaseOrdersPurchaseOrderIdReceiveRouteImport } from './routes/admin/inventory/purchase-orders/$purchaseOrderId/receive'
 import { Route as AdminInventoryTransfersTransferIdIndexRouteImport } from './routes/admin/inventory/transfers/$transferId/index'
 import { Route as AdminInventoryTransfersTransferIdReceiveRouteImport } from './routes/admin/inventory/transfers/$transferId/receive'
-import { Route as AdminMetaobjectsDefinitionIdEntriesEntryIdRouteImport } from './routes/admin/metaobjects/$definitionId/entries/$entryId'
-import { Route as AdminMetaobjectsDefinitionIdEntriesNewRouteImport } from './routes/admin/metaobjects/$definitionId/entries/new'
+import { Route as AdminObjectsTypeRecordsRecordIdRouteImport } from './routes/admin/objects/$type/records/$recordId'
+import { Route as AdminObjectsTypeRecordsNewRouteImport } from './routes/admin/objects/$type/records/new'
 import { Route as AdminOrdersListAbandonedCheckoutIdRouteImport } from './routes/admin/orders/_list/abandoned.$checkoutId'
 import { Route as AdminSettingsAgentAccessAuthorizeRequestIdRouteImport } from './routes/admin/settings/agent-access.authorize.$requestId'
 import { Route as AdminSettingsAgentAccessContinueHandoffIdRouteImport } from './routes/admin/settings/agent-access.continue.$handoffId'
@@ -341,14 +341,14 @@ const AdminInventoryLabelsRoute = AdminInventoryLabelsRouteImport.update({
   path: '/inventory/labels',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminMetaobjectsIndexRoute = AdminMetaobjectsIndexRouteImport.update({
-  id: '/metaobjects/',
-  path: '/metaobjects/',
+const AdminObjectsIndexRoute = AdminObjectsIndexRouteImport.update({
+  id: '/objects/',
+  path: '/objects/',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminMetaobjectsNewRoute = AdminMetaobjectsNewRouteImport.update({
-  id: '/metaobjects/new',
-  path: '/metaobjects/new',
+const AdminObjectsNewRoute = AdminObjectsNewRouteImport.update({
+  id: '/objects/new',
+  path: '/objects/new',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminOnlineStoreIndexRoute = AdminOnlineStoreIndexRouteImport.update({
@@ -607,16 +607,15 @@ const AdminInventoryTransfersNewRoute =
     path: '/inventory/transfers/new',
     getParentRoute: () => AdminRoute,
   } as any)
-const AdminMetaobjectsDefinitionIdIndexRoute =
-  AdminMetaobjectsDefinitionIdIndexRouteImport.update({
-    id: '/metaobjects/$definitionId/',
-    path: '/metaobjects/$definitionId/',
-    getParentRoute: () => AdminRoute,
-  } as any)
-const AdminMetaobjectsDefinitionIdSettingsRoute =
-  AdminMetaobjectsDefinitionIdSettingsRouteImport.update({
-    id: '/metaobjects/$definitionId/settings',
-    path: '/metaobjects/$definitionId/settings',
+const AdminObjectsTypeIndexRoute = AdminObjectsTypeIndexRouteImport.update({
+  id: '/objects/$type/',
+  path: '/objects/$type/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminObjectsTypeSettingsRoute =
+  AdminObjectsTypeSettingsRouteImport.update({
+    id: '/objects/$type/settings',
+    path: '/objects/$type/settings',
     getParentRoute: () => AdminRoute,
   } as any)
 const AdminOnlineStoreNavigationIndexRoute =
@@ -729,16 +728,16 @@ const AdminInventoryTransfersTransferIdReceiveRoute =
     path: '/inventory/transfers/$transferId/receive',
     getParentRoute: () => AdminRoute,
   } as any)
-const AdminMetaobjectsDefinitionIdEntriesEntryIdRoute =
-  AdminMetaobjectsDefinitionIdEntriesEntryIdRouteImport.update({
-    id: '/metaobjects/$definitionId/entries/$entryId',
-    path: '/metaobjects/$definitionId/entries/$entryId',
+const AdminObjectsTypeRecordsRecordIdRoute =
+  AdminObjectsTypeRecordsRecordIdRouteImport.update({
+    id: '/objects/$type/records/$recordId',
+    path: '/objects/$type/records/$recordId',
     getParentRoute: () => AdminRoute,
   } as any)
-const AdminMetaobjectsDefinitionIdEntriesNewRoute =
-  AdminMetaobjectsDefinitionIdEntriesNewRouteImport.update({
-    id: '/metaobjects/$definitionId/entries/new',
-    path: '/metaobjects/$definitionId/entries/new',
+const AdminObjectsTypeRecordsNewRoute =
+  AdminObjectsTypeRecordsNewRouteImport.update({
+    id: '/objects/$type/records/new',
+    path: '/objects/$type/records/new',
     getParentRoute: () => AdminRoute,
   } as any)
 const AdminOrdersListAbandonedCheckoutIdRoute =
@@ -798,7 +797,7 @@ export interface FileRoutesByFullPath {
   '/admin/gift-cards/$giftCardId': typeof AdminGiftCardsGiftCardIdRoute
   '/admin/inbox/$conversationId': typeof AdminInboxConversationIdRoute
   '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
-  '/admin/metaobjects/new': typeof AdminMetaobjectsNewRoute
+  '/admin/objects/new': typeof AdminObjectsNewRoute
   '/admin/online-store/preferences': typeof AdminOnlineStorePreferencesRoute
   '/admin/online-store/theme': typeof AdminOnlineStoreThemeRoute
   '/admin/orders': typeof AdminOrdersListRouteWithChildren
@@ -835,7 +834,7 @@ export interface FileRoutesByFullPath {
   '/admin/gift-cards/': typeof AdminGiftCardsIndexRoute
   '/admin/inbox/': typeof AdminInboxIndexRoute
   '/admin/inventory/': typeof AdminInventoryIndexRoute
-  '/admin/metaobjects/': typeof AdminMetaobjectsIndexRoute
+  '/admin/objects/': typeof AdminObjectsIndexRoute
   '/admin/online-store/': typeof AdminOnlineStoreIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/price-lists/': typeof AdminPriceListsIndexRoute
@@ -853,7 +852,7 @@ export interface FileRoutesByFullPath {
   '/admin/customers/segments/new': typeof AdminCustomersSegmentsNewRoute
   '/admin/inventory/purchase-orders/new': typeof AdminInventoryPurchaseOrdersNewRoute
   '/admin/inventory/transfers/new': typeof AdminInventoryTransfersNewRoute
-  '/admin/metaobjects/$definitionId/settings': typeof AdminMetaobjectsDefinitionIdSettingsRoute
+  '/admin/objects/$type/settings': typeof AdminObjectsTypeSettingsRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
   '/admin/online-store/theme/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
@@ -870,15 +869,15 @@ export interface FileRoutesByFullPath {
   '/admin/inventory/purchase-orders/': typeof AdminInventoryPurchaseOrdersIndexRoute
   '/admin/inventory/suppliers/': typeof AdminInventorySuppliersIndexRoute
   '/admin/inventory/transfers/': typeof AdminInventoryTransfersIndexRoute
-  '/admin/metaobjects/$definitionId/': typeof AdminMetaobjectsDefinitionIdIndexRoute
+  '/admin/objects/$type/': typeof AdminObjectsTypeIndexRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders/': typeof AdminOrdersListIndexRoute
   '/admin/apps/$pluginId/pages/$pageId': typeof AdminAppsPluginIdPagesPageIdRoute
   '/admin/inventory/purchase-orders/$purchaseOrderId/receive': typeof AdminInventoryPurchaseOrdersPurchaseOrderIdReceiveRoute
   '/admin/inventory/transfers/$transferId/receive': typeof AdminInventoryTransfersTransferIdReceiveRoute
-  '/admin/metaobjects/$definitionId/entries/$entryId': typeof AdminMetaobjectsDefinitionIdEntriesEntryIdRoute
-  '/admin/metaobjects/$definitionId/entries/new': typeof AdminMetaobjectsDefinitionIdEntriesNewRoute
+  '/admin/objects/$type/records/$recordId': typeof AdminObjectsTypeRecordsRecordIdRoute
+  '/admin/objects/$type/records/new': typeof AdminObjectsTypeRecordsNewRoute
   '/admin/orders/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
@@ -916,7 +915,7 @@ export interface FileRoutesByTo {
   '/admin/gift-cards/$giftCardId': typeof AdminGiftCardsGiftCardIdRoute
   '/admin/inbox/$conversationId': typeof AdminInboxConversationIdRoute
   '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
-  '/admin/metaobjects/new': typeof AdminMetaobjectsNewRoute
+  '/admin/objects/new': typeof AdminObjectsNewRoute
   '/admin/online-store/preferences': typeof AdminOnlineStorePreferencesRoute
   '/admin/online-store/theme': typeof AdminOnlineStoreThemeRoute
   '/admin/orders/new': typeof AdminOrdersNewRoute
@@ -952,7 +951,7 @@ export interface FileRoutesByTo {
   '/admin/gift-cards': typeof AdminGiftCardsIndexRoute
   '/admin/inbox': typeof AdminInboxIndexRoute
   '/admin/inventory': typeof AdminInventoryIndexRoute
-  '/admin/metaobjects': typeof AdminMetaobjectsIndexRoute
+  '/admin/objects': typeof AdminObjectsIndexRoute
   '/admin/online-store': typeof AdminOnlineStoreIndexRoute
   '/admin/pages': typeof AdminPagesIndexRoute
   '/admin/price-lists': typeof AdminPriceListsIndexRoute
@@ -970,7 +969,7 @@ export interface FileRoutesByTo {
   '/admin/customers/segments/new': typeof AdminCustomersSegmentsNewRoute
   '/admin/inventory/purchase-orders/new': typeof AdminInventoryPurchaseOrdersNewRoute
   '/admin/inventory/transfers/new': typeof AdminInventoryTransfersNewRoute
-  '/admin/metaobjects/$definitionId/settings': typeof AdminMetaobjectsDefinitionIdSettingsRoute
+  '/admin/objects/$type/settings': typeof AdminObjectsTypeSettingsRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
   '/admin/online-store/theme/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
@@ -987,15 +986,15 @@ export interface FileRoutesByTo {
   '/admin/inventory/purchase-orders': typeof AdminInventoryPurchaseOrdersIndexRoute
   '/admin/inventory/suppliers': typeof AdminInventorySuppliersIndexRoute
   '/admin/inventory/transfers': typeof AdminInventoryTransfersIndexRoute
-  '/admin/metaobjects/$definitionId': typeof AdminMetaobjectsDefinitionIdIndexRoute
+  '/admin/objects/$type': typeof AdminObjectsTypeIndexRoute
   '/admin/online-store/navigation': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders': typeof AdminOrdersListIndexRoute
   '/admin/apps/$pluginId/pages/$pageId': typeof AdminAppsPluginIdPagesPageIdRoute
   '/admin/inventory/purchase-orders/$purchaseOrderId/receive': typeof AdminInventoryPurchaseOrdersPurchaseOrderIdReceiveRoute
   '/admin/inventory/transfers/$transferId/receive': typeof AdminInventoryTransfersTransferIdReceiveRoute
-  '/admin/metaobjects/$definitionId/entries/$entryId': typeof AdminMetaobjectsDefinitionIdEntriesEntryIdRoute
-  '/admin/metaobjects/$definitionId/entries/new': typeof AdminMetaobjectsDefinitionIdEntriesNewRoute
+  '/admin/objects/$type/records/$recordId': typeof AdminObjectsTypeRecordsRecordIdRoute
+  '/admin/objects/$type/records/new': typeof AdminObjectsTypeRecordsNewRoute
   '/admin/orders/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
@@ -1036,7 +1035,7 @@ export interface FileRoutesById {
   '/admin/gift-cards/$giftCardId': typeof AdminGiftCardsGiftCardIdRoute
   '/admin/inbox/$conversationId': typeof AdminInboxConversationIdRoute
   '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
-  '/admin/metaobjects/new': typeof AdminMetaobjectsNewRoute
+  '/admin/objects/new': typeof AdminObjectsNewRoute
   '/admin/online-store/preferences': typeof AdminOnlineStorePreferencesRoute
   '/admin/online-store/theme': typeof AdminOnlineStoreThemeRoute
   '/admin/orders/_list': typeof AdminOrdersListRouteWithChildren
@@ -1073,7 +1072,7 @@ export interface FileRoutesById {
   '/admin/gift-cards/': typeof AdminGiftCardsIndexRoute
   '/admin/inbox/': typeof AdminInboxIndexRoute
   '/admin/inventory/': typeof AdminInventoryIndexRoute
-  '/admin/metaobjects/': typeof AdminMetaobjectsIndexRoute
+  '/admin/objects/': typeof AdminObjectsIndexRoute
   '/admin/online-store/': typeof AdminOnlineStoreIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/price-lists/': typeof AdminPriceListsIndexRoute
@@ -1091,7 +1090,7 @@ export interface FileRoutesById {
   '/admin/customers/segments/new': typeof AdminCustomersSegmentsNewRoute
   '/admin/inventory/purchase-orders/new': typeof AdminInventoryPurchaseOrdersNewRoute
   '/admin/inventory/transfers/new': typeof AdminInventoryTransfersNewRoute
-  '/admin/metaobjects/$definitionId/settings': typeof AdminMetaobjectsDefinitionIdSettingsRoute
+  '/admin/objects/$type/settings': typeof AdminObjectsTypeSettingsRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
   '/admin/online-store/theme_/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
@@ -1108,15 +1107,15 @@ export interface FileRoutesById {
   '/admin/inventory/purchase-orders/': typeof AdminInventoryPurchaseOrdersIndexRoute
   '/admin/inventory/suppliers/': typeof AdminInventorySuppliersIndexRoute
   '/admin/inventory/transfers/': typeof AdminInventoryTransfersIndexRoute
-  '/admin/metaobjects/$definitionId/': typeof AdminMetaobjectsDefinitionIdIndexRoute
+  '/admin/objects/$type/': typeof AdminObjectsTypeIndexRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders/_list/': typeof AdminOrdersListIndexRoute
   '/admin/apps/$pluginId_/pages/$pageId': typeof AdminAppsPluginIdPagesPageIdRoute
   '/admin/inventory/purchase-orders/$purchaseOrderId/receive': typeof AdminInventoryPurchaseOrdersPurchaseOrderIdReceiveRoute
   '/admin/inventory/transfers/$transferId/receive': typeof AdminInventoryTransfersTransferIdReceiveRoute
-  '/admin/metaobjects/$definitionId/entries/$entryId': typeof AdminMetaobjectsDefinitionIdEntriesEntryIdRoute
-  '/admin/metaobjects/$definitionId/entries/new': typeof AdminMetaobjectsDefinitionIdEntriesNewRoute
+  '/admin/objects/$type/records/$recordId': typeof AdminObjectsTypeRecordsRecordIdRoute
+  '/admin/objects/$type/records/new': typeof AdminObjectsTypeRecordsNewRoute
   '/admin/orders/_list/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
@@ -1158,7 +1157,7 @@ export interface FileRouteTypes {
     | '/admin/gift-cards/$giftCardId'
     | '/admin/inbox/$conversationId'
     | '/admin/inventory/labels'
-    | '/admin/metaobjects/new'
+    | '/admin/objects/new'
     | '/admin/online-store/preferences'
     | '/admin/online-store/theme'
     | '/admin/orders'
@@ -1195,7 +1194,7 @@ export interface FileRouteTypes {
     | '/admin/gift-cards/'
     | '/admin/inbox/'
     | '/admin/inventory/'
-    | '/admin/metaobjects/'
+    | '/admin/objects/'
     | '/admin/online-store/'
     | '/admin/pages/'
     | '/admin/price-lists/'
@@ -1213,7 +1212,7 @@ export interface FileRouteTypes {
     | '/admin/customers/segments/new'
     | '/admin/inventory/purchase-orders/new'
     | '/admin/inventory/transfers/new'
-    | '/admin/metaobjects/$definitionId/settings'
+    | '/admin/objects/$type/settings'
     | '/admin/online-store/navigation/$menuId'
     | '/admin/online-store/theme/editor'
     | '/admin/orders/$orderId/edit'
@@ -1230,15 +1229,15 @@ export interface FileRouteTypes {
     | '/admin/inventory/purchase-orders/'
     | '/admin/inventory/suppliers/'
     | '/admin/inventory/transfers/'
-    | '/admin/metaobjects/$definitionId/'
+    | '/admin/objects/$type/'
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
     | '/admin/orders/'
     | '/admin/apps/$pluginId/pages/$pageId'
     | '/admin/inventory/purchase-orders/$purchaseOrderId/receive'
     | '/admin/inventory/transfers/$transferId/receive'
-    | '/admin/metaobjects/$definitionId/entries/$entryId'
-    | '/admin/metaobjects/$definitionId/entries/new'
+    | '/admin/objects/$type/records/$recordId'
+    | '/admin/objects/$type/records/new'
     | '/admin/orders/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
@@ -1276,7 +1275,7 @@ export interface FileRouteTypes {
     | '/admin/gift-cards/$giftCardId'
     | '/admin/inbox/$conversationId'
     | '/admin/inventory/labels'
-    | '/admin/metaobjects/new'
+    | '/admin/objects/new'
     | '/admin/online-store/preferences'
     | '/admin/online-store/theme'
     | '/admin/orders/new'
@@ -1312,7 +1311,7 @@ export interface FileRouteTypes {
     | '/admin/gift-cards'
     | '/admin/inbox'
     | '/admin/inventory'
-    | '/admin/metaobjects'
+    | '/admin/objects'
     | '/admin/online-store'
     | '/admin/pages'
     | '/admin/price-lists'
@@ -1330,7 +1329,7 @@ export interface FileRouteTypes {
     | '/admin/customers/segments/new'
     | '/admin/inventory/purchase-orders/new'
     | '/admin/inventory/transfers/new'
-    | '/admin/metaobjects/$definitionId/settings'
+    | '/admin/objects/$type/settings'
     | '/admin/online-store/navigation/$menuId'
     | '/admin/online-store/theme/editor'
     | '/admin/orders/$orderId/edit'
@@ -1347,15 +1346,15 @@ export interface FileRouteTypes {
     | '/admin/inventory/purchase-orders'
     | '/admin/inventory/suppliers'
     | '/admin/inventory/transfers'
-    | '/admin/metaobjects/$definitionId'
+    | '/admin/objects/$type'
     | '/admin/online-store/navigation'
     | '/admin/orders/$orderId'
     | '/admin/orders'
     | '/admin/apps/$pluginId/pages/$pageId'
     | '/admin/inventory/purchase-orders/$purchaseOrderId/receive'
     | '/admin/inventory/transfers/$transferId/receive'
-    | '/admin/metaobjects/$definitionId/entries/$entryId'
-    | '/admin/metaobjects/$definitionId/entries/new'
+    | '/admin/objects/$type/records/$recordId'
+    | '/admin/objects/$type/records/new'
     | '/admin/orders/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
@@ -1395,7 +1394,7 @@ export interface FileRouteTypes {
     | '/admin/gift-cards/$giftCardId'
     | '/admin/inbox/$conversationId'
     | '/admin/inventory/labels'
-    | '/admin/metaobjects/new'
+    | '/admin/objects/new'
     | '/admin/online-store/preferences'
     | '/admin/online-store/theme'
     | '/admin/orders/_list'
@@ -1432,7 +1431,7 @@ export interface FileRouteTypes {
     | '/admin/gift-cards/'
     | '/admin/inbox/'
     | '/admin/inventory/'
-    | '/admin/metaobjects/'
+    | '/admin/objects/'
     | '/admin/online-store/'
     | '/admin/pages/'
     | '/admin/price-lists/'
@@ -1450,7 +1449,7 @@ export interface FileRouteTypes {
     | '/admin/customers/segments/new'
     | '/admin/inventory/purchase-orders/new'
     | '/admin/inventory/transfers/new'
-    | '/admin/metaobjects/$definitionId/settings'
+    | '/admin/objects/$type/settings'
     | '/admin/online-store/navigation/$menuId'
     | '/admin/online-store/theme_/editor'
     | '/admin/orders/$orderId/edit'
@@ -1467,15 +1466,15 @@ export interface FileRouteTypes {
     | '/admin/inventory/purchase-orders/'
     | '/admin/inventory/suppliers/'
     | '/admin/inventory/transfers/'
-    | '/admin/metaobjects/$definitionId/'
+    | '/admin/objects/$type/'
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
     | '/admin/orders/_list/'
     | '/admin/apps/$pluginId_/pages/$pageId'
     | '/admin/inventory/purchase-orders/$purchaseOrderId/receive'
     | '/admin/inventory/transfers/$transferId/receive'
-    | '/admin/metaobjects/$definitionId/entries/$entryId'
-    | '/admin/metaobjects/$definitionId/entries/new'
+    | '/admin/objects/$type/records/$recordId'
+    | '/admin/objects/$type/records/new'
     | '/admin/orders/_list/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
@@ -1790,18 +1789,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminInventoryLabelsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/metaobjects/': {
-      id: '/admin/metaobjects/'
-      path: '/metaobjects'
-      fullPath: '/admin/metaobjects/'
-      preLoaderRoute: typeof AdminMetaobjectsIndexRouteImport
+    '/admin/objects/': {
+      id: '/admin/objects/'
+      path: '/objects'
+      fullPath: '/admin/objects/'
+      preLoaderRoute: typeof AdminObjectsIndexRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/metaobjects/new': {
-      id: '/admin/metaobjects/new'
-      path: '/metaobjects/new'
-      fullPath: '/admin/metaobjects/new'
-      preLoaderRoute: typeof AdminMetaobjectsNewRouteImport
+    '/admin/objects/new': {
+      id: '/admin/objects/new'
+      path: '/objects/new'
+      fullPath: '/admin/objects/new'
+      preLoaderRoute: typeof AdminObjectsNewRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/online-store/': {
@@ -2133,18 +2132,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminInventoryTransfersNewRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/metaobjects/$definitionId/': {
-      id: '/admin/metaobjects/$definitionId/'
-      path: '/metaobjects/$definitionId'
-      fullPath: '/admin/metaobjects/$definitionId/'
-      preLoaderRoute: typeof AdminMetaobjectsDefinitionIdIndexRouteImport
+    '/admin/objects/$type/': {
+      id: '/admin/objects/$type/'
+      path: '/objects/$type'
+      fullPath: '/admin/objects/$type/'
+      preLoaderRoute: typeof AdminObjectsTypeIndexRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/metaobjects/$definitionId/settings': {
-      id: '/admin/metaobjects/$definitionId/settings'
-      path: '/metaobjects/$definitionId/settings'
-      fullPath: '/admin/metaobjects/$definitionId/settings'
-      preLoaderRoute: typeof AdminMetaobjectsDefinitionIdSettingsRouteImport
+    '/admin/objects/$type/settings': {
+      id: '/admin/objects/$type/settings'
+      path: '/objects/$type/settings'
+      fullPath: '/admin/objects/$type/settings'
+      preLoaderRoute: typeof AdminObjectsTypeSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/online-store/navigation/': {
@@ -2280,18 +2279,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminInventoryTransfersTransferIdReceiveRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/metaobjects/$definitionId/entries/$entryId': {
-      id: '/admin/metaobjects/$definitionId/entries/$entryId'
-      path: '/metaobjects/$definitionId/entries/$entryId'
-      fullPath: '/admin/metaobjects/$definitionId/entries/$entryId'
-      preLoaderRoute: typeof AdminMetaobjectsDefinitionIdEntriesEntryIdRouteImport
+    '/admin/objects/$type/records/$recordId': {
+      id: '/admin/objects/$type/records/$recordId'
+      path: '/objects/$type/records/$recordId'
+      fullPath: '/admin/objects/$type/records/$recordId'
+      preLoaderRoute: typeof AdminObjectsTypeRecordsRecordIdRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/metaobjects/$definitionId/entries/new': {
-      id: '/admin/metaobjects/$definitionId/entries/new'
-      path: '/metaobjects/$definitionId/entries/new'
-      fullPath: '/admin/metaobjects/$definitionId/entries/new'
-      preLoaderRoute: typeof AdminMetaobjectsDefinitionIdEntriesNewRouteImport
+    '/admin/objects/$type/records/new': {
+      id: '/admin/objects/$type/records/new'
+      path: '/objects/$type/records/new'
+      fullPath: '/admin/objects/$type/records/new'
+      preLoaderRoute: typeof AdminObjectsTypeRecordsNewRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/orders/_list/abandoned/$checkoutId': {
@@ -2438,7 +2437,7 @@ interface AdminRouteChildren {
   AdminGiftCardsGiftCardIdRoute: typeof AdminGiftCardsGiftCardIdRoute
   AdminInboxConversationIdRoute: typeof AdminInboxConversationIdRoute
   AdminInventoryLabelsRoute: typeof AdminInventoryLabelsRoute
-  AdminMetaobjectsNewRoute: typeof AdminMetaobjectsNewRoute
+  AdminObjectsNewRoute: typeof AdminObjectsNewRoute
   AdminOnlineStorePreferencesRoute: typeof AdminOnlineStorePreferencesRoute
   AdminOnlineStoreThemeRoute: typeof AdminOnlineStoreThemeRoute
   AdminOrdersListRoute: typeof AdminOrdersListRouteWithChildren
@@ -2457,7 +2456,7 @@ interface AdminRouteChildren {
   AdminGiftCardsIndexRoute: typeof AdminGiftCardsIndexRoute
   AdminInboxIndexRoute: typeof AdminInboxIndexRoute
   AdminInventoryIndexRoute: typeof AdminInventoryIndexRoute
-  AdminMetaobjectsIndexRoute: typeof AdminMetaobjectsIndexRoute
+  AdminObjectsIndexRoute: typeof AdminObjectsIndexRoute
   AdminOnlineStoreIndexRoute: typeof AdminOnlineStoreIndexRoute
   AdminPagesIndexRoute: typeof AdminPagesIndexRoute
   AdminPriceListsIndexRoute: typeof AdminPriceListsIndexRoute
@@ -2474,7 +2473,7 @@ interface AdminRouteChildren {
   AdminCustomersSegmentsNewRoute: typeof AdminCustomersSegmentsNewRoute
   AdminInventoryPurchaseOrdersNewRoute: typeof AdminInventoryPurchaseOrdersNewRoute
   AdminInventoryTransfersNewRoute: typeof AdminInventoryTransfersNewRoute
-  AdminMetaobjectsDefinitionIdSettingsRoute: typeof AdminMetaobjectsDefinitionIdSettingsRoute
+  AdminObjectsTypeSettingsRoute: typeof AdminObjectsTypeSettingsRoute
   AdminOnlineStoreNavigationMenuIdRoute: typeof AdminOnlineStoreNavigationMenuIdRoute
   AdminOnlineStoreThemeEditorRoute: typeof AdminOnlineStoreThemeEditorRoute
   AdminOrdersOrderIdEditRoute: typeof AdminOrdersOrderIdEditRoute
@@ -2485,14 +2484,14 @@ interface AdminRouteChildren {
   AdminInventoryPurchaseOrdersIndexRoute: typeof AdminInventoryPurchaseOrdersIndexRoute
   AdminInventorySuppliersIndexRoute: typeof AdminInventorySuppliersIndexRoute
   AdminInventoryTransfersIndexRoute: typeof AdminInventoryTransfersIndexRoute
-  AdminMetaobjectsDefinitionIdIndexRoute: typeof AdminMetaobjectsDefinitionIdIndexRoute
+  AdminObjectsTypeIndexRoute: typeof AdminObjectsTypeIndexRoute
   AdminOnlineStoreNavigationIndexRoute: typeof AdminOnlineStoreNavigationIndexRoute
   AdminOrdersOrderIdIndexRoute: typeof AdminOrdersOrderIdIndexRoute
   AdminAppsPluginIdPagesPageIdRoute: typeof AdminAppsPluginIdPagesPageIdRoute
   AdminInventoryPurchaseOrdersPurchaseOrderIdReceiveRoute: typeof AdminInventoryPurchaseOrdersPurchaseOrderIdReceiveRoute
   AdminInventoryTransfersTransferIdReceiveRoute: typeof AdminInventoryTransfersTransferIdReceiveRoute
-  AdminMetaobjectsDefinitionIdEntriesEntryIdRoute: typeof AdminMetaobjectsDefinitionIdEntriesEntryIdRoute
-  AdminMetaobjectsDefinitionIdEntriesNewRoute: typeof AdminMetaobjectsDefinitionIdEntriesNewRoute
+  AdminObjectsTypeRecordsRecordIdRoute: typeof AdminObjectsTypeRecordsRecordIdRoute
+  AdminObjectsTypeRecordsNewRoute: typeof AdminObjectsTypeRecordsNewRoute
   AdminInventoryPurchaseOrdersPurchaseOrderIdIndexRoute: typeof AdminInventoryPurchaseOrdersPurchaseOrderIdIndexRoute
   AdminInventoryTransfersTransferIdIndexRoute: typeof AdminInventoryTransfersTransferIdIndexRoute
 }
@@ -2516,7 +2515,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminGiftCardsGiftCardIdRoute: AdminGiftCardsGiftCardIdRoute,
   AdminInboxConversationIdRoute: AdminInboxConversationIdRoute,
   AdminInventoryLabelsRoute: AdminInventoryLabelsRoute,
-  AdminMetaobjectsNewRoute: AdminMetaobjectsNewRoute,
+  AdminObjectsNewRoute: AdminObjectsNewRoute,
   AdminOnlineStorePreferencesRoute: AdminOnlineStorePreferencesRoute,
   AdminOnlineStoreThemeRoute: AdminOnlineStoreThemeRoute,
   AdminOrdersListRoute: AdminOrdersListRouteWithChildren,
@@ -2535,7 +2534,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminGiftCardsIndexRoute: AdminGiftCardsIndexRoute,
   AdminInboxIndexRoute: AdminInboxIndexRoute,
   AdminInventoryIndexRoute: AdminInventoryIndexRoute,
-  AdminMetaobjectsIndexRoute: AdminMetaobjectsIndexRoute,
+  AdminObjectsIndexRoute: AdminObjectsIndexRoute,
   AdminOnlineStoreIndexRoute: AdminOnlineStoreIndexRoute,
   AdminPagesIndexRoute: AdminPagesIndexRoute,
   AdminPriceListsIndexRoute: AdminPriceListsIndexRoute,
@@ -2552,8 +2551,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCustomersSegmentsNewRoute: AdminCustomersSegmentsNewRoute,
   AdminInventoryPurchaseOrdersNewRoute: AdminInventoryPurchaseOrdersNewRoute,
   AdminInventoryTransfersNewRoute: AdminInventoryTransfersNewRoute,
-  AdminMetaobjectsDefinitionIdSettingsRoute:
-    AdminMetaobjectsDefinitionIdSettingsRoute,
+  AdminObjectsTypeSettingsRoute: AdminObjectsTypeSettingsRoute,
   AdminOnlineStoreNavigationMenuIdRoute: AdminOnlineStoreNavigationMenuIdRoute,
   AdminOnlineStoreThemeEditorRoute: AdminOnlineStoreThemeEditorRoute,
   AdminOrdersOrderIdEditRoute: AdminOrdersOrderIdEditRoute,
@@ -2565,8 +2563,7 @@ const AdminRouteChildren: AdminRouteChildren = {
     AdminInventoryPurchaseOrdersIndexRoute,
   AdminInventorySuppliersIndexRoute: AdminInventorySuppliersIndexRoute,
   AdminInventoryTransfersIndexRoute: AdminInventoryTransfersIndexRoute,
-  AdminMetaobjectsDefinitionIdIndexRoute:
-    AdminMetaobjectsDefinitionIdIndexRoute,
+  AdminObjectsTypeIndexRoute: AdminObjectsTypeIndexRoute,
   AdminOnlineStoreNavigationIndexRoute: AdminOnlineStoreNavigationIndexRoute,
   AdminOrdersOrderIdIndexRoute: AdminOrdersOrderIdIndexRoute,
   AdminAppsPluginIdPagesPageIdRoute: AdminAppsPluginIdPagesPageIdRoute,
@@ -2574,10 +2571,8 @@ const AdminRouteChildren: AdminRouteChildren = {
     AdminInventoryPurchaseOrdersPurchaseOrderIdReceiveRoute,
   AdminInventoryTransfersTransferIdReceiveRoute:
     AdminInventoryTransfersTransferIdReceiveRoute,
-  AdminMetaobjectsDefinitionIdEntriesEntryIdRoute:
-    AdminMetaobjectsDefinitionIdEntriesEntryIdRoute,
-  AdminMetaobjectsDefinitionIdEntriesNewRoute:
-    AdminMetaobjectsDefinitionIdEntriesNewRoute,
+  AdminObjectsTypeRecordsRecordIdRoute: AdminObjectsTypeRecordsRecordIdRoute,
+  AdminObjectsTypeRecordsNewRoute: AdminObjectsTypeRecordsNewRoute,
   AdminInventoryPurchaseOrdersPurchaseOrderIdIndexRoute:
     AdminInventoryPurchaseOrdersPurchaseOrderIdIndexRoute,
   AdminInventoryTransfersTransferIdIndexRoute:

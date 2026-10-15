@@ -11,7 +11,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { safeBatch } from "@scalius/database/client";
-import { pluginInstallations, pluginKv, pluginMigrations, pluginRecords, salesChannels } from "@scalius/database/schema";
+import { objectRecords, objectTypes, pluginInstallations, pluginKv, pluginMigrations, salesChannels } from "@scalius/database/schema";
 import { FIRST_PARTY_PLUGIN_VENDOR } from "@scalius/shared/plugins";
 import { and, asc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { writePluginLogs } from "./logs";
@@ -183,8 +183,9 @@ export async function listPluginMigrations(db: Database, pluginId: string): Prom
  */
 export async function measurePluginStorage(db: Database, pluginId: string): Promise<number> {
   const [records, kv] = await Promise.all([
-    db.select({ bytes: sql<number>`COALESCE(SUM(length(${pluginRecords.dataJson}) + length(${pluginRecords.id})), 0)` })
-      .from(pluginRecords).where(eq(pluginRecords.pluginId, pluginId)).get(),
+    db.select({ bytes: sql<number>`COALESCE(SUM(length(${objectRecords.dataJson}) + length(${objectRecords.id})), 0)` })
+      .from(objectRecords).innerJoin(objectTypes, eq(objectRecords.typeId, objectTypes.id))
+      .where(eq(objectTypes.namespace, pluginId)).get(),
     db.select({ bytes: sql<number>`COALESCE(SUM(length(${pluginKv.valueJson}) + length(${pluginKv.key})), 0)` })
       .from(pluginKv).where(eq(pluginKv.pluginId, pluginId)).get(),
   ]);
@@ -202,7 +203,7 @@ export async function measurePluginStorage(db: Database, pluginId: string): Prom
  */
 export function measureDuePluginStorageStatement(db: Database, nowSeconds = Math.floor(Date.now() / 1000)) {
   return db.update(pluginInstallations).set({
-    storageBytes: sql`(SELECT COALESCE(SUM(length(r.data_json) + length(r.id)), 0) FROM ${pluginRecords} AS r WHERE r.plugin_id = ${pluginInstallations.pluginId})
+    storageBytes: sql`(SELECT COALESCE(SUM(length(r.data_json) + length(r.id)), 0) FROM ${objectRecords} AS r JOIN ${objectTypes} AS t ON t.id = r.type_id WHERE t.namespace = ${pluginInstallations.pluginId})
       + (SELECT COALESCE(SUM(length(k.value_json) + length(k.key)), 0) FROM ${pluginKv} AS k WHERE k.plugin_id = ${pluginInstallations.pluginId})`,
     storageMeasuredAt: nowSeconds,
   }).where(or(isNull(pluginInstallations.storageMeasuredAt), lt(pluginInstallations.storageMeasuredAt, nowSeconds - PLUGIN_STORAGE_MEASURE_INTERVAL_SECONDS))).returning({ pluginId: pluginInstallations.pluginId, bytes: pluginInstallations.storageBytes });

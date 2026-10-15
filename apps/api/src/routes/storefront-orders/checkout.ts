@@ -1,3 +1,4 @@
+import { checkoutAttributesSchema, readCheckoutAttributes } from "@scalius/shared/plugins";
 // Checkout: the idempotent storefront order commit.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
@@ -8,6 +9,8 @@ import { assertPhoneCountryAllowed, validateAndFormatPhone } from "@scalius/shar
 import { BD_MOBILE_REQUIRED_MESSAGE } from "@scalius/shared/phone-input";
 import { refineDeliveryLine } from "@scalius/core/modules/orders";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
+import { workerCacheHint } from "@scalius/shared/worker-cache-hint";
+import { requestCourierProviders } from "../../plugins/providers/courier";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { recordCheckoutMarketingConsent } from "@scalius/core/modules/customer-marketing";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -265,6 +268,7 @@ const createOrderSchema = z.object({
   zone: z.string().min(1, "Zone is required").nullable().optional(),
   area: z.string().nullable().optional(),
   ...billingAddressBodyShape,
+  attributes: checkoutAttributesSchema.optional(),
   notes: z
     .string()
     .max(500, "Notes must be less than 500 characters")
@@ -288,6 +292,7 @@ const createOrderSchema = z.object({
     .min(0, "Shipping charge must be greater than or equal to 0"),
   /** A delivery or pickup rate; required when a line is physical. */
   shippingMethodId: z.string().optional().nullable(),
+  shippingRateToken: z.string().min(1).max(2048).optional().nullable(),
   /**
    * `cod`, a gateway id (`stripe`, or an app provider's
    * `<plugin id>:<provider id>`), or `gift_card` only when the applied gift
@@ -465,6 +470,7 @@ app.openapi(createOrderRoute, async (c) => {
       getCustomerBySession(db, token, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>)));
     // What the apps' line prices and cart transforms see besides the cart.
     const appContext = {
+      attributes: data.attributes,
       channel: "online_store" as const,
       customerId: sessionCustomerId,
       destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
@@ -494,6 +500,14 @@ app.openapi(createOrderRoute, async (c) => {
         shippingAdminArea: data.shippingAdminArea,
         shippingPostalCode: data.shippingPostalCode,
         shippingMethodId: data.shippingMethodId,
+        shippingRateToken: data.shippingRateToken,
+        cod: data.paymentMethod === "cod",
+        calculatedRates: {
+          couriers: requestCourierProviders(c),
+          masterSecret: readMasterSecret(c.env) ?? undefined,
+          cache: workerCacheHint(c.env, "courier-rates", 600) ?? undefined,
+          credentialEncryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+        },
         customerEmail: data.customerEmail,
         customerPhone: data.customerPhone,
         // The order's market prices the lines (MARKETS-DESIGN D5); the
@@ -601,6 +615,7 @@ app.openapi(createOrderRoute, async (c) => {
       },
       createTrustedStorefrontCheckoutPolicySnapshot({
         partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
+        partialPaymentAmount: checkoutSettings.partialPaymentAmount,
         authorityRevision: checkoutAuthority.authorityRevision,
         orderCreatedNotificationEnabled:
           checkoutAuthority.sideEffects.orderCreatedNotification,
@@ -620,6 +635,7 @@ app.openapi(createOrderRoute, async (c) => {
         result.taxQuote,
         result.shippingMethod,
         result.linePropertiesHashes,
+        readCheckoutAttributes(result.commitPayload.orderData.attributes),
       ),
     );
     // An app may have hidden the chosen method for this cart; readiness and

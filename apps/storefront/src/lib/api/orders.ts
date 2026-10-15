@@ -4,6 +4,8 @@ import { apiFetch } from "./transport";
 import { getRuntimePresence } from "./runtime";
 import { isMarketSubfolder } from "@scalius/shared/markets";
 import { CUSTOMER_SESSION_ENDED_HEADER } from "@scalius/shared/customer-auth-policy";
+import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 import type { OrderLineProperty, OrderReceipt, CreateOrderPayload } from "./types";
 import type {
   DeliveryMethodKind,
@@ -117,6 +119,7 @@ export type CartValidationItem = {
 };
 
 export type CartValidationResult = {
+  buyerUi?: import("@scalius/shared/plugins/buyer-ui").BuyerUiBlock[];
   valid: boolean;
   issues: CartValidationIssue[];
   /**
@@ -156,6 +159,7 @@ export type CartValidationResult = {
 };
 
 export type CartValidationOptions = {
+  attributes?: Record<string, string>;
   inventoryPool?: "regular" | "preorder" | "backorder";
   /** Another country's delivery (absent: Bangladesh, with City/Thana/Area). */
   shippingCountryCode?: string | null;
@@ -166,6 +170,8 @@ export type CartValidationOptions = {
   shippingAdminArea?: string | null;
   shippingPostalCode?: string | null;
   shippingMethodId?: string | null;
+  shippingRateToken?: string | null;
+  cod?: boolean;
   /** The page's subfolder presence (`en-in`): before an address, its market prices the cart. */
   presence?: string | null;
 };
@@ -382,13 +388,19 @@ function cartPresence(presence: string | null | undefined): { presence?: string 
 export async function validateCartItems(
   items: CartValidationRequestItem[],
   options: CartValidationOptions = {},
+  customerSessionToken?: string | null,
+  buyerHeaders?: Headers,
 ): Promise<{ success: true; data: CartValidationResult } | { success: false; error: string; status?: number; details?: unknown }> {
   try {
     const response = await apiFetch(
       "/orders/cart-validation",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          ...await buyerUiLocaleHeaders(buyerHeaders),
+          "Content-Type": "application/json",
+          ...(customerSessionToken ? { "X-Customer-Session": customerSessionToken } : {}),
+        },
         // A presence page's market prices the cart (server renders know their presence).
         body: JSON.stringify({ items, ...options, ...cartPresence(options.presence) }),
         cache: "no-store",
@@ -453,7 +465,7 @@ export async function getAccountOwnerReceiptProof(
 export async function getOrderReceipt(
   orderId: string,
   receiptToken: string,
-): Promise<OrderReceipt | null> {
+): Promise<(OrderReceipt & { buyerUi?: BuyerUiBlock[] }) | null> {
   if (!orderId || !receiptToken) {
     console.error("getOrderReceipt: orderId and receiptToken are required.");
     return null;
@@ -462,7 +474,7 @@ export async function getOrderReceipt(
   const response = await apiFetch(
     `/orders/receipt/${encodeURIComponent(orderId)}`,
     {
-      headers: { "X-Receipt-Token": receiptToken },
+      headers: { "X-Receipt-Token": receiptToken, ...await buyerUiLocaleHeaders() },
       cache: "no-store",
     },
     { retries: 2, timeout: 5000, auth: false },
@@ -470,7 +482,7 @@ export async function getOrderReceipt(
   if (!response.ok) throw new OrderReceiptAccessError(response.status);
 
   const data = await response.json();
-  const receipt = unwrapData<{ order: OrderReceipt }>(data)?.order ?? null;
+  const receipt = unwrapData<{ order: OrderReceipt & { buyerUi?: BuyerUiBlock[] } }>(data)?.order ?? null;
   if (!receipt) throw new OrderReceiptAccessError(502);
   return receipt;
 }

@@ -124,6 +124,7 @@ export interface StorefrontCartItemIssue {
 }
 
 export interface StorefrontCartValidatedItem {
+    weightGrams?: number | null;
     index: number;
     cartKey?: string | null;
     productId: string;
@@ -236,6 +237,7 @@ export interface StorefrontCartProductRow {
 }
 
 export interface StorefrontCartVariantRow {
+    weight?: number | null;
     id: string;
     productId: string;
     optionCombinationKey: string | null;
@@ -421,6 +423,7 @@ export function selectStorefrontCartVariantRows(
     return db
         .select({
             id: productVariants.id,
+            weight: productVariants.weight,
             productId: productVariants.productId,
             optionCombinationKey: productVariants.optionCombinationKey,
             optionLabel: variantOptionLabelSql(productVariants.id),
@@ -797,6 +800,7 @@ export function resolveStorefrontCartValidationFromRows(
             isGiftCard,
             productName: product.name,
             variantLabel: requestedVariantLabel,
+            weightGrams: variant.weight ?? null,
             freeDelivery: product.freeDelivery,
             inventoryTracked: variant.trackInventory,
             availableQuantity: Number.isFinite(availableQuantity) ? availableQuantity : null,

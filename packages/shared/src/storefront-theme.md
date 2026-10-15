@@ -1,4 +1,4 @@
-# Storefront theme document (version 9)
+# Storefront theme document (version 10)
 
 One JSON document describes how the storefront looks: the template label, tokens, brand, one variant per block with its settings, the homepage sections, up to 20 landing pages, the sections of the product, listing, cart and CMS page templates and what `/` shows. The dashboard drafts, previews, publishes (atomically) and restores it. An agent can write it through the API, and installed apps add sections and product blocks. The storefront and the dashboard resolve it against the store with the same function. This file is the contract for contributors and coding agents.
 
@@ -10,7 +10,7 @@ Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@s
 
 ```jsonc
 {
-  "version": 8,                        // literal; a new shape means a new version
+  "version": 10,                       // literal; a new shape means a new version
   "template": "department-mall",       // the template it is based on: a label, never read for behaviour
   "tokens": {
     "colors": { "<19 keys>": "#rrggbb" },
@@ -72,6 +72,7 @@ Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@s
   - `action`: `none`, `quick-add` (a round add button on the photo for a product that needs no buyer input: no options, customization or gift card, in stock, a fixed positive price; a chevron hint for products with options) or `full` (a button under the price on every card: Add to cart, Choose options or View product). Simple products add to the cart in place; anything else opens its page.
   - `hoverImage`: the second photo fades in on hover.
   - One discount mark: the sale badge on the photo (or Sold out). The body never repeats it. Rows in a grid stretch to equal height, with the price and action at the bottom.
+  - `blocks.card.fields` optionally names up to three storefront-visible product custom fields (`custom.care`, `vendor.app.points`). Listing, home and app-section card reads return these in `fields`; one statement shares each existing card wave, and unused fields add no statement. Card skins receive the same typed values.
   - The facts are each product's `cardFacts` (`packages/core/src/modules/catalog/card-facts.ts`): one bounded statement batched with the card media, so no page gains a D1 round trip. A card never shows an original upload that has no renditions: it shows the placeholder while the render job runs.
 
 ### Fit and store shape
@@ -136,9 +137,15 @@ One listing block serves category, collection, brand and search pages. The edito
 - **Page templates.** `pages.templates` gives the product, listing (category, collection, brand), cart and CMS pages their own sections (same registry and 24 cap) around a fixed part: the product information, the listing, the cart or the page content. `main` is the fixed part's place in the list. The fixed part can move but is never removed. Its own structure stays `blocks.product` or `blocks.listing`. A template without sections reads nothing: the page's batch stays as it was. A template with sections reads them after the batch, once the theme is known (`GET /api/v1/storefront/template/<kind>`, market keyed): one read only for stores that use them. Search has no template.
 - **Blocks.** `STOREFRONT_SECTION_BLOCKS` names each section type's block lists (slides, side banners, points, tabs, cards, tiles, columns, quotes, questions, link cards). A block item with `hidden: true` stays saved but buyers do not see it: `storefrontVisibleSection` removes hidden blocks before the resolver and the data planner, so a hidden slide reads no image.
 - **App components and skins.** An app with a storefront module (docs/STOREFRONT-COMPONENTS.md) adds component sections (an `app` section whose type the module draws, no route) and **skins**: app markup for a core-owned unit. `apps.skins` maps the units `header`, `footer`, `product-card`, `product-main` and `listing-main` to `{ app: "<plugin id>/<skin id>", values }`; a core section placement takes its own `skin` (target `section:<type>`, `STOREFRONT_SKINNABLE_SECTION_TYPES`). Core is the fallback: a skin whose app is gone, inactive, not approved for storefront code, failing or drawing nothing leaves the unit to core (the blocks the document chooses, or the core section). A skin gets the unit's projection: a core section's settings with references resolved by `resolveCoreSectionSettings` (`CoreSectionSettings<type>`), so it reads nothing more. Component section settings may use `image`, `products`, `product`, `link` and `list`; their images and product lists join the page's data batch (`readAppComponentData`); skin settings name no images or products. An app's `storefront.templates` appear in the template library; applying one (`applyStorefrontAppTemplate`) sets its tokens, blocks and `apps` and makes its sections the homepage's; the brand, landing pages and page templates stay, and a homepage section whose id the template reuses keeps the merchant's values. `apps` is optional, so documents without it are unchanged. Stored documents with the old `apps.header`, `apps.footer` or `apps.productCard` keys no longer parse (the storefront draws the default theme) until a data migration resets them.
+- **Specifications.** A `specifications` section renders labelled `rows` as a definition list, omitting blank rows. Connect `rows.0.value` to `resource.cf.<namespace>.<key>` to use the current product’s public custom field; the literal remains the fallback. Its core Astro renderer and Noor skin take the same resolved `CoreSectionSettings<"specifications">` projection and make no data reads.
+- **Section content.** `shop-by` cards may carry a `subtitle`; `deal-block` and `newsletter` may carry a `mediaId`. Their media joins the existing page batch, validates on save and clears on a missing-image restore. Core renderers and section skins receive the same fields; hero headings remain per slide. Version 10 resets previous stored themes, drafts, history, restore points and previews; it has no read upgrade.
 - **AI drafts.** A section with `aiDraft: true` came from an AI and nobody opened it yet. It renders like any section. The editor removes the mark when someone opens the section, and the publish summary warns about marked sections (it does not block).
 
 ## Draft, preview, publish and versions
+
+Dynamic sources live beside a placement's literal settings as `bindings: { "heading": { "source": "resource.cf.custom.subtitle" } }` (20 per placement). Core section items, app sections, skins and product app blocks use the same contract. `bindings.ts` owns parsing, compatibility and safe resolution; the shared theme writer checks live public definitions and target schemas before saving or publishing. Missing sources and values outside a target setting's schema keep the literal value. The editor's Connect picker lists compatible public fields and published objects; connections on list items follow moves and duplication.
+
+Resource words, images and safe reference links use the page part already read. Object sources share the page's object planner and its four-type bound; app product sources resolve before the existing card reads. Optional `blocks.card.fields` names at most three public product fields and adds one field statement to the existing card wave only when used. All stored theme reads remain strict v10 reads; there is no version upgrade on read.
 
 The service is `packages/core/src/modules/settings/site-settings.service.ts`. The rows are `theme_settings` (live), `theme_settings_drafts` (the one shared draft) and `theme_settings_versions` (immutable published versions).
 

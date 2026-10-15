@@ -1,3 +1,4 @@
+import { validateCheckoutAttributes } from "./attributes";
 // Cart transform (`cart.transform`, docs/platform/PLUGINS.md): Shopify's
 // cartTransform. An app says what the buyer's lines are, never what they
 // cost:
@@ -82,6 +83,7 @@ export interface CartTransformContext {
     customerId?: string | null | PromiseLike<string | null>;
     destination?: { country?: string | null; city: string | null; zone: string | null } | null;
     discountCodes?: readonly string[];
+    attributes?: Record<string, string>;
 }
 
 /** The transformer for this request, or undefined when no active app implements `cart.transform`. */
@@ -91,6 +93,7 @@ export function createCartTransformer(
     context: CartTransformContext,
 ): CartTransformer | undefined {
     if (!apps?.points.has("cart.transform")) return undefined;
+    const attributes = validateCheckoutAttributes(apps, context.attributes);
     return async (items, preliminary) => {
         const valid = preliminary.items;
         if (valid.length === 0) return null;
@@ -120,6 +123,7 @@ export function createCartTransformer(
                 facts,
                 destination: context.destination ?? null,
                 discountCodes: context.discountCodes ?? [],
+                attributes,
             });
         } catch (error) {
             console.error(`[checkout] app transform cart could not be built: ${error instanceof Error ? error.name : "error"}`);

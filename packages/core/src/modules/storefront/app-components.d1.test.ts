@@ -4,6 +4,8 @@ import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-sche
 import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { withDependencyScope } from "../../cache-deps";
 import { readAppComponentData, type AppComponentPlacement } from "./app-components";
+import { products } from "@scalius/database/schema";
+import { readResourceProductFields, resourceProductFieldsSql } from "./resource-bindings";
 
 const SCHEMA: PluginSettingsSchema = [
   { key: "heading", label: "Heading", type: "text", required: false, default: "New in", maxLength: 80 },
@@ -69,6 +71,63 @@ describe("readAppComponentData", () => {
     } finally {
       sqlite.close();
     }
+  });
+
+  it("plans object-bound product reads from the shared page data without querying the object type again", async () => {
+    const { sqlite, db } = await store();
+    try {
+      let calls = 0;
+      const { value, dependencies } = await withDependencyScope(() => readAppComponentData(db, [{
+        ...placement("bound", {}),
+        bindings: { pick: { source: "object.custom.testimonials.featured.product" }, list: { source: "object.custom.testimonials.featured.products" } },
+        reads: [{ object: "custom.testimonials", limit: 24 }],
+      }], null, [], async (requests) => {
+        calls += 1;
+        expect(requests.some((request) => request.typeId === "oty_custom.testimonials")).toBe(true);
+        return { "custom.testimonials": { fields: { product: "product_reference", products: "list.product_reference" }, records: [{ id: "featured", handle: "featured", data: { product: "p_linen", products: ["p_cotton"] } }] } };
+      }), { strict: true });
+      expect(calls).toBe(1);
+      const component = value[0]!.component;
+      expect(component.values.pick).toBe("p_linen");
+      expect(component.lists.map((list) => [list.source, ids(list.products)])).toEqual([
+        ["products:p_cotton", ["p_cotton"]], ["product:p_linen", ["p_linen"]],
+        ["newest", expect.arrayContaining(["p_linen", "p_cotton"])],
+      ]);
+      expect(dependencies.tables).not.toContain("object_records");
+      expect(component.objects?.["custom.testimonials"]?.records[0]?.id).toBe("featured");
+    } finally { sqlite.close(); }
+  });
+
+  it("folds public resource references into a selected row and plans their products with literal fallback", async () => {
+    const { sqlite, db } = await store();
+    try {
+      sqlite.exec(`
+        INSERT INTO custom_field_definitions (id, owner_type, namespace, key, name, type, storefront_visible) VALUES
+          ('cfd_related', 'product', 'custom', 'related', 'Related', 'product_reference', 1),
+          ('cfd_pairing', 'product', 'custom', 'pairing', 'Pairing', 'list.product_reference', 1),
+          ('cfd_private', 'product', 'custom', 'private', 'Private', 'product_reference', 0);
+        INSERT INTO custom_field_values (definition_id, owner_type, owner_id, value) VALUES
+          ('cfd_related', 'product', 'p_linen', 'p_off'),
+          ('cfd_pairing', 'product', 'p_linen', '["p_cotton"]'),
+          ('cfd_private', 'product', 'p_linen', 'p_linen');
+      `);
+      const { value, dependencies } = await withDependencyScope(async () => {
+        const [row] = await db.select({ resource: resourceProductFieldsSql({ ownerType: "product", id: "p_linen" }) }).from(products).limit(1);
+        const resource = readResourceProductFields(row?.resource);
+        expect(resource?.customFields?.map((field) => field.key)).not.toContain("private");
+        return readAppComponentData(db, [{
+          ...placement("resource", { pick: "p_linen", image: "m_hero" }), resource,
+          bindings: { pick: { source: "resource.cf.custom.related" }, list: { source: "resource.cf.custom.pairing" }, image: { source: "object.custom.cards.featured.image" } },
+        }], null, [], async () => ({ "custom.cards": { fields: { image: "media_reference" }, records: [{ id: "one", handle: "featured", data: { image: "m_missing" } }] } }));
+      }, { strict: true });
+      const component = value[0]!.component;
+      expect(component.values).toMatchObject({ pick: "p_linen", list: ["p_cotton"], image: "m_hero" });
+      expect(ids(component.lists.find((list) => list.source === "products:p_cotton")!.products)).toEqual(["p_cotton"]);
+      expect(component.media.map((asset) => asset.id)).toEqual(["m_hero"]);
+      expect(dependencies.keys).toContain("cf:product");
+      const privateOwner = await db.select({ resource: resourceProductFieldsSql({ ownerType: "product", id: "p_off" }) }).from(products).limit(1);
+      expect(readResourceProductFields(privateOwner[0]?.resource)?.customFields).toEqual([]);
+    } finally { sqlite.close(); }
   });
 
   it("reads nothing for a page without component sections", async () => {

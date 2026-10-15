@@ -83,7 +83,7 @@ export class MutationCoverage {
 
 type Row = Record<string, SQLInputValue | null>;
 
-const ID_PREFIXES = /^(p|cat|col|brd|media|page|art|menu|nav|promo|ov|opt|v|pmed|attr|atv|atg|loc|zone|ship|tax|rate|lang|an|hero|pcode|pcond|peff|pred|prc|pcb|pbd|pav|o|oi|cus)_/;
+const ID_PREFIXES = /^(p|cat|col|brd|media|page|art|menu|nav|promo|ov|opt|v|pmed|attr|atv|atg|loc|zone|ship|tax|rate|lang|an|hero|pcode|pcond|peff|pred|prc|pcb|pbd|pav|o|oi|cus|oty|obj)_/;
 const UNIQUE_HINT = /slug|sku|handle|code|barcode|name|key|path|normalized|checksum|token|value|label|title|filename|object_key/;
 const MAX_ATTEMPTS = 12;
 /**
@@ -218,6 +218,12 @@ export class RowMutator {
         values.push(normalizeFor(companion.name, value));
         changed.push(companion.name);
       }
+      if (tableName === "object_types" && changed.some((name) => name === "namespace" || name === "type")) {
+        const next = { ...row, ...Object.fromEntries(changed.map((name, index) => [name, values[index]])) };
+        assignments.push('"id" = ?');
+        values.push(`oty_${next.namespace}.${next.type}`);
+        changed.push("id");
+      }
       if (assignments.length === 0) continue;
       const where = this.pkWhere(table, row);
       try {
@@ -276,6 +282,10 @@ export class RowMutator {
           && column.enumValues === null && column.shape !== "json" && !looksLikeJson(value)) {
           source[column.name] = uniqueVariant(value, suffix);
         }
+      }
+      if (tableName === "object_types") {
+        source.type = `${String(source.type).slice(0, 40)}_${suffix}`;
+        source.id = `oty_${source.namespace}.${source.type}`;
       }
       normalizeCompanions(table, source);
       const columns = table.columns.map((column) => column.name).filter((name) => source[name] !== null || !table.columns.find((each) => each.name === name)!.pk);

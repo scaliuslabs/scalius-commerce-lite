@@ -614,6 +614,7 @@ export const orderDetailSchema = z.object({
   paymentMethod: z.string().nullable(),
   fulfillmentStatus: z.string().nullable(),
   notes: z.string().nullable(),
+  attributes: z.record(z.string(), z.string()),
   ...orderShippingAddressShape,
   /** The billing snapshot (Shopify's rule): the shipping address bills when `billingSameAsShipping`. */
   ...orderBillingAddressShape,

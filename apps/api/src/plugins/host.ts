@@ -91,11 +91,7 @@ export interface PluginHostOptions {
   db?: Database;
   /** Test seam: replaces the loader choice. */
   loaderFor?: (installation: PluginInstallation) => PluginLoader;
-  /**
-   * The store facts handlers see (`ctx.store`), when the caller reads them
-   * itself: storefront renders read exactly the rows whose cache keys they
-   * declare (storefront-render.ts).
-   */
+  /** Store facts supplied by a caller that already read them. */
   store?: () => Promise<PluginStoreInfo>;
 }
 
@@ -108,10 +104,7 @@ export function pluginBridgeAuthority(installation: PluginInstallation): PluginB
   return {
     permissions: [...effectivePluginPermissions(grant)].sort(),
     allowedHosts: manifest.allowedHosts.filter((host) => grantedHosts.has(host)),
-    collections: Object.fromEntries(Object.entries(manifest.storage).map(([name, collection]) => [
-      name,
-      { indexes: collection.indexes, unique: collection.unique },
-    ])),
+    objects: manifest.objects,
     customFields: manifest.customFields
       .filter((field) => grantedOwners.has(field.ownerType))
       .map((field) => ({
@@ -121,6 +114,7 @@ export function pluginBridgeAuthority(installation: PluginInstallation): PluginB
         type: field.type,
         ...(field.description ? { description: field.description } : {}),
         storefrontVisible: field.storefrontVisible,
+        ...(field.to ? { to: field.to } : {}),
       })),
     appName: manifest.name,
     timeline: manifest.timeline.map((entry) => ({ kind: entry.kind, title: entry.title })),
@@ -270,19 +264,16 @@ export class PluginHost {
     name: string,
     request: PluginRouteRequest,
     options: {
-      /** Storefront output: read-only bridge over these collections, and a wall time capped like functions. */
-      render?: { collections: string[]; wallMs: number };
       operator?: { userId: string };
     } = {},
   ): Promise<PluginInvocationOutcome<{ status: number; headers: Record<string, string>; body: unknown }>> {
     const source = `route:${surface}/${name}`;
-    const wallMs = options.render ? Math.min(installation.manifest.limits.wallMs, options.render.wallMs) : installation.manifest.limits.wallMs;
     const outcome = await this.run(
       installation,
       { kind: "route", surface, name, request },
       source,
-      wallMs,
-      { ...(options.render ? { render: { collections: [...options.render.collections] } } : {}), ...(surface === "admin" && options.operator ? { operator: options.operator } : {}) },
+      installation.manifest.limits.wallMs,
+      { ...(surface === "admin" && options.operator ? { operator: options.operator } : {}) },
     );
     if (!outcome.ok) return failed(outcome);
     const response = validatePluginRouteResponse(outcome.value);
@@ -350,7 +341,7 @@ export class PluginHost {
         plugin: { id: installation.pluginId, version: installation.version },
         store: store ?? { name: "", url: null, currency: "", decimalPlaces: 0, timezone: storeTimeZoneOf(this.env), locale: "en" },
         settings: settings.values,
-        collections: Object.keys(installation.manifest.storage),
+        objects: Object.keys(installation.manifest.objects),
         inventory: pluginHandlerInventory(installation.manifest, installation.declaredManifest),
         features: installation.features,
       },
@@ -371,7 +362,6 @@ export class PluginHost {
         storageBytes: caps.storageBytes,
         breachesBeforeStop: caps.breachesBeforeStop,
       },
-      ...(mode.render ? { render: mode.render } : {}),
       ...(mode.provider ? { provider: mode.provider } : {}),
       ...(mode.operator ? { operator: mode.operator } : {}),
     };
@@ -454,8 +444,8 @@ export class PluginHost {
     const caps = planLimits().plugins;
     const wallMs = Math.min(requestedWallMs, caps.wallMs);
     // Runs the app starts or that come from outside are paced per app; checkout
-    // functions, provider operations and storefront output are paced by the platform.
-    if (invocation.kind === "event" || invocation.kind === "cron" || (invocation.kind === "route" && !mode.render)) {
+    // functions and provider operations are paced by the platform.
+    if (invocation.kind === "event" || invocation.kind === "cron" || invocation.kind === "route") {
       if (!(await pluginWithinInvocationRate(this.env, installation.pluginId, caps.invocationsPerMinute))) {
         const error = `${installation.manifest.name} is over its ${caps.invocationsPerMinute} runs a minute; try again shortly.`;
         await this.breach(installation, "invocations", `more than ${caps.invocationsPerMinute} runs a minute`);
@@ -463,8 +453,8 @@ export class PluginHost {
       }
     }
     // Data updates run before the app's first run of a new version. Functions are
-    // pure and never wait; storefront output is read-only and never writes.
-    if (invocation.kind !== "function" && invocation.kind !== "migration" && invocation.kind !== "check" && !mode.render
+    // pure and never wait.
+    if (invocation.kind !== "function" && invocation.kind !== "migration" && invocation.kind !== "check"
       && pendingPluginMigrations(installation.manifest, this.migratedVersions.get(installation.pluginId) ?? installation.migratedVersion).length > 0) {
       const migrated = await this.runPendingMigrations(installation);
       if (!migrated.ok) {
@@ -572,8 +562,8 @@ export class PluginHost {
   }
 }
 
-/** What the bridge is set up for besides the default: a storefront render, or a provider operation. */
-type BridgeMode = Pick<PluginBridgeProps, "render" | "provider" | "operator">;
+/** Additional authority for provider operations and staff-invoked routes. */
+type BridgeMode = Pick<PluginBridgeProps, "provider" | "operator">;
 
 /** A `ProviderError` an operation raised, as it crossed the loader (message already masked). */
 interface RunProviderError {

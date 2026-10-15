@@ -21,6 +21,21 @@ const pickupRate = method("Pick up at our shop", 0, 9, true, { kind: "pickup", p
 const codConfig: CheckoutConfig = { gateways: [{ id: "cod", name: "Cash on delivery", flow: "cod" }] };
 
 describe("buildDeliveryFacts", () => {
+  it("never calls an unquoted carrier rate free, including when flat rates also exist", () => {
+    const input = {
+      shippingMethods: [method("Carrier", 0, 0, true, { rateSource: "app.carrier:standard" }), method("Flat", 80, 1)],
+      checkoutConfig: null,
+      returnPolicy: null,
+      formatMoney,
+    };
+    expect(buildDeliveryFacts(input)[0]).toEqual({
+      kind: "delivery",
+      title: "Delivery calculated at checkout",
+      detail: "Price depends on your address and order.",
+    });
+    expect(buildDeliveryFacts({ ...input, freeDelivery: true })[0]?.title).toBe("Free delivery");
+  });
+
   it("states only delivery to the page's market's countries, and cash on delivery only where it serves (MARKETS-DESIGN step 3b)", () => {
     const methods = [
       method("Bangladesh", 120, 0),

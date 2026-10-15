@@ -64,6 +64,7 @@ export async function fetchQuickCheckoutQuote(
       {
         method: "POST",
         headers: {
+          ...Object.fromEntries(new Headers(init?.headers)),
           Accept: "application/json",
           "Content-Type": "application/json",
           ...(customerSessionToken ? { "X-Customer-Session": customerSessionToken } : {}),

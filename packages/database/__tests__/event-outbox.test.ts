@@ -76,7 +76,7 @@ describe(`${MIGRATION} files`, () => {
       .split(BREAKPOINT).map((statement) => statement.trim());
     const sqliteStatements = read("");
     const postgresStatements = read("postgres");
-    expect(eventOutboxSqliteStatements(migration).length).toBeGreaterThan(0);
+    expect(eventOutboxSqliteStatements(migration).length + supersededEventOutboxSqliteStatements(migration).length).toBeGreaterThan(0);
     for (const statement of eventOutboxSqliteStatements(migration)) {
       expect(sqliteStatements.some((candidate) => candidate.includes(statement)), statement.split("\n")[0]).toBe(true);
     }
@@ -107,7 +107,9 @@ describe(`${MIGRATION} files`, () => {
   });
 
   it("covers every topic of the catalog and matches each topic's resource", () => {
-    expect([...new Set(EVENT_TRIGGER_SPECS.map((spec) => spec.topic))].sort()).toEqual([...EVENT_TOPICS].sort());
+    expect([...new Set(EVENT_TRIGGER_SPECS.map((spec) => spec.topic))].sort()).toEqual(
+      EVENT_TOPICS.filter((topic) => !["customer.redact_requested", "customer.data_requested"].includes(topic)).sort(),
+    );
   });
 
   it("keeps the schema's order channel vocabulary equal to the shared one", () => {
@@ -120,6 +122,7 @@ describe(`${MIGRATION} triggers (D1)`, () => {
 
   beforeEach(() => {
     sqlite = createMigratedSqlite();
+    sqlite.exec("INSERT INTO event_demand (filter) VALUES ('order.*'), ('return.*'), ('product.*'), ('inventory.*'), ('customer.*')");
   });
   afterEach(() => sqlite.close());
 
@@ -444,6 +447,7 @@ describe(`${MIGRATION} backfill`, () => {
 describe(`${MIGRATION} on the Turso engine`, () => {
   it("applies every 0103 statement and fires the triggers", async () => {
     const database = await freshTursoEngineStore();
+    await database.exec("INSERT INTO event_demand (filter) VALUES ('order.*')");
     await database.exec(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
       VALUES ('ord_t', 'A', '+8801711111111', 'House', 'city', 'zone', 'pending')`);
     await database.exec("UPDATE orders SET payment_status = 'paid' WHERE id = 'ord_t'");

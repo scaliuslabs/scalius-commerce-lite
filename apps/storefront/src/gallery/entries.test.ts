@@ -43,6 +43,14 @@ describe("the storefront gallery", () => {
     }
   });
 
+  it("composes the Noor slideshow through the current hero skin", () => {
+    const hero = entries.find((entry) => entry.id === "noor-home-skin-slideshow")!.theme.pages.home[0]!;
+    expect(hero).toMatchObject({ type: "hero", skin: { app: "scalius.noor/noor-hero" } });
+    if (hero.type !== "hero") throw new Error("Expected core hero");
+    expect(hero.settings.slides).toHaveLength(2);
+    expect(hero.settings.slides.every((slide) => slide.heading && slide.image)).toBe(true);
+  });
+
   it("has unique ids and only saveable theme documents", () => {
     expect(ids.size).toBe(entries.length);
     for (const entry of entries) expect(storefrontThemeDocumentSchema.safeParse(entry.theme).success, entry.id).toBe(true);
@@ -90,7 +98,7 @@ describe("the storefront gallery", () => {
       for (const value of values) expect(ids.has(entryId("product", "sticky", `${position}=${value}`)), `${position}=${value}`).toBe(true);
     }
     for (const palette of STOREFRONT_THEME_PALETTE_KEYS) expect(families.has(`palette:${palette}`), palette).toBe(true);
-    for (const family of ["app:checkout-block", "locale:bn", "locale:rtl", "page:cart", "page:cms", "page:landing"]) expect(families.has(family), family).toBe(true);
+    for (const family of ["app:buyer-ui", "locale:bn", "locale:rtl", "page:cart", "page:cms", "page:landing"]) expect(families.has(family), family).toBe(true);
   });
 
   it("audits the cart page with lines in it: 1, 3 and 10 lines, a sold-out line and a Bangla cart", () => {

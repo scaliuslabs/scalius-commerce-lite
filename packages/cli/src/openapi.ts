@@ -18,6 +18,10 @@ import type {
 
 const METHODS = ["get", "post", "put", "patch", "delete", "head", "options"] as const;
 const OPERATION_ID = /^(?:dashboard|storefront|system)(?:\.[a-z][a-z0-9_]*){2,}$/;
+
+export function isObjectOperationId(id: string): boolean {
+  return /^objects\.(?:types\.(?:list|get|create|update|delete)|list|get|upsert|delete)$/.test(id);
+}
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 // Keep one multi-step agent workflow on a single reviewed contract. Credentials,
 // grants, and request authorization are still checked by the server per call.
@@ -102,6 +106,9 @@ function continuationOutput(id: string, value: unknown): AgentContinuationOutput
 function runnableMetadata(id: string, value: unknown): AgentMetadata | undefined {
   const metadata = agentMetadata(value);
   if (metadata?.exposure !== "execute" && metadata?.exposure !== "continuation") return undefined;
+  if (isObjectOperationId(id) && (metadata.surface !== "dashboard" || metadata.principals?.length !== 1 || metadata.principals[0] !== "admin")) {
+    throw new CliError(8, "invalid_openapi", `Object operation '${id}' must be dashboard/admin only.`);
+  }
   const continuation = metadata.exposure === "continuation";
   const allowedSurface = ["dashboard", "storefront", "system"].includes(metadata.surface ?? "");
   const allowedRisk = ["read", "write", "destructive", "financial", "security"].includes(metadata.risk ?? "");
@@ -168,10 +175,10 @@ export function indexOperations(document: OpenApiDocument): IndexedOperation[] {
       const rawMetadata = operation["x-scalius-agent"];
       const hasRunnableExposure = isObject(rawMetadata) &&
         (rawMetadata.exposure === "execute" || rawMetadata.exposure === "continuation");
-      if (!id || !OPERATION_ID.test(id) || !hasRunnableExposure) continue;
+      if (!id || !(OPERATION_ID.test(id) || isObjectOperationId(id)) || !hasRunnableExposure) continue;
       const agent = runnableMetadata(id, rawMetadata)!;
       const fullPath = path.startsWith("/api/v1/") ? path : `/api/v1${path.startsWith("/") ? path : `/${path}`}`;
-      if (!fullPath.startsWith("/api/v1/") || fullPath.includes("\\")) {
+      if (!fullPath.startsWith("/api/v1/") || fullPath.includes("\\") || (isObjectOperationId(id) && !fullPath.startsWith("/api/v1/admin/objects/"))) {
         throw new CliError(8, "invalid_openapi", `Operation '${id}' contains an invalid API path.`);
       }
       if (seen.has(id)) throw new CliError(8, "invalid_openapi", `Server contract contains duplicate operation ID '${id}'.`);
@@ -284,7 +291,7 @@ export async function getIndexedOperations(
 }
 
 export function findOperation(operations: IndexedOperation[], id: string): IndexedOperation {
-  if (!OPERATION_ID.test(id)) throw new CliError(2, "invalid_operation_id", "Operation ID has an invalid format.");
+  if (!(OPERATION_ID.test(id) || isObjectOperationId(id))) throw new CliError(2, "invalid_operation_id", "Operation ID has an invalid format.");
   const operation = operations.find((candidate) => candidate.id === id);
   if (!operation) throw new CliError(5, "operation_not_found", `Executable operation '${id}' is not in the live server contract.`);
   return operation;

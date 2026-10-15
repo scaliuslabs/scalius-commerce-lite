@@ -333,6 +333,7 @@ export function Gallery({ settings, context }: SectionProps<GallerySettings>) {
 // ── Sign-up call ─────────────────────────────────────────────────────────
 
 export interface SignupSettings {
+  image?: StorefrontImage | null;
   eyebrow: string | null;
   heading: string | null;
   text: string | null;
@@ -347,7 +348,8 @@ export function SignupCall({ settings, context }: SectionProps<SignupSettings>) 
   if (!heading) return null;
   return (
     <Section name="signup" space={settings.spacing}>
-      <div class={cx("noor-callout", `is-${choice(settings.tone, ["soft", "ink", "accent"] as const, "soft")}`)}>
+      <div class={cx("noor-callout", settings.image && "has-image", `is-${choice(settings.tone, ["soft", "ink", "accent"] as const, "soft")}`)}>
+        {settings.image ? <Image image={settings.image} alt="" class="noor-callout-image noor-cover" sizes="(min-width: 768px) 50vw, 100vw" /> : null}
         <div class="noor-callout-copy">
           {text(settings.eyebrow) ? <p class="noor-eyebrow" {...editable(context, "eyebrow")}>{settings.eyebrow}</p> : null}
           <h2 class="noor-h2" {...editable(context, "heading")}>{heading}</h2>

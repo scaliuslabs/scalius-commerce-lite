@@ -229,7 +229,7 @@ function storefrontFile(contract, path, bytes) {
  * Settings for a smoke render at pack time: each field's default (or, for a
  * required field, a fixture value), images and products from the SDK's fixtures.
  */
-function smokeSettings(contract, schema) {
+export function smokeSettings(contract, schema) {
   const stored = {};
   const item = (fields) => Object.fromEntries(fields.map((field) => [field.key, fixtureValue(field)]));
   function fixtureValue(field) {

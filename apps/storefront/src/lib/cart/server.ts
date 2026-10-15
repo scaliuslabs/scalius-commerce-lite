@@ -16,7 +16,7 @@ import { isLocationCountry, readForeignAddressFields, shippingCountryOf } from "
 import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
 import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "@/lib/checkout/billing-address";
 import { marketingConsentOrderField } from "@/lib/checkout/marketing-consent";
-import { parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
+import { parseCheckoutAttributes, parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
 import {
   checkoutAddressForMode,
   missingCheckoutFields,
@@ -223,8 +223,12 @@ export async function processOrder(
     const zoneId = formData.get("zone") as string;
     const areaId = (formData.get("area") as string) || null;
     const notes = (formData.get("notes") as string) || null;
+    const attributes = parseCheckoutAttributes(formData.get("attributes"));
     const cartItemsJson = formData.get("cartItems") as string;
     const shippingLocationId = formData.get("shippingLocation") as string;
+    const shippingRateToken = typeof formData.get("shippingRateToken") === "string"
+      ? String(formData.get("shippingRateToken"))
+      : undefined;
     const discountCodes = readDiscountCodes({ discountCodes: formData.get("discountCodes") });
     const checkoutId = formData.get("checkoutId") as string | null;
     const checkoutRequestId = checkoutId?.trim();
@@ -267,7 +271,10 @@ export async function processOrder(
         ...(item.properties ? { properties: item.properties } : {}),
       })),
       {
+        ...(attributes ? { attributes } : {}),
         ...(shippingLocationId ? { shippingMethodId: shippingLocationId } : {}),
+        ...(shippingRateToken ? { shippingRateToken } : {}),
+        cod: true,
         ...(chosenPath === "delivery" && foreignAddress
           ? {
             shippingCountryCode,
@@ -368,9 +375,11 @@ export async function processOrder(
       ...address,
       ...billing,
       notes,
+      ...(attributes ? { attributes } : {}),
       items: processedItems,
       shippingCharge: mode === "none" ? 0 : delivery?.shippingCharge ?? 0,
       shippingMethodId: mode === "none" ? null : shippingLocationId,
+      ...(mode === "delivery" && shippingRateToken ? { shippingRateToken } : {}),
       discountCodes,
       paymentMethod: "cod",
       // Only when the buyer ticked the marketing consent box.

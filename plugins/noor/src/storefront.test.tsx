@@ -110,7 +110,7 @@ describe("Noor manifest", () => {
       "footer", "header", "product-card", "product-main",
       "section:banner-mosaic", "section:category-tiles", "section:deal-block", "section:editorial", "section:faq", "section:hero",
       "section:lookbook", "section:newsletter", "section:product-grid", "section:product-rail", "section:product-tabs",
-      "section:seo-text", "section:shop-by", "section:usp-strip",
+      "section:seo-text", "section:shop-by", "section:specifications", "section:usp-strip",
     ]);
   });
 

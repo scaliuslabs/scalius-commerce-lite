@@ -289,6 +289,10 @@ describe("commerce structured data helpers", () => {
       kind: "delivery" as const, countries: [{ code: "BD", entire: true }], ...extra,
     });
     const zoned = [rate("Inside Dhaka", 60, { countries: [{ code: "BD", entire: false }] }), rate("Outside Dhaka", 120)];
+    const calculated = [rate("Carrier", 0, { rateSource: "app.carrier:standard" })];
+    expect(buildOfferShippingDetails({ shippingMethods: calculated, currencyCode: "BDT", freeDelivery: false, countries: ["BD"] })).toEqual([]);
+    expect(buildOfferShippingDetails({ shippingMethods: calculated, currencyCode: "BDT", freeDelivery: true, countries: ["BD"] })
+      .map((detail) => detail.shippingRate.value)).toEqual(["0.00"]);
     expect(buildOfferShippingDetails({ shippingMethods: zoned, currencyCode: "BDT", freeDelivery: false, countries: ["BD"] })).toEqual([]);
     // A free-delivery product costs nothing to ship anywhere, zones or not.
     expect(buildOfferShippingDetails({ shippingMethods: zoned, currencyCode: "BDT", freeDelivery: true, countries: ["BD"] })

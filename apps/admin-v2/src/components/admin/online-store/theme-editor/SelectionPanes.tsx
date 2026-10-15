@@ -4,6 +4,7 @@
  * module (and the generated forms under it) after its first render, not in
  * it; the settings are there before a merchant's first click.
  */
+import { DynamicSourcePicker } from "../schema-form/DynamicSourcePicker";
 import { useState, type FocusEvent, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import {
@@ -84,7 +85,7 @@ function BlockLinks({ section, onSelectBlock }: { section: StorefrontPlatformSec
   const blockName = useBlockName();
   const lists = storefrontSectionBlockLists(section.type)
     .map((list) => ({ ...list, items: storefrontSettingAt(section.settings, list.path) }))
-    .filter((list): list is typeof list & { items: unknown[] } => Array.isArray(list.items) && list.items.length > 0);
+    .filter((list): list is typeof list & { items: unknown[] } => Array.isArray(list.items));
   if (lists.length === 0) return null;
   return (
     <>
@@ -93,6 +94,7 @@ function BlockLinks({ section, onSelectBlock }: { section: StorefrontPlatformSec
         return (
           <section key={list.path} className="space-y-1" data-block-links={list.path}>
             <h3 className="text-body font-medium">{key ? labels(key) : list.path}</h3>
+            <DynamicSourcePicker id={`${sectionFieldPrefix(section.id)}-${list.path}`} path={list.path} type="list" label={key ? labels(key) : list.path} />
             <ul className="divide-y divide-border rounded-lg border border-border">
               {list.items.map((item, index) => (
                 <li key={index}>

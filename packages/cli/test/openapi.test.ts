@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ConfigStore } from "../src/config.js";
 import { CliError } from "../src/errors.js";
 import { findOperation, indexOperations, loadOpenApi, searchOperations } from "../src/openapi.js";
-import type { OpenApiDocument } from "../src/types.js";
+import type { OpenApiDocument, OpenApiOperation } from "../src/types.js";
 import { createTestRuntime, executableSpec, validToken } from "./helpers.js";
 
 describe("OpenAPI operation indexing", () => {
@@ -19,6 +19,17 @@ describe("OpenAPI operation indexing", () => {
       "dashboard.products.create",
       "dashboard.products.get",
     ]);
+  });
+
+  it("indexes object operations only with dashboard admin metadata", () => {
+    const document = executableSpec() as OpenApiDocument;
+    const original = document.paths!["/api/v1/admin/products/{id}"]!.get as OpenApiOperation;
+    const objectOperation: OpenApiOperation = { ...original, operationId: "objects.get" };
+    document.paths!["/api/v1/admin/objects/{type}/{id}"] = { get: objectOperation };
+    expect(findOperation(indexOperations(document), "objects.get").agent.surface).toBe("dashboard");
+    expect(() => findOperation(indexOperations(document), "objects.unknown")).toThrow("invalid format");
+    objectOperation["x-scalius-agent"] = { ...objectOperation["x-scalius-agent"]!, surface: "storefront", principals: ["visitor"] };
+    expect(() => indexOperations(document)).toThrow("dashboard/admin only");
   });
 
   it("indexes and preserves mixed closed- and open-world executable operations", () => {

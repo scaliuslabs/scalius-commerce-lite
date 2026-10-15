@@ -25,7 +25,7 @@ import type {
   HomepageBrand,
   HomepageCategory,
   HomepageMediaAsset,
-  HomepageMetaobject,
+  HomepageObject,
   HomepageProduct,
   HomepageProductList,
   HomepageSectionData,
@@ -40,6 +40,8 @@ import { storefrontCopy, type StorefrontLanguage } from "@/lib/storefront-copy";
  * media id, category id, collection id and promotion id.
  */
 export interface HomepageContent {
+  bindingObjects?: import("@scalius/shared/storefront-theme/bindings").BindingObjects;
+  resourceFields?: import("@scalius/shared/storefront-theme/bindings").BindingResource["customFields"];
   deliveryFacts: DeliveryFact[];
   lists: ReadonlyMap<string, HomepageProductList>;
   media: ReadonlyMap<string, HomepageMediaAsset>;
@@ -54,8 +56,8 @@ export interface HomepageContent {
   homeProduct: HomepageProduct | null;
   /** What app sections drew (sanitized by the API), by section id; absent or missing: nothing. */
   apps?: ReadonlyMap<string, HomepageAppSurface>;
-  /** The Metaobjects sections' content types, by definition id; absent or missing: nothing. */
-  metaobjects?: ReadonlyMap<string, HomepageMetaobject>;
+  /** The Objects sections' content types, by definition id; absent or missing: nothing. */
+  objects?: ReadonlyMap<string, HomepageObject>;
   /** The store's language for default titles (English when absent). */
   language?: StorefrontLanguage;
 }
@@ -76,6 +78,7 @@ export function homepageContent(
   deliveryFacts: DeliveryFact[],
 ): HomepageContent {
   return {
+    bindingObjects: data?.bindingObjects,
     deliveryFacts,
     lists: new Map((data?.lists ?? []).map((list) => [list.key, list])),
     media: new Map((data?.media ?? []).map((asset) => [asset.id, asset])),
@@ -85,7 +88,7 @@ export function homepageContent(
     promotionEnds: new Map((data?.promotions ?? []).map((promotion) => [promotion.id, promotion.endsAt])),
     homeProduct: data?.homeProduct ?? null,
     apps: readHomepageAppSurfaces(data?.apps),
-    metaobjects: new Map((data?.metaobjects ?? []).map((type) => [type.id, type])),
+    objects: new Map((data?.objects ?? []).map((type) => [type.id, type])),
   };
 }
 
@@ -98,16 +101,16 @@ export function homepageAppSurface(
 }
 
 /**
- * A Metaobjects section's content type and the entries it shows (the first
+ * A Objects section's content type and the entries it shows (the first
  * `limit`), or null when the type is unset, private, gone or has no entries
  * (the section then renders nothing).
  */
-export function homepageMetaobject(
+export function homepageObject(
   section: StorefrontSection,
-  content: Pick<HomepageContent, "metaobjects">,
-): HomepageMetaobject | null {
-  if (section.type !== "metaobjects" || !section.settings.definitionId) return null;
-  const type = content.metaobjects?.get(section.settings.definitionId);
+  content: Pick<HomepageContent, "objects">,
+): HomepageObject | null {
+  if (section.type !== "objects" || !section.settings.typeId) return null;
+  const type = content.objects?.get(section.settings.typeId);
   const entries = type?.entries.slice(0, section.settings.limit) ?? [];
   return type && entries.length > 0 ? { ...type, entries } : null;
 }
@@ -392,12 +395,16 @@ export function homepageSectionRenders(section: StorefrontSection, content: Home
       }
     case "faq":
       return section.settings.items.length > 0;
+    case "specifications":
+      return Boolean(content.resourceFields?.some((field) => field.type === "object_reference"
+        && `${field.namespace}.${field.key}` === section.settings.objectField && field.object?.fields.length))
+        || section.settings.rows.some((row) => textPresent(row.label) && textPresent(row.value));
     case "utility-cards":
       return section.settings.cards.length > 0;
     case "seo-text":
       return seoTextBlocks(section.settings.body).length > 0;
-    case "metaobjects":
-      return homepageMetaobject(section, content) !== null;
+    case "objects":
+      return homepageObject(section, content) !== null;
     // The signup form reads no store data: it always has its form and words.
     case "newsletter":
       return true;

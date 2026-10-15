@@ -212,7 +212,7 @@ describe("bKash: sessions", () => {
     const tokenKeys = [...harness.kv.keys()];
     expect(tokenKeys).toEqual([expect.stringMatching(/^bkash:token:sandbox:[0-9a-f]{32}$/)]);
     expect(harness.kv.get(tokenKeys[0]!)).toBe(ID_TOKEN);
-    expect(harness.records.get("bkash-payments")?.get("TR00111A")).toMatchObject({ orderId: "ORD1", correlationId: "ORD1_full_ABCD1234", amountMinor: 12_550, closedAs: null });
+    expect(harness.records.get("bkash_payments")?.get("TR00111A")?.data).toMatchObject({ orderId: "ORD1", correlationId: "ORD1_full_ABCD1234", amountMinor: 12_550, closedAs: null });
 
     // A retry of the same attempt: the same session, nothing sent.
     expect((await run("createSession", sessionInput())).value).toEqual(created.value);
@@ -239,7 +239,7 @@ describe("bKash: sessions", () => {
     expect((await declined.run("createSession", sessionInput())).error)
       .toMatchObject({ category: "declined", uncertain: false, code: "bkash.2006", message: "bKash did not start the payment (bKash code 2006: Invalid Amount)." });
     // Nothing was stored, so a retry creates the payment.
-    expect(declined.harness.records.get("bkash-payments")?.size).toBe(0);
+    expect(declined.harness.records.get("bkash_payments")?.size).toBe(0);
 
     const badCredentials = setup();
     badCredentials.bank.script("token/grant", fail("2079", "Invalid username and password"));
@@ -262,7 +262,7 @@ describe("bKash: sessions", () => {
     expect((await run("createSession", sessionInput())).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash.timeout" });
     bank.script("create", { status: 502, body: "<html>Bad gateway</html>" });
     expect((await run("createSession", sessionInput())).error).toMatchObject({ category: "retryable", uncertain: true, code: "bkash.unavailable" });
-    expect(harness.records.get("bkash-payments")?.size).toBe(0);
+    expect(harness.records.get("bkash_payments")?.size).toBe(0);
   });
 });
 
@@ -319,7 +319,7 @@ describe("bKash: buyer returns", () => {
       },
     });
     expect(bank.calls.at(-1)).toMatchObject({ path: "payment/status", body: { paymentID } });
-    expect(harness.records.get("bkash-payments")?.get(paymentID)).toMatchObject({ closedAs: "cancelled" });
+    expect(harness.records.get("bkash_payments")?.get(paymentID)?.data).toMatchObject({ closedAs: "cancelled" });
 
     // A success return for the released payment is not executed: the same cancellation again.
     expect((await run("verifyReturn", buyerReturn(paymentID, "success"))).value).toEqual(cancelled.value);
@@ -424,7 +424,7 @@ describe("bKash: refunds", () => {
     expect(partial.value).toEqual({ refundId: "RTX4C" });
     expect(bank.paths().slice(-2)).toEqual(["payment/status", "payment/refund"]);
     expect(bank.calls.at(-1)!.body).toMatchObject({ amount: "50.00", trxID, reason: "Refund" });
-    expect([...harness.records.get("bkash-refunds")!.values()]).toEqual([
+    expect([...harness.records.get("bkash_refunds")!.values()].map((record) => record.data)).toEqual([
       { paymentId: paymentID, trxId: trxID, amountMinor: 12_550, state: "completed", refundTrxId: "RTX3C" },
       { paymentId: paymentID, trxId: trxID, amountMinor: 5_000, state: "completed", refundTrxId: "RTX4C" },
     ]);
@@ -472,7 +472,7 @@ describe("bKash: refunds", () => {
     bank.script("payment/refund", fail("2023", "Insufficient Balance"));
     expect((await run("refund", refundInput({ providerRef: paymentID, secondaryRef: trxID, idempotencyKey: "refused" }))).error)
       .toMatchObject({ category: "declined", code: "bkash.2023", message: "bKash refused the refund (bKash code 2023: Insufficient Balance)." });
-    expect(harness.records.get("bkash-refunds")?.size).toBe(1);
+    expect(harness.records.get("bkash_refunds")?.size).toBe(1);
   });
 });
 

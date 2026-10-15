@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { judgeApiBundle, measureWorkerOutput, API_BUNDLE_BUDGET_BYTES, WORKER_SIZE_LIMIT_BYTES } from "./check-api-bundle.mjs";
 import { createPluginTestHarness, fixtures, parsePluginUiDocument } from "../packages/plugin-sdk/src/testing.ts";
+import { renderSection } from "../packages/plugin-sdk/src/storefront/testing.ts";
 import { isPathSource, packPlugin, renderBundledGen, renderCatalogGen, renderLockfile, sealBundle } from "./plugin-build.mjs";
 import { BUNDLE_MAX_BYTES } from "./plugin-registry.mjs";
 import { editSource, makeTempPlugin } from "./plugin-test-helpers.mjs";
@@ -79,7 +80,7 @@ describe("pnpm plugin", () => {
 
   it("scaffolds a plugin with an event, a function, a section, an admin page, a migration and a test", () => {
     const files = scaffoldFiles("acme.loyalty", "loyalty");
-    expect(Object.keys(files).sort()).toEqual(["package.json", "src/index.test.ts", "src/index.ts", "tsconfig.json"]);
+    expect(Object.keys(files).sort()).toEqual(["package.json", "src/index.test.ts", "src/index.ts", "src/storefront.tsx", "tsconfig.json"]);
     expect(JSON.parse(files["package.json"]).dependencies).toEqual({ "@scalius/plugin-sdk": "workspace:*" });
     const source = files["src/index.ts"];
     expect(source).toContain('id: "acme.loyalty"');
@@ -87,11 +88,15 @@ describe("pnpm plugin", () => {
     expect(source).toContain('"order.created": async');
     expect(source).toContain('"checkout.discounts": ()');
     expect(source).toContain('type: "banner"');
+    expect(source).toContain('ctx.objects.notes!.put');
+    expect(source).not.toMatch(/ctx\.kv|request\.render|route: "banner"/);
+    expect(files["src/storefront.tsx"]).toContain("defineStorefront");
+    expect(JSON.parse(files["tsconfig.json"]).compilerOptions).toMatchObject({ jsx: "react-jsx", jsxImportSource: "@scalius/plugin-sdk/storefront" });
     expect(source).toContain("pages: [{ id: \"overview\"");
     expect(source).toContain("migrations: [{ version: 1");
     expect(source).toContain('"1": async');
     const test = files["src/index.test.ts"];
-    for (const used of ["createPluginTestHarness", "harness.deliver", "harness.fn", "harness.runMigrations", "harness.render", 'harness.route("admin"']) {
+    for (const used of ["createPluginTestHarness", "harness.deliver", "harness.fn", "harness.runMigrations", "renderSection", 'harness.route("admin"']) {
       expect(test).toContain(used);
     }
   });
@@ -113,12 +118,19 @@ describe("scaffolded plugin", () => {
       const module = await import(`data:text/javascript;base64,${Buffer.from(packed.code).toString("base64")}`);
       const harness = createPluginTestHarness(module);
       expect((await harness.deliver(fixtures.event("order.created", { resource: { type: "order", id: "o1" } }))).ok).toBe(true);
-      expect(harness.kv.get("last_order")).toBe("o1");
+      expect(harness.records.get("notes")?.get("last_order")).toEqual({ value: "o1" });
       expect((await harness.fn("checkout.discounts", fixtures.checkoutDiscountsInput())).value).toEqual({ discounts: [] });
       expect((await harness.runMigrations()).ok).toBe(true);
-      expect(harness.kv.get("install_note")).toBe("Installed");
-      const section = await harness.render("section", "banner", { settings: { heading: "Sale <now>", text: "" } });
-      expect(JSON.stringify(section.value)).toContain("Sale &#60;now&#62;");
+      expect(harness.records.get("notes")?.get("install_note")).toEqual({ value: "Installed" });
+      harness.records.get("notes").set("install_note", { value: "Changed by the merchant" });
+      expect((await harness.runMigrations()).ok).toBe(true);
+      expect(harness.records.get("notes")?.get("install_note")).toEqual({ value: "Changed by the merchant" });
+      const storefrontFile = packed.storefront.find((file) => file.path === "storefront.js");
+      const storefront = await import(`data:text/javascript;base64,${Buffer.from(storefrontFile.bytes).toString("base64")}`);
+      const html = renderSection(storefront.default, "banner", { heading: "Sale <now>", text: "" });
+      expect(html).toContain("Sale &lt;now&gt;");
+      expect(html).not.toContain("<now>");
+      expect(renderSection(storefront.default, "banner", { heading: "", text: "" })).toBe("");
       const page = parsePluginUiDocument(((await harness.route("admin", "overview", fixtures.adminRouteRequest())).value).body);
       expect(page.ok).toBe(true);
     } finally {

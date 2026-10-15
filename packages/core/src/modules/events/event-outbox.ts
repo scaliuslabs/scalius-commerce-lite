@@ -8,9 +8,8 @@
 //                           └──▶ dead_lettered (8 attempts)
 //
 // Delivery is at least once: a drain that dies leaves an expired lease the
-// next drain reclaims, and every target is idempotent by event id. With no
-// subscriber at all, due rows are marked dispatched in place, so an unused
-// store pays one indexed read per drain.
+// next drain reclaims, and every target is idempotent by event id. Event
+// triggers only enqueue topics with demand, so an unused store has no rows.
 
 import type { Database } from "@scalius/database/client";
 import { eventOutbox, type EventOutboxRow } from "@scalius/database/schema";
@@ -51,7 +50,7 @@ export interface OutboxEvent<T extends EventTopic = EventTopic> {
  */
 export interface EventFanOutTarget {
   readonly name: string;
-  /** Cheap check used to settle events in place when nobody listens. */
+  /** Whether this delivery target currently has subscribers. */
   hasSubscribers(db: Database): Promise<boolean>;
   fanOut(db: Database, event: OutboxEvent): Promise<EventDelivery[]>;
 }
@@ -60,7 +59,7 @@ const PROCESSING_LEASE_SECONDS = 5 * 60;
 export const MAX_EVENT_DISPATCH_ATTEMPTS = 8;
 /** Due rows one drain may take (the scheduled sweep's ceiling). */
 export const MAX_EVENT_FLUSH_LIMIT = 200;
-/** Ids per settle statement: within D1's 100 bound parameters. */
+/** Default number of events one drain may take. */
 export const EVENT_FLUSH_BATCH_SIZE = 50;
 const MAX_ERROR_LENGTH = 500;
 const DEAD_LETTER_NEXT_ATTEMPT_AT = 253_402_300_799;
@@ -107,21 +106,9 @@ function dueEventIds(limit: number): SQL {
   ) AS "due_rows" ORDER BY "due" LIMIT ${limit}`;
 }
 
-export async function anyEventSubscribers(
-  db: Database,
-  targets: readonly EventFanOutTarget[],
-): Promise<boolean> {
-  for (const target of targets) {
-    if (await target.hasSubscribers(db)) return true;
-  }
-  return false;
-}
-
 export interface EventFlushResult {
   scanned: number;
   dispatched: number;
-  /** Marked dispatched in place because no target had a subscriber. */
-  settledWithoutSubscribers: number;
   failed: number;
   skipped: number;
   /** The deliveries the dispatched events recorded, for the caller to send. */
@@ -138,12 +125,12 @@ export async function dispatchPendingEvents(options: {
   targets: readonly EventFanOutTarget[];
   limit?: number;
   /**
-   * The events this drain moved on (settled or dispatched). The API fans them
+   * The events this drain dispatched. The API fans them
    * out to the realtime hub. Called once, after the drain; never throws into it.
    */
   onFlushed?: (events: OutboxEvent[]) => void | Promise<void>;
 }): Promise<EventFlushResult> {
-  const result: EventFlushResult = { scanned: 0, dispatched: 0, settledWithoutSubscribers: 0, failed: 0, skipped: 0, deliveries: [] };
+  const result: EventFlushResult = { scanned: 0, dispatched: 0, failed: 0, skipped: 0, deliveries: [] };
   const flushed: OutboxEvent[] = [];
   const report = async () => {
     if (!options.onFlushed || flushed.length === 0) return;
@@ -165,37 +152,6 @@ export async function dispatchPendingEvents(options: {
   result.scanned = dueRows.length;
   if (dueRows.length === 0) return result;
 
-  if (!(await anyEventSubscribers(db, options.targets))) {
-    // Nobody listens: settle the due rows in place, oldest first. A target
-    // added later receives only events that occur after it exists. `limit`
-    // sizes fan-out work (several queries an event); a settle is one
-    // statement whatever it takes, so it takes a full EVENT_FLUSH_BATCH_SIZE:
-    // a backlog clears in a few drains instead of writing two rows on every
-    // later tick, at the same D1 calls per drain.
-    const settled = await db
-      .update(eventOutbox)
-      .set({
-        status: "dispatched",
-        claimId: null,
-        claimExpiresAt: null,
-        lastError: null,
-        dispatchedAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      })
-      // The due set is read in this statement, so it needs no second claimable
-      // test (one beside it let SQLite walk every due row's status index).
-      .where(sql`${eventOutbox.id} IN (${dueEventIds(EVENT_FLUSH_BATCH_SIZE)})`)
-      .returning(flushedColumns());
-    for (const row of settled) {
-      const event = toOutboxEvent(row);
-      if (event) flushed.push(event);
-    }
-    result.settledWithoutSubscribers = settled.length;
-    result.scanned = Math.max(result.scanned, result.settledWithoutSubscribers);
-    await report();
-    return result;
-  }
-
   for (const { id } of dueRows) {
     const outcome = await processEventDispatch({ db, eventId: id, targets: options.targets });
     if (outcome.status === "dispatched") {
@@ -211,18 +167,6 @@ export async function dispatchPendingEvents(options: {
   }
   await report();
   return result;
-}
-
-/** What a settle returns per row: enough to parse the event, so observers need no read. */
-function flushedColumns() {
-  return {
-    id: eventOutbox.id,
-    topic: eventOutbox.topic,
-    resourceType: eventOutbox.resourceType,
-    resourceId: eventOutbox.resourceId,
-    data: eventOutbox.data,
-    occurredAt: eventOutbox.occurredAt,
-  };
 }
 
 /** Parses a stored row into a catalog event, or null when it is unreadable. */

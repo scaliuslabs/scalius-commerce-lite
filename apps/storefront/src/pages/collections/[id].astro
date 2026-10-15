@@ -1,5 +1,7 @@
 ---
 import Layout from "@/layouts/Layout.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { resourceBindingContext } from "@/lib/setting-bindings";
 import CatalogListingPage from "@/components/catalog/CatalogListingPage.astro";
 import { storefrontFieldValues } from "@/lib/extensions/data";
 import CatalogEmptyState from "@/components/catalog/CatalogEmptyState.astro";
@@ -137,6 +139,8 @@ const collectionJsonLd =
         ...(pagination.totalIsCapped ? {} : { numberOfItems: pagination.total }),
       })
     : null;
+await resolveRequestTheme(Astro, layoutData, resourceBindingContext(collection, `/collections/${collection.id}`));
+
 ---
 
 <Layout

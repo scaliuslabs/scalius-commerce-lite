@@ -50,6 +50,10 @@ import { getOptionalExecutionContext } from "../utils/execution-context";
 import { sendOrderSupportRequestNotification } from "../utils/order-notifications";
 import { BUILT_IN_PAYMENT_PROVIDERS, isPaymentMethodId, type PaymentProviders } from "@scalius/core/modules/payments";
 import { notificationSender } from "../background/notification-sender";
+import { checkoutAttributesSchema } from "@scalius/shared/plugins/buyer-ui";
+import { readMasterSecret } from "@scalius/shared/runtime-secrets";
+import { workerCacheHint } from "@scalius/shared/worker-cache-hint";
+import { requestCourierProviders } from "../plugins/providers/courier";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -160,12 +164,16 @@ const agentCustomerPhoneSchema = z.string().min(7).max(16).openapi({
 
 const checkoutInputSchema = z.object({
   customerPhone: agentCustomerPhoneSchema.optional().nullable(),
+  attributes: checkoutAttributesSchema.optional(),
+  shippingRateToken: z.string().min(1).max(2048).optional().nullable(),
+  cod: z.boolean().optional().openapi({ description: "True when delivery requires cash collection, including the balance after an online deposit." }),
 }).strict();
 
 const checkoutQuoteSchema = z.object({
   valid: z.literal(true),
   contextRevision: revisionSchema,
   quoteFingerprint: z.string().regex(/^taxq_[A-Za-z0-9_-]{22}$/),
+  shippingRateToken: z.string().max(2048).nullable(),
   displayLabel: z.string(),
   pricesIncludeTax: z.boolean(),
   shippingTaxed: z.boolean(),
@@ -235,6 +243,8 @@ const startedContinuationSchema = continuationViewSchema.extend({
 });
 
 const checkoutSubmitSchema = z.object({
+  attributes: checkoutAttributesSchema.optional(),
+  shippingRateToken: z.string().min(1).max(2048).optional().nullable(),
   expectedRevision: revisionSchema,
   expectedQuoteFingerprint: z.string().regex(/^taxq_[A-Za-z0-9_-]{22}$/).openapi({
     description: "Exact quote fingerprint reviewed and confirmed by the buyer before this submit.",
@@ -687,7 +697,13 @@ app.openapi(validateCheckoutRoute, async (c) => {
     c.get("db"),
     principal.grantId,
     c.req.valid("param").contextId,
-    { customerPhone: c.req.valid("json").customerPhone, apps: (await agentCheckoutApps(c)).apps },
+    { ...c.req.valid("json"), apps: (await agentCheckoutApps(c)).apps, appProviders: requestAppProviders(c),
+      calculatedRates: {
+        couriers: requestCourierProviders(c), masterSecret: readMasterSecret(c.env) ?? undefined,
+        cache: workerCacheHint(c.env, "courier-rates", 600) ?? undefined,
+        credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+      },
+    },
   ));
 });
 
@@ -716,8 +732,16 @@ app.openapi(quoteCheckoutRoute, async (c) => {
     c.req.valid("param").contextId,
     {
       customerPhone: c.req.valid("json").customerPhone,
+      shippingRateToken: c.req.valid("json").shippingRateToken,
+      cod: c.req.valid("json").cod,
+      attributes: c.req.valid("json").attributes,
       ...await agentCheckoutApps(c),
       appProviders: requestAppProviders(c),
+      calculatedRates: {
+        couriers: requestCourierProviders(c), masterSecret: readMasterSecret(c.env) ?? undefined,
+        cache: workerCacheHint(c.env, "courier-rates", 600) ?? undefined,
+        credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+      },
       credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     },
   ));
@@ -766,6 +790,11 @@ app.openapi(submitCheckoutRoute, async (c) => {
         `/api/v1/storefront/agent-contexts/${encodeURIComponent(contextId)}/checkout/submit`,
         c.env.PUBLIC_API_BASE_URL,
       ).toString(),
+      calculatedRates: {
+        couriers: requestCourierProviders(c), masterSecret: readMasterSecret(c.env) ?? undefined,
+        cache: workerCacheHint(c.env, "courier-rates", 600) ?? undefined,
+        credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+      },
       credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
       apps,
       paymentProviders,

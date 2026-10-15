@@ -80,6 +80,10 @@ function otherParts(): string[] {
     "/api/v1/collections/col_dynamic",
     "/api/v1/collections/col_hidden",
     "/api/v1/storefront/homepage",
+    "/api/v1/objects/custom.faq",
+    "/api/v1/objects/custom.faq?handle=returns&limit=1",
+    "/api/v1/objects/custom.size_chart",
+    "/api/v1/objects/acme.loyalty.tiers",
     "/api/v1/storefront/layout",
     ...DVC_IDS.landingSlugs.map((slug) => `/api/v1/storefront/landing/${slug}`),
     "/api/v1/storefront/pages/slug/about",
@@ -87,7 +91,6 @@ function otherParts(): string[] {
     // The one market-keyed read: the India market's subfolder.
     "/api/v1/checkout/config?presence=en-in",
     "/api/v1/storefront/markets",
-    "/api/v1/storefront/app-blocks/checkout",
     "/api/v1/checkout-languages/active",
     "/api/v1/shipping-methods",
     // A destination's zone: a Bangladesh place, and abroad by postal prefix, admin area and country.

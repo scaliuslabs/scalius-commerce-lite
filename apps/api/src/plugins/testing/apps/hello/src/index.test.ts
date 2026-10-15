@@ -29,7 +29,7 @@ describe("acme.hello", () => {
       api: async () => ({ ok: true, status: 200, data: { status: "confirmed" }, error: null }),
     });
     expect(await harness.event("order.paid", { type: "order", id: "o1" })).toMatchObject({ ok: true });
-    expect(harness.records.get("greetings")?.get("o1")).toMatchObject({ orderId: "o1", greeting: "Salam", orderStatus: "confirmed" });
+    expect(harness.records.get("greetings")?.get("o1")).toMatchObject({ order_id: "o1", greeting: "Salam", order_status: "confirmed" });
     expect(harness.kv.get("paid_count")).toBe(1);
     expect(harness.logs).toEqual([{ level: "info", message: "Greeted a paid order", fields: { orderId: "o1", apiStatus: 200 } }]);
   });

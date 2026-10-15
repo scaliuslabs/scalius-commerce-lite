@@ -1,3 +1,4 @@
+import { buyerUiBlockSchema, checkoutAttributesSchema } from "@scalius/shared/plugins";
 // Authoritative checkout tax quote.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
@@ -19,6 +20,7 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
 import {
     assertNoCheckoutRuleErrors,
+    validateCheckoutAttributes,
     createAppLinePricer,
     createCartTransformer,
     presentTransformedCartLines,
@@ -37,6 +39,8 @@ import {
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
+import { workerCacheHint } from "@scalius/shared/worker-cache-hint";
+import { requestCourierProviders } from "../../plugins/providers/courier";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
@@ -77,6 +81,7 @@ const taxQuoteItemSchema = z.object({
 });
 
 const taxQuoteResponseSchema = z.object({
+  buyerUi: z.array(buyerUiBlockSchema),
   valid: z.literal(true),
   quoteFingerprint: z.string(),
   displayLabel: z.string(),
@@ -107,6 +112,7 @@ const taxQuoteResponseSchema = z.object({
   }),
   /** Null when the cart has nothing physical (no delivery method, no fee). */
   shippingMethod: storefrontShippingMethodSnapshotSchema.nullable(),
+  shippingRateToken: z.string().max(2048).nullable(),
   deliveryMethodKind: deliveryMethodKindSchema.nullable(),
   /** Some line ships: the order needs the delivery address. */
   requiresShipping: z.boolean(),
@@ -172,11 +178,13 @@ const taxQuoteRoute = createRoute({
   tags: ["Orders"],
   summary: "Calculate an authoritative storefront tax quote",
   request: {
+    headers: z.object({ "x-storefront-language": z.string().min(1).max(35).optional(), "x-storefront-locale": z.string().min(1).max(35).optional() }),
     body: {
       required: true,
       content: {
         "application/json": {
           schema: z.object({
+            attributes: checkoutAttributesSchema.optional(),
             items: z.array(taxQuoteItemSchema).min(1).max(99),
             inventoryPool: z.enum([
               InventoryPool.REGULAR,
@@ -197,6 +205,8 @@ const taxQuoteRoute = createRoute({
             shippingPostalCode: z.string().trim().max(20).optional().nullable(),
             /** Required when a line is physical; omitted when nothing is. */
             shippingMethodId: z.string().min(1).max(180).optional().nullable(),
+            shippingRateToken: z.string().min(1).max(2048).optional().nullable(),
+            cod: z.boolean().optional(),
             /**
              * Where a cart with nothing physical is taxed: its billing country,
              * admin area and postal code (a cart that ships is taxed at its
@@ -248,9 +258,11 @@ app.openapi(taxQuoteRoute, async (c) => {
     db,
     registrations,
   });
+  const attributes = validateCheckoutAttributes(apps, data.attributes);
   // App payment methods join only when an app provides payment (then one more read).
   const { providers: paymentProviders, paymentMethods } = await checkoutPaymentMethods(c, registrations, builtInPaymentMethods, encryptionKey);
   const appContext = {
+    attributes,
     channel: "online_store" as const,
     customerId: sessionCustomer?.customerId ?? null,
     destination: data.shippingCountryCode ? { country: data.shippingCountryCode, city: null, zone: null } : null,
@@ -287,11 +299,19 @@ app.openapi(taxQuoteRoute, async (c) => {
     shippingAdminArea: data.shippingAdminArea,
     shippingPostalCode: data.shippingPostalCode,
     shippingMethodId: data.shippingMethodId,
-  }, cartValidation);
+    shippingRateToken: data.shippingRateToken,
+    cod: data.cod,
+  }, cartValidation, {
+    couriers: requestCourierProviders(c),
+    masterSecret: readMasterSecret(c.env) ?? undefined,
+    cache: workerCacheHint(c.env, "courier-rates", 600) ?? undefined,
+    credentialEncryptionKey: encryptionKey,
+  });
   const lineTypes = assertStorefrontLineFulfilment(cartValidation, delivery);
   const linePropertiesHashes = await storefrontLinePropertiesHashes(cartValidation);
   // Promotions or bundles, then the apps, then tax: the rule the order commits (pricing.ts).
   const pricing = await priceStorefrontCheckout(db, {
+    attributes,
     cartValidation,
     delivery,
     discountCodes: data.discountCodes,
@@ -346,11 +366,13 @@ app.openapi(taxQuoteRoute, async (c) => {
     ), paymentProviders);
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   return ok(c, {
+    buyerUi: await apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: ["purchase.checkout.contact.render-after", "purchase.checkout.shipping-option-list.render-after", "purchase.checkout.cart-line-list.render-after", "purchase.checkout.payment-method-list.render-after", "purchase.checkout.actions.render-before"], currency: quote.currencyCode, cart: pricing.appCart, attributes, customer: sessionCustomer?.customerId ? { id: sessionCustomer.customerId } : null }) ?? [],
     valid: true as const,
     quoteFingerprint: await buildStorefrontCheckoutQuoteFingerprint(
       quote,
       pricing.shippingMethod,
       linePropertiesHashes,
+      attributes,
     ),
     displayLabel: quote.displayLabel,
     pricesIncludeTax: quote.pricesIncludeTax,
@@ -372,6 +394,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     totalAmount: toAmount(quote.totalMinor),
     ...presentGiftCardTenderQuote(giftCardTender, quote.decimalPlaces),
     shippingMethod: pricing.shippingMethod,
+    shippingRateToken: delivery.rateToken ?? null,
     deliveryMethodKind: delivery.kind,
     requiresShipping: delivery.fulfilment.requiresShipping,
     pickup: delivery.pickup,

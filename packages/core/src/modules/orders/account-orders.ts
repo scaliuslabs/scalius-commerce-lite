@@ -757,6 +757,7 @@ export async function getCustomerOwnedOrderForDetail(
             pickupHours: orders.pickupHours,
             pickupReadyAt: orders.pickupReadyAt,
             notes: orders.notes,
+            attributes: orders.attributes,
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
         })

@@ -2,7 +2,7 @@
 
 An app can redesign the storefront: skins of the header, footer, product card, product page, listings and any core section; new sections and product blocks with their own logic; a single-page order landing; and ready-made templates that apply the whole look in one click. The merchant installs the app, activates it, picks its template in Online Store → Theme, and edits every section and skin in the theme editor like the built-in ones. Nobody forks the storefront.
 
-The reference app is `plugins/noor` (Noor: a complete theme with nine sections of its own, skins of the store's own header, footer, card, product page and fourteen core sections, one template, and a landing kit with a page preset for Bangladesh-style single-product campaign pages with a cash-on-delivery order form). The small worked example is `apps/api/src/plugins/testing/apps/studio`.
+The reference app is `plugins/noor` (Noor: a complete theme with nine sections of its own, skins of the store's own header, footer, card, product page and fifteen core sections, one template, and a landing kit with a page preset for Bangladesh-style single-product campaign pages with a cash-on-delivery order form). The small worked example is `apps/api/src/plugins/testing/apps/studio`.
 
 Source of truth:
 
@@ -38,7 +38,7 @@ The storefront runs the module in one of two loaders, with the same input and th
 
 | Point | Declare (`storefront.*`) | Implement (`defineStorefront`) | The theme stores |
 | --- | --- | --- | --- |
-| Component section | `sections: [{ type, name, settings }]` (no `route`) | `sections[type]` | a section `{ type: "app", settings: { app: "<id>/<type>", values } }` |
+| Component section | `sections: [{ type, name, settings, reads? }]` (no `route`) | `sections[type]` | a section `{ type: "app", settings: { app: "<id>/<type>", values } }` |
 | Component product block | `productBlocks: [{ type, name, placement, settings }]` (no `route`) | `blocks[type]` | `blocks.product.apps: [{ id, app: "<id>/<type>", values }]` |
 | Skin of a unit | `skins: [{ id, target, name, settings }]` (≤ 30) | `skins[id]` | `apps.skins.<target>: { app: "<id>/<skin id>", values }` |
 | Skin of a core section | `skins: [{ id, target: "section:<type>", … }]` | `skins[id]` | the core section's `skin: { app, values }` |
@@ -48,7 +48,7 @@ The storefront runs the module in one of two loaders, with the same input and th
 | Stylesheet | `stylesheet: true` | `src/storefront.css` | |
 | Browser hosts | `connect: ["api.example.com"]` | | |
 
-Component sections and product blocks are the only app sections and blocks: they have no `route`, and the API draws nothing for them (a manifest that gives one a `route` or `reads` is rejected). They run at the edge with no network hop and can show product cards, images and the order form. The API still draws checkout and account blocks (`storefront.blocks`) from a public route; only proxy pages (`/apps/<id>/*`) and those blocks put app HTML through the API's sanitizer.
+Component sections and product blocks have no render route: they run at the edge with data supplied by the existing page batch and can show product cards, images and core embeds. A section may declare bounded public object `reads`; these add data to its input, not network access to its renderer. Private buyer pages use declarative `buyer.ui` functions rendered by core. The static `storefront.blocks` and `request.render` APIs are retired; only proxy pages (`/apps/<id>/*`) accept route-returned page HTML.
 
 A **page preset** is a ready-made landing page: when the merchant makes a new landing page (`/pages/<slug>`), the editor offers "a blank page" or the presets of the active apps, and asks for a product when a preset's sections have `product` settings, which it fills in. Noor's "Product campaign" preset builds a complete Facebook-ad page (offer, promises, features, steps, reviews, questions, order form) in one step; every section stays editable and reorderable.
 
@@ -68,7 +68,7 @@ A **skin** is app markup for a core-owned unit. It gets the unit's public projec
 
 - `product-main` draws the product page's breadcrumbs, gallery and buy box. The buy form is `ProductBuyBox.astro`, the same component the core page draws: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app blocks, kept current as the buyer chooses. The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
 - `listing-main` draws the listing between the collection template's sections. The page links are numbered links on every listing, so crawlers reach every product.
-- A core section's projection is its settings at its `version` with references resolved by fixed rules (`resolveCoreSectionSettings`): `image`/`phoneImage`/`mediaId` → `StorefrontImage | null`; a product source → `StorefrontProductList` (`{ title, url, cards }`, as many cards as the core section shows); `categoryIds`/`collectionIds` → `StorefrontTile[]`; `promotionId` → `{ endsAt } | null`; a delivery-facts source → the store's facts; hidden blocks left out. A brand wall's brands arrive in `tiles`, a collections section's fallback products in `cards`. `recently-viewed`, `endless-grid` and `metaobjects` have no skin.
+- A core section's projection is its settings at its `version` with references resolved by fixed rules (`resolveCoreSectionSettings`): `image`/`phoneImage`/`mediaId` → `StorefrontImage | null`; a product source → `StorefrontProductList` (`{ title, url, cards }`, as many cards as the core section shows); `categoryIds`/`collectionIds` → `StorefrontTile[]`; `promotionId` → `{ endsAt } | null`; a delivery-facts source → the store's facts; hidden blocks left out. A brand wall's brands arrive in `tiles`, a collections section's fallback products in `cards`. `recently-viewed`, `endless-grid` and `objects` have no skin.
 - JSON-LD stays core's on product and listing pages: the host strips app JSON-LD from `product-main`, `listing-main` and product blocks.
 - **Product blocks** (component `productBlocks`) draw as `block` jobs at `product.buy-box` (in the buy box, after the buttons) or `product.below` (after the modules), from the same `StorefrontProductPage`.
 
@@ -87,6 +87,14 @@ Component sections, product blocks and skins use the app settings types (`text`,
 The editor shows a media picker, a product source or product picker, a link field and a repeatable item list. Values are resolved against the schema as it is now (`resolveStorefrontSettings`): a removed setting drops, a new one takes its default, a deleted image or product resolves to `null`. Skin and product block settings cannot use `image`, `products` or `product`: a skin draws from its unit's projection and must not add reads (ship images in the app's public files).
 
 The page reads every image, product list and picked product its component sections name in one batch (`readAppComponentData`), with the homepage limits (40 images, 8 product lists). That batch follows the apps' read, which names the settings schemas, so component sections add one wave to the page, and a `collection:` source one more (its rules are read first). `apps/api/src/storefront-render-budget.test.ts` measures both.
+
+## Dynamic sources and Objects
+
+A section, block value, skin or app placement may store `bindings` beside its literal settings. Each setting path maps to `{ source }`, for example `heading: { source: "resource.title" }` or `subtitle: { source: "object.custom.testimonials.featured.quote" }`. Sources cover resource title/description/image/URL, `resource.cf.<namespace>.<key>`, a published object field, or an object list. The literal value remains the fallback when a source is absent or incompatible. The builder's Connect picker writes this same contract.
+
+Theme writes validate target paths and source types; stored documents parse only the current version. Objects resolve in the API's existing section read wave, with a bounded number of distinct types and `obj:<typeId>` dependency proofs. Public object rows must be published in a storefront-visible type. Unused sources add no database reads.
+
+A component section may declare `reads: [{ object, where?, limit }]`. The host validates the declared type, visibility and indexed filter, resolves any setting-backed filter from the placement, and supplies the result as `objects` in its section props. An app cannot use this declaration to read private records or another app's namespace. Noor's testimonials exercise the Objects path.
 
 ## A storefront module
 
@@ -285,7 +293,7 @@ Noor, a full theme, packs to a 40 KB module, 3.8 KB of islands and a 44 KB style
 
 - **One call per app per page.** Every component an app draws on a page (header, footer, every card in a listing, every section) joins one batch, sent once (`ExtensionHost`). A product-main or listing-main skin is drawn first (the page needs to know whether core draws), so those pages make one more batch to the app.
 - **Memo.** Each isolate keeps an LRU of rendered output (2,000 entries, 8 MiB) keyed by the app's release, the job and its context. A popular page's cards and chrome render once per isolate, not per request.
-- **No new reads.** Skins and product blocks draw from data the page already has (the layout's menus and store info, the product part, the listing part, the homepage section data); their projections are built only when a skin draws. Component section data joins the page's existing batch. `apps/storefront/src/lib/route-tests/skins.render.test.ts` holds a skinned product page to one batch call.
+- **Bounded reads.** Skins and product blocks draw from data the page already has (the layout's menus and store info, the product part, the listing part, the homepage section data); their projections are built only when a skin draws. Component section data joins the page's existing batch. `apps/storefront/src/lib/route-tests/skins.render.test.ts` holds a skinned product page to one batch call.
 - **Existing page cache.** Rendered pages use the storefront's dependency-validated
   HTML cache; do not add purge or generation-bump paths. Release files are
   immutable for a year (`/_x/<id>/<release>/`), so an update is a new URL. Installs
@@ -313,7 +321,7 @@ The merchant owns their apps (private or uploaded). The platform makes what an a
   sanitization does not sandbox an approved island. HttpOnly cookies prevent
   reading cookie values, not making otherwise-authorized same-origin requests.
 - Output passes `sanitizePluginHtml` (`component` profile), an allowlist. It keeps content, list, table and form elements, `h1`, `video`, an SVG drawing subset, islands and core embeds; classes; `id`s that start with the app name (`noor-…` for `scalius.noor`); inline style without loading functions (`url()`, `image-set()`, …), escapes or comments; forms that post to a store path; and schema.org JSON-LD (dropped on `noindex` pages). It drops everything else: `<script>`, `<style>` (CSS belongs in the stylesheet), `<iframe>`, `<noscript>`, `<template>`, `<math>`, SVG animation and `foreignObject`, event handlers, `data-sx-*` (host attributes), and every URL that is not a store path, `http(s)` (the store's media origin is http on a local stack), `mailto`, `tel` or a fragment. Test with `storefrontShown(html, pluginId)` (`/storefront/testing`): `dropped` counts what it left out.
-- App components, their islands, stylesheets and connect hosts never reach a buyer's page (checkout, the receipt, account, payment recovery, order tracking; `appComponentsRenderOn` in `apps/storefront/src/lib/app-scripts.ts`): the core chrome renders there.
+- App components, their islands, stylesheets and connect hosts never reach a buyer's page (cart, checkout, the receipt, account, payment recovery, order tracking; `appComponentsRenderOn` in `apps/storefront/src/lib/app-scripts.ts`): the core chrome renders there.
 - Island code is served from the store's origin under its release; CSP `script-src` gains nothing. Connect hosts join `connect-src` and `img-src` only, on pages whose theme uses the app.
 - A page drawn with a fallback (a component late, failed, refused, or a release the isolate cannot load) is never stored in the page cache.
 - SVG files are served with a sandboxing CSP and `nosniff`.
@@ -326,6 +334,6 @@ The document keeps skins under `apps.skins` (`header`, `footer`, `product-card`,
 
 The component ABI (`STOREFRONT_COMPONENT_ABI`) and the data shapes are part of the plugin API (`PLUGIN_API_VERSION`): within a version they only gain optional fields. A breaking change bumps the ABI with a changelog entry; app authors repack, merchants update the app. Merchants never touch storefront code.
 
-See [UI verification](UI-VERIFICATION.md) for the composed-journey release bar
-and [extension hardening](STOREFRONT-EXTENSION-HARDENING.md) for the next contract
-improvements. Proposed helpers there are not shipped SDK APIs.
+The ABI snapshot gate (`packages/shared/src/plugins/abi.snapshot.test.ts`) captures manifest JSON Schema, SDK declarations, protocol constants, events and public handler schemas. Stable HTTP operations have a separate compatibility gate. Review an additive change before updating a snapshot; a snapshot update cannot authorize a breaking change.
+
+See [UI verification](UI-VERIFICATION.md) for the composed-journey release bar. `pnpm plugin preview <path>` and `pnpm plugin dev <path>` provide static fixture previews; core embeds are placeholders and require local-store verification of their real behavior.

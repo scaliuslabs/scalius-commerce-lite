@@ -26,9 +26,9 @@ describe("pnpm plugin pack: storefront components", () => {
     const plugin = makeTempPlugin();
     try {
       editSource(plugin.dir, (source) => source.replace("  storefront: {", '  storefront: {\n    skins: [{ id: "masthead", target: "header", name: "Masthead", settings: [] }],'));
-      const writeHeader = (html) => writeFileSync(join(plugin.dir, "src/storefront.ts"), `
+      const writeHeader = (html) => writeFileSync(join(plugin.dir, "src/storefront.tsx"), `
         import { defineStorefront, raw } from "@scalius/plugin-sdk/storefront";
-        export default defineStorefront({ skins: { masthead: () => raw(${JSON.stringify(html)}) } });
+        export default defineStorefront({ sections: { banner: () => null }, skins: { masthead: () => raw(${JSON.stringify(html)}) } });
       `);
       writeHeader('<header id="menu"><nav id="menu"></nav></header>');
       await expect(packPlugin(plugin.dir)).rejects.toThrow('skin:masthead (header): Duplicate id "menu"');

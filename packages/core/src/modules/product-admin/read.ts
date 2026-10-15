@@ -567,10 +567,12 @@ export async function getProductsByIds(
 export async function getProductDetails(
     db: Database,
     id: string,
-): Promise<ProductWithDetails | null> {
+    relatedObjectsProjection?: SQL<string | null>,
+): Promise<(ProductWithDetails & { relatedObjectsJson: string | null }) | null> {
     // Every read is keyed by the product id: one wave, not three.
     const productRead = db
         .select({
+            relatedObjectsJson: relatedObjectsProjection ?? sql<string | null>`null`,
             id: products.id,
             name: products.name,
             description: products.description,
@@ -585,6 +587,8 @@ export async function getProductDetails(
             excludeFromSitemap: products.excludeFromSitemap,
             salesChannelIds: publishedChannelIdsSql(sql`${products.id}`),
             productCondition: products.productCondition,
+            emiEligible: products.emiEligible,
+            pageTemplate: products.pageTemplate,
             aggregateRevision: products.aggregateRevision,
             createdAt: products.createdAt,
             updatedAt: products.updatedAt,
@@ -662,7 +666,7 @@ export async function getProductDetails(
             attributeId: attr.attributeId,
             value: attr.value,
         })),
-    } as ProductWithDetails;
+    } as ProductWithDetails & { relatedObjectsJson: string | null };
 }
 
 /** Returns aggregate product and category counts for the products dashboard. */

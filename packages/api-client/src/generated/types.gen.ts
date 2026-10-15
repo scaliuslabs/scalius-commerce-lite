@@ -66,11 +66,37 @@ export type StorefrontCustomField = {
     namespace: string;
     key: string;
     name: string;
-    type: 'single_line_text' | 'multi_line_text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'date_time' | 'url' | 'color' | 'json' | 'money' | 'product_reference' | 'variant_reference' | 'collection_reference' | 'media_reference' | 'list.single_line_text' | 'list.multi_line_text' | 'list.integer' | 'list.decimal' | 'list.date' | 'list.date_time' | 'list.url' | 'list.color' | 'list.money' | 'list.product_reference' | 'list.variant_reference' | 'list.collection_reference' | 'list.media_reference';
+    type: 'single_line_text' | 'multi_line_text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'date_time' | 'url' | 'color' | 'json' | 'money' | 'product_reference' | 'variant_reference' | 'collection_reference' | 'media_reference' | 'object_reference' | 'list.single_line_text' | 'list.multi_line_text' | 'list.integer' | 'list.decimal' | 'list.date' | 'list.date_time' | 'list.url' | 'list.color' | 'list.money' | 'list.product_reference' | 'list.variant_reference' | 'list.collection_reference' | 'list.media_reference' | 'list.object_reference';
+    /**
+     * Qualified target type for object references.
+     */
+    to?: string;
+    /**
+     * One published scalar object reference, containing declared public fields only.
+     */
+    object?: {
+        handle: string | null;
+        fields: Array<{
+            key: string;
+            name: string;
+            type: 'single_line_text' | 'multi_line_text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'date_time' | 'url' | 'color' | 'json' | 'money' | 'product_reference' | 'variant_reference' | 'collection_reference' | 'media_reference' | 'object_reference' | 'list.single_line_text' | 'list.multi_line_text' | 'list.integer' | 'list.decimal' | 'list.date' | 'list.date_time' | 'list.url' | 'list.color' | 'list.money' | 'list.product_reference' | 'list.variant_reference' | 'list.collection_reference' | 'list.media_reference' | 'list.object_reference';
+            value?: unknown;
+        }>;
+    };
     /**
      * JSON per the type: text, dates, URLs, colours and record ids as strings; integers as numbers; decimals as decimal strings; booleans; any JSON for `json`; money in decimal major units of the store currency; lists as arrays.
      */
     value?: unknown;
+    /**
+     * Resolved public product, collection, or image reference; absent when its target is unavailable.
+     */
+    reference?: {
+        id: string;
+        url: string;
+        alt?: string;
+        width?: number;
+        height?: number;
+    };
 };
 
 export type ProductCardFacts = {
@@ -125,6 +151,20 @@ export type ProductCardFacts = {
 export type NullableTimestamp = string | number | null;
 
 export type StorefrontHomepageSections = {
+    bindingObjects?: {
+        [key: string]: {
+            records: Array<{
+                id: string;
+                handle: string | null;
+                data: {
+                    [key: string]: unknown;
+                };
+            }>;
+            fields: {
+                [key: string]: string;
+            };
+        };
+    };
     lists: Array<{
         key: string;
         products: Array<{
@@ -154,6 +194,12 @@ export type StorefrontHomepageSections = {
                 count: number;
             } | null;
             cardFacts?: ProductCardFacts;
+            /**
+             * Requested storefront-visible card fields, keyed by namespace.key.
+             */
+            fields?: {
+                [key: string]: unknown;
+            };
         }>;
         category: {
             id: string;
@@ -241,6 +287,12 @@ export type StorefrontHomepageSections = {
                 count: number;
             } | null;
             cardFacts?: ProductCardFacts;
+            /**
+             * Requested storefront-visible card fields, keyed by namespace.key.
+             */
+            fields?: {
+                [key: string]: unknown;
+            };
         }>;
         featuredProduct: {
             id: string;
@@ -269,6 +321,12 @@ export type StorefrontHomepageSections = {
                 count: number;
             } | null;
             cardFacts?: ProductCardFacts;
+            /**
+             * Requested storefront-visible card fields, keyed by namespace.key.
+             */
+            fields?: {
+                [key: string]: unknown;
+            };
         } | null;
     }>;
     /**
@@ -303,12 +361,26 @@ export type StorefrontHomepageSections = {
                 source: string;
                 products: Array<unknown>;
             }>;
+            objects?: {
+                [key: string]: {
+                    records: Array<{
+                        id: string;
+                        handle: string | null;
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    }>;
+                    fields: {
+                        [key: string]: string;
+                    };
+                };
+            };
         };
     }>;
     /**
-     * The Metaobjects sections' content types (only those with storefront access) and their published entries, by definition id.
+     * The Objects sections' content types (only those with storefront access) and their published entries, by definition id.
      */
-    metaobjects?: Array<{
+    objects?: Array<{
         id: string;
         name: string;
         entries: Array<{
@@ -362,7 +434,7 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 9;
+    version: 10;
     template: 'department-mall' | 'boutique' | 'marketplace' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
@@ -410,17 +482,32 @@ export type StorefrontThemeDocument = {
             settings: {
                 [key: string]: never;
             };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         } | {
             variant: 'announcement';
             settings: {
                 text: string;
                 link: string | null;
             };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         } | {
             variant: 'utility';
             settings: {
                 text: string;
                 link: string | null;
+            };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
             };
         };
         header: {
@@ -430,6 +517,11 @@ export type StorefrontThemeDocument = {
                 rowTone: 'page' | 'header';
                 cartTotal: boolean;
             };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         } | {
             variant: 'search-first';
             settings: {
@@ -437,12 +529,22 @@ export type StorefrontThemeDocument = {
                 rowTone: 'page' | 'header';
                 cartTotal: boolean;
             };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         } | {
             variant: 'centered-logo';
             settings: {
                 search: 'icon' | 'field';
                 rowTone: 'page' | 'header';
                 cartTotal: boolean;
+            };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
             };
         };
         navigation: {
@@ -455,30 +557,60 @@ export type StorefrontThemeDocument = {
             settings: {
                 [key: string]: never;
             };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         } | {
             variant: 'cascading';
             settings: {
                 [key: string]: never;
+            };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
             };
         } | {
             variant: 'mega-panel';
             settings: {
                 promoImages: boolean;
             };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         } | {
             variant: 'drill-in-drawer';
             settings: {
                 [key: string]: never;
+            };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
             };
         } | {
             variant: 'departments-rail';
             settings: {
                 open: 'demand' | 'always';
             };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         } | {
             variant: 'sticky-category-bar';
             settings: {
                 flyouts: 'dropdown' | 'cascading';
+            };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
             };
         };
         mobileNav: {
@@ -486,16 +618,31 @@ export type StorefrontThemeDocument = {
             settings: {
                 [key: string]: never;
             };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         } | {
             variant: 'drill-in-drawer';
             settings: {
                 [key: string]: never;
+            };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
             };
         } | {
             variant: 'bottom-tabs';
             settings: {
                 tabs: Array<'home' | 'categories' | 'offers' | 'compare' | 'account'>;
                 drawer: 'accordion' | 'drill-in';
+            };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
             };
         };
         card: {
@@ -505,6 +652,12 @@ export type StorefrontThemeDocument = {
                 action: 'none' | 'quick-add' | 'full';
                 hoverImage: boolean;
             };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
+            fields?: Array<string>;
         };
         listing: {
             layout: {
@@ -512,10 +665,20 @@ export type StorefrontThemeDocument = {
                 settings: {
                     [key: string]: never;
                 };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
+                };
             } | {
                 variant: 'list';
                 settings: {
                     [key: string]: never;
+                };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
                 };
             } | {
                 variant: 'shelves';
@@ -523,10 +686,20 @@ export type StorefrontThemeDocument = {
                     maxShelves: number;
                     spacing: 'standard' | 'airy';
                 };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
+                };
             } | {
                 variant: 'quick-grid';
                 settings: {
                     [key: string]: never;
+                };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
                 };
             };
             searchLayout: 'same' | 'grid' | 'list';
@@ -557,30 +730,60 @@ export type StorefrontThemeDocument = {
                 settings: {
                     [key: string]: never;
                 };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
+                };
             } | {
                 variant: 'thumbs-below';
                 settings: {
                     [key: string]: never;
+                };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
                 };
             } | {
                 variant: 'thumbs-left';
                 settings: {
                     phoneSideThumbnails?: boolean;
                 };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
+                };
             } | {
                 variant: 'stacked';
                 settings: {
                     [key: string]: never;
+                };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
                 };
             } | {
                 variant: 'portrait';
                 settings: {
                     [key: string]: never;
                 };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
+                };
             } | {
                 variant: 'image-grid';
                 settings: {
                     [key: string]: never;
+                };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
                 };
             };
             buyBox: {
@@ -592,10 +795,20 @@ export type StorefrontThemeDocument = {
                     emi: boolean;
                     whatsapp: boolean;
                 };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
+                };
             } | {
                 variant: 'marketplace-3col';
                 settings: {
                     [key: string]: never;
+                };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
                 };
             };
             below: Array<'key-attributes' | 'about-bullets' | 'spec-table' | 'description' | 'content-blocks' | 'compare-similar' | 'warranty' | 'reviews' | 'policies' | 'related' | 'recently-viewed'>;
@@ -606,6 +819,11 @@ export type StorefrontThemeDocument = {
                     [key: string]: string | number | boolean | Array<string> | Array<{
                         [key: string]: string | number | boolean | unknown;
                     }> | unknown;
+                };
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
                 };
             }>;
             sticky: {
@@ -622,6 +840,11 @@ export type StorefrontThemeDocument = {
                 about: string;
                 copyright: string;
             };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         } | {
             variant: 'centered-compact';
             settings: {
@@ -630,6 +853,11 @@ export type StorefrontThemeDocument = {
                 about: string;
                 copyright: string;
             };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         } | {
             variant: 'directory';
             settings: {
@@ -637,6 +865,11 @@ export type StorefrontThemeDocument = {
                 tagline: string;
                 about: string;
                 copyright: string;
+            };
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
             };
         };
     };
@@ -677,6 +910,11 @@ export type StorefrontSkinRef = {
             [key: string]: string | number | boolean | unknown;
         }> | unknown;
     };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
+    };
 };
 
 export type StorefrontSectionList = Array<{
@@ -704,6 +942,11 @@ export type StorefrontSectionList = Array<{
             buttonLabel?: string;
             link: string | null;
             hidden?: boolean;
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         }>;
         phonePlacement?: 'after-categories';
         sideBanners?: Array<{
@@ -711,8 +954,18 @@ export type StorefrontSectionList = Array<{
             alt: string;
             href: string | null;
             hidden?: boolean;
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         }>;
         phoneHeight?: 'screen' | 'compact';
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -731,7 +984,17 @@ export type StorefrontSectionList = Array<{
                 title: string;
                 detail: string;
                 hidden?: boolean;
+                bindings?: {
+                    [key: string]: {
+                        source: string;
+                    };
+                };
             }>;
+        };
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
         };
     };
     skin?: StorefrontSkinRef;
@@ -746,6 +1009,11 @@ export type StorefrontSectionList = Array<{
         title: string;
         categoryIds: Array<string>;
     };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
+    };
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -757,6 +1025,11 @@ export type StorefrontSectionList = Array<{
         carousel: 'large' | 'compact';
         collectionIds: Array<string>;
         title?: string;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -781,6 +1054,11 @@ export type StorefrontSectionList = Array<{
             categoryId: string;
         };
         limit: number;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -807,6 +1085,11 @@ export type StorefrontSectionList = Array<{
         columns: number;
         rows: number;
     };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
+    };
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -830,6 +1113,12 @@ export type StorefrontSectionList = Array<{
             categoryId: string;
         };
         promotionId?: string | null;
+        mediaId?: string | null;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -856,8 +1145,18 @@ export type StorefrontSectionList = Array<{
                 categoryId: string;
             };
             hidden?: boolean;
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         }>;
         limit: number;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -871,9 +1170,20 @@ export type StorefrontSectionList = Array<{
         cards: Array<{
             mediaId: string;
             title: string;
+            subtitle?: string;
             href: string;
             hidden?: boolean;
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         }>;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -888,7 +1198,17 @@ export type StorefrontSectionList = Array<{
             alt: string;
             href: string | null;
             hidden?: boolean;
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         }>;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -915,6 +1235,11 @@ export type StorefrontSectionList = Array<{
         };
         photo: 'tall' | 'square';
     };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
+    };
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -932,6 +1257,11 @@ export type StorefrontSectionList = Array<{
             href: string;
         } | null;
     };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
+    };
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -942,6 +1272,11 @@ export type StorefrontSectionList = Array<{
     settings: {
         title: string;
         style: 'grid' | 'rail';
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -967,6 +1302,11 @@ export type StorefrontSectionList = Array<{
             title: string;
             text: string;
             hidden?: boolean;
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         }>;
     } | {
         layout: 'testimonial';
@@ -974,7 +1314,43 @@ export type StorefrontSectionList = Array<{
             quote: string;
             author: string;
             hidden?: boolean;
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         }>;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
+    };
+    skin?: StorefrontSkinRef;
+} | {
+    id: string;
+    type: 'specifications';
+    version: 1;
+    hidden?: boolean;
+    aiDraft?: true;
+    settings: {
+        heading: string;
+        objectField?: string;
+        rows: Array<{
+            label: string;
+            value: string;
+            hidden?: boolean;
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
+        }>;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -989,7 +1365,17 @@ export type StorefrontSectionList = Array<{
             question: string;
             answer: string;
             hidden?: boolean;
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         }>;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -1004,7 +1390,17 @@ export type StorefrontSectionList = Array<{
             text: string;
             href: string;
             hidden?: boolean;
+            bindings?: {
+                [key: string]: {
+                    source: string;
+                };
+            };
         }>;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -1017,6 +1413,11 @@ export type StorefrontSectionList = Array<{
         title: string;
         pageSize: 12 | 24 | 36;
     };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
+    };
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1028,6 +1429,11 @@ export type StorefrontSectionList = Array<{
         heading: string;
         body: string;
     };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
+    };
     skin?: StorefrontSkinRef;
 } | {
     id: string;
@@ -1038,18 +1444,28 @@ export type StorefrontSectionList = Array<{
     settings: {
         title: string;
     };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
+    };
     skin?: StorefrontSkinRef;
 } | {
     id: string;
-    type: 'metaobjects';
+    type: 'objects';
     version: 1;
     hidden?: boolean;
     aiDraft?: true;
     settings: {
         heading: string;
-        definitionId: string;
+        typeId: string;
         layout: 'list' | 'grid' | 'accordion';
         limit: number;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -1061,9 +1477,15 @@ export type StorefrontSectionList = Array<{
     settings: {
         heading: string;
         text: string;
+        mediaId?: string | null;
         email?: 'optional' | 'required' | 'hidden';
         whatsapp?: boolean;
         buttonLabel?: string;
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
+        };
     };
     skin?: StorefrontSkinRef;
 } | {
@@ -1078,6 +1500,11 @@ export type StorefrontSectionList = Array<{
             [key: string]: string | number | boolean | Array<string> | Array<{
                 [key: string]: string | number | boolean | unknown;
             }> | unknown;
+        };
+    };
+    bindings?: {
+        [key: string]: {
+            source: string;
         };
     };
 }>;
@@ -1214,6 +1641,65 @@ export type GiftCardBalance = {
     status: 'active' | 'disabled' | 'expired';
 };
 
+export type BuyerUiNode = {
+    type: 'stack' | 'columns';
+    children: Array<BuyerUiNode>;
+} | {
+    type: 'heading' | 'text';
+    text: string;
+} | {
+    type: 'badge' | 'banner';
+    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+    title?: string;
+    text?: string;
+} | {
+    type: 'divider';
+} | {
+    type: 'key-value';
+    items: Array<{
+        label: string;
+        value: string;
+    }>;
+} | {
+    type: 'image';
+    src: {
+        media: string;
+    } | {
+        app: string;
+    };
+    alt: string;
+} | {
+    type: 'link';
+    text: string;
+    path: string;
+} | {
+    type: 'field';
+    attribute: string;
+} | {
+    type: 'button';
+    label: string;
+    action: {
+        kind: 'add_line';
+        variantId: string;
+        quantity: number;
+    } | {
+        kind: 'set_attribute';
+        key: string;
+        value: string;
+    } | {
+        kind: 'apply_code';
+        code: string;
+    } | {
+        kind: 'app_route';
+        route: string;
+        body?: BuyerUiJson;
+    };
+};
+
+export type BuyerUiJson = string | number | boolean | unknown | Array<BuyerUiJson & unknown> | {
+    [key: string]: BuyerUiJson & unknown;
+};
+
 export type OrderLineExtras = {
     review?: OrderLineReviewExtra;
     downloads?: Array<OrderLineDownloadExtra>;
@@ -1292,6 +1778,85 @@ export type CustomerAccountSummary = {
     downloads: number;
     giftCards: number;
     activeWarranties: number;
+    buyerUi: Array<{
+        appId: string;
+        releaseId: string;
+        target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
+        ui: {
+            type: 'stack' | 'columns';
+            children: Array<BuyerUiNode>;
+        } | {
+            type: 'heading' | 'text';
+            text: string;
+        } | {
+            type: 'badge' | 'banner';
+            tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+            title?: string;
+            text?: string;
+        } | {
+            type: 'divider';
+        } | {
+            type: 'key-value';
+            items: Array<{
+                label: string;
+                value: string;
+            }>;
+        } | {
+            type: 'image';
+            src: {
+                media: string;
+            } | {
+                app: string;
+            };
+            alt: string;
+        } | {
+            type: 'link';
+            text: string;
+            path: string;
+        } | {
+            type: 'field';
+            attribute: string;
+        } | {
+            type: 'button';
+            label: string;
+            action: {
+                kind: 'add_line';
+                variantId: string;
+                quantity: number;
+            } | {
+                kind: 'set_attribute';
+                key: string;
+                value: string;
+            } | {
+                kind: 'apply_code';
+                code: string;
+            } | {
+                kind: 'app_route';
+                route: string;
+                body?: BuyerUiJson;
+            };
+        };
+        attributes: Array<{
+            key: string;
+            label: string;
+            help?: string;
+            type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice';
+            required?: boolean;
+            maxLength?: number;
+            min?: number;
+            max?: number;
+            choices?: Array<{
+                value: string;
+                label: string;
+            }>;
+        }>;
+        values: {
+            [key: string]: string;
+        };
+        media?: {
+            [key: string]: string;
+        };
+    }>;
 };
 
 export type BuyerReviews = {
@@ -1787,50 +2352,50 @@ export type PriceListVariant = {
     }>;
 };
 
-export type MetaobjectDefinition = {
+export type ObjectType = {
     id: string;
-    /**
-     * <namespace>.<type>: custom.faq, or an app's acme.loyalty.tiers.
-     */
     handle: string;
     namespace: string;
     type: string;
     name: string;
     description: string | null;
-    fields: Array<MetaobjectFieldDefinition>;
-    displayField: string | null;
-    /**
-     * Published entries are readable by the storefront (theme sections).
-     */
-    storefrontAccess: boolean;
+    fields: Array<ObjectField>;
+    indexes: Array<string | Array<string>>;
+    unique: Array<string | Array<string>>;
+    display: string | null;
+    storefront: boolean;
+    admin: 'none' | 'read' | 'edit';
+    events: boolean;
+    handleEnabled: boolean;
     owner: 'merchant' | 'app';
-    entryCount: number;
+    recordCount: number;
     revision: number;
     createdAt: string;
     updatedAt: string;
 };
 
-export type MetaobjectFieldDefinition = {
+export type ObjectField = {
     key: string;
     name: string;
-    /**
-     * A custom-field type.
-     */
-    type: 'single_line_text' | 'multi_line_text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'date_time' | 'url' | 'color' | 'json' | 'money' | 'product_reference' | 'variant_reference' | 'collection_reference' | 'media_reference' | 'list.single_line_text' | 'list.multi_line_text' | 'list.integer' | 'list.decimal' | 'list.date' | 'list.date_time' | 'list.url' | 'list.color' | 'list.money' | 'list.product_reference' | 'list.variant_reference' | 'list.collection_reference' | 'list.media_reference';
+    type: 'single_line_text' | 'multi_line_text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'date_time' | 'url' | 'color' | 'json' | 'money' | 'product_reference' | 'variant_reference' | 'collection_reference' | 'media_reference' | 'object_reference' | 'list.single_line_text' | 'list.multi_line_text' | 'list.integer' | 'list.decimal' | 'list.date' | 'list.date_time' | 'list.url' | 'list.color' | 'list.money' | 'list.product_reference' | 'list.variant_reference' | 'list.collection_reference' | 'list.media_reference' | 'list.object_reference' | 'customer_reference' | 'order_reference';
+    to?: string;
     required?: boolean;
     description?: string;
+    validations?: {
+        min?: string | number | unknown;
+        max?: string | number | unknown;
+        regex?: string | null;
+        choices?: Array<string> | null;
+    };
 };
 
-export type MetaobjectEntry = {
+export type ObjectRecord = {
     id: string;
-    definitionId: string;
-    handle: string;
+    typeId: string;
+    handle: string | null;
+    status: 'active' | 'draft' | 'published';
     displayName: string;
-    status: 'draft' | 'published';
-    /**
-     * Field key → value in the custom-field contract (money in major units).
-     */
-    fields: {
+    data: {
         [key: string]: unknown;
     };
     position: number;
@@ -2741,7 +3306,7 @@ export type AppSummary = {
      * The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk).
      */
     functions: Array<{
-        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods' | 'order.risk';
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods' | 'order.risk' | 'buyer.ui';
         /**
          * Lower runs first among apps at the same point.
          */
@@ -2751,9 +3316,9 @@ export type AppSummary = {
          */
         onError: 'skip' | 'block';
         /**
-         * checkout.discounts and cart.line_prices: the app reads the signed-in buyer's record in this collection (checkout.discounts also updates it with each order).
+         * checkout.discounts and cart.line_prices: the app reads the signed-in buyer's record in this object type (checkout.discounts also updates it with each order).
          */
-        snapshotCollection: string | null;
+        snapshotObject: string | null;
     }>;
 };
 
@@ -3102,7 +3667,7 @@ export type AppDetail = AppSummary & {
             error: string | null;
         } | null;
     }>;
-    storage: Array<string>;
+    objects: Array<string>;
     customFields: Array<{
         ownerType: string;
         key: string;
@@ -3337,8 +3902,9 @@ export type AdminCustomFieldDefinition = {
     key: string;
     name: string;
     description: string | null;
-    type: 'single_line_text' | 'multi_line_text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'date_time' | 'url' | 'color' | 'json' | 'money' | 'product_reference' | 'variant_reference' | 'collection_reference' | 'media_reference' | 'list.single_line_text' | 'list.multi_line_text' | 'list.integer' | 'list.decimal' | 'list.date' | 'list.date_time' | 'list.url' | 'list.color' | 'list.money' | 'list.product_reference' | 'list.variant_reference' | 'list.collection_reference' | 'list.media_reference';
+    type: 'single_line_text' | 'multi_line_text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'date_time' | 'url' | 'color' | 'json' | 'money' | 'product_reference' | 'variant_reference' | 'collection_reference' | 'media_reference' | 'object_reference' | 'list.single_line_text' | 'list.multi_line_text' | 'list.integer' | 'list.decimal' | 'list.date' | 'list.date_time' | 'list.url' | 'list.color' | 'list.money' | 'list.product_reference' | 'list.variant_reference' | 'list.collection_reference' | 'list.media_reference' | 'list.object_reference';
     validations: {
+        to?: string | null;
         min?: string | number | unknown;
         max?: string | number | unknown;
         regex?: string | null;
@@ -4258,6 +4824,12 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
                 cardFacts?: ProductCardFacts;
+                /**
+                 * Requested storefront-visible card fields, keyed by namespace.key.
+                 */
+                fields?: {
+                    [key: string]: unknown;
+                };
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
@@ -4292,6 +4864,12 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
                 cardFacts?: ProductCardFacts;
+                /**
+                 * Requested storefront-visible card fields, keyed by namespace.key.
+                 */
+                fields?: {
+                    [key: string]: unknown;
+                };
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
@@ -4652,6 +5230,12 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
                 cardFacts?: ProductCardFacts;
+                /**
+                 * Requested storefront-visible card fields, keyed by namespace.key.
+                 */
+                fields?: {
+                    [key: string]: unknown;
+                };
                 category: {
                     id: string;
                     name: string;
@@ -4738,6 +5322,58 @@ export type GetApiV1BrandsBySlugProductsResponses = {
 };
 
 export type GetApiV1BrandsBySlugProductsResponse = GetApiV1BrandsBySlugProductsResponses[keyof GetApiV1BrandsBySlugProductsResponses];
+
+export type GetApiV1ObjectsByTypeData = {
+    body?: never;
+    path: {
+        type: string;
+    };
+    query?: {
+        handle?: string;
+        limit?: number;
+    };
+    url: '/api/v1/objects/{type}';
+};
+
+export type GetApiV1ObjectsByTypeErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1ObjectsByTypeError = GetApiV1ObjectsByTypeErrors[keyof GetApiV1ObjectsByTypeErrors];
+
+export type GetApiV1ObjectsByTypeResponses = {
+    /**
+     * Published records in merchant order; private reference fields are omitted.
+     */
+    200: {
+        success: true;
+        data: {
+            fields: {
+                [key: string]: string;
+            };
+            records: Array<{
+                id: string;
+                handle: string | null;
+                data: {
+                    [key: string]: unknown;
+                };
+            }>;
+        };
+    };
+};
+
+export type GetApiV1ObjectsByTypeResponse = GetApiV1ObjectsByTypeResponses[keyof GetApiV1ObjectsByTypeResponses];
 
 export type GetApiV1SearchData = {
     body?: never;
@@ -5964,6 +6600,7 @@ export type GetApiV1StorefrontTemplateByKindData = {
          * The page's subfolder presence (`en-in`); its market prices the products shown. Omit for the root (the backup market). An inactive or unknown presence answers 404.
          */
         presence?: string;
+        resource?: string;
     };
     url: '/api/v1/storefront/template/{kind}';
 };
@@ -6030,53 +6667,6 @@ export type GetApiV1StorefrontExtensionsByPluginIdByReleaseResponses = {
 };
 
 export type GetApiV1StorefrontExtensionsByPluginIdByReleaseResponse = GetApiV1StorefrontExtensionsByPluginIdByReleaseResponses[keyof GetApiV1StorefrontExtensionsByPluginIdByReleaseResponses];
-
-export type GetApiV1StorefrontAppBlocksByPageData = {
-    body?: never;
-    path: {
-        page: 'checkout' | 'order' | 'account';
-    };
-    query?: never;
-    url: '/api/v1/storefront/app-blocks/{page}';
-};
-
-export type GetApiV1StorefrontAppBlocksByPageErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type GetApiV1StorefrontAppBlocksByPageError = GetApiV1StorefrontAppBlocksByPageErrors[keyof GetApiV1StorefrontAppBlocksByPageErrors];
-
-export type GetApiV1StorefrontAppBlocksByPageResponses = {
-    /**
-     * The drawn blocks, in app id then manifest order
-     */
-    200: {
-        success: true;
-        data: {
-            blocks: Array<{
-                /**
-                 * <app id>/<block type>
-                 */
-                id: string;
-                app: string;
-                target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
-                /**
-                 * Sanitized HTML. Checkout blocks hold no forms.
-                 */
-                html: string;
-            }>;
-        };
-    };
-};
-
-export type GetApiV1StorefrontAppBlocksByPageResponse = GetApiV1StorefrontAppBlocksByPageResponses[keyof GetApiV1StorefrontAppBlocksByPageResponses];
 
 export type GetApiV1StorefrontPagesSlugBySlugData = {
     body?: never;
@@ -6383,7 +6973,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 pluginId: string;
                 src: string;
                 placement: 'head' | 'body-end';
-                pages: Array<'all' | 'home' | 'product' | 'listing' | 'cart'>;
+                pages: Array<'all' | 'home' | 'product' | 'listing'>;
             }>;
             /**
              * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the component sections, component product blocks and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
@@ -6423,10 +7013,6 @@ export type GetApiV1StorefrontLayoutResponses = {
                 stylesheet: boolean;
                 connect: Array<string>;
             }>;
-            /**
-             * The page groups where an active app draws a checkout or customer-account block. Only these pages read /storefront/app-blocks/{page}.
-             */
-            appBlockPages: Array<'checkout' | 'order' | 'account'>;
             appServices: {
                 /**
                  * The search app predictive search passes as `provider` to /search; null: built-in search.
@@ -6608,6 +7194,7 @@ export type PostApiV1StorefrontThemePreviewHomepageData = {
         template?: 'product' | 'collection' | 'cart' | 'page';
         sections?: StorefrontSectionList;
         presence?: string;
+        resource?: string;
     };
     path?: never;
     query?: never;
@@ -7314,6 +7901,14 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateData = {
          * Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).
          */
         customerPhone?: string | null;
+        attributes?: {
+            [key: string]: string;
+        };
+        shippingRateToken?: string | null;
+        /**
+         * True when delivery requires cash collection, including the balance after an online deposit.
+         */
+        cod?: boolean;
     };
     path: {
         contextId: string;
@@ -7369,6 +7964,14 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteData = {
          * Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).
          */
         customerPhone?: string | null;
+        attributes?: {
+            [key: string]: string;
+        };
+        shippingRateToken?: string | null;
+        /**
+         * True when delivery requires cash collection, including the balance after an online deposit.
+         */
+        cod?: boolean;
     };
     path: {
         contextId: string;
@@ -7416,6 +8019,7 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponses = 
             valid: true;
             contextRevision: number;
             quoteFingerprint: string;
+            shippingRateToken: string | null;
             displayLabel: string;
             pricesIncludeTax: boolean;
             shippingTaxed: boolean;
@@ -7477,6 +8081,10 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponse = P
 
 export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
     body: {
+        attributes?: {
+            [key: string]: string;
+        };
+        shippingRateToken?: string | null;
         expectedRevision: number;
         /**
          * Exact quote fingerprint reviewed and confirmed by the buyer before this submit.
@@ -10053,6 +10661,10 @@ export type PostApiV1CustomerAuthOrdersByIdClaimReceiptResponse = PostApiV1Custo
 
 export type GetApiV1CustomerAuthOrdersByIdData = {
     body?: never;
+    headers?: {
+        'x-storefront-language'?: string;
+        'x-storefront-locale'?: string;
+    };
     path: {
         id: string;
     };
@@ -10096,6 +10708,85 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
     200: {
         success: true;
         data: {
+            buyerUi: Array<{
+                appId: string;
+                releaseId: string;
+                target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
+                ui: {
+                    type: 'stack' | 'columns';
+                    children: Array<BuyerUiNode>;
+                } | {
+                    type: 'heading' | 'text';
+                    text: string;
+                } | {
+                    type: 'badge' | 'banner';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                    title?: string;
+                    text?: string;
+                } | {
+                    type: 'divider';
+                } | {
+                    type: 'key-value';
+                    items: Array<{
+                        label: string;
+                        value: string;
+                    }>;
+                } | {
+                    type: 'image';
+                    src: {
+                        media: string;
+                    } | {
+                        app: string;
+                    };
+                    alt: string;
+                } | {
+                    type: 'link';
+                    text: string;
+                    path: string;
+                } | {
+                    type: 'field';
+                    attribute: string;
+                } | {
+                    type: 'button';
+                    label: string;
+                    action: {
+                        kind: 'add_line';
+                        variantId: string;
+                        quantity: number;
+                    } | {
+                        kind: 'set_attribute';
+                        key: string;
+                        value: string;
+                    } | {
+                        kind: 'apply_code';
+                        code: string;
+                    } | {
+                        kind: 'app_route';
+                        route: string;
+                        body?: BuyerUiJson;
+                    };
+                };
+                attributes: Array<{
+                    key: string;
+                    label: string;
+                    help?: string;
+                    type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice';
+                    required?: boolean;
+                    maxLength?: number;
+                    min?: number;
+                    max?: number;
+                    choices?: Array<{
+                        value: string;
+                        label: string;
+                    }>;
+                }>;
+                values: {
+                    [key: string]: string;
+                };
+                media?: {
+                    [key: string]: string;
+                };
+            }>;
             order: {
                 id: string;
                 orderNumber: number | null;
@@ -12060,6 +12751,10 @@ export type PutApiV1CustomerAuthOrdersByIdConversationCartShareResponse = PutApi
 
 export type GetApiV1CustomerAuthAccountSummaryData = {
     body?: never;
+    headers?: {
+        'x-storefront-language'?: string;
+        'x-storefront-locale'?: string;
+    };
     path?: never;
     query?: never;
     url: '/api/v1/customer-auth/account-summary';
@@ -14614,6 +15309,10 @@ export type GetApiV1ShippingMethodsResponses = {
                 id: string;
                 name: string;
                 fee: number;
+                /**
+                 * flat for a configured fee; otherwise the courier provider. Calculated fees are available only in the checkout quote.
+                 */
+                rateSource: string;
                 freeOver: number | null;
                 kind: 'delivery' | 'pickup';
                 /**
@@ -14827,6 +15526,12 @@ export type GetApiV1ProductsResponses = {
                  */
                 secondaryImageUrl: string | null;
                 cardFacts?: ProductCardFacts;
+                /**
+                 * Requested storefront-visible card fields, keyed by namespace.key.
+                 */
+                fields?: {
+                    [key: string]: unknown;
+                };
                 category: {
                     id: string;
                     name: string;
@@ -16555,6 +17260,12 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
                 cardFacts?: ProductCardFacts;
+                /**
+                 * Requested storefront-visible card fields, keyed by namespace.key.
+                 */
+                fields?: {
+                    [key: string]: unknown;
+                };
                 category: {
                     id: string;
                     name: string;
@@ -16599,6 +17310,12 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
                 cardFacts?: ProductCardFacts;
+                /**
+                 * Requested storefront-visible card fields, keyed by namespace.key.
+                 */
+                fields?: {
+                    [key: string]: unknown;
+                };
                 category: {
                     id: string;
                     name: string;
@@ -16780,6 +17497,12 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
                 cardFacts?: ProductCardFacts;
+                /**
+                 * Requested storefront-visible card fields, keyed by namespace.key.
+                 */
+                fields?: {
+                    [key: string]: unknown;
+                };
                 category: {
                     id: string;
                     name: string;
@@ -17341,6 +18064,8 @@ export type PostApiV1OrdersLookupVerifyOtpResponse = PostApiV1OrdersLookupVerify
 export type GetApiV1OrdersReceiptByIdData = {
     body?: never;
     headers?: {
+        'x-storefront-language'?: string;
+        'x-storefront-locale'?: string;
         'X-Receipt-Token'?: string;
     };
     path: {
@@ -17367,6 +18092,85 @@ export type GetApiV1OrdersReceiptByIdResponses = {
         success: true;
         data: {
             order: {
+                buyerUi: Array<{
+                    appId: string;
+                    releaseId: string;
+                    target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
+                    ui: {
+                        type: 'stack' | 'columns';
+                        children: Array<BuyerUiNode>;
+                    } | {
+                        type: 'heading' | 'text';
+                        text: string;
+                    } | {
+                        type: 'badge' | 'banner';
+                        tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                        title?: string;
+                        text?: string;
+                    } | {
+                        type: 'divider';
+                    } | {
+                        type: 'key-value';
+                        items: Array<{
+                            label: string;
+                            value: string;
+                        }>;
+                    } | {
+                        type: 'image';
+                        src: {
+                            media: string;
+                        } | {
+                            app: string;
+                        };
+                        alt: string;
+                    } | {
+                        type: 'link';
+                        text: string;
+                        path: string;
+                    } | {
+                        type: 'field';
+                        attribute: string;
+                    } | {
+                        type: 'button';
+                        label: string;
+                        action: {
+                            kind: 'add_line';
+                            variantId: string;
+                            quantity: number;
+                        } | {
+                            kind: 'set_attribute';
+                            key: string;
+                            value: string;
+                        } | {
+                            kind: 'apply_code';
+                            code: string;
+                        } | {
+                            kind: 'app_route';
+                            route: string;
+                            body?: BuyerUiJson;
+                        };
+                    };
+                    attributes: Array<{
+                        key: string;
+                        label: string;
+                        help?: string;
+                        type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice';
+                        required?: boolean;
+                        maxLength?: number;
+                        min?: number;
+                        max?: number;
+                        choices?: Array<{
+                            value: string;
+                            label: string;
+                        }>;
+                    }>;
+                    values: {
+                        [key: string]: string;
+                    };
+                    media?: {
+                        [key: string]: string;
+                    };
+                }>;
                 id: string;
                 orderNumber: number | null;
                 customerName: string;
@@ -17729,6 +18533,9 @@ export type PostApiV1OrdersReceiptByIdSupportRequestsResponse = PostApiV1OrdersR
 
 export type PostApiV1OrdersCartValidationData = {
     body?: {
+        attributes?: {
+            [key: string]: string;
+        };
         items: Array<{
             cartKey?: string | null;
             productId: string;
@@ -17753,6 +18560,8 @@ export type PostApiV1OrdersCartValidationData = {
         shippingAdminArea?: string | null;
         shippingPostalCode?: string | null;
         shippingMethodId?: string | null;
+        shippingRateToken?: string | null;
+        cod?: boolean;
         /**
          * The page's subfolder presence (`en-in`): before an address is known, its market prices the cart. Omit at the root.
          */
@@ -17763,6 +18572,10 @@ export type PostApiV1OrdersCartValidationData = {
         giftCards?: Array<{
             handle: string;
         }>;
+    };
+    headers?: {
+        'x-storefront-language'?: string;
+        'x-storefront-locale'?: string;
     };
     path?: never;
     query?: never;
@@ -17789,6 +18602,85 @@ export type PostApiV1OrdersCartValidationResponses = {
     200: {
         success: true;
         data: {
+            buyerUi: Array<{
+                appId: string;
+                releaseId: string;
+                target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
+                ui: {
+                    type: 'stack' | 'columns';
+                    children: Array<BuyerUiNode>;
+                } | {
+                    type: 'heading' | 'text';
+                    text: string;
+                } | {
+                    type: 'badge' | 'banner';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                    title?: string;
+                    text?: string;
+                } | {
+                    type: 'divider';
+                } | {
+                    type: 'key-value';
+                    items: Array<{
+                        label: string;
+                        value: string;
+                    }>;
+                } | {
+                    type: 'image';
+                    src: {
+                        media: string;
+                    } | {
+                        app: string;
+                    };
+                    alt: string;
+                } | {
+                    type: 'link';
+                    text: string;
+                    path: string;
+                } | {
+                    type: 'field';
+                    attribute: string;
+                } | {
+                    type: 'button';
+                    label: string;
+                    action: {
+                        kind: 'add_line';
+                        variantId: string;
+                        quantity: number;
+                    } | {
+                        kind: 'set_attribute';
+                        key: string;
+                        value: string;
+                    } | {
+                        kind: 'apply_code';
+                        code: string;
+                    } | {
+                        kind: 'app_route';
+                        route: string;
+                        body?: BuyerUiJson;
+                    };
+                };
+                attributes: Array<{
+                    key: string;
+                    label: string;
+                    help?: string;
+                    type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice';
+                    required?: boolean;
+                    maxLength?: number;
+                    min?: number;
+                    max?: number;
+                    choices?: Array<{
+                        value: string;
+                        label: string;
+                    }>;
+                }>;
+                values: {
+                    [key: string]: string;
+                };
+                media?: {
+                    [key: string]: string;
+                };
+            }>;
             valid: boolean;
             issues: Array<{
                 index: number;
@@ -17904,6 +18796,9 @@ export type PostApiV1OrdersCartValidationResponse = PostApiV1OrdersCartValidatio
 
 export type PostApiV1OrdersTaxQuoteData = {
     body: {
+        attributes?: {
+            [key: string]: string;
+        };
         items: Array<{
             cartKey?: string | null;
             productId: string;
@@ -17927,6 +18822,8 @@ export type PostApiV1OrdersTaxQuoteData = {
         shippingAdminArea?: string | null;
         shippingPostalCode?: string | null;
         shippingMethodId?: string | null;
+        shippingRateToken?: string | null;
+        cod?: boolean;
         /**
          * The billing country (ISO 3166-1 alpha-2), one an active market sells to. An order that ships nothing needs one (absent: the store's only selling country); it is taxed and placed there.
          */
@@ -17950,6 +18847,10 @@ export type PostApiV1OrdersTaxQuoteData = {
         giftCards?: Array<{
             handle: string;
         }>;
+    };
+    headers?: {
+        'x-storefront-language'?: string;
+        'x-storefront-locale'?: string;
     };
     path?: never;
     query?: never;
@@ -17976,6 +18877,85 @@ export type PostApiV1OrdersTaxQuoteResponses = {
     200: {
         success: true;
         data: {
+            buyerUi: Array<{
+                appId: string;
+                releaseId: string;
+                target: 'purchase.checkout.contact.render-after' | 'purchase.checkout.shipping-option-list.render-after' | 'purchase.checkout.cart-line-list.render-after' | 'purchase.checkout.payment-method-list.render-after' | 'purchase.checkout.actions.render-before' | 'purchase.thank-you.customer-information.render-after' | 'customer-account.order-status.block.render' | 'customer-account.order-index.block.render' | 'customer-account.profile.block.render';
+                ui: {
+                    type: 'stack' | 'columns';
+                    children: Array<BuyerUiNode>;
+                } | {
+                    type: 'heading' | 'text';
+                    text: string;
+                } | {
+                    type: 'badge' | 'banner';
+                    tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
+                    title?: string;
+                    text?: string;
+                } | {
+                    type: 'divider';
+                } | {
+                    type: 'key-value';
+                    items: Array<{
+                        label: string;
+                        value: string;
+                    }>;
+                } | {
+                    type: 'image';
+                    src: {
+                        media: string;
+                    } | {
+                        app: string;
+                    };
+                    alt: string;
+                } | {
+                    type: 'link';
+                    text: string;
+                    path: string;
+                } | {
+                    type: 'field';
+                    attribute: string;
+                } | {
+                    type: 'button';
+                    label: string;
+                    action: {
+                        kind: 'add_line';
+                        variantId: string;
+                        quantity: number;
+                    } | {
+                        kind: 'set_attribute';
+                        key: string;
+                        value: string;
+                    } | {
+                        kind: 'apply_code';
+                        code: string;
+                    } | {
+                        kind: 'app_route';
+                        route: string;
+                        body?: BuyerUiJson;
+                    };
+                };
+                attributes: Array<{
+                    key: string;
+                    label: string;
+                    help?: string;
+                    type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice';
+                    required?: boolean;
+                    maxLength?: number;
+                    min?: number;
+                    max?: number;
+                    choices?: Array<{
+                        value: string;
+                        label: string;
+                    }>;
+                }>;
+                values: {
+                    [key: string]: string;
+                };
+                media?: {
+                    [key: string]: string;
+                };
+            }>;
             valid: true;
             quoteFingerprint: string;
             displayLabel: string;
@@ -18047,6 +19027,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 baseAmountMinor: number;
                 feeWaived: boolean;
             } | null;
+            shippingRateToken: string | null;
             /**
              * `delivery` ships to the buyer's address; `pickup` is collected at the store.
              */
@@ -18263,6 +19244,9 @@ export type PostApiV1OrdersData = {
          * A minimal billing address sends it when the country's rules require it.
          */
         billingPostalCode?: string | null;
+        attributes?: {
+            [key: string]: string;
+        };
         notes: string | null;
         items: Array<{
             cartKey?: string | null;
@@ -18286,6 +19270,7 @@ export type PostApiV1OrdersData = {
         discountCodes?: Array<string>;
         shippingCharge: number;
         shippingMethodId?: string | null;
+        shippingRateToken?: string | null;
         paymentMethod?: string;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
         /**
@@ -22334,14 +23319,14 @@ export type PutApiV1AdminPriceListsByIdPricesResponses = {
 
 export type PutApiV1AdminPriceListsByIdPricesResponse = PutApiV1AdminPriceListsByIdPricesResponses[keyof PutApiV1AdminPriceListsByIdPricesResponses];
 
-export type GetApiV1AdminMetaobjectsDefinitionsData = {
+export type GetApiV1AdminObjectsTypesData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/v1/admin/metaobjects/definitions';
+    url: '/api/v1/admin/objects/types';
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsErrors = {
+export type GetApiV1AdminObjectsTypesErrors = {
     /**
      * Validation error
      */
@@ -22368,40 +23353,42 @@ export type GetApiV1AdminMetaobjectsDefinitionsErrors = {
     500: ErrorResponse;
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsError = GetApiV1AdminMetaobjectsDefinitionsErrors[keyof GetApiV1AdminMetaobjectsDefinitionsErrors];
+export type GetApiV1AdminObjectsTypesError = GetApiV1AdminObjectsTypesErrors[keyof GetApiV1AdminObjectsTypesErrors];
 
-export type GetApiV1AdminMetaobjectsDefinitionsResponses = {
+export type GetApiV1AdminObjectsTypesResponses = {
     /**
-     * Content types
+     * Object types
      */
     200: {
         success: true;
         data: {
-            items: Array<MetaobjectDefinition>;
+            items: Array<ObjectType>;
         };
     };
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsResponse = GetApiV1AdminMetaobjectsDefinitionsResponses[keyof GetApiV1AdminMetaobjectsDefinitionsResponses];
+export type GetApiV1AdminObjectsTypesResponse = GetApiV1AdminObjectsTypesResponses[keyof GetApiV1AdminObjectsTypesResponses];
 
-export type PostApiV1AdminMetaobjectsDefinitionsData = {
+export type PostApiV1AdminObjectsTypesData = {
     body: {
-        /**
-         * The type handle, fixed once created.
-         */
         type: string;
         name: string;
         description?: string;
-        fields: Array<MetaobjectFieldDefinition>;
-        displayField?: string;
-        storefrontAccess?: boolean;
+        fields: Array<ObjectField>;
+        display?: string;
+        indexes?: Array<string | Array<string>>;
+        unique?: Array<string | Array<string>>;
+        handle?: boolean;
+        storefront?: boolean;
+        admin?: 'none' | 'read' | 'edit';
+        events?: boolean;
     };
     path?: never;
     query?: never;
-    url: '/api/v1/admin/metaobjects/definitions';
+    url: '/api/v1/admin/objects/types';
 };
 
-export type PostApiV1AdminMetaobjectsDefinitionsErrors = {
+export type PostApiV1AdminObjectsTypesErrors = {
     /**
      * Validation error
      */
@@ -22432,34 +23419,34 @@ export type PostApiV1AdminMetaobjectsDefinitionsErrors = {
     500: ErrorResponse;
 };
 
-export type PostApiV1AdminMetaobjectsDefinitionsError = PostApiV1AdminMetaobjectsDefinitionsErrors[keyof PostApiV1AdminMetaobjectsDefinitionsErrors];
+export type PostApiV1AdminObjectsTypesError = PostApiV1AdminObjectsTypesErrors[keyof PostApiV1AdminObjectsTypesErrors];
 
-export type PostApiV1AdminMetaobjectsDefinitionsResponses = {
+export type PostApiV1AdminObjectsTypesResponses = {
     /**
-     * The content type
+     * Created type
      */
     201: {
         success: true;
         data: {
-            definition: MetaobjectDefinition;
+            type: ObjectType;
         };
     };
 };
 
-export type PostApiV1AdminMetaobjectsDefinitionsResponse = PostApiV1AdminMetaobjectsDefinitionsResponses[keyof PostApiV1AdminMetaobjectsDefinitionsResponses];
+export type PostApiV1AdminObjectsTypesResponse = PostApiV1AdminObjectsTypesResponses[keyof PostApiV1AdminObjectsTypesResponses];
 
-export type DeleteApiV1AdminMetaobjectsDefinitionsByIdData = {
+export type DeleteApiV1AdminObjectsTypesByTypeData = {
     body?: never;
     path: {
-        id: string;
+        type: string;
     };
     query: {
         expectedRevision: number;
     };
-    url: '/api/v1/admin/metaobjects/definitions/{id}';
+    url: '/api/v1/admin/objects/types/{type}';
 };
 
-export type DeleteApiV1AdminMetaobjectsDefinitionsByIdErrors = {
+export type DeleteApiV1AdminObjectsTypesByTypeErrors = {
     /**
      * Validation error
      */
@@ -22490,27 +23477,27 @@ export type DeleteApiV1AdminMetaobjectsDefinitionsByIdErrors = {
     500: ErrorResponse;
 };
 
-export type DeleteApiV1AdminMetaobjectsDefinitionsByIdError = DeleteApiV1AdminMetaobjectsDefinitionsByIdErrors[keyof DeleteApiV1AdminMetaobjectsDefinitionsByIdErrors];
+export type DeleteApiV1AdminObjectsTypesByTypeError = DeleteApiV1AdminObjectsTypesByTypeErrors[keyof DeleteApiV1AdminObjectsTypesByTypeErrors];
 
-export type DeleteApiV1AdminMetaobjectsDefinitionsByIdResponses = {
+export type DeleteApiV1AdminObjectsTypesByTypeResponses = {
     /**
      * No content
      */
     204: void;
 };
 
-export type DeleteApiV1AdminMetaobjectsDefinitionsByIdResponse = DeleteApiV1AdminMetaobjectsDefinitionsByIdResponses[keyof DeleteApiV1AdminMetaobjectsDefinitionsByIdResponses];
+export type DeleteApiV1AdminObjectsTypesByTypeResponse = DeleteApiV1AdminObjectsTypesByTypeResponses[keyof DeleteApiV1AdminObjectsTypesByTypeResponses];
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdData = {
+export type GetApiV1AdminObjectsTypesByTypeData = {
     body?: never;
     path: {
-        id: string;
+        type: string;
     };
     query?: never;
-    url: '/api/v1/admin/metaobjects/definitions/{id}';
+    url: '/api/v1/admin/objects/types/{type}';
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdErrors = {
+export type GetApiV1AdminObjectsTypesByTypeErrors = {
     /**
      * Validation error
      */
@@ -22537,39 +23524,47 @@ export type GetApiV1AdminMetaobjectsDefinitionsByIdErrors = {
     500: ErrorResponse;
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdError = GetApiV1AdminMetaobjectsDefinitionsByIdErrors[keyof GetApiV1AdminMetaobjectsDefinitionsByIdErrors];
+export type GetApiV1AdminObjectsTypesByTypeError = GetApiV1AdminObjectsTypesByTypeErrors[keyof GetApiV1AdminObjectsTypesByTypeErrors];
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdResponses = {
+export type GetApiV1AdminObjectsTypesByTypeResponses = {
     /**
-     * The content type
+     * Object type
      */
     200: {
         success: true;
         data: {
-            definition: MetaobjectDefinition;
+            type: ObjectType;
+            jsonSchema: {
+                [key: string]: unknown;
+            };
         };
     };
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdResponse = GetApiV1AdminMetaobjectsDefinitionsByIdResponses[keyof GetApiV1AdminMetaobjectsDefinitionsByIdResponses];
+export type GetApiV1AdminObjectsTypesByTypeResponse = GetApiV1AdminObjectsTypesByTypeResponses[keyof GetApiV1AdminObjectsTypesByTypeResponses];
 
-export type PatchApiV1AdminMetaobjectsDefinitionsByIdData = {
+export type PatchApiV1AdminObjectsTypesByTypeData = {
     body: {
         name: string;
         description?: string;
-        fields: Array<MetaobjectFieldDefinition>;
-        displayField?: string;
-        storefrontAccess?: boolean;
+        fields: Array<ObjectField>;
+        display?: string;
+        indexes?: Array<string | Array<string>>;
+        unique?: Array<string | Array<string>>;
+        handle?: boolean;
+        storefront?: boolean;
+        admin?: 'none' | 'read' | 'edit';
+        events?: boolean;
         expectedRevision: number;
     };
     path: {
-        id: string;
+        type: string;
     };
     query?: never;
-    url: '/api/v1/admin/metaobjects/definitions/{id}';
+    url: '/api/v1/admin/objects/types/{type}';
 };
 
-export type PatchApiV1AdminMetaobjectsDefinitionsByIdErrors = {
+export type PatchApiV1AdminObjectsTypesByTypeErrors = {
     /**
      * Validation error
      */
@@ -22600,36 +23595,39 @@ export type PatchApiV1AdminMetaobjectsDefinitionsByIdErrors = {
     500: ErrorResponse;
 };
 
-export type PatchApiV1AdminMetaobjectsDefinitionsByIdError = PatchApiV1AdminMetaobjectsDefinitionsByIdErrors[keyof PatchApiV1AdminMetaobjectsDefinitionsByIdErrors];
+export type PatchApiV1AdminObjectsTypesByTypeError = PatchApiV1AdminObjectsTypesByTypeErrors[keyof PatchApiV1AdminObjectsTypesByTypeErrors];
 
-export type PatchApiV1AdminMetaobjectsDefinitionsByIdResponses = {
+export type PatchApiV1AdminObjectsTypesByTypeResponses = {
     /**
-     * The content type
+     * Updated type
      */
     200: {
         success: true;
         data: {
-            definition: MetaobjectDefinition;
+            type: ObjectType;
         };
     };
 };
 
-export type PatchApiV1AdminMetaobjectsDefinitionsByIdResponse = PatchApiV1AdminMetaobjectsDefinitionsByIdResponses[keyof PatchApiV1AdminMetaobjectsDefinitionsByIdResponses];
+export type PatchApiV1AdminObjectsTypesByTypeResponse = PatchApiV1AdminObjectsTypesByTypeResponses[keyof PatchApiV1AdminObjectsTypesByTypeResponses];
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesData = {
+export type GetApiV1AdminObjectsByTypeData = {
     body?: never;
     path: {
-        id: string;
+        type: string;
     };
     query?: {
-        status?: 'draft' | 'published';
+        where?: string;
+        cursor?: string;
         limit?: number;
-        offset?: number | null;
+        status?: 'active' | 'draft' | 'published';
+        orderBy?: string;
+        direction?: 'asc' | 'desc';
     };
-    url: '/api/v1/admin/metaobjects/definitions/{id}/entries';
+    url: '/api/v1/admin/objects/{type}';
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors = {
+export type GetApiV1AdminObjectsByTypeErrors = {
     /**
      * Validation error
      */
@@ -22656,103 +23654,38 @@ export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors = {
     500: ErrorResponse;
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesError = GetApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors[keyof GetApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors];
+export type GetApiV1AdminObjectsByTypeError = GetApiV1AdminObjectsByTypeErrors[keyof GetApiV1AdminObjectsByTypeErrors];
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses = {
+export type GetApiV1AdminObjectsByTypeResponses = {
     /**
-     * Entries
+     * Object records
      */
     200: {
         success: true;
         data: {
-            definition: MetaobjectDefinition;
-            entries: Array<MetaobjectEntry>;
+            type: ObjectType;
+            records: Array<ObjectRecord>;
+            nextCursor: string | null;
             total: number;
         };
     };
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesResponse = GetApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses[keyof GetApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses];
+export type GetApiV1AdminObjectsByTypeResponse = GetApiV1AdminObjectsByTypeResponses[keyof GetApiV1AdminObjectsByTypeResponses];
 
-export type PostApiV1AdminMetaobjectsDefinitionsByIdEntriesData = {
-    body: {
-        /**
-         * Lowercase letters, digits and dashes; made from the display field when left out.
-         */
-        handle?: string;
-        status?: 'draft' | 'published';
-        fields?: {
-            [key: string]: unknown;
-        };
-        position?: number;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/metaobjects/definitions/{id}/entries';
-};
-
-export type PostApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Conflict
-     */
-    409: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1AdminMetaobjectsDefinitionsByIdEntriesError = PostApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors[keyof PostApiV1AdminMetaobjectsDefinitionsByIdEntriesErrors];
-
-export type PostApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses = {
-    /**
-     * The entry
-     */
-    201: {
-        success: true;
-        data: {
-            entry: MetaobjectEntry;
-        };
-    };
-};
-
-export type PostApiV1AdminMetaobjectsDefinitionsByIdEntriesResponse = PostApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses[keyof PostApiV1AdminMetaobjectsDefinitionsByIdEntriesResponses];
-
-export type DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdData = {
+export type DeleteApiV1AdminObjectsByTypeByIdData = {
     body?: never;
     path: {
+        type: string;
         id: string;
-        entryId: string;
     };
     query: {
         expectedRevision: number;
     };
-    url: '/api/v1/admin/metaobjects/definitions/{id}/entries/{entryId}';
+    url: '/api/v1/admin/objects/{type}/{id}';
 };
 
-export type DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors = {
+export type DeleteApiV1AdminObjectsByTypeByIdErrors = {
     /**
      * Validation error
      */
@@ -22783,28 +23716,28 @@ export type DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors = {
     500: ErrorResponse;
 };
 
-export type DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdError = DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors[keyof DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors];
+export type DeleteApiV1AdminObjectsByTypeByIdError = DeleteApiV1AdminObjectsByTypeByIdErrors[keyof DeleteApiV1AdminObjectsByTypeByIdErrors];
 
-export type DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses = {
+export type DeleteApiV1AdminObjectsByTypeByIdResponses = {
     /**
      * No content
      */
     204: void;
 };
 
-export type DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponse = DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses[keyof DeleteApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses];
+export type DeleteApiV1AdminObjectsByTypeByIdResponse = DeleteApiV1AdminObjectsByTypeByIdResponses[keyof DeleteApiV1AdminObjectsByTypeByIdResponses];
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdData = {
+export type GetApiV1AdminObjectsByTypeByIdData = {
     body?: never;
     path: {
+        type: string;
         id: string;
-        entryId: string;
     };
     query?: never;
-    url: '/api/v1/admin/metaobjects/definitions/{id}/entries/{entryId}';
+    url: '/api/v1/admin/objects/{type}/{id}';
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors = {
+export type GetApiV1AdminObjectsByTypeByIdErrors = {
     /**
      * Validation error
      */
@@ -22831,44 +23764,41 @@ export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors = {
     500: ErrorResponse;
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdError = GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors[keyof GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors];
+export type GetApiV1AdminObjectsByTypeByIdError = GetApiV1AdminObjectsByTypeByIdErrors[keyof GetApiV1AdminObjectsByTypeByIdErrors];
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses = {
+export type GetApiV1AdminObjectsByTypeByIdResponses = {
     /**
-     * The entry
+     * Object record
      */
     200: {
         success: true;
         data: {
-            entry: MetaobjectEntry;
+            record: ObjectRecord;
         };
     };
 };
 
-export type GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponse = GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses[keyof GetApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses];
+export type GetApiV1AdminObjectsByTypeByIdResponse = GetApiV1AdminObjectsByTypeByIdResponses[keyof GetApiV1AdminObjectsByTypeByIdResponses];
 
-export type PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdData = {
+export type PutApiV1AdminObjectsByTypeByIdData = {
     body: {
-        /**
-         * Lowercase letters, digits and dashes; made from the display field when left out.
-         */
-        handle?: string;
-        status?: 'draft' | 'published';
-        fields?: {
+        data: {
             [key: string]: unknown;
         };
+        expectedRevision: number | null;
+        handle?: string;
+        status?: 'active' | 'draft' | 'published';
         position?: number;
-        expectedRevision: number;
     };
     path: {
+        type: string;
         id: string;
-        entryId: string;
     };
     query?: never;
-    url: '/api/v1/admin/metaobjects/definitions/{id}/entries/{entryId}';
+    url: '/api/v1/admin/objects/{type}/{id}';
 };
 
-export type PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors = {
+export type PutApiV1AdminObjectsByTypeByIdErrors = {
     /**
      * Validation error
      */
@@ -22899,21 +23829,21 @@ export type PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors = {
     500: ErrorResponse;
 };
 
-export type PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdError = PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors[keyof PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdErrors];
+export type PutApiV1AdminObjectsByTypeByIdError = PutApiV1AdminObjectsByTypeByIdErrors[keyof PutApiV1AdminObjectsByTypeByIdErrors];
 
-export type PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses = {
+export type PutApiV1AdminObjectsByTypeByIdResponses = {
     /**
-     * The entry
+     * Saved record
      */
     200: {
         success: true;
         data: {
-            entry: MetaobjectEntry;
+            record: ObjectRecord;
         };
     };
 };
 
-export type PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponse = PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses[keyof PatchApiV1AdminMetaobjectsDefinitionsByIdEntriesByEntryIdResponses];
+export type PutApiV1AdminObjectsByTypeByIdResponse = PutApiV1AdminObjectsByTypeByIdResponses[keyof PutApiV1AdminObjectsByTypeByIdResponses];
 
 export type GetApiV1AdminCollectionsFormOptionsData = {
     body?: never;
@@ -25467,6 +26397,13 @@ export type GetApiV1AdminCustomersByIdResponses = {
                 validationSkipped: boolean;
                 createdAt: number;
                 updatedAt: number;
+            }>;
+            relatedObjects: Array<{
+                typeId: string;
+                typeHandle: string;
+                typeName: string;
+                recordId: string;
+                displayName: string;
             }>;
         };
     };
@@ -40067,6 +41004,9 @@ export type GetApiV1AdminSettingsShippingMethodsResponses = {
                     name: string;
                     fee: number;
                     freeOver: number | null;
+                    rateSource: string;
+                    rateService: string | null;
+                    fallbackFee: number | null;
                     description: string | null;
                     pickupAddress: string | null;
                     pickupHours: string | null;
@@ -40081,6 +41021,9 @@ export type GetApiV1AdminSettingsShippingMethodsResponses = {
                     name: string;
                     fee: number;
                     freeOver: number | null;
+                    rateSource: string;
+                    rateService: string | null;
+                    fallbackFee: number | null;
                     description: string | null;
                     pickupAddress: string | null;
                     pickupHours: string | null;
@@ -40119,6 +41062,9 @@ export type PostApiV1AdminSettingsShippingMethodsData = {
             name: string;
             fee: number;
             freeOver?: number | null;
+            rateSource?: string;
+            rateService?: string | null;
+            fallbackFee?: number | null;
             description?: string | null;
             kind?: 'delivery' | 'pickup';
             pickupAddress?: string | null;
@@ -40186,6 +41132,9 @@ export type PutApiV1AdminSettingsShippingMethodsPickupData = {
             name: string;
             fee: number;
             freeOver?: number | null;
+            rateSource?: string;
+            rateService?: string | null;
+            fallbackFee?: number | null;
             description?: string | null;
             kind?: 'delivery' | 'pickup';
             pickupAddress?: string | null;
@@ -40371,6 +41320,9 @@ export type PutApiV1AdminSettingsShippingMethodsByIdData = {
             name: string;
             fee: number;
             freeOver?: number | null;
+            rateSource?: string;
+            rateService?: string | null;
+            fallbackFee?: number | null;
             description?: string | null;
             kind?: 'delivery' | 'pickup';
             pickupAddress?: string | null;
@@ -47771,6 +48723,9 @@ export type GetApiV1AdminOrdersByIdResponses = {
             paymentMethod: string | null;
             fulfillmentStatus: string | null;
             notes: string | null;
+            attributes: {
+                [key: string]: string;
+            };
             shippingAddress: string | null;
             shippingAddressLine2: string | null;
             shippingCountryCode: string | null;
@@ -48051,6 +49006,13 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 id: string;
                 unread: boolean;
             } | null;
+            relatedObjects: Array<{
+                typeId: string;
+                typeHandle: string;
+                typeName: string;
+                recordId: string;
+                displayName: string;
+            }>;
         };
     };
 };
@@ -52597,6 +53559,13 @@ export type GetApiV1AdminProductsByIdResponses = {
             attributes: Array<{
                 attributeId: string;
                 value: string;
+            }>;
+            relatedObjects: Array<{
+                typeId: string;
+                typeHandle: string;
+                typeName: string;
+                recordId: string;
+                displayName: string;
             }>;
             warrantyPolicyId: string | null;
         };
@@ -58890,7 +59859,7 @@ export type PostApiV1AdminWebhooksData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'fulfillment.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card.transaction' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
         description?: string | null;
     };
     path?: never;
@@ -59042,7 +60011,7 @@ export type PatchApiV1AdminWebhooksByIdData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'fulfillment.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card.transaction' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
         description?: string | null;
         status?: 'active' | 'disabled';
     };
@@ -59312,8 +60281,8 @@ export type GetApiV1AdminEventsData = {
     body?: never;
     path?: never;
     query?: {
-        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed';
-        resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer';
+        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card.transaction' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested';
+        resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer' | 'fulfillment' | 'shipment' | 'payment' | 'checkout' | 'discount' | 'review' | 'gift_card' | 'transaction' | 'object';
         resourceId?: string;
         /**
          * `nextCursor` of the previous page.
@@ -60648,8 +61617,12 @@ export type PostApiV1AdminCustomFieldDefinitionsData = {
         /**
          * Fixed once created.
          */
-        type: 'single_line_text' | 'multi_line_text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'date_time' | 'url' | 'color' | 'json' | 'money' | 'product_reference' | 'variant_reference' | 'collection_reference' | 'media_reference' | 'list.single_line_text' | 'list.multi_line_text' | 'list.integer' | 'list.decimal' | 'list.date' | 'list.date_time' | 'list.url' | 'list.color' | 'list.money' | 'list.product_reference' | 'list.variant_reference' | 'list.collection_reference' | 'list.media_reference';
+        type: 'single_line_text' | 'multi_line_text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'date_time' | 'url' | 'color' | 'json' | 'money' | 'product_reference' | 'variant_reference' | 'collection_reference' | 'media_reference' | 'object_reference' | 'list.single_line_text' | 'list.multi_line_text' | 'list.integer' | 'list.decimal' | 'list.date' | 'list.date_time' | 'list.url' | 'list.color' | 'list.money' | 'list.product_reference' | 'list.variant_reference' | 'list.collection_reference' | 'list.media_reference' | 'list.object_reference';
         validations?: {
+            /**
+             * Object references: qualified target type, for example custom.size_chart.
+             */
+            to?: string | null;
             /**
              * Text and URL: minimum length. Numbers, money, dates: minimum value (money in decimal major units).
              */
@@ -60841,6 +61814,10 @@ export type PatchApiV1AdminCustomFieldDefinitionsByIdData = {
         name?: string;
         description?: string | null;
         validations?: {
+            /**
+             * Object references: qualified target type, for example custom.size_chart.
+             */
+            to?: string | null;
             /**
              * Text and URL: minimum length. Numbers, money, dates: minimum value (money in decimal major units).
              */

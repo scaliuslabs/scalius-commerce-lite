@@ -35,6 +35,11 @@ import {
   orderLineFulfilmentShape,
 } from "../../schemas/order-lines";
 import { fromMinor } from "@scalius/shared/money";
+import { buyerUiBlockSchema, readCheckoutAttributes } from "@scalius/shared/plugins";
+import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
+import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { publishedMediaObjectKey } from "@scalius/core/modules/media-references";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
@@ -82,6 +87,7 @@ const unixToDate = (timestamp: number | null): Date | null => {
 };
 
 const orderReceiptSchema = z.object({
+  buyerUi: z.array(buyerUiBlockSchema),
   id: z.string(),
   /** Short per-store order number shown as "#1001"; null only for orders placed before numbering. */
   orderNumber: z.number().int().nullable(),
@@ -434,6 +440,8 @@ const getOrderReceiptRoute = createRoute({
       id: z.string(),
     }),
     headers: z.object({
+      "x-storefront-language": z.string().min(1).max(35).optional(),
+      "x-storefront-locale": z.string().min(1).max(35).optional(),
       [RECEIPT_TOKEN_HEADER]: z.string().optional(),
     }),
   },
@@ -485,6 +493,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       pickupReadyAt: orders.pickupReadyAt,
       requiresShipping: orders.requiresShipping,
       notes: orders.notes,
+      attributes: orders.attributes,
       taxAmountMinor: orders.taxAmountMinor,
       taxLabel: orders.taxLabel,
       pricesIncludeTax: orders.pricesIncludeTax,
@@ -534,9 +543,10 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   ]);
   // Ledger and thread reads come after the first wave: at most six D1
   // connections per invocation.
-  const [fulfillments, conversationId] = await Promise.all([
+  const [fulfillments, conversationId, registrations] = await Promise.all([
     listBuyerOrderFulfilments(db, id),
     findOrderConversationId(db, id),
+    listActiveCheckoutRegistrations(db),
   ]);
   const lineExtras = await composeOrderLineExtras(db, {
     orderId: id,
@@ -549,8 +559,34 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     : [];
 
   const money = orderMoneyAmounts(order);
+  const apps = createCheckoutAppFunctions({
+    env: c.env,
+    ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
+    db,
+    registrations,
+  });
+  const buyerUi = apps.points.has("buyer.ui")
+    ? await apps.buyerUi?.({
+      targets: ["purchase.thank-you.customer-information.render-after", "customer-account.order-status.block.render"],
+      language: c.req.header("x-storefront-language"),
+      locale: c.req.header("x-storefront-locale"),
+      currency: order.currencyCode ?? (await readStoreCurrency(db)).code,
+      attributes: readCheckoutAttributes(order.attributes),
+      order: {
+        orderId: order.id,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        lines: items.flatMap((item) => item.variantId
+          ? [{ productId: item.productId, variantId: item.variantId, quantity: item.quantity }]
+          : []),
+      },
+      // Receipt proof authorizes this order, not the customer's account data.
+      customer: null,
+    }) ?? []
+    : [];
   return ok(c, {
     order: {
+      buyerUi,
       id: order.id,
       orderNumber: order.orderNumber ?? null,
       customerName: order.customerName,

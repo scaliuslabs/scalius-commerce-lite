@@ -3,7 +3,7 @@ import { products, categories, productReviewStats } from "@scalius/database/sche
 import { and, sql, eq, or, type AnyColumn, type SQL } from "drizzle-orm";
 import { searchMatch } from "../../search";
 import { productCategoryNameMatch } from "./search-relevance";
-import { declareProductCards } from "./declare-deps";
+import { declareProductCards, deps } from "./declare-deps";
 import {
   buyerCatalogHasSkuInPriceRange,
   loadProductMediaProjections,
@@ -218,7 +218,8 @@ export function buildStorefrontBuyerStateConditions(
     if (params.ids) {
         const lookupTokens = parsePublicLookupTokens(params.ids);
         if (lookupTokens.length > 0) {
-            conditions.push(buildProductLookupCondition(lookupTokens, {}, buyerState.productId));
+            deps.table("product_variants");
+            conditions.push(buildProductLookupCondition(lookupTokens, { includeVariantLookups: true }, buyerState.productId));
         }
     }
     if (params.minPriceMinor !== undefined || params.maxPriceMinor !== undefined) {

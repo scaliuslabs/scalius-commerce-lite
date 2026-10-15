@@ -240,7 +240,7 @@ function valueSchema(field: PluginSettingField | PluginSettingItemField): z.ZodT
     case "image":
       return z.string().regex(PLUGIN_MEDIA_ID);
     case "products":
-      return z.string().regex(PLUGIN_PRODUCT_SOURCE);
+      return z.union([z.string().regex(PLUGIN_PRODUCT_SOURCE), z.array(z.string().regex(PLUGIN_PRODUCT_ID)).max(PLUGIN_SETTING_PRODUCTS_MAX)]);
     case "product":
       return z.string().regex(PLUGIN_PRODUCT_ID);
     case "link":

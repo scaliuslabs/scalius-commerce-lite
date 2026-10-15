@@ -14,6 +14,7 @@ import {
   createAppLinePricer,
   createCartTransformer,
   DELIVERY_ADDRESS_REQUIRED_REASON,
+  DELIVERY_RATE_UNAVAILABLE_REASON,
   NO_CHECKOUT_APP_FUNCTIONS,
   presentCheckoutRateOptions,
   previewStorefrontAppDiscounts,
@@ -26,7 +27,9 @@ import {
   summarizeStorefrontCartFulfilment,
   validateStorefrontCartItems,
   validateStorefrontDeliveryPreflight,
+  validateCheckoutAttributes,
   type CheckoutAppFunctions,
+  type CalculatedRateOptions,
   type StorefrontCartItemIssue,
 } from "@scalius/core/modules/checkout";
 import { priceIncrementForCurrency } from "@scalius/core/modules/settings";
@@ -110,6 +113,7 @@ export interface AgentStorefrontCheckoutQuote {
   valid: true;
   contextRevision: number;
   quoteFingerprint: string;
+  shippingRateToken: string | null;
   displayLabel: string;
   pricesIncludeTax: boolean;
   shippingTaxed: boolean;
@@ -624,12 +628,14 @@ async function loadAgentStorefrontCart(
   row: ContextRow,
   /** The apps' checkout functions: their line prices price the cart as submit will. */
   apps?: CheckoutAppFunctions,
+  rateOptions?: Pick<AgentStorefrontCheckoutInput, "shippingRateToken" | "cod" | "calculatedRates" | "attributes">,
 ): Promise<AgentStorefrontCartState> {
   const cart = parseAgentStorefrontCartJson(row.cartJson);
   const identityLines = await resolveProductIdsForCart(db, cart);
   const currency = await readStoreCurrency(db);
   const market = agentCartMarket(db, row);
   const appContext = {
+    attributes: rateOptions?.attributes,
     channel: "agent" as const,
     customerId: market.customerId,
     destination: row.countryCode ? { country: row.countryCode, city: null, zone: null } : null,
@@ -664,11 +670,15 @@ async function loadAgentStorefrontCart(
         shippingAdminArea: row.adminArea,
         shippingPostalCode: row.postalCode,
         shippingMethodId: row.shippingMethodId,
-      }, validation);
+        shippingRateToken: rateOptions?.shippingRateToken,
+        cod: rateOptions?.cod,
+      }, validation, rateOptions?.calculatedRates);
     } catch (error) {
       // A delivery rate saved while the cart had nothing physical: the cart
       // now needs its address; checkout asks for it.
-      if (!isDeliveryAddressRequired(error)) throw error;
+      const unquotedRate = !rateOptions && error instanceof ValidationError
+        && (error.details as { reason?: unknown } | undefined)?.reason === DELIVERY_RATE_UNAVAILABLE_REASON;
+      if (!isDeliveryAddressRequired(error) && !unquotedRate) throw error;
     }
   }
 
@@ -849,13 +859,18 @@ export async function validateAgentStorefrontCheckout(
   db: Database,
   grantId: string,
   contextId: string,
-  options: { now?: Date; customerPhone?: string | null; apps?: CheckoutAppFunctions } = {},
+  options: AgentStorefrontCheckoutInput = {},
 ): Promise<AgentStorefrontCartProjection> {
   const now = options.now ?? new Date();
   const row = await loadActiveOwnedContext(db, grantId, contextId, now);
-  const cart = await loadAgentStorefrontCart(db, row);
+  const cart = await loadAgentStorefrontCart(db, row, options.apps, options);
   assertAgentStorefrontCheckoutProjection(cart);
-  if (row.discountCode) {
+  const attributes = validateCheckoutAttributes(options.apps, options.attributes);
+  if (options.apps?.points.has("cart.validate") || Object.keys(attributes).length > 0) {
+    const { pricing } = await priceAgentStorefrontCheckout(db, row, cart, options);
+    assertNoCheckoutRuleErrors(pricing.ruleErrors);
+    assertDiscountCodesApplied(pricing.typedCodes);
+  } else if (row.discountCode) {
     await assertAgentStorefrontDiscountValid(
       db,
       row,
@@ -889,29 +904,33 @@ function assertAgentStorefrontCheckoutProjection(
   }
 }
 
-export async function quoteAgentStorefrontCheckout(
+interface AgentStorefrontCheckoutInput {
+  customerPhone?: string | null;
+  attributes?: Record<string, string>;
+  shippingRateToken?: string | null;
+  cod?: boolean;
+  calculatedRates?: CalculatedRateOptions;
+  now?: Date;
+  /** The apps' checkout functions, channel "agent" (none: platform pricing only). */
+  apps?: CheckoutAppFunctions;
+  /** Reads the enabled payment methods, only when an app adjusts them or the delivery is abroad. */
+  credentialEncryptionKey?: string;
+  /** The request's gateways (built-in and active app providers); built-in ones alone by default. */
+  paymentProviders?: PaymentProviders;
+  /** The request's app providers (an app tax provider). */
+  appProviders?: AppProviders;
+}
+
+async function priceAgentStorefrontCheckout(
   db: Database,
-  grantId: string,
-  contextId: string,
-  input: {
-    customerPhone?: string | null;
-    now?: Date;
-    /** The apps' checkout functions, channel "agent" (none: platform pricing only). */
-    apps?: CheckoutAppFunctions;
-    /** Reads the enabled payment methods, only when an app adjusts them or the delivery is abroad. */
-    credentialEncryptionKey?: string;
-    /** The request's gateways (built-in and active app providers); built-in ones alone by default. */
-    paymentProviders?: PaymentProviders;
-    /** The request's app providers (an app tax provider). */
-    appProviders?: AppProviders;
-  } = {},
-): Promise<AgentStorefrontCheckoutQuote> {
-  const row = await loadActiveOwnedContext(db, grantId, contextId, input.now ?? new Date());
-  const projection = await loadAgentStorefrontCart(db, row, input.apps);
-  assertAgentStorefrontCheckoutProjection(projection);
+  row: ContextRow,
+  projection: AgentStorefrontCartState,
+  input: AgentStorefrontCheckoutInput,
+) {
   const delivery = projection.delivery!;
   const discountCode = row.discountCode?.trim().toUpperCase() ?? null;
   const apps = input.apps ?? NO_CHECKOUT_APP_FUNCTIONS;
+  const attributes = validateCheckoutAttributes(apps, input.attributes);
   const customerId = await getLiveContextCustomerId(db, row);
   const customerPhone = input.customerPhone?.trim() || await getLiveContextCustomerPhone(db, row);
   // Promotions or bundles, then the apps, then tax: the one rule the
@@ -929,6 +948,7 @@ export async function quoteAgentStorefrontCheckout(
       priceIncrementMinor: priceIncrementForCurrency(await readStoreCurrency(db), projection.currencyCode),
     },
     apps,
+    attributes,
     appProviders: input.appProviders,
     channel: "agent",
     // A cart with nothing physical is taxed at its billing location: the
@@ -940,6 +960,22 @@ export async function quoteAgentStorefrontCheckout(
     // Submit lists delivery options from the order's own address (none for pickup), so the quote does too.
     location: null,
   });
+  return { pricing, attributes };
+}
+
+export async function quoteAgentStorefrontCheckout(
+  db: Database,
+  grantId: string,
+  contextId: string,
+  input: AgentStorefrontCheckoutInput = {},
+): Promise<AgentStorefrontCheckoutQuote> {
+  const row = await loadActiveOwnedContext(db, grantId, contextId, input.now ?? new Date());
+  const projection = await loadAgentStorefrontCart(db, row, input.apps, input);
+  assertAgentStorefrontCheckoutProjection(projection);
+  const delivery = projection.delivery!;
+  const discountCode = row.discountCode?.trim().toUpperCase() ?? null;
+  const apps = input.apps ?? NO_CHECKOUT_APP_FUNCTIONS;
+  const { pricing, attributes } = await priceAgentStorefrontCheckout(db, row, projection, input);
   assertNoCheckoutRuleErrors(pricing.ruleErrors);
   assertDiscountCodesApplied(pricing.typedCodes);
   const quote = pricing.taxQuote;
@@ -965,11 +1001,13 @@ export async function quoteAgentStorefrontCheckout(
     shippingMethodId: delivery.shippingMethod?.id ?? null,
     discountCode,
     quote,
+    attributes,
   });
   return {
     valid: true,
     contextRevision: row.revision,
     quoteFingerprint: currentQuoteFingerprint,
+    shippingRateToken: delivery.rateToken ?? null,
     displayLabel: quote.displayLabel,
     pricesIncludeTax: quote.pricesIncludeTax,
     shippingTaxed: quote.shippingTaxed,

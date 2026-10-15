@@ -1,0 +1,31 @@
+---
+import type { StorefrontSectionSkinData } from "@scalius/shared/plugins/storefront-protocol";
+import type { CoreSectionSettings } from "@scalius/shared/storefront-theme";
+import Container from "@/components/ui/Container.astro";
+import ObjectFieldValue from "./ObjectFieldValue.astro";
+
+interface Props {
+  sectionId: string;
+  data: StorefrontSectionSkinData<CoreSectionSettings<"specifications">>;
+}
+const { sectionId, data } = Astro.props;
+const heading = data.settings.heading.trim();
+const rows = data.settings.rows.filter((row) => row.label.trim() && row.value.trim());
+const fields = data.settings.objectField ?? [];
+const headingId = `home-${sectionId}-title`;
+---
+
+{(fields.length > 0 || rows.length > 0) && <section class="home-section w-full" aria-labelledby={heading ? headingId : undefined}>
+  <Container width="text">
+    {heading && <h2 id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{heading}</h2>}
+    <dl class="divide-y divide-border rounded-xl border border-border bg-card px-4 md:px-5">
+      {fields.length > 0 ? fields.map((view) => <div class="grid grid-cols-2 gap-4 py-3 text-sm [overflow-wrap:anywhere]">
+        <dt class="font-medium text-foreground">{view.name}</dt>
+        <dd class="text-muted-foreground"><ObjectFieldValue view={view} title={heading} /></dd>
+      </div>) : rows.map((row) => <div class="grid grid-cols-2 gap-4 py-3 text-sm [overflow-wrap:anywhere]">
+        <dt class="font-medium text-foreground">{row.label}</dt>
+        <dd class="whitespace-pre-line text-muted-foreground">{row.value}</dd>
+      </div>)}
+    </dl>
+  </Container>
+</section>}

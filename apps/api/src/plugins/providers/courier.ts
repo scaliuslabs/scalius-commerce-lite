@@ -216,6 +216,23 @@ export function appCourier(
   if (operations.has("findShipment")) courier.findShipment = (input, { signal }) => invoke("findShipment", input, signal);
   if (operations.has("cancelShipment")) courier.cancelShipment = (input, { signal }) => invoke("cancelShipment", input, signal);
   if (operations.has("quote")) courier.quote = (input, { signal }) => invoke("quote", input, signal);
+  if (operations.has("rates")) courier.rates = async (input, { signal, locationExternalIds }) => {
+    const settings = await readSettings(runtime.env.CREDENTIAL_ENCRYPTION_KEY);
+    if (!settings.enabled || settings.credentialErrors.length || settings.missingFields.length) {
+      throw new ProviderError("misconfigured", "The courier is not ready to calculate delivery.");
+    }
+    if (!locations) return invoke("rates", input, signal);
+    const ids = input.destination.placeIds;
+    const mapped = (level: LocationLevel) => {
+      const id = ids?.[level];
+      const value = id ? locationExternalIds?.get(id)?.[locations.key] : undefined;
+      if (locations.numeric ? !isPositiveIntegerExternalLocationId(value) : value == null || String(value).trim() === "") return null;
+      return String(value).trim();
+    };
+    const placeIds = { city: mapped("city"), zone: mapped("zone"), area: mapped("area") };
+    if (locations.required.some((level) => !placeIds[level])) throw new ProviderError("declined", "The destination has no courier location mapping.");
+    return invoke("rates", { ...input, destination: { ...input.destination, placeIds } }, signal);
+  };
   if (operations.has("verifyWebhook")) courier.verifyWebhook = (input, { signal }) => invoke("verifyWebhook", input, signal);
   if (operations.has("reconcileCod")) courier.reconcileCod = (input, { signal }) => invoke("reconcileCod", input, signal);
   if (operations.has("testConnection")) courier.testConnection = (input, { signal }) => invoke("testConnection", input, signal);

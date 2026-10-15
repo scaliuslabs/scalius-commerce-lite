@@ -11,8 +11,8 @@ const OBSERVED_TABLES: ReadonlySet<string> = new Set([...EVENT_SOURCE_TABLES, ..
 
 /**
  * Notes whether a request (or a background run) wrote a table that fires event
- * triggers, and which realtime topics its writes to tables without events
- * touched. The database transports report each statement's tables; for the
+ * triggers, and which realtime topics its writes touched (including tables
+ * whose events have no subscriber). The database transports report each statement's tables; for the
  * observed tables they also hand over the SQL, so only writes count.
  */
 export function createEventWriteObserver(): ReadObserver & {

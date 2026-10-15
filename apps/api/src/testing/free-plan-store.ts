@@ -9,6 +9,7 @@ import { getDb, type Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { user as userTable } from "@scalius/database/schema";
 import { createAuth } from "@scalius/core/auth";
+import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
 import { savePlatformSettings } from "@scalius/core/modules/platform";
 import { settingsMirror } from "@scalius/core/settings-store";
 import { composeApiRuntimeEnv } from "../runtime/runtime-env";
@@ -100,6 +101,8 @@ export async function createFreePlanStore(options: CreateFreePlanStoreOptions = 
       body: { email: STORE.ownerEmail, password: STORE.ownerPassword, name: "Owner" },
     });
     await db.update(userTable).set({ isSuperAdmin: true, role: "admin" }).where(eq(userTable.id, created.user.id));
+    // First-admin setup seeds these before a merchant can operate the store.
+    await autoSeedRbacIfNeeded(db);
     const response = await worker.fetch(new Request(`${STORE.dashboard}/api/auth/sign-in/email`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: STORE.dashboard },

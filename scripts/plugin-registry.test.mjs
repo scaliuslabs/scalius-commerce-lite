@@ -98,11 +98,12 @@ describe("keys, signed packs and the upload ZIP", () => {
     expect(await registry.verifyPluginSignature({ id: manifest.id, version: manifest.version, sha256: packed.sha256, manifest }, signature, [trusted])).toMatchObject({ ok: true });
 
     const files = await readPluginPackageZip(readFileSync(packed.zipPath));
-    expect([...files.keys()].sort()).toEqual(["assets/assets/icon.svg", "manifest.json", "plugin.js", "signature.json"]);
+    expect([...files.keys()].sort()).toEqual(["assets/assets/icon.svg", "manifest.json", "plugin.js", "signature.json", "storefront/storefront.js"]);
     expect(Buffer.from(files.get("manifest.json")).toString("utf8")).toBe(manifestText);
     expect(Buffer.from(files.get("plugin.js"))).toEqual(read(dist, "plugin.js"));
     expect(Buffer.from(files.get("signature.json"))).toEqual(read(dist, "signature.json"));
     expect(Buffer.from(files.get("assets/assets/icon.svg"))).toEqual(read(dist, "assets/assets/icon.svg"));
+    expect(Buffer.from(files.get("storefront/storefront.js"))).toEqual(read(dist, "storefront/storefront.js"));
   });
 
   it("passes the API's own release check when read back from the ZIP (the upload path)", async () => {
@@ -116,10 +117,12 @@ describe("keys, signed packs and the upload ZIP", () => {
       signature: { keyId: signature.keyId, value: signature.value },
       trustedKeys: [trusted],
       asset: async (path) => files.get(`assets/${path}`) ?? null,
+      storefrontFile: async (path) => files.get(`storefront/${path}`) ?? null,
       source: "upload",
     });
     expect(release.manifest.id).toBe("acme.tally");
     expect([...release.assets.keys()]).toEqual(["assets/icon.svg"]);
+    expect([...release.storefront.keys()]).toEqual(["storefront.js"]);
     expect(release.signer?.id).toBe(key.keyId);
   });
 

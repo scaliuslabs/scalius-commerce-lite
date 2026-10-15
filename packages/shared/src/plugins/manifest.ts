@@ -6,6 +6,7 @@
 // changes only additively.
 
 import { z } from "zod";
+import { isCustomFieldObjectTarget } from "../custom-fields";
 import { isEventTopicFilter, topicMatchesAnyFilter, type EventTopic, type EventTopicFilter } from "../events";
 import { SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
 import { parsePluginCronSchedule } from "./cron";
@@ -15,8 +16,9 @@ import { PLUGIN_SCOPE_NAMES, type PluginScope } from "./scopes";
 import { storefrontComponentsManifestSchema } from "./storefront-components";
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
+import { checkoutAttributeSchema } from "./buyer-ui";
 import { PLUGIN_BLOCK_TARGETS } from "./storefront";
-import { metaobjectDefinitionInputSchema } from "../metaobjects";
+import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN } from "./objects";
 import { PROVIDER_KINDS } from "./providers/kinds";
 import {
   PLUGIN_FEATURES_MAX,
@@ -70,6 +72,7 @@ export const PLUGIN_FUNCTION_POINTS = [
   "checkout.shipping_rates",
   "checkout.payment_methods",
   "order.risk",
+  "buyer.ui",
 ] as const;
 export type PluginFunctionPoint = (typeof PLUGIN_FUNCTION_POINTS)[number];
 
@@ -87,7 +90,7 @@ export const PLUGIN_BLOCKING_FUNCTION_POINTS = [
 ] as const satisfies readonly PluginFunctionPoint[];
 
 /** Points whose function may read the signed-in buyer's record (`snapshot`); only checkout.discounts may commit it. */
-export const PLUGIN_SNAPSHOT_FUNCTION_POINTS = ["cart.line_prices", "checkout.discounts"] as const satisfies readonly PluginFunctionPoint[];
+export const PLUGIN_SNAPSHOT_FUNCTION_POINTS = ["cart.line_prices", "checkout.discounts", "buyer.ui"] as const satisfies readonly PluginFunctionPoint[];
 
 /** Provider ports a plugin can fill: the same ports the platform's own adapters implement (providers.ts). */
 export const PLUGIN_PROVIDER_KINDS = PROVIDER_KINDS;
@@ -129,14 +132,6 @@ const cronSchedule = z.string().trim().regex(/^(\S+\s+){4}\S+$/, "Use a five-fie
     if (typeof parsed === "string") context.addIssue({ code: "custom", message: parsed });
   });
 
-/** A top-level JSON key of a stored record. */
-const recordField = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,47}$/);
-const storageCollectionSchema = z.object({
-  /** Up to four indexed fields (each a top-level JSON key); compound indexes use an array. */
-  indexes: z.array(z.union([recordField, z.array(recordField).min(2).max(4)])).max(4).default([]),
-  unique: z.array(z.union([recordField, z.array(recordField).min(2).max(4)])).max(2).default([]),
-}).strict();
-
 const customFieldSchema = z.object({
   ownerType: z.enum(["product", "variant", "customer", "order", "category", "collection", "brand", "page"]),
   key: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
@@ -145,7 +140,11 @@ const customFieldSchema = z.object({
   type: z.string().min(1).max(48),
   description: description.optional(),
   storefrontVisible: z.boolean().default(false),
-}).strict();
+  to: z.string().max(150).optional(),
+}).strict().superRefine((field, context) => {
+  const isObject = field.type === "object_reference" || field.type === "list.object_reference";
+  if (isObject ? !isCustomFieldObjectTarget(field.to) : field.to !== undefined) context.addIssue({ code: "custom", path: ["to"], message: isObject ? "Object references require a qualified target type." : "Only object references declare a target type." });
+});
 
 /** The most tabs one app page declares. */
 export const PLUGIN_PAGE_TABS_MAX = 8;
@@ -164,7 +163,7 @@ export const PLUGIN_LIST_COLUMNS_PER_REQUEST = 5;
  * backed by real data: a field of the app's record whose id is the row's
  * resource id, or one of its own custom fields on the resource. The list
  * reads it in one bounded statement for the page shown. `filterable` adds an
- * equality filter, only on a storage field that leads one of the
+ * equality filter, only on a object field that leads one of the
  * collection's declared indexes, so the filter is an index match, never a
  * scan. No app column sorts a list: no index orders the store's rows by an
  * app's value.
@@ -175,7 +174,7 @@ const listColumnSchema = z.object({
   title,
   type: z.enum(PLUGIN_LIST_COLUMN_TYPES),
   source: z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("storage"), collection: name, field: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,47}$/) }).strict(),
+    z.object({ kind: z.literal("object"), object: z.string().regex(OBJECT_TYPE_PATTERN), field: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,47}$/) }).strict(),
     z.object({ kind: z.literal("customField"), key: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/) }).strict(),
   ]),
   filterable: z.boolean().default(false),
@@ -221,8 +220,8 @@ const adminSchema = z.object({
 const timelineSchema = z.array(z.object({ kind: name, title }).strict()).max(20).default([])
   .refine((kinds) => new Set(kinds.map((entry) => entry.kind)).size === kinds.length, "Timeline kinds must be unique.");
 
-/** The pages an app script can name. Buyer pages (checkout, the receipt, account) are not among them. */
-export const PLUGIN_STOREFRONT_SCRIPT_PAGES = ["all", "home", "product", "listing", "cart"] as const;
+/** The pages an app script can name. Buyer pages (cart, checkout, the receipt, account) are not among them. */
+export const PLUGIN_STOREFRONT_SCRIPT_PAGES = ["all", "home", "product", "listing"] as const;
 
 const storefrontSchema = z.object({
   /**
@@ -235,6 +234,14 @@ const storefrontSchema = z.object({
     name: title,
     description: description.optional(),
     settings: pluginSettingsSchemaSchema.default([]),
+    reads: z.array(z.object({
+      object: z.string().min(2).max(150).regex(/^[a-z][a-z0-9_.-]*$/),
+      where: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,63}$/), z.union([
+        z.string().max(128), z.number().finite(), z.boolean(), z.null(),
+        z.object({ setting: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/) }).strict(),
+      ])).refine((value) => Object.keys(value).length <= 4, "At most four indexed filters.").optional(),
+      limit: z.number().int().min(1).max(24).default(24),
+    }).strict()).max(2).default([]),
   }).strict()).max(32).default([]),
   /**
    * Blocks inside the product page's purchase area or below it: components
@@ -247,25 +254,11 @@ const storefrontSchema = z.object({
     placement: z.enum(["buy-box", "below"]),
     settings: pluginSettingsSchemaSchema.default([]),
   }).strict()).max(10).default([]),
-  /**
-   * Checkout and customer-account blocks (Shopify's UI extension targets):
-   * sanitized HTML the public `route` draws from the app's settings and the
-   * collections in `reads`, the same for every buyer, cached under
-   * dependency validation. They draw at their target while the app is active.
-   */
-  blocks: z.array(z.object({
-    type: name,
-    name: title,
-    target: z.enum(PLUGIN_BLOCK_TARGETS),
-    route: name,
-    /** Storage collections the render reads; it may read only these (and the app's settings). */
-    reads: z.array(name).max(20).default([]),
-  }).strict()).max(10).default([]),
   /** Meta tags and JSON-LD (sanitized) for the page head. */
   head: z.boolean().default(false),
   /**
    * External scripts; their hosts join the storefront CSP. Loaded non-blocking,
-   * on public pages only: app JavaScript never runs on checkout, the receipt or
+   * on public pages only: app JavaScript never runs on cart, checkout, the receipt or
    * a private page (R3), so those pages cannot be named.
    */
   scripts: z.array(z.object({
@@ -284,7 +277,7 @@ const storefrontSchema = z.object({
 /** The empty `storefront` part (a manifest that declares none). */
 function emptyPluginStorefront() {
   return {
-    sections: [], productBlocks: [], blocks: [], head: false, scripts: [], proxy: false,
+    sections: [], productBlocks: [], head: false, scripts: [], proxy: false,
     skins: [], templates: [], pagePresets: [], islands: [], stylesheet: false, connect: [],
   };
 }
@@ -474,6 +467,7 @@ export const pluginManifestSchema = z.object({
     .transform((topics) => topics as EventTopicFilter[]),
   functions: z.array(z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
+    targets: z.array(z.enum(PLUGIN_BLOCK_TARGETS)).min(1).max(9).optional(),
     /** Lower runs first among plugins at the same point. */
     priority: z.number().int().min(0).max(1000).default(100),
     /**
@@ -490,13 +484,14 @@ export const pluginManifestSchema = z.object({
      * with the order in the same atomic batch at the revision the function
      * saw (a spent balance can never be spent twice).
      */
-    snapshot: z.object({ collection: name }).strict().optional(),
+    snapshot: z.object({ object: z.string().regex(OBJECT_TYPE_PATTERN) }).strict().optional(),
   }).strict()).max(PLUGIN_FUNCTION_POINTS.length).default([]),
   /**
    * Providers the app implements, grouped by port (providers/descriptors.ts).
    * Ids are unique within the app; merchants and orders name a provider
    * `<plugin id>:<id>`.
    */
+  checkout: z.object({ attributes: z.array(checkoutAttributeSchema).max(10).refine((fields) => new Set(fields.map((field) => field.key)).size === fields.length, "Attribute keys must be unique.") }).strict().optional(),
   providers: pluginProvidersSchema,
 
   routes: z.object({
@@ -509,18 +504,9 @@ export const pluginManifestSchema = z.object({
   }).strict().default({ admin: [], public: [], webhooks: [] }),
   cron: z.array(z.object({ name, schedule: cronSchedule }).strict()).max(10).default([]),
 
-  storage: z.record(name, storageCollectionSchema).default({})
-    .refine((collections) => Object.keys(collections).length <= 20, "At most 20 storage collections."),
+  objects: z.record(z.string().regex(OBJECT_TYPE_PATTERN), objectTypeDeclarationSchema).default({})
+    .refine((types) => Object.keys(types).length <= 20, "At most 20 object types."),
   customFields: z.array(customFieldSchema).max(50).default([]),
-  /**
-   * Content types the app defines (Shopify metaobjects), in its own
-   * namespace (`<app id>.<type>`): created or updated when the app is
-   * activated or updated; only the app changes them. Their entries are store
-   * content the merchant edits too (and the app through `ctx.api` with the
-   * `write_objects` scope). Uninstalling with "delete data" removes them.
-   */
-  metaobjects: z.array(metaobjectDefinitionInputSchema).max(10).default([])
-    .refine((types) => new Set(types.map((type) => type.type)).size === types.length, "Metaobject types must be unique."),
   /**
    * Versioned data updates of the app's own storage (`migrations` handlers,
    * keyed by version). The platform runs each one once, in order, before the
@@ -643,24 +629,11 @@ export const pluginManifestSchema = z.object({
       }
     }
   }
-  const needPublicRoute = (path: (string | number)[], route: string) => {
-    if (!publicRoutes.has(route)) context.addIssue({ code: "custom", path, message: `Public route ${route} is not declared.` });
-  };
-  const collections = new Set(Object.keys(manifest.storage));
-  // `ctx.storage.batch` is the atomic multi-record write.
+  const collections = new Set(Object.keys(manifest.objects));
+  // `ctx.objects.batch` is the atomic multi-record write.
   if (collections.has("batch")) {
-    context.addIssue({ code: "custom", path: ["storage", "batch"], message: "\"batch\" is reserved: name the collection something else." });
+    context.addIssue({ code: "custom", path: ["objects", "batch"], message: "\"batch\" is reserved: name the collection something else." });
   }
-  // Checkout and customer-account blocks, the one route-drawn surface left: a public route reading declared collections.
-  manifest.storefront.blocks.forEach((block, index) => {
-    const path = ["storefront", "blocks", index];
-    needPublicRoute([...path, "route"], block.route);
-    block.reads.forEach((collection, readIndex) => {
-      if (!collections.has(collection)) {
-        context.addIssue({ code: "custom", path: [...path, "reads", readIndex], message: `Storage collection ${collection} is not declared.` });
-      }
-    });
-  });
   // Components (sections and product blocks): public settings the storefront module resolves at the edge.
   const components = [
     ...manifest.storefront.sections.map((surface, index) => ({ settings: surface.settings, path: ["storefront", "sections", index] as (string | number)[], reads: true })),
@@ -719,14 +692,15 @@ export const pluginManifestSchema = z.object({
     });
   }
   manifest.functions.forEach((fn, index) => {
+    if ((fn.point === "buyer.ui") !== Boolean(fn.targets?.length)) context.addIssue({ code: "custom", path: ["functions", index, "targets"], message: "Only buyer.ui declares targets, and it requires at least one." });
     if (fn.onError === "block" && !(PLUGIN_BLOCKING_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
       context.addIssue({ code: "custom", path: ["functions", index, "onError"], message: `Only ${PLUGIN_BLOCKING_FUNCTION_POINTS.join(", ")} may block checkout.` });
     }
     if (fn.snapshot && !(PLUGIN_SNAPSHOT_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
       context.addIssue({ code: "custom", path: ["functions", index, "snapshot"], message: `Only ${PLUGIN_SNAPSHOT_FUNCTION_POINTS.join(" and ")} read a snapshot.` });
     }
-    if (fn.snapshot && !collections.has(fn.snapshot.collection)) {
-      context.addIssue({ code: "custom", path: ["functions", index, "snapshot", "collection"], message: `Storage collection ${fn.snapshot.collection} is not declared.` });
+    if (fn.snapshot && !collections.has(fn.snapshot.object)) {
+      context.addIssue({ code: "custom", path: ["functions", index, "snapshot", "object"], message: `Object type ${fn.snapshot.object} is not declared.` });
     }
   });
   unique(manifest.providers.map((provider) => provider.id), ["providers"], "Provider ids");
@@ -768,18 +742,18 @@ export const pluginManifestSchema = z.object({
       if (!manifest.customFields.some((field) => field.ownerType === column.resource && field.key === key)) {
         context.addIssue({ code: "custom", path: [...path, "source", "key"], message: `Custom field ${column.resource}.${key} is not declared.` });
       }
-      if (column.filterable) context.addIssue({ code: "custom", path: [...path, "filterable"], message: "Only a storage field an index leads can filter a list." });
+      if (column.filterable) context.addIssue({ code: "custom", path: [...path, "filterable"], message: "Only a object field an index leads can filter a list." });
       return;
     }
-    const collection = manifest.storage[column.source.collection];
+    const collection = manifest.objects[column.source.object];
     if (!collection) {
-      context.addIssue({ code: "custom", path: [...path, "source", "collection"], message: `Storage collection ${column.source.collection} is not declared.` });
+      context.addIssue({ code: "custom", path: [...path, "source", "object"], message: `Object type ${column.source.object} is not declared.` });
       return;
     }
     const field = column.source.field;
     const leads = collection.indexes.some((entry) => (Array.isArray(entry) ? entry[0] : entry) === field);
     if (column.filterable && !leads) {
-      context.addIssue({ code: "custom", path: [...path, "filterable"], message: `Index ${field} first in collection ${column.source.collection} to filter by it.` });
+      context.addIssue({ code: "custom", path: [...path, "filterable"], message: `Index ${field} first in collection ${column.source.object} to filter by it.` });
     }
   });
   unique(manifest.storefront.sections.map((section) => section.type), ["storefront", "sections"], "Section types");
@@ -789,7 +763,6 @@ export const pluginManifestSchema = z.object({
   unique(manifest.storefront.islands.map((island) => island.name), ["storefront", "islands"], "Island names");
   unique(manifest.storefront.connect, ["storefront", "connect"], "Connect hosts");
   unique(manifest.storefront.productBlocks.map((block) => block.type), ["storefront", "productBlocks"], "Product block types");
-  unique(manifest.storefront.blocks.map((block) => block.type), ["storefront", "blocks"], "Block types");
   unique([...manifest.admin.pages, ...manifest.admin.cards, ...manifest.admin.actions, ...manifest.admin.widgets].map((item) => item.id), ["admin"], "Admin ids");
 });
 
@@ -891,7 +864,7 @@ export function pluginGrantRequest(declared: PluginManifest, features: Iterable<
     publicRoutes: manifest.routes.public.length > 0 || manifest.routes.webhooks.length > 0 || manifest.storefront.proxy,
     storefrontScripts: sorted(manifest.storefront.scripts.map((script) => new URL(script.src).host)),
     storefrontSurfaces: manifest.storefront.sections.length > 0 || manifest.storefront.productBlocks.length > 0
-      || manifest.storefront.blocks.length > 0 || manifest.storefront.head || manifest.storefront.skins.length > 0,
+      || manifest.storefront.head || manifest.storefront.skins.length > 0,
     customFieldOwners: sorted(manifest.customFields.map((field) => field.ownerType)),
     ...(pluginHasStorefrontModule(manifest.storefront) || manifest.storefront.islands.length > 0 || manifest.storefront.stylesheet
       ? { storefrontCode: true as const }

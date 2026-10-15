@@ -110,18 +110,8 @@ export const deps = {
   plugin: (pluginId: Id): void => declareOne(cacheDep.plugin, pluginId),
   /** `plg:*`: which apps are installed and active (their storefront scripts). */
   anyPlugin: (): void => declare(cacheDep.anyPlugin()),
-  /** `plgs:<id>:<collection>`: one storage collection an app's storefront output reads. */
-  pluginCollections: (pluginId: string, collections: Iterable<string>): void => {
-    const scope = activeDependencyScope();
-    if (scope === null) return;
-    for (const collection of collections) scope.declare(cacheDep.pluginCollection(pluginId, collection));
-  },
-
-  // --- Metaobjects --------------------------------------------------------------------
-  /** `mo:<id>`: one metaobject definition and its entries (a section that shows them). */
-  metaobjects: (definitionIds: Iterable<Id>): void => declareEach(cacheDep.metaobjects, definitionIds),
-  /** `mo:*`: which metaobject definitions exist (a read that finds one by its handle). */
-  anyMetaobjects: (): void => declare(cacheDep.anyMetaobjects()),
+  /** `obj:<typeId>`: public object types and their published records. */
+  objects: (typeIds: Iterable<Id>): void => declareEach(cacheDep.objects, typeIds),
 
   // --- Markets ----------------------------------------------------------------------
   /** `mk:<id>`: one market (status, identity, countries, presences): a market-keyed read declares its market. */

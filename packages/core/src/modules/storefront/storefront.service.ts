@@ -1,3 +1,7 @@
+import { collectObjectBindingRequests } from "@scalius/shared/storefront-theme/bindings";
+import { objectTypeId } from "@scalius/shared/plugins/objects";
+import { resourceProductFieldsSql, readResourceProductFields, type BindingResourceSelector } from "./resource-bindings";
+import type { BindingResource } from "@scalius/shared/storefront-theme/bindings";
 // src/modules/storefront/storefront.service.ts
 // Data query and shaping functions for the storefront API.
 // Extracted from src/server/routes/storefront.ts — zero logic changes.
@@ -26,6 +30,7 @@ import {
   planCollectionProducts,
   planHomeBrands,
   planHomeProductLists,
+  planProductCardFields,
   priceCardRowsInResults,
 } from "../catalog";
 import { planHomeMedia, planHomePromotions, planPublishedThemeBrandMedia } from "./homepage-sections";
@@ -42,7 +47,7 @@ import {
   seoDocument,
 } from "../settings";
 import { getPublicPageBySlug, planPublicStorePolicies } from "../pages";
-import { planStorefrontMetaobjects } from "../metaobjects";
+import { planStorefrontObjects, type PublicObjectBindings, type StorefrontObjectRequest, type StorefrontObjectLoader } from "../objects";
 import {
   selectSettingsDocuments,
   type SettingsDocumentRow,
@@ -78,7 +83,7 @@ import {
 } from "../plugins";
 import type { PluginInstallationRow } from "@scalius/database/schema";
 import { PLUGIN_RENDER_RETRY_SECONDS } from "@scalius/shared/plugins";
-import { activePluginBlockPages, activePluginStorefrontServices } from "./app-render";
+import { activePluginStorefrontServices } from "./app-render";
 import { deps } from "../../cache-deps";
 import {
     NAME_FIELDS,
@@ -228,7 +233,8 @@ export async function getHomepageData(
      * second batch, so a homepage with app sections adds no wave before its
      * apps' own reads. Without it, app sections draw nothing.
      */
-    renderApps?: (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null }) => Promise<HomepageAppSection[]>;
+    renderApps?: (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null; cardFields: string[]; loadObjects: StorefrontObjectLoader; resource?: BindingResource }) => Promise<HomepageAppSection[]>;
+    resource?: BindingResourceSelector;
     /** A presence page's market pricing (MARKETS-DESIGN D5); null at the root. */
     pricing?: MarketPricing | null;
   } = {},
@@ -265,7 +271,7 @@ export async function getHomepageData(
 
     // 2. The published theme: its sections and home mode name the reads.
     db
-      .select({ value: themeSettings.colors })
+      .select({ value: themeSettings.colors, ...(options.resource ? { bindingResource: resourceProductFieldsSql(options.resource) } : {}) })
       .from(themeSettings)
       .where(eq(themeSettings.id, "default"))
       .limit(1),
@@ -274,6 +280,7 @@ export async function getHomepageData(
 
   const collectionResults = batchResults[batchResults.length - 2];
   const themeResults = batchResults[batchResults.length - 1];
+  const resource = readResourceProductFields((themeResults as Array<{ bindingResource?: string }>)[0]?.bindingResource);
   const seo = options.pageSlug || options.template ? null : await seoDocument.fromRows(batchResults[0] as SettingsDocumentRow[]);
   // Unset copy stays null: the storefront titles the homepage with the
   // store name instead of inventing a platform-branded headline.
@@ -296,9 +303,15 @@ export async function getHomepageData(
   ]);
   else deps.anyCollection();
   // The apps draw their sections while batch 2 reads the platform sections' data.
+  let declareAppObjects!: (requests: readonly StorefrontObjectRequest[]) => void;
+  let resolveAppObjects!: (objects: PublicObjectBindings) => void;
+  const appObjectRequests = new Promise<readonly StorefrontObjectRequest[]>((resolve) => { declareAppObjects = resolve; });
+  const appObjectData = new Promise<PublicObjectBindings>((resolve) => { resolveAppObjects = resolve; });
+  const loadObjects: StorefrontObjectLoader = (reads) => { declareAppObjects(reads); return appObjectData; };
   let previewAppFailed = false;
   const appSections: Promise<HomepageAppSection[]> = (requests.apps ?? []).length > 0 && options.renderApps
-    ? options.renderApps(requests.apps ?? [], { pricing: options.pricing ?? null }).catch((error: unknown) => {
+    ? options.renderApps(requests.apps ?? [], { pricing: options.pricing ?? null, cardFields: theme.blocks.card.fields ?? [], loadObjects, resource }).then((sections) => { declareAppObjects([]); return sections; }).catch((error: unknown) => {
+      declareAppObjects([]);
       // A preview must retain its previous DOM and report failure, not erase
       // an app section because a required dependency temporarily failed.
       if (options.requests) { previewAppFailed = true; return []; }
@@ -307,7 +320,7 @@ export async function getHomepageData(
       deps.validUntil(Date.now() + PLUGIN_RENDER_RETRY_SECONDS * 1000);
       return [];
     })
-    : Promise.resolve([]);
+    : (declareAppObjects([]), Promise.resolve([]));
 
   // === BATCH 2: every product list, its card media, section images ===
   const activeCollections = translateRows(
@@ -341,7 +354,13 @@ export async function getHomepageData(
   const promotionPlan = planHomePromotions(db, requests.promotionIds);
   const categoryPlan = planHomeCategories(db, requests.categoryIds, translation);
   const productPlan = planHomeProduct(db, requests.homeProductId, translation);
-  const metaobjectPlan = planStorefrontMetaobjects(db, requests.metaobjects ?? []);
+  const bindingTypes = [...requests.bindingObjects ?? [], ...collectObjectBindingRequests({ blocks: theme.blocks, apps: theme.apps })];
+  const objectPlan = planStorefrontObjects(db, [
+    ...(requests.objects ?? []),
+    ...await appObjectRequests,
+    ...bindingTypes.map(({ namespace, type, handles }) => ({ typeId: objectTypeId(namespace, type), limit: 24, handles })),
+  ]);
+  const cardFieldsPlan = planProductCardFields(db, [...collectionPlan.productIdQueries, ...listPlan.productIdQueries], theme.blocks.card.fields ?? []);
   const statements: BatchItem[] = [
     ...collectionPlan.statements,
     ...listPlan.statements,
@@ -350,7 +369,8 @@ export async function getHomepageData(
     ...promotionPlan.statements,
     ...categoryPlan.statements,
     ...productPlan.statements,
-    ...metaobjectPlan.statements,
+    ...objectPlan.statements,
+    ...cardFieldsPlan.statements,
   ];
   const results: unknown[] = statements.length > 0 ? [...await safeBatch(db, statements)] : [];
   const listOffset = collectionPlan.statements.length;
@@ -365,16 +385,18 @@ export async function getHomepageData(
   const promotionOffset = brandOffset + brandPlan.statements.length;
   const categoryOffset = promotionOffset + promotionPlan.statements.length;
   const productOffset = categoryOffset + categoryPlan.statements.length;
-  const metaobjectOffset = productOffset + productPlan.statements.length;
-  const metaobjects = metaobjectPlan.resolve(results, metaobjectOffset);
+  const objectOffset = productOffset + productPlan.statements.length;
+  const objects = objectPlan.resolve(results, objectOffset);
+  resolveAppObjects(objects.bindingObjects);
   // Images the shown entries name and no section did: one more read, only then.
-  const extraMediaIds = metaobjects.mediaIds.filter((id) => !requests.mediaIds.includes(id)).slice(0, HOME_MAX_MEDIA);
+  const extraMediaIds = objects.mediaIds.filter((id) => !requests.mediaIds.includes(id)).slice(0, HOME_MAX_MEDIA);
   const extraMediaPlan = planHomeMedia(db, extraMediaIds);
   const extraMedia = extraMediaPlan.statements.length > 0
     ? extraMediaPlan.resolve(await safeBatch(db, extraMediaPlan.statements), 0)
     : [];
-  const resolvedMap = collectionPlan.resolve(results, marketShopAmounts(market));
-  const productLists = listPlan.resolve(results, listOffset, marketShopAmounts(market));
+  const cardFields = cardFieldsPlan.resolve(results, statements.length - cardFieldsPlan.statements.length);
+  const resolvedMap = collectionPlan.resolve(results, marketShopAmounts(market), cardFields);
+  const productLists = listPlan.resolve(results, listOffset, marketShopAmounts(market), cardFields);
 
   // The collections sections' collections that have products to show.
   const formattedCollections = sectionCollections.flatMap((col) => {
@@ -428,9 +450,10 @@ export async function getHomepageData(
       homeProduct: productPlan.resolve(results, productOffset),
       // App sections that drew something, by section id (component data).
       apps: renderedApps,
-      // The Metaobjects sections' content types with their published entries.
-      // Only a page with a Metaobjects section carries the key (other pages answer as before).
-      ...(metaobjects.types.length > 0 || (requests.metaobjects?.length ?? 0) > 0 ? { metaobjects: metaobjects.types } : {}),
+      // The Objects sections' content types with their published entries.
+      // Only a page with a Objects section carries the key (other pages answer as before).
+      ...(objects.types.length > 0 || (requests.objects?.length ?? 0) > 0 ? { objects: objects.types } : {}),
+      ...(bindingTypes.length > 0 ? { bindingObjects: objects.bindingObjects } : {}),
     },
   };
 }
@@ -455,7 +478,7 @@ export async function getLandingPageData(
 export async function getTemplateSectionsData(
   db: Database,
   template: StorefrontPageTemplate,
-  options: Pick<NonNullable<Parameters<typeof getHomepageData>[1]>, "renderApps" | "pricing"> = {},
+  options: Pick<NonNullable<Parameters<typeof getHomepageData>[1]>, "renderApps" | "pricing" | "resource"> = {},
 ) {
   return (await getHomepageData(db, { ...options, template })).sections;
 }
@@ -762,7 +785,6 @@ export async function getLayoutData(
     appExtensions: activePluginStorefrontExtensions(activeApps.values()),
     // The page groups where an active app draws a checkout or account block:
     // only those pages read their blocks part (none: no read at all).
-    appBlockPages: activePluginBlockPages(activeApps.values()),
     // Buyer services apps provide (search, address autocomplete, sign-in): the pages call them only when named.
     appServices: activePluginStorefrontServices(activeApps.values()),
   };

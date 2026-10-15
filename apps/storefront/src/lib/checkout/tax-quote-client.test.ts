@@ -102,6 +102,25 @@ function checkoutData(): Record<string, unknown> {
 }
 
 describe("tax quote client contract", () => {
+  it("carries a bounded courier quote token and cash-collection choice in JSON", () => {
+    const request = buildTaxQuoteRequest({ ...checkoutData(), shippingRateToken: "rate_signed", cod: true });
+    expect(request).toMatchObject({ shippingRateToken: "rate_signed", cod: true });
+    expect(parseTaxQuoteEnvelope({ success: true, data: validQuote({ shippingRateToken: "rate_signed" }) }).shippingRateToken).toBe("rate_signed");
+    expect(() => buildTaxQuoteRequest({ ...checkoutData(), shippingRateToken: "x".repeat(2049) })).toThrow(TaxQuoteUnavailableError);
+    expect(() => parseTaxQuoteEnvelope({ success: true, data: validQuote({ shippingRateToken: "x".repeat(2049) }) })).toThrow(TaxQuoteContractError);
+  });
+
+  it("carries bounded buyer attributes and preserves validated private UI", () => {
+    const attributes = { "test.gift.message": "Happy birthday" };
+    expect(buildTaxQuoteRequest({ ...checkoutData(), attributes: JSON.stringify(attributes) }).attributes).toEqual(attributes);
+    expect(() => buildTaxQuoteRequest({ ...checkoutData(), attributes: { "test.gift.message": "a".repeat(501) } })).toThrow(TaxQuoteUnavailableError);
+    expect(() => buildTaxQuoteRequest({ ...checkoutData(), attributes: "broken" })).toThrow(TaxQuoteUnavailableError);
+    const buyerUi = [{ appId: "test.gift", releaseId: "release_1", target: "purchase.checkout.contact.render-after" as const,
+      ui: { type: "field" as const, attribute: "message" }, attributes: [{ key: "message", label: "Gift message", type: "text" as const }], values: { message: "Happy birthday" } }];
+    expect(parseTaxQuoteEnvelope({ success: true, data: validQuote({ buyerUi }) }).buyerUi).toEqual(buyerUi);
+    expect(parseTaxQuoteEnvelope({ success: true, data: { ...validQuote(), buyerUi: [{ ui: "<script>" }] } }).buyerUi).toBeUndefined();
+  });
+
   it("builds only server-resolvable quote inputs and drops client prices and tax classes", () => {
     const request = buildTaxQuoteRequest(checkoutData());
 

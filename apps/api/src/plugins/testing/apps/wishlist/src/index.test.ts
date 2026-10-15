@@ -41,7 +41,7 @@ describe("acme.wishlist", () => {
     expect((await harness.route("public", "toggle", { method: "POST", headers: json, body: { productId: "p_linen" }, customer: { id: "cust_2" } })).value)
       .toMatchObject({ body: { pressed: true } });
     expect(harness.records.get("products")?.get("p_linen")).toEqual({
-      productId: "p_linen", name: "Linen Panjabi", slug: "linen-panjabi", imageUrl: "https://cdn.example.com/linen.jpg", available: true, wishes: 2,
+      product_id: "p_linen", name: "Linen Panjabi", slug: "linen-panjabi", image_url: "https://cdn.example.com/linen.jpg", available: true, wishes: 2,
     });
     expect((await harness.route("public", "state", { query: { productId: "p_linen" }, customer })).value).toEqual({ body: { pressed: true, signedIn: true } });
     expect((await harness.route("public", "state", { query: { productId: "p_linen" } })).value).toEqual({ body: { pressed: false, signedIn: false } });

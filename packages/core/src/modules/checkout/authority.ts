@@ -41,12 +41,13 @@ import {
     type StorefrontCartVariantRow,
 } from "./cart-validation";
 import {
-    resolveStorefrontDeliveryPreflightFromRows,
+    resolveStorefrontDeliveryPreflightWithRates,
     type StorefrontDeliveryPreflightResult,
 } from "./prepare";
 import {
   type ActiveDeliveryLocationRow,
   type DeliveryRateRow,
+  type CalculatedRateOptions,
   normalizeDeliveryDestination,
   selectActiveDeliveryLocationRowsByIds,
   selectDeliveryRateRowsByIds,
@@ -80,6 +81,9 @@ export interface StorefrontCheckoutAuthorityInput {
     shippingAdminArea?: string | null;
     shippingPostalCode?: string | null;
     shippingMethodId?: string | null;
+    shippingRateToken?: string | null;
+    cod?: boolean;
+    calculatedRates?: CalculatedRateOptions;
     customerEmail?: string | null;
     customerPhone?: string | null;
     /** The billed country: the order's market when nothing physical ships (MARKETS-DESIGN D5). */
@@ -414,7 +418,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                             itemIssues: cartValidation.issues,
                         });
                     }
-                    const deliveryPreflight = resolveStorefrontDeliveryPreflightFromRows(
+                    const deliveryPreflight = await resolveStorefrontDeliveryPreflightWithRates(
+                        db,
                         {
                             shippingCountryCode: input.shippingCountryCode,
                             city: input.city,
@@ -423,10 +428,13 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                             shippingAdminArea: input.shippingAdminArea,
                             shippingPostalCode: input.shippingPostalCode,
                             shippingMethodId: input.shippingMethodId,
+                            shippingRateToken: input.shippingRateToken,
+                            cod: input.cod,
                         },
                         cartValidation,
                         locationRows,
-                        shippingRows.filter((row) => row.id === input.shippingMethodId),
+                        shippingRows,
+                        { ...input.calculatedRates, acceptQuotedCod: true },
                     );
 
                     return {

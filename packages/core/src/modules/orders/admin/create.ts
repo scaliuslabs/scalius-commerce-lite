@@ -316,7 +316,7 @@ export async function createManualOrder(
     // Order row
     writeBatch.push(
         db.insert(orders).values({
-            orderNumber: nextOrderNumberSql(),
+            orderNumber: nextOrderNumberSql(db),
             id: orderId,
             customerName: data.customerName,
             customerPhone: data.customerPhone,

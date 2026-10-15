@@ -1,3 +1,4 @@
+import { clearBuyerAttributes } from "@/lib/buyer-ui/state";
 import { cartStore, removeOrderedLines, syncCartFromStorage } from "@/store/cart";
 import {
   clearCheckoutAttemptSession,
@@ -144,6 +145,7 @@ export async function finalizeCheckoutReceipt(receiptElement: HTMLElement): Prom
   }
   if (cleanup.clearCheckoutSession) {
     clearCheckoutSession();
+    clearBuyerAttributes();
     try {
       sessionStorage.removeItem(SUBMITTED_CART_KEY);
       sessionStorage.setItem(LAST_ORDER_KEY, orderId);

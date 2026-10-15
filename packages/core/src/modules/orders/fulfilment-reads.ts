@@ -28,8 +28,9 @@ function epochToIso(value: number | null): string | null {
     return typeof value === "number" && Number.isFinite(value) ? new Date(value * 1000).toISOString() : null;
 }
 
-async function readOrderFulfilments(db: Database, orderId: string, activeOnly: boolean) {
+async function readOrderFulfilments(db: Database, orderId: string, activeOnly: boolean, fulfillmentId?: string) {
     const conditions = [eq(orderFulfillments.orderId, orderId)];
+    if (fulfillmentId) conditions.push(eq(orderFulfillments.id, fulfillmentId));
     if (activeOnly) conditions.push(eq(orderFulfillments.status, "active"));
     const [fulfilmentRows, lineRows] = await db.batch([
         db.select({
@@ -60,7 +61,7 @@ async function readOrderFulfilments(db: Database, orderId: string, activeOnly: b
             quantity: orderFulfillmentLines.quantity,
         })
             .from(orderFulfillmentLines)
-            .where(eq(orderFulfillmentLines.orderId, orderId)),
+            .where(and(eq(orderFulfillmentLines.orderId, orderId), fulfillmentId ? eq(orderFulfillmentLines.fulfillmentId, fulfillmentId) : undefined)),
     ]);
     const linesByFulfilment = new Map<string, OrderFulfilmentLineView[]>();
     for (const line of lineRows) {
@@ -113,8 +114,9 @@ export async function listAdminOrderFulfilments(
     orderId: string,
     currencyDecimalPlaces: number,
     orderStatus: string,
+    fulfillmentId?: string,
 ): Promise<AdminOrderFulfilmentView[]> {
-    const rows = await readOrderFulfilments(db, orderId, false);
+    const rows = await readOrderFulfilments(db, orderId, false, fulfillmentId);
     return rows.map(({ row, lines }) => {
         const voidBlockedReason = fulfilmentVoidBlockedReason({
             status: row.status,
