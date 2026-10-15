@@ -99,7 +99,7 @@ export function RegistryAppRows({ query, chevron, empty, hasOther }: RegistryApp
                     {app.signer.trusted ? <Badge variant="success">{t("developerBadgeVerified")}</Badge> : <Badge variant="warning">{t("developerUnknown")}</Badge>}
                     {app.compatible ? null : <Badge variant="secondary">{t("needsNewerScalius")}</Badge>}
                   </span>
-                  <span className="line-clamp-2 text-body text-muted-foreground">{app.tagline ?? app.description}</span>
+                  <span title={app.tagline ?? app.description} className="line-clamp-2 text-body text-muted-foreground">{app.tagline ?? app.description}</span>
                   <span className="text-body text-muted-foreground">{t("registryBy", { author: app.author, registry: registryName(app.registryId) })}</span>
                 </span>
                 <span className="flex h-10 items-center">{chevron}</span>

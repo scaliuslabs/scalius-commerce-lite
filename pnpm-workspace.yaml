@@ -42,6 +42,9 @@ overrides:
   fast-uri: "3.1.8"
   svgo: "4.1.0"
   wrangler: "4.150.0"
+  # Astro's dev runtime must support the same compatibility date as Wrangler.
+  "@cloudflare/vite-plugin>miniflare": "5.20261006.2-beta"
+  "@cloudflare/vite-plugin>workerd": "1.20261006.1"
   better-call: ">=1.4.0"
   ws: ">=8.21.0"
   qs: "6.16.0"

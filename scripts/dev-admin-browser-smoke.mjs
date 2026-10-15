@@ -522,16 +522,16 @@ async function clickSaveProduct(cdp) {
     cdp,
     { kind: "save-product-enabled" },
     15_000,
-    "enabled Save changes button",
+    "enabled product Save button",
   );
 
   const result = await cdp.send("Runtime.evaluate", {
     awaitPromise: true,
     expression: `
       (() => {
-        const button = Array.from(document.querySelectorAll("button"))
-          .find((candidate) => candidate.textContent?.includes("Save changes") && !candidate.disabled);
-        if (!button) throw new Error("Save changes button was not found.");
+        const button = Array.from(document.querySelectorAll("[data-save-bar] button"))
+          .find((candidate) => candidate.textContent?.trim() === "Save" && !candidate.disabled);
+        if (!button) throw new Error("Product Save button was not found.");
         button.scrollIntoView({ block: "center", inline: "nearest" });
         const rect = button.getBoundingClientRect();
         return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
@@ -853,8 +853,8 @@ const PAGE_CONDITION_FUNCTIONS = {
     return document.querySelector(selector)?.textContent?.includes(expectedText) === true;
   }`,
   "save-product-enabled": `function () {
-    return Array.from(document.querySelectorAll("button"))
-      .some((button) => button.textContent?.includes("Save changes") && !button.disabled);
+    return Array.from(document.querySelectorAll("[data-save-bar] button"))
+      .some((button) => button.textContent?.trim() === "Save" && !button.disabled);
   }`,
 };
 

@@ -92,7 +92,7 @@ describe("server staff notification history", () => {
     expect(dialog().querySelectorAll("button")).toHaveLength(0);
     seed(Array.from({ length: 120 }, (_, index) => item(index + 1)));
     await receipt();
-    expect(host.querySelector("button")!.getAttribute("aria-label")).toBe(locale === "en" ? "Notifications (99+ unread)" : "নোটিফিকেশন (৯৯+ পড়া হয়নি)");
+    expect(host.querySelector("button")!.getAttribute("aria-label")).toBe(locale === "en" ? "Notifications: 99+ unread" : "নোটিফিকেশন: ৯৯+ পড়া হয়নি");
     expect(rows()).toHaveLength(0);
     await click(button(locale === "en" ? "New alerts" : "নতুন নোটিফিকেশন"));
     expect(rows()).toHaveLength(20);

@@ -288,8 +288,7 @@ export function buildCheckoutPayload({ sequence = 1, checkoutRequestId } = {}) {
         variantLabel: null,
       },
     ],
-    discountAmount: null,
-    discountCode: null,
+    discountCodes: [],
     shippingCharge: fixture.shippingCharge,
     shippingMethodId: fixture.shippingMethodId,
     paymentMethod: "cod",
@@ -311,7 +310,7 @@ export function buildCartValidationPayload(orderPayload) {
 export function buildTaxQuotePayload(orderPayload) {
   return {
     ...buildCartValidationPayload(orderPayload),
-    discountCode: orderPayload.discountCode,
+    discountCodes: orderPayload.discountCodes,
     customerPhone: orderPayload.customerPhone,
   };
 }
@@ -911,7 +910,7 @@ function importDevPlaces(config) {
   console.log("Importing the Bangladesh places (plugins/bangladesh/places)...");
   execFileSync(pnpmExecutable, [
     "--dir", "apps/api", "exec", "tsx", "scripts/places-import.ts",
-    "--dataset", resolve(root, "data", "places", "bd"),
+    "--dataset", resolve(root, "plugins", "bangladesh", "places"),
     "--state", config.wranglerState,
   ], { cwd: root, stdio: "inherit" });
 }

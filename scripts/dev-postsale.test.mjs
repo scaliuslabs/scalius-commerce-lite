@@ -108,6 +108,7 @@ describe("local post-sale smoke CLI", () => {
 
   it("submits the exact authoritative quote fingerprint reviewed by the smoke", () => {
     const payload = buildCheckoutPayload({ sequence: 7 });
+    payload.discountCodes = ["SMOKE10", "SHIPFREE"];
     const quotePayload = buildTaxQuotePayload(payload);
     const quotedPayload = attachAuthoritativeQuote(payload, {
       success: true,
@@ -118,7 +119,9 @@ describe("local post-sale smoke CLI", () => {
       items: payload.items,
       shippingMethodId: payload.shippingMethodId,
       customerPhone: payload.customerPhone,
+      discountCodes: ["SMOKE10", "SHIPFREE"],
     });
+    expect(quotePayload).not.toHaveProperty("discountCode");
     expect(quotedPayload.expectedQuoteFingerprint).toBe("taxq_abcdefghijklmnopqrstuv");
     expect(payload).not.toHaveProperty("expectedQuoteFingerprint");
     expect(() => attachAuthoritativeQuote(payload, { data: {} })).toThrow(/valid quote fingerprint/);

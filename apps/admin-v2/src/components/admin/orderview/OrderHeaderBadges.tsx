@@ -35,7 +35,7 @@ export function OrderHeaderBadges({ order }: {
       ) : null}
       {order.archivedAt ? <Badge variant="secondary">{o("archived")}</Badge> : null}
       {order.conversation?.unread ? (
-        <a href="#order-requests" className="inline-flex rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <a href="#order-requests" className="inline-flex min-h-11 items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-6">
           <Badge variant="info">{t("messages.unread")}</Badge>
         </a>
       ) : null}

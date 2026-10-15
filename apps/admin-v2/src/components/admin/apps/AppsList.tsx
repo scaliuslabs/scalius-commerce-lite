@@ -46,7 +46,7 @@ function RowText({ app, extra }: { app: AppSummary | AppListing; extra: ReactNod
   const shown = localizedApp(app, useLocale());
   return (
     <>
-      <span className="line-clamp-2 text-body text-muted-foreground">{shown.tagline ?? shown.description}</span>
+      <span title={shown.tagline ?? shown.description} className="line-clamp-2 text-body text-muted-foreground">{shown.tagline ?? shown.description}</span>
       {extra}
     </>
   );

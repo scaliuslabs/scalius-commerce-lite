@@ -155,7 +155,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
             <p className="font-mono text-muted-foreground">{t("contact.whatsapp")}: {formatPhoneForDisplay(order.customerWhatsapp, getStoreRegion())}</p>
           ) : null}
           {order.customerEmail ? (
-            <a href={`mailto:${order.customerEmail}`} className="flex min-h-11 items-center break-all text-muted-foreground hover:text-foreground sm:min-h-0">
+            <a href={`mailto:${order.customerEmail}`} className="flex min-h-11 items-center break-all text-muted-foreground hover:text-foreground sm:min-h-6">
               {order.customerEmail}
             </a>
           ) : null}

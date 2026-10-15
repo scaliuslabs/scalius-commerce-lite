@@ -34,9 +34,8 @@ export function useStoreIdentity() {
 /** Shopify's store avatar: a coloured square with the name's first character. */
 export function StoreBadge({ name, className }: { name: string; className?: string }) {
   return (
-    <span aria-hidden className={cn("grid size-5 shrink-0 place-items-center rounded-md bg-store-badge text-caption font-semibold text-store-badge-foreground", className)}>
-      {/* The first character, whole (an emoji is never split). */}
-      {name ? Array.from(name)[0]!.toUpperCase() : <Store className="size-3.5" />}
+    <span aria-hidden data-initial={name ? Array.from(name)[0]!.toUpperCase() : undefined} className={cn("grid size-5 shrink-0 place-items-center rounded-md bg-store-badge text-caption font-semibold text-store-badge-foreground data-[initial]:before:content-[attr(data-initial)]", className)}>
+      {name ? null : <Store className="size-3.5" />}
     </span>
   );
 }

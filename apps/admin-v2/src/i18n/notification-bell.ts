@@ -4,8 +4,8 @@ import { defineMessages } from "./index";
 export const notificationBellMessages = defineMessages({
   en: {
     notifications: "Notifications",
-    unreadNotifications: "Notifications ({count} unread)",
-    unreadNotificationsCapped: "Notifications ({count}+ unread)",
+    unreadNotifications: "Notifications: {count} unread",
+    unreadNotificationsCapped: "Notifications: {count}+ unread",
     markAllRead: "Mark all read",
     clearAll: "Clear all",
     clearHelp: "Clears current alerts and marks them read. New arrivals stay.",
@@ -31,8 +31,8 @@ export const notificationBellMessages = defineMessages({
   },
   bn: {
     notifications: "নোটিফিকেশন",
-    unreadNotifications: "নোটিফিকেশন ({count}টি পড়া হয়নি)",
-    unreadNotificationsCapped: "নোটিফিকেশন ({count}+ পড়া হয়নি)",
+    unreadNotifications: "নোটিফিকেশন: {count}টি পড়া হয়নি",
+    unreadNotificationsCapped: "নোটিফিকেশন: {count}+ পড়া হয়নি",
     markAllRead: "সব পঠিত করুন",
     clearAll: "সব মুছুন",
     clearHelp: "বর্তমান নোটিফিকেশন পঠিত হয়ে মুছে যাবে। নতুনগুলো থাকবে।",

@@ -87,8 +87,14 @@ export default defineConfig({
       __SCALIUS_DEV_API_ORIGIN__: JSON.stringify(devOrigins(devPorts).apiUrl),
     },
     optimizeDeps: {
+      entries: ["!**/*.d.{ts,mts,cts}"],
       // @astrojs/cloudflare misses these on cold Vite caches: withastro/astro#17788.
       include: ["astro/assets/services/noop", "astro/logger/json"],
+    },
+    environments: {
+      astro: { optimizeDeps: { entries: ["!**/*.d.{ts,mts,cts}"] } },
+      ssr: { optimizeDeps: { entries: ["!**/*.d.{ts,mts,cts}"] } },
+      prerender: { optimizeDeps: { entries: ["!**/*.d.{ts,mts,cts}"] } },
     },
     resolve: {
       dedupe: reactSingletonDeps,

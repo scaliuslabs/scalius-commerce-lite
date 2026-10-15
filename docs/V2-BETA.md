@@ -1,6 +1,6 @@
 # Scalius Commerce 2.0 beta
 
-This is the beta candidate for the core contract freeze. Deployment and publication are separate from preparing the candidate. The full review, browser journey and capacity sweeps remain release evidence to collect; focused checks do not replace them.
+The v2 beta core is deployed. The contract baseline is sealed in the manifest, protocol, SDK and stable-operation snapshots. This is a beta release; independent review and opt-in capacity benchmarks remain distinct from the verification below.
 
 ## Core contract
 
@@ -15,7 +15,7 @@ This is the beta candidate for the core contract freeze. Deployment and publicat
 
 ## Upgrade
 
-Apply migrations 0154–0157 before the new application code. Use the repository deploy command when deployment is authorized.
+Migrations 0154–0157 were applied by `pnpm run deploy` on 2026-10-15 before the new application code.
 
 0155 deliberately removes the disposable pre-beta metaobject/app-record tables. It also resets stored themes, drafts, history, restore points and previews: old theme versions are not upgraded on read. Reconfigure saved theme branding and landing layouts after that reset. Other catalog, order and customer data are not part of this reset.
 
@@ -29,23 +29,30 @@ This is an intentional pre-freeze contract replacement. Existing pre-beta apps u
 
 The separate marketing campaign app and engine remain cancelled by the owner's October 13 decision. Existing consent and unsubscribe protections remain core. Marketplace, subscription billing, paid hosting and AI vendor products are separate products.
 
-The candidate does not claim an npm publication, production deployment, full-suite pass or completed review sweep. Those outcomes must be recorded from their actual runs.
+## Deployment — 2026-10-15
 
-## Candidate verification — 2026-10-15
+Source commit: `2d764ecfa` (`Fix PostgreSQL object projections and dashboard loading budgets`). Both Workers were deployed through `pnpm run deploy`, with each latest version verified at 100% and live storefront build propagation checked.
 
-- Workspace typecheck, including Astro: passed. Dashboard lint passed; storefront lint passed with 17 warnings.
-- Dashboard and storefront builds, API deployment dry run, distribution-secret checks and build canaries: passed. No production deploy ran.
-- Focused contract, Object/custom-field, checkout, buyer UI, courier, theme, event and migration tests: passed after integration fixes. Native PostgreSQL sequence concurrency and upgrade/fresh-schema parity passed; migration metadata and core domain boundaries passed.
-- SDK tarball installed, imported and typechecked in an external consumer. Bundled plugins were rebuilt and ABI/operation snapshots verified.
-- Strict Free/Paid budget checks passed for admin listing, status changes and refunds, including isolated cold requests. Cold refunds used 47 of the 50 allowed D1 calls; the ceiling has no exceptions.
-- Live messaging authorization now rejects disabled/replaced apps, banned approvers and revoked scopes; bridge and bundled/sandbox regressions passed.
+| Surface | Deployment |
+| --- | --- |
+| API and dashboard | `35990537-3620-4e27-95eb-0a6cedcb92e9` |
+| Storefront | `0b1a1cc8-bb99-4431-af49-76491f75e307` |
+| Storefront build | `src-5f99c682baacd6a9` |
 
-Review sweeps, final composed browser journeys, full-suite/DVC race and capacity runs, deployment smokes and package publication remain separate release steps. The earlier Noor gallery passed eight scenarios at mobile and desktop widths; final integration still needs the requested review sweep.
+`pnpm release:check --json` passed against api.scalius.com, dashboard.scalius.com and storefront.scalius.com with no warnings or required actions. It verified readiness, deployment identity, invalid-cookie rejection, dashboard auth, public reads, theme app availability, cache headers, all child sitemaps, both feeds, UCP search/lookup and Product JSON-LD. Desktop and 390 px product-page inspection found no horizontal overflow or browser errors.
 
-## Full verification repairs — 2026-10-15
+The eight tables affected by the pre-beta reset were exported immediately before deployment. Migrations 0154–0157 also passed a disposable remote D1 rehearsal with foreign-key and search-update checks; that test database was deleted.
 
-The first full suite ran 1,820 files: 1,718 passed, 30 failed and 72 skipped. All initially failing cases passed after fixes to Objects workflow IDs, shared MCP schema references, order search-index write amplification, redundant Object type reads, and stale fixtures for the new contracts. Strict Free/Paid database budgets passed (36 tests); the Free 50-call ceiling is unchanged. Migration 0154–0157 application and search behavior passed on a disposable remote D1 database, which was then deleted.
+## Verification
 
-The complete storefront gallery covered 341 scenarios at 390, 768, 1280 and 1440 px. It found unnamed Noor gallery links and two development reload interruptions. All five affected scenarios passed their rerun after the link fix; all 24 packed Noor integration scenarios passed. Heuristic advisory findings remain separate from the zero failing accessibility/layout gates. Final full-suite, native PostgreSQL, five-seed DVC, deployment and live-smoke outcomes are still pending.
+- **Full suite:** the expanded run enabled native PostgreSQL and five DVC seeds: 1,805 files passed, four failed and 12 opt-in files were skipped; 15,631 tests passed, four failed and 24 were skipped. Every failing test subsequently passed. This is a full run plus targeted repairs, not a claim of a second entirely green full run.
+- **Repairs:** fixed Objects workflow IDs, shared MCP schema references, redundant Object type reads, order search-index write amplification, PostgreSQL nested JSON/Object projections and stale fixtures. The Turso timeout passed in isolation; the PostgreSQL migration lock-table exhaustion passed with adequate disposable-server capacity; the historical 0152 parity test now compares its own migration boundary. The final native PostgreSQL/Object/custom-field regression run passed all 54 tests.
+- **Freshness and budgets:** all five DVC seeds reported zero findings; all six race tests passed. Strict Free/Paid D1 budget checks passed all 36 tests, with the Free 50-call ceiling unchanged. Both workerd profiles passed nine tests each. Operational order-status writes fell from 95 to 16.
+- **Build and contracts:** serialized workspace typechecks, Astro checks, production builds, environment/source policies, secret/canary scans, migration metadata and ABI/operation gates passed. Dashboard initial bundles passed the existing budgets after deferring related-record rendering and removing an eager theme-editor import. API builds now clear stale generated artifacts; the measured API bundle is 14.96 MiB, including 7.77 MiB JavaScript, within unchanged limits. The SDK tarball installed, imported and typechecked in an external consumer; bundled plugins were rebuilt. No npm publication was performed.
+- **Storefront gallery:** all 341 scenarios ran at 390, 768, 1280 and 1440 px. Three unnamed Noor gallery-link failures were fixed; those and two development-reload interruptions passed all five targeted reruns. All 24 packed Noor integration scenarios passed. Accessibility/layout gates have no outstanding failures; heuristic advisories are not a complete accessibility audit.
+- **Local composed journeys:** COD checkout, authoritative quote, duplicate-request replay, receipt access and support request passed against a disposable database. Product rich-text save/reload and Object create/edit/save/revision/reload also passed through the real dashboard. The smoke helpers were corrected for the moved Bangladesh dataset, plural discount codes and shared Save bar.
+- **Dashboard quality:** all 20 selected routes/surfaces passed at 390 and 1440 px in English and Bangla (80 variants, zero gating findings). Three routes were explicitly skipped because their menu, abandoned-checkout or app-page fixtures were absent. Shared control-name, description-tooltip, order-link target and Bangla composer-sizing findings were repaired. Heuristic language/timing/focus advisories remain separate from functional and accessibility gates.
+- **Local runtime:** API, dashboard and storefront all started and answered successfully after aligning Astro’s nested Miniflare/workerd with the installed Wrangler runtime and excluding type declarations from dependency scanning. Production compatibility settings were retained.
+- **Lint:** dashboard lint passed; storefront lint passed with 17 existing warnings. Oxlint passed with existing warnings.
 
-The expanded full run included native PostgreSQL and five DVC seeds: 1,805 files passed, four failed and 12 opt-in files were skipped (15,631 tests passed, four failed, 24 skipped). All five DVC seeds reported zero findings and all six race tests passed. Follow-up checks reproduced a PostgreSQL JSON/query portability defect in Object projections and corrected it with native coverage. The Turso timeout passed in isolation; PostgreSQL migration 0151 passed with adequate lock-table capacity in the disposable server; the historical 0152 comparison now stops at its own schema boundary. Both workerd profiles passed nine tests each.
+Opt-in scale/load/noise benchmarks were not rerun. Production checks were read-only: no real payment, courier booking, OTP delivery or production order was created. Independent review sweeps, real-device accessibility and live provider transactions remain separate evidence; passing automated checks does not establish those outcomes.
