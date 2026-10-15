@@ -23,7 +23,7 @@ import { themeEditorMessages } from "~/i18n/theme-editor";
 import { AdminApiResponseError, isAdminApiConflictError } from "~/lib/admin-api-error";
 import { apiData } from "~/lib/api";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
-import { actionErrorText } from "../shared";
+import { actionErrorText } from "../action-error";
 import { editorHistory, startHistory, type EditorAction } from "./editor-state";
 import type { SaveStatus } from "./EditorTopBar";
 import { saveableDraft, type DraftApps } from "./saveable-draft";

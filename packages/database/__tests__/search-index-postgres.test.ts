@@ -58,7 +58,8 @@ const TERMS = "SELECT source, doc_id, col, term, tf FROM search_fts_terms ORDER 
 describe.runIf(postgresUrl)("0152 search index on PostgreSQL", { timeout: 300_000 }, () => {
   it("upgrades an 0151 store to exactly the fresh schema and backfills what the triggers store", async () => {
     const [fresh, before] = await Promise.all([
-      compileCanonicalPostgresSchema(),
+      // Compare at this migration boundary; later contracts have their own gates.
+      compileCanonicalPostgresSchema({ beforeMigration: "0153_" }),
       compileCanonicalPostgresSchema({ beforeMigration: "0152_" }),
     ]);
     expect(fresh.derivedTables).toBe(1);

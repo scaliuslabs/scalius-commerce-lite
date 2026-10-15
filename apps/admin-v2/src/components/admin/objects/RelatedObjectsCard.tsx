@@ -1,33 +1,12 @@
-import { Link } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
 import type { RelatedObjectRecord } from "@scalius/shared/plugins/objects";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { usePermissions } from "~/contexts/PermissionContext";
-import { useMessages } from "~/i18n";
-import { objectMessages } from "~/i18n/objects";
 
-/** The resource detail carries this bounded projection in its existing read. */
+const RelatedObjectsCardContent = lazy(() => import("./RelatedObjectsCardContent").then((module) => ({ default: module.RelatedObjectsCardContent })));
+
+/** Load the optional card and its copy only when this resource has related records. */
 export function RelatedObjectsCard({ records }: { records?: readonly RelatedObjectRecord[] }) {
-  const t = useMessages(objectMessages);
   const { hasPermission } = usePermissions();
   if (!hasPermission("objects.view") || !records?.length) return null;
-  return (
-    <Card>
-      <CardHeader><CardTitle>{t("relatedTitle")}</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <ul className="space-y-2">
-          {records.map((record) => (
-            <li key={`${record.typeId}:${record.recordId}`}>
-              <Link
-                to="/admin/objects/$type/records/$recordId"
-                params={{ type: record.typeHandle, recordId: record.recordId }}
-                className="text-body text-link hover:underline"
-              >{record.displayName}</Link>
-              <p className="text-body text-muted-foreground">{record.typeName}</p>
-            </li>
-          ))}
-        </ul>
-        {records.length === 25 ? <p className="text-body text-muted-foreground">{t("relatedLimit", { count: 25 })}</p> : null}
-      </CardContent>
-    </Card>
-  );
+  return <Suspense fallback={null}><RelatedObjectsCardContent records={records} /></Suspense>;
 }

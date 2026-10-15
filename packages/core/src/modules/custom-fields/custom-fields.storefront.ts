@@ -90,14 +90,14 @@ function referenceColumn() {
 function publicObjectReference() {
     return sql<string | null>`(SELECT json_object('id', ${objectRecords.id}, 'handle', ${objectRecords.handle},
         'fields', ${objectTypes.fieldsJson}, 'data', ${objectRecords.dataJson},
-        'references', (SELECT coalesce(json_group_array(json_object('type', target.namespace || '.' || target.type, 'id', live.id)), '[]')
+        'references', json((SELECT coalesce(json_group_array(json_object('type', target.namespace || '.' || target.type, 'id', live.id)), '[]')
             FROM json_each(${objectTypes.fieldsJson}) AS field
-            JOIN json_each(CASE WHEN json_type(${objectRecords.dataJson}, '$.' || json_extract(field.value, '$.key')) = 'array'
+            CROSS JOIN json_each(CASE WHEN json_type(${objectRecords.dataJson}, '$.' || json_extract(field.value, '$.key')) = 'array'
                 THEN json_extract(${objectRecords.dataJson}, '$.' || json_extract(field.value, '$.key'))
                 ELSE json_array(json_extract(${objectRecords.dataJson}, '$.' || json_extract(field.value, '$.key'))) END) AS reference
             JOIN object_types AS target ON target.id = 'oty_' || json_extract(field.value, '$.to') AND target.storefront = 1
             JOIN object_records AS live ON live.type_id = target.id AND live.id = CAST(reference.value AS TEXT) AND live.pub = 1 AND live.status = 'published'
-            WHERE json_extract(field.value, '$.type') IN ('object_reference', 'list.object_reference')))
+            WHERE json_extract(field.value, '$.type') IN ('object_reference', 'list.object_reference'))))
         FROM ${objectTypes} JOIN ${objectRecords} ON ${objectRecords.typeId} = ${objectTypes.id}
         WHERE ${objectTypes.id} = 'oty_' || json_extract(${customFieldDefinitions.validations}, '$.to')
             AND ${objectTypes.storefront} = 1 AND ${objectRecords.id} = ${customFieldValues.value}

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { SaveErrorBanner, useSaveBar, type SaveBarEntry } from "~/components/admin/shared/SaveBar";
-import { AdminApiResponseError, isAdminApiConflictError } from "~/lib/admin-api-error";
+import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { translate } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { Page } from "~/components/admin/resource/Page";
@@ -198,13 +198,4 @@ export function failSave(error: unknown, reload: () => void): never {
   throw error;
 }
 
-/**
- * What a failed immediate action (add, move, delete) tells the merchant: the
- * API's own sentence for a 4xx, never raw server or network text.
- */
-export function actionErrorText(error: unknown): string {
-  if (error instanceof AdminApiResponseError && error.status < 500 && error.message && !error.message.startsWith("API error")) {
-    return error.message;
-  }
-  return translate(onlineStoreMessages, "actionFailed");
-}
+export { actionErrorText } from "./action-error";

@@ -416,7 +416,13 @@ function splitSqlCallArguments(body: string): string[] {
 }
 
 function postgresJsonObjectValue(expression: string): string {
-  const trimmed = compileSqliteJsonObjects(expression).trim();
+  const input = expression.trim();
+  const constructor = /^(?:json_object|json_array|json_group_array|json)\s*\(/i.exec(input);
+  const directJsonValue = constructor !== null
+    && findSqlCallEnd(input, constructor[0].lastIndexOf("(")) === input.length - 1;
+  // Only a complete constructor argument carries JSON into its consumer.
+  // Subqueries still need text-valued JSON in predicates/table-function inputs.
+  const trimmed = compileSqliteJsonObjects(input, directJsonValue).trim();
   if (/^json_extract\s*\(/i.test(trimmed)) {
     const opening = trimmed.indexOf("(");
     if (opening >= 0 && findSqlCallEnd(trimmed, opening) === trimmed.length - 1) {
@@ -629,7 +635,7 @@ export function compileSqliteJsonExtractPaths(sql: string): string {
  * a jsonb-returning twin so arrays, objects, numbers, booleans, strings, and
  * null retain their exact JSON kinds.
  */
-export function compileSqliteJsonObjects(sql: string): string {
+export function compileSqliteJsonObjects(sql: string, jsonValue = false): string {
   let output = "";
   let cursor = 0;
   let state: ScannerState = "normal";
@@ -693,20 +699,34 @@ export function compileSqliteJsonObjects(sql: string): string {
       state = "block-comment";
       continue;
     }
-    const call = /^json_object\s*\(/i.exec(sql.slice(cursor));
+    const call = /^(json_object|json_array|json_group_array|json)\s*\(/i.exec(sql.slice(cursor));
     if (call) {
+      const kind = call[1]!.toLowerCase();
       const opening = cursor + call[0].lastIndexOf("(");
       const closing = findSqlCallEnd(sql, opening);
-      const argumentsList = splitSqlCallArguments(sql.slice(opening + 1, closing));
-      if (argumentsList.length === 0 || argumentsList.length % 2 !== 0) {
+      const body = sql.slice(opening + 1, closing);
+      const argumentsList = body.trim() ? splitSqlCallArguments(body) : [];
+      if (kind === "json_object" && (argumentsList.length === 0 || argumentsList.length % 2 !== 0)) {
         throw new Error("SQLite json_object() requires key/value argument pairs.");
       }
+      if ((kind === "json_group_array" || kind === "json") && argumentsList.length !== 1) {
+        throw new Error(`SQLite ${kind}() requires one value argument.`);
+      }
       const compiledArguments = argumentsList.map((argument, index) =>
-        index % 2 === 0
+        kind === "json" || (kind === "json_object" && index % 2 === 0)
           ? compileSqliteJsonObjects(argument).trim()
           : postgresJsonObjectValue(argument)
       );
-      output += `(jsonb_build_object(${compiledArguments.join(", ")})::text)`;
+      const expression = kind === "json"
+        ? `scalius_compat.json_text(${compiledArguments[0]})`
+        : kind === "json_group_array"
+          ? `COALESCE(jsonb_agg(${compiledArguments[0]}), '[]'::jsonb)`
+          : `${kind === "json_object" ? "jsonb_build_object" : "jsonb_build_array"}(${compiledArguments.join(", ")})`;
+      // SQLite marks a constructor's result as JSON when another constructor
+      // consumes it. json() explicitly marks a scalar subquery's result.
+      output += kind === "json"
+        ? jsonValue ? `(${expression}::jsonb)` : expression
+        : jsonValue ? expression : `(${expression}::text)`;
       cursor = closing + 1;
       continue;
     }

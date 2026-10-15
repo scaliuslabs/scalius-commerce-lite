@@ -6,7 +6,9 @@
 // SCALIUS_TEST_POSTGRES_URL.
 import { afterAll, describe, expect, it } from "vitest";
 import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
+import { storefrontTemplateTheme } from "@scalius/shared/storefront-theme";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
+import { presentStorefrontCustomFields, selectStorefrontCustomFieldRows } from "../custom-fields";
 import { getHomepageData } from "./storefront.service";
 
 afterAll(closeNativePostgres);
@@ -30,7 +32,23 @@ describe.runIf(nativePostgresUrl())("storefront homepage on PostgreSQL", { timeo
       INSERT INTO collections (id, name, presentation, config, is_active) VALUES
         ('col_a', 'Picks', 'grid', '{"source":"manual","productIds":["prod_a","prod_b"],"maxProducts":8}', 1);
       INSERT INTO product_sales_stats (product_id, sold_30d) VALUES ('prod_a', 4);
+      INSERT INTO object_types (id, namespace, type, name, fields_json, storefront, display_field) VALUES
+        ('oty_custom.charts', 'custom', 'charts', 'Charts', '[{"key":"title","name":"Title","type":"single_line_text"},{"key":"related","name":"Related","type":"list.object_reference","to":"custom.sizes"}]', 1, 'title'),
+        ('oty_custom.sizes', 'custom', 'sizes', 'Sizes', '[{"key":"title","name":"Title","type":"single_line_text"}]', 1, 'title');
+      INSERT INTO object_records (type_id, id, handle, status, data_json, pub) VALUES
+        ('oty_custom.charts', 'chart_a', 'shirt', 'published', '{"title":"Shirt sizes","related":["size_live","size_draft","missing"]}', 1),
+        ('oty_custom.sizes', 'size_live', 'medium', 'published', '{"title":"Medium"}', 1),
+        ('oty_custom.sizes', 'size_draft', 'large', 'draft', '{"title":"Large"}', 0);
+      INSERT INTO custom_field_definitions (id, owner_type, namespace, key, name, type, validations, storefront_visible) VALUES
+        ('cfd_homecare', 'product', 'custom', 'care', 'Care', 'single_line_text', '{}', 1),
+        ('cfd_homechart', 'product', 'custom', 'chart', 'Chart', 'object_reference', '{"to":"custom.charts"}', 1);
+      INSERT INTO custom_field_values (definition_id, owner_type, owner_id, value) VALUES
+        ('cfd_homecare', 'product', 'prod_a', 'Hand wash'),
+        ('cfd_homechart', 'product', 'prod_a', 'chart_a');
     `);
+    const theme = storefrontTemplateTheme("department-mall");
+    theme.blocks.card.fields = ["custom.care"];
+    await client.query("INSERT INTO theme_settings (id, colors) VALUES ('default', $1) ON CONFLICT(id) DO UPDATE SET colors = excluded.colors", [JSON.stringify(theme)]);
 
     // The stored projections a release fills for raw-SQL rows.
     for (let cursor: string | null = null; ;) {
@@ -54,10 +72,22 @@ describe.runIf(nativePostgresUrl())("storefront homepage on PostgreSQL", { timeo
         brandLimit: 12,
         promotionIds: ["promo_missing"],
         homeProductId: null,
-        objects: [{ typeId: "oty_custom.missing", limit: 4 }],
+        objects: [{ typeId: "oty_custom.missing", limit: 4 }, { typeId: "oty_custom.charts", limit: 4 }],
+        bindingObjects: [{ namespace: "custom", type: "charts", handles: ["shirt"], list: false }],
       },
     });
 
     expect(home.sections.lists.find((list) => list.key === "newest")?.products.map((product) => product.id)).toEqual(["prod_a", "prod_b"]);
+    expect(home.sections.lists.find((list) => list.key === "newest")?.products.find((product) => product.id === "prod_a")?.fields).toEqual({ "custom.care": "Hand wash" });
+    expect(home.sections.bindingObjects?.["custom.charts"]?.records).toEqual([
+      { id: "chart_a", handle: "shirt", data: { title: "Shirt sizes", related: ["size_live", null, null] } },
+    ]);
+    expect(home.sections.objects?.find((type) => type.id === "oty_custom.charts")?.entries).toMatchObject([
+      { handle: "shirt", title: "Shirt sizes", fields: [{ key: "related", value: ["size_live", null, null] }] },
+    ]);
+    const fields = presentStorefrontCustomFields(await selectStorefrontCustomFieldRows(db, "product", "prod_a"));
+    expect(fields.find((field) => field.key === "chart")?.object).toMatchObject({
+      handle: "shirt", fields: [{ key: "title", value: "Shirt sizes" }, { key: "related", value: ["size_live", null, null] }],
+    });
   });
 });

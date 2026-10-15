@@ -205,6 +205,32 @@ describe("PostgreSQL SQLite-profile compiler", () => {
     );
   });
 
+  it("compiles nested JSON arrays and empty aggregates without double encoding", () => {
+    const compiled = compileSqliteStatementForPostgres(
+      "SELECT json_group_array(json_object('quote', 'a''b', 'items', json_array(NULL, json_object('id', ?))))",
+      1,
+    );
+    expect(compiled.sql).toBe(
+      "SELECT (COALESCE(jsonb_agg(jsonb_build_object('quote', 'a''b', 'items', jsonb_build_array(NULL, jsonb_build_object('id', $1)))), '[]'::jsonb)::text)",
+    );
+    expect(compileSqliteStatementForPostgres("SELECT json_array(), json_group_array(value) FROM items").sql).toBe(
+      "SELECT (jsonb_build_array()::text), (COALESCE(jsonb_agg(value), '[]'::jsonb)::text) FROM items",
+    );
+    expect(compileSqliteStatementForPostgres("SELECT json_object('refs', json((SELECT coalesce(json_group_array(json_object('id', id)), '[]') FROM items)))").sql).toBe(
+      "SELECT (jsonb_build_object('refs', (scalius_compat.json_text((SELECT coalesce((COALESCE(jsonb_agg(jsonb_build_object('id', id)), '[]'::jsonb)::text), '[]') FROM items))::jsonb))::text)",
+    );
+    const quoted = "SELECT 'json_array(NULL)', \"json_group_array\" /* json_array() */ FROM items";
+    expect(compileSqliteStatementForPostgres(quoted).sql).toBe(quoted);
+  });
+
+  it("keeps JSON table-function inputs text inside a JSON-valued scalar subquery", () => {
+    const compiled = compileSqliteStatementForPostgres(
+      "SELECT json_object('refs', json((SELECT json_group_array(value) FROM json_each(CASE WHEN kind = 'list' THEN payload ELSE json_array(payload) END))))",
+    );
+    expect(compiled.sql).toContain("THEN payload ELSE (jsonb_build_array(payload)::text) END");
+    expect(compiled.sql).toContain("jsonb_build_object('refs', (scalius_compat.json_text((SELECT (COALESCE(jsonb_agg(value), '[]'::jsonb)::text)");
+  });
+
   it("uses the explicit JSONB row fast path without changing SQLite SQL", () => {
     const compiled = compileSqliteStatementForPostgres(
       "SELECT json_extract(item.value, '$.id') FROM "

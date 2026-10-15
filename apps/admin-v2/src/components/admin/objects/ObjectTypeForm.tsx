@@ -8,12 +8,11 @@ import { useNavigate } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import {
-  CUSTOM_FIELD_TYPES,
   customFieldItemType,
   isCustomFieldKey,
   isCustomFieldListType,
 } from "@scalius/shared/custom-fields";
-import { OBJECT_FIELDS_MAX, OBJECT_MERCHANT_NAMESPACE } from "@scalius/shared/plugins/objects";
+import { OBJECT_FIELD_TYPES, OBJECT_FIELDS_MAX, OBJECT_MERCHANT_NAMESPACE } from "@scalius/shared/plugins/objects";
 import { toast } from "~/lib/toast";
 import { ErrorBoundary } from "~/components/admin/ErrorBoundary";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
@@ -176,7 +175,7 @@ function TypeFormPage({ initial }: { initial: ObjectType | null }) {
   });
 
   const binding = `${saved?.namespace ?? OBJECT_MERCHANT_NAMESPACE}.${draft.handle || "handle"}`;
-  const fieldTypes: ObjectField["type"][] = [...CUSTOM_FIELD_TYPES, "customer_reference", "order_reference", "object_reference", "list.object_reference"];
+  const fieldTypes = OBJECT_FIELD_TYPES;
   const typeLabel = (type: ObjectField["type"]) => {
     if (type === "customer_reference" || type === "order_reference" || type === "object_reference" || type === "list.object_reference") return t(`fieldType.${type}`);
     const item = types(`type.${customFieldItemType(type)}` as CustomFieldMessageKey);

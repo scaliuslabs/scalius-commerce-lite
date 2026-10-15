@@ -67,7 +67,7 @@ export function planStorefrontObjects(db: Database, requests: readonly Storefron
     // Weak object references reveal only a live, published target of a public type.
     references: sql<string>`(SELECT COALESCE(json_group_array(json_object('type', target.namespace || '.' || target.type, 'id', live.id)), '[]')
       FROM json_each(${objectTypes.fieldsJson}) AS field
-      JOIN json_each(CASE WHEN json_type(${objectRecords.dataJson}, '$.' || json_extract(field.value, '$.key')) = 'array'
+      CROSS JOIN json_each(CASE WHEN json_type(${objectRecords.dataJson}, '$.' || json_extract(field.value, '$.key')) = 'array'
         THEN json_extract(${objectRecords.dataJson}, '$.' || json_extract(field.value, '$.key'))
         ELSE json_array(json_extract(${objectRecords.dataJson}, '$.' || json_extract(field.value, '$.key'))) END) AS reference
       JOIN object_types AS target ON target.id = 'oty_' || json_extract(field.value, '$.to') AND target.storefront = 1
