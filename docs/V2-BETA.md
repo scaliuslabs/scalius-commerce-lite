@@ -31,13 +31,13 @@ The separate marketing campaign app and engine remain cancelled by the owner's O
 
 ## Deployment — 2026-10-15
 
-Source commit: `2d764ecfa` (`Fix PostgreSQL object projections and dashboard loading budgets`). Both Workers were deployed through `pnpm run deploy`, with each latest version verified at 100% and live storefront build propagation checked.
+Source commit: `1cc060a0d` (`Verify beta journeys and fix dashboard accessibility`), including the earlier core verification repairs. Both Workers were deployed through `pnpm run deploy`, with each latest version verified at 100% and live storefront build propagation checked.
 
 | Surface | Deployment |
 | --- | --- |
-| API and dashboard | `35990537-3620-4e27-95eb-0a6cedcb92e9` |
-| Storefront | `0b1a1cc8-bb99-4431-af49-76491f75e307` |
-| Storefront build | `src-5f99c682baacd6a9` |
+| API and dashboard | `b8cfeef2-0765-4c54-b654-1fe04fce27ad` |
+| Storefront | `c862342f-fcf3-4b30-8795-c7d8ccbdb741` |
+| Storefront build | `src-cc667faffec45a37` |
 
 `pnpm release:check --json` passed against api.scalius.com, dashboard.scalius.com and storefront.scalius.com with no warnings or required actions. It verified readiness, deployment identity, invalid-cookie rejection, dashboard auth, public reads, theme app availability, cache headers, all child sitemaps, both feeds, UCP search/lookup and Product JSON-LD. Desktop and 390 px product-page inspection found no horizontal overflow or browser errors.
 
@@ -46,7 +46,7 @@ The eight tables affected by the pre-beta reset were exported immediately before
 ## Verification
 
 - **Full suite:** the expanded run enabled native PostgreSQL and five DVC seeds: 1,805 files passed, four failed and 12 opt-in files were skipped; 15,631 tests passed, four failed and 24 were skipped. Every failing test subsequently passed. This is a full run plus targeted repairs, not a claim of a second entirely green full run.
-- **Repairs:** fixed Objects workflow IDs, shared MCP schema references, redundant Object type reads, order search-index write amplification, PostgreSQL nested JSON/Object projections and stale fixtures. The Turso timeout passed in isolation; the PostgreSQL migration lock-table exhaustion passed with adequate disposable-server capacity; the historical 0152 parity test now compares its own migration boundary. The final native PostgreSQL/Object/custom-field regression run passed all 54 tests.
+- **Repairs:** fixed Objects workflow IDs, shared MCP schema references, redundant Object type reads, order search-index write amplification, PostgreSQL nested JSON/Object projections and stale fixtures. The Turso timeout passed in isolation; the PostgreSQL migration lock-table exhaustion passed with adequate disposable-server capacity; the historical 0152 parity test now compares its own migration boundary. The final native PostgreSQL/Object/custom-field regression run passed all 54 tests. The post-browser repair run passed 62 notification, composer, customer-card and smoke-helper tests.
 - **Freshness and budgets:** all five DVC seeds reported zero findings; all six race tests passed. Strict Free/Paid D1 budget checks passed all 36 tests, with the Free 50-call ceiling unchanged. Both workerd profiles passed nine tests each. Operational order-status writes fell from 95 to 16.
 - **Build and contracts:** serialized workspace typechecks, Astro checks, production builds, environment/source policies, secret/canary scans, migration metadata and ABI/operation gates passed. Dashboard initial bundles passed the existing budgets after deferring related-record rendering and removing an eager theme-editor import. API builds now clear stale generated artifacts; the measured API bundle is 14.96 MiB, including 7.77 MiB JavaScript, within unchanged limits. The SDK tarball installed, imported and typechecked in an external consumer; bundled plugins were rebuilt. No npm publication was performed.
 - **Storefront gallery:** all 341 scenarios ran at 390, 768, 1280 and 1440 px. Three unnamed Noor gallery-link failures were fixed; those and two development-reload interruptions passed all five targeted reruns. All 24 packed Noor integration scenarios passed. Accessibility/layout gates have no outstanding failures; heuristic advisories are not a complete accessibility audit.
