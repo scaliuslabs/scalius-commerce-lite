@@ -11,7 +11,7 @@ import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
 import { getBearerToken, parseAgentCredential } from "../agent-access/pat";
 import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from "../agent-access/principal";
 import type { AgentPrincipal } from "../agent-access/types";
-import { getAgentDispatchPrincipal, getPluginDispatchPrincipal } from "../agent-access/dispatch-context";
+import { getAgentDispatchPrincipal, getOperationDispatchClearance, getPluginDispatchPrincipal } from "../agent-access/dispatch-context";
 import { isAgentRiskAllowed } from "../agent-access/types";
 import {
     enforceAgentRateLimit,
@@ -380,9 +380,25 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
                     "You do not have permission to perform this action",
                 );
             }
+            // Opt-in grant scopes (inbox, review moderation): only a Custom grant reaches them.
+            const { requiresOptInGrantScope } = await import("../agent-access/grant-scopes");
+            if (operation.rbac && requiresOptInGrantScope(operation.rbac) && agentPrincipal.preset !== "custom") {
+                throw new ForbiddenError(
+                    "This operation needs an opt-in grant scope: approve a Custom connection that selects it",
+                );
+            }
             if (!dispatchPrincipal) {
                 await enforceDirectAgentRequestBodyLimit(c, operation);
             }
+            // One confirmation gate for both lanes (MCP dispatch and direct REST).
+            const { enforceAgentConfirmation } = await import("../agent-access/confirm-gate");
+            await enforceAgentConfirmation(
+                c,
+                agentPrincipal,
+                operation,
+                pathname,
+                dispatchPrincipal ? getOperationDispatchClearance(c.env) ?? { confirmed: false, dryRun: false } : null,
+            );
         } catch (error) {
             if (!dispatchPrincipal) {
                 await writeDeniedAgentRequestAudit(c, agentPrincipal, operation, startedAt, error);

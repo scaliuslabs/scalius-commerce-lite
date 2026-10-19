@@ -705,7 +705,10 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
     try {
       response = await fetchRuntimeApiApp(
         internalRequest,
-        withOperationDispatchPrincipal(env, principal),
+        withOperationDispatchPrincipal(env, principal, {
+          confirmed: options.confirmedBy !== undefined,
+          dryRun: options.dryRun === "native",
+        }),
         ctx,
       );
     } catch {

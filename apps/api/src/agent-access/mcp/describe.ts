@@ -202,7 +202,7 @@ export function describeOperationBrief(operation: AgentOperationManifestEntry, d
   return {
     operationId: operation.operationId,
     purpose: operation.summary,
-    ...(operation.description ? { when: operation.description.slice(0, 240) } : {}),
+    ...(operation.when ?? operation.description ? { when: (operation.when ?? operation.description)!.slice(0, 240) } : {}),
     risk: operation.risk,
     stability: operation.stability,
     inputs: {

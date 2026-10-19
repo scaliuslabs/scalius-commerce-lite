@@ -11,6 +11,7 @@ import type {
 } from "./types";
 import { isAgentRiskAllowed } from "./types";
 import { writeAgentAuditEvent } from "./audit";
+import { requiresOptInGrantScope } from "./grant-scopes";
 import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from "./principal";
 import {
   beginAgentAuthorization,
@@ -62,32 +63,6 @@ export interface AgentAccessBackend {
     env?: Env,
   ): Promise<boolean>;
   writeAudit(event: AgentAuditInput, env: Env): Promise<void>;
-}
-
-/**
- * The permissions of the opt-in grant scopes (`x-scalius-agent.grantScope`):
- * `customer_conversations` (the inbox) and `review_moderation`. A grant made
- * from a preset never reaches an operation that requires one of them, even
- * when its snapshot (taken before the scopes existed) lists it.
- */
-export const OPT_IN_GRANT_SCOPE_PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
-  customer_conversations: ["conversations.view", "conversations.reply"],
-  review_moderation: ["reviews.view", "reviews.moderate"],
-};
-const OPT_IN_PERMISSIONS = new Set(Object.values(OPT_IN_GRANT_SCOPE_PERMISSIONS).flat());
-
-/** True when the route cannot be reached without an opt-in scope permission. */
-export function requiresOptInGrantScope(rbac: AgentManifestAuthorizationInput["rbac"]): boolean {
-  switch (rbac.type) {
-    case "permission":
-      return OPT_IN_PERMISSIONS.has(rbac.permission);
-    case "allOf":
-      return rbac.permissions.some((permission) => OPT_IN_PERMISSIONS.has(permission));
-    case "anyOf":
-      return rbac.permissions.every((permission) => OPT_IN_PERMISSIONS.has(permission));
-    default:
-      return false;
-  }
 }
 
 function getCanonicalMcpResource(env: Env, resource: AgentPrincipal["resource"]): string {

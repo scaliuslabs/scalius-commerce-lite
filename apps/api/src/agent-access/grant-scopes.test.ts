@@ -17,7 +17,8 @@ vi.mock("./oauth-consent", () => ({
 vi.mock("./audit", () => ({ writeAgentAuditEvent: vi.fn() }));
 
 import { AGENT_OPERATIONS } from "../generated/agent-operations.gen";
-import { loadAgentAccessBackend, OPT_IN_GRANT_SCOPE_PERMISSIONS, requiresOptInGrantScope } from "./backend";
+import { loadAgentAccessBackend } from "./backend";
+import { OPT_IN_GRANT_SCOPE_PERMISSIONS, requiresOptInGrantScope } from "./grant-scopes";
 import type { AgentPrincipal } from "./types";
 
 const everyScopePermission = Object.values(OPT_IN_GRANT_SCOPE_PERMISSIONS).flat();

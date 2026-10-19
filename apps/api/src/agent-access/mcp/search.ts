@@ -11,6 +11,7 @@ import { isConfirmGated } from "./confirm";
 import { isMcpOperationExposure } from "./operations";
 import { jsonBytes } from "./shape";
 import { resolveAuthorizedWorkflow, type AuthorizedWorkflowPlan } from "./workflows";
+import { searchAgentWorkflows } from "../workflows/resolver";
 
 export const SEARCH_DEFAULT_LIMIT = 6;
 export const SEARCH_MAX_LIMIT = 10;
@@ -150,7 +151,7 @@ function operationHit(operation: AgentOperationManifestEntry, score: number): Se
     id: operation.operationId,
     kind: "operation",
     title: clip(operation.summary),
-    summary: clip(operation.description ?? operation.summary),
+    summary: clip(operation.when ?? operation.description ?? operation.summary),
     score: Number(score.toFixed(3)),
     risk: operation.risk,
     stability: operation.stability,
@@ -220,6 +221,67 @@ async function workflowHits(query: string, surface: AgentResource, principal: Ag
   return { hits, notes };
 }
 
+/**
+ * The ranked catalogue (workflows/resolver-core.ts `createWorkflowSearch`):
+ * routes and operations scored together over their "Use when" lines, kept
+ * only when the grant can run every operation of the hit.
+ */
+async function rankedHits(
+  query: string,
+  surface: AgentResource,
+  principal: AgentPrincipal,
+  limit: number,
+): Promise<SearchHit[]> {
+  const backend = await loadAgentAccessBackend();
+  const authorized = new Map<string, boolean>();
+  const allowed = async (operationId: string): Promise<boolean> => {
+    const known = authorized.get(operationId);
+    if (known !== undefined) return known;
+    const operation = AGENT_OPERATIONS_BY_ID[operationId];
+    const result = operation !== undefined &&
+      operation.surface === surface &&
+      isMcpOperationExposure(operation) &&
+      await backend.authorizeOperation(principal, {
+        rbac: operation.rbac,
+        risk: operation.risk,
+        surface: operation.surface,
+        exposure: operation.exposure,
+        principals: operation.principals,
+        grantScope: operation.grantScope ?? null,
+      });
+    authorized.set(operationId, result);
+    return result;
+  };
+  const hits: SearchHit[] = [];
+  for (const hit of searchAgentWorkflows({ query, surface, limit: SEARCH_MAX_LIMIT }).hits) {
+    if (hits.length >= limit) break;
+    let usable = true;
+    for (const operationId of hit.operationIds) {
+      if (!(await allowed(operationId))) {
+        usable = false;
+        break;
+      }
+    }
+    if (!usable) continue;
+    if (hit.kind === "operation") {
+      hits.push(operationHit(AGENT_OPERATIONS_BY_ID[hit.id]!, hit.confidence));
+      continue;
+    }
+    hits.push({
+      id: hit.id,
+      kind: "workflow",
+      title: clip(hit.title),
+      summary: clip(hit.summary),
+      score: hit.confidence,
+      risk: hit.risk,
+      stability: hit.stability,
+      operationIds: hit.operationIds,
+      ...(hit.operationIds.some((operationId) => isConfirmGated(AGENT_OPERATIONS_BY_ID[operationId]!)) ? { confirm: true as const } : {}),
+    });
+  }
+  return hits;
+}
+
 async function operationHits(
   query: string,
   surface: AgentResource,
@@ -263,10 +325,13 @@ export async function searchCapabilities(input: {
 }): Promise<{ hits: SearchHit[]; notes?: string[] }> {
   const limit = Math.max(1, Math.min(input.limit ?? SEARCH_DEFAULT_LIMIT, SEARCH_MAX_LIMIT));
   const workflows = await workflowHits(input.query, input.surface, input.principal);
+  const ranked = await rankedHits(input.query, input.surface, input.principal, limit);
   const operations = await operationHits(input.query, input.surface, input.principal, limit);
   const seen = new Set<string>();
   const hits: SearchHit[] = [];
-  for (const hit of [...workflows.hits, ...operations]) {
+  // The resolver's committed plan or control leads, then the ranked catalogue,
+  // then the lexical operation index fills what is left.
+  for (const hit of [...workflows.hits, ...ranked, ...operations]) {
     if (hits.length >= limit || seen.has(hit.id)) continue;
     seen.add(hit.id);
     hits.push(hit);

@@ -57,8 +57,26 @@ function isPluginPrincipal(value: unknown): value is PluginPrincipal {
   );
 }
 
+/**
+ * What the dispatcher already settled for a confirmation-gated step: the
+ * merchant approved it (a consumed confirm token or a client dialog), or it
+ * is a native dry run that writes nothing. The admin boundary's confirm gate
+ * (agent-access/confirm-gate.ts) reads it; nothing outside the dispatcher can
+ * set it.
+ */
+export interface OperationDispatchClearance {
+  confirmed: boolean;
+  dryRun: boolean;
+}
+
+const OPERATION_DISPATCH_CLEARANCE = Symbol("scalius.operation-dispatch-clearance");
+
 /** A copy of `env` carrying the principal an in-process operation dispatch acts as. */
-export function withOperationDispatchPrincipal(env: Env, principal: OperationPrincipal): Env {
+export function withOperationDispatchPrincipal(
+  env: Env,
+  principal: OperationPrincipal,
+  clearance: OperationDispatchClearance = { confirmed: false, dryRun: false },
+): Env {
   if (!isAgentPrincipal(principal) && !isPluginPrincipal(principal)) {
     throw new TypeError("Operation dispatch principal is invalid");
   }
@@ -72,7 +90,19 @@ export function withOperationDispatchPrincipal(env: Env, principal: OperationPri
     writable: false,
     value: principal,
   });
+  Object.defineProperty(wrapped, OPERATION_DISPATCH_CLEARANCE, {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: Object.freeze({ confirmed: clearance.confirmed === true, dryRun: clearance.dryRun === true }),
+  });
   return wrapped;
+}
+
+/** The dispatcher's clearance of the current step; none outside an in-process dispatch. */
+export function getOperationDispatchClearance(env: Env): OperationDispatchClearance | null {
+  const value = (env as Env & { [OPERATION_DISPATCH_CLEARANCE]?: OperationDispatchClearance })[OPERATION_DISPATCH_CLEARANCE];
+  return value && typeof value === "object" ? value : null;
 }
 
 export function withAgentDispatchPrincipal(env: Env, principal: AgentPrincipal): Env {

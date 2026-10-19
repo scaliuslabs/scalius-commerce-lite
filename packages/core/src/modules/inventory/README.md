@@ -111,6 +111,8 @@ Types: `reserved`, `preorder_reserved`, `released`, `deducted`, `preorder_deduct
 
 An exact retry replays the stored result. A changed request under the same key is refused (409). A lost race re-plans from fresh reads, up to 3 attempts. A removal may not take `stock` below `reserved_stock`.
 
+A bulk stock run (`apps/api/src/bulk-runs`) sets counted quantities with the same engine: each chunk is one command of signed `adjusted` lines at one location, replayed by its subject (`replay: "subject"`): the run's chunk counter advances in the same batch, so no `inventory_commands` row is written.
+
 | Document | States |
 |----------|--------|
 | Purchase order | `draft` (editable, deletable) -> `ordered` (lines locked) -> `partially_received` -> `received`; `cancelled` from `draft`, `ordered` or `partially_received` (received units stay). |

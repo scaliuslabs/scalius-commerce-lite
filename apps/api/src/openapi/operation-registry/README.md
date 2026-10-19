@@ -89,6 +89,40 @@ operations stay callable and are labelled. The MCP server's instructions and
 the OpenAPI document (`info.x-scalius-stability`) say the storefront surface is
 beta.
 
+Routing and gating fields (`x-scalius-agent`, every manifest entry):
+
+- `when`: one "Use when ..." line (at most 240 characters) per executable
+  operation, kept in `when-dashboard-a.ts`, `when-dashboard-b.ts` and
+  `when-storefront.ts` beside the rows. Write it in the merchant's words, not
+  with a sample value from a test task; the contract test fails on a missing
+  one or one naming an unknown operation. `scalius_search`
+  (`workflows/resolver-core.ts` `createWorkflowSearch`) ranks with it and
+  `scalius_describe` shows it; the resolver's own index leaves it out.
+- `dryRun`: `native` (the route takes `dryRun: true` and writes nothing),
+  `preview:<operationId>` (a reviewed read on the same surface) or `none`.
+- `confirmation`: `required` for destructive and financial risk, and for any
+  row that adds the gate (gift-card writes). Both agent lanes pass one gate
+  at the admin boundary (`agent-access/confirm-gate.ts`): MCP settles it with
+  the confirm token or a client dialog, direct REST with the
+  `Scalius-Confirm-Token` header from a 428 `confirmation_required` answer.
+- `grantScope`: `customer_conversations` (the inbox) or `review_moderation`.
+  No preset grant reaches them; a Custom grant that selected their permissions
+  does (`agent-access/grant-scopes.ts`, checked on both lanes).
+
+## Bulk runs
+
+`dashboard.resources.variants.bulk_set_prices`, `variants.bulk_set_stock`,
+`customers.bulk_tag`, `products.bulk_set_status` and `products.bulk_publish`
+(`routes/admin/resources-bulk.ts`) change up to 5,000 items by ids or a list
+filter. `dryRun: true` plans every item (before/after of the first 50, totals)
+and writes nothing. A run is one `bulk_runs` row (migration 0159): 250 items
+or fewer finish in the request (200), more answer 202 with the run and finish
+right after the response and on the minute cron; `bulk_runs.get` reads it.
+Each chunk of 90 commits its writes with the run's cursor and chunk counter,
+so a repeat never applies a chunk twice: prices update field by field (no
+`aggregateRevision` churn; the product's derived price and buyer state move in
+the same batch), stock writes one ledger-v2 stock command per chunk.
+
 ## Changing a stable operation
 
 Add a field, a value or an optional input and accept it with
