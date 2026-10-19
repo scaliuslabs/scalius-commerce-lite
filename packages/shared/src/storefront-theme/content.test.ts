@@ -78,6 +78,10 @@ describe("theme content", () => {
     expect(hero?.type === "hero" && hero.settings.layout).toBe("full-bleed");
     const tiles = next.pages.home.find((section) => section.type === "category-tiles");
     expect(tiles?.type === "category-tiles" && tiles.settings).toEqual({ style: "photo", title: "Departments", categoryIds: ["cat_a", "cat_b"] });
+    // Translations are content too: keyed by their words, they follow them into the new look.
+    const translated = { ...source, translations: [{ locale: "bn", marketId: null, fields: { "Since 1998": "১৯৯৮ থেকে" } }] };
+    expect(storefrontThemeWithContent(storefrontTemplateTheme("daily-essentials"), translated).translations).toEqual(translated.translations);
+    expect(storefrontThemeLook(translated).translations).toBeUndefined();
   });
 
   it("compares looks without content: a filled-in template still looks like its template", () => {
