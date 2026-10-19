@@ -1801,17 +1801,20 @@ describe("product page modules", () => {
   });
 
   it("pins the buy bar at the bottom on phones and under the header on computers, per choice", async () => {
-    const both = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt", phone: true, desktop: true }));
+    const both = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt", action: { label: "কার্টে যোগ করুন", disabled: false }, price: "৳১,২০০", phone: true, desktop: true }));
     const bar = both.querySelector("[data-sticky-buy]")!;
     expect(bar.getAttribute("data-sticky-buy-screens")).toBe("all");
+    // The page's own words and price, before any script runs.
+    expect(bar.querySelector("[data-sticky-buy-action]")!.textContent!.trim()).toBe("কার্টে যোগ করুন");
+    expect(bar.querySelector("[data-sticky-buy-price]")!.textContent).toBe("৳১,২০০");
     expect(bar.className).toContain("bottom-0");
     expect(bar.className).toContain("lg:top-[var(--header-height,0px)]");
-    const desktop = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt", phone: false, desktop: true }));
+    const desktop = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt", action: { label: "কার্টে যোগ করুন", disabled: false }, price: "৳১,২০০", phone: false, desktop: true }));
     expect(desktop.querySelector("[data-sticky-buy]")!.className).toContain("max-lg:hidden");
     expect(desktop.querySelector("[data-sticky-buy]")!.getAttribute("data-sticky-buy-screens")).toBe("desktop");
-    const phone = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt" }));
+    const phone = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt", action: { label: "কার্টে যোগ করুন", disabled: false }, price: "৳১,২০০" }));
     expect(phone.querySelector("[data-sticky-buy]")!.className).toContain("lg:hidden");
-    const none = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt", phone: false }));
+    const none = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt", action: { label: "কার্টে যোগ করুন", disabled: false }, price: "৳১,২০০", phone: false }));
     expect(none.querySelector("[data-sticky-buy]")).toBeNull();
   });
 
