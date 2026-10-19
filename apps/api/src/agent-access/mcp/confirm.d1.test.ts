@@ -66,8 +66,14 @@ describe("confirmed refunds through MCP on D1", () => {
   let env: Env;
   let orderId: string;
   let write: (args: Record<string, unknown>) => Promise<ToolOutput>;
+  /** Work the refund hands to waitUntil (notifications): settled before a snapshot. */
+  let background: Promise<unknown>[];
+  const settle = async () => {
+    while (background.length > 0) await Promise.allSettled(background.splice(0));
+  };
 
   beforeEach(async () => {
+    background = [];
     const harness = createSqliteD1Database();
     sqlite = harness.sqlite;
     db = harness.db;
@@ -123,13 +129,20 @@ describe("confirmed refunds through MCP on D1", () => {
     const server = createAgentMcpServer({
       surface: "dashboard",
       env,
-      ctx: { props: state.props, waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext,
+      ctx: {
+        props: state.props,
+        waitUntil: vi.fn((promise: Promise<unknown>) => { background.push(promise); }),
+        passThroughOnException: vi.fn(),
+      } as unknown as ExecutionContext,
     });
     const handler = Reflect.get(server, "_registeredTools").scalius_write.handler;
     write = (args) => handler(args) as Promise<ToolOutput>;
   }, 60_000);
 
-  afterEach(() => sqlite.close());
+  afterEach(async () => {
+    await settle();
+    sqlite.close();
+  });
 
   const refund = () => ({
     operationId: "dashboard.orders.refund",
@@ -178,11 +191,13 @@ describe("confirmed refunds through MCP on D1", () => {
     expect(refundRows.count).toBeGreaterThan(1);
     expect(audits().at(-1)).toMatchObject({ outcome: "success", http_status: 200, metadata_json: expect.stringContaining('"confirmedBy":"token"') });
 
+    await settle();
     const afterConfirm = snapshot(sqlite);
     const replay = await write({ ...refund(), confirmToken: token });
     expect(replay.isError).toBe(true);
     expect(replay.structuredContent.error).toMatchObject({ code: "confirm_token_used", status: 409, current: null });
     expect(attempts().count).toBe(1);
+    await settle();
     const { system_kv: _claims, ...unchanged } = snapshot(sqlite);
     const { system_kv: _before, ...expected } = afterConfirm;
     expect(unchanged).toEqual(expected);

@@ -3,7 +3,7 @@
 // controls; a lexical index over the authorized operations contributes the
 // rest, so the model picks from evidence instead of trusting one route.
 
-import { AGENT_OPERATIONS } from "../../generated/agent-operations.gen";
+import { AGENT_OPERATIONS, AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import { loadAgentAccessBackend } from "../backend";
 import type { AgentPrincipal, AgentResource } from "../types";
@@ -145,11 +145,37 @@ function workflowResource(plan: AuthorizedWorkflowPlan): string | undefined {
   return plan.detail && id ? `scalius://workflows/${id}` : undefined;
 }
 
+function operationHit(operation: AgentOperationManifestEntry, score: number): SearchHit {
+  return {
+    id: operation.operationId,
+    kind: "operation",
+    title: clip(operation.summary),
+    summary: clip(operation.description ?? operation.summary),
+    score: Number(score.toFixed(3)),
+    risk: operation.risk,
+    stability: operation.stability,
+    ...(isConfirmGated(operation) ? { confirm: true as const } : {}),
+  };
+}
+
+/**
+ * The resolver's single-operation fallback is an operation, not a workflow:
+ * it is listed as one (or dropped when it names another audience's operation).
+ */
+function fallbackHit(source: string, operationIds: readonly string[], score: number): SearchHit | null | undefined {
+  if (source !== "operation-fallback") return undefined;
+  const operation = operationIds.length === 1 ? AGENT_OPERATIONS_BY_ID[operationIds[0]!] : undefined;
+  return operation ? operationHit(operation, score) : null;
+}
+
 async function workflowHits(query: string, surface: AgentResource, principal: AgentPrincipal) {
   const resolution = await resolveAuthorizedWorkflow({ prompt: query, surface, principal });
   const hits: SearchHit[] = [];
   const notes: string[] = "safetyNotes" in resolution ? resolution.safetyNotes : [];
-  if (resolution.kind === "plan") {
+  if (resolution.kind === "plan" && fallbackHit(resolution.plan.source, resolution.plan.operationIds, resolution.plan.confidence) !== undefined) {
+    const hit = fallbackHit(resolution.plan.source, resolution.plan.operationIds, resolution.plan.confidence);
+    if (hit) hits.push(hit);
+  } else if (resolution.kind === "plan") {
     const plan = resolution.plan;
     const inline = compactPlan(plan);
     hits.push({
@@ -164,6 +190,11 @@ async function workflowHits(query: string, surface: AgentResource, principal: Ag
     });
   } else if (resolution.kind === "choices") {
     for (const choice of resolution.choices) {
+      const fallback = fallbackHit(choice.source, choice.operationIds, choice.confidence);
+      if (fallback !== undefined) {
+        if (fallback) hits.push(fallback);
+        continue;
+      }
       hits.push({
         id: choice.id,
         kind: "workflow",
@@ -214,16 +245,7 @@ async function operationHits(
       principals: operation.principals,
     });
     if (!authorized) continue;
-    hits.push({
-      id: operation.operationId,
-      kind: "operation",
-      title: clip(operation.summary),
-      summary: clip(operation.description ?? operation.summary),
-      score: Number(score.toFixed(3)),
-      risk: operation.risk,
-      stability: operation.stability,
-      ...(isConfirmGated(operation) ? { confirm: true as const } : {}),
-    });
+    hits.push(operationHit(operation, score));
   }
   return hits;
 }

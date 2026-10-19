@@ -23,8 +23,13 @@ const POLICY_KEY_PREFIX = "agent-confirm-policy:";
 const USED_KEY_PREFIX = "agent-confirm-used:";
 const encoder = new TextEncoder();
 
-/** Operations the confirm policy gates: every destructive or financial one. */
+/**
+ * Operations the confirm policy gates: every destructive or financial one,
+ * plus any the registry marks `confirmation: "required"` (a registry entry
+ * can add a gate, never remove one).
+ */
 export function isConfirmGated(operation: Pick<AgentOperationManifestEntry, "risk">): boolean {
+  if ((operation as { confirmation?: unknown }).confirmation === "required") return true;
   return operation.risk === "destructive" || operation.risk === "financial";
 }
 
