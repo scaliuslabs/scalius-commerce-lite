@@ -15853,6 +15853,10 @@ export type GetApiV1ProductsFeedResponses = {
                     slug: string;
                     value: string;
                 }>;
+                rating: {
+                    average: number;
+                    count: number;
+                } | null;
                 variants: Array<{
                     id: string;
                     productId: string;

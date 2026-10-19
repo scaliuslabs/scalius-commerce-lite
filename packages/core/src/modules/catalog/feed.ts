@@ -63,6 +63,7 @@ import {
     translationColumns,
 } from "../translations";
 import type { TranslationRow } from "@scalius/shared/translations";
+import { presentCardRating, reviewStats, reviewStatsJoin } from "./shared";
 
 /**
  * What one feed page depends on. Beyond the public set, the feed filters
@@ -473,6 +474,15 @@ export async function getStorefrontFeedProducts(
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             storeCurrencyCode: storeCurrencyCodeSql(),
             storePriceIncrementMinor: storePriceIncrementSql(),
+            // The card rating (catalog/cards.ts): primary-key probes of the
+            // review projection inside this statement, null while the store's
+            // reviews are off. Review writes advance the product's own key.
+            ratingAvgCenti: sql<number | null>`(
+                SELECT ${reviewStats.ratingAvgCenti} FROM ${reviewStats} WHERE ${reviewStatsJoin(products.id)}
+            )`.as("feed_rating_avg_centi"),
+            reviewCount: sql<number | null>`(
+                SELECT ${reviewStats.reviewCount} FROM ${reviewStats} WHERE ${reviewStatsJoin(products.id)}
+            )`.as("feed_review_count"),
             ...(translation ? {
                 trRows: productTranslationRowsSql(translation, products.id),
                 trSlug: localizedSlugSql(translation, "product", products.id),
@@ -546,7 +556,7 @@ export async function getStorefrontFeedProducts(
         deps.translations("product", productIds);
         deps.translations("brand", productsList.map((product) => product.brandId));
     }
-    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, storePriceIncrementMinor, customizationSchema, brandId, brandName: sourceBrandName, brandSlug, ...readRow }) => {
+    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, storePriceIncrementMinor, customizationSchema, brandId, brandName: sourceBrandName, brandSlug, ratingAvgCenti, reviewCount, ...readRow }) => {
         const { trRows, trSlug, brandTrRows, ...sourceRow } = readRow as typeof readRow & { trRows?: string | null; trSlug?: string | null; brandTrRows?: string | null };
         const chains = translation ? foldedProductChains(translation, trRows) : new Map<string, TranslationRow[]>();
         const productRow = translation
@@ -603,6 +613,7 @@ export async function getStorefrontFeedProducts(
             category,
             brand: brandId && brandName && brandSlug ? { id: brandId, name: brandName, slug: brandSlug } : null,
             attributes: attributeMap.get(product.id) ?? [],
+            rating: presentCardRating(ratingAvgCenti, reviewCount),
             variants: translation
                 ? (variantMap.get(product.id) ?? []).map((variant) => ({
                     ...variant,

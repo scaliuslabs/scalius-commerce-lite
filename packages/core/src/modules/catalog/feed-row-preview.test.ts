@@ -53,6 +53,7 @@ function product(
       { name: "Brand", slug: "brand", value: "Ignored free text" },
       { name: "Material", slug: "material", value: "Cotton" },
     ],
+    rating: null,
     variants: [
       {
         id: "var_small",
