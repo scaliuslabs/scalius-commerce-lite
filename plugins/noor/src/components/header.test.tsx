@@ -16,9 +16,9 @@ const menu = (count: number): StorefrontMenuItem[] => Array.from({ length: count
 }));
 const urls = (items: StorefrontMenuItem[]): string[] => items.flatMap((item) => [item.url, ...urls(item.children)]);
 
-function render(items: StorefrontMenuItem[], layout: "center" | "start", language: "en" | "bn" = "en", style = "mega") {
+function render(items: StorefrontMenuItem[], layout: "center" | "start", language: "en" | "bn" = "en", style = "mega", path = "/") {
   const settings = resolveStorefrontSettings(schema, { layout, menu_style: style }, { image: () => null, products: () => [] });
-  const context = fixtureContext();
+  const context = fixtureContext({ page: { kind: "listing", path } });
   context.store.language = language;
   const html = storefrontShown(renderHeader(storefront, "noor-header", settings, { menu: items }, { context }), "scalius.noor");
   expect(html.dropped).toBe(0);
@@ -123,6 +123,31 @@ describe("Noor bounded desktop navigation", () => {
     expect(draw().classList.contains("is-drill")).toBe(false);
     expect(draw({ menu: "drill", tabBar: true }).classList.contains("is-drill")).toBe(true);
     expect(draw({ menu: "accordion", tabBar: true }).classList.contains("is-drill")).toBe(false);
+  });
+
+  it.each(["mega", "simple"])("marks the current page and its section in every %s menu, More and the drawer", (style) => {
+    const items = menu(8);
+    const current = (fragment: DocumentFragment, selector: string) =>
+      [...fragment.querySelectorAll(`${selector} [aria-current]`)].map((link) => [link.getAttribute("href"), link.getAttribute("aria-current")]);
+    // A leaf: its link is the page; its group and root are the section.
+    const leaf = render(items, "center", "en", style, "/categories/leaf-1/");
+    expect(current(leaf, ".noor-nav-list > [data-nav-index]")).toEqual([
+      ["/categories/root-1", "true"], ["/categories/group-1", "true"], ["/categories/leaf-1", "page"],
+    ]);
+    // The drawer names a parent in its summary; its "All" link is marked only on its own page.
+    expect(current(leaf, ".noor-drawer-list")).toEqual([["/categories/leaf-1", "page"]]);
+    // A root: its own link and every "All" link to it are the page.
+    const root = render(items, "center", "en", style, "/categories/root-1");
+    const rootLinks = current(root, ".noor-nav-list > [data-nav-index]");
+    expect(rootLinks[0]).toEqual(["/categories/root-1", "page"]);
+    expect(rootLinks.every(([href, value]) => href === "/categories/root-1" && value === "page")).toBe(true);
+    expect(current(root, ".noor-drawer-list")).toEqual([["/categories/root-1", "page"]]);
+    // A root past the row is marked in More.
+    expect(current(render(items, "center", "en", style, "/categories/leaf-7"), "[data-nav-more-list]")).toEqual([
+      ["/categories/root-7", "true"], ["/categories/group-7", "true"], ["/categories/leaf-7", "page"],
+    ]);
+    // Elsewhere nothing is current.
+    expect(render(items, "center", "en", style, "/search").querySelectorAll("[aria-current]")).toHaveLength(0);
   });
 
   it("keeps full long labels and translated More text available before hydration", () => {
