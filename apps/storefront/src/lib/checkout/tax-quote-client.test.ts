@@ -330,6 +330,28 @@ describe("tax quote client contract", () => {
     expect(JSON.stringify((error as TaxQuoteCartChangedError).issues))
       .not.toContain("privatePhone");
   });
+
+  it.each([
+    ["FULFILMENT_UNAVAILABLE", "remove", undefined],
+    ["PROPERTIES_REQUIRED", "edit_properties", "player_uid"],
+    ["PROPERTIES_INVALID", "edit_properties", "player_uid"],
+  ])("sends a %s line back to the cart instead of reporting the taxes as unverified", async (code, action, propertyKey) => {
+    // The API's own answer (a key pool that ran out, a missing buyer input).
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: "Some items in your cart need attention.", details: { itemIssues: [{
+        index: 0, cartKey: "k1", productId: "prod_1", variantId: "var_1", requestedQuantity: 1,
+        code, action, message: "PUBG MOBILE UC PACK (60) needs \"Player UID\" before checkout.",
+        productName: "PUBG MOBILE UC PACK", variantLabel: "60", ...(propertyKey ? { propertyKey } : {}),
+      }] } },
+    }), { status: 400 })) as unknown as typeof fetch;
+
+    const error = await fetchAuthoritativeTaxQuote(checkoutData(), fetcher).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(TaxQuoteCartChangedError);
+    expect((error as TaxQuoteCartChangedError).issues).toEqual([
+      expect.objectContaining({ code, action, ...(propertyKey ? { propertyKey } : {}) }),
+    ]);
+  });
 });
 
 describe("tax quote on the pickup and no-delivery paths (Wave A)", () => {

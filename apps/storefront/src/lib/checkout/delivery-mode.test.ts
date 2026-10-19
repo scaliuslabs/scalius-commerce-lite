@@ -8,6 +8,7 @@ import {
   cashOnDeliveryDescription,
   cashOnDeliveryLabel,
   checkoutAddressForMode,
+  checkoutTransferPath,
   CHECKOUT_REQUIRED_FIELDS,
   missingCheckoutFields,
   readCheckoutDeliveryMode,
@@ -15,6 +16,8 @@ import {
   type CheckoutDeliveryMode,
 } from "./delivery-mode";
 import { checkoutInformationFields, enhanceCheckoutFields } from "./field-validation";
+import { syncCheckoutTransferSession, writeCheckoutTransferSession } from "./session-state";
+import { buildTaxQuoteRequest, TaxQuoteUnavailableError } from "./tax-quote-client";
 
 describe("checkout paths (Wave A §2.7)", () => {
   it("resolves the path from the cart and the chosen rate's kind", () => {
@@ -64,6 +67,31 @@ describe("checkout paths (Wave A §2.7)", () => {
     for (const mode of ["pickup", "none"] as const) {
       expect(Object.values(checkoutAddressForMode(mode, typed)).every((value) => value === null)).toBe(true);
     }
+  });
+
+  it("keeps a digital-only transfer free of the hidden Delivery radio and a saved draft's address", () => {
+    // Submit wrote the transfer for a cart with nothing physical.
+    const submitted = {
+      cartItems: JSON.stringify({ k1: { id: "p_key", variantId: "v_key", quantity: 1, name: "Licence" } }),
+      customerName: "Anika",
+      customerPhone: "+8801712345678",
+      billingCountryCode: "BD",
+      ...Object.fromEntries(Object.entries(checkoutTransferPath("none", {})).filter(([, value]) => value !== null)),
+    };
+    expect(writeCheckoutTransferSession(submitted, "[]")).toEqual({ ok: true });
+    // Leaving the page syncs the form: the checked Delivery radio and the
+    // draft's Rajshahi/Bagmara from an earlier cart are still in it.
+    const draft = { deliveryMode: "delivery", city: "city_rajshahi", zone: "zone_bagmara", shippingAddress: "House 1, Road 2" };
+    expect(syncCheckoutTransferSession({ ...draft, ...checkoutTransferPath("none", draft), shippingMethodId: null })).toBe(true);
+    const transfer = JSON.parse(sessionStorage.getItem("scalius_checkout_data")!) as Record<string, unknown>;
+    expect(transfer).toMatchObject({ deliveryMode: "none", billingCountryCode: "BD" });
+    for (const field of ["city", "zone", "shippingAddress", "shippingMethodId"]) expect(transfer).not.toHaveProperty(field);
+    // The payment step's quote is the digital one: billed in BD, no address, no rate.
+    expect(buildTaxQuoteRequest(transfer)).toEqual(expect.objectContaining({ billingCountryCode: "BD" }));
+    expect(buildTaxQuoteRequest(transfer)).not.toHaveProperty("city");
+    // Synced raw (as before), the quote could not even be asked for.
+    expect(syncCheckoutTransferSession(draft)).toBe(true);
+    expect(() => buildTaxQuoteRequest(JSON.parse(sessionStorage.getItem("scalius_checkout_data")!))).toThrow(TaxQuoteUnavailableError);
   });
 
   it("words cash on delivery for the door, the counter and the service", () => {

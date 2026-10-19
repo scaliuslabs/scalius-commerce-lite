@@ -1087,7 +1087,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   import { enhanceShippingMethods, fetchDeliveryRates } from "@/lib/checkout/shipping-methods";
   import {
     applyCheckoutDeliveryMode,
-    checkoutAddressForMode,
+    checkoutTransferPath,
     readCheckoutDeliveryMode,
   } from "@/lib/checkout/delivery-mode";
   import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "@/lib/checkout/billing-address";
@@ -1536,6 +1536,11 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     const expectedQuoteFingerprint = (
       document.getElementById("expectedQuoteFingerprint") as HTMLInputElement | null
     )?.value;
+    // The path the page shows decides what the transfer carries, as on
+    // submit: a cart with nothing physical keeps no address and no rate,
+    // whatever a hidden Delivery radio or a saved draft still holds.
+    const mode = readCheckoutDeliveryMode();
+    const path = checkoutTransferPath(mode, { ...values, shippingCountryCode: chosenShippingCountry() });
     const shippingMethodId = window.lastShippingEventDetail?.id;
     const shippingMethodName = window.lastShippingEventDetail?.name;
     let shippingCharge = "";
@@ -1555,13 +1560,18 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     }
     syncCheckoutTransferSession({
       ...values,
+      ...path,
       ...(cartItems ? { cartItems } : {}),
       ...(checkoutId ? { checkoutId } : {}),
       ...(discountCodes !== undefined ? { discountCodes } : {}),
       ...(expectedQuoteFingerprint ? { expectedQuoteFingerprint } : {}),
-      ...(shippingMethodId ? { shippingMethodId } : {}),
-      ...(shippingMethodName ? { shippingMethodName } : {}),
-      ...(shippingCharge ? { shippingCharge } : {}),
+      ...(mode === "none"
+        ? { shippingMethodId: null, shippingMethodName: null, shippingLocation: null, shippingCharge: "0" }
+        : {
+          ...(shippingMethodId ? { shippingMethodId } : {}),
+          ...(shippingMethodName ? { shippingMethodName } : {}),
+          ...(shippingCharge ? { shippingCharge } : {}),
+        }),
     });
   };
 
@@ -2122,9 +2132,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           // service order carries none (the disabled address fieldset is not
           // in the form data; the location controls are read here).
           const deliveryMode = readCheckoutDeliveryMode();
-          checkoutData.deliveryMode = deliveryMode;
           const locationValue = (name: string) => findNamedCheckoutControl(document, name)?.value;
-          Object.assign(checkoutData, checkoutAddressForMode(deliveryMode, {
+          Object.assign(checkoutData, checkoutTransferPath(deliveryMode, {
             shippingCountryCode: chosenShippingCountry(),
             shippingAddressLine2: locationValue("shippingAddressLine2"),
             shippingDependentLocality: locationValue("shippingDependentLocality"),

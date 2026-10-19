@@ -1,20 +1,26 @@
 import type { CartRuleError, CartValidationIssue } from "../api/orders";
 import { parseQuotedShippingRate, type QuotedShippingRate } from "./tax-quote-contract";
 
-const ISSUE_CODES = new Set<CartValidationIssue["code"]>([
-  "PRODUCT_UNAVAILABLE",
-  "VARIANT_REQUIRED",
-  "VARIANT_UNAVAILABLE",
-  "VARIANT_MISMATCH",
-  "QUANTITY_UNAVAILABLE",
-  "PRICE_CHANGED",
-]);
-const ISSUE_ACTIONS = new Set<CartValidationIssue["action"]>([
-  "remove",
-  "select_variant",
-  "reduce_quantity",
-  "refresh_item",
-]);
+// Every code and action the API answers with (a Record, so a new one fails to
+// compile here): an issue this list does not know would read as an outage.
+const ISSUE_CODES = new Set(Object.keys({
+  PRODUCT_UNAVAILABLE: true,
+  VARIANT_REQUIRED: true,
+  VARIANT_UNAVAILABLE: true,
+  VARIANT_MISMATCH: true,
+  QUANTITY_UNAVAILABLE: true,
+  PRICE_CHANGED: true,
+  PROPERTIES_REQUIRED: true,
+  PROPERTIES_INVALID: true,
+  FULFILMENT_UNAVAILABLE: true,
+} satisfies Record<CartValidationIssue["code"], true>));
+const ISSUE_ACTIONS = new Set(Object.keys({
+  remove: true,
+  select_variant: true,
+  reduce_quantity: true,
+  refresh_item: true,
+  edit_properties: true,
+} satisfies Record<CartValidationIssue["action"], true>));
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -90,6 +96,7 @@ export function parseTaxQuoteCartIssues(payload: unknown): CartValidationIssue[]
       ...(optionalFiniteNumber(value.currentPrice) !== undefined
         ? { currentPrice: optionalFiniteNumber(value.currentPrice) }
         : {}),
+      ...(boundedString(value.propertyKey, 40) ? { propertyKey: boundedString(value.propertyKey, 40) } : {}),
     }];
   });
 }
