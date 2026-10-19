@@ -153,6 +153,26 @@ describe("checkout field validation per path", () => {
     expect((document.querySelector("fieldset[data-address-fields]") as HTMLFieldSetElement).disabled).toBe(false);
   });
 
+  it("delivery: options that couldn't be read are never the buyer's mistake, and an earlier mark follows them", () => {
+    const { fields, messages } = renderForm();
+    const methods = document.getElementById("shippingMethods")!;
+    const wrapper = document.createElement("div");
+    wrapper.dataset.shippingMethods = "";
+    methods.replaceWith(wrapper);
+    wrapper.append(methods);
+    (document.getElementById("checkout-city") as HTMLSelectElement).value = "dhaka";
+    (document.getElementById("checkout-zone") as HTMLSelectElement).value = "mirpur";
+    fields.validateAll();
+    expect(messages().method).toBe(copy.deliveryRequiredText);
+    // The next read of the options fails: the earlier mark goes, the failure is said at the options.
+    wrapper.dataset.ratesFailed = "true";
+    fields.recheckMarked();
+    expect(messages().method).toBe("");
+    expect(methods.getAttribute("aria-invalid")).toBeNull();
+    fields.validateAll();
+    expect(messages().method).toBe("");
+  });
+
   it("pickup: never asks for an address, asks for a pickup location, and leaves the address out of the form", () => {
     const { fields, messages } = renderForm({ mode: "pickup" });
     expect(applyCheckoutDeliveryMode()).toBe("pickup");

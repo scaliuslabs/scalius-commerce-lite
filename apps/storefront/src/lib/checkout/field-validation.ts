@@ -112,6 +112,9 @@ export function checkoutInformationFields(
       check: () => {
         const mode = readMode();
         if (!required("shippingMethod")) return "";
+        // The options couldn't be read: their note says so and offers to try again
+        // (the buyer has nothing to choose yet, so nothing is their mistake).
+        if (methods.closest<HTMLElement>("[data-shipping-methods]")?.dataset.ratesFailed === "true") return "";
         if (root.querySelector<HTMLInputElement>('[name="shippingLocation"]:checked')?.value) return "";
         if (mode === "pickup") return copy.pickupLocationRequiredText;
         // Another country: its shipping zone's options, or none (the options say why).
@@ -182,6 +185,8 @@ export function enhanceCheckoutFields(
   validateAll(): HTMLElement | null;
   /** Checks typed fields that arrived without a blur (a restored draft), leaving empty ones quiet. */
   checkFilled(): void;
+  /** Checks again only the fields already marked (e.g. the delivery options were read again). */
+  recheckMarked(): void;
 } {
   for (const field of fields) {
     const listenTo = field.control.matches("fieldset")
@@ -205,6 +210,11 @@ export function enhanceCheckoutFields(
         const control = field.control;
         const typed = (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) && control.value.trim();
         if (typed) setFieldError(field, field.check());
+      }
+    },
+    recheckMarked() {
+      for (const field of fields) {
+        if (field.control.getAttribute("aria-invalid") === "true") setFieldError(field, field.check());
       }
     },
     validateAll() {

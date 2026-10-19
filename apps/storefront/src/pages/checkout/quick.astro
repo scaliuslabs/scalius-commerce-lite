@@ -264,7 +264,8 @@ if (!codAvailable) {
   } else if (fieldErrors.length > 0 || Object.keys(billingErrors).length > 0) {
     errorMessage = "";
   } else if (!quote) {
-    errorMessage = mode === "delivery" ? copy.cityZoneRequiredText : copy.deliveryRequiredText;
+    // Options that couldn't be read are said once, at the options; never as the buyer's mistake.
+    errorMessage = ratesFailed ? "" : mode === "delivery" ? copy.cityZoneRequiredText : copy.deliveryRequiredText;
   } else if (quote.quoteFingerprint !== form.expectedQuoteFingerprint) {
     // The buyer places only the total they were shown.
     errorMessage = copy.totalChangedReviewText;
@@ -504,7 +505,7 @@ const secondaryButtonClass =
                   {mode === "pickup" ? copy.pickupLocationLabel : copy.shippingMethodLabel}
                 </legend>
                 {ratesFailed ? (
-                  <p class="text-sm font-medium text-destructive" role="alert">{copy.deliveryOptionsFailedText}</p>
+                  <p class="text-sm font-medium text-destructive" role="alert">{copy.deliveryOptionsUnavailableText}</p>
                 ) : rates.length === 0 ? (
                   <p class="text-sm text-muted-foreground" role="status">{abroad && !offersDelivery
                     ? formatCheckoutLanguageText(copy.deliveryCountryUnavailableText, { country: countryName })

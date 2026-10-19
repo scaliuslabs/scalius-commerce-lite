@@ -771,6 +771,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 chooseAddressText={copy.chooseAddressForDeliveryText}
                 noDeliveryText={copy.noDeliveryToAddressText}
                 failedText={copy.deliveryOptionsFailedText}
+                unavailableText={copy.deliveryOptionsUnavailableText}
                 retryText={copy.retryText}
                 loadingText={copy.loadingText}
                 feeChangedText={copy.deliveryFeeChangedText}
@@ -1901,6 +1902,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     );
     // A restored draft never blurred: say now if a typed value (an email) is wrong.
     fields.checkFilled();
+    // New delivery options (or none read): a "Choose a delivery option." from an
+    // earlier attempt follows them instead of standing beside a load failure.
+    window.addEventListener("shippingLocationChange", () => fields.recheckMarked(), { signal: cartPageSignal });
 
     /**
      * Marks every problem under its field at once, then moves to the first
@@ -1929,6 +1933,11 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       // Visual order: name, phone, then the rest.
       let first: HTMLElement | null = firstField;
       if (phoneMessage && phoneInput && (!first || first !== nameInput)) first = phoneInput;
+      // Delivery options that couldn't be read leave nothing to choose: their
+      // note says so; the order waits on its Try again.
+      if (!first && readCheckoutDeliveryMode() !== "none") {
+        first = document.querySelector<HTMLElement>('[data-shipping-methods][data-rates-failed="true"] [data-shipping-note] button');
+      }
       if (!first) return true;
       first.scrollIntoView?.({ behavior: "smooth", block: "center" });
       const focusable = first.matches("fieldset")
