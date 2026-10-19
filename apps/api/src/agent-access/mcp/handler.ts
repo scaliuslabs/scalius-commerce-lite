@@ -3,7 +3,7 @@ import { createMcpHandler } from "agents/mcp/server";
 import type { AgentOAuthProps, AgentResource } from "../types";
 import { getMcpPath } from "../paths";
 import { isAgentOAuthPropsForResource } from "./auth";
-import { createAgentMcpServer } from "./server";
+import { createAgentMcpServerForRequest, peekMcpMethod } from "./server";
 import { loadAgentAccessBackend } from "../backend";
 import { withAgentDispatchPrincipal } from "../dispatch-context";
 
@@ -79,9 +79,11 @@ export abstract class AgentMcpHandler extends WorkerEntrypoint<Env, AgentOAuthPr
       });
     }
     // Constructing the wrapper per request keeps Env/ExecutionContext/principal
-    // request-scoped. The SDK factory then creates a fresh McpServer instance.
+    // request-scoped. The SDK factory then creates a fresh McpServer instance;
+    // only a handshake (initialize, server/discover) reads the store context.
+    const method = await peekMcpMethod(request);
     const handler = createMcpHandler(
-      () => createAgentMcpServer({ surface: this.surface, env: this.env, ctx: this.ctx }),
+      () => createAgentMcpServerForRequest({ surface: this.surface, env: this.env, ctx: this.ctx }, method),
       {
         route,
         legacy: "stateless",

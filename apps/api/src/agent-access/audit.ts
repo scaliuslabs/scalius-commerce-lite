@@ -13,6 +13,8 @@ const MAX_METADATA_STRING_LENGTH = 160;
 const MAX_RESOURCE_IDS = 16;
 const SAFE_METADATA_KEYS = new Set([
   "batchStepCount",
+  "confirmedBy",
+  "dryRun",
   "resultCount",
   "retryCount",
   "transport",

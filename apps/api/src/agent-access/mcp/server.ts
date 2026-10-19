@@ -1,38 +1,99 @@
-import { objectOperationResponseLimit } from "../../openapi/operation-registry/dashboard-objects";
-import { McpServer } from "@modelcontextprotocol/server";
+import {
+  McpServer,
+  SUPPORTED_PROTOCOL_VERSIONS,
+  acceptedContent,
+  inputRequired,
+} from "@modelcontextprotocol/server";
 import { getMcpAuthContext } from "agents/mcp/server";
 import { z } from "zod";
 import { getDb } from "@scalius/database/client";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
+import { AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import { loadAgentAccessBackend } from "../backend";
 import {
   AgentDispatchError,
   buildAgentRequiredClientAction,
+  buildInternalRequest,
   dispatchAgentOperation,
+  type AgentConfirmation,
   type AgentOperationInput,
   type AgentOperationResult,
 } from "../dispatch";
 import {
   AGENT_MAX_BATCH_STEPS,
   AGENT_MAX_PARALLEL_READS,
+  AGENT_MAX_RESULT_BYTES,
   checkAgentRateLimit,
-  utf8ByteLength,
 } from "../limits";
 import type { AgentOAuthProps, AgentPrincipal, AgentResource } from "../types";
 import { isAgentOAuthProps } from "./auth";
 import { createAgentBrowserHandoff } from "../browser-handoffs";
 import {
-  describeOperation,
-  getAuthorizedOperation,
-} from "./operations";
+  confirmBinding,
+  confirmSummary,
+  consumeConfirmToken,
+  isConfirmGated,
+  mintConfirmToken,
+  readAgentConfirmPolicy,
+  type ConfirmStep,
+} from "./confirm";
+import { loadStoreContext, storeContextLine } from "./context";
+import { describeForAgent, dryRunSupportOf } from "./describe";
+import {
+  agentErrorResult,
+  buildAgentToolError,
+  errorFromOperationResult,
+  errorFromUnknown,
+  type AgentToolError,
+} from "./errors";
+import { getAuthorizedOperation } from "./operations";
+import { registerAgentPrompts } from "./prompts";
 import {
   AGENT_STEP_ID_PATTERN,
   AGENT_STEP_POINTER_PATTERN,
   containsStepReference,
   resolveStepReferences,
 } from "./references";
-import { resolveAuthorizedWorkflow } from "./workflows";
+import { registerAgentResources } from "./resources";
+import { searchCapabilities } from "./search";
+import {
+  AGENT_MAX_SELECT_POINTERS,
+  AGENT_READ_BUDGET_BYTES,
+  applyListControls,
+  fitToBudget,
+  jsonBytes,
+  paginationMeta,
+  selectPointers,
+  unwrapRouteBody,
+  type ShapedMeta,
+} from "./shape";
 import { executeAuthorizedWorkflowRead } from "./workflow-read";
+
+// ─── Protocol ────────────────────────────────────────────────────────────────
+
+/** 2026-07-28 first (stateless, per-request envelope); every 2025-era revision stays served. */
+export const AGENT_MCP_PROTOCOL_VERSIONS = ["2026-07-28", ...SUPPORTED_PROTOCOL_VERSIONS];
+const LIST_CACHE = { ttlMs: 3_600_000, cacheScope: "private" as const };
+const INSTRUCTIONS_MAX_BYTES = 600;
+
+export const AGENT_MCP_INSTRUCTIONS = "Scalius tools: scalius_search a goal, scalius_describe ids, then scalius_read or scalius_write; verify with a read. scalius_answer handles common data questions. Changes: dryRun:true first; destructive or financial ones need the merchant's approval (confirmToken). Use only ids, revisions and amounts read from the store; money is decimal major units.";
+
+/** The static loop plus one live store line, within 600 bytes. */
+export function buildAgentInstructions(storeLine = ""): string {
+  if (!storeLine) return AGENT_MCP_INSTRUCTIONS;
+  const encoder = new TextEncoder();
+  const room = INSTRUCTIONS_MAX_BYTES - encoder.encode(`${AGENT_MCP_INSTRUCTIONS}\n`).byteLength;
+  if (room < 24) return AGENT_MCP_INSTRUCTIONS;
+  let line = storeLine;
+  if (encoder.encode(line).byteLength > room) {
+    const characters = [...line];
+    while (characters.length > 0 && encoder.encode(`${characters.join("")}...`).byteLength > room) characters.pop();
+    line = `${characters.join("")}...`;
+  }
+  return `${AGENT_MCP_INSTRUCTIONS}\n${line}`;
+}
+
+// ─── Input schemas (listing) and strict validation (dispatch) ───────────────
 
 const pathValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 const queryValueSchema = z.union([
@@ -42,105 +103,81 @@ const queryValueSchema = z.union([
   z.null(),
   z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).max(100),
 ]);
-const pathRecordSchema = z.record(z.string(), pathValueSchema).refine(
-  (value) => Object.keys(value).length <= 50,
-  "At most 50 path parameters are allowed",
-);
-const queryRecordSchema = z.record(z.string(), queryValueSchema).refine(
-  (value) => Object.keys(value).length <= 100,
-  "At most 100 query parameters are allowed",
-);
-const operationInputSchema = z.object({
-  path: pathRecordSchema.optional(),
-  query: queryRecordSchema.optional(),
-  body: z.unknown().optional(),
-  idempotencyKey: z.string().min(8).max(200).optional(),
-}).strict();
 const stepReferenceSchema = z.object({
   $step: z.string().regex(AGENT_STEP_ID_PATTERN),
   pointer: z.string().regex(AGENT_STEP_POINTER_PATTERN).optional(),
 }).strict();
-const batchOperationInputSchema = z.object({
+const strictInputSchema = z.object({
+  path: z.record(z.string(), pathValueSchema)
+    .refine((value) => Object.keys(value).length <= 50, "At most 50 path parameters are allowed").optional(),
+  query: z.record(z.string(), queryValueSchema)
+    .refine((value) => Object.keys(value).length <= 100, "At most 100 query parameters are allowed").optional(),
+  body: z.unknown().optional(),
+  idempotencyKey: z.string().min(8).max(200).optional(),
+}).strict();
+const strictStepInputSchema = z.object({
   path: z.record(z.string(), z.union([pathValueSchema, stepReferenceSchema]))
-    .refine((value) => Object.keys(value).length <= 50, "At most 50 path parameters are allowed")
-    .optional(),
+    .refine((value) => Object.keys(value).length <= 50, "At most 50 path parameters are allowed").optional(),
   query: z.record(z.string(), z.union([queryValueSchema, stepReferenceSchema]))
-    .refine((value) => Object.keys(value).length <= 100, "At most 100 query parameters are allowed")
-    .optional(),
+    .refine((value) => Object.keys(value).length <= 100, "At most 100 query parameters are allowed").optional(),
   body: z.unknown().optional(),
   idempotencyKey: z.union([z.string().min(8).max(200), stepReferenceSchema]).optional(),
 }).strict();
-const batchStepSchema = z.object({
-  id: z.string().regex(AGENT_STEP_ID_PATTERN),
-  operationId: z.string().min(1).max(240),
-  input: batchOperationInputSchema.optional(),
-}).strict();
-const toolErrorSchema = z.object({
-  code: z.string().min(1).max(120),
-  message: z.string().min(1).max(1_024),
-}).strict();
-const batchStepResultSchema = z.object({
-  id: z.string().regex(AGENT_STEP_ID_PATTERN),
-  ok: z.boolean(),
-  result: z.unknown().optional(),
-  error: toolErrorSchema.optional(),
-}).strict();
-const agentToolOutputSchema = z.object({
-  ok: z.boolean(),
-  result: z.unknown().optional(),
-  results: z.array(batchStepResultSchema).max(AGENT_MAX_BATCH_STEPS).optional(),
-  operation: z.unknown().optional(),
-  error: toolErrorSchema.optional(),
-  truncated: z.boolean().optional(),
-  summary: z.string().max(240).optional(),
-}).strict();
-const projectedScalarSchema = z.union([
-  z.string(),
-  z.number().finite(),
-  z.boolean(),
-  z.null(),
-]);
-const projectedRecordSchema = z.record(
-  z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/),
-  projectedScalarSchema,
-).refine((value) => Object.keys(value).length <= 32, "At most 32 projected fields are allowed");
-const projectedValueSchema = z.union([
-  projectedScalarSchema,
-  z.array(projectedScalarSchema).max(100),
-  projectedRecordSchema,
-  z.array(projectedRecordSchema).max(100),
-]);
-const projectedStepSchema = z.record(
-  z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/),
-  projectedValueSchema,
-).refine((value) => Object.keys(value).length <= 24, "At most 24 projected selectors are allowed");
-const workflowReadResultSchema = z.union([
-  z.object({
-    kind: z.literal("result"),
-    disposition: z.literal("execute"),
-    version: z.string().max(64),
-    workflowId: z.string().max(160),
-    rules: z.array(z.string().min(1).max(300)).min(1).max(6),
-    outputs: z.record(z.string().max(129), projectedStepSchema)
-      .refine((value) => Object.keys(value).length <= 50, "At most 50 workflow steps are allowed"),
-  }).strict(),
-  z.object({
-    kind: z.literal("unavailable"),
-    disposition: z.literal("unavailable"),
-    classification: z.object({
-      code: z.literal("workflow_read_unavailable"),
-      reason: z.literal("The requested workflow read is unavailable."),
-    }).strict(),
-  }).strict(),
-]);
-const workflowReadToolOutputSchema = z.object({
-  ok: z.boolean(),
-  result: workflowReadResultSchema.optional(),
-  error: toolErrorSchema.optional(),
-}).strict();
-const MCP_TEXT_COMPATIBILITY_BYTES = 4 * 1024;
-const MCP_TOOL_ERROR_CODE_CHARS = 120;
-const MCP_TOOL_ERROR_MESSAGE_CHARS = 1_024;
+
+/** Tool arguments are shape-checked here; `strictInputSchema` validates each input before dispatch. */
+const inputArgSchema = z.object({
+  path: z.record(z.string(), z.unknown()).optional(),
+  query: z.record(z.string(), z.unknown()).optional(),
+  body: z.unknown().optional(),
+  idempotencyKey: z.string().optional(),
+});
+const stepArgSchema = z.object({
+  id: z.string().max(64),
+  operationId: z.string().max(240),
+  input: inputArgSchema.optional(),
+});
+
+/** One small output schema shared by every tool (2026-07-28 allows any JSON). */
+const toolOutputSchema = z.object({ ok: z.boolean() }).passthrough();
+
+type JsonSchema = Record<string, unknown>;
+
+/**
+ * A zod schema that validates, advertised in `tools/list` by a hand-written
+ * JSON Schema: the listing is the token cost of every session, so it carries
+ * only what a model needs to form a call; zod and the strict per-input
+ * schemas still reject anything malformed.
+ */
+function listed<T extends z.ZodType>(schema: T, json: JsonSchema): T {
+  const standard = schema["~standard"];
+  return Object.create(schema, {
+    "~standard": { value: { ...standard, jsonSchema: { input: () => json, output: () => json } } },
+  }) as T;
+}
+
+const INPUT_JSON: JsonSchema = {
+  type: "object",
+  description: "{path, query, body} as scalius_describe shows",
+  properties: { path: { type: "object" }, query: { type: "object" }, body: {}, idempotencyKey: { type: "string" } },
+};
+const stepsJson = (description: string): JsonSchema => ({
+  type: "array",
+  maxItems: AGENT_MAX_BATCH_STEPS,
+  description,
+  items: {
+    type: "object",
+    required: ["id", "operationId"],
+    properties: {
+      id: { type: "string" },
+      operationId: { type: "string" },
+      input: { type: "object", description: "As input; a value may be {$step: id, pointer: \"/data/..\"}" },
+    },
+  },
+});
+const OUTPUT_JSON: JsonSchema = { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] };
+const sharedOutputSchema = listed(toolOutputSchema, OUTPUT_JSON);
+
+const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 
 interface McpServerDependencies {
   surface: AgentResource;
@@ -148,127 +185,65 @@ interface McpServerDependencies {
   ctx: ExecutionContext;
 }
 
-export const AGENT_MCP_INSTRUCTIONS = "For data questions try workflows.read; on unavailable, or for changes, use workflows.resolve. Describe only selected IDs, then use operations.read/read_batch or operations.write/write_batch; confirm and verify writes. Fixed reviewed operations only—never arbitrary code, HTTP, or SQL. Never invent IDs, revisions, money, stock, or secrets. Prefer stable ops.";
+// ─── Principal ───────────────────────────────────────────────────────────────
 
-export function formatAgentToolResult(value: Record<string, unknown>) {
-  const oneTimeResult = typeof value.result === "object" && value.result !== null
-    ? value.result as Partial<AgentOperationResult>
-    : null;
-  if (oneTimeResult?.oneTimeSecret === true) {
-    return {
-      content: [{
-        type: "text" as const,
-        text: "One-time secret returned in structured content",
-      }],
-      structuredContent: value,
-    };
+function readVerifiedProps(surface: AgentResource): AgentOAuthProps | null {
+  // The handler passes the props the OAuth resource server verified into
+  // createMcpHandler's authContext; getMcpAuthContext reads them back here.
+  const props = getMcpAuthContext()?.props;
+  if (!isAgentOAuthProps(props) || props.resource !== surface) return null;
+  return props;
+}
+
+async function resolveToolPrincipal(deps: McpServerDependencies): Promise<AgentPrincipal | null> {
+  const props = readVerifiedProps(deps.surface);
+  if (!props) return null;
+  const configuredOrigin = deps.env.PUBLIC_API_BASE_URL?.trim();
+  if (!configuredOrigin) return null;
+  const canonicalAudience = `${new URL(configuredOrigin).origin}/api/v1/mcp/${deps.surface}`;
+  if (props.audience.length !== 1 || props.audience[0] !== canonicalAudience) return null;
+  const backend = await loadAgentAccessBackend();
+  return backend.resolvePrincipal(
+    { grantId: props.grantId, credentialId: props.credentialId, resource: props.resource },
+    deps.env,
+  );
+}
+
+async function principalOrThrow(deps: McpServerDependencies): Promise<AgentPrincipal> {
+  let principal: AgentPrincipal | null;
+  try {
+    principal = await resolveToolPrincipal(deps);
+  } catch {
+    principal = null;
   }
-  if (oneTimeResult?.sensitiveContinuation === true) {
-    const safe = {
-      ok: false,
-      error: {
-        code: "sensitive_continuation_not_supported",
-        message: "Sensitive browser continuations are unavailable through generic MCP clients; use the Scalius CLI or dashboard browser flow",
-      },
-    };
-    return {
-      isError: true,
-      content: [{
-        type: "text" as const,
-        text: JSON.stringify(safe),
-      }],
-      structuredContent: safe,
-    };
+  if (!principal) throw new AgentDispatchError("unauthorized", "Agent grant is inactive", 401);
+  return principal;
+}
+
+async function chargeRateLimit(deps: McpServerDependencies, principal: AgentPrincipal): Promise<void> {
+  if (!(await checkAgentRateLimit(deps.env, `grant:${principal.grantId}`))) {
+    throw new AgentDispatchError("rate_limited", "Agent request rate limit exceeded", 429);
   }
-  if (oneTimeResult?.artifact) {
-    const artifact = oneTimeResult.artifact;
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: `Artifact ready: ${artifact.filename} (${artifact.sizeBytes} bytes, sha256 ${artifact.sha256})`,
-        },
-        {
-          type: "resource_link" as const,
-          uri: artifact.uri,
-          name: artifact.filename,
-          mimeType: artifact.mediaType,
-          size: artifact.sizeBytes,
-          description: "One-use authenticated Scalius artifact; send the same Bearer credential",
-        },
-      ],
-      structuredContent: {
-        ok: value.ok === true,
-        result: {
-          operationId: oneTimeResult.operationId,
-          status: oneTimeResult.status,
-          ok: oneTimeResult.ok === true,
-          requestId: oneTimeResult.requestId,
-          artifact: {
-            artifactId: artifact.artifactId,
-            filename: artifact.filename,
-            mediaType: artifact.mediaType,
-            sizeBytes: artifact.sizeBytes,
-            sha256: artifact.sha256,
-            expiresInSeconds: artifact.expiresInSeconds,
-          },
-        },
-      },
-    };
-  }
-  const text = JSON.stringify(value);
-  const directOperationId = typeof value.result === "object" && value.result !== null
-    ? (value.result as Partial<AgentOperationResult>).operationId : undefined;
-  if (utf8ByteLength(text) > objectOperationResponseLimit(directOperationId)) {
-    const compactOperation = (candidate: unknown) => {
-      if (typeof candidate !== "object" || candidate === null) return null;
-      const result = candidate as Partial<AgentOperationResult>;
-      if (!result.operationId || !result.requestId || typeof result.status !== "number") return null;
-      return {
-        operationId: result.operationId,
-        status: result.status,
-        ok: result.ok === true,
-        requestId: result.requestId,
-        truncated: true,
-      };
-    };
-    const direct = compactOperation(value.result);
-    const batch = Array.isArray(value.results)
-      ? value.results.slice(0, AGENT_MAX_BATCH_STEPS).map((item) => {
-        const record = typeof item === "object" && item !== null
-          ? item as { id?: unknown; ok?: unknown; result?: unknown; error?: unknown }
-          : {};
-        return {
-          id: typeof record.id === "string" ? record.id : "unknown",
-          ok: record.ok === true,
-          result: compactOperation(record.result),
-          ...(!record.result && record.error ? { error: record.error } : {}),
-        };
-      })
-      : undefined;
-    const bounded = direct
-      ? { ok: value.ok === true, result: direct }
-      : batch
-        ? { ok: value.ok === true, results: batch, truncated: true }
-        : {
-          ok: value.ok === true,
-          truncated: true,
-          summary: "Tool result data omitted because the MCP envelope exceeded 64 KiB",
-        };
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(bounded) }],
-      structuredContent: bounded,
-    };
-  }
+}
+
+/** A principal for a tool call that dispatches nothing itself: charged once here. */
+async function requireToolPrincipal(deps: McpServerDependencies): Promise<AgentPrincipal> {
+  const principal = await principalOrThrow(deps);
+  await chargeRateLimit(deps, principal);
+  return principal;
+}
+
+// ─── Result formatting ───────────────────────────────────────────────────────
+
+function toolResult(value: Record<string, unknown>) {
   return {
-    content: [{
-      type: "text" as const,
-      text: utf8ByteLength(text) <= MCP_TEXT_COMPATIBILITY_BYTES
-        ? text
-        : `Structured result returned (${utf8ByteLength(text)} UTF-8 bytes)`,
-    }],
+    content: [{ type: "text" as const, text: JSON.stringify(value) }],
     structuredContent: value,
   };
+}
+
+function errorResult(error: unknown, operationId?: string) {
+  return agentErrorResult(errorFromUnknown(error, operationId));
 }
 
 export function formatAgentBrowserHandoffResult(handoff: {
@@ -292,545 +267,828 @@ export function formatAgentBrowserHandoffResult(handoff: {
     ],
     structuredContent: {
       ok: true,
-      result: {
-        status: "browser_action_required",
-        handoffId: handoff.handoffId,
-        expiresAt: handoff.expiresAt,
-      },
+      status: "browser_action_required",
+      handoffId: handoff.handoffId,
+      expiresAt: handoff.expiresAt,
     },
   };
 }
 
-function toolError(code: string, message: string) {
-  const value = {
-    ok: false,
-    error: {
-      code: code.slice(0, MCP_TOOL_ERROR_CODE_CHARS) || "agent_tool_failed",
-      message: message.slice(0, MCP_TOOL_ERROR_MESSAGE_CHARS) || "Agent tool execution failed",
-    },
-  };
+function artifactResult(result: AgentOperationResult) {
+  const artifact = result.artifact!;
   return {
-    isError: true,
-    content: [{ type: "text" as const, text: JSON.stringify(value) }],
-    structuredContent: value,
+    content: [
+      {
+        type: "text" as const,
+        text: `Artifact ready: ${artifact.filename} (${artifact.sizeBytes} bytes, sha256 ${artifact.sha256})`,
+      },
+      {
+        type: "resource_link" as const,
+        uri: artifact.uri,
+        name: artifact.filename,
+        mimeType: artifact.mediaType,
+        size: artifact.sizeBytes,
+        description: "One-use authenticated Scalius artifact; send the same Bearer credential",
+      },
+    ],
+    structuredContent: {
+      ok: true,
+      artifact: {
+        artifactId: artifact.artifactId,
+        filename: artifact.filename,
+        mediaType: artifact.mediaType,
+        sizeBytes: artifact.sizeBytes,
+        sha256: artifact.sha256,
+        expiresInSeconds: artifact.expiresInSeconds,
+      },
+      meta: { operationId: result.operationId, requestId: result.requestId, status: result.status },
+    },
   };
 }
 
-function safeToolError(error: unknown) {
-  if (error instanceof AgentDispatchError) return toolError(error.code, error.message);
-  if (error instanceof Error && error.message.startsWith("Reference ")) {
-    return toolError("invalid_step_reference", error.message);
-  }
-  return toolError("agent_tool_failed", "Agent tool execution failed");
+interface ShapeOptions {
+  select?: readonly string[];
+  budget: number;
 }
 
-function readVerifiedProps(surface: AgentResource): AgentOAuthProps | null {
-  // The handler passes the props the OAuth resource server verified into
-  // createMcpHandler's authContext; getMcpAuthContext reads them back here.
-  const props = getMcpAuthContext()?.props;
-  if (!isAgentOAuthProps(props) || props.resource !== surface) return null;
-  return props;
+interface ShapedStep {
+  ok: boolean;
+  data?: unknown;
+  error?: AgentToolError;
+  meta: ShapedMeta & { operationId: string; requestId?: string; status?: number; replayed?: true; idempotencyKey?: string };
 }
 
-async function resolveToolPrincipal(
-  deps: McpServerDependencies,
-): Promise<AgentPrincipal | null> {
-  const props = readVerifiedProps(deps.surface);
-  if (!props) return null;
-  const configuredOrigin = deps.env.PUBLIC_API_BASE_URL?.trim();
-  if (!configuredOrigin) return null;
-  const canonicalAudience = `${new URL(configuredOrigin).origin}/api/v1/mcp/${deps.surface}`;
-  if (props.audience.length !== 1 || props.audience[0] !== canonicalAudience) return null;
-  const backend = await loadAgentAccessBackend();
-  return backend.resolvePrincipal(
-    {
-      grantId: props.grantId,
-      credentialId: props.credentialId,
-      resource: props.resource,
-    },
-    deps.env,
-  );
-}
-
-async function requireToolPrincipal(deps: McpServerDependencies): Promise<AgentPrincipal> {
-  let principal: AgentPrincipal | null;
-  try {
-    principal = await resolveToolPrincipal(deps);
-  } catch {
-    principal = null;
-  }
-  if (!principal) throw new AgentDispatchError("unauthorized", "Agent grant is inactive", 401);
-  if (!(await checkAgentRateLimit(deps.env, `grant:${principal.grantId}`))) {
-    throw new AgentDispatchError("rate_limited", "Agent request rate limit exceeded", 429);
-  }
-  return principal;
-}
-
-type AgentOperationToolMode = "read" | "write";
-type BatchStep = z.infer<typeof batchStepSchema>;
-type BatchStepResult = z.infer<typeof batchStepResultSchema>;
-
-interface PreparedBatchStep {
-  step: BatchStep;
-  operation: AgentOperationManifestEntry;
-}
-
-function assertOperationRisk(
+/** The route's payload, projected and bounded, with pagination as one cursor. */
+function shapeOperationResult(
   operation: AgentOperationManifestEntry,
-  mode: AgentOperationToolMode,
-): void {
-  const allowed = mode === "read" ? operation.risk === "read" : operation.risk !== "read";
-  if (allowed) return;
+  result: AgentOperationResult,
+  options: ShapeOptions,
+): ShapedStep {
+  if (!result.ok) {
+    return { ok: false, error: errorFromOperationResult(result), meta: { operationId: operation.operationId } };
+  }
+  if (result.artifact) {
+    const { artifact } = result;
+    return {
+      ok: true,
+      data: { artifact: { artifactId: artifact.artifactId, filename: artifact.filename, uri: artifact.uri, sizeBytes: artifact.sizeBytes } },
+      meta: { operationId: operation.operationId, requestId: result.requestId, status: result.status },
+    };
+  }
+  const meta: ShapedStep["meta"] = {
+    operationId: operation.operationId,
+    requestId: result.requestId,
+    status: result.status,
+    ...(result.replayed ? { replayed: true as const } : {}),
+  };
+  if (result.oneTimeSecret) return { ok: true, data: unwrapRouteBody(result.data), meta };
+  let data = unwrapRouteBody(result.data);
+  Object.assign(meta, paginationMeta(operation, data));
+  if (options.select && options.select.length > 0) data = selectPointers(data, options.select);
+  const fitted = fitToBudget(data, options.budget);
+  return { ok: true, data: fitted.data, meta: { ...meta, ...fitted.meta } };
+}
+
+function stepResultValue(step: ShapedStep): Record<string, unknown> {
+  return step.ok
+    ? { ok: true, data: step.data, meta: step.meta }
+    : { ok: false, error: step.error, meta: step.meta };
+}
+
+// ─── Operations ──────────────────────────────────────────────────────────────
+
+type ToolMode = "read" | "write";
+
+async function authorizedOperationFor(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  operationId: string,
+  mode: ToolMode,
+): Promise<AgentOperationManifestEntry> {
+  const operation = await getAuthorizedOperation(operationId, deps.surface, principal);
+  if (!operation) {
+    throw new AgentDispatchError("operation_not_found", "Operation is unavailable or not authorized", 404);
+  }
+  if (mode === "read" ? operation.risk !== "read" : operation.risk === "read") {
+    throw new AgentDispatchError(
+      "operation_risk_mismatch",
+      mode === "read"
+        ? "scalius_read accepts only operations declared with risk read"
+        : "scalius_write rejects operations declared with risk read",
+      400,
+    );
+  }
+  return operation;
+}
+
+function parseInput<T>(schema: z.ZodType<T>, value: unknown, label: string): T {
+  const parsed = schema.safeParse(value ?? {});
+  if (parsed.success) return parsed.data;
+  const issue = parsed.error.issues[0];
+  const path = issue?.path.map(String).join(".") ?? "";
   throw new AgentDispatchError(
-    "operation_risk_mismatch",
-    mode === "read"
-      ? "Read tools accept only operations declared with risk read"
-      : "Write tools reject operations declared with risk read",
+    "invalid_input",
+    `${label}${path ? `.${path}` : ""}: ${issue?.message ?? "invalid input"}`,
     400,
   );
 }
 
-async function getAuthorizedOperationForMode(
-  deps: McpServerDependencies,
-  principal: AgentPrincipal,
-  operationId: string,
-  mode: AgentOperationToolMode,
-): Promise<AgentOperationManifestEntry> {
-  const operation = await getAuthorizedOperation(operationId, deps.surface, principal);
-  if (!operation) {
-    throw new AgentDispatchError(
-      "operation_not_found",
-      "Operation is unavailable or not authorized",
-      404,
-    );
-  }
-  assertOperationRisk(operation, mode);
-  return operation;
-}
-
-async function dispatchPreparedOperation(
-  deps: McpServerDependencies,
-  principal: AgentPrincipal,
+/** Generates the idempotency key a supporting operation needs, stable for one confirmation. */
+async function withIdempotencyKey(
   operation: AgentOperationManifestEntry,
   input: AgentOperationInput,
-): Promise<AgentOperationResult> {
-  return dispatchAgentOperation({ operation, input, principal, env: deps.env, ctx: deps.ctx });
+  seed?: string,
+): Promise<AgentOperationInput> {
+  if (operation.idempotency === "none" || input.idempotencyKey) return input;
+  if (!seed) return { ...input, idempotencyKey: `agk_${crypto.randomUUID()}` };
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(seed)));
+  const hex = Array.from(digest.slice(0, 16), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return { ...input, idempotencyKey: `agk_${hex}` };
 }
 
-async function prepareBatchSteps(
+interface PreparedStep {
+  id: string;
+  operation: AgentOperationManifestEntry;
+  input: AgentOperationInput;
+}
+
+async function prepareSteps(
   deps: McpServerDependencies,
   principal: AgentPrincipal,
-  steps: BatchStep[],
-  mode: AgentOperationToolMode,
-): Promise<PreparedBatchStep[]> {
+  steps: Array<{ id: string; operationId: string; input?: unknown }>,
+  mode: ToolMode,
+): Promise<PreparedStep[]> {
   if (new Set(steps.map((step) => step.id)).size !== steps.length) {
-    throw new AgentDispatchError("duplicate_step_id", "Batch step IDs must be unique", 400);
+    throw new AgentDispatchError("duplicate_step_id", "Step ids must be unique", 400);
   }
-  const prepared: PreparedBatchStep[] = [];
+  const prepared: PreparedStep[] = [];
   for (const step of steps) {
-    const operation = await getAuthorizedOperationForMode(
-      deps,
-      principal,
-      step.operationId,
-      mode,
-    );
-    if (operation.batch === "forbidden") {
-      throw new AgentDispatchError(
-        "batch_forbidden",
-        `Step ${step.id} cannot run in a batch`,
-        400,
-      );
+    if (!AGENT_STEP_ID_PATTERN.test(step.id)) {
+      throw new AgentDispatchError("invalid_input", `Step id '${step.id.slice(0, 64)}' must start with a letter`, 400);
     }
-    prepared.push({ step, operation });
+    const operation = await authorizedOperationFor(deps, principal, step.operationId, mode);
+    if (operation.batch === "forbidden" || operation.requiredClientAction || operation.exposure === "continuation") {
+      throw new AgentDispatchError("batch_forbidden", `Step ${step.id} cannot run inside steps[]`, 400);
+    }
+    prepared.push({
+      id: step.id,
+      operation,
+      input: parseInput(strictStepInputSchema, step.input, `steps.${step.id}.input`) as AgentOperationInput,
+    });
   }
   return prepared;
 }
 
-async function executeBatchStep(
+async function dispatchStep(
   deps: McpServerDependencies,
   principal: AgentPrincipal,
-  prepared: PreparedBatchStep,
+  step: PreparedStep,
   input: AgentOperationInput,
-): Promise<BatchStepResult> {
+  options: ShapeOptions,
+  confirmedBy?: AgentConfirmation,
+): Promise<ShapedStep> {
   try {
-    const result = await dispatchPreparedOperation(
-      deps,
-      principal,
-      prepared.operation,
+    const result = await dispatchAgentOperation({
+      operation: step.operation,
       input,
-    );
-    return { id: prepared.step.id, ok: result.ok, result };
+      principal,
+      env: deps.env,
+      ctx: deps.ctx,
+      ...(confirmedBy && isConfirmGated(step.operation) ? { confirmedBy } : {}),
+    });
+    const shaped = shapeOperationResult(step.operation, result, options);
+    if (input.idempotencyKey && step.operation.idempotency !== "none") shaped.meta.idempotencyKey = input.idempotencyKey;
+    return shaped;
   } catch (error) {
-    return {
-      id: prepared.step.id,
-      ok: false,
-      error: safeToolError(error).structuredContent.error,
-    };
+    return { ok: false, error: errorFromUnknown(error, step.operation.operationId), meta: { operationId: step.operation.operationId } };
   }
 }
 
-async function executeReadBatch(
+/** The value a later step's `$step` reference reads: `{ok, data}` of the earlier step. */
+function referenceValue(step: ShapedStep): unknown {
+  return step.ok ? { ok: true, data: step.data } : { ok: false, error: step.error };
+}
+
+async function runReadSteps(
   deps: McpServerDependencies,
   principal: AgentPrincipal,
-  prepared: PreparedBatchStep[],
+  prepared: PreparedStep[],
+  options: ShapeOptions,
   stopOnError: boolean,
-): Promise<BatchStepResult[]> {
+): Promise<Array<[string, ShapedStep]>> {
   const completed = new Map<string, unknown>();
-  const results: BatchStepResult[] = [];
+  const results: Array<[string, ShapedStep]> = [];
   let index = 0;
   while (index < prepared.length) {
-    const current = prepared[index]!;
-    const wave: PreparedBatchStep[] = [];
+    const wave: PreparedStep[] = [];
     while (index < prepared.length && wave.length < AGENT_MAX_PARALLEL_READS) {
       const candidate = prepared[index]!;
-      if (
-        candidate.operation.batch !== "parallel" ||
-        containsStepReference(candidate.step.input)
-      ) break;
+      if (candidate.operation.batch !== "parallel" || containsStepReference(candidate.input)) break;
       wave.push(candidate);
       index += 1;
     }
-
+    let shaped: Array<[string, ShapedStep]>;
     if (wave.length > 0) {
-      const waveResults = await Promise.all(wave.map((candidate) =>
-        executeBatchStep(
-          deps,
-          principal,
-          candidate,
-          (candidate.step.input ?? {}) as AgentOperationInput,
-        )
-      ));
-      for (const item of waveResults) {
-        results.push(item);
-        completed.set(item.id, item.result ?? item.error);
+      shaped = await Promise.all(wave.map(async (step) =>
+        [step.id, await dispatchStep(deps, principal, step, step.input, options)] as [string, ShapedStep]));
+    } else {
+      const step = prepared[index]!;
+      index += 1;
+      let item: ShapedStep;
+      try {
+        const input = resolveStepReferences(step.input, completed) as AgentOperationInput;
+        item = await dispatchStep(deps, principal, step, input, options);
+      } catch (error) {
+        item = { ok: false, error: errorFromUnknown(error, step.operation.operationId), meta: { operationId: step.operation.operationId } };
       }
-      if (stopOnError && waveResults.some((item) => !item.ok)) break;
-      continue;
+      shaped = [[step.id, item]];
     }
-
-    index += 1;
-    let item: BatchStepResult;
-    try {
-      const resolvedInput = resolveStepReferences(
-        current.step.input ?? {},
-        completed,
-      ) as AgentOperationInput;
-      item = await executeBatchStep(deps, principal, current, resolvedInput);
-    } catch (error) {
-      item = {
-        id: current.step.id,
-        ok: false,
-        error: safeToolError(error).structuredContent.error,
-      };
+    for (const [id, item] of shaped) {
+      results.push([id, item]);
+      completed.set(id, referenceValue(item));
     }
-    results.push(item);
-    completed.set(item.id, item.result ?? item.error);
-    if (stopOnError && !item.ok) break;
+    if (stopOnError && shaped.some(([, item]) => !item.ok)) break;
   }
   return results;
 }
 
-async function executeWriteBatch(
+async function runWriteSteps(
   deps: McpServerDependencies,
   principal: AgentPrincipal,
-  prepared: PreparedBatchStep[],
-): Promise<BatchStepResult[]> {
+  prepared: PreparedStep[],
+  options: ShapeOptions,
+  confirmation: { by: AgentConfirmation; token: string } | null,
+): Promise<Array<[string, ShapedStep]>> {
   const completed = new Map<string, unknown>();
-  const results: BatchStepResult[] = [];
-  for (const current of prepared) {
-    let item: BatchStepResult;
+  const results: Array<[string, ShapedStep]> = [];
+  for (const step of prepared) {
+    let item: ShapedStep;
     try {
-      const resolvedInput = resolveStepReferences(
-        current.step.input ?? {},
-        completed,
-      ) as AgentOperationInput;
-      item = await executeBatchStep(deps, principal, current, resolvedInput);
+      const resolved = resolveStepReferences(step.input, completed) as AgentOperationInput;
+      const input = await withIdempotencyKey(step.operation, resolved, confirmation ? `${confirmation.token}:${step.id}` : undefined);
+      item = await dispatchStep(deps, principal, step, input, options, confirmation?.by);
     } catch (error) {
-      item = {
-        id: current.step.id,
-        ok: false,
-        error: safeToolError(error).structuredContent.error,
-      };
+      item = { ok: false, error: errorFromUnknown(error, step.operation.operationId), meta: { operationId: step.operation.operationId } };
     }
-    results.push(item);
-    completed.set(item.id, item.result ?? item.error);
+    results.push([step.id, item]);
+    completed.set(step.id, referenceValue(item));
     if (!item.ok) break;
   }
   return results;
 }
 
-async function executeSingleTool(
-  deps: McpServerDependencies,
-  mode: AgentOperationToolMode,
-  operationId: string,
-  input: AgentOperationInput,
-) {
-  // The dispatch boundary charges normal operations. Required client actions
-  // do not dispatch, so they charge explicitly before returning their contract.
-  const principal = await resolveToolPrincipal(deps);
-  if (!principal) {
-    throw new AgentDispatchError("unauthorized", "Agent grant is inactive", 401);
+function stepsResult(results: Array<[string, ShapedStep]>, budget: number) {
+  const steps = results.map(([id, item]) => ({ id, ...stepResultValue(item) }));
+  const value: Record<string, unknown> = { ok: results.every(([, item]) => item.ok), steps };
+  if (jsonBytes(value) > AGENT_MAX_RESULT_BYTES) {
+    const fitted = fitToBudget(steps, Math.min(budget * 2, AGENT_MAX_RESULT_BYTES));
+    return toolResult({ ok: value.ok, steps: fitted.data, meta: fitted.meta });
   }
-  const operation = await getAuthorizedOperationForMode(
-    deps,
-    principal,
-    operationId,
-    mode,
-  );
-  if (operation.requiredClientAction) {
-    if (!(await checkAgentRateLimit(deps.env, `grant:${principal.grantId}`))) {
-      throw new AgentDispatchError(
-        "rate_limited",
-        "Agent request rate limit exceeded",
-        429,
-      );
-    }
-    const result = buildAgentRequiredClientAction(operation, input, deps.env);
-    return formatAgentToolResult({ ok: true, result });
-  }
-  const result = await dispatchPreparedOperation(deps, principal, operation, input);
-  if (result.sensitiveContinuation !== true) {
-    return formatAgentToolResult({ ok: result.ok, result });
-  }
-  const continuation = result.data && typeof result.data === "object"
-    ? (result.data as { continuation?: unknown }).continuation
-    : null;
-  if (!continuation || typeof continuation !== "object") {
-    throw new AgentDispatchError(
-      "invalid_continuation_response",
-      "Operation returned an invalid continuation",
-      502,
-    );
-  }
-  const handoff = await createAgentBrowserHandoff(
-    getDb(deps.env),
-    principal,
-    operation.operationId,
-    continuation as {
-      url: string;
-      method: "POST";
-      fields: Record<string, string>;
-    },
-    deps.env,
-  );
-  return formatAgentBrowserHandoffResult(handoff);
+  return toolResult(value);
 }
 
-export function createAgentMcpServer(deps: McpServerDependencies): McpServer {
+/** A single operation's response: browser handoffs, artifacts, client actions and errors keep their own shape. */
+async function singleResult(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  operation: AgentOperationManifestEntry,
+  input: AgentOperationInput,
+  options: ShapeOptions,
+  confirmedBy?: AgentConfirmation,
+) {
+  if (operation.requiredClientAction) {
+    await chargeRateLimit(deps, principal);
+    return toolResult({ ok: true, ...buildAgentRequiredClientAction(operation, input, deps.env) });
+  }
+  const result = await dispatchAgentOperation({
+    operation,
+    input,
+    principal,
+    env: deps.env,
+    ctx: deps.ctx,
+    ...(confirmedBy ? { confirmedBy } : {}),
+  });
+  if (result.sensitiveContinuation === true) {
+    const continuation = result.data && typeof result.data === "object"
+      ? (result.data as { continuation?: unknown }).continuation
+      : null;
+    if (!continuation || typeof continuation !== "object") {
+      throw new AgentDispatchError("invalid_continuation_response", "Operation returned an invalid continuation", 502);
+    }
+    const handoff = await createAgentBrowserHandoff(
+      getDb(deps.env),
+      principal,
+      operation.operationId,
+      continuation as { url: string; method: "POST"; fields: Record<string, string> },
+      deps.env,
+    );
+    return formatAgentBrowserHandoffResult(handoff);
+  }
+  if (result.ok && result.artifact) return artifactResult(result);
+  const shaped = shapeOperationResult(operation, result, options);
+  if (!shaped.ok) return agentErrorResult(shaped.error!);
+  if (input.idempotencyKey && operation.idempotency !== "none") shaped.meta.idempotencyKey = input.idempotencyKey;
+  if (result.oneTimeSecret) {
+    const value = { ok: true, data: shaped.data, meta: shaped.meta };
+    return {
+      content: [{ type: "text" as const, text: "One-time secret returned in structured content" }],
+      structuredContent: value,
+    };
+  }
+  return toolResult({ ok: true, data: shaped.data, meta: shaped.meta });
+}
+
+// ─── Confirmation ────────────────────────────────────────────────────────────
+
+const confirmAnswerSchema = z.object({ confirm: z.boolean() });
+
+interface ToolContextLike {
+  mcpReq?: {
+    envelope?: Record<string, unknown>;
+    inputResponses?: Record<string, unknown>;
+    requestState?: () => unknown;
+  };
+}
+
+/** A 2026-07-28 client that declared form elicitation can show a native confirm dialog. */
+function supportsFormElicitation(ctx: ToolContextLike | undefined): boolean {
+  const capabilities = ctx?.mcpReq?.envelope?.["io.modelcontextprotocol/clientCapabilities"];
+  if (typeof capabilities !== "object" || capabilities === null) return false;
+  const elicitation = (capabilities as { elicitation?: unknown }).elicitation;
+  if (typeof elicitation !== "object" || elicitation === null) return false;
+  const modes = elicitation as Record<string, unknown>;
+  return Object.keys(modes).length === 0 || (typeof modes.form === "object" && modes.form !== null);
+}
+
+async function auditConfirmationRequired(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  steps: readonly ConfirmStep[],
+): Promise<void> {
+  const backend = await loadAgentAccessBackend();
+  for (const { operation } of steps.filter((step) => isConfirmGated(step.operation))) {
+    try {
+      await backend.writeAudit({
+        grantId: principal.grantId,
+        credentialId: principal.credentialId,
+        ownerUserId: principal.ownerUserId,
+        resource: principal.resource,
+        operationId: operation.operationId,
+        risk: operation.risk,
+        outcome: "denied",
+        httpStatus: 428,
+        errorClass: "confirmation_required",
+        durationMs: 0,
+        requestId: crypto.randomUUID(),
+        metadata: { transport: operation.transport },
+      }, deps.env);
+    } catch {
+      // The refusal itself is the safety property; a lost audit row never turns it into a write.
+    }
+  }
+}
+
+type ConfirmOutcome =
+  | { kind: "confirmed"; by: AgentConfirmation; token: string }
+  | { kind: "respond"; result: unknown };
+
+/**
+ * Resolves the confirmation for gated steps: a valid one-use token, or an
+ * accepted native dialog (whose request state carries the token). Without
+ * either, nothing is dispatched: the call answers `confirmation_required`
+ * (audited) with the summary and a token, or asks the client's dialog.
+ */
+async function resolveConfirmation(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  steps: readonly ConfirmStep[],
+  confirmToken: string | undefined,
+  ctx: ToolContextLike | undefined,
+): Promise<ConfirmOutcome> {
+  const binding = await confirmBinding(steps);
+  if (confirmToken) {
+    await consumeConfirmToken(deps.env, principal, binding, confirmToken);
+    return { kind: "confirmed", by: "token", token: confirmToken };
+  }
+  const summary = confirmSummary(steps);
+  if (supportsFormElicitation(ctx)) {
+    const state = ctx?.mcpReq?.requestState?.();
+    const answer = acceptedContent(ctx?.mcpReq?.inputResponses, "confirm", confirmAnswerSchema);
+    if (typeof state === "string" && answer?.confirm === true) {
+      await consumeConfirmToken(deps.env, principal, binding, state);
+      return { kind: "confirmed", by: "elicitation", token: state };
+    }
+    if (typeof state === "string" && ctx?.mcpReq?.inputResponses) {
+      await auditConfirmationRequired(deps, principal, steps);
+      return {
+        kind: "respond",
+        result: agentErrorResult(buildAgentToolError({
+          code: "confirmation_declined",
+          status: 403,
+          message: "The merchant did not approve this change.",
+        })),
+      };
+    }
+    await chargeRateLimit(deps, principal);
+    const minted = await mintConfirmToken(deps.env, principal, binding);
+    return {
+      kind: "respond",
+      result: inputRequired({
+        inputRequests: {
+          confirm: inputRequired.elicit({
+            message: `Approve: ${summary}`,
+            requestedSchema: {
+              type: "object",
+              properties: { confirm: { type: "boolean", title: "Approve this change" } },
+              required: ["confirm"],
+            },
+          }),
+        },
+        requestState: minted.confirmToken,
+      }),
+    };
+  }
+  await chargeRateLimit(deps, principal);
+  await auditConfirmationRequired(deps, principal, steps);
+  const minted = await mintConfirmToken(deps.env, principal, binding);
+  return {
+    kind: "respond",
+    result: agentErrorResult(
+      buildAgentToolError({
+        code: "confirmation_required",
+        status: 428,
+        message: "This change needs the merchant's approval before it runs.",
+      }),
+      { confirmation: { summary, ...minted } },
+    ),
+  };
+}
+
+// ─── Dry run ─────────────────────────────────────────────────────────────────
+
+async function dryRunStep(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  step: PreparedStep,
+): Promise<Record<string, unknown>> {
+  const support = dryRunSupportOf(step.operation);
+  if (containsStepReference(step.input)) {
+    return { id: step.id, operationId: step.operation.operationId, support, validated: false, note: "Depends on an earlier step; validated when it runs." };
+  }
+  const input = await withIdempotencyKey(step.operation, step.input);
+  // Validates path, body properties, transport and idempotency exactly as dispatch will, without sending.
+  buildInternalRequest(step.operation, input, deps.env, "dry-run");
+  if (support === "none") {
+    const read = siblingRead(step.operation);
+    return {
+      id: step.id,
+      operationId: step.operation.operationId,
+      support: "none",
+      validated: true,
+      note: "Input is valid. This operation has no route preview: nothing was sent.",
+      ...(read ? { verifyWith: read } : {}),
+    };
+  }
+  const options: ShapeOptions = { budget: AGENT_READ_BUDGET_BYTES };
+  if (support === "native") {
+    const result = await dispatchAgentOperation({ operation: step.operation, input, principal, env: deps.env, ctx: deps.ctx, dryRun: "native" });
+    const shaped = shapeOperationResult(step.operation, result, options);
+    return { id: step.id, operationId: step.operation.operationId, support: "native", preview: stepResultValue(shaped) };
+  }
+  const previewId = support.slice("preview:".length);
+  const preview = await getAuthorizedOperation(previewId, deps.surface, principal);
+  if (!preview || preview.risk !== "read") {
+    return { id: step.id, operationId: step.operation.operationId, support, validated: true, note: "The preview operation is not authorized for this grant." };
+  }
+  const { idempotencyKey: _key, ...previewInput } = input;
+  const result = await dispatchAgentOperation({ operation: preview, input: previewInput, principal, env: deps.env, ctx: deps.ctx });
+  const shaped = shapeOperationResult(preview, result, options);
+  return { id: step.id, operationId: step.operation.operationId, support, preview: stepResultValue(shaped) };
+}
+
+function siblingRead(operation: AgentOperationManifestEntry): string | null {
+  const prefix = operation.operationId.slice(0, operation.operationId.lastIndexOf("."));
+  for (const name of ["get", "get_section", "list"]) {
+    const candidate = AGENT_OPERATIONS_BY_ID[`${prefix}.${name}`];
+    if (candidate?.risk === "read") return candidate.operationId;
+  }
+  return null;
+}
+
+// ─── Tools ───────────────────────────────────────────────────────────────────
+
+const readArgsSchema = z.object({
+  operationId: z.string().max(240).optional(),
+  input: inputArgSchema.optional(),
+  steps: z.array(stepArgSchema).max(AGENT_MAX_BATCH_STEPS).optional(),
+  select: z.array(z.string().max(200)).max(AGENT_MAX_SELECT_POINTERS).optional(),
+  limit: z.number().int().min(1).max(250).optional(),
+  cursor: z.string().max(2048).optional(),
+  maxBytes: z.number().int().min(1024).max(AGENT_MAX_RESULT_BYTES).optional(),
+});
+const writeArgsSchema = z.object({
+  operationId: z.string().max(240).optional(),
+  input: inputArgSchema.optional(),
+  steps: z.array(stepArgSchema).max(AGENT_MAX_BATCH_STEPS).optional(),
+  dryRun: z.boolean().optional(),
+  confirmToken: z.string().max(200).optional(),
+  idempotencyKey: z.string().min(8).max(200).optional(),
+});
+const READ_ARGS_JSON: JsonSchema = {
+  type: "object",
+  properties: {
+    operationId: { type: "string" },
+    input: INPUT_JSON,
+    steps: stepsJson("Instead of operationId: up to 20 reads"),
+    select: { type: "array", maxItems: AGENT_MAX_SELECT_POINTERS, items: { type: "string" }, description: "JSON pointers to keep, e.g. /items/*/id" },
+    limit: { type: "integer", minimum: 1 },
+    cursor: { type: "string", description: "meta.nextCursor" },
+    maxBytes: { type: "integer", description: "Result budget, default 8192, max 65536" },
+  },
+};
+const WRITE_ARGS_JSON: JsonSchema = {
+  type: "object",
+  properties: {
+    operationId: { type: "string" },
+    input: INPUT_JSON,
+    steps: stepsJson("Instead of operationId: up to 20 writes in order; stops at the first failure"),
+    dryRun: { type: "boolean", description: "Validate and preview; writes nothing" },
+    confirmToken: { type: "string" },
+    idempotencyKey: { type: "string" },
+  },
+};
+
+type ReadArgs = z.infer<typeof readArgsSchema>;
+type WriteArgs = z.infer<typeof writeArgsSchema>;
+
+function exactlyOne(args: { operationId?: string; steps?: unknown[] }): void {
+  if ((args.operationId === undefined) === (args.steps === undefined)) {
+    throw new AgentDispatchError("invalid_input", "Pass either operationId (with input) or steps", 400);
+  }
+  if (args.steps && args.steps.length === 0) throw new AgentDispatchError("invalid_input", "steps must not be empty", 400);
+}
+
+async function runRead(deps: McpServerDependencies, args: ReadArgs) {
+  exactlyOne(args);
+  const budget = args.maxBytes ?? AGENT_READ_BUDGET_BYTES;
+  if (args.steps) {
+    if (args.limit !== undefined || args.cursor !== undefined) {
+      throw new AgentDispatchError("invalid_input", "limit and cursor apply to a single operationId; set them in each step's query", 400);
+    }
+    const principal = await principalOrThrow(deps);
+    const prepared = await prepareSteps(deps, principal, args.steps, "read");
+    const perStep = Math.max(2048, Math.floor(budget / prepared.length));
+    const results = await runReadSteps(deps, principal, prepared, { select: args.select, budget: perStep }, true);
+    return stepsResult(results, budget);
+  }
+  const principal = await principalOrThrow(deps);
+  const operation = await authorizedOperationFor(deps, principal, args.operationId!, "read");
+  const parsed = parseInput(strictInputSchema, args.input, "input") as AgentOperationInput;
+  const input = applyListControls(operation, parsed, { limit: args.limit, cursor: args.cursor });
+  return singleResult(deps, principal, operation, input, { select: args.select, budget });
+}
+
+async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolContextLike | undefined) {
+  exactlyOne(args);
+  const principal = await principalOrThrow(deps);
+  const options: ShapeOptions = { budget: AGENT_READ_BUDGET_BYTES };
+  let prepared: PreparedStep[];
+  if (args.steps) {
+    if (args.idempotencyKey) {
+      throw new AgentDispatchError("invalid_input", "Set idempotencyKey inside each step's input", 400);
+    }
+    prepared = await prepareSteps(deps, principal, args.steps, "write");
+  } else {
+    const operation = await authorizedOperationFor(deps, principal, args.operationId!, "write");
+    const input = parseInput(strictInputSchema, args.input, "input") as AgentOperationInput;
+    prepared = [{
+      id: "main",
+      operation,
+      input: args.idempotencyKey ? { ...input, idempotencyKey: args.idempotencyKey } : input,
+    }];
+  }
+  const gated = prepared.some((step) => isConfirmGated(step.operation));
+  const policy = gated ? await readAgentConfirmPolicy(deps.env, principal) : "none";
+  const confirmSteps: ConfirmStep[] = prepared.map(({ operation, input }) => ({ operation, input }));
+
+  if (args.dryRun) {
+    await chargeRateLimit(deps, principal);
+    const steps = [];
+    for (const step of prepared) {
+      try {
+        steps.push(await dryRunStep(deps, principal, step));
+      } catch (error) {
+        return agentErrorResult(errorFromUnknown(error, step.operation.operationId));
+      }
+    }
+    const confirmation = gated && policy !== "none"
+      ? { summary: confirmSummary(confirmSteps), ...(await mintConfirmToken(deps.env, principal, await confirmBinding(confirmSteps))) }
+      : null;
+    return toolResult({
+      ok: true,
+      dryRun: true,
+      written: false,
+      ...(args.steps ? { steps } : (({ id: _id, ...single }) => single)(steps[0]!)),
+      ...(confirmation ? { confirmation } : {}),
+    });
+  }
+
+  let confirmation: { by: AgentConfirmation; token: string } | null = null;
+  if (gated && policy !== "none") {
+    const outcome = await resolveConfirmation(deps, principal, confirmSteps, args.confirmToken, ctx);
+    if (outcome.kind === "respond") return outcome.result;
+    confirmation = { by: outcome.by, token: outcome.token };
+  }
+
+  if (args.steps) {
+    const results = await runWriteSteps(deps, principal, prepared, options, confirmation);
+    return stepsResult(results, options.budget);
+  }
+  const step = prepared[0]!;
+  const input = await withIdempotencyKey(step.operation, step.input, confirmation ? `${confirmation.token}:main` : undefined);
+  return singleResult(deps, principal, step.operation, input, options, confirmation?.by);
+}
+
+export interface AgentMcpServerOptions {
+  /** Instructions with the live store line; the static loop when omitted. */
+  instructions?: string;
+}
+
+export function createAgentMcpServer(deps: McpServerDependencies, options: AgentMcpServerOptions = {}): McpServer {
   const server = new McpServer({
     name: `scalius-${deps.surface}`,
-    title: `Scalius ${deps.surface} operations`,
-    version: "1.0.0",
+    title: `Scalius ${deps.surface}`,
+    version: "2.0.0",
   }, {
-    instructions: AGENT_MCP_INSTRUCTIONS,
+    instructions: options.instructions ?? AGENT_MCP_INSTRUCTIONS,
+    supportedProtocolVersions: AGENT_MCP_PROTOCOL_VERSIONS,
+    // A stateless 2025-era request cannot hold a server-to-client dialog open,
+    // so confirmation falls back to the token there; 2026-07-28 clients get
+    // the native dialog through input_required.
+    inputRequired: { legacyShim: false },
+    cacheHints: {
+      "tools/list": LIST_CACHE,
+      "prompts/list": LIST_CACHE,
+      "resources/list": LIST_CACHE,
+      "resources/templates/list": LIST_CACHE,
+      "server/discover": { ttlMs: 300_000, cacheScope: "private" },
+    },
   });
 
-  server.registerTool(
-    "workflows.resolve",
-    {
-      title: "Resolve workflow",
-      description: "Resolve a natural-language merchant or buyer goal into one compact reviewed plan, up to three choices, a safety control, or an explicit unsupported result.",
-      inputSchema: z.object({
-        request: z.string().trim().min(1).max(4_000),
-      }).strict(),
-      outputSchema: agentToolOutputSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    async ({ request }) => {
-      try {
-        const principal = await requireToolPrincipal(deps);
-        const resolution = await resolveAuthorizedWorkflow({
-          prompt: request,
-          surface: deps.surface,
-          principal,
-        });
-        return formatAgentToolResult({ ok: true, result: resolution });
-      } catch (error) {
-        return safeToolError(error);
-      }
-    },
-  );
+  server.registerTool("scalius_search", {
+    description: "Find how to do a goal: ranked reviewed workflows (a confident one inlines its plan) and operations this connection can run. Honour control hits that ask or refuse.",
+    inputSchema: listed(z.object({
+      query: z.string().trim().min(1).max(500),
+      limit: z.number().int().min(1).max(10).optional(),
+    }), {
+      type: "object",
+      required: ["query"],
+      properties: { query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 10 } },
+    }),
+    outputSchema: sharedOutputSchema,
+    annotations: READ_ONLY,
+  }, async ({ query, limit }) => {
+    try {
+      const principal = await requireToolPrincipal(deps);
+      return toolResult({ ok: true, ...(await searchCapabilities({ query, limit, surface: deps.surface, principal })) });
+    } catch (error) {
+      return errorResult(error);
+    }
+  });
 
-  server.registerTool(
-    "workflows.read",
-    {
-      title: "Read workflow",
-      description: "Answer a supported natural-language store-data question in one call using only fixed reviewed inputs and bounded output projections. If unavailable, use workflows.resolve.",
-      inputSchema: z.object({
-        request: z.string().trim().min(1).max(4_000),
-      }).strict(),
-      outputSchema: workflowReadToolOutputSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
+  server.registerTool("scalius_describe", {
+    description: "How to call up to 5 operations: purpose, inputs (! = required), write rules, one example input, response fields. detail full gives the exact schemas.",
+    inputSchema: listed(z.object({
+      ids: z.array(z.string().max(240)).min(1).max(5),
+      detail: z.enum(["compact", "full", "examples"]).optional(),
+    }), {
+      type: "object",
+      required: ["ids"],
+      properties: {
+        ids: { type: "array", minItems: 1, maxItems: 5, items: { type: "string" } },
+        detail: { enum: ["compact", "full", "examples"] },
       },
-    },
-    async ({ request }) => {
-      try {
-        const principal = await requireToolPrincipal(deps);
-        const result = await executeAuthorizedWorkflowRead({
-          prompt: request,
-          surface: deps.surface,
-          principal,
-          env: deps.env,
-          ctx: deps.ctx,
-        });
-        return formatAgentToolResult({ ok: true, result });
-      } catch (error) {
-        return safeToolError(error);
+    }),
+    outputSchema: sharedOutputSchema,
+    annotations: READ_ONLY,
+  }, async ({ ids, detail }) => {
+    try {
+      const principal = await requireToolPrincipal(deps);
+      const operations: unknown[] = [];
+      const links: Array<{ type: "resource_link"; uri: string; name: string; mimeType: string }> = [];
+      for (const id of [...new Set(ids)]) {
+        const operation = await getAuthorizedOperation(id, deps.surface, principal);
+        if (!operation) {
+          operations.push({ operationId: id, error: buildAgentToolError({ code: "operation_not_found", status: 404, message: "Operation is unavailable or not authorized" }) });
+          continue;
+        }
+        const described = describeForAgent(operation, detail ?? "compact");
+        operations.push(described.value);
+        if (described.kind === "resource") links.push({ type: "resource_link", uri: described.uri, name: id, mimeType: "application/json" });
       }
-    },
-  );
+      const value = { ok: true, operations };
+      const result = toolResult(value);
+      return links.length > 0 ? { ...result, content: [...result.content, ...links] } : result;
+    } catch (error) {
+      return errorResult(error);
+    }
+  });
 
-  server.registerTool(
-    "operations.describe",
-    {
-      title: "Describe operation",
-      description: "Describe one authorized operation compactly. Set full=true only when constructing its exact input.",
-      inputSchema: z.object({
-        operationId: z.string().min(1).max(240),
-        full: z.boolean().default(false),
-      }).strict(),
-      outputSchema: agentToolOutputSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    async ({ operationId, full }) => {
-      try {
-        const principal = await requireToolPrincipal(deps);
-        const operation = await getAuthorizedOperation(operationId, deps.surface, principal);
-        if (!operation) return toolError("operation_not_found", "Operation is unavailable or not authorized");
-        return formatAgentToolResult({
-          ok: true,
-          operation: full ? describeOperation(operation, true) : describeOperation(operation),
-        });
-      } catch (error) {
-        return safeToolError(error);
-      }
-    },
-  );
+  server.registerTool("scalius_answer", {
+    description: "Answer a common store-data question in one bounded call. If unavailable, the top scalius_search hits come back instead.",
+    inputSchema: listed(z.object({ question: z.string().trim().min(1).max(4_000) }), {
+      type: "object",
+      required: ["question"],
+      properties: { question: { type: "string" } },
+    }),
+    outputSchema: sharedOutputSchema,
+    annotations: READ_ONLY,
+  }, async ({ question }) => {
+    try {
+      const principal = await requireToolPrincipal(deps);
+      const answer = await executeAuthorizedWorkflowRead({
+        prompt: question,
+        surface: deps.surface,
+        principal,
+        env: deps.env,
+        ctx: deps.ctx,
+      });
+      if (answer.kind === "result") return toolResult({ ok: true, ...answer });
+      const search = await searchCapabilities({ query: question, limit: 3, surface: deps.surface, principal });
+      return toolResult({ ok: true, kind: "unavailable", hits: search.hits });
+    } catch (error) {
+      return errorResult(error);
+    }
+  });
 
-  server.registerTool(
-    "operations.read",
-    {
-      title: "Read operation",
-      description: "Run one fixed, authorized operation declared with risk read.",
-      inputSchema: z.object({
-        operationId: z.string().min(1).max(240),
-        input: operationInputSchema.optional(),
-      }).strict(),
-      outputSchema: agentToolOutputSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-    },
-    async ({ operationId, input }) => {
-      try {
-        return await executeSingleTool(deps, "read", operationId, input ?? {});
-      } catch (error) {
-        return safeToolError(error);
-      }
-    },
-  );
+  server.registerTool("scalius_read", {
+    description: "Run read operations: operationId + input, or steps. Results keep to 8 KB: narrow with select, page with limit and meta.nextCursor.",
+    inputSchema: listed(readArgsSchema, READ_ARGS_JSON),
+    outputSchema: sharedOutputSchema,
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, async (args) => {
+    try {
+      return await runRead(deps, args);
+    } catch (error) {
+      return errorResult(error, args.operationId);
+    }
+  });
 
-  server.registerTool(
-    "operations.read_batch",
-    {
-      title: "Read operation batch",
-      description: "Run up to 20 authorized read operations. Independent parallel-eligible reads use at most two lanes; $step references create ordered waves.",
-      inputSchema: z.object({
-        steps: z.array(batchStepSchema).min(1).max(AGENT_MAX_BATCH_STEPS),
-        stopOnError: z.boolean().default(true),
-      }).strict(),
-      outputSchema: agentToolOutputSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-    },
-    async ({ steps, stopOnError }) => {
-      try {
-        // Batch requests charge once here plus once in each dispatched step.
-        const principal = await requireToolPrincipal(deps);
-        const prepared = await prepareBatchSteps(deps, principal, steps, "read");
-        const results = await executeReadBatch(deps, principal, prepared, stopOnError);
-        return formatAgentToolResult({ ok: results.every((result) => result.ok), results });
-      } catch (error) {
-        return safeToolError(error);
-      }
-    },
-  );
+  server.registerTool("scalius_write", {
+    description: "Run changes: operationId + input, or steps in order. dryRun:true validates and previews. Destructive or financial changes need the merchant's approval: send the confirmToken it returns.",
+    inputSchema: listed(writeArgsSchema, WRITE_ARGS_JSON),
+    outputSchema: sharedOutputSchema,
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  }, async (args, ctx) => {
+    try {
+      return await runWrite(deps, args, ctx as ToolContextLike | undefined) as ReturnType<typeof toolResult>;
+    } catch (error) {
+      return errorResult(error, args.operationId);
+    }
+  });
 
-  server.registerTool(
-    "operations.write",
-    {
-      title: "Write operation",
-      description: "Run one fixed, authorized write, destructive, financial, or security operation.",
-      inputSchema: z.object({
-        operationId: z.string().min(1).max(240),
-        input: operationInputSchema.optional(),
-      }).strict(),
-      outputSchema: agentToolOutputSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-    },
-    async ({ operationId, input }) => {
-      try {
-        return await executeSingleTool(deps, "write", operationId, input ?? {});
-      } catch (error) {
-        return safeToolError(error);
-      }
-    },
-  );
-
-  server.registerTool(
-    "operations.write_batch",
-    {
-      title: "Write operation batch",
-      description: "Run up to 20 authorized non-read operations sequentially, stopping on the first failed step. Later inputs may use $step references.",
-      inputSchema: z.object({
-        steps: z.array(batchStepSchema).min(1).max(AGENT_MAX_BATCH_STEPS),
-      }).strict(),
-      outputSchema: agentToolOutputSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-    },
-    async ({ steps }) => {
-      try {
-        // All steps are authorized and risk-checked before the first mutation.
-        const principal = await requireToolPrincipal(deps);
-        const prepared = await prepareBatchSteps(deps, principal, steps, "write");
-        const results = await executeWriteBatch(deps, principal, prepared);
-        return formatAgentToolResult({ ok: results.every((result) => result.ok), results });
-      } catch (error) {
-        return safeToolError(error);
-      }
-    },
-  );
-
+  registerAgentResources(server, { surface: deps.surface, env: deps.env, ctx: deps.ctx, principal: () => requireToolPrincipal(deps) });
+  if (deps.surface === "dashboard") registerAgentPrompts(server);
   return server;
+}
+
+/**
+ * The server for one HTTP request. For the handshake methods (`initialize`,
+ * `server/discover`) the instructions carry the live store line; every other
+ * request skips those reads.
+ */
+export async function createAgentMcpServerForRequest(
+  deps: McpServerDependencies,
+  method: string | null,
+): Promise<McpServer> {
+  if (method !== "initialize" && method !== "server/discover") return createAgentMcpServer(deps);
+  let line = "";
+  try {
+    const principal = await resolveToolPrincipal(deps);
+    if (principal) line = storeContextLine(await loadStoreContext({ surface: deps.surface, principal, env: deps.env, ctx: deps.ctx }));
+  } catch {
+    line = "";
+  }
+  return createAgentMcpServer(deps, { instructions: buildAgentInstructions(line) });
+}
+
+const HANDSHAKE_PEEK_MAX_BYTES = 8 * 1024;
+
+/**
+ * The JSON-RPC method of a request: the 2026-07-28 `Mcp-Method` header, or,
+ * for a small 2025-era body (a handshake is a few hundred bytes), the body's
+ * `method`. Larger bodies are tool calls and are never read twice.
+ */
+export async function peekMcpMethod(request: Request): Promise<string | null> {
+  const header = request.headers.get("Mcp-Method")?.trim();
+  if (header) return header;
+  if (request.method !== "POST" || request.body === null) return null;
+  const length = Number(request.headers.get("Content-Length") ?? Number.NaN);
+  if (!Number.isFinite(length) || length > HANDSHAKE_PEEK_MAX_BYTES) return null;
+  try {
+    const body = JSON.parse(await request.clone().text()) as { method?: unknown };
+    return typeof body?.method === "string" ? body.method : null;
+  } catch {
+    return null;
+  }
 }
