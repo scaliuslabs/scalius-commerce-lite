@@ -185,6 +185,12 @@ describe("changing the two-step method", () => {
     const emailed = await call(cookie, "/2fa/method", { method: "email", challengeId: back.json.data!.challengeId, code: await emailedCode(userId) });
     expect(emailed.status).toBe(200);
     expect(await twoFactorMethod(userId)).toBe("email");
+
+    // Email codes replace the app: sign-in offers only them, and the old key no longer signs in.
+    const emailSignIn = await signIn(env, "owner@shop.test");
+    expect(await emailSignIn.clone().json()).toMatchObject({ twoFactorRedirect: true, twoFactorMethods: ["otp"] });
+    const stale = await postAuth(env, "/api/auth/two-factor/verify-totp", { code: totp(key) }, cookieNamed(emailSignIn, "two_factor"));
+    expect(stale.status).toBeGreaterThanOrEqual(400);
   });
 
   it("answers a wrong authenticator code with a specific 4xx and keeps the old method", async () => {
@@ -219,6 +225,49 @@ describe("changing the two-step method", () => {
     const rejected = await call(cookie, "/2fa/method", { method: "email", challengeId: challenge.json.data!.challengeId, code: wrongCode(await emailedCode(userId)) });
     expect(rejected.status).toBe(400);
     expect(rejected.json.error?.code).toBe("TWO_FACTOR_CODE_INVALID");
+  });
+});
+
+describe("turning off two-step verification", () => {
+  it("needs the password and a current code, then signs in with the password alone", async () => {
+    const env = makeEnv();
+    const { userId, cookie } = await ownerWithEmailCodes(env);
+    const call = adminApi(env);
+    expect((await call(cookie, "/account-security")).json.data).toMatchObject({ twoFactorRequired: false });
+
+    await postAuth(env, "/api/auth/two-factor/send-otp", {}, cookie);
+    const code = await emailedCode(userId);
+    const wrongPassword = await call(cookie, "/2fa/disable", { password: "Not-The-Password-1", code });
+    expect(wrongPassword.json.error?.code).toBe("PASSWORD_INCORRECT");
+    const wrongCodeResponse = await call(cookie, "/2fa/disable", { password: PASSWORD, code: wrongCode(code) });
+    expect(wrongCodeResponse.json.error?.code).toBe("TWO_FACTOR_CODE_INVALID");
+
+    await postAuth(env, "/api/auth/two-factor/send-otp", {}, cookie);
+    const off = await call(cookie, "/2fa/disable", { password: PASSWORD, code: await emailedCode(userId) });
+    expect(off.status, JSON.stringify(off.json)).toBe(200);
+    const row = database.sqlite.prepare("SELECT two_factor_enabled AS enabled, two_factor_method AS method FROM user WHERE id = ?").get(userId);
+    expect(row).toEqual({ enabled: 0, method: null });
+    expect(database.sqlite.prepare("SELECT COUNT(*) AS count FROM two_factor WHERE user_id = ?").get(userId)).toEqual({ count: 0 });
+    await vi.waitFor(() => expect(outbox.at(-1)?.subject).toBe(`Two-step verification was turned off at ${STORE}`));
+
+    const signedIn = await signIn(env, "owner@shop.test");
+    expect(await signedIn.clone().json()).not.toHaveProperty("twoFactorRedirect");
+    // The same browser keeps working.
+    expect((await call(off.cookie, "/2fa/info")).json.data).toMatchObject({ twoFactorEnabled: false });
+  });
+
+  it("keeps it on for staff the store invited, and says why", async () => {
+    const env = makeEnv();
+    const { userId, cookie } = await ownerWithEmailCodes(env);
+    database.sqlite.prepare("INSERT INTO admin_invitations (id, user_id, name, email, status) VALUES ('inv_1', ?, 'Rahim', 'owner@shop.test', 'accepted')").run(userId);
+    const call = adminApi(env);
+    expect((await call(cookie, "/account-security")).json.data).toMatchObject({ twoFactorRequired: true });
+
+    await postAuth(env, "/api/auth/two-factor/send-otp", {}, cookie);
+    const refused = await call(cookie, "/2fa/disable", { password: PASSWORD, code: await emailedCode(userId) });
+    expect(refused.status).toBe(403);
+    expect(refused.json.error?.code).toBe("TWO_FACTOR_REQUIRED");
+    expect(database.sqlite.prepare("SELECT two_factor_enabled AS enabled FROM user WHERE id = ?").get(userId)).toEqual({ enabled: 1 });
   });
 });
 

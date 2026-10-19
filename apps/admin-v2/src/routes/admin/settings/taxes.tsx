@@ -6,7 +6,6 @@ import {
   TaxOverridesCard,
   TaxRegionsCard,
 } from "~/components/admin/taxes/TaxesSettings";
-import { AppProviderSheetHost } from "~/components/admin/apps/AppProviderSheetHost";
 import { useQuery } from "@tanstack/react-query";
 import { SettingsAdvanced } from "~/components/admin/settings/SettingsAdvanced";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
@@ -67,19 +66,17 @@ function TaxesPage() {
   // A fresh page per country: switching countries never carries a draft over.
   if (region) return <TaxRegionPage key={region} regionId={region} />;
   return (
-    <AppProviderSheetHost>
-      <SettingsPage page="taxes" readOnly={!canEdit}>
-        <TaxCollectionCard />
-        <TaxRegionsCard />
-        <SettingsAdvanced
-          label={t("advancedTitle")}
-          defaultOpen={(config?.classes.length ?? 0) > 1}
-          forceOpen={hash === "taxGroups" || hash === "taxOverrides"}
-        >
-          <TaxGroupsCard />
-          <TaxOverridesCard />
-        </SettingsAdvanced>
-      </SettingsPage>
-    </AppProviderSheetHost>
+    <SettingsPage page="taxes" readOnly={!canEdit}>
+      <TaxCollectionCard />
+      <TaxRegionsCard />
+      <SettingsAdvanced
+        label={t("advancedTitle")}
+        defaultOpen={(config?.classes.length ?? 0) > 1}
+        forceOpen={hash === "taxGroups" || hash === "taxOverrides"}
+      >
+        <TaxGroupsCard />
+        <TaxOverridesCard />
+      </SettingsAdvanced>
+    </SettingsPage>
   );
 }

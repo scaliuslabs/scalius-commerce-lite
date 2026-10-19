@@ -1,12 +1,13 @@
 // An installed app's provider inside a settings dialog, beside the built-in
 // ones: its mark and "by <app>", the same readiness every send or lookup
-// checks, the button that opens its setup sheet (only its own fields, kept
+// checks, the link to its setup on its feature's page in the app (its own fields, kept
 // encrypted with the app), and the app's connection test.
 import { useMutation } from "@tanstack/react-query";
 import { postApiV1AdminSettingsProvidersByIdTest } from "@scalius/api-client/sdk";
 import { AppIcon } from "~/components/admin/apps/AppIcon";
 import { ProvidedByChip } from "~/components/admin/apps/ProvidedByChip";
-import { useOpenAppProvider } from "~/components/admin/apps/AppProviderSheetHost";
+import { Link } from "@tanstack/react-router";
+import { appProviderSetupPath } from "~/components/admin/apps/app-sections";
 import { Alert } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -28,17 +29,19 @@ export function appProviderOption(provider: AppProvider, t: (key: AppProvidersMe
   return { value: provider.id, label: providerLabel(provider.name), description: t("byApp", { app: providerLabel(provider.appName) }), group: t("apps") };
 }
 
-/** The button that opens a provider's setup sheet: "Set up" until it is configured, then "Edit settings". */
+/**
+ * The link to a provider's setup: its feature's page in its app (the switch,
+ * consent and its own fields). "Set up" until it is configured, then "Edit settings".
+ */
 export function AppProviderSetupButton({ provider, size = "default" }: { provider: AppProvider; size?: "default" | "sm" }) {
   const t = useMessages(appProvidersMessages);
-  const openProvider = useOpenAppProvider();
-  // The sheet reads the app's settings (apps.view); saving them is the app's (apps.manage).
+  // The app page reads the app's settings (apps.view); saving them is the app's (apps.manage).
   const canSeeApps = usePermissions().hasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
-  if (!canSeeApps || !openProvider) return null;
+  if (!canSeeApps) return null;
   const configured = provider.readiness.configured;
   return (
-    <Button type="button" variant={configured ? "outline" : "default"} size={size} onClick={() => openProvider(provider.id)}>
-      {t(configured ? "editSettings" : "setUp", { name: providerLabel(provider.name) })}
+    <Button asChild variant={configured ? "outline" : "default"} size={size}>
+      <Link to={appProviderSetupPath(provider.id)}>{t(configured ? "editSettings" : "setUp", { name: providerLabel(provider.name) })}</Link>
     </Button>
   );
 }

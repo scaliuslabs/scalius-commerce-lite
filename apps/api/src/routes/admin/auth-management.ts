@@ -53,6 +53,7 @@ import {
     getTwoFactorMethodChallengeIdentifier,
     readPendingTwoFactorMethodChallenge,
     sendStaffPasswordChangedEmail,
+    sendStaffTwoStepOffEmail,
     verifyPendingTotpCode,
     type ClaimedAdminSetup,
 } from "@scalius/core/auth";
@@ -1364,6 +1365,77 @@ const update2faMethodSchema = z.union([
     }),
 ]);
 
+/**
+ * Checks a code of the signed-in person's second factor through Better Auth
+ * (email code or authenticator) and returns the session it proved: Better
+ * Auth may rotate the session while enrolling, so the proof names the one to
+ * mark verified.
+ */
+async function verifySessionTwoFactorCode(
+    c: Context<{ Bindings: Env }>,
+    verificationMethod: "totp" | "email",
+    code: string,
+): Promise<{ sessionId: string; sessionToken: string }> {
+    const db = c.get("db");
+    const sessionUser = c.get("user");
+    const session = c.get("session");
+    if (!session) throw new UnauthorizedError("No active session found");
+    const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
+    const verifiedProof = await (async () => {
+        try {
+            const betterAuthResult = verificationMethod === "email"
+                ? await auth.api.verifyTwoFactorOTP({
+                    headers: c.req.raw.headers,
+                    body: { code, trustDevice: false },
+                    returnHeaders: true,
+                }) as BetterAuthHeadersResult<{ token?: string }>
+                : await auth.api.verifyTOTP({
+                    headers: c.req.raw.headers,
+                    body: { code, trustDevice: false },
+                    returnHeaders: true,
+                }) as BetterAuthHeadersResult<{ token?: string }>;
+            appendBetterAuthSetCookies(c, betterAuthResult.headers);
+            const cookieSessionToken = getSessionTokenFromSetCookie(
+                betterAuthResult.headers,
+                auth,
+            );
+            return {
+                token: cookieSessionToken ?? betterAuthResult.response?.token,
+                allowRotatedCookieSession: Boolean(cookieSessionToken),
+            };
+        } catch (error) {
+            throw twoFactorCodeRejected(error);
+        }
+    })();
+
+    if (!verifiedProof.token) {
+        throw new UnauthorizedError("Two-factor verification did not return a session proof");
+    }
+    const verifiedSession = await db
+        .select({ id: sessionTable.id, token: sessionTable.token })
+        .from(sessionTable)
+        .where(
+            verifiedProof.allowRotatedCookieSession
+                ? and(
+                    eq(sessionTable.token, verifiedProof.token),
+                    eq(sessionTable.userId, sessionUser.id),
+                )
+                : and(
+                    eq(sessionTable.id, session.id),
+                    eq(sessionTable.token, verifiedProof.token),
+                    eq(sessionTable.userId, sessionUser.id),
+                ),
+        )
+        .get();
+    if (!verifiedSession) {
+        throw new UnauthorizedError("Two-factor method proof is invalid");
+    }
+    return {
+        sessionId: verifiedSession.id,
+        sessionToken: verifiedSession.token,
+    };
+}
+
 const update2faMethodRoute = createRoute({
     method: "post",
     path: "/2fa/method",
@@ -1405,65 +1477,8 @@ app.openapi(update2faMethodRoute, async (c) => {
         throw new UnauthorizedError("No active session found");
     }
 
-    const verifySubmittedCode = async (
-        verificationMethod: "totp" | "email",
-        code: string,
-    ): Promise<{ sessionId: string; sessionToken: string }> => {
-        const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
-        const verifiedProof = await (async () => {
-            try {
-                const betterAuthResult = verificationMethod === "email"
-                    ? await auth.api.verifyTwoFactorOTP({
-                        headers: c.req.raw.headers,
-                        body: { code, trustDevice: false },
-                        returnHeaders: true,
-                    }) as BetterAuthHeadersResult<{ token?: string }>
-                    : await auth.api.verifyTOTP({
-                        headers: c.req.raw.headers,
-                        body: { code, trustDevice: false },
-                        returnHeaders: true,
-                    }) as BetterAuthHeadersResult<{ token?: string }>;
-                appendBetterAuthSetCookies(c, betterAuthResult.headers);
-                const cookieSessionToken = getSessionTokenFromSetCookie(
-                    betterAuthResult.headers,
-                    auth,
-                );
-                return {
-                    token: cookieSessionToken ?? betterAuthResult.response?.token,
-                    allowRotatedCookieSession: Boolean(cookieSessionToken),
-                };
-            } catch (error) {
-                throw twoFactorCodeRejected(error);
-            }
-        })();
-
-        if (!verifiedProof.token) {
-            throw new UnauthorizedError("Two-factor verification did not return a session proof");
-        }
-        const verifiedSession = await db
-            .select({ id: sessionTable.id, token: sessionTable.token })
-            .from(sessionTable)
-            .where(
-                verifiedProof.allowRotatedCookieSession
-                    ? and(
-                        eq(sessionTable.token, verifiedProof.token),
-                        eq(sessionTable.userId, sessionUser.id),
-                    )
-                    : and(
-                        eq(sessionTable.id, session.id),
-                        eq(sessionTable.token, verifiedProof.token),
-                        eq(sessionTable.userId, sessionUser.id),
-                    ),
-            )
-            .get();
-        if (!verifiedSession) {
-            throw new UnauthorizedError("Two-factor method proof is invalid");
-        }
-        return {
-            sessionId: verifiedSession.id,
-            sessionToken: verifiedSession.token,
-        };
-    };
+    const verifySubmittedCode = (verificationMethod: "totp" | "email", code: string) =>
+        verifySessionTwoFactorCode(c, verificationMethod, code);
 
     if ("challengeId" in methodInput) {
         if (!sessionUser.twoFactorEnabled) {
@@ -1536,6 +1551,14 @@ app.openapi(update2faMethodRoute, async (c) => {
             try {
                 await safeBatch(db, [
                     emailGuard,
+                    // Email codes replace the authenticator: its key stops
+                    // signing in (recovery codes keep working).
+                    db.update(twoFactorTable)
+                        .set({ verified: false, updatedAt: claimedAt })
+                        .where(and(
+                            eq(twoFactorTable.id, existingTwoFactor.id),
+                            eq(twoFactorTable.userId, sessionUser.id),
+                        )),
                     db.update(user)
                         .set({
                             twoFactorEnabled: true,
@@ -1671,8 +1694,11 @@ app.openapi(update2faMethodRoute, async (c) => {
     try {
         await safeBatch(db, [
             enrollmentGuard,
+            // The authenticator key counts only when it is the method: someone
+            // who chose email codes never scanned it, so sign-in must not
+            // offer an authenticator they don't have.
             db.update(twoFactorTable)
-                .set({ verified: true, updatedAt: committedAt })
+                .set({ verified: method === "totp", updatedAt: committedAt })
                 .where(and(
                     eq(twoFactorTable.id, authority.id),
                     eq(twoFactorTable.userId, sessionUser.id),
@@ -1701,6 +1727,116 @@ app.openapi(update2faMethodRoute, async (c) => {
     }
 
     return ok(c, {});
+});
+
+/**
+ * Whether the store requires two-step verification for this person. Staff the
+ * store invited enrol at their first sign-in and may never turn it off (the
+ * README's "required for invited admins"); the first admin and manually
+ * created admins may. A revoked invitation does not count.
+ */
+function twoFactorRequiredFor(db: Database, userId: string) {
+    return db
+        .select({ id: adminInvitations.id })
+        .from(adminInvitations)
+        .where(and(eq(adminInvitations.userId, userId), ne(adminInvitations.status, "revoked")))
+        .get()
+        .then(Boolean);
+}
+
+const twoFactorRequired = () => new AppError(
+    403,
+    "TWO_FACTOR_REQUIRED",
+    "This store requires two-step verification for invited staff, so it can't be turned off.",
+);
+
+const disable2faRoute = createRoute({
+    method: "post",
+    path: "/2fa/disable",
+    operationId: "dashboard.account.two_factor.disable",
+    tags: ["Admin - Auth Management"],
+    summary: "Turn off two-step verification",
+    description: "Needs the password and a current code of the account's method (an emailed code is sent with Better Auth's send-otp first). Removes the authenticator key and recovery codes. Refused with 403 TWO_FACTOR_REQUIRED for staff the store invited, who must keep it on.",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        password: z.string().min(1).max(AUTH_PASSWORD_MAX_LENGTH),
+                        code: z.string().regex(/^\d{6}$/),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: { description: "Two-step verification turned off", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(disable2faRoute, async (c) => {
+    const db = c.get("db");
+    const sessionUser = c.get("user");
+    const session = c.get("session");
+    const { password, code } = c.req.valid("json");
+
+    if (!session) throw new UnauthorizedError("No active session found");
+    if (!sessionUser.twoFactorEnabled) throw new ConflictError("Two-step verification is already off");
+    if (await twoFactorRequiredFor(db, sessionUser.id)) throw twoFactorRequired();
+
+    const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
+    const passwordProof = await auth.api.verifyPassword({
+        headers: c.req.raw.headers,
+        body: { password },
+    }).catch(() => null);
+    if (passwordProof?.status !== true) {
+        throw new AppError(400, "PASSWORD_INCORRECT", "Password confirmation failed");
+    }
+    await verifySessionTwoFactorCode(c, sessionUser.twoFactorMethod === "totp" ? "totp" : "email", code);
+
+    const changedAt = new Date();
+    const stillAllowed = buildBatchGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${user}
+        WHERE ${user.id} = ${sessionUser.id}
+          AND ${user.twoFactorEnabled} = ${true}
+    ) AND NOT EXISTS (
+        SELECT 1 FROM ${adminInvitations}
+        WHERE ${adminInvitations.userId} = ${sessionUser.id}
+          AND ${adminInvitations.status} <> 'revoked'
+    )`, "TWO_FACTOR_DISABLE_CONFLICT");
+    try {
+        await safeBatch(db, [
+            stillAllowed,
+            db.delete(twoFactorTable).where(eq(twoFactorTable.userId, sessionUser.id)),
+            db.update(user)
+                .set({ twoFactorEnabled: false, twoFactorMethod: null, updatedAt: changedAt })
+                .where(eq(user.id, sessionUser.id)),
+            db.delete(verification).where(
+                eq(verification.identifier, getTwoFactorMethodChallengeIdentifier(sessionUser.id, session.id)),
+            ),
+        ]);
+    } catch (error) {
+        if (isBatchGuardError(error, "TWO_FACTOR_DISABLE_CONFLICT")) {
+            throw new ConflictError("Two-step verification changed before it could be turned off");
+        }
+        throw error;
+    }
+
+    const notice = sendStaffTwoStepOffEmail({
+        db,
+        env: c.env as unknown as Record<string, unknown>,
+        dashboardUrl: c.env.BETTER_AUTH_URL,
+        user: { name: sessionUser.name, email: sessionUser.email },
+        appProviders: requestAppProviders(c),
+    });
+    try {
+        c.executionCtx.waitUntil(notice);
+    } catch {
+        await notice;
+    }
+
+    return ok(c, { message: "Two-step verification turned off" });
 });
 
 const verify2faRoute = createRoute({
@@ -2150,7 +2286,19 @@ const getAccountSecurityRoute = createRoute({
     tags: ["Admin - Auth Management"],
     summary: "Get current user account security data",
     responses: {
-        200: { description: "Account security data", content: { "application/json": { schema: successEnvelope(z.object({ twoFactorMethod: z.string().nullable(), isSuperAdmin: z.boolean() })) } } },
+        200: {
+            description: "Account security data",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        twoFactorMethod: z.string().nullable(),
+                        isSuperAdmin: z.boolean(),
+                        /** The store requires two-step verification for this person (invited staff): it can't be turned off. */
+                        twoFactorRequired: z.boolean(),
+                    })),
+                },
+            },
+        },
         ...errorResponses,
     }
 });
@@ -2158,18 +2306,22 @@ const getAccountSecurityRoute = createRoute({
 app.openapi(getAccountSecurityRoute, async (c) => {
     const db = c.get("db");
     const sessionUser = c.get("user");
-    const dbUser = await db
-        .select({
-            twoFactorMethod: user.twoFactorMethod,
-            isSuperAdmin: user.isSuperAdmin,
-        })
-        .from(user)
-        .where(eq(user.id, sessionUser.id))
-        .get();
+    const [dbUser, required] = await Promise.all([
+        db
+            .select({
+                twoFactorMethod: user.twoFactorMethod,
+                isSuperAdmin: user.isSuperAdmin,
+            })
+            .from(user)
+            .where(eq(user.id, sessionUser.id))
+            .get(),
+        twoFactorRequiredFor(db, sessionUser.id),
+    ]);
 
     return ok(c, {
         twoFactorMethod: dbUser?.twoFactorMethod || null,
         isSuperAdmin: dbUser?.isSuperAdmin ?? false,
+        twoFactorRequired: required,
     });
 });
 

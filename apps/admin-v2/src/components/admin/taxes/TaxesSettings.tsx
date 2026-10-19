@@ -24,9 +24,7 @@ import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { EMPTY_LOCATION, LocationPicker, type LocationValue } from "~/components/admin/location/LocationPicker";
-import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
-import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { AdminApiResponseError, isAdminApiConflictError } from "~/lib/admin-api-error";
 import { apiData } from "~/lib/api";
 import { countryName } from "~/lib/country-name";
@@ -50,7 +48,6 @@ import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { taxesMessages } from "~/i18n/settings-taxes";
 import { appProvidersMessages } from "~/i18n/settings-app-providers";
-import { useOpenAppProvider } from "../apps/AppProviderSheetHost";
 import { AppProviderStatus, appProviderOption } from "../settings/AppProviderStatus";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
@@ -129,8 +126,6 @@ export function TaxCollectionCard() {
   const canEdit = useCanManageTaxes();
   const groupName = useGroupName();
   const services = useTaxServices();
-  const openProvider = useOpenAppProvider();
-  const canSeeApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
   const configuration = useQuery(configurationQuery);
   const config = configuration.data;
   const { values, setValue, isLoadError, refetch } = useSettingsForm<TaxSettingsRecord, TaxSettingsRecord>({
@@ -214,9 +209,6 @@ export function TaxCollectionCard() {
             disabled={!settled}
             onValueChange={(value) => {
               setValue("providerId", value);
-              // An app tax service not set up yet opens its own setup.
-              const chosen = services.providers.find((provider) => provider.id === value);
-              if (chosen && !chosen.readiness.configured && canSeeApps) openProvider?.(chosen.id);
             }}
             options={services.options}
             ariaLabel={t("service")}

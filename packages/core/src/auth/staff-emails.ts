@@ -122,21 +122,58 @@ export function staffPasswordChangedEmail(input: {
   });
 }
 
-/**
- * The security notice after a password change or reset. It links only to the
- * forgot-password page (no token), and a delivery failure never undoes the change.
- */
-export async function sendStaffPasswordChangedEmail(input: {
+export function staffTwoStepOffEmail(input: {
+  store: string | null;
+  name: string;
+  email: string;
+  resetLink: string | null;
+}): StaffEmail {
+  const subject = input.store ? `Two-step verification was turned off at ${input.store}` : "Two-step verification was turned off";
+  return render(subject, {
+    store: input.store,
+    heading: "Two-step verification was turned off",
+    greeting: `Hi ${input.name},`,
+    lines: [
+      `Two-step verification was just turned off for your staff account (${input.email}). Signing in now needs only your password.`,
+      "If this was you, there's nothing else to do. You can turn it back on in My account.",
+      "If this wasn't you, reset your password now and tell the store owner.",
+    ],
+    action: input.resetLink ? { label: "Reset password", href: input.resetLink } : undefined,
+    footer: "This is a security notice about your staff account.",
+  });
+}
+
+interface SecurityNoticeInput {
   db: Database;
   env: Record<string, unknown>;
   dashboardUrl: string | undefined;
   user: { name: string; email: string };
   /** The request's app providers, for an app sender the merchant chose. */
   appProviders?: AppProviders;
-}): Promise<void> {
+}
+
+/** The security notice after a password change or reset. */
+export function sendStaffPasswordChangedEmail(input: SecurityNoticeInput): Promise<void> {
+  return sendSecurityNotice(input, staffPasswordChangedEmail, "Password-changed");
+}
+
+/** The security notice after two-step verification is turned off. */
+export function sendStaffTwoStepOffEmail(input: SecurityNoticeInput): Promise<void> {
+  return sendSecurityNotice(input, staffTwoStepOffEmail, "Two-step-off");
+}
+
+/**
+ * A security notice to the person whose account changed. It links only to the
+ * forgot-password page (no token), and a delivery failure never undoes the change.
+ */
+async function sendSecurityNotice(
+  input: SecurityNoticeInput,
+  build: typeof staffPasswordChangedEmail,
+  label: string,
+): Promise<void> {
   try {
     const { sendEmail } = await import("../integrations/email");
-    const message = staffPasswordChangedEmail({
+    const message = build({
       store: await readStoreName(input.db),
       name: input.user.name,
       email: input.user.email,
@@ -148,8 +185,8 @@ export async function sendStaffPasswordChangedEmail(input: {
       encryptionKey: input.env.CREDENTIAL_ENCRYPTION_KEY as string | undefined,
       appProviders: input.appProviders,
     });
-    if (!delivery.success) console.warn("[Auth] Password-changed notice was not delivered", { provider: delivery.provider });
+    if (!delivery.success) console.warn(`[Auth] ${label} notice was not delivered`, { provider: delivery.provider });
   } catch {
-    console.warn("[Auth] Password-changed notice failed");
+    console.warn(`[Auth] ${label} notice failed`);
   }
 }

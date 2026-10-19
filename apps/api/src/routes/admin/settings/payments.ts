@@ -10,6 +10,7 @@ import {
     BUILT_IN_PAYMENT_PROVIDERS,
     getPaymentGatewaySettingsSnapshot,
     getActivePaymentMethods,
+    getPaymentMethodPreferences,
     getStripeSettings,
     getStripeCheckoutReadiness,
     COD_PAYMENT_METHOD,
@@ -20,7 +21,8 @@ import {
     type GatewaySettings,
     type PaymentProviders,
 } from "@scalius/core/modules/payments";
-import { isQualifiedProviderId, parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { isQualifiedProviderId, parseQualifiedProviderId, qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { readPluginInstallations } from "@scalius/core/modules/plugins";
 import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import {
     checkoutDocument,
@@ -67,6 +69,29 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
             `Cannot disable ${providers.label(gatewayId)} because it would leave checkout without a compatible payment method. ${checkoutFlowIssues.join(" ")}`,
         );
     }
+}
+
+/**
+ * Whether a saved method still has an installed app behind it. An app's
+ * method stays saved while its app is installed (deactivated, or its feature
+ * off: checkout skips it and it comes back with the app). Once the app is
+ * removed, or no longer declares that provider (bKash moved from
+ * `scalius.bkash` into the Bangladesh pack), the id is an orphan: it is left
+ * out of what the dashboard reads and of the next save, so it never shows as
+ * on or blocks a save. The installations are read only when an app method is
+ * saved; an app whose manifest this release can't read keeps its methods.
+ */
+async function installedAppMethods(db: Database, ids: readonly string[]): Promise<(id: string) => boolean> {
+    if (!ids.some(isAppPaymentMethod)) return () => true;
+    const { installations, unreadable } = await readPluginInstallations(db);
+    const declared = new Set(installations.flatMap((installation) => installation.manifest.providers
+        .filter((provider) => provider.kind === "payment")
+        .map((provider) => qualifiedProviderId(installation.pluginId, provider.id))));
+    const unreadableApps = new Set(unreadable.map((installation) => installation.pluginId));
+    return (id) => {
+        const app = parseQualifiedProviderId(id);
+        return !app || declared.has(id) || unreadableApps.has(app.pluginId);
+    };
 }
 
 // ─────────────────────────────────────────
@@ -200,7 +225,11 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
     const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const providers = await requestPaymentProviders(c);
     const gatewaySnapshot = await getPaymentGatewaySettingsSnapshot(db, encKey, providers);
-    const rawConfig = gatewaySnapshot.preferences;
+    const installed = await installedAppMethods(db, gatewaySnapshot.preferences.enabledMethods);
+    const rawConfig = {
+        ...gatewaySnapshot.preferences,
+        enabledMethods: gatewaySnapshot.preferences.enabledMethods.filter(installed),
+    };
     const activeConfig = gatewaySnapshot.activePaymentMethods;
     const savedSettings = gatewaySnapshot.settings as unknown as Record<string, GatewaySettings | null | undefined>;
 
@@ -296,25 +325,41 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
 
-    if (!data.enabledMethods.includes(data.defaultMethod)) {
+    const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+    const [currencySettings, saved] = await Promise.all([getCurrencySettings(db), getPaymentMethodPreferences(db)]);
+    const savedMethods = new Set(saved.enabledMethods);
+    // A saved method whose app was removed is dropped (see `installedAppMethods`).
+    const installed = await installedAppMethods(db, data.enabledMethods.filter((method) => savedMethods.has(method)));
+    const enabledMethods = data.enabledMethods.filter((method) => !savedMethods.has(method) || installed(method));
+    if (!enabledMethods.includes(data.defaultMethod)) {
         throw new ValidationError("Default method must be one of the enabled methods");
     }
-
-    const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const currencySettings = await getCurrencySettings(db);
     // App gateways are read only when the merchant selects one.
-    const providers = await requestPaymentProviders(c, data.enabledMethods.find(isAppPaymentMethod) ?? COD_PAYMENT_METHOD);
-    for (const method of data.enabledMethods) {
-        if (method === COD_PAYMENT_METHOD) continue;
-        const gateway = providers.require(method);
-        const readiness = gateway.readiness(await gateway.loadSettings(db, encKey));
-        if (!readiness.usable) {
-            throw new ValidationError(readiness.blockedReason ?? `${gateway.label} is not ready for checkout.`);
+    const providers = await requestPaymentProviders(c, enabledMethods.find(isAppPaymentMethod) ?? COD_PAYMENT_METHOD);
+    const readyMethods: string[] = [];
+    for (const method of enabledMethods) {
+        if (method === COD_PAYMENT_METHOD) {
+            readyMethods.push(method);
+            continue;
         }
+        // Turning a method on, or making it the default, needs it ready. One
+        // already saved that can't take payments now (its app deactivated, its
+        // feature off) stays saved, is skipped by checkout until it is ready
+        // again, and never blocks another change.
+        const strict = !savedMethods.has(method) || method === data.defaultMethod;
+        const gateway = strict ? providers.require(method) : providers.get(method);
+        const readiness = gateway ? gateway.readiness(await gateway.loadSettings(db, encKey)) : null;
         const currencyIssue = providers.currencyIssue(method, currencySettings.currencyCode);
-        if (currencyIssue) throw new ValidationError(currencyIssue);
+        if (gateway && readiness?.usable && !currencyIssue) {
+            readyMethods.push(method);
+            continue;
+        }
+        if (!strict) continue;
+        throw new ValidationError(
+            (readiness?.usable ? currencyIssue : readiness?.blockedReason) ?? `${gateway?.label ?? method} is not ready for checkout.`,
+        );
     }
-    const usableMethods = providers.filterForCurrency(data.enabledMethods, currencySettings.currencyCode);
+    const usableMethods = readyMethods;
 
     const checkoutSettings = await checkoutDocument.read(db);
     const checkoutFlowIssues = getCheckoutFlowValidationIssues({
@@ -337,7 +382,7 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
     }
 
     const { revision } = await paymentMethodsDocument.write(db, {
-        enabledMethods: data.enabledMethods,
+        enabledMethods,
         defaultMethod: data.defaultMethod,
     }, {}, { expectedRevision: data.expectedRevision });
 

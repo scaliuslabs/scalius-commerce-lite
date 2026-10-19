@@ -50,8 +50,6 @@ export interface PaymentMethodRow {
   appName: string | null;
   /** The provider's mark (else its app's icon), shown as the method's mark. */
   appIcon: string | null;
-  /** False for a saved app method whose app is no longer installed. */
-  installed: boolean;
   canTestConnection: boolean;
   chargeCurrencies: ChargeCurrencies;
   status: GatewayStatus | undefined;
@@ -75,15 +73,16 @@ function appProviderStatus(provider: AppPaymentProvider): GatewayStatus {
 /**
  * Every method the merchant can see: the ones turned on in their checkout
  * order, then the rest (cash on delivery, the API's gateways in its order,
- * then app providers that can't be offered yet). A saved app method whose
- * app is gone stays listed, so it can be turned off.
+ * then app providers that can't be offered yet). A saved method whose app
+ * was removed is not a row: the API leaves it out of its read and drops it
+ * on the next save, so it never shows as on or blocks saving.
  */
 export function paymentMethodRows(input: {
   enabledMethods: readonly string[];
   gateways: readonly PaymentGatewayInfo[];
   gatewayStatus: Partial<Record<string, GatewayStatus>>;
   appProviders: readonly AppPaymentProvider[];
-  /** The installed providers were read; until then no saved app method is called removed. */
+  /** The installed providers were read; until then a saved app method is kept as a row. */
   appProvidersKnown: boolean;
 }): PaymentMethodRow[] {
   const gateways = new Map(input.gateways.map((gateway) => [gateway.id, gateway]));
@@ -95,50 +94,49 @@ export function paymentMethodRows(input: {
   ];
   const order = [...new Set([...input.enabledMethods, ...catalog])];
 
-  return order.map((id): PaymentMethodRow => {
+  return order.flatMap((id): PaymentMethodRow[] => {
     if (id === COD_METHOD) {
-      return {
+      return [{
         id,
         kind: "cod",
         name: id,
         pluginId: null,
         appName: null,
         appIcon: null,
-        installed: true,
         canTestConnection: false,
         chargeCurrencies: "any",
         status: input.gatewayStatus[id],
-      };
+      }];
     }
     const gateway = gateways.get(id);
     const provider = providers.get(id);
     const app = parseQualifiedProviderId(id);
     if (gateway && gateway.pluginId === null && !app) {
-      return {
+      return [{
         id,
         kind: "built_in",
         name: gateway.label,
         pluginId: null,
         appName: null,
         appIcon: null,
-        installed: true,
         canTestConnection: false,
         chargeCurrencies: gateway.chargeCurrencies,
         status: input.gatewayStatus[id],
-      };
+      }];
     }
-    return {
+    // Its app was removed (a read racing the removal): the next save drops it.
+    if (!gateway && !provider && input.appProvidersKnown) return [];
+    return [{
       id,
       kind: "app",
       name: provider?.name ?? gateway?.label ?? appPaymentMethodFallbackName(id) ?? id,
       pluginId: gateway?.pluginId ?? provider?.pluginId ?? app?.pluginId ?? null,
       appName: provider?.appName ?? null,
       appIcon: provider?.icon ?? provider?.appIcon ?? null,
-      installed: Boolean(gateway || provider) || !input.appProvidersKnown,
       canTestConnection: provider?.canTestConnection ?? false,
       chargeCurrencies: gateway?.chargeCurrencies ?? "any",
       // The checkout's own verdict (currency included) when the app is active.
       status: input.gatewayStatus[id] ?? (provider ? appProviderStatus(provider) : undefined),
-    };
+    }];
   });
 }

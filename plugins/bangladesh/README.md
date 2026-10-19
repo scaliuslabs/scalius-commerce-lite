@@ -38,7 +38,7 @@ An off feature's provider is not offered anywhere; a saved choice of it reads "T
 
 ## Settings
 
-Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPTION_KEY` and never shown again. Each field belongs to one provider (`group: <provider id>`), so the dashboard shows it only in that provider's setup sheet, where the provider is set up (Notifications, Shipping → Couriers, Apps and integrations); the app's page lists each provider as a collapsed group with its status. Each provider names the settings it needs (`providers.<kind>[].settings`), so each one is ready or not on its own. A missing key of one gateway never stops another.
+Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPTION_KEY` and never shown again. Each field belongs to one provider (`group: <provider id>`), so the dashboard shows it only on that service's page in the pack (`/admin/apps/scalius.bangladesh/<feature>`, where the Set up links on Payments, Shipping, Notifications and Apps and integrations land), under the feature's switch; the pack's Overview lists the services that are on with their status. Each provider names the settings it needs (`providers.<kind>[].settings`), so each one is ready or not on its own. A missing key of one gateway never stops another.
 
 | Provider | Settings it needs |
 |----------|-------------------|

@@ -87,6 +87,7 @@ import { Route as AdminSettingsWebhooksRouteImport } from './routes/admin/settin
 import { Route as AdminTranslationsIndexRouteImport } from './routes/admin/translations/index'
 import { Route as AdminAnalyticsReportsIndexRouteImport } from './routes/admin/analytics/reports/index'
 import { Route as AdminAnalyticsReportsReportIdRouteImport } from './routes/admin/analytics/reports/$reportId'
+import { Route as AdminAppsPluginIdSectionRouteImport } from './routes/admin/apps/$pluginId_.$section'
 import { Route as AdminArticlesArticleIdEditRouteImport } from './routes/admin/articles/$articleId/edit'
 import { Route as AdminBrandsBrandIdEditRouteImport } from './routes/admin/brands/$brandId/edit'
 import { Route as AdminCategoriesCategoryIdEditRouteImport } from './routes/admin/categories/$categoryId/edit'
@@ -530,6 +531,12 @@ const AdminAnalyticsReportsReportIdRoute =
     path: '/analytics/reports/$reportId',
     getParentRoute: () => AdminRoute,
   } as any)
+const AdminAppsPluginIdSectionRoute =
+  AdminAppsPluginIdSectionRouteImport.update({
+    id: '/apps/$pluginId_/$section',
+    path: '/apps/$pluginId/$section',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminArticlesArticleIdEditRoute =
   AdminArticlesArticleIdEditRouteImport.update({
     id: '/articles/$articleId/edit',
@@ -843,6 +850,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/translations/': typeof AdminTranslationsIndexRoute
   '/admin/analytics/reports/$reportId': typeof AdminAnalyticsReportsReportIdRoute
+  '/admin/apps/$pluginId/$section': typeof AdminAppsPluginIdSectionRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/brands/$brandId/edit': typeof AdminBrandsBrandIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -960,6 +968,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsIndexRoute
   '/admin/translations': typeof AdminTranslationsIndexRoute
   '/admin/analytics/reports/$reportId': typeof AdminAnalyticsReportsReportIdRoute
+  '/admin/apps/$pluginId/$section': typeof AdminAppsPluginIdSectionRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/brands/$brandId/edit': typeof AdminBrandsBrandIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -1081,6 +1090,7 @@ export interface FileRoutesById {
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/translations/': typeof AdminTranslationsIndexRoute
   '/admin/analytics/reports/$reportId': typeof AdminAnalyticsReportsReportIdRoute
+  '/admin/apps/$pluginId_/$section': typeof AdminAppsPluginIdSectionRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/brands/$brandId/edit': typeof AdminBrandsBrandIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -1203,6 +1213,7 @@ export interface FileRouteTypes {
     | '/admin/settings/'
     | '/admin/translations/'
     | '/admin/analytics/reports/$reportId'
+    | '/admin/apps/$pluginId/$section'
     | '/admin/articles/$articleId/edit'
     | '/admin/brands/$brandId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -1320,6 +1331,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/translations'
     | '/admin/analytics/reports/$reportId'
+    | '/admin/apps/$pluginId/$section'
     | '/admin/articles/$articleId/edit'
     | '/admin/brands/$brandId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -1440,6 +1452,7 @@ export interface FileRouteTypes {
     | '/admin/settings/'
     | '/admin/translations/'
     | '/admin/analytics/reports/$reportId'
+    | '/admin/apps/$pluginId_/$section'
     | '/admin/articles/$articleId/edit'
     | '/admin/brands/$brandId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -2041,6 +2054,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAnalyticsReportsReportIdRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/apps/$pluginId_/$section': {
+      id: '/admin/apps/$pluginId_/$section'
+      path: '/apps/$pluginId/$section'
+      fullPath: '/admin/apps/$pluginId/$section'
+      preLoaderRoute: typeof AdminAppsPluginIdSectionRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/articles/$articleId/edit': {
       id: '/admin/articles/$articleId/edit'
       path: '/articles/$articleId/edit'
@@ -2464,6 +2484,7 @@ interface AdminRouteChildren {
   AdminReviewsIndexRoute: typeof AdminReviewsIndexRoute
   AdminTranslationsIndexRoute: typeof AdminTranslationsIndexRoute
   AdminAnalyticsReportsReportIdRoute: typeof AdminAnalyticsReportsReportIdRoute
+  AdminAppsPluginIdSectionRoute: typeof AdminAppsPluginIdSectionRoute
   AdminArticlesArticleIdEditRoute: typeof AdminArticlesArticleIdEditRoute
   AdminBrandsBrandIdEditRoute: typeof AdminBrandsBrandIdEditRoute
   AdminCategoriesCategoryIdEditRoute: typeof AdminCategoriesCategoryIdEditRoute
@@ -2542,6 +2563,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminReviewsIndexRoute: AdminReviewsIndexRoute,
   AdminTranslationsIndexRoute: AdminTranslationsIndexRoute,
   AdminAnalyticsReportsReportIdRoute: AdminAnalyticsReportsReportIdRoute,
+  AdminAppsPluginIdSectionRoute: AdminAppsPluginIdSectionRoute,
   AdminArticlesArticleIdEditRoute: AdminArticlesArticleIdEditRoute,
   AdminBrandsBrandIdEditRoute: AdminBrandsBrandIdEditRoute,
   AdminCategoriesCategoryIdEditRoute: AdminCategoriesCategoryIdEditRoute,

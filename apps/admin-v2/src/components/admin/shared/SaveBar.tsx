@@ -61,6 +61,13 @@ export class SaveConflict extends SaveNotCompleted {
   }
 }
 
+/** A reason an entry can't be saved yet, and the control that fixes it. */
+export interface SaveProblem {
+  message: string;
+  /** The DOM id of the control to fix it in. */
+  target?: string;
+}
+
 /** One editable card (or dialog form) registered with a save scope. */
 export interface SaveBarEntry {
   dirty: boolean;
@@ -69,6 +76,13 @@ export interface SaveBarEntry {
   saving?: boolean;
   /** Dirty but not savable yet (inline validation, fail-closed lock, role). */
   invalid?: boolean;
+  /**
+   * Why it is invalid when no field on screen is marked for it (a choice
+   * that no longer fits, a list that needs one item). Pressing Save lists
+   * each one in the banner; one with a `target` (a control's DOM id) is a
+   * link that moves focus there. Any problem makes the entry invalid.
+   */
+  problems?: readonly SaveProblem[];
   /** Names the card in the "couldn't save" banner, e.g. "Business details". */
   label?: string;
   /**
@@ -109,6 +123,10 @@ export interface SaveScopeState {
   failure: SaveFailureKind | null;
   /** Save was pressed while fields were invalid; their messages are showing. */
   revealed: boolean;
+  /** The invalid entries' `problems`, one line each, prefixed with the card's label. */
+  problems: Array<{ line: string; target?: string }>;
+  /** The labels of invalid entries that named no problem (their fields are marked, or should be). */
+  invalidCards: Array<string | undefined>;
   /**
    * Saves every dirty entry; false when any failed (their edits are kept).
    * `all` also saves untouched entries: Save on a new record before any edit,
@@ -178,6 +196,14 @@ function isConnectionFailure(error: unknown): boolean {
 function failureKind(failure: SaveFailure): SaveFailureKind | null {
   if (failure.conflicts.length > 0) return "conflict";
   return failure.errors.length > 0 || Object.keys(failure.fieldErrors).length > 0 ? failure.kind : null;
+}
+
+function isInvalid(entry: SaveBarEntry): boolean {
+  return Boolean(entry.invalid) || Boolean(entry.problems?.length);
+}
+
+function problemKey(entry: SaveBarEntry): string {
+  return (entry.problems ?? []).map((problem) => `${problem.target ?? ""}\u0000${problem.message}`).join("\u0001");
 }
 
 /** The on-screen control (and its label) that shows an API body path. */
@@ -267,7 +293,8 @@ export function SaveScope({
         previous.dirty !== entry.dirty ||
         (previous.navigationDirty ?? previous.dirty) !== (entry.navigationDirty ?? entry.dirty) ||
         Boolean(previous.saving) !== Boolean(entry.saving) ||
-        Boolean(previous.invalid) !== Boolean(entry.invalid)
+        Boolean(previous.invalid) !== Boolean(entry.invalid) ||
+        problemKey(previous) !== problemKey(entry)
       ) {
         rerender();
       }
@@ -278,19 +305,25 @@ export function SaveScope({
   }), []);
 
   const list = [...entries.current.values()];
+  const blocked = list.filter((entry) => entry.dirty && isInvalid(entry));
   const state: SaveScopeState = {
     dirty: list.some((entry) => entry.dirty),
     navigationDirty: list.some((entry) => entry.navigationDirty ?? entry.dirty),
     busy: saving || list.some((entry) => entry.saving),
-    invalid: list.some((entry) => entry.dirty && entry.invalid),
+    invalid: blocked.length > 0,
     errors: failure.errors,
     fieldErrors: failure.fieldErrors,
     failed: failure.errors.length > 0 || Object.keys(failure.fieldErrors).length > 0,
     failure: failureKind(failure),
     revealed: failure.reveal > 0,
+    problems: blocked.flatMap((entry) => (entry.problems ?? []).map((problem) => ({
+      line: entry.label ? `${entry.label}: ${problem.message}` : problem.message,
+      ...(problem.target ? { target: problem.target } : {}),
+    }))),
+    invalidCards: blocked.filter((entry) => !entry.problems?.length).map((entry) => entry.label),
     async saveAll(options) {
       const all = options?.all === true;
-      if (list.some((entry) => (all || entry.dirty) && entry.invalid)) {
+      if (list.some((entry) => (all || entry.dirty) && isInvalid(entry))) {
         // Shopify: Save stays pressable; it shows what to fix instead of saving.
         setFailure((previous) => ({ ...previous, reveal: previous.reveal + 1 }));
         return false;
@@ -369,6 +402,33 @@ export function useServerFieldError(id: string): { error: string | undefined; cl
   return { error: fieldErrors[id], clear: () => clearField(id), revealed: reveal > 0 };
 }
 
+/** A problem Save revealed: a marked field, or what a card said is wrong. */
+interface RevealedProblem {
+  line: string;
+  element?: HTMLElement;
+  /** From a card's `problems` (else a marked field, or the card's name). */
+  problem?: boolean;
+}
+
+/** Brings a control into view below the top bar and puts the cursor there. */
+function moveTo(element: HTMLElement | null) {
+  if (!element) return;
+  element.scrollIntoView?.({ block: "center" });
+  element.focus({ preventScroll: true });
+}
+
+/** "Default method: Choose a method checkout offers.": the field's label and its message. */
+function describeControl(element: HTMLElement, t: (key: "unnamedField") => string): string {
+  const field = element.closest('[data-slot="field"]');
+  const label = (element.id ? document.querySelector(`label[for="${CSS.escape(element.id)}"]`)?.textContent : null)
+    ?? element.getAttribute("aria-label")
+    ?? field?.querySelector('[data-slot="field-label"]')?.textContent
+    ?? null;
+  const message = field?.querySelector('[data-slot="field-error"]')?.textContent?.trim();
+  const name = label?.trim() || t("unnamedField");
+  return message ? `${name}: ${message}` : name;
+}
+
 /** A banner line; one that names a control is a link that moves focus to it (Shopify's "fix 2 problems"). */
 function ProblemLine({ line, focus }: { line: string; focus: Record<string, () => void> }) {
   const move = focus[line];
@@ -403,11 +463,50 @@ export function SaveErrorBanner() {
   // Marked fields carry their own message. A page adds one count of them
   // (Polaris: "To save, fix 2 problems"); a dialog's fields are all in view.
   const marked = inDialog ? 0 : Object.keys(fieldErrors).length;
+  // Save pressed while something is invalid: name every problem (each marked
+  // field, then what the cards said), never a bare "fix the highlighted
+  // fields", and move to the first one.
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const serverMarked = useRef(fieldErrors);
+  serverMarked.current = fieldErrors;
+  const [revealed, setRevealed] = useState<RevealedProblem[]>([]);
   useEffect(() => {
-    if (reveal === 0) return;
+    if (reveal === 0) {
+      setRevealed([]);
+      return;
+    }
+    const current = scopeRef.current;
     const container = anchor.current?.closest("[role=dialog]") ?? document;
-    container.querySelector<HTMLElement>('[aria-invalid="true"]:not([disabled])')?.focus();
-  }, [reveal]);
+    // A field the last save marked is already counted.
+    const fields = [...container.querySelectorAll<HTMLElement>('[aria-invalid="true"]:not([disabled])')]
+      .filter((element) => !(element.id && element.id in serverMarked.current));
+    const lines: RevealedProblem[] = fields.map((element) => ({ line: describeControl(element, t), element }));
+    for (const problem of current?.problems ?? []) {
+      const target = problem.target ? document.getElementById(problem.target) : null;
+      // Its control is marked and already listed with its own message.
+      if (target && fields.includes(target)) continue;
+      lines.push({ line: problem.line, problem: true, ...(target ? { element: target } : {}) });
+    }
+    if (lines.length === 0) {
+      for (const card of current?.invalidCards ?? []) lines.push({ line: card ? t("checkCard", { card }) : t("checkPage") });
+    }
+    const unique = lines.filter((line, index) => lines.findIndex((other) => other.line === line.line) === index);
+    setRevealed(unique);
+    const first = unique.find((line) => line.element)?.element;
+    if (first) moveTo(first);
+    else if (unique.length > 0) requestAnimationFrame(() => moveTo(ref.current));
+  }, [reveal, t]);
+  // A line goes once it's fixed: its field is no longer marked, its problem gone.
+  const shownRevealed = !scope?.invalid ? [] : revealed.filter((line) => line.problem
+    ? scope.problems.some((problem) => problem.line === line.line)
+    : line.element
+      ? line.element.isConnected && line.element.getAttribute("aria-invalid") === "true"
+      : true);
+  const revealFocus = Object.fromEntries(shownRevealed.flatMap((line) => {
+    const element = line.element;
+    return element ? [[line.line, () => moveTo(element)] as const] : [];
+  }));
   // Once per failed save (not when a dialog reopens): the first marked field,
   // else the banner, takes focus.
   const seenAttempt = useRef(attempt);
@@ -425,7 +524,10 @@ export function SaveErrorBanner() {
       banner.scrollIntoView({ block: "nearest" });
     }
   }, [attempt, errors, fieldErrors]);
-  const count = errors.length + marked;
+  const lines = [...errors, ...shownRevealed.map((line) => line.line).filter((line) => !errors.includes(line))];
+  const lineFocus = { ...revealFocus, ...focus };
+  const count = lines.length + marked;
+  const validation = kind === "validation" || (kind === null && shownRevealed.length > 0);
   return (
     <>
       <span ref={anchor} hidden />
@@ -433,17 +535,17 @@ export function SaveErrorBanner() {
         <Alert ref={ref} tabIndex={-1} variant="destructive" className="scroll-mt-4">
           <CircleAlert aria-hidden="true" />
           <AlertTitle>
-            {kind !== "validation" || (count === 1 && errors.length)
+            {!validation || (count === 1 && errors.length)
               ? t("notSavedOne")
               : count === 1 ? t("fixOne") : t("notSavedMany", { count })}
           </AlertTitle>
-          {errors.length === 0 ? null : (
+          {lines.length === 0 ? null : (
             <AlertDescription>
-              {errors.length === 1 ? (
-                <p><ProblemLine line={errors[0]!} focus={focus} /></p>
+              {lines.length === 1 ? (
+                <p><ProblemLine line={lines[0]!} focus={lineFocus} /></p>
               ) : (
                 <ul className="list-disc space-y-1 ps-4">
-                  {errors.map((error) => <li key={error}><ProblemLine line={error} focus={focus} /></li>)}
+                  {lines.map((line) => <li key={line}><ProblemLine line={line} focus={lineFocus} /></li>)}
                 </ul>
               )}
               {conflicts.length === 0 ? null : (
@@ -537,7 +639,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
     failure === "conflict" ? t("conflictBar")
       : failure === "connection" ? t(online ? "retryBar" : "offlineBar")
         : failure === "validation" ? (Object.keys(state.fieldErrors).length ? t("fixErrors") : t("notSavedBar"))
-          : invalid && revealed ? t("fixErrors") : unsavedLabel ?? t("unsavedChanges");
+          : invalid && revealed ? t("fixProblems") : unsavedLabel ?? t("unsavedChanges");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // A new record shows its bar before the first edit (P5), as Shopify's "Unsaved product" does.
   const shown = dirty || unsavedLabel !== undefined;

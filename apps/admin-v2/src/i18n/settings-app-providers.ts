@@ -2,7 +2,7 @@ import { defineMessages } from "./index";
 
 /**
  * An installed app's provider offered beside the built-in ones (SMS, email,
- * courier, payment, fraud check, tax), and its setup sheet.
+ * courier, payment, fraud check, tax), and the link to its setup in its app.
  */
 export const appProvidersMessages = defineMessages({
   en: {
@@ -16,19 +16,13 @@ export const appProvidersMessages = defineMessages({
     notReady: "Not ready",
     testConnection: "Test connection",
     testFailed: "Couldn't test the connection. Try again.",
-    openApp: "Open {app}",
     setUp: "Set up {name}",
     editSettings: "Edit {name} settings",
     configured: "Configured",
     notSet: "Not set",
-    sheetDescription: "Saved secret values are never shown again.",
-    sheetLoading: "Loading {name}",
-    sheetFailed: "{name}'s settings didn't load.",
-    sheetMissing: "This provider is no longer installed.",
     retry: "Try again",
     noFields: "{name} has nothing to set up.",
     readOnly: "You can view these settings. Changing them needs permission to manage apps.",
-    activateApp: "Activate {app} in Apps to use {name}.",
     close: "Close",
     cancel: "Cancel",
     save: "Save",
@@ -45,19 +39,13 @@ export const appProvidersMessages = defineMessages({
     notReady: "প্রস্তুত নয়",
     testConnection: "কানেকশন পরীক্ষা করুন",
     testFailed: "কানেকশন পরীক্ষা করা যায়নি। আবার চেষ্টা করুন।",
-    openApp: "{app} খুলুন",
     setUp: "{name} সেট আপ করুন",
     editSettings: "{name}-এর সেটিংস বদলান",
     configured: "সেট করা আছে",
     notSet: "সেট করা নেই",
-    sheetDescription: "সেভ করা সিক্রেট আর কখনো দেখানো হয় না।",
-    sheetLoading: "{name} লোড হচ্ছে",
-    sheetFailed: "{name}-এর সেটিংস লোড হয়নি।",
-    sheetMissing: "এই প্রোভাইডার আর ইনস্টল করা নেই।",
     retry: "আবার চেষ্টা করুন",
     noFields: "{name}-এ সেট করার কিছু নেই।",
     readOnly: "আপনি এই সেটিংস দেখতে পারবেন। বদলাতে অ্যাপ পরিচালনার অনুমতি লাগবে।",
-    activateApp: "{name} ব্যবহার করতে অ্যাপে গিয়ে {app} চালু করুন।",
     close: "বন্ধ করুন",
     cancel: "বাতিল",
     save: "সেভ করুন",

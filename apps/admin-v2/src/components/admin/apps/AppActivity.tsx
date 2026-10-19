@@ -229,7 +229,12 @@ function Log({ appId }: { appId: string }) {
 }
 
 /** One card, two tabs; nothing until the app has sent or logged something. */
-export function AppActivity({ appId, canManage }: { appId: string; canManage: boolean }) {
+export function AppActivity({ appId, canManage, always = false }: {
+  appId: string;
+  canManage: boolean;
+  /** Its own section: the card stays, saying there is nothing yet. */
+  always?: boolean;
+}) {
   const t = useMessages(installedAppsMessages);
   // The same first pages the tabs read: an app with no events and no log has no card.
   const deliveries = useInfiniteQuery(appDeliveriesQueryOptions(appId, null));
@@ -237,7 +242,18 @@ export function AppActivity({ appId, canManage }: { appId: string; canManage: bo
   const failed = deliveries.isError || log.isError;
   const sent = deliveries.data?.pages[0]?.deliveries.length ?? 0;
   const logged = log.data?.pages[0]?.lines.length ?? 0;
-  if (!failed && sent === 0 && logged === 0) return null;
+  const loaded = deliveries.isSuccess && log.isSuccess;
+  if (!failed && sent === 0 && logged === 0) {
+    if (!always) return null;
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("activityTitle")}</CardTitle>
+        </CardHeader>
+        {loaded ? <p className="px-4 pb-4 text-body text-muted-foreground">{t("activityEmpty")}</p> : <PanelState isError={false} retrying={false} onRetry={() => {}} empty={null} />}
+      </Card>
+    );
+  }
   return (
     <Card className="overflow-clip">
       <Tabs defaultValue="deliveries">

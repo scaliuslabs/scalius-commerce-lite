@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { BUILT_IN_PAYMENT_PROVIDERS, getStripeSettings, type PaymentProviders } from "@scalius/core/modules/payments";
 import { createFakeGateway } from "@scalius/core/testing";
+import { installPlugin } from "@scalius/core/modules/plugins";
+import { WALLET_FIXTURE_ID, WALLET_FIXTURE_MANIFEST } from "../../../plugins/testing/provider-fixture";
 import {
     checkoutDocument,
     currencyDocument,
@@ -232,6 +234,41 @@ describe("payment settings", () => {
             await expectValidationError(await request("/payment-methods", body), message);
             expect(storedRows(sqlite, "payment_methods")).toEqual({});
 
+        });
+    });
+
+    describe("saved methods whose app is gone or off", () => {
+        // bKash's id before it moved into the Bangladesh pack: no installed app declares it.
+        const ORPHAN = "scalius.bkash:bkash";
+        const WALLET = `${WALLET_FIXTURE_ID}:wallet`;
+
+        it("leaves a removed app's method out of the read, so it never shows as on", async () => {
+            const { request } = await createTestApp({ payment_methods: { enabledMethods: [ORPHAN, "cod"], defaultMethod: ORPHAN } });
+
+            await expect((await request("/payment-methods")).json()).resolves.toMatchObject({
+                data: { enabledMethods: ["cod"], defaultMethod: "cod", activeMethods: ["cod"] },
+            });
+        });
+
+        it("drops a removed app's saved method on the next save instead of refusing it", async () => {
+            const { request, sqlite } = await createTestApp({ payment_methods: { enabledMethods: [ORPHAN, "cod"], defaultMethod: "cod" } });
+
+            const response = await request("/payment-methods", { enabledMethods: [ORPHAN, "cod"], defaultMethod: "cod" });
+
+            expect(response.status, await response.clone().text()).toBe(200);
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod"], defaultMethod: "cod" });
+        });
+
+        it("keeps an installed but inactive app's saved method without blocking the save, and refuses it as the default", async () => {
+            const { request, db, sqlite } = await createTestApp({ payment_methods: { enabledMethods: [WALLET, "cod"], defaultMethod: "cod" } });
+            await installPlugin(db, { manifest: WALLET_FIXTURE_MANIFEST, source: "upload", bundleSha256: "a".repeat(64) });
+
+            await expect((await request("/payment-methods")).json()).resolves.toMatchObject({
+                data: { enabledMethods: [WALLET, "cod"], activeMethods: ["cod"] },
+            });
+            expect((await request("/payment-methods", { enabledMethods: ["cod", WALLET], defaultMethod: "cod" })).status).toBe(200);
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod", WALLET], defaultMethod: "cod" });
+            await expectValidationError(await request("/payment-methods", { enabledMethods: ["cod", WALLET], defaultMethod: WALLET }));
         });
     });
 

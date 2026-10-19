@@ -3,7 +3,6 @@ import {
   PaymentMethodsCard,
   PaymentOptionsCard,
 } from "~/components/admin/settings/PaymentsSettings";
-import { AppProviderSheetHost } from "~/components/admin/apps/AppProviderSheetHost";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { EmiPlansCard } from "~/components/admin/settings/EmiPlansCard";
 import { emiSettingsQuery } from "~/lib/api-query-options/emi";
@@ -39,12 +38,10 @@ export const Route = createFileRoute("/admin/settings/payments")({
 function PaymentsPage() {
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   return (
-    <AppProviderSheetHost>
-      <SettingsPage page="payments" readOnly={!canEdit}>
-        <PaymentMethodsCard />
-        <PaymentOptionsCard />
-        <EmiPlansCard />
-      </SettingsPage>
-    </AppProviderSheetHost>
+    <SettingsPage page="payments" readOnly={!canEdit}>
+      <PaymentMethodsCard />
+      <PaymentOptionsCard />
+      <EmiPlansCard />
+    </SettingsPage>
   );
 }

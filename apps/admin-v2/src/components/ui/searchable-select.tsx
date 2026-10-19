@@ -454,7 +454,12 @@ function ComboboxView({
           aria-busy={state === "loading" || searching || undefined}
           data-slot="searchable-select-list"
           onScroll={onScroll}
-          className="max-h-60 min-h-0 overflow-y-auto overscroll-contain p-1.5"
+          // While the first page loads the list keeps its full height. The
+          // popover picks its side from its size when it opens: sized to a
+          // one-line "Loading…" it stayed below a field near the bottom of a
+          // dialog, then capped the arriving rows to the little room there
+          // (an unscrollable sliver on phones) instead of opening above.
+          className={cn("max-h-60 min-h-0 overflow-y-auto overscroll-contain p-1.5", state === "loading" && "h-60")}
         >
           {state === "loading" ? (
             <p role="status" className="flex items-center justify-center gap-2 px-3 py-5 text-body text-muted-foreground">

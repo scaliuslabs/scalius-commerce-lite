@@ -29,7 +29,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
-import { SaveScope, type SaveScopeState } from "../shared/SaveBar";
+import { SaveErrorBanner, SaveScope, type SaveScopeState } from "../shared/SaveBar";
 import { PaymentMethodsCard } from "./PaymentsSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -171,22 +171,23 @@ describe("app payment providers in payment settings", () => {
     expect(bkash.textContent).toContain("Provided by bKash Payments");
     expect(bkash.textContent).toContain("Off · Test mode");
     expect(toggle(BKASH).disabled).toBe(false);
-    // The chip links to the app; outside a settings page's sheet host, Manage opens the app too.
+    // The chip links to the app; Manage opens the method's own page in it.
     const links = [...bkash.querySelectorAll("a")];
-    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/admin/apps/scalius.bkash", "/admin/apps/scalius.bkash"]);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/admin/apps/scalius.bkash", "/admin/apps/scalius.bangladesh/bkash"]);
     expect(links.map((link) => link.textContent)).toEqual(["Provided by bKash Payments", "Manage"]);
     // The app's icon is the method's mark; an app without one keeps the neutral wallet.
     expect(bkash.querySelector("img")?.getAttribute("src")).toBe("/api/v1/admin/apps/scalius.bkash/assets/icon?v=63a5ccd16b4c0000");
     expect(row(NAGAD).querySelector("img")).toBeNull();
   });
 
-  it("fails an app provider closed with the server's reason, and links to the app to fix it", async () => {
+  it("fails an app provider closed with the server's reason, and links to its own page to fix it", async () => {
     await renderCard();
 
     const nagad = row(NAGAD);
     expect(nagad.textContent).toContain("Activate Nagad in Apps to use it.");
     expect(toggle(NAGAD).disabled).toBe(true);
-    expect([...nagad.querySelectorAll("a")].map((link) => link.textContent)).toContain("Open app");
+    const setUp = [...nagad.querySelectorAll("a")].find((link) => link.textContent === "Set up");
+    expect(setUp?.getAttribute("href")).toBe("/admin/apps/scalius.bangladesh/nagad");
     // Nothing to test while the app can't run.
     expect([...nagad.querySelectorAll("button")].some((button) => button.textContent === "Test connection")).toBe(false);
   });
@@ -218,17 +219,49 @@ describe("app payment providers in payment settings", () => {
     expect(sdk.postApiV1AdminSettingsProvidersByIdTest).toHaveBeenCalledWith({ path: { id: BKASH } });
   });
 
-  it("refuses to save while a removed app's method is still on", async () => {
+  it("never shows a removed app's saved method as on, and it never blocks saving", async () => {
     sdk.getApiV1AdminSettingsPaymentMethods.mockImplementation(() => envelope({ ...methods(["cod", "gone.app:wallet"]) }));
     await renderCard();
 
-    expect(row("gone.app:wallet").textContent).toContain("Its app was removed. Turn it off to save your payment methods.");
+    expect(container.querySelector('[data-method="gone.app:wallet"]')).toBeNull();
     await act(async () => toggle(BKASH).click());
     await vi.waitFor(() => expect(page?.dirty).toBe(true));
-    expect(page?.invalid).toBe(true);
+    expect(page?.invalid).toBe(false);
+    await act(async () => { await page!.saveAll(); });
+    // The API drops it from the saved methods.
+    expect(sdk.postApiV1AdminSettingsPaymentMethods).toHaveBeenCalledOnce();
+  });
 
-    expect(toggle("gone.app:wallet").disabled).toBe(false);
-    await act(async () => toggle("gone.app:wallet").click());
-    await vi.waitFor(() => expect(page?.invalid).toBe(false));
+  it("names the default that no longer fits and marks its field when Save is pressed", async () => {
+    // The saved default is Nagad, whose app is inactive: checkout can't select it first.
+    sdk.getApiV1AdminSettingsPaymentMethods.mockImplementation(() => envelope({ ...methods(["cod", NAGAD]), defaultMethod: NAGAD }));
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <PermissionProvider isSuperAdmin>
+            <SaveScope render={(state) => { page = state; return null; }}>
+              <SaveErrorBanner />
+              <PaymentMethodsCard />
+            </SaveScope>
+          </PermissionProvider>
+        </QueryClientProvider>,
+      );
+    });
+    await vi.waitFor(() => expect(container.querySelector(`[data-method="${NAGAD}"]`)).not.toBeNull());
+    // Any edit that keeps the default: reorder the methods.
+    await act(async () => row("cod").querySelector<HTMLButtonElement>('button[aria-label^="Move"]:not([disabled])')!.click());
+    expect(page?.dirty).toBe(true);
+    expect(page?.invalid).toBe(true);
+    expect(page?.problems).toEqual([{ line: "Payment methods: Choose which method is selected first: the current one isn't offered at checkout.", target: "default-payment-method" }]);
+
+    await act(async () => { await page!.saveAll(); });
+
+    expect(sdk.postApiV1AdminSettingsPaymentMethods).not.toHaveBeenCalled();
+    const select = document.getElementById("default-payment-method")!;
+    expect(select.getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(select);
+    const banner = container.querySelector("[role=alert]")!;
+    expect(banner.textContent).toContain("To save, fix 1 problem");
+    expect(banner.textContent).toContain("Selected first at checkout: Choose which method is selected first");
   });
 });

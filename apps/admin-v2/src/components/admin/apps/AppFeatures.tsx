@@ -57,7 +57,7 @@ function isFunctionPoint(point: string): point is (typeof APP_FUNCTION_POINTS)[n
 }
 
 /** One line of what a feature needs beyond the app, in plain words ("Connects to 2 websites"). */
-function useAccessLine(feature: AppFeature): string {
+export function useAccessLine(feature: AppFeature): string {
   const t = useMessages(appFeaturesMessages);
   const scopeText = useMessages(appScopeMessages);
   const { request } = feature;
@@ -121,7 +121,7 @@ interface FeatureDialogProps {
 }
 
 /** A Super Admin's consent to one feature: what it does, what it may then do, and Turn on. */
-function EnableFeatureDialog({ app, feature, open, onOpenChange, onEnabled }: FeatureDialogProps & { onEnabled: () => void }) {
+export function EnableFeatureDialog({ app, feature, open, onOpenChange, onEnabled }: FeatureDialogProps & { onEnabled: () => void }) {
   const t = useMessages(appFeaturesMessages);
   const result = useAppMutationResult(app);
   const enable = useMutation({
@@ -162,7 +162,7 @@ function EnableFeatureDialog({ app, feature, open, onOpenChange, onEnabled }: Fe
 }
 
 /** Turning a feature off, with what stops for the store. */
-function DisableFeatureDialog({ app, feature, open, onOpenChange }: FeatureDialogProps) {
+export function DisableFeatureDialog({ app, feature, open, onOpenChange }: FeatureDialogProps) {
   const t = useMessages(appFeaturesMessages);
   const result = useAppMutationResult(app);
   const group = featureGroup(feature);
@@ -198,19 +198,24 @@ function DisableFeatureDialog({ app, feature, open, onOpenChange }: FeatureDialo
   );
 }
 
-function HealthBadge({ health }: { health: ServiceHealth }) {
+export function HealthBadge({ health }: { health: ServiceHealth }) {
   const t = useMessages(appFeaturesMessages);
   if (!health) return null;
   return <Badge variant={HEALTH_VARIANT[health.status]}>{t(`status_${health.status}`)}</Badge>;
 }
 
-/** What a running row shows under it: its settings, where it is chosen, its pages and its last run. */
-function RunningDetail({ app, item, form, canManage, health }: {
+/**
+ * What a running service shows: its settings, where it is chosen, its pages
+ * and its last run. Under its row in a services card (`inRow`, a quiet
+ * inset), or as the body of its own page.
+ */
+export function RunningDetail({ app, item, form, canManage, health, inRow = true }: {
   app: AppDetail;
   item: ServiceItem;
   form: AppSettingsDraftApi;
   canManage: boolean;
   health: ServiceHealth;
+  inRow?: boolean;
 }) {
   const t = useMessages(appFeaturesMessages);
   const settingsPage = useMessages(settingsNavMessages);
@@ -229,11 +234,10 @@ function RunningDetail({ app, item, form, canManage, health }: {
       <Link key={page.id} to={appPagePath(app.id, page.id)} className="text-link hover:underline">{t("openPage", { title: page.title })}</Link>
     )) : []),
   ];
-  return (
-    <Inset className="mt-3 sm:ms-11">
+  const body = (
       <div className="flex flex-col gap-3">
         {fields.length > 0 ? (
-          <FieldGroup inset>
+          <FieldGroup inset={inRow}>
             {fields.map((field) => <AppSettingControl key={field.key} app={app} field={field} form={form} canManage={canManage} />)}
           </FieldGroup>
         ) : links.length === 0 ? <p className="text-body text-muted-foreground">{t("noSettings")}</p> : null}
@@ -246,8 +250,8 @@ function RunningDetail({ app, item, form, canManage, health }: {
           <p className="text-body text-muted-foreground">{t("lastRan")} <ListDate value={lastRun} /></p>
         ) : null}
       </div>
-    </Inset>
   );
+  return inRow ? <Inset className="mt-3 sm:ms-11">{body}</Inset> : body;
 }
 
 function ServiceRow({ app, item, form, canManage, canTurnOn, focus, onToggle }: {

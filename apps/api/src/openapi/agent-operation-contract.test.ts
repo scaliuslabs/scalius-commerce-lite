@@ -299,6 +299,7 @@ describe("agent operation contract", () => {
     });
     for (const operationId of [
       "dashboard.account.password_change",
+      "dashboard.account.two_factor.disable",
       "dashboard.account.two_factor.method_challenge",
       "dashboard.account.two_factor.method_update",
       "dashboard.account.two_factor.verify",

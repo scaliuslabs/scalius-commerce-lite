@@ -203,6 +203,7 @@ export const installedAppsMessages = defineMessages({
     job_never: "Not run yet",
 
     activityTitle: "Activity",
+    activityEmpty: "Nothing yet. The store updates sent to this app and its log appear here.",
     tab_deliveries: "Event deliveries",
     tab_log: "Log",
     activityFailed: "This didn't load.",
@@ -470,6 +471,7 @@ export const installedAppsMessages = defineMessages({
     job_never: "এখনো চলেনি",
 
     activityTitle: "কার্যকলাপ",
+    activityEmpty: "এখনো কিছু নেই। এই অ্যাপে পাঠানো স্টোরের আপডেট ও এর লগ এখানে দেখা যাবে।",
     tab_deliveries: "ইভেন্ট ডেলিভারি",
     tab_log: "লগ",
     activityFailed: "এটি লোড হয়নি।",

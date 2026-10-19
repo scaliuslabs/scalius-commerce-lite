@@ -47,7 +47,6 @@ describe("payment method rows", () => {
       name: "bKash",
       appName: "bKash Payments",
       pluginId: "scalius.bkash",
-      installed: true,
       canTestConnection: true,
       chargeCurrencies: ["BDT"],
       // The checkout's own verdict wins over the app list's.
@@ -74,17 +73,17 @@ describe("payment method rows", () => {
     expect(rows.find((row) => row.id === "scalius.bangladesh:sslcommerz")).toMatchObject({ kind: "app", name: "SSLCommerz", appIcon: "/icon/sslcommerz.png" });
   });
 
-  it("keeps a saved app method whose app was removed, so it can be turned off", () => {
+  it("leaves out a saved app method whose app was removed, once the installed apps are read", () => {
     const input = {
       enabledMethods: ["cod", "gone.app:wallet-pay"],
       gateways: gateways.slice(0, 1),
       gatewayStatus: { cod: ready },
       appProviders: [],
     };
-    const removed = paymentMethodRows({ ...input, appProvidersKnown: true }).find((row) => row.id === "gone.app:wallet-pay");
-    expect(removed).toMatchObject({ kind: "app", name: "Wallet pay", pluginId: "gone.app", installed: false, status: undefined });
-    // Until the installed apps are read, nothing is called removed.
-    expect(paymentMethodRows({ ...input, appProvidersKnown: false }).find((row) => row.id === "gone.app:wallet-pay")?.installed).toBe(true);
+    expect(paymentMethodRows({ ...input, appProvidersKnown: true }).map((row) => row.id)).toEqual(["cod", "stripe"]);
+    // Until the installed apps are read it may be an inactive app's: kept, so it can be turned off.
+    expect(paymentMethodRows({ ...input, appProvidersKnown: false }).find((row) => row.id === "gone.app:wallet-pay"))
+      .toMatchObject({ kind: "app", name: "Wallet pay", pluginId: "gone.app", status: undefined });
   });
 });
 

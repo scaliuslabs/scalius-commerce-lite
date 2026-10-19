@@ -145,6 +145,15 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
             </div>
           )
         ) : null}
+        {!canRead ? (
+          <p className="text-body text-muted-foreground">
+            {tr("card.noAccess")} {tr("card.askOwner")}
+          </p>
+        ) : !canReply ? (
+          <p className="border-t pt-4 text-body text-muted-foreground">
+            {tr("card.readOnly")} {tr("card.askOwner")}
+          </p>
+        ) : null}
         {canRead && canReply ? (
           <Suspense fallback={null}>
             <div className="border-t pt-4">

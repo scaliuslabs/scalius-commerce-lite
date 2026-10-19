@@ -268,6 +268,42 @@ describe("dashboard inbox", () => {
     expect(sdk.post.mock.calls[0]![0].body).toMatchObject({ visibility: "internal", body: "Refund approved by owner" });
   });
 
+  it("opens a guest's order thread in the inbox and replies to the guest from the order page", async () => {
+    sdk.getOrder.mockImplementation(() => ok({ conversation: thread }));
+    sdk.post.mockImplementation(() => ok({ conversation: thread }));
+    await render(<OrderConversationCard order={{ id: "ord_1", supportRequests: [] } as unknown as Order} />);
+    await act(async () => {
+      await import("./ConversationComposer");
+      await import("./ConversationMessages");
+    });
+    // The guest's words (a receipt-proof author, no customer on the thread).
+    expect(host.textContent).toContain("The strap broke");
+    const open = [...host.querySelectorAll("a")].find((link) => link.textContent === "Open in inbox");
+    expect(open?.getAttribute("href")).toBe("/admin/inbox/$conversationId");
+    const textarea = host.querySelector("textarea")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "We'll swap it this week");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button(en.send)!.click());
+    expect(sdk.post.mock.calls[0]![0]).toMatchObject({ path: { id: thread.id }, body: { visibility: "public", body: "We'll swap it this week" } });
+  });
+
+  it("says why staff without inbox access see a request but no thread or reply box", async () => {
+    const request = { id: "req_1", type: "cancel_pre_shipment", status: "submitted", active: true, reason: "Ordered by mistake", createdAt: 1, submittedAt: 1 };
+    await render(<OrderConversationCard order={{ id: "ord_1", supportRequests: [request] } as unknown as Order} />, ["orders.view"]);
+    expect(host.textContent).toContain("Ordered by mistake");
+    expect(host.textContent).toContain("which your role can't open");
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(sdk.getOrder).not.toHaveBeenCalled();
+
+    act(() => root.unmount());
+    root = createRoot(host);
+    sdk.getOrder.mockImplementation(() => ok({ conversation: thread }));
+    await render(<OrderConversationCard order={{ id: "ord_1", supportRequests: [] } as unknown as Order} />, ["conversations.view"]);
+    expect(host.textContent).toContain("You can read these messages but not reply.");
+  });
+
   it("keeps existing internal notes but leaves new order-editor notes to the timeline", async () => {
     sdk.getOrder.mockImplementation(() => ok({ conversation: thread }));
     sdk.post.mockImplementation(() => ok({ conversation: thread }));

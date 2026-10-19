@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "@tanstack/react-router";
-import { AlertCircle, Copy, Download, Mail, Smartphone } from "lucide-react";
+import { AlertCircle, Copy, Download, KeyRound, Mail, Smartphone } from "lucide-react";
 import { toast } from "~/lib/toast";
-import { postApiV1AdminAuth2FaMethod, postApiV1AdminAuth2FaMethodChallenge } from "@scalius/api-client/sdk";
+import { postApiV1AdminAuth2FaDisable, postApiV1AdminAuth2FaMethod, postApiV1AdminAuth2FaMethodChallenge } from "@scalius/api-client/sdk";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -22,10 +22,13 @@ import { accountFailureKey } from "./account-error";
 import type { User } from "./ProfileHeader";
 import { Field } from "~/components/ui/field";
 
-type Step = "method" | "password" | "qr" | "verify" | "codes";
+type Step = "method" | "password" | "qr" | "verify" | "codes" | "off";
 type Method = "totp" | "email";
-/** enable: first setup · change: switch method · codes: a new authenticator secret and new recovery codes. */
-type Mode = "enable" | "change" | "codes";
+/**
+ * enable: first setup · change: use the other method · codes: a new
+ * authenticator key and new recovery codes · off: turn it off.
+ */
+type Mode = "enable" | "change" | "codes" | "off";
 
 /** The key inside the otpauth:// link in blocks of four, for people who type it instead of scanning. */
 function manualKeyOf(totpUri: string | null): string | null {
@@ -40,12 +43,22 @@ function manualKeyOf(totpUri: string | null): string | null {
 const wrongPassword = ({ code, status }: AuthFailure): AccountMessageKey | null =>
   code === "PASSWORD_INCORRECT" || code === "INVALID_PASSWORD" || status === 400 || status === 401 ? "wrongPassword" : null;
 
+const METHOD_ICON = { totp: Smartphone, email: Mail } as const;
+
 /**
- * Two-step verification card. Nothing here is put in a URL or a log: the
+ * Two-step verification card. With it on, the two ways to get a code are
+ * rows, the one in use marked and the other one click away (Stripe and
+ * GitHub list factors the same way); recovery codes and Turn off sit below.
+ * Every change asks for the password, and each new method proves itself with
+ * a code before anything changes. Nothing here is put in a URL or a log: the
  * password, the authenticator key and the codes live only in component state
  * and are cleared when the flow closes.
  */
-export function TwoFactorSetup({ user }: { user: User }) {
+export function TwoFactorSetup({ user, required = false }: {
+  user: User;
+  /** The store requires two-step verification for this person (invited staff): no Turn off. */
+  required?: boolean;
+}) {
   const t = useMessages(accountMessages);
   const router = useRouter();
   const [isEnabled, setIsEnabled] = useState(user.twoFactorEnabled ?? false);
@@ -88,17 +101,6 @@ export function TwoFactorSetup({ user }: { user: User }) {
     setError(null);
   };
 
-  const start = (next: Mode) => {
-    close();
-    setMode(next);
-    if (next === "codes") {
-      setMethod("totp");
-      setStep("password");
-    } else {
-      setMethod(next === "change" ? (currentMethod === "totp" ? "email" : "totp") : "totp");
-    }
-  };
-
   const run = async (task: () => Promise<void>, pick: (failure: AuthFailure) => AccountMessageKey | null) => {
     setError(null);
     setBusy(true);
@@ -116,7 +118,23 @@ export function TwoFactorSetup({ user }: { user: User }) {
     if (result?.error) throw result.error;
   };
 
-  // Step 2: the password unlocks setup (first time) or a staged method change.
+  /** First setup picks a method; a change goes straight to the password for the method it names. */
+  const start = (next: Mode, target?: Method) => {
+    close();
+    setMode(next);
+    if (next === "enable") {
+      setMethod("totp");
+      return;
+    }
+    setMethod(target ?? "totp");
+    setStep(next === "off" ? "off" : "password");
+    // Turning off proves the current method: an emailed code is sent at once.
+    if (next === "off" && currentMethod === "email") {
+      void run(sendEmailCode, () => "codeNotSent");
+    }
+  };
+
+  // The password unlocks setup (first time) or a staged method change.
   const confirmPassword = () =>
     run(async () => {
       if (!isChange) {
@@ -134,7 +152,7 @@ export function TwoFactorSetup({ user }: { user: User }) {
       }
       const challenge = await apiData(postApiV1AdminAuth2FaMethodChallenge({ body: { method, password } }));
       setChallengeId(challenge.challengeId);
-      // Changing how codes arrive keeps the current authenticator key and recovery codes.
+      // Changing how codes arrive keeps the current recovery codes.
       setRecoveryCodes([]);
       if (method === "totp") {
         setTotpUri(challenge.totpUri);
@@ -146,7 +164,7 @@ export function TwoFactorSetup({ user }: { user: User }) {
       }
     }, wrongPassword);
 
-  // Step 3: the code proves the method works before anything changes.
+  // The code proves the method works before anything changes.
   const verify = () =>
     run(async () => {
       if (isChange && !challengeId) return setError("setupExpired");
@@ -165,10 +183,20 @@ export function TwoFactorSetup({ user }: { user: User }) {
         setCode("");
         setStep("codes");
       } else close();
-    }, ({ code: errorCode, status }) => {
-      if (errorCode === "TWO_FACTOR_SETUP_EXPIRED") return "setupExpired";
-      if (errorCode === "TWO_FACTOR_CODE_EXPIRED" || errorCode === "OTP_HAS_EXPIRED") return "codeExpired";
-      return status === 400 || status === 401 ? (method === "totp" ? "wrongAppCode" : "wrongEmailCode") : null;
+    }, codeFailure(method));
+
+  // Turning off needs the password and a code from the method in use.
+  const turnOff = () =>
+    run(async () => {
+      await apiData(postApiV1AdminAuth2FaDisable({ body: { password, code } }));
+      setIsEnabled(false);
+      void refreshAdminRouteContext(router);
+      toast.success(t("turnedOff"));
+      close();
+    }, (failure) => {
+      if (failure.code === "TWO_FACTOR_REQUIRED") return "requiredByStore";
+      if (failure.code === "PASSWORD_INCORRECT") return "wrongPassword";
+      return codeFailure(currentMethod)(failure);
     });
 
   const resend = () => run(async () => {
@@ -187,36 +215,89 @@ export function TwoFactorSetup({ user }: { user: User }) {
 
   const dirty = mode !== null && (step !== "method" || password.length > 0 || code.length > 0);
   const manualKey = manualKeyOf(totpUri);
+  const methodHelp = (option: Method) => option === "totp" ? t("authenticatorAppHelp") : t("emailCodeTo", { email: user.email });
+
+  const codeField = (codeMethod: Method) => (
+    <Field id="two-step-code" label={t(codeMethod === "email" ? "enterEmailCode" : "enterAppCode")}>
+      <Input
+        id="two-step-code"
+        value={code}
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={6}
+        autoFocus={step !== "off"}
+        disabled={busy}
+        // eslint-disable-next-line shadcn/no-restyle -- digits in a fixed-width face so the six-digit code lines up
+        className="max-w-40 font-mono"
+        onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+      />
+      {codeMethod === "email" ? (
+        <div>
+          <Button type="button" variant="link" size="sm" disabled={busy} onClick={() => void resend()}>{t("resendCode")}</Button>
+        </div>
+      ) : null}
+    </Field>
+  );
+  const passwordField = (
+    <Field id="two-step-password" label={t("confirmYourPassword")}>
+      <Input id="two-step-password" type="password" value={password} autoComplete="current-password" autoFocus disabled={busy} onChange={(event) => setPassword(event.target.value)} />
+    </Field>
+  );
 
   let content: ReactNode;
-  let footer: ReactNode;
-  if (mode === null) {
-    content = isEnabled ? (
-      <div className="flex items-start gap-3">
-        <span className="flex h-lh items-center text-muted-foreground">
-          {currentMethod === "totp" ? <Smartphone className="size-4" aria-hidden="true" /> : <Mail className="size-4" aria-hidden="true" />}
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="text-body font-medium">{t(currentMethod === "totp" ? "authenticatorApp" : "emailCode")}</span>
-          <span className="break-words text-body text-muted-foreground">
-            {currentMethod === "totp" ? t("authenticatorAppHelp") : t("emailCodeTo", { email: user.email })}
-          </span>
-        </div>
-        <Badge variant="success">{t("on")}</Badge>
-      </div>
-    ) : (
+  let footer: ReactNode = null;
+  if (mode === null && !isEnabled) {
+    content = (
       <div className="flex items-center justify-between gap-3">
         <span className="text-body text-muted-foreground">{t("offHelp")}</span>
         <Badge>{t("off")}</Badge>
       </div>
     );
-    footer = isEnabled ? (
-      <>
-        {currentMethod === "totp" ? <Button type="button" variant="outline" onClick={() => start("codes")}>{t("newRecoveryCodes")}</Button> : null}
-        <Button type="button" variant="outline" onClick={() => start("change")}>{t("changeMethod")}</Button>
-      </>
+    footer = <Button type="button" onClick={() => start("enable")}>{t("turnOn")}</Button>;
+  } else if (mode === null) {
+    // One row per way to get a code; the one in use is marked, the other is one click away.
+    content = (
+      <ul className="-mx-4 divide-y divide-border border-y border-border">
+        {(["totp", "email"] as const).map((option) => {
+          const Icon = METHOD_ICON[option];
+          const inUse = option === currentMethod;
+          return (
+            <li key={option} data-method={option} className="flex flex-wrap items-start gap-3 px-4 py-3">
+              <span className="flex h-lh items-center text-muted-foreground">
+                <Icon className="size-4" aria-hidden="true" />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-body font-medium">{t(option === "totp" ? "authenticatorApp" : "emailCode")}</span>
+                <span className="break-words text-body text-muted-foreground">{methodHelp(option)}</span>
+              </span>
+              {inUse ? (
+                <Badge variant="success">{t("inUse")}</Badge>
+              ) : (
+                <Button type="button" variant="outline" size="sm" onClick={() => start("change", option)}>
+                  {t(option === "totp" ? "useAuthenticator" : "useEmailCodes")}
+                </Button>
+              )}
+            </li>
+          );
+        })}
+        {currentMethod === "totp" ? (
+          <li className="flex flex-wrap items-start gap-3 px-4 py-3">
+            <span className="flex h-lh items-center text-muted-foreground">
+              <KeyRound className="size-4" aria-hidden="true" />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-body font-medium">{t("recoveryCodes")}</span>
+              <span className="text-body text-muted-foreground">{t("recoveryCodesHelp")}</span>
+            </span>
+            <Button type="button" variant="outline" size="sm" onClick={() => start("codes", "totp")}>{t("newRecoveryCodes")}</Button>
+          </li>
+        ) : null}
+      </ul>
+    );
+    footer = required ? (
+      <p className="w-full text-body text-muted-foreground">{t("requiredByStore")}</p>
     ) : (
-      <Button type="button" onClick={() => start("enable")}>{t("turnOn")}</Button>
+      <Button type="button" variant="outline" onClick={() => start("off")}>{t("turnOff")}</Button>
     );
   } else if (step === "method") {
     content = (
@@ -228,9 +309,7 @@ export function TwoFactorSetup({ user }: { user: User }) {
             </span>
             <span className="flex min-w-0 flex-col">
               <span className="text-body font-medium">{t(option === "totp" ? "authenticatorApp" : "emailCode")}</span>
-              <span className="break-words text-body text-muted-foreground">
-                {option === "totp" ? t("authenticatorAppHelp") : t("emailCodeTo", { email: user.email })}
-              </span>
+              <span className="break-words text-body text-muted-foreground">{methodHelp(option)}</span>
             </span>
           </label>
         ))}
@@ -243,17 +322,30 @@ export function TwoFactorSetup({ user }: { user: User }) {
       </>
     );
   } else if (step === "password") {
+    content = passwordField;
+    footer = (
+      <>
+        <Button type="button" variant="outline" disabled={busy} onClick={mode === "enable" ? () => setStep("method") : close}>
+          {t(mode === "enable" ? "back" : "cancel")}
+        </Button>
+        <Button type="submit" loading={busy} disabled={!password}>{t("continue")}</Button>
+      </>
+    );
+  } else if (step === "off") {
     content = (
-      <Field id="two-step-password" label={t("confirmYourPassword")}>
-        <Input id="two-step-password" type="password" value={password} autoComplete="current-password" autoFocus disabled={busy} onChange={(event) => setPassword(event.target.value)} />
-      </Field>
+      <>
+        <Alert variant="warning">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription>{t("turnOffWarning")}</AlertDescription>
+        </Alert>
+        {passwordField}
+        {codeField(currentMethod)}
+      </>
     );
     footer = (
       <>
-        <Button type="button" variant="outline" disabled={busy} onClick={mode === "codes" ? close : () => setStep("method")}>
-          {t(mode === "codes" ? "cancel" : "back")}
-        </Button>
-        <Button type="submit" loading={busy} disabled={!password}>{t("continue")}</Button>
+        <Button type="button" variant="outline" disabled={busy} onClick={close}>{t("cancel")}</Button>
+        <Button type="submit" variant="destructive" loading={busy} disabled={!password || code.length !== 6}>{t("turnOff")}</Button>
       </>
     );
   } else if (step === "qr") {
@@ -280,27 +372,7 @@ export function TwoFactorSetup({ user }: { user: User }) {
       </>
     );
   } else if (step === "verify") {
-    content = (
-      <Field id="two-step-code" label={t(method === "email" ? "enterEmailCode" : "enterAppCode")}>
-        <Input
-          id="two-step-code"
-          value={code}
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={6}
-          autoFocus
-          disabled={busy}
-          // eslint-disable-next-line shadcn/no-restyle -- digits in a fixed-width face so the six-digit code lines up
-          className="max-w-40 font-mono"
-          onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-        />
-        {method === "email" ? (
-          <div>
-            <Button type="button" variant="link" size="sm" disabled={busy} onClick={() => void resend()}>{t("resendCode")}</Button>
-          </div>
-        ) : null}
-      </Field>
-    );
+    content = codeField(method);
     footer = (
       <>
         <Button type="button" variant="outline" disabled={busy} onClick={() => setStep(method === "totp" ? "qr" : "password")}>{t("back")}</Button>
@@ -333,14 +405,25 @@ export function TwoFactorSetup({ user }: { user: User }) {
   }
 
   // The title stays put through every step; the line under it says what this step is for.
-  const description = step === "codes" ? "recoveryCodesTitle" : mode === "codes" ? "newCodesHelp" : mode === "change" ? "changeMethodHelp" : "twoStepHelp";
-  const submits = step === "password" || step === "verify";
+  const description: AccountMessageKey = step === "codes"
+    ? "recoveryCodesTitle"
+    : mode === "codes"
+      ? "newCodesHelp"
+      : mode === "off"
+        ? "turnOffHelp"
+        : mode === "change"
+          ? (method === "totp" ? "useAuthenticatorHelp" : "useEmailCodesHelp")
+          : "twoStepHelp";
+  const submits = step === "password" || step === "verify" || step === "off";
 
   return (
     <Card id="two-step" className="scroll-mt-4">
       <UnsavedChangesGuard isDirty={dirty && step !== "codes"} isSubmitting={busy} />
       <CardHeader>
-        <CardTitle>{t("twoStep")}</CardTitle>
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle>{t("twoStep")}</CardTitle>
+          {mode === null && isEnabled ? <Badge variant="success">{t("on")}</Badge> : null}
+        </div>
         <CardDescription>{t(description)}</CardDescription>
       </CardHeader>
       <form
@@ -350,7 +433,7 @@ export function TwoFactorSetup({ user }: { user: User }) {
         onSubmit={(event) => {
           event.preventDefault();
           if (!submits || busy) return;
-          void (step === "password" ? confirmPassword() : verify());
+          void (step === "password" ? confirmPassword() : step === "off" ? turnOff() : verify());
         }}
       >
         <CardContent className="flex flex-col gap-4">
@@ -362,8 +445,17 @@ export function TwoFactorSetup({ user }: { user: User }) {
           ) : null}
           {content}
         </CardContent>
-        <CardFooter className="justify-end">{footer}</CardFooter>
+        {footer ? <CardFooter className="justify-end gap-2">{footer}</CardFooter> : null}
       </form>
     </Card>
   );
+}
+
+/** A refused code in the words of the method it came from. */
+function codeFailure(method: Method) {
+  return ({ code, status }: AuthFailure): AccountMessageKey | null => {
+    if (code === "TWO_FACTOR_SETUP_EXPIRED") return "setupExpired";
+    if (code === "TWO_FACTOR_CODE_EXPIRED" || code === "OTP_HAS_EXPIRED") return "codeExpired";
+    return status === 400 || status === 401 ? (method === "totp" ? "wrongAppCode" : "wrongEmailCode") : null;
+  };
 }

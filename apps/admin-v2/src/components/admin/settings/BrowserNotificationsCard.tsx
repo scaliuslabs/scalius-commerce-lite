@@ -10,7 +10,6 @@ import { putApiV1AdminSettingsNotificationChannels } from "@scalius/api-client/s
 import { isReady } from "@scalius/shared/readiness";
 import { Alert } from "~/components/ui/alert";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { useOpenAppProvider } from "~/components/admin/apps/AppProviderSheetHost";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { useMessages } from "~/i18n";
@@ -38,8 +37,6 @@ export function BrowserNotificationsCard() {
   const pushIssueText = usePushIssueText();
   const queryClient = useQueryClient();
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT);
-  const canSeeApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
-  const openProvider = useOpenAppProvider();
   const apps = useQuery({ ...appProvidersQuery("push"), enabled: useProviderPortAccess("push").canView }).data ?? [];
   const { values, setValue, isLoadError, refetch } = useSettingsForm<CustomerRules>({
     label: t("browserTitle"),
@@ -80,9 +77,6 @@ export function BrowserNotificationsCard() {
           options={options}
           onValueChange={(value) => {
             setValue("pushProvider", value);
-            // An app not set up yet opens its own setup, beside this choice.
-            const chosen = apps.find((candidate) => candidate.id === value);
-            if (chosen && !chosen.readiness.configured && canSeeApps) openProvider?.(chosen.id);
           }}
         />
       </SettingsField>

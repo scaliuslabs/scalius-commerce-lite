@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 // Settings → Notifications → SMS: the gateway picker lists every SMS
 // provider of every installed app, and choosing one that is not set up yet
-// opens its own setup sheet: titled with its name, "by <app>", and only its
-// fields (never another gateway's, never a saved secret).
+// says so with a link to its own page in its app (its switch and its fields,
+// never another gateway's), without leaving the choice.
 
 import { act, type AnchorHTMLAttributes, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -32,7 +32,6 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setLocale } from "~/i18n";
-import { AppProviderSheetHost } from "../apps/AppProviderSheetHost";
 import { SendingCard } from "./NotificationSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -124,14 +123,12 @@ afterEach(() => {
 });
 
 describe("SMS gateway picker", () => {
-  it("lists every app's gateways and opens only the chosen one's fields in its sheet", async () => {
+  it("lists every app's gateways and links the chosen one to its own setup page", async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     await act(async () => root.render(
       <QueryClientProvider client={queryClient}>
         <PermissionProvider isSuperAdmin>
-          <AppProviderSheetHost>
-            <SendingCard />
-          </AppProviderSheetHost>
+          <SendingCard />
         </PermissionProvider>
       </QueryClientProvider>,
     ));
@@ -155,18 +152,12 @@ describe("SMS gateway picker", () => {
     ]);
     expect(options[2]!.textContent).toContain("by Other texts");
 
-    // Beta is not set up: choosing it opens its sheet.
+    // Beta is not set up: choosing it says so and links to its page in the app; nothing opens over the choice.
     await act(async () => options[1]!.click());
     await flush();
-    await vi.waitFor(() => expect(document.querySelector("#provider-setting-beta_token")).not.toBeNull());
-    const sheet = document.querySelector<HTMLElement>("#provider-setting-beta_token")!.closest('[role="dialog"]')!;
-    expect(sheet.querySelector("h2")?.textContent).toBe("Beta SMS");
-    expect(sheet.textContent).toContain("by Acme pack");
-    expect(sheet.textContent).toContain("Not set");
-    expect([...sheet.querySelectorAll("input")].map((element) => element.id)).toEqual(["provider-setting-beta_token", "provider-setting-beta_sender"]);
-    // Alpha's key (saved) is in no field and no text: only its own sheet would say "Set".
-    expect(document.querySelector("#provider-setting-alpha_key")).toBeNull();
-    expect(sheet.querySelector<HTMLInputElement>("#provider-setting-beta_token")?.value).toBe("");
-    expect(sheet.querySelector('a[href="/admin/apps/acme.pack"]')).not.toBeNull();
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Not ready"));
+    const setUp = [...document.querySelectorAll("a")].find((link) => link.textContent === "Set up Beta SMS");
+    expect(setUp?.getAttribute("href")).toBe("/admin/apps/acme.pack/beta");
+    expect(document.querySelector("#provider-setting-beta_token")).toBeNull();
   });
 });
