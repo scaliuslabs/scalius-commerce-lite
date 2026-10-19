@@ -405,7 +405,7 @@ export function coreSectionSkinData<Type extends StorefrontSkinnableSection>(
   return {
     type: visible.type,
     // The projection's own version: core may change its section's version without changing what skins get.
-    version: STOREFRONT_SECTION_SKIN_PROJECTIONS[section.type as StorefrontSkinnableSection],
+    version: STOREFRONT_SECTION_SKIN_PROJECTIONS[visible.type as StorefrontSkinnableSection],
     settings,
     tiles: visible.type === "brand-wall"
       ? content.brands.map((brand) => ({
