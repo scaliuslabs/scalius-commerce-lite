@@ -1,30 +1,16 @@
 import { lazy, memo, Suspense, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
-import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react";
-import { toast } from "~/lib/toast";
+import { ChevronsUpDown } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { postApiV1AdminCategories } from "@scalius/api-client/sdk";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
-import { getServerFnError } from "@/lib/api-helpers";
-import { apiData } from "@/lib/api";
-import { queryKeys } from "@/lib/query-keys";
-import { categoriesInTreeOrder, categoryPathLabel, indexCategories } from "@/lib/category-tree";
+import { categoryPathLabel, indexCategories } from "@/lib/category-tree";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
-import { resourceMessages } from "~/i18n/resource";
+import { categoryStatusLabel } from "./category-status-label";
 import type { Category, ProductFormValues } from "./types";
 import { Field, ReadOnlyValue } from "~/components/ui/field";
 import { useFieldControl } from "~/components/ui/field";
@@ -40,9 +26,11 @@ interface OrganizationCardProps {
 // The brand search picker is loaded after the page, so it stays off the product page's first download.
 const BrandPicker = lazy(() => import("./BrandPicker"));
 
-function categoryStatusLabel(t: ReturnType<typeof useMessages<keyof typeof productMessages.en>>, category: Category) {
-  return category.status === "draft" ? t("statusDraft") : category.status === "internal" ? t("categoryHidden") : null;
-}
+// The category list (search, choose, create) is needed only once the picker opens, so it loads right
+// after the page, and again at the first look at the trigger.
+const loadCategoryPickerList = () => import("./CategoryPickerList");
+void loadCategoryPickerList().catch(() => {});
+const CategoryPickerList = lazy(loadCategoryPickerList);
 
 /** Side card: the product's category (new categories start as drafts) and brand. */
 export const OrganizationCard = memo(function OrganizationCard({ form, categories, brandName = null, readOnly = false }: OrganizationCardProps) {
@@ -123,68 +111,27 @@ function CategoryCombobox({
   invalid?: boolean;
 }) {
   const t = useMessages(productMessages);
-  const r = useMessages(resourceMessages);
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const queryClient = useQueryClient();
-  const name = search.trim();
-
-  const handleCreate = async () => {
-    if (!name) return;
-    setIsCreating(true);
-    setCreateError(null);
-    try {
-      // The server makes the web address from the name (Bangla included) and numbers a taken one.
-      const data = await apiData(postApiV1AdminCategories({
-        body: {
-          name,
-          description: null,
-          content: null,
-          metaTitle: null,
-          metaDescription: null,
-          canonicalPath: null,
-          noIndex: false,
-          excludeFromSitemap: false,
-          image: null,
-        },
-      }));
-      onCreated({ id: data.id, name, status: data.status });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.categories.formOptions() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.collections.categoryOptions() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() }),
-      ]);
-      toast.success(t("categoryCreated"), { description: t("categoryCreatedHint") });
-      setOpen(false);
-      setSearch("");
-    } catch (error: unknown) {
-      // Said next to the Create button, where the merchant can change the name.
-      setCreateError(getServerFnError(error, r("actionFailed")));
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  // Categories are named by their path ("Men › Shirts"), parents before children.
-  const { ordered, byId } = useMemo(
-    () => ({ ordered: categoriesInTreeOrder(categories), byId: indexCategories(categories) }),
-    [categories],
-  );
-  const pathOf = (category: Category) => categoryPathLabel(category.id, byId);
+  const byId = useMemo(() => indexCategories(categories), [categories]);
   const selected = categories.find((category) => category.id === selectedId);
   const selectedStatus = selected ? categoryStatusLabel(t, selected) : null;
-  const selectedLabel = selected ? (selectedStatus ? `${pathOf(selected)} · ${selectedStatus}` : pathOf(selected)) : undefined;
-  const filtered = ordered.filter((category) => pathOf(category).toLowerCase().includes(search.toLowerCase()));
+  const selectedPath = selected ? categoryPathLabel(selected.id, byId) : null;
+  const selectedLabel = selectedPath ? (selectedStatus ? `${selectedPath} · ${selectedStatus}` : selectedPath) : undefined;
   // The trigger is the Category field's control: its label names it.
   const control = useFieldControl({});
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" {...control} aria-invalid={invalid || control["aria-invalid"] || undefined} className="w-full justify-between">
+        <Button
+          variant="outline"
+          role="combobox"
+          {...control}
+          aria-invalid={invalid || control["aria-invalid"] || undefined}
+          className="w-full justify-between"
+          onPointerEnter={() => void loadCategoryPickerList().catch(() => {})}
+          onFocus={() => void loadCategoryPickerList().catch(() => {})}
+        >
           <span className={cn("truncate", !selected && "text-muted-foreground")} title={selectedLabel}>
             {selectedLabel ?? t(selectedId ? "savedValueUnavailable" : "chooseCategory")}
           </span>
@@ -192,77 +139,17 @@ function CategoryCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0" align="start">
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder={t("searchCategories")}
-            value={search}
-            onValueChange={(value) => {
-              setSearch(value);
-              setCreateError(null);
-            }}
+        <Suspense fallback={<div className="h-24" aria-hidden />}>
+          <CategoryPickerList
+            categories={categories}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            onCreated={onCreated}
+            onClose={() => setOpen(false)}
           />
-          <CommandList>
-            {filtered.length > 0 || selectedId ? (
-              <CommandGroup>
-                {/* A category is optional (Shopify): the merchant can take it off again. */}
-                {selectedId && !search ? (
-                  <CommandItem
-                    value="__no_category"
-                    onSelect={() => {
-                      onSelect("");
-                      setOpen(false);
-                    }}
-                  >
-                    <Check className="me-2 h-4 w-4 opacity-0" />
-                    <span className="flex-1 text-muted-foreground">{t("noCategory")}</span>
-                  </CommandItem>
-                ) : null}
-                {filtered.map((category) => (
-                  <CommandItem
-                    key={category.id}
-                    value={category.id}
-                    onSelect={() => {
-                      onSelect(category.id);
-                      setOpen(false);
-                      setSearch("");
-                    }}
-                  >
-                    <Check className={cn("me-2 h-4 w-4", selectedId === category.id ? "opacity-100" : "opacity-0")} />
-                    <span className="flex-1">{pathOf(category)}</span>
-                    {categoryStatusLabel(t, category) ? (
-                      <span className="text-body text-muted-foreground">{categoryStatusLabel(t, category)}</span>
-                    ) : null}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ) : null}
-            <CommandEmpty>
-              {name ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full justify-start"
-                    onClick={handleCreate}
-                    disabled={isCreating}
-                    aria-describedby={createError ? "create-category-error" : undefined}
-                  >
-                    {isCreating ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <Plus className="me-2 h-4 w-4" />}
-                    {t("createCategory", { name })}
-                  </Button>
-                  {createError ? (
-                    <p id="create-category-error" role="alert" className="px-3 pb-2 text-body text-destructive">
-                      {createError}
-                    </p>
-                  ) : null}
-                </>
-              ) : (
-                <p className="py-4 text-center text-body text-muted-foreground">{t("typeToFindCategory")}</p>
-              )}
-            </CommandEmpty>
-          </CommandList>
-        </Command>
+        </Suspense>
       </PopoverContent>
     </Popover>
   );
 }
+

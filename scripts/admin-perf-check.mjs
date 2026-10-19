@@ -58,13 +58,16 @@ export const BUNDLE_BUDGETS = {
     // content-block, bundle and template sections in turn under the product revision.
     // +1: the shared icon and SDK chunks the new catalogue screens regrouped.
     // +0.1: truthful app consent copy (storefront components, en + bn).
-    "admin/products/$productId/edit.tsx": 369.3,
+    // -8.3: the cards under the variants (digital delivery, gift card, attributes, search
+    // listing) and the category picker's list load after the page; measured 360.6.
+    "admin/products/$productId/edit.tsx": 361,
     // The editor plus the navigation shell and the save system's real
     // variant diff and in-flight-save rebase (edits typed while saving stay dirty).
     // +2 (catalogue dashboard): the same category paths and section-save code as the edit
     // page, and the shared icon and SDK chunks the new catalogue screens regrouped.
     // +0.3: the local "Bengali System" fallback face that keeps the Taka sign off the platform font search.
-    "admin/products/new.tsx": 366,
+    // -8.5: the same lazy cards and category list as the edit page; measured 357.3.
+    "admin/products/new.tsx": 357.5,
     // +0.3 over the default: the type preview's "Bengali System" fallback face.
     "admin/online-store/theme_.editor.tsx": 360.3,
     "admin/inventory/index.tsx": 255,

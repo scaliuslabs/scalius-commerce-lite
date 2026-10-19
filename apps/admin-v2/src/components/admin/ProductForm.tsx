@@ -48,13 +48,10 @@ import {
 } from "./product-form/TitleDescriptionSection";
 import { ProductImagesSection } from "./product-form/ProductImagesSection";
 import { PricingCard } from "./product-form/PricingCard";
-import { AttributesSection } from "./product-form/AttributesSection";
-import { ProductSearchListing } from "./product-form/ProductSearchListing";
+import { LazyAttributesSection, LazyDigitalDeliveryCard, LazyGiftCardProductCard, LazyProductSearchListing } from "./product-form/LazyProductCards";
 import { ShippingCard } from "./product-form/ShippingCard";
 import { CollapsibleCard } from "./product-form/CollapsibleCard";
 import { ProductEditorSlotsContext, type ProductEditorSlots } from "./product-form/editor-slots";
-import { DigitalDeliveryCard } from "./product-form/DigitalDeliveryCard";
-import { GiftCardProductCard } from "./product-form/GiftCardProductCard";
 import { StatusCard } from "./product-form/StatusCard";
 import { ProductKindRulesContext, productKindRules } from "./product-form/product-kind-rules";
 import { OrganizationCard } from "./product-form/OrganizationCard";
@@ -64,7 +61,7 @@ import { useProductSubmit } from "./product-form/hooks/useProductSubmit";
 import { ProductSectionsProvider, useProductSections } from "./product-form/merchandising/product-sections";
 import { LoadingFallback } from "./shared/LoadingFallback";
 import { problemLine, productFieldLabel } from "./product-form/utils";
-import { autoHandleFor } from "./search-listing/SearchListingCard";
+import { autoHandleFor } from "./search-listing/auto-handle";
 import {
   DEFAULT_PRODUCT_CONDITION,
   productFormSchema,
@@ -518,8 +515,8 @@ function ProductEditor({
                   <ProductVariants form={form} optionManager={optionManager} onPricesChange={setVariantPrices} readOnly={readOnly} />
                 </CardContent>
               </Card>
-              <DigitalDeliveryCard form={form} productId={productId} readOnly={readOnly} />
-              <GiftCardProductCard form={form} productId={productId} readOnly={readOnly} />
+              <LazyDigitalDeliveryCard form={form} productId={productId} readOnly={readOnly} />
+              <LazyGiftCardProductCard form={form} productId={productId} readOnly={readOnly} />
               {isEdit && productId ? (
                 <React.Suspense fallback={<LoadingFallback height="h-20" />}>
                   <BundlesCard productId={productId} readOnly={readOnly} />
@@ -545,8 +542,8 @@ function ProductEditor({
                 // A new product's tabs go with it; once saved they are edited as content blocks.
                 <AdditionalSectionsCard form={form} readOnly={readOnly} />
               )}
-              <AttributesSection form={form} defaultOpen={readOnly} readOnly={readOnly} />
-              <fieldset disabled={readOnly} className="min-w-0"><ProductSearchListing form={form} disabled={readOnly} /></fieldset>
+              <LazyAttributesSection form={form} defaultOpen={readOnly} readOnly={readOnly} />
+              <fieldset disabled={readOnly} className="min-w-0"><LazyProductSearchListing form={form} disabled={readOnly} /></fieldset>
             </div>
             {/* On phones the status comes first; the rest of the side column follows the main cards. */}
             <div className="min-w-0 space-y-4 max-lg:contents">
