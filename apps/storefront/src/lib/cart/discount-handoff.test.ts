@@ -563,7 +563,7 @@ describe("cart discount checkout handoff", () => {
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
     // The quote refuses a cart that changed: the totals are the estimate.
     const { TaxQuoteCartChangedError } = await import("../checkout/tax-quote-client");
-    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockRejectedValue(new TaxQuoteCartChangedError("cart changed"));
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockRejectedValue(new TaxQuoteCartChangedError([]));
     // A buy-one-get-one on the mug would discount it; it is not counted.
     apiMocks.previewCartDiscounts.mockImplementation(async (_codes: string[], lines: Array<{ id: string }>) =>
       lines.some((line) => line.id === "prod_2") ? { ...NO_DISCOUNTS, totalDiscount: 50 } : NO_DISCOUNTS);
