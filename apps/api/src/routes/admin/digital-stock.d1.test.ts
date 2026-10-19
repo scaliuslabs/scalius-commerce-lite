@@ -44,10 +44,10 @@ function app() {
   return router;
 }
 
-async function call(method: string, path: string, body: unknown) {
+async function call(method: string, path: string, body: unknown, headers: Record<string, string> = {}) {
   const response = await app().request(`/api/v1/admin${path}`, {
     method,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the test reads the JSON body freely
@@ -65,11 +65,11 @@ const refused = {
 
 describe("digital stock rule over HTTP", () => {
   it("answers 400 with the message and reason on every manual inventory path", async () => {
-    const adjust = await call("POST", "/inventory/var_app/adjust", { operationKey: "digital-http-adjust-0001", delta: 2, reason: "correction" });
+    const adjust = await call("POST", "/inventory/var_app/adjust", { delta: 2, reason: "correction" }, { "Idempotency-Key": "digital-http-adjust-0001" });
     expect(adjust).toMatchObject({ status: 400, body: refused });
     const scan = await call("POST", "/inventory/stock-adjust", { operationKey: "digital-http-scan-00001", variantId: "var_app", adjustment: -1 });
     expect(scan).toMatchObject({ status: 400, body: refused });
-    const count = await call("POST", "/inventory/stock-set", { operationKey: "digital-http-count-0001", variantId: "var_app", newStock: 9 });
+    const count = await call("POST", "/inventory/stock-set", { variantId: "var_app", newStock: 9 }, { "Idempotency-Key": "digital-http-count-0001" });
     expect(count).toMatchObject({ status: 400, body: refused });
     expect(sqlite.prepare("SELECT stock FROM product_variants WHERE id = 'var_app'").get()).toEqual({ stock: 3 });
   });

@@ -94,6 +94,12 @@ type InventoryOperationBase = {
    * location, and a relative change applies there.
    */
   locationId?: string | null;
+  /**
+   * The SKU's `stockVersion` the caller read: any stock change since refuses
+   * (409) instead of applying. Exact: the write's own stockVersion CAS
+   * covers it. Omit to apply whatever happened since.
+   */
+  expectedStockVersion?: number;
 };
 
 export type InventoryOperationInput =
@@ -163,6 +169,9 @@ export async function executeInventoryOperation(
   for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
     const variant = await selectInventoryVariant(db, normalized.variantId);
     if (!variant) throw new NotFoundError("Variant not found");
+    if (input.expectedStockVersion !== undefined && variant.stockVersion !== input.expectedStockVersion) {
+      throw new ConflictError("This SKU's stock changed since you read it. Read it again, then retry.");
+    }
     // Every level change bumps the SKU's stockVersion, so this read is
     // covered by the same compare-and-set as the counters.
     const locationPreviousStock = location

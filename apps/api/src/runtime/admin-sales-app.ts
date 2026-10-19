@@ -8,6 +8,7 @@ import { adminShipmentRoutes } from "../routes/admin/shipments";
 import { adminTaxRoutes } from "../routes/admin/taxes";
 import { adminGiftCardRoutes } from "../routes/admin/gift-cards";
 import { adminWarrantyClaimRoutes } from "../routes/admin/warranty-claims";
+import { adminResourceRoutes } from "../routes/admin/resources";
 
 const app = createAdminRuntimeApiApp();
 app.route("/admin/customers", adminCustomerMarketingRoutes);
@@ -19,5 +20,7 @@ app.route("/admin/conversations", adminConversationRoutes);
 app.route("/admin/taxes", adminTaxRoutes);
 app.route("/admin/gift-cards", adminGiftCardRoutes);
 app.route("/admin/warranty-claims", adminWarrantyClaimRoutes);
+// The stable app API's resources (orders, products, customers and their parts).
+app.route("/admin/resources", adminResourceRoutes);
 
 export default app;

@@ -1,5 +1,6 @@
 // Bulk archive, ship, confirm and fulfil.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { assertContactSearchAllowed } from "../contact-access";
 import {
     archiveOrders,
     listMatchingArchivableOrders,
@@ -96,6 +97,7 @@ app.openapi(archiveOrdersRoute, async (c) => {
     const data = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
     requireOneSelection(data.orders, data.matching);
+    assertContactSearchAllowed(c, "matching.filter.search", data.matching?.filter.search);
     const archive = async (claims: Array<{ id: string; expectedVersion: number }>) => {
         await archiveOrders(db, claims);
         for (const order of claims) {

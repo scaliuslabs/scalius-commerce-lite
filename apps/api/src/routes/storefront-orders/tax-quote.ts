@@ -1,4 +1,5 @@
 import { buyerUiBlockSchema, checkoutAttributesSchema } from "@scalius/shared/plugins";
+import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 // Authoritative checkout tax quote.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
@@ -74,7 +75,7 @@ const taxQuoteItemSchema = z.object({
   cartKey: z.string().min(1).max(256).optional().nullable(),
   productId: z.string().min(1, "Product is required").max(180),
   variantId: persistedStorefrontVariantIdSchema,
-  quantity: z.number().int().min(1).max(99),
+  quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
   productName: z.string().max(200).optional().nullable(),
   variantLabel: z.string().max(200).optional().nullable(),
   properties: linePropertiesInputSchema,
@@ -185,7 +186,7 @@ const taxQuoteRoute = createRoute({
         "application/json": {
           schema: z.object({
             attributes: checkoutAttributesSchema.optional(),
-            items: z.array(taxQuoteItemSchema).min(1).max(99),
+            items: z.array(taxQuoteItemSchema).min(1).max(MAX_ORDER_LINES),
             inventoryPool: z.enum([
               InventoryPool.REGULAR,
               InventoryPool.PREORDER,

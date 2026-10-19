@@ -27,6 +27,7 @@ import { CUSTOM_FIELD_ROUTE_PERMISSIONS } from "./custom-fields";
 import { APP_ROUTE_PERMISSIONS } from "./apps";
 import { STORE_TRANSFER_ROUTE_PERMISSIONS } from "./store-transfer";
 import { OBJECT_ROUTE_PERMISSIONS } from "./objects";
+import { RESOURCE_ROUTE_PERMISSIONS } from "./resources";
 import type { HttpMethod, RoutePermission, RoutePermissionMap } from "./shared";
 
 /**
@@ -60,6 +61,7 @@ export const ROUTE_PERMISSION_MAPS: readonly RoutePermissionMap[] = [
   APP_ROUTE_PERMISSIONS,
   STORE_TRANSFER_ROUTE_PERMISSIONS,
   OBJECT_ROUTE_PERMISSIONS,
+  RESOURCE_ROUTE_PERMISSIONS,
 ];
 
 /**

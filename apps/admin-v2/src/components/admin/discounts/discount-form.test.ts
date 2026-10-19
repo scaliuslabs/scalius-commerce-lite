@@ -50,6 +50,7 @@ function record(input: ReturnType<typeof draftToInput>): DiscountRecord {
     maxRedemptions: input.maxRedemptions ?? null,
     maxRedemptionsPerCustomer: input.maxRedemptionsPerCustomer ?? null,
     maxDiscountSpendMinor: input.maxDiscountSpendMinor ?? null,
+    currency: "BDT",
     budgetCurrencyCode: input.budgetCurrencyCode ?? null,
     redemptionCount: 0,
     customerRedemptionCount: 0,

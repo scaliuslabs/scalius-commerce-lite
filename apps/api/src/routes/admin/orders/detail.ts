@@ -1,5 +1,6 @@
 // One order: detail, items, payments, timeline and comments, notifications, edits, restore, recovery links and form data.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { idempotencyKeyHeaderSchema, scopedRequestKey } from "../idempotency";
 import { listGiftCardPaymentLinks } from "../../shared/gift-card-payment-links";
 import { relatedObjectsProjection, withRelatedObjects } from "../related-objects";
 import { relatedObjectRecordSchema } from "../../../schemas/related-objects";
@@ -42,10 +43,11 @@ import {
     products,
     productVariants,
     media,
+    orderHolds,
     orders,
 } from "@scalius/database/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { NotFoundError, ServiceUnavailableError } from "../../../utils/api-error";
+import { ForbiddenError, NotFoundError, ServiceUnavailableError } from "../../../utils/api-error";
 import { ok, created, noContent } from "../../../utils/api-response";
 import {
     successEnvelope,
@@ -318,17 +320,16 @@ const addCommentRoute = createRoute({
     path: "/{id}/timeline",
     tags: ["Admin - Orders"],
     summary: "Add a staff comment to the order timeline",
+    description: "Send one Idempotency-Key per comment draft: posting it again returns the first comment.",
     request: {
         params: z.object({ id: z.string() }),
+        headers: idempotencyKeyHeaderSchema,
         body: {
             content: {
                 "application/json": {
                     schema: z.object({
                         body: z.string().trim().min(1, "Write a comment first.")
                             .max(ORDER_COMMENT_MAX_LENGTH),
-                        requestKey: bulkRequestKeySchema.openapi({
-                            description: "One key per comment draft. Posting it again returns the first comment.",
-                        }),
                     }),
                 },
             },
@@ -350,7 +351,9 @@ app.openapi(addCommentRoute, (async (c: AdminRouteContext<typeof addCommentRoute
         c.req.valid("param").id,
         c.req.valid("json").body,
         user?.id ?? null,
-        c.req.valid("json").requestKey,
+        c.req.valid("header")["idempotency-key"]
+            ? await scopedRequestKey(c, "dashboard.orders.comment_add", c.req.valid("header")["idempotency-key"])
+            : undefined,
     );
     return created(c, { ...event, createdAt: event.createdAt.toISOString() });
 }) as unknown as AdminRouteHandler<typeof addCommentRoute>);
@@ -410,6 +413,14 @@ const releaseHoldRoute = createRoute({
 
 app.openapi(releaseHoldRoute, async (c) => {
     const { id, holdId } = c.req.valid("param");
+    // An app releases only the holds it placed; another app's review stays with staff.
+    const plugin = c.get("pluginPrincipal");
+    if (plugin) {
+        const placed = await c.get("db").select({ pluginId: orderHolds.pluginId }).from(orderHolds)
+            .where(and(eq(orderHolds.id, holdId), eq(orderHolds.orderId, id))).get();
+        if (!placed) throw new NotFoundError("Hold not found");
+        if (placed.pluginId !== plugin.pluginId) throw new ForbiddenError("An app can release only the holds it placed.");
+    }
     const user = c.get("user") as { id?: string } | undefined;
     const hold = await releaseOrderHold(c.get("db"), id, holdId, user?.id ?? null);
     return ok(c, {

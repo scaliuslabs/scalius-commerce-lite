@@ -35,11 +35,11 @@ describe("manual-order quantity validation", () => {
     const schema = createOrderSchema;
     const input = (quantity: number) => ({ ...orderInput(quantity), requestKey: crypto.randomUUID() });
 
-    it.each([1, 99])("accepts boundary quantity %s", (quantity) => {
+    it.each([1, 99, 120, 1_000_000])("accepts boundary quantity %s", (quantity) => {
         expect(schema.safeParse(input(quantity)).success).toBe(true);
     });
 
-    it.each([1.5, 0, 100])("rejects invalid quantity %s", (quantity) => {
+    it.each([1.5, 0, 1_000_001])("rejects invalid quantity %s", (quantity) => {
         const result = schema.safeParse(input(quantity));
         expect(result.success).toBe(false);
         if (!result.success) {

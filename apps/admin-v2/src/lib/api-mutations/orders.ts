@@ -234,12 +234,12 @@ export function useUpdateOrderDetails() {
   });
 }
 
-/** A staff comment; one request key per draft, so a repeated Post adds it once. */
+/** A staff comment; one Idempotency-Key per draft, so a repeated Post adds it once. */
 export function useAddOrderComment() {
   const queryClient = useQueryClient();
   return useSingleFlightMutation({
-    mutationFn: ({ orderId, ...body }: { orderId: string } & ApiBody<typeof postApiV1AdminOrdersByIdTimeline>) =>
-      apiData(postApiV1AdminOrdersByIdTimeline({ path: { id: orderId }, body })),
+    mutationFn: ({ orderId, requestKey, ...body }: { orderId: string; requestKey: string } & ApiBody<typeof postApiV1AdminOrdersByIdTimeline>) =>
+      apiData(postApiV1AdminOrdersByIdTimeline({ path: { id: orderId }, body, headers: { "idempotency-key": requestKey } })),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["orders", "timeline", variables.orderId] });
     },
@@ -337,7 +337,8 @@ export function useVoidFulfillment() {
     mutationFn: ({ orderId, fulfillmentId, requestKey }: { orderId: string; fulfillmentId: string; requestKey: string }) =>
       apiData(postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid({
         path: { id: orderId, fulfillmentId },
-        body: { requestKey },
+        body: {},
+        headers: { "idempotency-key": requestKey },
       })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
@@ -367,7 +368,7 @@ export function useMarkPickupReady() {
   const queryClient = useQueryClient();
   return useSingleFlightMutation({
     mutationFn: ({ orderId, requestKey }: { orderId: string; requestKey: string }) =>
-      apiData(postApiV1AdminOrdersByIdPickupReady({ path: { id: orderId }, body: { requestKey } })),
+      apiData(postApiV1AdminOrdersByIdPickupReady({ path: { id: orderId }, body: {}, headers: { "idempotency-key": requestKey } })),
     onSuccess: (_data, variables) => {
       invalidateOrder(queryClient, variables.orderId);
       toast.success(msg("toast.pickupReady"));

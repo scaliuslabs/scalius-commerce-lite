@@ -43,6 +43,8 @@ function epochIso(value: Date | number | null): string {
 export async function markOrderReadyForPickup(
     db: Database,
     orderId: string,
+    /** The order version the caller read; a change since refuses (exact under the write's version CAS). */
+    options: { expectedVersion?: number } = {},
 ): Promise<MarkReadyForPickupResult> {
     const order = await db.select({
         status: orders.status,
@@ -60,6 +62,9 @@ export async function markOrderReadyForPickup(
     }
     if (order.pickupReadyAt) {
         return { orderId, pickupReadyAt: epochIso(order.pickupReadyAt), replayed: true, notificationOutboxId: null };
+    }
+    if (options.expectedVersion !== undefined && order.version !== options.expectedVersion) {
+        throw new ConflictError("This order changed. Reload to see the latest.");
     }
     if (!(OPEN_PICKUP_STATUSES as readonly string[]).includes(order.status)) {
         throw new ValidationError(order.status === OrderStatus.CANCELLED

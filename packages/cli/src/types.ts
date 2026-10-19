@@ -56,6 +56,8 @@ export interface ResolvedProfile {
 export interface AgentMetadata {
   surface?: "dashboard" | "storefront" | "system";
   exposure?: "execute" | "continuation" | "device" | "excluded";
+  /** The app-API tier: stable changes only additively; beta (every storefront operation) may change. */
+  stability?: "stable" | "beta" | "internal";
   principals?: Array<"admin" | "visitor" | "customer" | "internal">;
   risk?: "read" | "write" | "destructive" | "financial" | "security";
   openWorld?: boolean;

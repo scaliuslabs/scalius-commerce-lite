@@ -20,6 +20,7 @@ import { describe, expect, it } from "vitest";
 import { effectivePluginPermissions } from "@scalius/core/modules/plugins";
 import { PLUGIN_SCOPE_NAMES, PROTECTED_FIELD_KEYWORD, isProtectedDataScope, type PluginScope } from "@scalius/shared/plugins";
 import { protectedMarkerCategories } from "@scalius/shared/plugins/protected-data";
+import { eventDataTruncation } from "@scalius/shared/events";
 import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS } from "../generated/agent-operations.gen";
 import { isOperationAvailableToPlugin, pluginRbacSatisfied } from "../plugins/authority";
 import type { AgentOperationManifestEntry } from "./agent-operation-manifest";
@@ -129,6 +130,57 @@ function stableBreakingChanges(before: StableSnapshot, after: StableSnapshot): s
   return problems;
 }
 
+/** A field name that names an amount of money (`totalMinor`, `price`, `shippingCharge`...). */
+const MONEY_KEY = /(price|amount|subtotal|cost|fee|charge|balance|paid|due|refund|cash|spent|revenue|discount|shipping|tax|total)/iu;
+/** Names that look like money but count, time or rank something. */
+const NOT_MONEY_KEY = /(count|pages|orders|characters|percent|bps|rate|quantity|days|weight|position|priority|version|revision|items|at)$|^total$/iu;
+const CURRENCY_KEY = /^(currency|currencyCode|[a-z]+Currency)$/u;
+
+type SchemaNode = Record<string, unknown>;
+
+/**
+ * Every place a stable schema carries money in a way the app API does not
+ * allow: a decimal or non-integer amount anywhere, or a returned `*Minor`
+ * amount with no currency on its object or an enclosing one.
+ */
+function moneyProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
+  const problems = new Set<string>();
+  const resolve = (node: unknown): SchemaNode | null => {
+    if (!node || typeof node !== "object") return null;
+    const ref = (node as { $ref?: unknown }).$ref;
+    return typeof ref === "string" ? resolve(components[ref.replace("#/components/schemas/", "")]) : node as SchemaNode;
+  };
+  const walk = (label: string, node: unknown, path: string[], currencyInReach: boolean, output: boolean, refs: Set<string>) => {
+    const ref = node && typeof node === "object" ? (node as { $ref?: unknown }).$ref : undefined;
+    if (typeof ref === "string") {
+      if (refs.has(ref)) return;
+      refs = new Set([...refs, ref]);
+    }
+    const schema = resolve(node);
+    if (!schema) return;
+    const key = path.filter((segment) => segment !== "*").at(-1);
+    if (key && (schema.type === "number" || schema.type === "integer") && MONEY_KEY.test(key) && !NOT_MONEY_KEY.test(key)) {
+      if (!key.endsWith("Minor") || schema.type !== "integer") problems.add(`${label} ${path.join(".")}: money is an integer *Minor field.`);
+      else if (output && !currencyInReach) problems.add(`${label} ${path.join(".")}: no currency beside this amount.`);
+    }
+    const properties = (schema.properties ?? {}) as Record<string, unknown>;
+    const reach = currencyInReach || Object.keys(properties).some((name) => CURRENCY_KEY.test(name));
+    for (const [child, value] of Object.entries(properties)) walk(label, value, [...path, child], reach, output, refs);
+    if (schema.items) walk(label, schema.items, [...path, "*"], reach, output, refs);
+    if (schema.additionalProperties && typeof schema.additionalProperties === "object") walk(label, schema.additionalProperties, [...path, "*"], reach, output, refs);
+    for (const variant of [...((schema.anyOf ?? []) as unknown[]), ...((schema.oneOf ?? []) as unknown[]), ...((schema.allOf ?? []) as unknown[])]) {
+      walk(label, variant, path, reach, output, refs);
+    }
+  };
+  for (const operation of operations) {
+    const input = (operation.inputSchema ?? {}) as { parameters?: { name: string; schema?: unknown }[]; requestBody?: { content?: Record<string, { schema?: unknown }> } };
+    for (const parameter of input.parameters ?? []) walk(`${operation.operationId} input`, parameter.schema, [parameter.name], true, false, new Set());
+    for (const media of Object.values(input.requestBody?.content ?? {})) walk(`${operation.operationId} input`, media.schema, [], true, false, new Set());
+    walk(`${operation.operationId} output`, operation.outputSchema, [], false, true, new Set());
+  }
+  return [...problems];
+}
+
 describe("the stable app API", () => {
   it("is a deliberate, coherent set every third-party app can reach through a scope", () => {
     expect(stable.length).toBeGreaterThanOrEqual(100);
@@ -174,7 +226,8 @@ describe("the stable app API", () => {
       const parent = path.filter((segment) => segment !== "*").at(-2);
       const contact = key !== undefined && (CONTACT_KEYS.has(key) || (key === "name" && parent !== undefined && PERSON_CONTAINERS.has(parent))
         || (key === "name" && path.join(".") === "data" + ".name" && operationId.startsWith("dashboard.customers.")));
-      if (contact && !protectedMarkerCategories(schema[PROTECTED_FIELD_KEYWORD]) && (schema.type !== "boolean")) {
+      // An object (an address, a contact block) is checked through its fields.
+      if (contact && !protectedMarkerCategories(schema[PROTECTED_FIELD_KEYWORD]) && schema.type !== "boolean" && schema.type !== "object") {
         unmarked.push(`${operationId} ${path.join(".")}`);
       }
       for (const [child, value] of Object.entries((schema.properties ?? {}) as Record<string, unknown>)) walk(operationId, value, [...path, child], refs);
@@ -194,6 +247,71 @@ describe("the stable app API", () => {
   it("never reaches people, credentials, webhooks or apps", () => {
     for (const operation of stable) {
       expect(operation.operationId).not.toMatch(/^dashboard\.(account|team|agent_access|apps|webhooks|security)\./);
+    }
+  });
+
+  it("locks the app API only: every storefront operation is beta", () => {
+    const storefront = AGENT_OPERATIONS.filter((operation) => operation.surface === "storefront");
+    expect(storefront.length).toBeGreaterThan(0);
+    expect(storefront.filter((operation) => operation.stability !== "beta" && operation.exposure === "execute").map((operation) => operation.operationId)).toEqual([]);
+  });
+
+  it("carries money only as integer minor units, with a currency beside every amount it returns", () => {
+    expect(moneyProblems(stable)).toEqual([]);
+  });
+
+  it("has one retry contract: the Idempotency-Key header on every mutation, and no body key", () => {
+    const mutations = stable.filter((operation) => operation.risk !== "read");
+    expect(mutations.length).toBeGreaterThan(40);
+    expect(mutations.filter((operation) => operation.idempotency === "none").map((operation) => operation.operationId)).toEqual([]);
+    for (const operation of mutations) {
+      const input = operation.inputSchema as { parameters?: { name: string; in: string; schema?: { pattern?: string; maxLength?: number } }[] };
+      const header = input.parameters?.find((parameter) => parameter.in === "header" && parameter.name === "idempotency-key");
+      expect(header?.schema, operation.operationId).toMatchObject({ pattern: "^[\\x20-\\x7E]{8,200}$", maxLength: 200 });
+    }
+    const sealed = JSON.stringify(Object.fromEntries(Object.entries(currentSnapshot().operations).map(([id, operation]) => [id, operation.input])));
+    for (const field of ["requestKey", "operationKey"]) expect(sealed.includes(`"${field}"`), field).toBe(false);
+  });
+
+  it("takes a revision precondition on every write that is not a create", () => {
+    // No revision to compare yet: custom field values (each PUT checks the
+    // definitions' revisions), customers (no revision column; adding one
+    // touches every checkout write), the place import (an additive upsert
+    // of a dataset) and publications (outside the product revision by
+    // design). An optional precondition added later is additive.
+    const WITHOUT_REVISION = new Set([
+      ...["brand", "category", "collection", "customer", "order", "page", "product", "variant"].map((owner) => `dashboard.custom_fields.set_${owner}_values`),
+      "dashboard.customers.update",
+      "dashboard.customers.tags_set",
+      "dashboard.delivery_locations.import",
+      "dashboard.products.publications_set",
+    ]);
+    const creates = /\.(create|import_url|comment_add)$/u;
+    const unguarded = stable
+      .filter((operation) => operation.risk !== "read" && !creates.test(operation.operationId) && operation.revision === "none")
+      .map((operation) => operation.operationId);
+    expect(unguarded.filter((id) => !WITHOUT_REVISION.has(id))).toEqual([]);
+    expect([...WITHOUT_REVISION].filter((id) => !unguarded.includes(id))).toEqual([]);
+  });
+
+  it("reads each resource in the representation its webhooks carry, where a truncated delivery points", () => {
+    const facts = { orderId: "ord_1", giftCardId: "gc_1", objectType: "custom.x" };
+    for (const type of ["order", "product", "variant", "customer", "fulfillment", "shipment", "payment"] as const) {
+      const { fetch } = eventDataTruncation(type, "res_1", facts);
+      const operation = stable.find((candidate) => candidate.operationId === fetch.operationId);
+      expect(operation, `${type}: ${fetch.operationId} is stable`).toBeDefined();
+      expect(operation!.operationId.startsWith("dashboard.resources."), type).toBe(true);
+      const template = new RegExp(`^${operation!.pathTemplate.replace(/\{[^}]+\}/gu, "[^/]+")}$`, "u");
+      expect(fetch.path, type).toMatch(template);
+      const output = JSON.stringify(operation!.outputSchema);
+      expect(output.includes(`#/components/schemas/${type[0]!.toUpperCase()}${type.slice(1)}Resource`), type).toBe(true);
+    }
+  });
+
+  it("seals no regional or editor-only product fields", () => {
+    const sealed = JSON.stringify(currentSnapshot());
+    for (const field of ["emiEligible", "freeDelivery", "discountPercentage", "discountType"]) {
+      expect(sealed.includes(`"${field}"`), field).toBe(false);
     }
   });
 
@@ -273,5 +391,32 @@ describe("the breaking-change check", () => {
     expect(stableBreakingChanges(before, retyped)).toEqual([
       "dashboard.things.get output [variant 1].count: type changed from integer to string.",
     ]);
+  });
+});
+
+describe("the money check", () => {
+  const operation = (output: unknown, body?: unknown) => ({
+    operationId: "dashboard.things.get",
+    inputSchema: body ? { requestBody: { content: { "application/json": { schema: body } } } } : {},
+    outputSchema: output,
+  }) as unknown as AgentOperationManifestEntry;
+  const object = (properties: Record<string, unknown>) => ({ type: "object", properties });
+
+  it("refuses decimal amounts and returned amounts without a currency", () => {
+    expect(moneyProblems([operation(
+      object({ price: { type: "number" }, totalMinor: { type: "integer" }, pagination: object({ total: { type: "integer" }, totalPages: { type: "integer" } }) }),
+      object({ shippingCharge: { type: "number" } }),
+    )], {})).toEqual([
+      "dashboard.things.get input shippingCharge: money is an integer *Minor field.",
+      "dashboard.things.get output price: money is an integer *Minor field.",
+      "dashboard.things.get output totalMinor: no currency beside this amount.",
+    ]);
+  });
+
+  it("accepts minor units beside a currency on the object or an enclosing one", () => {
+    expect(moneyProblems([operation(
+      object({ currency: { type: "string" }, totalMinor: { type: "integer" }, lines: { type: "array", items: object({ unitPriceMinor: { type: "integer" } }) } }),
+      object({ cashReceivedMinor: { type: "integer" } }),
+    )], {})).toEqual([]);
   });
 });

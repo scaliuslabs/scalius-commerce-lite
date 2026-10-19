@@ -514,7 +514,8 @@ export function ScannerApp({ token }: ScannerAppProps) {
         const data: { newStock?: unknown; locationNewStock?: unknown } = isAbsolute
           ? await withOneRetry(() => apiData(postApiV1AdminInventoryStockSet({
               // A count is the units at the location being counted.
-              body: { operationKey, variantId, newStock: adjustment, reason, ...(at ? { locationId: at.id } : {}) },
+              body: { variantId, newStock: adjustment, reason, ...(at ? { locationId: at.id } : {}) },
+              headers: { "idempotency-key": operationKey },
             })))
           : await adjustStock({ operationKey, variantId, adjustment, reason }, at);
         const oldStock = product.locationStock ?? product.stock;

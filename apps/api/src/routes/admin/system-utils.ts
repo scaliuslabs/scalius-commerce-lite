@@ -2,6 +2,7 @@
 // Admin OpenAPI routes for system utilities (abandoned checkouts, FCM tokens).
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { assertContactSearchAllowed } from "./contact-access";
 import { createId } from "@paralleldrive/cuid2";
 import { sql, inArray, desc, asc, and, count } from "drizzle-orm";
 import { containsText } from "@scalius/core/utils/text-match";
@@ -144,6 +145,7 @@ const listAbandonedCheckoutSummariesRoute = createRoute({
 app.openapi(listAbandonedCheckoutSummariesRoute, async (c) => {
     const db = c.get("db");
     const { page, limit, search, order } = c.req.valid("query");
+    assertContactSearchAllowed(c, "search", search);
     const offset = (page - 1) * limit;
     const whereConditions = [];
     if (search) {

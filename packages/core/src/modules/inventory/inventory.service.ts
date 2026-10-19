@@ -689,6 +689,8 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
     notes?: string;
     pool?: string;
     locationId?: string;
+    /** The SKU's stockVersion the caller read; a change since refuses (409). */
+    expectedStockVersion?: number;
 }, adminUserId?: string) {
     const parsedPayload = adjustInventorySchema.safeParse(payload);
     if (!parsedPayload.success) {
@@ -699,6 +701,7 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
     const { operationKey, pool, delta, reason, notes, locationId } = parsedPayload.data;
     return executeInventoryOperation(db, {
         operationKey,
+        ...(payload.expectedStockVersion !== undefined ? { expectedStockVersion: payload.expectedStockVersion } : {}),
         operationType: "manual_adjustment",
         variantId,
         pool,

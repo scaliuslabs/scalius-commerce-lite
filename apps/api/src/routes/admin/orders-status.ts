@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import {
     assertShipmentDeletable,
     bulkShipOrders,
@@ -159,6 +160,9 @@ const updateStatusRoute = createRoute({
                         status: z.enum(ORDER_STATUSES),
                         /** Why an order is cancelled; recorded on the timeline. */
                         reason: z.enum(["customer_changed_mind", "unreachable", "fake_order", "out_of_stock", "other"]).optional(),
+                        expectedVersion: z.number().int().min(1).optional().openapi({
+                            description: "The order version you read (`version` on the order). A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.",
+                        }),
                     }),
                 },
             },
@@ -182,7 +186,7 @@ app.openapi(updateStatusRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const before = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
-    const result = await updateOrderStatus(db, orderId, data.status);
+    const result = await updateOrderStatus(db, orderId, data.status, { expectedVersion: data.expectedVersion });
     if (before && before.status !== data.status) {
         await recordOrderEvent(db, {
             orderId,
@@ -222,7 +226,14 @@ const markDeliveredRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Mark a paid order your own rider delivered in full as delivered",
     description: "Cash-on-delivery orders are delivered by recording the cash (POST /{id}/cod). Refused while anything is unsent or money is due.",
-    request: { params: z.object({ id: z.string() }) },
+    request: {
+        params: z.object({ id: z.string() }),
+        query: z.object({
+            expectedVersion: z.coerce.number().int().min(1).optional().openapi({
+                description: "The order version you read; a change since is refused with 409. Omit to mark it whatever happened since.",
+            }),
+        }),
+    },
     responses: {
         200: {
             description: "Order delivered",
@@ -235,7 +246,7 @@ const markDeliveredRoute = createRoute({
 app.openapi(markDeliveredRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const result = await markOrderDelivered(db, orderId);
+    const result = await markOrderDelivered(db, orderId, { expectedVersion: c.req.valid("query").expectedVersion });
     if (result.notification) {
         await recordOrderEvent(db, {
             orderId,
@@ -417,7 +428,7 @@ app.openapi(getShipmentsRoute, async (c) => {
 
 // ─── POST /:id/shipments ─────────────────────────────────────────────────────
 
-const createShipmentBodySchema = z.object({
+export const createShipmentBodySchema = z.object({
     providerId: z.string().trim().min(1).max(180),
     options: shipmentCreationOptionsSchema.optional(),
 }).strict();
@@ -442,8 +453,24 @@ const createShipmentRoute = createRoute({
 });
 
 app.openapi(createShipmentRoute, async (c) => {
-    const orderId = c.req.valid("param").id;
-    const data = c.req.valid("json");
+    const { shipment, providerName, lastChecked } = await bookOrderShipment(c, c.req.valid("param").id, c.req.valid("json"));
+    return created(c, {
+        ...shipment,
+        providerName: providerName || shipment.providerType,
+        lastChecked: lastChecked.toISOString(),
+    });
+});
+
+/**
+ * Books a courier for an order and records its effects (timeline, the
+ * buyer's shipped notification). Shared by `dashboard.orders.create_shipment`
+ * and `dashboard.resources.shipments.create`.
+ */
+export async function bookOrderShipment(
+    c: Context<{ Bindings: Env }>,
+    orderId: string,
+    data: z.infer<typeof createShipmentBodySchema>,
+) {
     const db = c.get("db");
 
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
@@ -495,14 +522,8 @@ app.openapi(createShipmentRoute, async (c) => {
     });
     }
 
-    const enhancedShipment = {
-        ...createdShipmentRecord,
-        providerName: provider?.name || createdShipmentRecord.providerType,
-        lastChecked: now.toISOString()
-    };
-
-    return created(c, enhancedShipment);
-});
+    return { shipment: createdShipmentRecord, providerName: provider?.name ?? null, lastChecked: now };
+}
 
 // ─── GET /:id/shipments/:shipmentId ──────────────────────────────────────────
 

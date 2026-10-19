@@ -1,5 +1,6 @@
 // Dashboard order list, export, payment-recovery lists, and the order form product picker.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { assertContactSearchAllowed } from "../contact-access";
 import {
     ORDER_DELIVERY_METHOD_FILTERS,
     ORDER_LIST_VIEWS,
@@ -298,6 +299,7 @@ const listOrdersRoute = createRoute({
 app.openapi(listOrdersRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
+    assertContactSearchAllowed(c, "search", query.search);
     const effectiveSort: OrderListSort = query.sort
         ?? (query.search?.trim() ? "relevance" : "createdAt");
     // App columns and filters: nothing more is read unless the request names some.

@@ -44,6 +44,7 @@ export function summarizeOperation(operation: AgentOperationManifestEntry) {
     operationId: operation.operationId,
     summary: operation.summary,
     tags: operation.tags,
+    stability: operation.stability,
     risk: operation.risk,
     exposure: operation.exposure,
     idempotency: operation.idempotency,

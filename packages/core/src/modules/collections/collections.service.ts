@@ -517,18 +517,27 @@ export async function updateCollectionProducts(
     return updated;
 }
 
-export async function deleteCollection(db: Database, id: string): Promise<void> {
+/**
+ * Moves a collection to the trash. `expectedVersion`, when given, is the
+ * version the caller read: a change since refuses (409) and trashes nothing.
+ */
+export async function deleteCollection(db: Database, id: string, options: { expectedVersion?: number } = {}): Promise<void> {
     const existing = await getCollectionById(db, id);
     if (!existing) throw new NotFoundError("Collection not found");
 
-    await db
+    const trashed = await db
         .update(collections)
         .set(truthfulUpdatedAt(collections, {
             deletedAt: sql`(unixepoch())`,
             version: sql`${collections.version} + 1`,
             updatedAt: sql`(unixepoch())`,
         }))
-        .where(eq(collections.id, id));
+        .where(and(
+            eq(collections.id, id),
+            options.expectedVersion !== undefined ? eq(collections.version, options.expectedVersion) : undefined,
+        ))
+        .returning({ id: collections.id });
+    if (trashed.length === 0) throw new ConflictError("This collection changed. Reload to see the latest.");
 }
 
 export async function bulkDeleteCollections(
@@ -602,7 +611,8 @@ export async function bulkDeactivateCollections(db: Database, ids: string[]): Pr
         .where(and(inArray(collections.id, normalizedIds), isNull(collections.deletedAt)));
 }
 
-export async function restoreCollections(db: Database, ids: string[]): Promise<void> {
+/** `expectedVersion` (one collection only) is the version the caller read; a change since refuses (409). */
+export async function restoreCollections(db: Database, ids: string[], options: { expectedVersion?: number } = {}): Promise<void> {
     const normalizedIds = normalizeMutationIds(ids);
     if (normalizedIds.length === 0) return;
 
@@ -620,6 +630,9 @@ export async function restoreCollections(db: Database, ids: string[]): Promise<v
         throw new NotFoundError("One or more trashed collections were not found.");
     }
     const byId = new Map(trashedRows.map((row) => [row.id, row]));
+    if (options.expectedVersion !== undefined && trashedRows.some((row) => row.version !== options.expectedVersion)) {
+        throw new ConflictError("This collection changed. Reload to see the latest.");
+    }
     const nextSortOrder = Number(maxRows[0]?.max ?? -1) + 1;
     const results = await safeBatch(db, normalizedIds.map((id, index) => {
         const row = byId.get(id)!;

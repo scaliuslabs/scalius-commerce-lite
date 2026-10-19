@@ -4,7 +4,9 @@
 // from the `{ success, data }` envelope; refusals are results, not throws.
 // A third-party app reaches the stable app API only (`x-scalius-agent.stability`);
 // anything else refuses with `api.operation_not_stable`. Buyer contact fields
-// the grant does not reveal read null (protected-response.ts, H5).
+// the grant does not reveal read null (protected-response.ts, H5). The input's
+// `idempotencyKey` is sent as the Idempotency-Key header: the one retry key
+// every stable mutation takes.
 
 import type { Database } from "@scalius/database/client";
 import type { PluginApiCallInput, PluginApiResult } from "@scalius/plugin-sdk";
@@ -20,6 +22,7 @@ import { resolveAgentOperationById } from "../agent-access/direct-operation";
 import type { PluginPrincipal } from "../agent-access/types";
 import { authorizePluginOperation, pluginTierAllows, pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
 import { redactOperationResponse } from "./protected-response";
+import { IDEMPOTENCY_KEY_PATTERN } from "../routes/admin/idempotency";
 
 const OPERATION_ID = /^(?:dashboard(\.[a-z][a-z0-9_]*){2,}|objects\.(?:types\.(?:list|get|create|update|delete)|list|get|upsert|delete))$/;
 
@@ -61,9 +64,11 @@ export function normalizePluginApiInput(input: unknown): AgentOperationInput | s
     normalized.query = query;
   }
   if (input.body !== undefined) normalized.body = input.body;
+  // The operation's Idempotency-Key header: every stable mutation takes it
+  // and replays its first response for 24 hours (routes/admin/idempotency.ts).
   if (input.idempotencyKey !== undefined) {
-    if (typeof input.idempotencyKey !== "string" || input.idempotencyKey.length < 8 || input.idempotencyKey.length > 200) {
-      return "idempotencyKey is a string of 8 to 200 characters.";
+    if (typeof input.idempotencyKey !== "string" || !IDEMPOTENCY_KEY_PATTERN.test(input.idempotencyKey)) {
+      return "idempotencyKey is 8 to 200 printable characters.";
     }
     normalized.idempotencyKey = input.idempotencyKey;
   }

@@ -219,7 +219,8 @@ describe("order mutation requests", () => {
     expect(sdk.postApiV1AdminOrdersByIdTimeline).toHaveBeenCalledTimes(1);
     expect(sdk.postApiV1AdminOrdersByIdTimeline).toHaveBeenCalledWith({
       path: { id: "ord_1" },
-      body: { body: "Customer confirmed on the phone", requestKey: "draft-1" },
+      body: { body: "Customer confirmed on the phone" },
+      headers: { "idempotency-key": "draft-1" },
     });
   });
 
@@ -253,7 +254,8 @@ describe("order mutation requests", () => {
     await run(renderMutation(useVoidFulfillment), { orderId: "ord_1", fulfillmentId: "ful_1", requestKey: "void-1" });
     expect(sdk.postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid).toHaveBeenCalledWith({
       path: { id: "ord_1", fulfillmentId: "ful_1" },
-      body: { requestKey: "void-1" },
+      body: {},
+      headers: { "idempotency-key": "void-1" },
     });
     expect(toastMocks.success).toHaveBeenCalledWith(msg("toast.fulfillmentVoided"));
     expect(refreshedOrderQuery("detail", "ord_1")).toBe(true);
@@ -262,7 +264,7 @@ describe("order mutation requests", () => {
   it("marks a pickup order ready with its retry key", async () => {
     sdk.postApiV1AdminOrdersByIdPickupReady.mockResolvedValue({ pickupReadyAt: "2026-09-25T10:00:00Z" });
     await run(renderMutation(useMarkPickupReady), { orderId: "ord_1", requestKey: "ready-1" });
-    expect(sdk.postApiV1AdminOrdersByIdPickupReady).toHaveBeenCalledWith({ path: { id: "ord_1" }, body: { requestKey: "ready-1" } });
+    expect(sdk.postApiV1AdminOrdersByIdPickupReady).toHaveBeenCalledWith({ path: { id: "ord_1" }, body: {}, headers: { "idempotency-key": "ready-1" } });
     expect(toastMocks.success).toHaveBeenCalledWith(msg("toast.pickupReady"));
   });
 

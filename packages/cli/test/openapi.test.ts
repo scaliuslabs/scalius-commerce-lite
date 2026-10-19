@@ -155,6 +155,16 @@ describe("OpenAPI operation indexing", () => {
     expect(searchOperations(operations, "Products")).toHaveLength(2);
   });
 
+  it("lists stable operations first, keeping beta ones listed", () => {
+    const operations = indexOperations(executableSpec());
+    const ids = (list: typeof operations) => list.map(({ id }) => id);
+    const before = ids(searchOperations(operations, "Products"));
+    findOperation(operations, before.at(-1)!).agent.stability = "stable";
+    expect(ids(searchOperations(operations, "Products"))).toEqual([before.at(-1), ...before.slice(0, -1)]);
+    expect(ids(searchOperations(operations))[0]).toBe(before.at(-1));
+    expect(searchOperations(operations)).toHaveLength(operations.length);
+  });
+
   it("understands common merchant phrasing without requiring operation jargon", () => {
     const operations = indexOperations(executableSpec());
     findOperation(operations, "dashboard.products.get").operation.description = "Answer daily revenue and order questions.";

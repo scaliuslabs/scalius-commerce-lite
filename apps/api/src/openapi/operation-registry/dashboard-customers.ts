@@ -13,9 +13,9 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
     risk: "destructive",
     batch: "forbidden",
   },
-  "dashboard.customers.get": { stability: "stable" },
+  "dashboard.customers.get": {},
   "dashboard.customers.history": {},
-  "dashboard.customers.list": { stability: "stable" },
+  "dashboard.customers.list": {},
   "dashboard.customers.restore": {},
   "dashboard.customers.update": { stability: "stable" },
   // The address book (MARKETS-DESIGN D7).
@@ -46,7 +46,7 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
   "dashboard.customers.segments_members": {},
   "dashboard.customers.segments_preview": { risk: "read" },
   "dashboard.customers.segments_update": { revision: "required" },
-  "dashboard.customers.tags_bulk_update": { stability: "stable", batch: "sequential" },
+  "dashboard.customers.tags_bulk_update": { batch: "sequential" },
   "dashboard.customers.tags_list": { stability: "stable" },
   "dashboard.customers.tags_set": { stability: "stable" },
 } satisfies Record<string, OperationRegistryEntry>;

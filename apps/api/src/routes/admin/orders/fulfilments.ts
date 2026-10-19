@@ -3,6 +3,8 @@
 // done, void a fulfilment whose parcel came back, and mark a pickup order
 // ready to collect. Courier bookings stay on POST /{id}/shipments.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
+import type { Context } from "hono";
 import { MANUAL_FULFILLMENT_TYPES } from "@scalius/shared/fulfilment";
 import {
     markOrderReadyForPickup,
@@ -36,10 +38,17 @@ const requestKeySchema = z.string().uuid().openapi({
     description: "Retry key: repeating the request returns the first result instead of acting twice.",
 });
 
+/** A repeat is safe (the first result comes back); the version, when sent, must still be the order's. */
+const orderVersionBodySchema = z.object({
+    expectedVersion: z.number().int().min(1).optional().openapi({
+        description: "The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.",
+    }),
+}).strict();
+
 const fulfilmentLinesInputSchema = z.array(z.object({
     itemId: z.string().min(1).max(180),
-    quantity: z.number().int().min(1).max(99),
-})).min(1).max(99).optional().openapi({
+    quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
+})).min(1).max(MAX_ORDER_LINES).optional().openapi({
     description: "Which units to hand over; part of a line is fine. Omit for every unit of this kind not handed over yet.",
 });
 
@@ -103,9 +112,37 @@ const createFulfilmentRoute = createRoute({
 });
 
 app.openapi(createFulfilmentRoute, async (c) => {
+    const result = await handOverOrderLines(c, c.req.valid("param").id, c.req.valid("json"));
+    return created(c, {
+        orderId: result.orderId,
+        fulfillmentId: result.fulfillmentId,
+        kind: result.kind,
+        lines: result.lines,
+        shipmentId: result.shipmentId,
+        orderStatus: result.orderStatus,
+        fulfillmentStatus: result.fulfillmentStatus,
+        replayed: result.replayed,
+        awaitingPayment: result.awaitingPayment,
+    });
+});
+
+/** A hand-over as the dashboard and the app API take it (amounts in major units). */
+export interface HandOverInput {
+    requestKey: string;
+    kind: (typeof MANUAL_FULFILLMENT_TYPES)[number];
+    lines?: { itemId: string; quantity: number }[];
+    tracking?: { courierName?: string; trackingId?: string; trackingUrl?: string; note?: string; shipmentAmount?: number };
+    cashReceived?: number;
+}
+
+/**
+ * Records a hand-over and its effects (timeline, buyer notifications, the
+ * delivery cascade after cash at the counter); a repeated request key
+ * returns the first result and repeats no effect. Shared by
+ * `dashboard.orders.fulfillment_create` and `dashboard.resources.fulfillments.create`.
+ */
+export async function handOverOrderLines(c: Context<{ Bindings: Env }>, orderId: string, body: HandOverInput) {
     const db = c.get("db");
-    const orderId = c.req.valid("param").id;
-    const body = c.req.valid("json");
     const actorId = actorIdOf(c);
     const result = await recordOrderFulfilment(db, orderId, {
         requestKey: body.requestKey,
@@ -168,18 +205,8 @@ app.openapi(createFulfilmentRoute, async (c) => {
             });
         }
     }
-    return created(c, {
-        orderId: result.orderId,
-        fulfillmentId: result.fulfillmentId,
-        kind: result.kind,
-        lines: result.lines,
-        shipmentId: result.shipmentId,
-        orderStatus: result.orderStatus,
-        fulfillmentStatus: result.fulfillmentStatus,
-        replayed: result.replayed,
-        awaitingPayment: result.awaitingPayment,
-    });
-});
+    return result;
+}
 
 const voidFulfilmentRoute = createRoute({
     operationId: "dashboard.orders.fulfillment_void",
@@ -191,7 +218,7 @@ const voidFulfilmentRoute = createRoute({
         params: z.object({ id: z.string(), fulfillmentId: z.string() }),
         body: {
             required: true,
-            content: { "application/json": { schema: z.object({ requestKey: requestKeySchema }).strict() } },
+            content: { "application/json": { schema: orderVersionBodySchema } },
         },
     },
     responses: {
@@ -217,7 +244,7 @@ const voidFulfilmentRoute = createRoute({
 app.openapi(voidFulfilmentRoute, async (c) => {
     const db = c.get("db");
     const { id: orderId, fulfillmentId } = c.req.valid("param");
-    const result = await voidOrderFulfilment(db, orderId, fulfillmentId);
+    const result = await voidOrderFulfilment(db, orderId, fulfillmentId, { expectedVersion: c.req.valid("json").expectedVersion });
     if (!result.replayed) {
         await recordOrderEvent(db, {
             orderId,
@@ -240,7 +267,7 @@ const pickupReadyRoute = createRoute({
         params: z.object({ id: z.string() }),
         body: {
             required: true,
-            content: { "application/json": { schema: z.object({ requestKey: requestKeySchema }).strict() } },
+            content: { "application/json": { schema: orderVersionBodySchema } },
         },
     },
     responses: {
@@ -264,7 +291,7 @@ const pickupReadyRoute = createRoute({
 app.openapi(pickupReadyRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const result = await markOrderReadyForPickup(db, orderId);
+    const result = await markOrderReadyForPickup(db, orderId, { expectedVersion: c.req.valid("json").expectedVersion });
     if (!result.replayed) {
         await recordOrderEvent(db, {
             orderId,

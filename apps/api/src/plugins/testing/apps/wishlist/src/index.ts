@@ -173,27 +173,20 @@ function fieldOf(request: PluginRouteRequest, name: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/** The product as the dashboard API returns it (its base section and its picker summary), reduced to what the app shows. */
+/** The product as the stable app API returns it (`dashboard.resources.products.get`), reduced to what the app shows. */
 async function readProduct(ctx: PluginContext, productId: string): Promise<ProductFacts | null> {
-  const [base, summary] = await Promise.all([
-    ctx.api.call<{ product?: { name?: string; slug?: string; isActive?: boolean; deletedAt?: unknown } }>(
-      "dashboard.products.get_section",
-      { path: { id: productId, section: "base" } },
-    ),
-    ctx.api.call<{ products?: Array<{ id?: string; primaryImage?: string | null }> }>(
-      "dashboard.products.get_by_ids",
-      { query: { ids: productId } },
-    ),
-  ]);
-  const product = base.ok ? base.data?.product : undefined;
+  const result = await ctx.api.call<{ name?: string; slug?: string; status?: string; imageUrl?: string | null }>(
+    "dashboard.resources.products.get",
+    { path: { id: productId } },
+  );
+  const product = result.ok ? result.data : null;
   if (!product) return null;
-  const image = summary.ok ? summary.data?.products?.find((entry) => entry.id === productId)?.primaryImage : null;
   return {
     product_id: productId,
     name: String(product.name ?? "").slice(0, 200),
     slug: String(product.slug ?? "").slice(0, 200),
-    image_url: typeof image === "string" && image ? image : null,
-    available: product.isActive !== false && !product.deletedAt,
+    image_url: typeof product.imageUrl === "string" && product.imageUrl ? product.imageUrl : null,
+    available: product.status === "active",
   };
 }
 

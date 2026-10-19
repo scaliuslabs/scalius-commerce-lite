@@ -671,6 +671,7 @@ export async function operationsSearch(
     method,
     path,
     surface: agent.surface,
+    stability: agent.stability ?? "beta",
     exposure: agent.exposure,
     risk: agent.risk,
     openWorld: agent.openWorld,

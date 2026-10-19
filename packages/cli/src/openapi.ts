@@ -297,14 +297,28 @@ export function findOperation(operations: IndexedOperation[], id: string): Index
   return operation;
 }
 
+/** Stable operations come first: they change only additively; beta ones stay listed, labelled. */
+const STABLE_BONUS = 40;
+
 export function searchOperations(operations: IndexedOperation[], query?: string): IndexedOperation[] {
   const normalizedQuery = query?.trim() ?? "";
-  if (!normalizedQuery) return operations;
+  if (!normalizedQuery) {
+    return operations
+      .map((candidate, index) => ({ candidate, index }))
+      .sort((left, right) => Number(right.candidate.agent.stability === "stable") - Number(left.candidate.agent.stability === "stable") || left.index - right.index)
+      .map(({ candidate }) => candidate);
+  }
   const ranked = operations.map((candidate, index) => {
     const { id, operation } = candidate;
     const text = [id, operation.summary, operation.description, ...(operation.tags ?? [])].filter(Boolean).join("\n").toLocaleLowerCase();
     const matchScore = merchantOperationQueryScore(text, normalizedQuery);
-    return { candidate, index, score: matchScore === null ? null : matchScore + (candidate.agent.risk === "read" ? 25 : 0) };
+    return {
+      candidate,
+      index,
+      score: matchScore === null
+        ? null
+        : matchScore + (candidate.agent.risk === "read" ? 25 : 0) + (candidate.agent.stability === "stable" ? STABLE_BONUS : 0),
+    };
   }).filter(({ score }) => score !== null);
   const hasReadMatch = ranked.some(({ candidate }) => candidate.agent.risk === "read");
   const preferReadMatches = normalizedQuery.split(/\s+/u).length > 1

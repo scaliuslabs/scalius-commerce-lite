@@ -18,7 +18,8 @@ import {
     resolveLineProperties,
     serializeOrderLineProperties,
 } from "@scalius/shared/line-properties";
-import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
+import { discountedPriceMinor, fromMinor, isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
+import { isLineAmountInRange } from "@scalius/shared/order-limits";
 import type { QuoteManualOrderInput } from "../validation";
 import {
     checkoutListPricesSql,
@@ -453,11 +454,22 @@ export async function prepareManualOrderQuote(
     const shippingCountryCode = plan.requiresShipping ? submittedCountry : null;
 
     const lineProperties = resolveManualOrderLineProperties(
-        resolvedItems.map((item, index) => ({
-            ...item,
-            orderItemId: (data.items[index] as { orderItemId?: string | null } | undefined)?.orderItemId ?? null,
-            unitPriceMinor: item.catalogUnitPriceMinor,
-        })),
+        resolvedItems.map((item, index) => {
+            const submitted = data.items[index] as { orderItemId?: string | null; unitPriceMinor?: number } | undefined;
+            const override = submitted?.unitPriceMinor;
+            if (override !== undefined && !isIncrementMultipleMinor(override, currency.priceIncrementMinor)) {
+                throw new ValidationError(priceIncrementMessage(currency.code, currency.priceIncrementMinor), {
+                    issues: [{ index, field: "unitPriceMinor", code: "PRICE_INCREMENT" }],
+                });
+            }
+            return {
+                ...item,
+                orderItemId: submitted?.orderItemId ?? null,
+                // A price set by hand replaces the catalogue price (resolvePrice) for this line.
+                catalogUnitPriceMinor: override ?? item.catalogUnitPriceMinor,
+                unitPriceMinor: override ?? item.catalogUnitPriceMinor,
+            };
+        }),
         retainedLines,
         currency.code !== store.code ? currency.code : null,
     );
@@ -466,6 +478,12 @@ export async function prepareManualOrderQuote(
         ...lineProperties[index]!,
         fulfillmentType: plan.lineTypes[index]!,
     }));
+    const outOfRange = trackedItems.findIndex((item) => !isLineAmountInRange(item.unitPriceMinor, item.quantity));
+    if (outOfRange >= 0) {
+        throw new ValidationError("That line comes to more than one order can hold. Lower its quantity.", {
+            issues: [{ index: outOfRange, code: "QUANTITY_UNAVAILABLE" }],
+        });
+    }
     const money = calculateManualOrderMoney(
         trackedItems,
         toStoreMinor(data.shippingCharge, currency),

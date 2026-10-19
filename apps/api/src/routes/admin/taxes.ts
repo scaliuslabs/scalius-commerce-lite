@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import {
   calculateStorefrontTaxQuote,
@@ -722,7 +723,7 @@ const previewRoute = createRoute({
   description: "Uses the saved regions, rates and provider, and the market of the address's country for whether prices include tax. A Bangladesh address names its City and Thana (and Area); another country's names its admin area or postal code. Without an address the order is taxed where the store ships from.",
   request: { body: { required: true, content: { "application/json": { schema: z.object({
     amount: z.number().min(0).max(1_000_000_000),
-    quantity: z.number().int().min(1).max(99).default(1),
+    quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY).default(1),
     taxClassId: z.string().max(180).nullable().optional(),
     shippingAmount: z.number().min(0).max(1_000_000_000).default(0),
     discountAmount: z.number().min(0).max(1_000_000_000).default(0),

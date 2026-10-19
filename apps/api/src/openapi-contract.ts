@@ -405,6 +405,44 @@ function applySecuritySchemes(spec: OpenApiDocument): void {
   };
 }
 
+/**
+ * Every stable mutation takes the optional header (routes/admin/idempotency.ts
+ * replays its first response); the shared middleware reads it, so the
+ * contract states it here once, in one shape, replacing a route's own.
+ */
+function documentIdempotencyKeyHeader(operation: OpenApiOperation): void {
+  const parameters = (Array.isArray(operation.parameters) ? operation.parameters as Record<string, unknown>[] : [])
+    .filter((parameter) => !(parameter.in === "header" && String(parameter.name).toLowerCase() === "idempotency-key"));
+  operation.parameters = [...parameters, {
+    schema: { type: "string", pattern: "^[\\x20-\\x7E]{8,200}$", minLength: 8, maxLength: 200 },
+    required: false,
+    description: "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+    name: "idempotency-key",
+    in: "header",
+  }];
+}
+
+/**
+ * The tiers, stated once at the document level (operation-registry/README.md):
+ * each operation carries its own in `x-scalius-agent.stability`.
+ */
+export const API_STABILITY = {
+  stable: "The frozen app API (v2.0): resource-shaped dashboard operations a third-party app may call. They change only additively.",
+  beta: "May change in any release: the dashboard's own projections and editor flows, and every storefront operation. The headless storefront contract stabilises in a later 2.x.",
+  internal: "Never callable by apps: staff, team, agent access, security, webhooks and app management.",
+} as const;
+
+function applyApiStability(spec: OpenApiDocument): void {
+  const info = (spec.info && typeof spec.info === "object" ? spec.info : {}) as Record<string, unknown>;
+  const note = "v2.0 locks the app API only (x-scalius-agent.stability: stable); the storefront API is beta.";
+  const description = typeof info.description === "string" ? info.description : "";
+  spec.info = {
+    ...info,
+    description: description.includes(note) ? description : [description, note].filter(Boolean).join(" "),
+    "x-scalius-stability": API_STABILITY,
+  };
+}
+
 function applyOperationContract(spec: OpenApiDocument): void {
   if (!spec.paths) return;
 
@@ -442,6 +480,7 @@ function applyOperationContract(spec: OpenApiDocument): void {
           ? SCANNER_ADMIN_OR_AGENT_SECURITY
           : ADMIN_OR_AGENT_SECURITY;
       }
+      if (metadata.stability === "stable" && metadata.risk !== "read") documentIdempotencyKeyHeader(operation);
       operation.operationId ??= operationId;
       operation["x-scalius-agent"] ??= metadata;
       operation["x-scalius-rbac"] ??= operationRbac(path, method);
@@ -516,6 +555,7 @@ function normalizeUnconstrainedOpenApiSchemas(value: unknown): void {
 
 export function finalizeOpenApiContract<T extends { components?: unknown; paths?: unknown }>(spec: T): T {
   const document = spec as OpenApiDocument;
+  applyApiStability(document);
   applySecuritySchemes(document);
   applyOperationContract(document);
   normalizeUnconstrainedOpenApiSchemas(document);

@@ -141,6 +141,9 @@ export function describeTimelineEvent(
         detail: from && from !== to ? t("timeline.locationWas", { location: from }) : null,
       };
     }
+    case "prices_set":
+      // Staff or an app priced lines by hand when placing the order.
+      return { text: t("timeline.pricesSet"), detail: null };
     case "app_event": {
       // An app's typed line: its name and the kind's title, then its message and facts as written.
       const fields = data.fields && typeof data.fields === "object" && !Array.isArray(data.fields)

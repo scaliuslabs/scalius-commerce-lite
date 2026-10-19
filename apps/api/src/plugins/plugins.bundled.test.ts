@@ -44,7 +44,7 @@ describe("acme.hello through the bundled loader", () => {
     expect(helloModule.manifest.id).toBe("acme.hello");
   });
 
-  it("handles order.paid: calls dashboard.orders.get as the plugin, writes objects and KV, logs masked", async () => {
+  it("handles order.paid: calls dashboard.resources.orders.get as the plugin, writes objects and KV, logs masked", async () => {
     const host = new PluginHost({ env: pluginTestEnv(binding), ctx: pluginTestCtx(), db });
     const outcome = await host.invokeEvent(installation, {
       id: "evt_1",
@@ -66,7 +66,7 @@ describe("acme.hello through the bundled loader", () => {
     const logs = await listPluginLogs(db, "acme.hello");
     expect(logs).toEqual([expect.objectContaining({ level: "info", source: "event:order.paid", message: "Greeted a paid order", fields: { orderId: "ord_hello1", apiStatus: 200 } })]);
     const audit = sqlite.prepare("SELECT plugin_id, grant_id, owner_user_id, operation_id, outcome, http_status FROM agent_audit_events").all();
-    expect(audit).toEqual([{ plugin_id: "acme.hello", grant_id: null, owner_user_id: "owner", operation_id: "dashboard.orders.get", outcome: "success", http_status: 200 }]);
+    expect(audit).toEqual([{ plugin_id: "acme.hello", grant_id: null, owner_user_id: "owner", operation_id: "dashboard.resources.orders.get", outcome: "success", http_status: 200 }]);
   });
 
   it("serves its admin and public routes and runs its cron job and lifecycle hook", async () => {

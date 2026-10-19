@@ -11,7 +11,7 @@ export function classifyAdminRuntimePath(pathname: string): AdminRuntimeGroup | 
   if (["categories", "brands", "price-lists", "collections", "media", "inventory", "products", "attributes", "catalog", "reviews", "digital-assets", "digital-entitlements", "warranty-policies", "import", "export"].includes(segment)) {
     return "catalog";
   }
-  if (["customers", "discounts", "shipments", "orders", "conversations", "taxes", "gift-cards", "warranty-claims"].includes(segment)) {
+  if (["customers", "discounts", "shipments", "orders", "conversations", "taxes", "gift-cards", "warranty-claims", "resources"].includes(segment)) {
     return "sales";
   }
   if (["pages", "navigation", "translations", "settings", "custom-field-definitions", "custom-fields", "objects"].includes(segment)) return "content";

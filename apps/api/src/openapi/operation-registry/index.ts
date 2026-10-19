@@ -48,6 +48,7 @@ import { STOREFRONT_REVIEW_OPERATIONS } from "./storefront-reviews";
 import { STOREFRONT_GIFT_CARD_OPERATIONS } from "./storefront-gift-cards";
 import { STOREFRONT_DIGITAL_OPERATIONS } from "./storefront-digital";
 import { STOREFRONT_WARRANTY_OPERATIONS } from "./storefront-warranty";
+import { DASHBOARD_RESOURCE_OPERATIONS } from "./dashboard-resources";
 import type { OperationRegistryEntry } from "./entry";
 
 export type { OperationRegistryEntry } from "./entry";
@@ -119,6 +120,7 @@ export const OPERATIONS = {
   ...STOREFRONT_GIFT_CARD_OPERATIONS,
   ...STOREFRONT_DIGITAL_OPERATIONS,
   ...STOREFRONT_WARRANTY_OPERATIONS,
+  ...DASHBOARD_RESOURCE_OPERATIONS,
 } satisfies Record<string, OperationRegistryEntry>;
 
 /** The per-domain groups, for the one-group-per-operation check. */
@@ -159,6 +161,7 @@ export const OPERATION_GROUPS: readonly Readonly<Record<string, OperationRegistr
   STOREFRONT_GIFT_CARD_OPERATIONS,
   STOREFRONT_DIGITAL_OPERATIONS,
   STOREFRONT_WARRANTY_OPERATIONS,
+  DASHBOARD_RESOURCE_OPERATIONS,
 ];
 
 export type OperationId = keyof typeof OPERATIONS;
@@ -197,6 +200,11 @@ export function operationMetadata(
   entry: OperationRegistryEntry,
 ): AgentOperationMetadata {
   const surface = operationSurface(operationId);
+  // v2.0 locks the app API only: the headless storefront contract is beta
+  // until a later 2.x seals it (README.md beside this file).
+  if (surface === "storefront" && entry.stability === "stable") {
+    throw new Error(`${operationId}: the storefront API is beta; no storefront operation is stable.`);
+  }
   const exposure: AgentOperationExposure = entry.exposure ?? "execute";
   const stability: AgentOperationStability =
     entry.stability ?? (exposure === "execute" && surface !== "system" ? "beta" : "internal");
@@ -211,7 +219,8 @@ export function operationMetadata(
     principals: [...(entry.principals ?? DEFAULT_PRINCIPALS[surface])],
     risk,
     openWorld: entry.openWorld ?? false,
-    idempotency: entry.idempotency ?? "none",
+    // Every stable mutation takes an Idempotency-Key (README.md beside this file).
+    idempotency: entry.idempotency ?? (stability === "stable" && risk !== "read" ? "supported" : "none"),
     revision: entry.revision ?? "none",
     batch,
     transport: entry.transport ?? "json",

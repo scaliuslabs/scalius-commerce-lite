@@ -39,7 +39,11 @@ export type OperationRegistryEntry = {
   risk?: AgentOperationRisk;
   /** Default `false`. Set when the operation calls an external provider. */
   openWorld?: true;
-  /** Default `"none"`. */
+  /**
+   * Default `"none"`; `"supported"` for a stable mutating operation, which
+   * replays its first response for a repeated `Idempotency-Key` for 24 hours
+   * (`routes/admin/idempotency.ts`).
+   */
   idempotency?: Exclude<AgentOperationIdempotency, "none">;
   /** Default `"none"`. */
   revision?: Exclude<AgentOperationRevision, "none">;

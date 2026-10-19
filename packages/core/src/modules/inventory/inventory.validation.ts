@@ -51,7 +51,13 @@ export const adjustInventorySchema = z.object({
     ...adjustInventoryFields,
 }).superRefine(validateAdjustmentReason);
 
+/**
+ * The stable app API's adjustment (`dashboard.inventory.adjust`): its retry
+ * key is the Idempotency-Key header, from which the ledger's operation key
+ * is derived.
+ */
 export const adjustInventoryRequestSchema = z.object({
-    operationKey: inventoryOperationKeySchema.optional(),
     ...adjustInventoryFields,
+    expectedStockVersion: z.number().int().min(0).optional()
+        .describe("The SKU's stockVersion you read; any stock change since is refused with 409. Omit to apply whatever happened since."),
 }).superRefine(validateAdjustmentReason);

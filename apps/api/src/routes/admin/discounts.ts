@@ -16,6 +16,7 @@ import {
 } from "@scalius/core/modules/promotions";
 import { promotionEvaluationCartSchema } from "@scalius/core/modules/promotions/browser";
 
+import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { NotFoundError } from "../../utils/api-error";
 import { created, noContent, ok } from "../../utils/api-response";
 
@@ -48,6 +49,8 @@ const discountSchema = z.object({
     timezone: z.string(),
     maxRedemptions: z.number().int().positive().nullable(),
     maxRedemptionsPerCustomer: z.number().int().positive().nullable(),
+    /** The store currency: rule amounts and the spend are in its minor units. */
+    currency: z.string().length(3).openapi({ description: "The store currency: rule amounts (amountMinor) and the spend are integer minor units of it." }),
     maxDiscountSpendMinor: z.number().int().positive().nullable(),
     budgetCurrencyCode: z.string().nullable(),
     redemptionCount: z.number().int().nonnegative().openapi({ description: "Orders that used this discount." }),
@@ -115,15 +118,16 @@ app.openapi(createRoute({
     },
 }), async (c) => {
     const query = c.req.valid("query");
-    const result = await listPromotionPage(c.get("db"), {
+    const db = c.get("db");
+    const [result, currency] = await Promise.all([listPromotionPage(db, {
         page: query.page,
         limit: query.limit,
         search: query.search || undefined,
         view: query.view,
         sort: query.sort,
         includeDeleted: query.includeDeleted === "true",
-    });
-    return ok(c, result);
+    }), readStoreCurrency(db)]);
+    return ok(c, { ...result, discounts: result.discounts.map((discount) => ({ ...discount, currency: currency.code })) });
 });
 
 app.openapi(createRoute({
@@ -151,7 +155,8 @@ app.openapi(createRoute({
     const db = c.get("db");
     const discount = await getPromotionAggregate(db, c.req.valid("param").id);
     if (!discount) throw new NotFoundError("Discount not found");
-    return ok(c, { ...discount, ...await getPromotionOrderUsage(db, discount.id) });
+    const [usage, currency] = await Promise.all([getPromotionOrderUsage(db, discount.id), readStoreCurrency(db)]);
+    return ok(c, { ...discount, currency: currency.code, ...usage });
 });
 
 app.openapi(createRoute({

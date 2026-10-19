@@ -72,7 +72,6 @@ vi.mock("@scalius/core/modules/inventory", async () => {
     INVENTORY_MOVEMENT_EXPORT_MAX_ROWS: 5_000,
     INVENTORY_MOVEMENT_EXPORT_MAX_BYTES: 16 * 1024 * 1024,
     adjustInventoryRequestSchema: z.object({
-      operationKey: z.string().min(16).optional(),
       delta: z.number().int().refine((value) => value !== 0),
       reason: z.enum(["received", "correction", "damage", "theft", "return", "other"]),
       notes: z.string().optional(),
@@ -268,7 +267,7 @@ describe("admin inventory write behavior", () => {
     expect(JSON.stringify(operation)).toContain('"effectivePrice"');
   });
 
-  it("documents the standard inventory idempotency header alongside the legacy body key", () => {
+  it("documents the Idempotency-Key header; only the scanner's route keeps a body key", () => {
     const { app } = createTestApp();
     const spec = app.getOpenAPIDocument({
       openapi: "3.0.0",
@@ -282,7 +281,7 @@ describe("admin inventory write behavior", () => {
       const operation = spec.paths?.[path]?.[method];
       const serialized = JSON.stringify(operation);
       expect(serialized).toContain('"name":"idempotency-key"');
-      expect(serialized).toContain('"operationKey"');
+      expect(serialized.includes('"operationKey"'), path).toBe(path.endsWith("/stock-adjust"));
     }
   });
 
@@ -437,37 +436,30 @@ describe("admin inventory write behavior", () => {
     expect(mocks.buildInventoryLabelArtifact).not.toHaveBeenCalled();
   });
 
-  it.each([
-    {
-      label: "adjust inventory",
-      path: "/var_1/adjust",
-      body: { operationKey: "invop_api_adjust_0001", delta: 2, reason: "received" },
-      coreCall: () => mocks.adjustInventory,
-      operationKey: "invop_api_adjust_0001",
-    },
-    {
-      label: "scanner stock adjust",
-      path: "/stock-adjust",
-      body: { operationKey: "invop_api_scanner_001", variantId: "var_1", adjustment: 3, reason: "cycle count" },
-      coreCall: () => mocks.adjustStock,
-      operationKey: "invop_api_scanner_001",
-    },
-    {
-      label: "scanner stock set",
-      path: "/stock-set",
-      body: { operationKey: "invop_api_stocktake_01", variantId: "var_1", newStock: 10, reason: "stocktake" },
-      coreCall: () => mocks.setStock,
-      operationKey: "invop_api_stocktake_01",
-    },
-  ])("forwards the inventory operation key for $label", async ({ path, body, coreCall, operationKey }) => {
+  it("forwards the scanner's own operation key", async () => {
     const { app, env } = createTestApp();
-
-    const response = await postJson(app, env, path, body);
-
+    const response = await postJson(app, env, "/stock-adjust", { operationKey: "invop_api_scanner_001", variantId: "var_1", adjustment: 3, reason: "cycle count" });
     expect(response.status).toBe(200);
-    expect(coreCall()).toHaveBeenCalled();
-    expect(JSON.stringify(coreCall().mock.calls[0])).toContain(operationKey);
+    expect(JSON.stringify(mocks.adjustStock.mock.calls[0])).toContain("invop_api_scanner_001");
+  });
 
+  it.each([
+    { label: "adjust inventory", path: "/var_1/adjust", body: { delta: 2, reason: "received" }, coreCall: () => mocks.adjustInventory },
+    { label: "stock set", path: "/stock-set", body: { variantId: "var_1", newStock: 10, reason: "stocktake" }, coreCall: () => mocks.setStock },
+  ])("derives the ledger key of $label from the Idempotency-Key header, the same on a retry", async ({ path, body, coreCall }) => {
+    const { app, env } = createTestApp();
+    const headers = { "Idempotency-Key": "erp sync 2026-10-19 #42" };
+
+    expect((await postJson(app, env, path, body, headers)).status).toBe(200);
+    expect((await postJson(app, env, path, body, headers)).status).toBe(200);
+    // A body key is not part of the stable contract: it is never the ledger key.
+    expect((await postJson(app, env, path, { ...body, operationKey: "invop_ignored_body_01" }, { "Idempotency-Key": "another key 0001" })).status).toBe(200);
+
+    const keys = coreCall().mock.calls.map((call) => JSON.stringify(call).match(/api-[0-9a-f]{48}/u)?.[0]);
+    expect(keys[0]).toBeDefined();
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).not.toBe(keys[0]);
+    expect(JSON.stringify(coreCall().mock.calls)).not.toContain("invop_ignored_body_01");
   });
 
   it("returns a regular-stock write within the same availability band", async () => {
@@ -488,11 +480,10 @@ describe("admin inventory write behavior", () => {
     const { app, env } = createTestApp();
 
     const response = await postJson(app, env, "/var_1/adjust", {
-      operationKey: "invop_api_preorder_001",
       delta: 2,
       reason: "received",
       pool: "preorderStock",
-    });
+    }, { "Idempotency-Key": "invop_api_preorder_001" });
 
     expect(response.status).toBe(200);
     expect(mocks.adjustInventory).toHaveBeenCalledWith(expect.anything(), "var_1", expect.objectContaining({ pool: "preorderStock", delta: 2 }), expect.anything());
@@ -505,10 +496,9 @@ describe("admin inventory write behavior", () => {
     mocks.adjustInventory.mockRejectedValueOnce(new Error("Variant not found"));
 
     const response = await postJson(app, env, "/missing_variant/adjust", {
-      operationKey: "invop_api_missing_0001",
       delta: 2,
       reason: "received",
-    });
+    }, { "Idempotency-Key": "invop_api_missing_0001" });
 
     expect(response.status).toBe(404);
 
@@ -543,9 +533,7 @@ describe("admin inventory write behavior", () => {
   });
 
   it.each([
-    ["/var_1/adjust", { operationKey: "invop_body_mismatch_01", delta: 2, reason: "received" }, () => mocks.adjustInventory],
     ["/stock-adjust", { operationKey: "invop_body_mismatch_02", variantId: "var_1", adjustment: 2 }, () => mocks.adjustStock],
-    ["/stock-set", { operationKey: "invop_body_mismatch_03", variantId: "var_1", newStock: 7 }, () => mocks.setStock],
   ] as const)("rejects mismatched standard and legacy idempotency keys at %s", async (path, body, coreCall) => {
     const { app, env } = createTestApp();
 
@@ -578,19 +566,14 @@ describe("admin inventory write behavior", () => {
     const { app, env } = createTestApp();
     const operationKey = "invop_equal_keys_00001";
 
-    const response = await postJson(app, env, "/var_1/adjust", {
+    const response = await postJson(app, env, "/stock-adjust", {
       operationKey,
-      delta: 2,
-      reason: "received",
+      variantId: "var_1",
+      adjustment: 2,
     }, { "Idempotency-Key": operationKey });
 
     expect(response.status).toBe(200);
-    expect(mocks.adjustInventory).toHaveBeenCalledWith(
-      expect.anything(),
-      "var_1",
-      expect.objectContaining({ operationKey }),
-      "user_1",
-    );
+    expect(mocks.adjustStock.mock.calls[0]?.[3]).toBe(operationKey);
   });
 
   it("forwards bounded movement filters and a stable cursor to the inventory service", async () => {
@@ -833,12 +816,12 @@ describe("admin inventory locations", () => {
     const { app, env } = createTestApp();
     mocks.getInventoryOverview.mockResolvedValue({ variants: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 0 } });
 
-    await postJson(app, env, "/var_1/adjust", { operationKey: "invop_api_location_001", delta: 2, reason: "received", locationId: "loc_branch" });
-    await postJson(app, env, "/stock-set", { operationKey: "invop_api_location_002", variantId: "var_1", newStock: 4, locationId: "loc_branch" });
+    await postJson(app, env, "/var_1/adjust", { delta: 2, reason: "received", locationId: "loc_branch" }, { "Idempotency-Key": "invop_api_location_001" });
+    await postJson(app, env, "/stock-set", { variantId: "var_1", newStock: 4, locationId: "loc_branch" }, { "Idempotency-Key": "invop_api_location_002" });
     await app.request("/api/v1/admin/inventory?section=variants&locationId=loc_branch", {}, env);
 
     expect(mocks.adjustInventory).toHaveBeenCalledWith(expect.anything(), "var_1", expect.objectContaining({ locationId: "loc_branch" }), "user_1");
-    expect(mocks.setStock).toHaveBeenCalledWith(expect.anything(), "var_1", 4, "invop_api_location_002", undefined, "user_1", "loc_branch");
+    expect(mocks.setStock).toHaveBeenCalledWith(expect.anything(), "var_1", 4, expect.stringMatching(/^api-[0-9a-f]{48}$/u), undefined, "user_1", "loc_branch", { expectedStockVersion: undefined });
     expect(mocks.getInventoryOverview).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ locationId: "loc_branch" }));
   });
 
