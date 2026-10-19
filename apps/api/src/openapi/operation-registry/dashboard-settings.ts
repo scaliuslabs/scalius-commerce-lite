@@ -95,8 +95,8 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   "dashboard.markets.create": {},
   "dashboard.markets.currencies": {},
   "dashboard.markets.delete": { risk: "destructive", revision: "required" },
-  "dashboard.markets.get": { stability: "stable" },
-  "dashboard.markets.list": { stability: "stable" },
+  "dashboard.markets.get": {},
+  "dashboard.markets.list": {},
   "dashboard.markets.update": { revision: "required" },
   // Personal bell state is a staff browser surface, not a merchant-agent action.
   "dashboard.notifications.feed": {

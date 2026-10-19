@@ -190,7 +190,7 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     if (workdir) rmSync(workdir, { recursive: true, force: true });
   });
 
-  it("handles order.paid in its isolate: the bridge stores, counts and calls dashboard.orders.get as the plugin", async () => {
+  it("handles order.paid in its isolate: the bridge stores, counts and calls dashboard.resources.orders.get as the plugin", async () => {
     const outcome = await send({
       action: "event",
       pluginId: "acme.hello",
@@ -200,7 +200,7 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     expect(await getObjectRecord(db, "acme.hello", "greetings", "ord_box1")).toMatchObject({ greeting: "Salam", order_status: "confirmed" });
     expect(await getPluginKv(db, "acme.hello", "paid_count")).toBe(1);
     expect(sqlite.prepare("SELECT plugin_id, operation_id, outcome FROM agent_audit_events").all())
-      .toEqual([{ plugin_id: "acme.hello", operation_id: "dashboard.orders.get", outcome: "success" }]);
+      .toEqual([{ plugin_id: "acme.hello", operation_id: "dashboard.resources.orders.get", outcome: "success" }]);
     expect((await listPluginLogs(db, "acme.hello")).map((line) => line.message)).toContain("Greeted a paid order");
   });
 

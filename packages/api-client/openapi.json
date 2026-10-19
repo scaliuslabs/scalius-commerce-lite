@@ -3,10 +3,15 @@
   "info": {
     "title": "Scalius Commerce API",
     "version": "1.0.0",
-    "description": "E-commerce platform API powering admin dashboard and storefront",
+    "description": "E-commerce platform API powering admin dashboard and storefront v2.0 locks the app API only (x-scalius-agent.stability: stable); the storefront API is beta.",
     "license": {
       "name": "GNU Affero General Public License v3.0",
       "url": "https://www.gnu.org/licenses/agpl-3.0.html"
+    },
+    "x-scalius-stability": {
+      "stable": "The frozen app API (v2.0): resource-shaped dashboard operations a third-party app may call. They change only additively.",
+      "beta": "May change in any release: the dashboard's own projections and editor flows, and every storefront operation. The headless storefront contract stabilises in a later 2.x.",
+      "internal": "Never callable by apps: staff, team, agent access, security, webhooks and app management."
     }
   },
   "servers": [
@@ -9586,6 +9591,1225 @@
           "resolution",
           "createdAt",
           "closedAt"
+        ]
+      },
+      "OrderResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderNumber": {
+            "type": "integer",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "paymentStatus": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "fulfillmentStatus": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "salesChannelId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "marketId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "subtotalMinor": {
+            "type": "integer"
+          },
+          "shippingMinor": {
+            "type": "integer"
+          },
+          "discountMinor": {
+            "type": "integer"
+          },
+          "taxMinor": {
+            "type": "integer"
+          },
+          "totalMinor": {
+            "type": "integer"
+          },
+          "paidMinor": {
+            "type": "integer"
+          },
+          "balanceDueMinor": {
+            "type": "integer"
+          },
+          "pricesIncludeTax": {
+            "type": "boolean"
+          },
+          "paymentMethod": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000
+          },
+          "customerId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "accountCustomerId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "contact": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "name"
+              },
+              "email": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "email"
+              },
+              "phone": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "phone"
+              }
+            },
+            "required": [
+              "name",
+              "email",
+              "phone"
+            ]
+          },
+          "requiresShipping": {
+            "type": "boolean"
+          },
+          "shippingMethodId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "shippingAddress": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "name": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "name"
+              },
+              "phone": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "phone"
+              },
+              "company": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "address"
+              },
+              "line1": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "address"
+              },
+              "line2": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "address"
+              },
+              "dependentLocality": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "address"
+              },
+              "locality": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000
+              },
+              "adminArea": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000
+              },
+              "postalCode": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000
+              },
+              "countryCode": {
+                "type": "string",
+                "nullable": true,
+                "minLength": 2,
+                "maxLength": 2
+              },
+              "placeIds": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "zone": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "area": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "city",
+                  "zone",
+                  "area"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "phone",
+              "company",
+              "line1",
+              "line2",
+              "dependentLocality",
+              "locality",
+              "adminArea",
+              "postalCode",
+              "countryCode",
+              "placeIds"
+            ]
+          },
+          "billingAddress": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "name": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "name"
+              },
+              "phone": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "phone"
+              },
+              "company": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "address"
+              },
+              "line1": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "address"
+              },
+              "line2": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "address"
+              },
+              "dependentLocality": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000,
+                "x-scalius-protected": "address"
+              },
+              "locality": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000
+              },
+              "adminArea": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000
+              },
+              "postalCode": {
+                "type": "string",
+                "nullable": true,
+                "maxLength": 4000
+              },
+              "countryCode": {
+                "type": "string",
+                "nullable": true,
+                "minLength": 2,
+                "maxLength": 2
+              },
+              "placeIds": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "zone": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "area": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "city",
+                  "zone",
+                  "area"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "phone",
+              "company",
+              "line1",
+              "line2",
+              "dependentLocality",
+              "locality",
+              "adminArea",
+              "postalCode",
+              "countryCode",
+              "placeIds"
+            ]
+          },
+          "fulfillmentLocationId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "version": {
+            "type": "integer"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "productId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "variantId": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "title": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 4000
+                },
+                "variantLabel": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 4000
+                },
+                "quantity": {
+                  "type": "integer"
+                },
+                "fulfilledQuantity": {
+                  "type": "integer"
+                },
+                "unitPriceMinor": {
+                  "type": "integer"
+                },
+                "subtotalMinor": {
+                  "type": "integer"
+                },
+                "discountMinor": {
+                  "type": "integer"
+                },
+                "taxMinor": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "productId",
+                "variantId",
+                "title",
+                "variantLabel",
+                "quantity",
+                "fulfilledQuantity",
+                "unitPriceMinor",
+                "subtotalMinor",
+                "discountMinor",
+                "taxMinor"
+              ]
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "deletedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "id",
+          "orderNumber",
+          "status",
+          "paymentStatus",
+          "fulfillmentStatus",
+          "channel",
+          "salesChannelId",
+          "marketId",
+          "currency",
+          "subtotalMinor",
+          "shippingMinor",
+          "discountMinor",
+          "taxMinor",
+          "totalMinor",
+          "paidMinor",
+          "balanceDueMinor",
+          "pricesIncludeTax",
+          "paymentMethod",
+          "customerId",
+          "accountCustomerId",
+          "contact",
+          "requiresShipping",
+          "shippingMethodId",
+          "shippingAddress",
+          "billingAddress",
+          "fulfillmentLocationId",
+          "version",
+          "lines",
+          "createdAt",
+          "updatedAt",
+          "deletedAt"
+        ]
+      },
+      "PaymentResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "method": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "amountMinor": {
+            "type": "integer"
+          },
+          "settlementCurrency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "settlementAmountMinor": {
+            "type": "integer"
+          },
+          "providerRef": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "status",
+          "method",
+          "type",
+          "currency",
+          "amountMinor",
+          "settlementCurrency",
+          "settlementAmountMinor",
+          "providerRef",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "FulfillmentResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "shipmentId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "locationId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "cashCollectedMinor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "orderItemId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "quantity": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "orderItemId",
+                "quantity"
+              ]
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "voidedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "kind",
+          "status",
+          "shipmentId",
+          "locationId",
+          "currency",
+          "cashCollectedMinor",
+          "lines",
+          "createdAt",
+          "voidedAt"
+        ]
+      },
+      "ShipmentResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "providerId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "providerType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "rawStatus": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000
+          },
+          "externalId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000
+          },
+          "trackingId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000
+          },
+          "trackingUrl": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000
+          },
+          "courierName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "amountMinor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "isFinal": {
+            "type": "boolean"
+          },
+          "lastCheckedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "providerId",
+          "providerType",
+          "status",
+          "rawStatus",
+          "externalId",
+          "trackingId",
+          "trackingUrl",
+          "courierName",
+          "currency",
+          "amountMinor",
+          "isFinal",
+          "lastCheckedAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ProductResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "slug": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "draft",
+              "trashed"
+            ]
+          },
+          "brandId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "categoryId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "isGiftCard": {
+            "type": "boolean"
+          },
+          "imageUrl": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2048
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "priceMinor": {
+            "type": "integer"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "sku": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "priceMinor": {
+                  "type": "integer"
+                },
+                "barcode": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 4000
+                },
+                "trackInventory": {
+                  "type": "boolean"
+                },
+                "fulfillmentKind": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "isDefault": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "sku",
+                "priceMinor",
+                "barcode",
+                "trackInventory",
+                "fulfillmentKind",
+                "isDefault"
+              ]
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "deletedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "status",
+          "brandId",
+          "categoryId",
+          "revision",
+          "isGiftCard",
+          "imageUrl",
+          "currency",
+          "priceMinor",
+          "variants",
+          "createdAt",
+          "updatedAt",
+          "deletedAt"
+        ]
+      },
+      "VariantResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "productId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "sku": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "trackInventory": {
+            "type": "boolean"
+          },
+          "onHand": {
+            "type": "integer"
+          },
+          "levels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "locationId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "onHand": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "locationId",
+                "onHand"
+              ]
+            }
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "sku",
+          "trackInventory",
+          "onHand",
+          "levels",
+          "updatedAt"
+        ]
+      },
+      "CustomerResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000,
+            "x-scalius-protected": "name"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000,
+            "x-scalius-protected": "email"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000,
+            "x-scalius-protected": "phone"
+          },
+          "hasAccount": {
+            "type": "boolean"
+          },
+          "totalOrders": {
+            "type": "integer"
+          },
+          "lastOrderAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "mergedIntoCustomerId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "consents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "channel": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "state": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "contact": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 4000,
+                  "x-scalius-protected": [
+                    "email",
+                    "phone"
+                  ]
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                }
+              },
+              "required": [
+                "channel",
+                "state",
+                "contact",
+                "updatedAt"
+              ]
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "deletedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "phone",
+          "hasAccount",
+          "totalOrders",
+          "lastOrderAt",
+          "mergedIntoCustomerId",
+          "tags",
+          "consents",
+          "createdAt",
+          "updatedAt",
+          "deletedAt"
+        ]
+      },
+      "PriceListResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "market",
+              "segment",
+              "sale"
+            ]
+          },
+          "marketId": {
+            "type": "string"
+          },
+          "segmentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "scheduled",
+              "active",
+              "expired"
+            ],
+            "description": "What the list does now: its status read with its schedule."
+          },
+          "startsAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "priceCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "variantCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "priceIncrementMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Every price is a multiple of this, in minor units of `currency`."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "kind",
+          "marketId",
+          "segmentId",
+          "status",
+          "state",
+          "startsAt",
+          "endsAt",
+          "priority",
+          "revision",
+          "priceCount",
+          "variantCount",
+          "currency",
+          "priceIncrementMinor",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PriceListSku": {
+        "type": "object",
+        "properties": {
+          "variantId": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "baseCurrency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "basePriceMinor": {
+            "type": "integer",
+            "description": "The SKU's own product price, in minor units of `baseCurrency`."
+          },
+          "prices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "currency": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3
+                },
+                "amountMinor": {
+                  "type": "integer"
+                },
+                "compareAtMinor": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "minQuantity": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "currency",
+                "amountMinor",
+                "compareAtMinor",
+                "minQuantity"
+              ]
+            }
+          }
+        },
+        "required": [
+          "variantId",
+          "productId",
+          "sku",
+          "baseCurrency",
+          "basePriceMinor",
+          "prices"
         ]
       },
       "PriceList": {
@@ -73839,6 +75063,3737 @@
         "security": []
       }
     },
+    "/api/v1/admin/resources/orders": {
+      "get": {
+        "operationId": "dashboard.resources.orders.list",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "List orders, least recently updated first",
+        "description": "Orders as webhooks carry them (OrderResource), in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor. Contact filters need the matching read_customer_* scope.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many records; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+            },
+            "required": false,
+            "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+            "name": "updatedSince",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "paymentStatus",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "fulfillmentStatus",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": false,
+            "name": "customerId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true
+            },
+            "required": false,
+            "name": "orderNumber",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 254,
+              "format": "email",
+              "description": "The buyer's email, matched whole. Needs read_customer_emails."
+            },
+            "required": false,
+            "description": "The buyer's email, matched whole. Needs read_customer_emails.",
+            "name": "email",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\+[1-9]\\d{6,14}$/u",
+              "description": "The buyer's phone in E.164, matched whole. Needs read_customer_phones."
+            },
+            "required": false,
+            "description": "The buyer's phone in E.164, matched whole. Needs read_customer_phones.",
+            "name": "phone",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "true lists trashed orders instead."
+            },
+            "required": false,
+            "description": "true lists trashed orders instead.",
+            "name": "trashed",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of orders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "orders": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/OrderResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/orders/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.orders.get",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Get an order",
+        "description": "The order as webhooks carry it: totals and lines in integer minor units of `currency`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/OrderResource"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/orders/{id}/payments": {
+      "get": {
+        "operationId": "dashboard.resources.payments.list",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "List an order's payments and refunds",
+        "description": "Every payment and refund of the order, oldest first, in integer minor units of `currency` (and of `settlementCurrency` as settled).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The payments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "payments": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PaymentResource"
+                          }
+                        }
+                      },
+                      "required": [
+                        "payments"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/orders/{id}/fulfillments": {
+      "get": {
+        "operationId": "dashboard.resources.fulfillments.list",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "List an order's fulfilments",
+        "description": "Every hand-over of the order (sent, picked up, performed, voided), oldest first, with its lines.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The fulfilments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "fulfillments": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/FulfillmentResource"
+                          }
+                        }
+                      },
+                      "required": [
+                        "fulfillments"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.resources.fulfillments.create",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Hand over order lines",
+        "description": "Marks units sent, picked up or performed. A repeat with the same Idempotency-Key returns the first fulfilment and acts once. The last ship line makes the order shipped; the last pickup or service line, with the money settled, makes it delivered.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200,
+              "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice."
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "ship",
+                      "pickup",
+                      "service"
+                    ],
+                    "description": "`ship`: sent with your own rider or carrier. `pickup`: the buyer collected it. `service`: the service was performed."
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "orderItemId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 99
+                        }
+                      },
+                      "required": [
+                        "orderItemId",
+                        "quantity"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 99,
+                    "description": "Which units to hand over; part of a line is fine. Omit for every unit of this kind not handed over yet."
+                  },
+                  "tracking": {
+                    "type": "object",
+                    "properties": {
+                      "courierName": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "trackingId": {
+                        "type": "string",
+                        "maxLength": 180
+                      },
+                      "trackingUrl": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "note": {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      "amountMinor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "What the delivery cost, in minor units of the order's currency."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "Parcel details; only for `ship`."
+                  },
+                  "cashReceivedMinor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991,
+                    "description": "Cash on delivery taken in the same action (`pickup`/`service`), in minor units of the order's currency. Must equal the balance due."
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The fulfilment and the order after it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "fulfillment": {
+                          "$ref": "#/components/schemas/FulfillmentResource"
+                        },
+                        "order": {
+                          "$ref": "#/components/schemas/OrderResource"
+                        }
+                      },
+                      "required": [
+                        "fulfillment",
+                        "order"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "supported",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_shipments"
+        }
+      }
+    },
+    "/api/v1/admin/resources/orders/{id}/shipments": {
+      "get": {
+        "operationId": "dashboard.resources.shipments.list",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "List an order's shipments",
+        "description": "Every courier or own-rider parcel of the order, oldest first, with its tracking and cost in minor units of `currency`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The shipments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "shipments": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ShipmentResource"
+                          }
+                        }
+                      },
+                      "required": [
+                        "shipments"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.resources.shipments.create",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Book a courier for an order",
+        "description": "Books the named courier (an app courier `<app id>:<provider id>` or a built-in one) for the whole order. Send an Idempotency-Key: a repeat returns the first booking instead of booking twice.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200,
+              "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice."
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "providerId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "options": {
+                    "type": "object",
+                    "properties": {
+                      "deliveryType": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000
+                      },
+                      "itemType": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000
+                      },
+                      "itemWeight": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "maximum": 10000
+                      },
+                      "note": {
+                        "type": "string",
+                        "maxLength": 500
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "providerId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The shipment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "shipment": {
+                          "$ref": "#/components/schemas/ShipmentResource"
+                        }
+                      },
+                      "required": [
+                        "shipment"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": true,
+          "idempotency": "supported",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_shipments"
+        }
+      }
+    },
+    "/api/v1/admin/resources/shipments/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.shipments.get",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Get a shipment",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The shipment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ShipmentResource"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/products": {
+      "get": {
+        "operationId": "dashboard.resources.products.list",
+        "tags": [
+          "App API - Products"
+        ],
+        "summary": "List products, least recently updated first",
+        "description": "Products with their live SKUs as webhooks carry them (ProductResource), prices in integer minor units of `currency`, in (updatedAt, id) order. Look one up by sku or barcode.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many records; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+            },
+            "required": false,
+            "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+            "name": "updatedSince",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "draft",
+                "trashed"
+              ],
+              "description": "Omit for active and draft products."
+            },
+            "required": false,
+            "description": "Omit for active and draft products.",
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "description": "The product with this SKU (any case)."
+            },
+            "required": false,
+            "description": "The product with this SKU (any case).",
+            "name": "sku",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50,
+              "description": "The product with a SKU of this barcode (any case)."
+            },
+            "required": false,
+            "description": "The product with a SKU of this barcode (any case).",
+            "name": "barcode",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
+            },
+            "required": false,
+            "name": "categoryId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": false,
+            "name": "brandId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "products": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ProductResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "products",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/products/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.products.get",
+        "tags": [
+          "App API - Products"
+        ],
+        "summary": "Get a product",
+        "description": "The product with its live SKUs as webhooks carry it; prices in integer minor units of `currency`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The product",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ProductResource"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/variants/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.variants.get",
+        "tags": [
+          "App API - Products"
+        ],
+        "summary": "Get a SKU's stock",
+        "description": "The SKU's on-hand units in total and per location, as `inventory.level_changed` carries it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The SKU",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/VariantResource"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "inventory.view",
+            "products.view"
+          ]
+        }
+      }
+    },
+    "/api/v1/admin/resources/customers": {
+      "get": {
+        "operationId": "dashboard.resources.customers.list",
+        "tags": [
+          "App API - Customers"
+        ],
+        "summary": "List customers, least recently updated first",
+        "description": "Customers as webhooks carry them (CustomerResource), in (updatedAt, id) order. Contact fields read null and contact filters are refused without the matching read_customer_* scope.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many records; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+            },
+            "required": false,
+            "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+            "name": "updatedSince",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 254,
+              "format": "email",
+              "description": "The customer's email, matched whole. Needs read_customer_emails."
+            },
+            "required": false,
+            "description": "The customer's email, matched whole. Needs read_customer_emails.",
+            "name": "email",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\+[1-9]\\d{6,14}$/u",
+              "description": "The customer's phone in E.164, matched whole. Needs read_customer_phones."
+            },
+            "required": false,
+            "description": "The customer's phone in E.164, matched whole. Needs read_customer_phones.",
+            "name": "phone",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "description": "Customers with this tag (any case)."
+            },
+            "required": false,
+            "description": "Customers with this tag (any case).",
+            "name": "tag",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "true lists trashed and merged customers instead."
+            },
+            "required": false,
+            "description": "true lists trashed and merged customers instead.",
+            "name": "trashed",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of customers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "customers": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/CustomerResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "customers",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/customers/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.customers.get",
+        "tags": [
+          "App API - Customers"
+        ],
+        "summary": "Get a customer",
+        "description": "The customer as webhooks carry it, with tags and marketing consent. Contact fields read null without the matching read_customer_* scope.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The customer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerResource"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/price-lists": {
+      "get": {
+        "operationId": "dashboard.resources.price_lists.list",
+        "tags": [
+          "App API - Products"
+        ],
+        "summary": "List price lists, by name",
+        "description": "Every price list (a store keeps at most 100) with its market, segment, schedule state and how many SKUs it prices. `marketId` narrows to one market.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "marketId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Price lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "priceLists": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PriceListResource"
+                          }
+                        }
+                      },
+                      "required": [
+                        "priceLists"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.resources.price_lists.create",
+        "tags": [
+          "App API - Products"
+        ],
+        "summary": "Create a price list",
+        "description": "A market list prices a non-backup market for every buyer; a sale list does too, between its start and end, and wins over the market list; a segment list prices the signed-in members of one customer segment in a market. A new list is a draft until set active.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 300
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "market",
+                      "segment",
+                      "sale"
+                    ],
+                    "description": "`market`: a market's own prices. `segment`: prices for the members of one customer segment (signed-in checkout only). `sale`: a scheduled sale in a market; it wins over the others."
+                  },
+                  "marketId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "segmentId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "description": "Segment lists only."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "active"
+                    ],
+                    "default": "draft"
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "startsAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time",
+                    "description": "When it starts pricing (inclusive); null: now."
+                  },
+                  "endsAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time",
+                    "description": "When it stops (exclusive); null: no end."
+                  }
+                },
+                "required": [
+                  "name",
+                  "kind",
+                  "marketId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new price list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "priceList": {
+                          "$ref": "#/components/schemas/PriceListResource"
+                        }
+                      },
+                      "required": [
+                        "priceList"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "supported",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.edit"
+        }
+      }
+    },
+    "/api/v1/admin/resources/price-lists/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.price_lists.get",
+        "tags": [
+          "App API - Products"
+        ],
+        "summary": "Get a price list",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The price list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "priceList": {
+                          "$ref": "#/components/schemas/PriceListResource"
+                        }
+                      },
+                      "required": [
+                        "priceList"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      },
+      "patch": {
+        "operationId": "dashboard.resources.price_lists.update",
+        "tags": [
+          "App API - Products"
+        ],
+        "summary": "Edit a price list under the revision you read",
+        "description": "Fields left out keep their value. `status: active` starts pricing (within its schedule); `draft` stops it. A stale expectedRevision is refused with 409.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 300
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "market",
+                      "segment",
+                      "sale"
+                    ],
+                    "description": "`market`: a market's own prices. `segment`: prices for the members of one customer segment (signed-in checkout only). `sale`: a scheduled sale in a market; it wins over the others."
+                  },
+                  "marketId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "segmentId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "active"
+                    ]
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "startsAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time",
+                    "description": "When it starts pricing (inclusive); null: now."
+                  },
+                  "endsAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date-time",
+                    "description": "When it stops (exclusive); null: no end."
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved price list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "priceList": {
+                          "$ref": "#/components/schemas/PriceListResource"
+                        }
+                      },
+                      "required": [
+                        "priceList"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.edit"
+        }
+      },
+      "delete": {
+        "operationId": "dashboard.resources.price_lists.delete",
+        "tags": [
+          "App API - Products"
+        ],
+        "summary": "Delete a price list and its prices",
+        "description": "Orders keep the prices they were placed at; the list's SKUs price by the next rule (another list, FX or the product price).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true
+            },
+            "required": true,
+            "name": "expectedRevision",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.edit"
+        }
+      }
+    },
+    "/api/v1/admin/resources/price-lists/{id}/prices": {
+      "get": {
+        "operationId": "dashboard.resources.price_lists.prices_list",
+        "tags": [
+          "App API - Products"
+        ],
+        "summary": "One page of a price list's SKUs and their prices",
+        "description": "By product name then SKU, in minor units. `search` matches the product name or the SKU code.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PriceListSku"
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "page": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "total",
+                        "page",
+                        "limit"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      },
+      "put": {
+        "operationId": "dashboard.resources.price_lists.prices_set",
+        "tags": [
+          "App API - Products"
+        ],
+        "summary": "Set or remove SKU prices of a price list",
+        "description": "`set` replaces each named SKU's prices (its price for one unit and up to four quantity breaks); `remove` takes SKUs out. At most 100 SKUs per save. Amounts are minor units of the list's currency at its price increment; a stale expectedRevision is refused with 409.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "set": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "variantId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "prices": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "amountMinor": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 9007199254740991,
+                                "description": "The price of one unit, in minor units of the list's currency, at its price increment."
+                              },
+                              "compareAtMinor": {
+                                "type": "integer",
+                                "nullable": true,
+                                "minimum": 0,
+                                "exclusiveMinimum": true,
+                                "maximum": 9007199254740991,
+                                "description": "The struck-through price, above the amount; null for none."
+                              },
+                              "minQuantity": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 10000,
+                                "default": 1,
+                                "description": "1 is the list's price; a larger value is a quantity break from that many units."
+                              }
+                            },
+                            "required": [
+                              "amountMinor"
+                            ]
+                          },
+                          "minItems": 1,
+                          "maxItems": 5
+                        }
+                      },
+                      "required": [
+                        "variantId",
+                        "prices"
+                      ]
+                    },
+                    "maxItems": 100,
+                    "default": [],
+                    "description": "Each SKU's whole set of prices (it replaces what the SKU had in the list)."
+                  },
+                  "remove": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "maxItems": 100,
+                    "default": [],
+                    "description": "SKUs to take out of the list."
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved price list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "priceList": {
+                          "$ref": "#/components/schemas/PriceListResource"
+                        }
+                      },
+                      "required": [
+                        "priceList"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 262144,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.edit"
+        }
+      }
+    },
     "/api/v1/admin/categories/form-options": {
       "get": {
         "operationId": "dashboard.categories.form_options",
@@ -74838,6 +79793,19 @@
             "agentBearer": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
@@ -74847,7 +79815,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -78126,6 +83094,19 @@
             "agentBearer": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
@@ -78135,7 +83116,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -81394,6 +86375,19 @@
             "agentBearer": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
@@ -81403,7 +86397,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -83877,6 +88871,19 @@
             "agentBearer": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
@@ -83886,7 +88893,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -86517,7 +91524,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -89514,7 +94521,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -89752,6 +94759,19 @@
             "agentBearer": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
@@ -89761,7 +94781,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -90692,7 +95712,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -93976,6 +98996,19 @@
             "agentBearer": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
@@ -93985,7 +99018,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -96233,6 +101266,12 @@
                                 "minimum": 0,
                                 "exclusiveMinimum": true
                               },
+                              "currency": {
+                                "type": "string",
+                                "minLength": 3,
+                                "maxLength": 3,
+                                "description": "The store currency: rule amounts (amountMinor) and the spend are integer minor units of it."
+                              },
                               "maxDiscountSpendMinor": {
                                 "type": "integer",
                                 "nullable": true,
@@ -96385,6 +101424,7 @@
                               "timezone",
                               "maxRedemptions",
                               "maxRedemptionsPerCustomer",
+                              "currency",
                               "maxDiscountSpendMinor",
                               "budgetCurrencyCode",
                               "redemptionCount",
@@ -97183,6 +102223,19 @@
             "agentBearer": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
@@ -97192,7 +102245,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -97324,6 +102377,12 @@
                           "nullable": true,
                           "minimum": 0,
                           "exclusiveMinimum": true
+                        },
+                        "currency": {
+                          "type": "string",
+                          "minLength": 3,
+                          "maxLength": 3,
+                          "description": "The store currency: rule amounts (amountMinor) and the spend are integer minor units of it."
                         },
                         "maxDiscountSpendMinor": {
                           "type": "integer",
@@ -97472,6 +102531,7 @@
                         "timezone",
                         "maxRedemptions",
                         "maxRedemptionsPerCustomer",
+                        "currency",
                         "maxDiscountSpendMinor",
                         "budgetCurrencyCode",
                         "redemptionCount",
@@ -100091,6 +105151,19 @@
             "agentBearer": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
@@ -100100,7 +105173,7 @@
           ],
           "risk": "write",
           "openWorld": true,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "forbidden",
           "transport": "json",
@@ -142432,7 +147505,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -142951,7 +148024,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -154066,6 +159139,11 @@
                       "out_of_stock",
                       "other"
                     ]
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The order version you read (`version` on the order). A change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
                   }
                 },
                 "required": [
@@ -154179,7 +159257,7 @@
           "risk": "write",
           "openWorld": true,
           "idempotency": "none",
-          "revision": "none",
+          "revision": "optional",
           "batch": "forbidden",
           "transport": "json",
           "maximumResponseBytes": 65536,
@@ -154878,7 +159956,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -155142,7 +160220,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -155333,7 +160411,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -162713,7 +167791,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -163077,7 +168155,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -164987,7 +170065,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -166952,6 +172030,17 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -167142,7 +172231,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -169440,7 +174529,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -170239,7 +175328,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -170888,7 +175977,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -172831,7 +177920,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -179613,7 +184702,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -180904,7 +185993,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -181265,7 +186354,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -181472,7 +186561,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -184378,7 +189467,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -185140,7 +190229,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -187728,7 +192817,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -188062,7 +193151,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -188516,7 +193605,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -189041,7 +194130,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -226670,7 +231759,7 @@
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
-          "stability": "stable",
+          "stability": "beta",
           "principals": [
             "admin"
           ],
@@ -232123,7 +237212,7 @@
                 },
                 "policies": {
                   "revision": "none",
-                  "idempotency": "none",
+                  "idempotency": "supported",
                   "confirmation": "required",
                   "stopConditions": [
                     "Conflict: stop; uncertainty: reread first."
@@ -232278,7 +237367,7 @@
                 },
                 "policies": {
                   "revision": "none",
-                  "idempotency": "none",
+                  "idempotency": "supported",
                   "confirmation": "required",
                   "stopConditions": [
                     "Conflict: stop; uncertainty: reread first."
@@ -242016,6 +247105,166 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.sales-analytics"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.customers.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.customers.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.customers.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.customers.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.fulfillments.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.fulfillments.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.fulfillments.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.fulfillments.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.orders.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.orders.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.orders.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.orders.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.payments.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.payments.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.price_lists.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.price_lists.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.price_lists.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.price_lists.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.price_lists.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.price_lists.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.price_lists.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.price_lists.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.price_lists.prices_list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.price_lists.prices_list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.price_lists.prices_set",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.price_lists.prices_set"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.price_lists.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.price_lists.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.products.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.products.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.products.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.products.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.shipments.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.shipments.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.shipments.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.shipments.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.shipments.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.shipments.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.variants.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.variants.get"
           ]
         },
         {

@@ -28,6 +28,9 @@ const createPolicies: AgentWorkflowStepPolicies = {
   nonInferenceRules: ["Use exact facts."],
 };
 
+/** A stable create that replays its first response for a repeated Idempotency-Key. */
+const replayCreatePolicies: AgentWorkflowStepPolicies = { ...createPolicies, idempotency: "supported" };
+
 export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
   id: "catalog.optioned-product.v1",
   surface: "dashboard",
@@ -226,7 +229,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
               ],
             }],
           },
-          policies: createPolicies,
+          policies: replayCreatePolicies,
         },
         {
           id: "attributeCreate",
@@ -305,7 +308,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
             capture: { responsePointer: "/data/file/id", itemPointer: "/mediaId" },
           },
           policies: {
-            ...createPolicies,
+            ...replayCreatePolicies,
             nonInferenceRules: [
               "Use exact facts.",
               "Capture mediaId only to the same key.",

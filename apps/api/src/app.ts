@@ -55,6 +55,8 @@ import {
 import { webhookBodyLimitMiddleware } from "./middleware/webhook-body-limit";
 import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations";
 import { adminCategoryRoutes } from "./routes/admin/categories";
+import { adminResourceRoutes } from "./routes/admin/resources";
+import { idempotentReplay } from "./routes/admin/idempotency";
 import { adminBrandRoutes } from "./routes/admin/brands";
 import { adminPriceListRoutes } from "./routes/admin/price-lists";
 import { adminObjectRoutes } from "./routes/admin/objects";
@@ -214,8 +216,11 @@ app.route("/orders", orderRoutes);
 // limited to exact scanner workflow endpoints inside the middleware.
 app.use("/admin/*", dashboardOriginGuardMiddleware);
 app.use("/admin/*", adminAuthMiddleware);
+// A stable create repeated with its Idempotency-Key returns the first response.
+app.use("/admin/*", idempotentReplay);
 
 // Register Admin routes
+app.route("/admin/resources", adminResourceRoutes);
 app.route("/admin/categories", adminCategoryRoutes);
 app.route("/admin/brands", adminBrandRoutes);
 app.route("/admin/price-lists", adminPriceListRoutes);

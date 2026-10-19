@@ -104,13 +104,15 @@ describe("acme.loyalty", () => {
   });
 
   it("earns once per paid order for an account, however often the event arrives", async () => {
-    const orders: Record<string, { id: string; totalAmount: number; customerRecord: { id: string; kind: string } }> = {
-      o1: { id: "o1", totalAmount: 1_250, customerRecord: { id: "cust_1", kind: "account" } },
-      o2: { id: "o2", totalAmount: 500, customerRecord: { id: "cust_1", kind: "account" } },
-      o3: { id: "o3", totalAmount: 900, customerRecord: { id: "guest_1", kind: "guest" } },
+    // The orders as dashboard.resources.orders.get returns them (minor units).
+    const orders: Record<string, { id: string; currency: string; totalMinor: number; customerId: string; accountCustomerId: string | null }> = {
+      o1: { id: "o1", currency: "BDT", totalMinor: 125_000, customerId: "cust_1", accountCustomerId: "cust_1" },
+      o2: { id: "o2", currency: "BDT", totalMinor: 50_000, customerId: "cust_1", accountCustomerId: "cust_1" },
+      o3: { id: "o3", currency: "BDT", totalMinor: 90_000, customerId: "guest_1", accountCustomerId: null },
     };
     const harness = createPluginTestHarness(loyalty, {
-      api: async (_operationId, input) => {
+      api: async (operationId, input) => {
+        expect(operationId).toBe("dashboard.resources.orders.get");
         const order = orders[String(input?.path?.id)];
         return order ? { ok: true, status: 200, data: order, error: null } : { ok: false, status: 404, data: null, error: { code: "NOT_FOUND", message: "Not found" } };
       },

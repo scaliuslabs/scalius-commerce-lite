@@ -11,7 +11,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     reason:
       "Browser detail projection contains buyer PII and serialized checkout state; use dashboard.abandoned_checkouts.summaries_list for bounded routine agent listing.",
   },
-  "dashboard.abandoned_checkouts.summaries_list": { stability: "stable" },
+  "dashboard.abandoned_checkouts.summaries_list": {},
   "dashboard.orders.amendment_confirm": {
     idempotency: "required",
     revision: "required",
@@ -38,16 +38,15 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   },
   "dashboard.orders.catalog_products": {},
   "dashboard.orders.cod_get": {},
-  "dashboard.orders.comment_add": { stability: "stable" },
+  "dashboard.orders.comment_add": { stability: "stable", replay: true },
   "dashboard.orders.comment_delete": { risk: "destructive" },
   "dashboard.orders.cod_update": {
     risk: "financial",
     openWorld: true,
     batch: "forbidden",
   },
-  "dashboard.orders.create": { stability: "stable", idempotency: "required" },
+  "dashboard.orders.create": { idempotency: "required" },
   "dashboard.orders.create_shipment": {
-    stability: "stable",
     openWorld: true,
     batch: "forbidden",
   },
@@ -63,7 +62,6 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   },
   "dashboard.orders.form_data": {},
   "dashboard.orders.fulfillment_create": {
-    stability: "stable",
     idempotency: "required",
     batch: "forbidden",
   },
@@ -76,7 +74,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     idempotency: "required",
     batch: "forbidden",
   },
-  "dashboard.orders.get": { stability: "stable" },
+  "dashboard.orders.get": {},
   "dashboard.orders.invoice_get": {},
   "dashboard.orders.invoice_issue": {
     idempotency: "required",
@@ -93,8 +91,8 @@ export const DASHBOARD_ORDER_OPERATIONS = {
       delivery: "authenticated-handle",
     },
   },
-  "dashboard.orders.items": { stability: "stable" },
-  "dashboard.orders.list": { stability: "stable" },
+  "dashboard.orders.items": {},
+  "dashboard.orders.list": {},
   "dashboard.orders.notification_resend": {
     openWorld: true,
     idempotency: "required",
@@ -115,14 +113,15 @@ export const DASHBOARD_ORDER_OPERATIONS = {
       delivery: "authenticated-handle",
     },
   },
+  // An app releases only the holds it placed (routes/admin/orders/detail.ts).
   "dashboard.orders.release_hold": { risk: "security", batch: "forbidden" },
   "dashboard.orders.payment_recovery_link": {
     risk: "security",
     batch: "forbidden",
   },
   "dashboard.orders.payment_recovery_list": {},
-  "dashboard.orders.payments": { stability: "stable" },
-  "dashboard.orders.quote": { stability: "stable", risk: "read" },
+  "dashboard.orders.payments": {},
+  "dashboard.orders.quote": { risk: "read" },
   "dashboard.orders.refund": {
     risk: "financial",
     openWorld: true,
@@ -159,7 +158,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     openWorld: true,
     batch: "forbidden",
   },
-  "dashboard.orders.shipment_get": { stability: "stable" },
+  "dashboard.orders.shipment_get": {},
   "dashboard.orders.shipment_reconcile": {
     openWorld: true,
     batch: "forbidden",
@@ -186,7 +185,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     revision: "required",
     batch: "forbidden",
   },
-  "dashboard.orders.shipments": { stability: "stable" },
+  "dashboard.orders.shipments": {},
   "dashboard.orders.timeline": { stability: "stable" },
   "dashboard.orders.support_request_update": {
     openWorld: true,
@@ -197,6 +196,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   "dashboard.orders.fulfillment_location_set": { revision: "required" },
   "dashboard.orders.update_status": {
     stability: "stable",
+    revision: "optional",
     openWorld: true,
     batch: "forbidden",
   },

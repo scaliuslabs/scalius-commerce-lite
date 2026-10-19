@@ -3,6 +3,7 @@
 // done, void a fulfilment whose parcel came back, and mark a pickup order
 // ready to collect. Courier bookings stay on POST /{id}/shipments.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import { MANUAL_FULFILLMENT_TYPES } from "@scalius/shared/fulfilment";
 import {
     markOrderReadyForPickup,
@@ -103,9 +104,37 @@ const createFulfilmentRoute = createRoute({
 });
 
 app.openapi(createFulfilmentRoute, async (c) => {
+    const result = await handOverOrderLines(c, c.req.valid("param").id, c.req.valid("json"));
+    return created(c, {
+        orderId: result.orderId,
+        fulfillmentId: result.fulfillmentId,
+        kind: result.kind,
+        lines: result.lines,
+        shipmentId: result.shipmentId,
+        orderStatus: result.orderStatus,
+        fulfillmentStatus: result.fulfillmentStatus,
+        replayed: result.replayed,
+        awaitingPayment: result.awaitingPayment,
+    });
+});
+
+/** A hand-over as the dashboard and the app API take it (amounts in major units). */
+export interface HandOverInput {
+    requestKey: string;
+    kind: (typeof MANUAL_FULFILLMENT_TYPES)[number];
+    lines?: { itemId: string; quantity: number }[];
+    tracking?: { courierName?: string; trackingId?: string; trackingUrl?: string; note?: string; shipmentAmount?: number };
+    cashReceived?: number;
+}
+
+/**
+ * Records a hand-over and its effects (timeline, buyer notifications, the
+ * delivery cascade after cash at the counter); a repeated request key
+ * returns the first result and repeats no effect. Shared by
+ * `dashboard.orders.fulfillment_create` and `dashboard.resources.fulfillments.create`.
+ */
+export async function handOverOrderLines(c: Context<{ Bindings: Env }>, orderId: string, body: HandOverInput) {
     const db = c.get("db");
-    const orderId = c.req.valid("param").id;
-    const body = c.req.valid("json");
     const actorId = actorIdOf(c);
     const result = await recordOrderFulfilment(db, orderId, {
         requestKey: body.requestKey,
@@ -168,18 +197,8 @@ app.openapi(createFulfilmentRoute, async (c) => {
             });
         }
     }
-    return created(c, {
-        orderId: result.orderId,
-        fulfillmentId: result.fulfillmentId,
-        kind: result.kind,
-        lines: result.lines,
-        shipmentId: result.shipmentId,
-        orderStatus: result.orderStatus,
-        fulfillmentStatus: result.fulfillmentStatus,
-        replayed: result.replayed,
-        awaitingPayment: result.awaitingPayment,
-    });
-});
+    return result;
+}
 
 const voidFulfilmentRoute = createRoute({
     operationId: "dashboard.orders.fulfillment_void",

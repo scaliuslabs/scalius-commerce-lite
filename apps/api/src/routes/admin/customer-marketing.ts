@@ -4,6 +4,7 @@
 // crosses this edge in decimal major units (the store currency) and is stored
 // in integer minor units.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { assertContactSearchAllowed } from "./contact-access";
 import { protectedField as pii } from "../../schemas/protected";
 import {
     CUSTOMER_EXPORT_MAX_ROWS,
@@ -201,6 +202,7 @@ app.openapi(bulkTagsRoute, async (c) => {
     const body = c.req.valid("json");
     if (!body.add?.length && !body.remove?.length) throw new ValidationError("Give tags to add or remove.");
     requireOneSelection(body.customerIds, body.matching);
+    assertContactSearchAllowed(c, "matching.filter.search", body.matching?.filter.search);
     const slice = body.matching ? await readCustomerSlice(db, body.matching, { trashed: false }) : null;
     const customerIds = slice ? slice.ids : body.customerIds!;
     const add = body.add ?? [];

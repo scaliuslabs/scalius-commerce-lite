@@ -19,7 +19,7 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
     revision: "required",
     limits: { response: 16_384 },
   },
-  "dashboard.content.create": { stability: "stable" },
+  "dashboard.content.create": { stability: "stable", replay: true },
   "dashboard.content.get": { stability: "stable" },
   "dashboard.content.list": { stability: "stable" },
   "dashboard.content.permanently_delete": {
@@ -47,6 +47,7 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   "dashboard.media_folders.update": { revision: "required" },
   "dashboard.media.import_url": {
     stability: "stable",
+    replay: true,
     openWorld: true,
     batch: "forbidden",
   },

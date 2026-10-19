@@ -100,6 +100,12 @@
      "minLength": 1,
      "maxLength": 128
     },
+    "accountCustomerId": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
     "contact": {
      "type": "object",
      "properties": {
@@ -351,6 +357,11 @@
      "minLength": 1,
      "maxLength": 128
     },
+    "version": {
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
     "lines": {
      "type": "array",
      "items": {
@@ -465,12 +476,14 @@
     "pricesIncludeTax",
     "paymentMethod",
     "customerId",
+    "accountCustomerId",
     "contact",
     "requiresShipping",
     "shippingMethodId",
     "shippingAddress",
     "billingAddress",
     "fulfillmentLocationId",
+    "version",
     "lines",
     "createdAt",
     "updatedAt",
@@ -675,6 +688,11 @@
     "isGiftCard": {
      "type": "boolean"
     },
+    "imageUrl": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 2048
+    },
     "currency": {
      "type": "string",
      "minLength": 3,
@@ -758,6 +776,7 @@
     "categoryId",
     "revision",
     "isGiftCard",
+    "imageUrl",
     "currency",
     "priceMinor",
     "variants",
@@ -875,6 +894,13 @@
      "minLength": 1,
      "maxLength": 128
     },
+    "tags": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "maxLength": 40
+     }
+    },
     "consents": {
      "type": "array",
      "items": {
@@ -939,6 +965,7 @@
     "totalOrders",
     "lastOrderAt",
     "mergedIntoCustomerId",
+    "tags",
     "consents",
     "createdAt",
     "updatedAt",

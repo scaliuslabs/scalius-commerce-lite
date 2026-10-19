@@ -8,15 +8,18 @@ import {
 } from "@scalius/plugin-sdk/testing";
 import wishlist from "./index";
 
+// The product as dashboard.resources.products.get returns it.
 const productApi = async (operationId: string, input: unknown) => {
-  if (operationId === "dashboard.products.get_section") {
+  if (operationId === "dashboard.resources.products.get") {
     const id = (input as { path: { id: string } }).path.id;
-    const product = { name: id === "p_linen" ? "Linen Panjabi" : "Cotton Panjabi", slug: id === "p_linen" ? "linen-panjabi" : "cotton-panjabi", isActive: true, deletedAt: null };
-    return { ok: true, status: 200, data: { section: "base", product }, error: null };
-  }
-  if (operationId === "dashboard.products.get_by_ids") {
-    const id = (input as { query: { ids: string } }).query.ids;
-    return { ok: true, status: 200, data: { products: [{ id, primaryImage: "https://cdn.example.com/linen.jpg" }] }, error: null };
+    const product = {
+      id,
+      name: id === "p_linen" ? "Linen Panjabi" : "Cotton Panjabi",
+      slug: id === "p_linen" ? "linen-panjabi" : "cotton-panjabi",
+      status: "active",
+      imageUrl: "https://cdn.example.com/linen.jpg",
+    };
+    return { ok: true, status: 200, data: product, error: null };
   }
   return { ok: false, status: 404, data: null, error: { code: "x", message: "unknown" } };
 };
@@ -77,9 +80,8 @@ describe("acme.wishlist", () => {
     const harness = createPluginTestHarness(wishlist, {
       api: async (operationId, input) => {
         const result = await productApi(operationId, input);
-        if (!result.ok || operationId !== "dashboard.products.get_section") return result;
-        const data = result.data as { product: Record<string, unknown> };
-        return { ...result, data: { ...data, product: { ...data.product, name } } };
+        if (!result.ok || operationId !== "dashboard.resources.products.get") return result;
+        return { ...result, data: { ...(result.data as Record<string, unknown>), name } };
       },
     });
     await harness.route("public", "toggle", { method: "POST", headers: json, body: { productId: "p_linen" }, customer: { id: "cust_1" } });

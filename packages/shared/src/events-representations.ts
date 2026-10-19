@@ -76,6 +76,8 @@ export const orderRepresentationSchema = z.object({
   pricesIncludeTax: z.boolean(),
   paymentMethod: text.nullable(),
   customerId: id.nullable(),
+  /** The buyer's storefront account when the order verifiably belongs to one; null for a guest order. */
+  accountCustomerId: id.nullable(),
   contact: z.object({
     name: pii("name", text.nullable()),
     email: pii("email", text.nullable()),
@@ -88,6 +90,8 @@ export const orderRepresentationSchema = z.object({
   /** Null when the shipping address bills too, or none was taken. */
   billingAddress: postalAddressSchema.nullable(),
   fulfillmentLocationId: id.nullable(),
+  /** Advances with every change: the `expectedVersion` an update takes. */
+  version: z.number().int(),
   lines: z.array(orderLineSchema),
   createdAt: iso,
   updatedAt: iso,
@@ -130,6 +134,8 @@ export const productRepresentationSchema = z.object({
   categoryId: id.nullable(),
   revision: z.number().int(),
   isGiftCard: z.boolean(),
+  /** The featured image (or the featured video's poster); null for none. */
+  imageUrl: z.string().max(2048).nullable(),
   /** The product's selling price in the store currency (each SKU carries its own). */
   currency,
   priceMinor: minor,
@@ -167,6 +173,8 @@ export const customerRepresentationSchema = z.object({
   totalOrders: z.number().int(),
   lastOrderAt: iso.nullable(),
   mergedIntoCustomerId: id.nullable(),
+  /** The merchant's tags, normalised (trimmed, lower-case), in order. */
+  tags: z.array(z.string().max(40)),
   /** Marketing consent per channel; the address it was given for is protected. */
   consents: z.array(z.object({
     channel: state,
@@ -411,18 +419,22 @@ export type EventDataTruncation = z.output<typeof eventDataTruncationSchema>;
 
 const segment = (value: unknown) => encodeURIComponent(typeof value === "string" ? value : "");
 
-/** Where a receiver reads a resource the delivery could not carry (the admin API, under its API credential). */
+/**
+ * Where a receiver reads a resource the delivery could not carry (the admin
+ * API, under its API credential): the stable app API's read of the same
+ * representation where one exists.
+ */
 const FETCH_HINTS: Record<EventRepresentationType, (resourceId: string, facts: Record<string, unknown>) => { operationId: string; path: string }> = {
-  order: (resource) => ({ operationId: "dashboard.orders.get", path: `/api/v1/admin/orders/${segment(resource)}` }),
+  order: (resource) => ({ operationId: "dashboard.resources.orders.get", path: `/api/v1/admin/resources/orders/${segment(resource)}` }),
   return: (resource, facts) => ({ operationId: "dashboard.orders.return_get", path: `/api/v1/admin/orders/${segment(facts.orderId)}/returns/${segment(resource)}` }),
-  product: (resource) => ({ operationId: "dashboard.products.get_by_ids", path: `/api/v1/admin/products/by-ids?ids=${segment(resource)}` }),
-  variant: (resource) => ({ operationId: "dashboard.inventory.levels", path: `/api/v1/admin/inventory/${segment(resource)}/levels` }),
-  customer: (resource) => ({ operationId: "dashboard.customers.get", path: `/api/v1/admin/customers/${segment(resource)}` }),
+  product: (resource) => ({ operationId: "dashboard.resources.products.get", path: `/api/v1/admin/resources/products/${segment(resource)}` }),
+  variant: (resource) => ({ operationId: "dashboard.resources.variants.get", path: `/api/v1/admin/resources/variants/${segment(resource)}` }),
+  customer: (resource) => ({ operationId: "dashboard.resources.customers.get", path: `/api/v1/admin/resources/customers/${segment(resource)}` }),
   purchase_order: (resource) => ({ operationId: "dashboard.purchase_orders.get", path: `/api/v1/admin/inventory/purchase-orders/${segment(resource)}` }),
   inventory_transfer: (resource) => ({ operationId: "dashboard.inventory_transfers.get", path: `/api/v1/admin/inventory/transfers/${segment(resource)}` }),
-  fulfillment: (_resource, facts) => ({ operationId: "dashboard.orders.get", path: `/api/v1/admin/orders/${segment(facts.orderId)}` }),
-  shipment: (resource, facts) => ({ operationId: "dashboard.orders.shipment_get", path: `/api/v1/admin/orders/${segment(facts.orderId)}/shipments/${segment(resource)}` }),
-  payment: (_resource, facts) => ({ operationId: "dashboard.orders.payments", path: `/api/v1/admin/orders/${segment(facts.orderId)}/payments` }),
+  fulfillment: (_resource, facts) => ({ operationId: "dashboard.resources.fulfillments.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/fulfillments` }),
+  shipment: (resource) => ({ operationId: "dashboard.resources.shipments.get", path: `/api/v1/admin/resources/shipments/${segment(resource)}` }),
+  payment: (_resource, facts) => ({ operationId: "dashboard.resources.payments.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/payments` }),
   checkout: () => ({ operationId: "dashboard.abandoned_checkouts.summaries_list", path: "/api/v1/admin/abandoned-checkouts/summaries" }),
   discount: (resource) => ({ operationId: "dashboard.discounts.get", path: `/api/v1/admin/discounts/${segment(resource)}` }),
   review: (resource) => ({ operationId: "dashboard.reviews.get", path: `/api/v1/admin/reviews/${segment(resource)}` }),

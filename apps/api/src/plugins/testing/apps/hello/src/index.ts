@@ -128,7 +128,7 @@ export default definePlugin({
   events: {
     "order.paid": async (event, ctx) => {
       const orderId = event.resource.id;
-      const order = await ctx.api.call<{ id?: string; status?: string }>("dashboard.orders.get", { path: { id: orderId } });
+      const order = await ctx.api.call<{ id?: string; status?: string }>("dashboard.resources.orders.get", { path: { id: orderId } });
       await greetings(ctx).put(orderId, {
         order_id: orderId,
         kind: "paid",

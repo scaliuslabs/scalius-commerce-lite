@@ -104,10 +104,11 @@ export function pointsEarned(totalMinor: number, settings: Record<string, unknow
   return per100 > 0 && totalMinor > 0 ? Math.floor((totalMinor * per100) / hundred) : 0;
 }
 
+/** The fields loyalty reads of `dashboard.resources.orders.get` (the order as webhooks carry it). */
 interface PaidOrder {
   id: string;
-  totalAmount: number;
-  customerRecord: { id: string; kind: string } | null;
+  totalMinor: number;
+  accountCustomerId: string | null;
 }
 
 /**
@@ -116,7 +117,7 @@ interface PaidOrder {
  * the entry; a concurrent credit or spend is re-read and retried.
  */
 async function earn(orderId: string, ctx: PluginContext): Promise<void> {
-  const result = await ctx.api.call<PaidOrder>("dashboard.orders.get", { path: { id: orderId } });
+  const result = await ctx.api.call<PaidOrder>("dashboard.resources.orders.get", { path: { id: orderId } });
   if (!result.ok || !result.data) {
     ctx.log.warn("Could not read the paid order", { orderId, status: result.status });
     if (result.status >= 500) throw new Error("The order could not be read; the event will be retried.");
@@ -124,10 +125,9 @@ async function earn(orderId: string, ctx: PluginContext): Promise<void> {
   }
   const order = result.data;
   // Points belong to accounts: a guest order earns nothing.
-  if (order.customerRecord?.kind !== "account") return;
-  const customerId = order.customerRecord.id;
-  const totalMinor = Math.round(order.totalAmount * 10 ** ctx.store.decimalPlaces);
-  const points = pointsEarned(totalMinor, ctx.settings, ctx.store.decimalPlaces);
+  if (!order.accountCustomerId) return;
+  const customerId = order.accountCustomerId;
+  const points = pointsEarned(order.totalMinor, ctx.settings, ctx.store.decimalPlaces);
   if (points <= 0) return;
 
   const entryId = `earn:${orderId}`;

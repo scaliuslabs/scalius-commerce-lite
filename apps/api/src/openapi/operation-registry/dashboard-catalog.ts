@@ -24,7 +24,7 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
     revision: "required",
   },
   "dashboard.categories.bulk_restore": { revision: "required" },
-  "dashboard.categories.create": { stability: "stable" },
+  "dashboard.categories.create": { stability: "stable", replay: true },
   "dashboard.categories.delete_permanently": {
     risk: "destructive",
     revision: "required",
@@ -58,7 +58,7 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
   "dashboard.collections.bulk_delete": { risk: "destructive" },
   "dashboard.collections.bulk_restore": {},
   "dashboard.collections.category_options": {},
-  "dashboard.collections.create": { stability: "stable" },
+  "dashboard.collections.create": { stability: "stable", replay: true },
   "dashboard.collections.delete_permanently": { risk: "destructive" },
   "dashboard.collections.form_options": {},
   "dashboard.collections.get": {
@@ -74,15 +74,15 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
   "dashboard.collections.trash": { stability: "stable", risk: "destructive" },
   "dashboard.collections.update": { stability: "stable", revision: "required" },
   "dashboard.collections.update_products": { stability: "stable", revision: "required" },
-  "dashboard.product_options.save_matrix": { stability: "stable", revision: "required" },
-  "dashboard.product_variants.create": { stability: "stable", revision: "required" },
-  "dashboard.product_variants.list": { stability: "stable" },
+  "dashboard.product_options.save_matrix": { revision: "required" },
+  "dashboard.product_variants.create": { revision: "required" },
+  "dashboard.product_variants.list": {},
   "dashboard.product_variants.retire": {
     stability: "stable",
     risk: "destructive",
     revision: "required",
   },
-  "dashboard.product_variants.update": { stability: "stable", revision: "required" },
+  "dashboard.product_variants.update": { revision: "required" },
   // Price lists (MARKETS-DESIGN D5): a market's, a segment's or a sale's fixed prices.
   "dashboard.price_lists.choices": {},
   "dashboard.price_lists.create": {},
@@ -98,7 +98,7 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
   },
   "dashboard.products.bulk_restore": { revision: "required" },
   "dashboard.products.bulk_update": { revision: "required" },
-  "dashboard.products.create": { stability: "stable", limits: { response: 16_384 } },
+  "dashboard.products.create": { limits: { response: 16_384 } },
   "dashboard.products.duplicate": {},
   "dashboard.products.delete_permanently": {
     risk: "destructive",
@@ -108,15 +108,15 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
     exposure: "excluded",
     reason: "Legacy oversized aggregate projection; use dashboard.products.get_section.",
   },
-  "dashboard.products.get_by_ids": { stability: "stable" },
-  "dashboard.products.get_section": { stability: "stable" },
+  "dashboard.products.get_by_ids": {},
+  "dashboard.products.get_section": {},
   "dashboard.products.list": {
     exposure: "excluded",
     reason:
       "Legacy dashboard list may include oversized rich text and media projections; use dashboard.products.list_summaries.",
   },
-  "dashboard.products.list_summaries": { stability: "stable" },
-  "dashboard.products.lookup_barcode": { stability: "stable" },
+  "dashboard.products.list_summaries": {},
+  "dashboard.products.lookup_barcode": {},
   // Publishing (MARKETS-DESIGN D6): not under the product's revision.
   "dashboard.products.publications_bulk": {},
   "dashboard.products.publications_set": { stability: "stable" },
@@ -129,7 +129,6 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
   },
   "dashboard.products.update": { revision: "required" },
   "dashboard.products.update_section": {
-    stability: "stable",
     revision: "required",
     limits: { request: 16_384, response: 16_384 },
   },

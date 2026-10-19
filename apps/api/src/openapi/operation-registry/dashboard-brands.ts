@@ -2,7 +2,7 @@
 import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_BRAND_OPERATIONS = {
-  "dashboard.brands.create": { stability: "stable" },
+  "dashboard.brands.create": { stability: "stable", replay: true },
   "dashboard.brands.delete_permanently": { risk: "destructive", revision: "required" },
   "dashboard.brands.form_options": {},
   "dashboard.brands.get": { stability: "stable" },

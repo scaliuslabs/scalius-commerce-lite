@@ -42,10 +42,11 @@ import {
     products,
     productVariants,
     media,
+    orderHolds,
     orders,
 } from "@scalius/database/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { NotFoundError, ServiceUnavailableError } from "../../../utils/api-error";
+import { ForbiddenError, NotFoundError, ServiceUnavailableError } from "../../../utils/api-error";
 import { ok, created, noContent } from "../../../utils/api-response";
 import {
     successEnvelope,
@@ -410,6 +411,14 @@ const releaseHoldRoute = createRoute({
 
 app.openapi(releaseHoldRoute, async (c) => {
     const { id, holdId } = c.req.valid("param");
+    // An app releases only the holds it placed; another app's review stays with staff.
+    const plugin = c.get("pluginPrincipal");
+    if (plugin) {
+        const placed = await c.get("db").select({ pluginId: orderHolds.pluginId }).from(orderHolds)
+            .where(and(eq(orderHolds.id, holdId), eq(orderHolds.orderId, id))).get();
+        if (!placed) throw new NotFoundError("Hold not found");
+        if (placed.pluginId !== plugin.pluginId) throw new ForbiddenError("An app can release only the holds it placed.");
+    }
     const user = c.get("user") as { id?: string } | undefined;
     const hold = await releaseOrderHold(c.get("db"), id, holdId, user?.id ?? null);
     return ok(c, {

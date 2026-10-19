@@ -2000,6 +2000,244 @@ export type BuyerWarrantyClaim = {
     closedAt: string | null;
 };
 
+export type OrderResource = {
+    id: string;
+    orderNumber: number | null;
+    status: string;
+    paymentStatus: string;
+    fulfillmentStatus: string;
+    channel: string;
+    salesChannelId: string;
+    marketId: string | null;
+    currency: string;
+    subtotalMinor: number;
+    shippingMinor: number;
+    discountMinor: number;
+    taxMinor: number;
+    totalMinor: number;
+    paidMinor: number;
+    balanceDueMinor: number;
+    pricesIncludeTax: boolean;
+    paymentMethod: string | null;
+    customerId: string | null;
+    accountCustomerId: string | null;
+    contact: {
+        name: string | null;
+        email: string | null;
+        phone: string | null;
+    };
+    requiresShipping: boolean;
+    shippingMethodId: string | null;
+    shippingAddress: {
+        name: string | null;
+        phone: string | null;
+        company: string | null;
+        line1: string | null;
+        line2: string | null;
+        dependentLocality: string | null;
+        locality: string | null;
+        adminArea: string | null;
+        postalCode: string | null;
+        countryCode: string | null;
+        placeIds: {
+            city: string | null;
+            zone: string | null;
+            area: string | null;
+        };
+    } | null;
+    billingAddress: {
+        name: string | null;
+        phone: string | null;
+        company: string | null;
+        line1: string | null;
+        line2: string | null;
+        dependentLocality: string | null;
+        locality: string | null;
+        adminArea: string | null;
+        postalCode: string | null;
+        countryCode: string | null;
+        placeIds: {
+            city: string | null;
+            zone: string | null;
+            area: string | null;
+        };
+    } | null;
+    fulfillmentLocationId: string | null;
+    version: number;
+    lines: Array<{
+        id: string;
+        productId: string;
+        variantId: string | null;
+        title: string | null;
+        variantLabel: string | null;
+        quantity: number;
+        fulfilledQuantity: number;
+        unitPriceMinor: number;
+        subtotalMinor: number;
+        discountMinor: number;
+        taxMinor: number;
+    }>;
+    createdAt: string;
+    updatedAt: string;
+    deletedAt: string | null;
+};
+
+export type PaymentResource = {
+    id: string;
+    orderId: string;
+    status: string;
+    method: string;
+    type: string;
+    currency: string;
+    amountMinor: number;
+    settlementCurrency: string;
+    settlementAmountMinor: number;
+    providerRef: string | null;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type FulfillmentResource = {
+    id: string;
+    orderId: string;
+    kind: string;
+    status: string;
+    shipmentId: string | null;
+    locationId: string | null;
+    currency: string;
+    cashCollectedMinor: number | null;
+    lines: Array<{
+        id: string;
+        orderItemId: string;
+        quantity: number;
+    }>;
+    createdAt: string;
+    voidedAt: string | null;
+};
+
+export type ShipmentResource = {
+    id: string;
+    orderId: string;
+    providerId: string | null;
+    providerType: string;
+    status: string;
+    rawStatus: string | null;
+    externalId: string | null;
+    trackingId: string | null;
+    trackingUrl: string | null;
+    courierName: string | null;
+    currency: string;
+    amountMinor: number | null;
+    isFinal: boolean;
+    lastCheckedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type ProductResource = {
+    id: string;
+    name: string;
+    slug: string;
+    status: 'active' | 'draft' | 'trashed';
+    brandId: string | null;
+    categoryId: string | null;
+    revision: number;
+    isGiftCard: boolean;
+    imageUrl: string | null;
+    currency: string;
+    priceMinor: number;
+    variants: Array<{
+        id: string;
+        sku: string;
+        priceMinor: number;
+        barcode: string | null;
+        trackInventory: boolean;
+        fulfillmentKind: string;
+        isDefault: boolean;
+    }>;
+    createdAt: string;
+    updatedAt: string;
+    deletedAt: string | null;
+};
+
+export type VariantResource = {
+    id: string;
+    productId: string;
+    sku: string;
+    trackInventory: boolean;
+    onHand: number;
+    levels: Array<{
+        locationId: string;
+        onHand: number;
+    }>;
+    updatedAt: string;
+};
+
+export type CustomerResource = {
+    id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    hasAccount: boolean;
+    totalOrders: number;
+    lastOrderAt: string | null;
+    mergedIntoCustomerId: string | null;
+    tags: Array<string>;
+    consents: Array<{
+        channel: string;
+        state: string;
+        contact: string | null;
+        updatedAt: string;
+    }>;
+    createdAt: string;
+    updatedAt: string;
+    deletedAt: string | null;
+};
+
+export type PriceListResource = {
+    id: string;
+    name: string;
+    description: string | null;
+    kind: 'market' | 'segment' | 'sale';
+    marketId: string;
+    segmentId: string | null;
+    status: 'draft' | 'active';
+    /**
+     * What the list does now: its status read with its schedule.
+     */
+    state: 'draft' | 'scheduled' | 'active' | 'expired';
+    startsAt: string | null;
+    endsAt: string | null;
+    priority: number;
+    revision: number;
+    priceCount: number;
+    variantCount: number;
+    currency: string;
+    /**
+     * Every price is a multiple of this, in minor units of `currency`.
+     */
+    priceIncrementMinor: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type PriceListSku = {
+    variantId: string;
+    productId: string;
+    sku: string;
+    baseCurrency: string;
+    /**
+     * The SKU's own product price, in minor units of `baseCurrency`.
+     */
+    basePriceMinor: number;
+    prices: Array<{
+        currency: string;
+        amountMinor: number;
+        compareAtMinor: number | null;
+        minQuantity: number;
+    }>;
+};
+
 export type PriceList = {
     id: string;
     name: string;
@@ -20778,6 +21016,1291 @@ export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachm
 
 export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdResponse = GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdResponses[keyof GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdResponses];
 
+export type GetApiV1AdminResourcesOrdersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        status?: string;
+        paymentStatus?: string;
+        fulfillmentStatus?: string;
+        customerId?: string;
+        orderNumber?: number;
+        /**
+         * The buyer's email, matched whole. Needs read_customer_emails.
+         */
+        email?: string;
+        /**
+         * The buyer's phone in E.164, matched whole. Needs read_customer_phones.
+         */
+        phone?: string;
+        /**
+         * true lists trashed orders instead.
+         */
+        trashed?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/resources/orders';
+};
+
+export type GetApiV1AdminResourcesOrdersErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesOrdersError = GetApiV1AdminResourcesOrdersErrors[keyof GetApiV1AdminResourcesOrdersErrors];
+
+export type GetApiV1AdminResourcesOrdersResponses = {
+    /**
+     * A page of orders
+     */
+    200: {
+        success: true;
+        data: {
+            orders: Array<OrderResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesOrdersResponse = GetApiV1AdminResourcesOrdersResponses[keyof GetApiV1AdminResourcesOrdersResponses];
+
+export type GetApiV1AdminResourcesOrdersByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}';
+};
+
+export type GetApiV1AdminResourcesOrdersByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesOrdersByIdError = GetApiV1AdminResourcesOrdersByIdErrors[keyof GetApiV1AdminResourcesOrdersByIdErrors];
+
+export type GetApiV1AdminResourcesOrdersByIdResponses = {
+    /**
+     * The order
+     */
+    200: {
+        success: true;
+        data: OrderResource;
+    };
+};
+
+export type GetApiV1AdminResourcesOrdersByIdResponse = GetApiV1AdminResourcesOrdersByIdResponses[keyof GetApiV1AdminResourcesOrdersByIdResponses];
+
+export type GetApiV1AdminResourcesOrdersByIdPaymentsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/payments';
+};
+
+export type GetApiV1AdminResourcesOrdersByIdPaymentsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesOrdersByIdPaymentsError = GetApiV1AdminResourcesOrdersByIdPaymentsErrors[keyof GetApiV1AdminResourcesOrdersByIdPaymentsErrors];
+
+export type GetApiV1AdminResourcesOrdersByIdPaymentsResponses = {
+    /**
+     * The payments
+     */
+    200: {
+        success: true;
+        data: {
+            payments: Array<PaymentResource>;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesOrdersByIdPaymentsResponse = GetApiV1AdminResourcesOrdersByIdPaymentsResponses[keyof GetApiV1AdminResourcesOrdersByIdPaymentsResponses];
+
+export type GetApiV1AdminResourcesOrdersByIdFulfillmentsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/fulfillments';
+};
+
+export type GetApiV1AdminResourcesOrdersByIdFulfillmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesOrdersByIdFulfillmentsError = GetApiV1AdminResourcesOrdersByIdFulfillmentsErrors[keyof GetApiV1AdminResourcesOrdersByIdFulfillmentsErrors];
+
+export type GetApiV1AdminResourcesOrdersByIdFulfillmentsResponses = {
+    /**
+     * The fulfilments
+     */
+    200: {
+        success: true;
+        data: {
+            fulfillments: Array<FulfillmentResource>;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesOrdersByIdFulfillmentsResponse = GetApiV1AdminResourcesOrdersByIdFulfillmentsResponses[keyof GetApiV1AdminResourcesOrdersByIdFulfillmentsResponses];
+
+export type PostApiV1AdminResourcesOrdersByIdFulfillmentsData = {
+    body: {
+        /**
+         * `ship`: sent with your own rider or carrier. `pickup`: the buyer collected it. `service`: the service was performed.
+         */
+        kind: 'ship' | 'pickup' | 'service';
+        /**
+         * Which units to hand over; part of a line is fine. Omit for every unit of this kind not handed over yet.
+         */
+        lines?: Array<{
+            orderItemId: string;
+            quantity: number;
+        }>;
+        /**
+         * Parcel details; only for `ship`.
+         */
+        tracking?: {
+            courierName?: string;
+            trackingId?: string;
+            trackingUrl?: string;
+            note?: string;
+            /**
+             * What the delivery cost, in minor units of the order's currency.
+             */
+            amountMinor?: number;
+        };
+        /**
+         * Cash on delivery taken in the same action (`pickup`/`service`), in minor units of the order's currency. Must equal the balance due.
+         */
+        cashReceivedMinor?: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/fulfillments';
+};
+
+export type PostApiV1AdminResourcesOrdersByIdFulfillmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesOrdersByIdFulfillmentsError = PostApiV1AdminResourcesOrdersByIdFulfillmentsErrors[keyof PostApiV1AdminResourcesOrdersByIdFulfillmentsErrors];
+
+export type PostApiV1AdminResourcesOrdersByIdFulfillmentsResponses = {
+    /**
+     * The fulfilment and the order after it
+     */
+    201: {
+        success: true;
+        data: {
+            fulfillment: FulfillmentResource;
+            order: OrderResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesOrdersByIdFulfillmentsResponse = PostApiV1AdminResourcesOrdersByIdFulfillmentsResponses[keyof PostApiV1AdminResourcesOrdersByIdFulfillmentsResponses];
+
+export type GetApiV1AdminResourcesOrdersByIdShipmentsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/shipments';
+};
+
+export type GetApiV1AdminResourcesOrdersByIdShipmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesOrdersByIdShipmentsError = GetApiV1AdminResourcesOrdersByIdShipmentsErrors[keyof GetApiV1AdminResourcesOrdersByIdShipmentsErrors];
+
+export type GetApiV1AdminResourcesOrdersByIdShipmentsResponses = {
+    /**
+     * The shipments
+     */
+    200: {
+        success: true;
+        data: {
+            shipments: Array<ShipmentResource>;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesOrdersByIdShipmentsResponse = GetApiV1AdminResourcesOrdersByIdShipmentsResponses[keyof GetApiV1AdminResourcesOrdersByIdShipmentsResponses];
+
+export type PostApiV1AdminResourcesOrdersByIdShipmentsData = {
+    body: {
+        providerId: string;
+        options?: {
+            deliveryType?: number;
+            itemType?: number;
+            itemWeight?: number;
+            note?: string;
+        };
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/shipments';
+};
+
+export type PostApiV1AdminResourcesOrdersByIdShipmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesOrdersByIdShipmentsError = PostApiV1AdminResourcesOrdersByIdShipmentsErrors[keyof PostApiV1AdminResourcesOrdersByIdShipmentsErrors];
+
+export type PostApiV1AdminResourcesOrdersByIdShipmentsResponses = {
+    /**
+     * The shipment
+     */
+    201: {
+        success: true;
+        data: {
+            shipment: ShipmentResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesOrdersByIdShipmentsResponse = PostApiV1AdminResourcesOrdersByIdShipmentsResponses[keyof PostApiV1AdminResourcesOrdersByIdShipmentsResponses];
+
+export type GetApiV1AdminResourcesShipmentsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/shipments/{id}';
+};
+
+export type GetApiV1AdminResourcesShipmentsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesShipmentsByIdError = GetApiV1AdminResourcesShipmentsByIdErrors[keyof GetApiV1AdminResourcesShipmentsByIdErrors];
+
+export type GetApiV1AdminResourcesShipmentsByIdResponses = {
+    /**
+     * The shipment
+     */
+    200: {
+        success: true;
+        data: ShipmentResource;
+    };
+};
+
+export type GetApiV1AdminResourcesShipmentsByIdResponse = GetApiV1AdminResourcesShipmentsByIdResponses[keyof GetApiV1AdminResourcesShipmentsByIdResponses];
+
+export type GetApiV1AdminResourcesProductsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * Omit for active and draft products.
+         */
+        status?: 'active' | 'draft' | 'trashed';
+        /**
+         * The product with this SKU (any case).
+         */
+        sku?: string;
+        /**
+         * The product with a SKU of this barcode (any case).
+         */
+        barcode?: string;
+        categoryId?: string;
+        brandId?: string;
+    };
+    url: '/api/v1/admin/resources/products';
+};
+
+export type GetApiV1AdminResourcesProductsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesProductsError = GetApiV1AdminResourcesProductsErrors[keyof GetApiV1AdminResourcesProductsErrors];
+
+export type GetApiV1AdminResourcesProductsResponses = {
+    /**
+     * A page of products
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<ProductResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesProductsResponse = GetApiV1AdminResourcesProductsResponses[keyof GetApiV1AdminResourcesProductsResponses];
+
+export type GetApiV1AdminResourcesProductsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/products/{id}';
+};
+
+export type GetApiV1AdminResourcesProductsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesProductsByIdError = GetApiV1AdminResourcesProductsByIdErrors[keyof GetApiV1AdminResourcesProductsByIdErrors];
+
+export type GetApiV1AdminResourcesProductsByIdResponses = {
+    /**
+     * The product
+     */
+    200: {
+        success: true;
+        data: ProductResource;
+    };
+};
+
+export type GetApiV1AdminResourcesProductsByIdResponse = GetApiV1AdminResourcesProductsByIdResponses[keyof GetApiV1AdminResourcesProductsByIdResponses];
+
+export type GetApiV1AdminResourcesVariantsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/variants/{id}';
+};
+
+export type GetApiV1AdminResourcesVariantsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesVariantsByIdError = GetApiV1AdminResourcesVariantsByIdErrors[keyof GetApiV1AdminResourcesVariantsByIdErrors];
+
+export type GetApiV1AdminResourcesVariantsByIdResponses = {
+    /**
+     * The SKU
+     */
+    200: {
+        success: true;
+        data: VariantResource;
+    };
+};
+
+export type GetApiV1AdminResourcesVariantsByIdResponse = GetApiV1AdminResourcesVariantsByIdResponses[keyof GetApiV1AdminResourcesVariantsByIdResponses];
+
+export type GetApiV1AdminResourcesCustomersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * The customer's email, matched whole. Needs read_customer_emails.
+         */
+        email?: string;
+        /**
+         * The customer's phone in E.164, matched whole. Needs read_customer_phones.
+         */
+        phone?: string;
+        /**
+         * Customers with this tag (any case).
+         */
+        tag?: string;
+        /**
+         * true lists trashed and merged customers instead.
+         */
+        trashed?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/resources/customers';
+};
+
+export type GetApiV1AdminResourcesCustomersErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesCustomersError = GetApiV1AdminResourcesCustomersErrors[keyof GetApiV1AdminResourcesCustomersErrors];
+
+export type GetApiV1AdminResourcesCustomersResponses = {
+    /**
+     * A page of customers
+     */
+    200: {
+        success: true;
+        data: {
+            customers: Array<CustomerResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesCustomersResponse = GetApiV1AdminResourcesCustomersResponses[keyof GetApiV1AdminResourcesCustomersResponses];
+
+export type GetApiV1AdminResourcesCustomersByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/customers/{id}';
+};
+
+export type GetApiV1AdminResourcesCustomersByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesCustomersByIdError = GetApiV1AdminResourcesCustomersByIdErrors[keyof GetApiV1AdminResourcesCustomersByIdErrors];
+
+export type GetApiV1AdminResourcesCustomersByIdResponses = {
+    /**
+     * The customer
+     */
+    200: {
+        success: true;
+        data: CustomerResource;
+    };
+};
+
+export type GetApiV1AdminResourcesCustomersByIdResponse = GetApiV1AdminResourcesCustomersByIdResponses[keyof GetApiV1AdminResourcesCustomersByIdResponses];
+
+export type GetApiV1AdminResourcesPriceListsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        marketId?: string;
+    };
+    url: '/api/v1/admin/resources/price-lists';
+};
+
+export type GetApiV1AdminResourcesPriceListsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesPriceListsError = GetApiV1AdminResourcesPriceListsErrors[keyof GetApiV1AdminResourcesPriceListsErrors];
+
+export type GetApiV1AdminResourcesPriceListsResponses = {
+    /**
+     * Price lists
+     */
+    200: {
+        success: true;
+        data: {
+            priceLists: Array<PriceListResource>;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesPriceListsResponse = GetApiV1AdminResourcesPriceListsResponses[keyof GetApiV1AdminResourcesPriceListsResponses];
+
+export type PostApiV1AdminResourcesPriceListsData = {
+    body: {
+        name: string;
+        description?: string | null;
+        /**
+         * `market`: a market's own prices. `segment`: prices for the members of one customer segment (signed-in checkout only). `sale`: a scheduled sale in a market; it wins over the others.
+         */
+        kind: 'market' | 'segment' | 'sale';
+        marketId: string;
+        /**
+         * Segment lists only.
+         */
+        segmentId?: string | null;
+        status?: 'draft' | 'active';
+        priority?: number;
+        /**
+         * When it starts pricing (inclusive); null: now.
+         */
+        startsAt?: string | null;
+        /**
+         * When it stops (exclusive); null: no end.
+         */
+        endsAt?: string | null;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/price-lists';
+};
+
+export type PostApiV1AdminResourcesPriceListsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesPriceListsError = PostApiV1AdminResourcesPriceListsErrors[keyof PostApiV1AdminResourcesPriceListsErrors];
+
+export type PostApiV1AdminResourcesPriceListsResponses = {
+    /**
+     * The new price list
+     */
+    201: {
+        success: true;
+        data: {
+            priceList: PriceListResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesPriceListsResponse = PostApiV1AdminResourcesPriceListsResponses[keyof PostApiV1AdminResourcesPriceListsResponses];
+
+export type DeleteApiV1AdminResourcesPriceListsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        expectedRevision: number;
+    };
+    url: '/api/v1/admin/resources/price-lists/{id}';
+};
+
+export type DeleteApiV1AdminResourcesPriceListsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminResourcesPriceListsByIdError = DeleteApiV1AdminResourcesPriceListsByIdErrors[keyof DeleteApiV1AdminResourcesPriceListsByIdErrors];
+
+export type DeleteApiV1AdminResourcesPriceListsByIdResponses = {
+    /**
+     * Deleted
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+        };
+    };
+};
+
+export type DeleteApiV1AdminResourcesPriceListsByIdResponse = DeleteApiV1AdminResourcesPriceListsByIdResponses[keyof DeleteApiV1AdminResourcesPriceListsByIdResponses];
+
+export type GetApiV1AdminResourcesPriceListsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/price-lists/{id}';
+};
+
+export type GetApiV1AdminResourcesPriceListsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesPriceListsByIdError = GetApiV1AdminResourcesPriceListsByIdErrors[keyof GetApiV1AdminResourcesPriceListsByIdErrors];
+
+export type GetApiV1AdminResourcesPriceListsByIdResponses = {
+    /**
+     * The price list
+     */
+    200: {
+        success: true;
+        data: {
+            priceList: PriceListResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesPriceListsByIdResponse = GetApiV1AdminResourcesPriceListsByIdResponses[keyof GetApiV1AdminResourcesPriceListsByIdResponses];
+
+export type PatchApiV1AdminResourcesPriceListsByIdData = {
+    body: {
+        expectedRevision: number;
+        name?: string;
+        description?: string | null;
+        /**
+         * `market`: a market's own prices. `segment`: prices for the members of one customer segment (signed-in checkout only). `sale`: a scheduled sale in a market; it wins over the others.
+         */
+        kind?: 'market' | 'segment' | 'sale';
+        marketId?: string;
+        segmentId?: string | null;
+        status?: 'draft' | 'active';
+        priority?: number;
+        /**
+         * When it starts pricing (inclusive); null: now.
+         */
+        startsAt?: string | null;
+        /**
+         * When it stops (exclusive); null: no end.
+         */
+        endsAt?: string | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/price-lists/{id}';
+};
+
+export type PatchApiV1AdminResourcesPriceListsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminResourcesPriceListsByIdError = PatchApiV1AdminResourcesPriceListsByIdErrors[keyof PatchApiV1AdminResourcesPriceListsByIdErrors];
+
+export type PatchApiV1AdminResourcesPriceListsByIdResponses = {
+    /**
+     * The saved price list
+     */
+    200: {
+        success: true;
+        data: {
+            priceList: PriceListResource;
+        };
+    };
+};
+
+export type PatchApiV1AdminResourcesPriceListsByIdResponse = PatchApiV1AdminResourcesPriceListsByIdResponses[keyof PatchApiV1AdminResourcesPriceListsByIdResponses];
+
+export type GetApiV1AdminResourcesPriceListsByIdPricesData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+    };
+    url: '/api/v1/admin/resources/price-lists/{id}/prices';
+};
+
+export type GetApiV1AdminResourcesPriceListsByIdPricesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesPriceListsByIdPricesError = GetApiV1AdminResourcesPriceListsByIdPricesErrors[keyof GetApiV1AdminResourcesPriceListsByIdPricesErrors];
+
+export type GetApiV1AdminResourcesPriceListsByIdPricesResponses = {
+    /**
+     * The page
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<PriceListSku>;
+            total: number;
+            page: number;
+            limit: number;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesPriceListsByIdPricesResponse = GetApiV1AdminResourcesPriceListsByIdPricesResponses[keyof GetApiV1AdminResourcesPriceListsByIdPricesResponses];
+
+export type PutApiV1AdminResourcesPriceListsByIdPricesData = {
+    body: {
+        expectedRevision: number;
+        /**
+         * Each SKU's whole set of prices (it replaces what the SKU had in the list).
+         */
+        set?: Array<{
+            variantId: string;
+            prices: Array<{
+                /**
+                 * The price of one unit, in minor units of the list's currency, at its price increment.
+                 */
+                amountMinor: number;
+                /**
+                 * The struck-through price, above the amount; null for none.
+                 */
+                compareAtMinor?: number | null;
+                /**
+                 * 1 is the list's price; a larger value is a quantity break from that many units.
+                 */
+                minQuantity?: number;
+            }>;
+        }>;
+        /**
+         * SKUs to take out of the list.
+         */
+        remove?: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/price-lists/{id}/prices';
+};
+
+export type PutApiV1AdminResourcesPriceListsByIdPricesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PutApiV1AdminResourcesPriceListsByIdPricesError = PutApiV1AdminResourcesPriceListsByIdPricesErrors[keyof PutApiV1AdminResourcesPriceListsByIdPricesErrors];
+
+export type PutApiV1AdminResourcesPriceListsByIdPricesResponses = {
+    /**
+     * The saved price list
+     */
+    200: {
+        success: true;
+        data: {
+            priceList: PriceListResource;
+        };
+    };
+};
+
+export type PutApiV1AdminResourcesPriceListsByIdPricesResponse = PutApiV1AdminResourcesPriceListsByIdPricesResponses[keyof PutApiV1AdminResourcesPriceListsByIdPricesResponses];
+
 export type GetApiV1AdminCategoriesFormOptionsData = {
     body?: never;
     path?: never;
@@ -21031,6 +22554,12 @@ export type PostApiV1AdminCategoriesData = {
          */
         listingTemplate?: string | null;
         status?: 'draft' | 'published' | 'internal';
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;
@@ -22032,6 +23561,12 @@ export type PostApiV1AdminBrandsData = {
          */
         slug?: string;
         status?: 'draft' | 'published';
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;
@@ -23107,6 +24642,12 @@ export type PostApiV1AdminObjectsTypesData = {
         admin?: 'none' | 'read' | 'edit';
         events?: boolean;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         */
+        'idempotency-key'?: string;
+    };
     path?: never;
     query?: never;
     url: '/api/v1/admin/objects/types';
@@ -23903,6 +25444,12 @@ export type PostApiV1AdminCollectionsData = {
          * A listing template id from the theme, or null for the theme's default collection listing.
          */
         listingTemplate?: string | null;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;
@@ -25764,6 +27311,12 @@ export type PostApiV1AdminCustomersData = {
             skipValidation?: boolean;
         } | null;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         */
+        'idempotency-key'?: string;
+    };
     path?: never;
     query?: never;
     url: '/api/v1/admin/customers';
@@ -26984,6 +28537,12 @@ export type PostApiV1AdminPagesData = {
         hideFooter?: boolean;
         hideTitle?: boolean;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         */
+        'idempotency-key'?: string;
+    };
     path?: never;
     query?: never;
     url: '/api/v1/admin/pages';
@@ -27800,6 +29359,10 @@ export type GetApiV1AdminDiscountsResponses = {
                 timezone: string;
                 maxRedemptions: number | null;
                 maxRedemptionsPerCustomer: number | null;
+                /**
+                 * The store currency: rule amounts (amountMinor) and the spend are integer minor units of it.
+                 */
+                currency: string;
                 maxDiscountSpendMinor: number | null;
                 budgetCurrencyCode: string | null;
                 /**
@@ -27947,6 +29510,12 @@ export type PostApiV1AdminDiscountsData = {
             };
         }>;
         customerSegmentIds?: Array<string>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;
@@ -28118,6 +29687,10 @@ export type GetApiV1AdminDiscountsByIdResponses = {
             timezone: string;
             maxRedemptions: number | null;
             maxRedemptionsPerCustomer: number | null;
+            /**
+             * The store currency: rule amounts (amountMinor) and the spend are integer minor units of it.
+             */
+            currency: string;
             maxDiscountSpendMinor: number | null;
             budgetCurrencyCode: string | null;
             /**
@@ -28689,6 +30262,12 @@ export type PostApiV1AdminMediaUploadsImportUrlData = {
         sourceUrl: string;
         filename?: string;
         folderId?: string | null;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;
@@ -44454,6 +46033,10 @@ export type PutApiV1AdminOrdersByIdStatusData = {
     body: {
         status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
         reason?: 'customer_changed_mind' | 'unreachable' | 'fake_order' | 'out_of_stock' | 'other';
+        /**
+         * The order version you read (`version` on the order). A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
+         */
+        expectedVersion?: number;
     };
     path: {
         id: string;
@@ -48111,6 +49694,12 @@ export type PostApiV1AdminOrdersByIdTimelineData = {
          * One key per comment draft. Posting it again returns the first comment.
          */
         requestKey?: string;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;

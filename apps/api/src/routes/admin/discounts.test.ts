@@ -21,6 +21,12 @@ vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
     getPromotionOrderUsage: mocks.getPromotionOrderUsage,
 }));
 
+// The store currency a discount's amounts are in (no database here).
+vi.mock("@scalius/core/modules/markets", async (importOriginal) => ({
+    ...await importOriginal<typeof import("@scalius/core/modules/markets")>(),
+    readStoreCurrency: vi.fn(async () => ({ code: "BDT" })),
+}));
+
 import { adminDiscountRoutes } from "./discounts";
 
 function draftBody(overrides: Record<string, unknown> = {}) {
@@ -88,7 +94,7 @@ describe("admin discount routes", () => {
         const response = await app.request("/api/v1/admin/discounts/promo_1");
         expect(response.status).toBe(200);
         await expect(response.json()).resolves.toMatchObject({
-            data: { id: "promo_1", redemptionCount: 2, discountSpendMinor: 3_000 },
+            data: { id: "promo_1", currency: "BDT", redemptionCount: 2, discountSpendMinor: 3_000 },
         });
     });
 

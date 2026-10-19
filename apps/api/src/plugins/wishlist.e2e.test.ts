@@ -88,8 +88,7 @@ describe("acme.wishlist end to end", { timeout: 30_000 }, () => {
     // The app read the product through /api/v1 under its own grant (products.view).
     expect(await getObjectRecord(db, "acme.wishlist", "products", "p_linen")).toMatchObject({ name: "Linen Panjabi", slug: "linen-panjabi", wishes: 1 });
     expect(sqlite.prepare("SELECT plugin_id, operation_id, outcome FROM agent_audit_events ORDER BY operation_id").all()).toEqual([
-      { plugin_id: "acme.wishlist", operation_id: "dashboard.products.get_by_ids", outcome: "success" },
-      { plugin_id: "acme.wishlist", operation_id: "dashboard.products.get_section", outcome: "success" },
+      { plugin_id: "acme.wishlist", operation_id: "dashboard.resources.products.get", outcome: "success" },
     ]);
 
     expect((await call("/api/v1/plugins/acme.wishlist/public/state?productId=p_linen", { headers: proxied("application/json") })).json)

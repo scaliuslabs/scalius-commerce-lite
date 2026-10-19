@@ -9,7 +9,7 @@ export function objectOperationResponseLimit(operationId?: string): number {
 export const DASHBOARD_OBJECT_OPERATIONS = {
   "objects.types.list": { stability: "stable", uncurated: true },
   "objects.types.get": { stability: "stable", uncurated: true },
-  "objects.types.create": { stability: "stable", uncurated: true },
+  "objects.types.create": { stability: "stable", replay: true, uncurated: true },
   "objects.types.update": { stability: "stable", revision: "required", uncurated: true },
   "objects.types.delete": { stability: "stable", risk: "destructive", revision: "required", uncurated: true },
   "objects.list": { limits: { response: OBJECT_OPERATION_RESPONSE_MAX_BYTES }, stability: "stable", uncurated: true },

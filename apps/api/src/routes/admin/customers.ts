@@ -2,6 +2,7 @@
 // Admin OpenAPI routes for customers.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { assertContactSearchAllowed } from "./contact-access";
 import {
     listCustomers,
     createCustomer,
@@ -149,6 +150,7 @@ const customerHistoryPayloadSchema = z.object({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const q = c.req.valid("query");
+    assertContactSearchAllowed(c, "search", q.search);
     // App columns and filters: nothing more is read unless the request names some.
     const appList = await planAppList(db, "customer", customers.id, q);
     const result = await listCustomers(db, {
@@ -226,6 +228,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const { customerIds: listed, matching, permanent } = c.req.valid("json");
     requireOneSelection(listed, matching);
     // A permanent delete reads only customers without orders: the others stay in Trash.
+    assertContactSearchAllowed(c, "matching.filter.search", matching?.filter.search);
     const slice = matching ? await readCustomerSlice(db, matching, { trashed: permanent, deletableOnly: permanent }) : null;
     const customerIds = slice ? slice.ids : listed!;
     if (customerIds.length > 0) await bulkDeleteCustomers(db, customerIds, permanent);
@@ -262,6 +265,7 @@ app.openapi(createRoute({
     const db = c.get("db");
     const { customerIds: listed, matching } = c.req.valid("json");
     requireOneSelection(listed, matching);
+    assertContactSearchAllowed(c, "matching.filter.search", matching?.filter.search);
     const slice = matching ? await readCustomerSlice(db, matching, { trashed: true, limit: planLimits().lists.bulkPerRowSlice }) : null;
     const result = await bulkRestoreCustomers(db, slice ? slice.ids : listed!, staffId(c));
     return ok(c, {

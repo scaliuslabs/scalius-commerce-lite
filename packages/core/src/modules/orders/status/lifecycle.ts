@@ -349,7 +349,17 @@ const NOTIFICATION_STATUSES: Record<string, OrderNotificationType> = {
  * effects (see admin-status-policy). Shipped, delivered and returned come from
  * the fulfilment actions, which call `applyOrderStatusChange` directly.
  */
-export async function updateOrderStatus(db: Database, orderId: string, status: string, data?: { trackingId?: string }): Promise<StatusUpdateResult> {
+/**
+ * The dashboard's and the app API's status change. `expectedVersion`, when
+ * given, is the order version the caller read: a change since refuses (409)
+ * and changes nothing (the write's own version CAS makes it exact).
+ */
+export async function updateOrderStatus(
+    db: Database,
+    orderId: string,
+    status: string,
+    data?: { trackingId?: string; expectedVersion?: number },
+): Promise<StatusUpdateResult> {
     return applyOrderStatusChange(db, orderId, status, data, { generic: true });
 }
 
@@ -357,7 +367,7 @@ export async function applyOrderStatusChange(
     db: Database,
     orderId: string,
     status: string,
-    data: { trackingId?: string } | undefined,
+    data: { trackingId?: string; expectedVersion?: number } | undefined,
     options: { generic: boolean },
 ): Promise<StatusUpdateResult> {
     const nextStatus = normalizeOrderStatus(status);
@@ -383,6 +393,9 @@ export async function applyOrderStatusChange(
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
+    if (data?.expectedVersion !== undefined && existingOrder.version !== data.expectedVersion) {
+        throw new ConflictError("This order changed. Reload to see the latest.");
+    }
     const currentStatus = normalizeOrderStatus(existingOrder.status);
     if (!currentStatus) {
         throw new ValidationError("Order has an unknown current status.");
