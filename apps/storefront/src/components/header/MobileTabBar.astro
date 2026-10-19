@@ -148,13 +148,14 @@ const active = {
   }
 
   /* Reserve the bar's height (zero specificity, so the product buy bar's own
-     reserve wins while it replaces the tabs). */
+     reserve wins while it replaces the tabs), only where the bar is drawn: an
+     app header skin draws its own phone navigation and no tab bar. */
   @media (max-width: 63.999rem) {
-    :where(html[data-mobile-nav="tabs"]) {
+    :where(html[data-mobile-nav="tabs"]:has(#mobile-tab-bar)) {
       scroll-padding-bottom: calc(var(--mobile-tabs-reserve) + 0.5rem);
     }
 
-    :where(html[data-mobile-nav="tabs"]) body {
+    :where(html[data-mobile-nav="tabs"]:has(#mobile-tab-bar)) body {
       padding-bottom: var(--mobile-tabs-reserve);
     }
   }

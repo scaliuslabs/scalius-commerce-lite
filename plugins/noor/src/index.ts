@@ -350,7 +350,7 @@ const skins = [
     id: "noor-product",
     target: "product-main",
     name: "Noor product page",
-    description: "Quiet photos beside the title and the store's own buy form, then the description, reviews and related products.",
+    description: "The store's gallery beside the title and the store's own buy form, which stays in view while the page scrolls, then the description, reviews and related products.",
     settings: [
       { key: "media_side", label: "Photos", type: "select", default: "start", options: SIDES },
       { key: "show_breadcrumbs", label: "Breadcrumbs", type: "boolean", default: true },

@@ -3,7 +3,8 @@
 // `beside` puts the gallery next to the details from 64rem (today's 12
 // columns). `stacked` (Dawn) and `grid` (Target) keep every photo in the
 // wide column and the details in a sticky column beside it (345px, 400–480px),
-// so the buy box starts at the top of the first screen. A buy box with a
+// so the buy box starts at the top of the first screen and stays in view; a
+// column taller than the window scrolls until its end shows, then stays. A buy box with a
 // delivery column takes the space beside the gallery from 80rem.
 import type { ResolvedStorefrontThemeLayout } from "@scalius/shared/storefront-theme";
 
@@ -45,10 +46,11 @@ const { gallery, factsColumn = false } = Astro.props;
     }
     .product-layout[data-gallery="stacked"] > :global([data-product-summary]),
     .product-layout[data-gallery="grid"] > :global([data-product-summary]) {
-      /* Start-aligned so the grid does not stretch the column to the photos' height (sticky needs room to travel). */
+      /* Start-aligned so the grid does not stretch the column to the photos' height (sticky needs room to travel).
+         A column taller than the window scrolls until its end shows (sticky-column.ts). */
       align-self: start;
       position: sticky;
-      top: calc(var(--header-height, 4rem) + 1rem);
+      top: calc(var(--header-height, 4rem) + 1rem + var(--sticky-column-shift, 0px));
     }
   }
   @media (min-width: 80rem) {

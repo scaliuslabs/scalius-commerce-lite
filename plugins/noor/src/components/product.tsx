@@ -1,10 +1,14 @@
-// Noor's product page (a skin of the store's product page): the photos as a
-// quiet column, the title, brand and rating, then the store's own buy form
-// (price, options, buyer inputs, quantity and buttons, all kept current by
-// the store), the description, reviews and related products. The buy form,
-// reviews and recommendations are the store's embeds; Noor draws around them.
+// Noor's product page (a skin of the store's product page): the store's
+// gallery (one photo at a time with thumbnails, swipe on phones, zoom, the
+// chosen variant's photo) beside the title, brand and rating and the store's
+// own buy form (price, options, buyer inputs, quantity and buttons, kept
+// current by the store), then the description, reviews and related products.
+// On computers the buy column stays in view while the page scrolls (the
+// store's sticky column, which also handles a column taller than the
+// window). The gallery, buy form, reviews and recommendations are the
+// store's embeds; Noor draws around them.
 
-import { BuyForm, Image, Recommendations, Reviews, raw, t, type ProductMainProps } from "@scalius/plugin-sdk/storefront";
+import { BuyForm, Gallery, Recommendations, Reviews, raw, t, type ProductMainProps } from "@scalius/plugin-sdk/storefront";
 import { Icon } from "./icons";
 import { Stars, choice, cx, ratingLabel, ratingValue, reviewCount } from "./ui";
 
@@ -29,13 +33,10 @@ export function ProductPage({ settings, data, context }: ProductMainProps<Produc
           </nav>
         ) : null}
         <div class={cx("noor-pdp", side === "end" && "is-flipped")}>
-          <div class="noor-pdp-media" data-count={String(Math.min(product.media.length, 5))}>
-            {product.media.map((image, index) => (
-              <Image image={image} loading={index === 0 ? "eager" : "lazy"} class="noor-cover"
-                sizes={index === 0 ? "(min-width: 768px) 55vw, 100vw" : "(min-width: 768px) 27vw, 50vw"} />
-            ))}
+          <div class="noor-pdp-media">
+            <Gallery />
           </div>
-          <div class="noor-pdp-buy">
+          <div class="noor-pdp-buy" data-sticky-column>
             {product.brand ? <p class="noor-eyebrow"><a href={product.brand.url}>{product.brand.title}</a></p> : null}
             <h1 class="noor-h1">{product.title}</h1>
             {product.rating ? (

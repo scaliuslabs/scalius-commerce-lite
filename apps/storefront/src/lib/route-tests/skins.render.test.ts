@@ -127,6 +127,13 @@ function app(draw: Partial<Record<string, (job: Record<string, unknown>) => stri
 
 const envelope = (data: unknown) => JSON.stringify({ success: true, data });
 
+/** Photos on the product (the gallery cases); the other cases have none. */
+let productPhotos = false;
+const photo = (id: string, index: number) => ({
+  id: `pmed_${id}`, mediaId: `med_${id}`, kind: "image", url: `https://cdn.shop.test/media/${id}.jpg`, posterMediaId: null, posterUrl: null,
+  altText: `Linen ${id}`, caption: null, width: 1200, height: 1200, durationMs: null, isPrimary: index === 0, sortOrder: index, status: "ready",
+});
+
 function productData() {
   return {
     product: {
@@ -134,13 +141,13 @@ function productData() {
       price: 1500, discountedPrice: 1200, discountType: "flat", discountPercentage: null, discountAmount: 300,
       freeDelivery: false, isActive: true, metaTitle: null, metaDescription: null, categoryId: null,
       createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z", deletedAt: null,
-      imageUrl: null, imageAlt: null, hasVariants: false, availableForSale: true, options: [], attributes: [], features: [],
+      imageUrl: productPhotos ? "https://cdn.shop.test/media/front.jpg" : null, imageAlt: null, imageMediaId: productPhotos ? "med_front" : null, hasVariants: false, availableForSale: true, options: [], attributes: [], features: [],
       noIndex: false, canonicalPath: null,
       customFields: [{ namespace: "custom", key: "fabric", name: "Fabric", type: "single_line_text", value: "Linen" }],
       reviews: { summary: { average: 4.5, count: 2, histogram: [] }, items: [], nextCursor: null },
     },
     category: null,
-    media: [],
+    media: productPhotos ? ["front", "side", "back"].map(photo) : [],
     variants: [{
       id: "sku_linen", productId: "prod_linen", optionCombinationKey: "", imageId: null, imageUrl: null, imageMediaId: null,
       selectedOptions: [], weight: null, sku: "LIN-1", price: 1500, stock: 5, reservedStock: 0, availabilityBand: "in_stock",
@@ -232,6 +239,29 @@ describe("a product-main skin", () => {
     // Structured data stays core's.
     const jsonLd = Array.from(page.querySelectorAll('script[type="application/ld+json"]')).map((node) => JSON.parse(node.textContent ?? "{}")["@type"]);
     expect(jsonLd).toContain("Product");
+  });
+
+  it("places the store's gallery where the skin asks for it, with its LCP preload, still in one batch", async () => {
+    app({
+      "product-main": () => '<article class="acme-pdp"><div class="acme-media"><scalius-embed kind="gallery"></scalius-embed></div><h1>Linen</h1><scalius-embed kind="buy-form" data-title="false"></scalius-embed></article>',
+    });
+    productPhotos = true;
+    const { calls, page } = await renderProduct(theme());
+    expect(calls.filter((call) => call.startsWith("/api/v1/storefront/batch"))).toHaveLength(1);
+    const gallery = page.querySelectorAll('[data-product-main="skin"] .acme-media [data-sx-embed="gallery"] #product-gallery[data-product-gallery]');
+    expect(gallery).toHaveLength(1);
+    expect(page.querySelectorAll("[data-product-gallery]")).toHaveLength(1);
+    // The first photo is the page's eager, high-priority LCP image, and preloaded.
+    expect(page.querySelector('#product-gallery img[fetchpriority="high"]')).not.toBeNull();
+    expect(page.querySelector('link[rel="preload"][as="image"]')).not.toBeNull();
+
+    // A skin without one draws its own photos: no core gallery, no preload for it.
+    vi.restoreAllMocks();
+    app({ "product-main": () => '<article class="acme-pdp"><h1>Linen</h1><scalius-embed kind="buy-form" data-title="false"></scalius-embed></article>' });
+    const own = await renderProduct(theme());
+    productPhotos = false;
+    expect(own.page.querySelector("[data-product-gallery]")).toBeNull();
+    expect(own.page.querySelector('link[rel="preload"][as="image"]')).toBeNull();
   });
 
   it("leaves the product page to core when the skin places no buy form, draws nothing, or is not chosen", async () => {

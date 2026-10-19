@@ -31,6 +31,10 @@ interface Props {
   /** One photo's zoom button in the stacked and grid lists ("Zoom photo 2 of 4"). */
   zoomOfLabel?: (position: number, total: number) => string;
   showAllLabel?: (count: number) => string;
+  /** The computer's previous and next photo buttons. */
+  stepLabels?: { previous: string; next: string };
+  /** The phone gallery's position, read out as it changes ("Photo 2 of 5"). */
+  positionLabel?: (position: number | string, total: number | string) => string;
 }
 
 const {
@@ -42,6 +46,8 @@ const {
   zoomLabel = "Zoom photo",
   zoomOfLabel = (position: number, total: number) => `Zoom photo ${position} of ${total}`,
   showAllLabel = (count: number) => `Show all photos (${count})`,
+  stepLabels = { previous: "Previous photo", next: "Next photo" },
+  positionLabel = (position: number | string, total: number | string) => `Photo ${position} of ${total}`,
 } = Astro.props;
 const thumbnails = layout.thumbnails;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
@@ -78,7 +84,9 @@ const galleryItems = galleryMedia.map((item) => {
   };
 });
 const galleryImages = galleryItems.filter(({ item }) => item.kind === "image");
-const mobileSwipe = layout.gallery === "beside" && layout.thumbnails === "beside" && layout.thumbnailSize === 48 && !layout.phoneSideThumbnails && galleryImages.length > 1;
+// Phones swipe between the photos of every gallery (the strip stays for
+// direct picks), with the position shown on the photo and read out.
+const mobileSwipe = galleryImages.length > 1;
 
 const initialMedia =
   galleryItems.find(({ item }) => item.id === featuredMedia?.id) ?? null;
@@ -222,6 +230,20 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
                 aria-hidden="true"
               >
               </div>
+              {/* Previous and next photo, for a mouse or keyboard on the main photo. */}
+              {hasMultipleMedia && (["previous", "next"] as const).map((step) => (
+                <button
+                  type="button"
+                  data-gallery-step={step === "previous" ? "-1" : "1"}
+                  class:list={[
+                    "gallery-step absolute top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm ring-1 ring-border backdrop-blur transition-opacity hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground motion-reduce:transition-none",
+                    step === "previous" ? "inset-s-3" : "inset-e-3",
+                  ]}
+                  aria-label={step === "previous" ? stepLabels.previous : stepLabels.next}
+                >
+                  <Icon name={step === "previous" ? "chevron-left" : "chevron-right"} class="h-5 w-5" aria-hidden="true" />
+                </button>
+              ))}
               {/* The keyboard (and touch) way in to the zoom view: hover alone reached nobody else. */}
               <button
                 type="button"
@@ -266,7 +288,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
               ) : (
                 <span data-gallery-position-count class="rounded-full bg-background/85 px-2 py-1 text-xs font-medium text-foreground shadow-sm" aria-hidden="true">{initialImageIndex + 1} / {galleryImages.length}</span>
               )}
-              <span data-gallery-position-label class="sr-only" role="status" aria-live="polite">Image {initialImageIndex + 1} of {galleryImages.length}</span>
+              <span data-gallery-position-label data-template={positionLabel("{position}", "{total}")} class="sr-only" role="status" aria-live="polite">{positionLabel(initialImageIndex + 1, galleryImages.length)}</span>
             </div>
           )}
         </div>

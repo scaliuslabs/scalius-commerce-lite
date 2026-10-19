@@ -1099,16 +1099,13 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 .noor-crumbs li { display: inline-flex; align-items: center; gap: 0.25rem; }
 .noor-crumbs a:hover { color: var(--n-ink); text-decoration: underline; }
 .noor-pdp { display: grid; gap: clamp(1.25rem, 1rem + 2vw, 3rem); align-items: start; }
-.noor-pdp-media { display: grid; gap: var(--n-gap); }
-.noor-pdp-media .noor-cover { block-size: auto; aspect-ratio: 4 / 5; border-radius: var(--n-radius); background: var(--n-soft); }
+.noor-pdp-media { min-inline-size: 0; }
 .noor-pdp-buy { display: grid; gap: 0.75rem; align-content: start; }
 .noor-pdp-description { margin-block-start: clamp(2rem, 1.5rem + 3vw, 4rem); }
 @media (min-width: 48rem) {
   .noor-pdp { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
   .noor-pdp.is-flipped .noor-pdp-media { order: 2; }
-  .noor-pdp-media { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .noor-pdp-media > :first-child { grid-column: 1 / -1; }
-  .noor-pdp-buy { position: sticky; inset-block-start: var(--noor-sticky); }
+  .noor-pdp-buy { position: sticky; inset-block-start: calc(var(--noor-sticky) + var(--sticky-column-shift, 0px)); }
 }
 
 /* ── Landing kit ────────────────────────────────────────────────────────── */
