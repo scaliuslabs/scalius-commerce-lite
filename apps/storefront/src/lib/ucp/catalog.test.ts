@@ -681,6 +681,47 @@ describe("UCP catalog mapping", () => {
     ]);
   });
 
+  it("relaxes selections no variant matches from the end of preferences", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [productFixture()],
+      pagination: { limit: 10, hasNextPage: false },
+    });
+
+    const result = await getCatalogProduct(
+      {
+        id: "khaki-shoes",
+        selected: [
+          { name: "Weight", label: "2KG" },
+          { name: "Style", label: "Blue" },
+        ],
+        preferences: ["Style", "Weight"],
+      },
+      context,
+    );
+    const product = result.body.product;
+    if (!product) throw new Error("Expected UCP product detail");
+
+    // No 2KG blue exists: Weight (last preference) is dropped, Style stays.
+    expect(product.selected).toEqual([{ name: "Style", label: "Blue" }]);
+    expect(product.variants[0]?.sku).toBe("SKU-BLUE");
+    expect(product.options).toEqual([
+      {
+        name: "Weight",
+        values: [
+          { label: "2KG", exists: false, available: false },
+          { label: "3KG", exists: true, available: true },
+        ],
+      },
+      {
+        name: "Style",
+        values: [
+          { label: "Red", exists: true, available: true },
+          { label: "Blue", exists: true, available: true },
+        ],
+      },
+    ]);
+  });
+
   it("rejects duplicate selected option names for product detail", async () => {
     mocks.getFeedProducts.mockResolvedValueOnce({
       data: [productFixture()],

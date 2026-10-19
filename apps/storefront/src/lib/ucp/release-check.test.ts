@@ -64,7 +64,8 @@ describe("release check UCP smoke against the storefront routes", () => {
   });
 
   it("passes discovery, REST search/lookup/product and MCP tools and search parity", async () => {
-    const result = await checkUcpDiscovery({ storefrontUrl: ORIGIN, timeoutMs: 5_000 }, {
+    // The script builds its result as it goes; JS inference sees only the first fields.
+    const result: Record<string, unknown> = await checkUcpDiscovery({ storefrontUrl: ORIGIN, timeoutMs: 5_000 }, {
       fetchImpl: storefrontFetch,
       productUrl: `${ORIGIN}/products/khaki-shoes`,
       logger: null,
