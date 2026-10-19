@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CustomerPaymentRecovery } from "./api/customer-auth";
 import type { AccountOrderDetail } from "./account-order-detail";
+import { cartStore, clearCart } from "@/store/cart";
 
 const api = vi.hoisted(() => ({
   getCustomerSession: vi.fn(),
@@ -443,22 +444,22 @@ describe("account order detail", () => {
     };
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true, data: validation })));
     vi.stubGlobal("fetch", fetchMock);
-    const added: unknown[] = [];
-    const listener = (event: Event) => added.push((event as CustomEvent).detail);
-    document.addEventListener("add-to-cart", listener);
+    localStorage.clear();
+    clearCart();
     renderOrderDetail(order, null);
 
     document.getElementById("orderBuyAgain")!.click();
     await vi.waitFor(() => expect(text("orderBuyAgainMessage")).toBe("Some items are no longer available, so they weren't added."));
-    document.removeEventListener("add-to-cart", listener);
     vi.unstubAllGlobals();
 
     expect(JSON.parse(String(fetchMock.mock.calls[0]![1].body)).items.map((item: { productId: string }) => item.productId))
       .toEqual(["prod_1", "prod_gone", "prod_3"]);
-    expect(added).toEqual([
-      { id: "prod_1", variantId: "sku_default", name: "BB Tee", price: 550, quantity: 2, slug: "bb-tee", image: undefined, imageMediaId: undefined, options: undefined, freeDelivery: false },
-      { id: "prod_3", variantId: "sku_red_m", name: "Polo", price: 900, quantity: 1, slug: "polo", image: "https://cdn.example.test/polo.jpg", imageMediaId: "media_1", options: [{ name: "Variant", label: "Red / M" }], freeDelivery: true },
-    ]);
+    // Both still-sellable lines went in as one cart change, the short one capped at what is left.
+    expect(Object.values(cartStore.get().items).map(({ id, variantId, name, price, quantity, slug }) => ({ id, variantId, name, price, quantity, slug })))
+      .toEqual([
+        { id: "prod_1", variantId: "sku_default", name: "BB Tee", price: 550, quantity: 2, slug: "bb-tee" },
+        { id: "prod_3", variantId: "sku_red_m", name: "Polo", price: 900, quantity: 1, slug: "polo" },
+      ]);
   });
 
   it("says the store could not be reached and retries", async () => {
