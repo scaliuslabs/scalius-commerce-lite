@@ -17,7 +17,7 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(207);
+      expect(d1Tables).toHaveLength(208);
       expect(d1Tables).toContain("system_kv");
       expect(d1Tables).toContain("conversation_inbox_counts");
       // 0146: the analytics projection keeps facts, sealed day buckets and their seals.

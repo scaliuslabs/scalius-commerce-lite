@@ -105,7 +105,7 @@ describe("plan profile", () => {
       expect(free.background[key] >= 0, key).toBe(true);
     }
     // Every drain makes progress on Free.
-    for (const key of ["eventsPerDrain", "deliveriesPerDrain", "notificationsPerDrain", "paymentEventsPerDrain", "autoFulfilPerRun", "pluginCronPerRun", "recommendationRotationPerRun", "catalogRebuildChunksPerDrain"] as const) {
+    for (const key of ["eventsPerDrain", "deliveriesPerDrain", "notificationsPerDrain", "paymentEventsPerDrain", "autoFulfilPerRun", "pluginCronPerRun", "recommendationRotationPerRun", "catalogRebuildChunksPerDrain", "bulkRunChunksPerDrain"] as const) {
       expect(free.background[key], key).toBeGreaterThanOrEqual(1);
     }
     expect(free.lists.countCap).toBeLessThanOrEqual(paid.lists.countCap);

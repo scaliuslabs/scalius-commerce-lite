@@ -67,8 +67,12 @@ export interface StockCommandSkuState {
 export interface StockCommandLine {
   variantId: string;
   location: InventoryLocationRef;
-  type: Extract<StockMovementClaimType, "received" | "transfer_out" | "transfer_in">;
-  /** Units moved; the type gives the sign (transfer_out removes). */
+  type: Extract<StockMovementClaimType, "received" | "transfer_out" | "transfer_in" | "adjusted">;
+  /**
+   * Units moved; the type gives the sign (transfer_out removes). An
+   * `adjusted` line (a counted quantity set by a bulk stock run) carries its
+   * own sign: a non-zero delta at its location.
+   */
   quantity: number;
   notes: string;
   /**
@@ -103,7 +107,16 @@ export interface StockCommandPlan<R> {
 
 export interface StockCommandInput<R> {
   operationKey: string;
-  commandType: InventoryCommandType;
+  /**
+   * What makes a retry safe. `"operation_key"` (the default): the
+   * `inventory_commands` row, replayed by key and request hash. `"subject"`:
+   * the subject guard alone, for a subject that advances its own revision in
+   * `documentStatements` (a bulk run's chunk counter); no command row is
+   * written, and a lost subject race throws {@link StockCommandSubjectMovedError}.
+   */
+  replay?: "operation_key" | "subject";
+  /** A row's command type; `bulk_set_quantities` (a bulk stock run's chunk) only with `replay: "subject"`. */
+  commandType: InventoryCommandType | "bulk_set_quantities";
   subjectId: string;
   /** The canonical request (without the key): its hash is the replay identity. */
   request: unknown;
@@ -139,7 +152,7 @@ export function idsFromJsonSql(ids: readonly string[]): SQL {
   return sql`SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)})`;
 }
 
-export async function hashStockCommandRequest(commandType: InventoryCommandType, subjectId: string, request: unknown): Promise<string> {
+export async function hashStockCommandRequest(commandType: StockCommandInput<unknown>["commandType"], subjectId: string, request: unknown): Promise<string> {
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(JSON.stringify({ commandType, subjectId, request })),
@@ -181,6 +194,14 @@ export function weightedAverageCostMinor(input: {
   const average = (total * 2n + units) / (units * 2n);
   if (average > BigInt(Number.MAX_SAFE_INTEGER)) throw new ValidationError("The average cost is out of range");
   return Number(average);
+}
+
+/** A subject-replayed command lost its subject race: another writer committed the subject's next revision. */
+export class StockCommandSubjectMovedError extends ConflictError {
+  constructor() {
+    super("The subject of this stock command moved on while it was being saved.");
+    this.name = "StockCommandSubjectMovedError";
+  }
 }
 
 export async function readStockCommandSkus(
@@ -293,8 +314,13 @@ function assertLinesMovable(lines: readonly StockCommandLine[], skus: Map<string
   for (const line of lines) {
     if (seen.has(line.variantId)) throw new ValidationError("Each SKU appears once in a stock command.");
     seen.add(line.variantId);
-    if (!Number.isSafeInteger(line.quantity) || line.quantity < 1) {
-      throw new ValidationError("Quantities are whole numbers of at least 1.");
+    if (
+      !Number.isSafeInteger(line.quantity) ||
+      (line.type === "adjusted" ? line.quantity === 0 : line.quantity < 1)
+    ) {
+      throw new ValidationError(line.type === "adjusted"
+        ? "A counted quantity line changes the stock."
+        : "Quantities are whole numbers of at least 1.");
     }
     const sku = skus.get(line.variantId);
     if (!sku) throw new NotFoundError("A SKU on this document no longer exists.");
@@ -306,8 +332,8 @@ function assertLinesMovable(lines: readonly StockCommandLine[], skus: Map<string
     if (sku.fulfillmentKind !== "physical") {
       throw new ValidationError(`SKU ${sku.sku} is not a physical item, so it has no stock to move.`);
     }
-    if (line.type === "transfer_out") {
-      const after = sku.stock - line.quantity;
+    if (lineDelta(line) < 0) {
+      const after = sku.stock + lineDelta(line);
       if (after < sku.reservedStock) {
         throw new ConflictError(
           `SKU ${sku.sku} has ${Math.max(0, sku.stock - sku.reservedStock)} units free to move: ${sku.reservedStock} of its ${sku.stock} on hand are committed to orders.`,
@@ -317,6 +343,11 @@ function assertLinesMovable(lines: readonly StockCommandLine[], skus: Map<string
   }
 }
 
+/** The signed change a line makes to the SKU's stock. */
+function lineDelta(line: StockCommandLine): number {
+  return line.type === "transfer_out" ? -line.quantity : line.quantity;
+}
+
 async function planEdges(
   operationKey: string,
   lines: readonly StockCommandLine[],
@@ -324,7 +355,7 @@ async function planEdges(
 ): Promise<StockCommandEdge[]> {
   return Promise.all(lines.map(async (line) => {
     const before = skus.get(line.variantId)!;
-    const delta = line.type === "transfer_out" ? -line.quantity : line.quantity;
+    const delta = lineDelta(line);
     const costAfterMinor = line.averageCostAtMinor === undefined
       ? before.costMinor
       : weightedAverageCostMinor({
@@ -347,9 +378,9 @@ async function planEdges(
 async function assertLocationsCover(db: Database, lines: readonly StockCommandLine[]): Promise<void> {
   const byLocation = new Map<string, { location: InventoryLocationRef; removals: Array<{ variantId: string; quantity: number }> }>();
   for (const line of lines) {
-    if (line.type !== "transfer_out") continue;
+    if (lineDelta(line) >= 0) continue;
     const group = byLocation.get(line.location.id) ?? { location: line.location, removals: [] };
-    group.removals.push({ variantId: line.variantId, quantity: line.quantity });
+    group.removals.push({ variantId: line.variantId, quantity: -lineDelta(line) });
     byLocation.set(line.location.id, group);
   }
   for (const group of byLocation.values()) await assertInventoryLocationCovers(db, group.location, group.removals);
@@ -368,7 +399,11 @@ function isUniqueViolation(error: unknown): boolean {
 export async function executeStockCommand<R>(db: Database, input: StockCommandInput<R>): Promise<R> {
   const operationKey = normalizeInventoryOperationKey(input.operationKey);
   const requestHash = await hashStockCommandRequest(input.commandType, input.subjectId, input.request);
-  const existing = await readCommand(db, operationKey);
+  const keyed = (input.replay ?? "operation_key") === "operation_key";
+  if (keyed && input.commandType === "bulk_set_quantities") {
+    throw new ValidationError("A bulk stock chunk is replayed by its run, not an operation key.");
+  }
+  const existing = keyed ? await readCommand(db, operationKey) : null;
   if (existing) return replay<R>(existing, input.commandType, input.subjectId, requestHash);
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
@@ -402,16 +437,18 @@ export async function executeStockCommand<R>(db: Database, input: StockCommandIn
         counterUpdate(db, edge),
       ]),
       ...casGuards(db, edges),
-      db.insert(inventoryCommands).values({
-        operationKey,
-        requestHash,
-        commandType: input.commandType,
-        subjectId: input.subjectId,
-        subjectRevision: plan.subjectRevisionAfter,
-        resultPayload: JSON.stringify(result),
-        createdBy: input.createdBy ?? null,
-        createdAt: sql`unixepoch()`,
-      }) as unknown as BatchItem<"sqlite">,
+      ...(keyed
+        ? [db.insert(inventoryCommands).values({
+          operationKey,
+          requestHash,
+          commandType: input.commandType as InventoryCommandType,
+          subjectId: input.subjectId,
+          subjectRevision: plan.subjectRevisionAfter,
+          resultPayload: JSON.stringify(result),
+          createdBy: input.createdBy ?? null,
+          createdAt: sql`unixepoch()`,
+        }) as unknown as BatchItem<"sqlite">]
+        : []),
       ...plan.documentStatements(edges),
       ...catalogBuyerStateRefreshStatementsForSkus(db, edges.map((edge) => edge.before.id)),
     ];
@@ -420,10 +457,11 @@ export async function executeStockCommand<R>(db: Database, input: StockCommandIn
       await safeBatch(db, statements as never);
     } catch (error) {
       if (isInventoryLevelShortfallError(error) || isInventoryLocationRequiredError(error)) {
-        const removal = plan.lines.find((line) => line.type === "transfer_out");
+        const removal = plan.lines.find((line) => lineDelta(line) < 0);
         throw inventoryLocationErrorFrom(error, removal?.location.name);
       }
-      const raced = await readCommand(db, operationKey);
+      if (!keyed && isBatchGuardError(error, SUBJECT_MARKER)) throw new StockCommandSubjectMovedError();
+      const raced = keyed ? await readCommand(db, operationKey) : null;
       if (raced) return replay<R>(raced, input.commandType, input.subjectId, requestHash);
       const lostRace = isBatchGuardError(error, CAS_MARKER) || isBatchGuardError(error, SUBJECT_MARKER) || isUniqueViolation(error);
       if (!lostRace) throw error;

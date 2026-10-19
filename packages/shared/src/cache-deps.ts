@@ -1045,6 +1045,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   // Purchasing and transfers (0109): staff-only documents. Their stock
   // effect is ledger movements, whose buyer-visible effect is the SKU band.
   inventory_commands: DERIVED_STOCK,
+  bulk_runs: PRIVATE,
   inventory_transfers: PURCHASING,
   inventory_transfer_lines: PURCHASING,
   inventory_transfer_movements: DERIVED_STOCK,

@@ -70,6 +70,8 @@ export interface PlanLimits {
     readonly catalogRebuildChunk: number;
     /** Rebuild chunks one drain runs before it leaves the cursor to the next tick. */
     readonly catalogRebuildChunksPerDrain: number;
+    /** Chunks (90 items each) of due bulk runs one drain commits; the rest continue next tick. */
+    readonly bulkRunChunksPerDrain: number;
   };
   readonly maintenance: {
     /** A sweep tick comes every this many minutes (the cron fires every minute; apps/api/src/scheduled/slices.ts). */
@@ -138,6 +140,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 5,
       catalogRebuildChunk: 90,
       catalogRebuildChunksPerDrain: 1,
+      bulkRunChunksPerDrain: 3,
     }),
     maintenance: Object.freeze({
       sweepEveryMinutes: 1,
@@ -175,6 +178,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       nightlySoldRecommendationLimit: 200,
       catalogRebuildChunk: 900,
       catalogRebuildChunksPerDrain: 10,
+      bulkRunChunksPerDrain: 12,
     }),
     maintenance: Object.freeze({
       sweepEveryMinutes: 15,
