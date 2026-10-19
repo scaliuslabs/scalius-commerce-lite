@@ -1034,8 +1034,8 @@ export const paymentSessionAttempts = sqliteTable("payment_session_attempts", {
 ]);
 
 /**
- * A hold on an order's fulfilment, placed by an app's `order.risk` answer
- * (`action: "hold"`). While any hold is open, no shipment is booked and
+ * A hold on an order's fulfilment, placed by an app's `ctx.orders.hold`
+ * from an event handler. While any hold is open, no shipment is booked and
  * the order cannot move to shipped or delivered; staff review it and release
  * the hold. One row per order and app, ever: a re-run of the same check
  * after a release adds nothing.

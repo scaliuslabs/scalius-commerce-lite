@@ -3,7 +3,6 @@
 // the checkout (which computes them) and orders (which persist and show
 // them), so neither core domain depends on the other for them.
 
-import type { FunctionCart } from "./plugins/functions";
 
 export type AppDiscountTarget = "order" | "lines" | "shipping";
 
@@ -113,20 +112,13 @@ export interface ManualOrderAppOutcome {
   appDiscounts: AppliedAppDiscount[];
   /** The staff discount plus the apps', for the tax quote; undefined without app discounts. */
   discountAllocation: { lines: Array<{ lineId: string; amountMinor: number }>; shippingMinor: number } | undefined;
-  /** The cart apps saw; null when no app implements a cart point. */
-  appCart: FunctionCart | null;
 }
-
-/** What `order.risk` needs to see a committed manual order's cart. */
-export type ManualOrderAppCartInput = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "shippingCountryCode" | "locationNames" | "manualDiscountMinor">;
 
 /**
  * The apps' checkout functions on a staff order, bound to the request's
  * database and apps. `price` applies their rules, delivery options, payment
- * method and discounts (it throws the checkout refusals); `orderCart` builds
- * the cart `order.risk` sees after the order committed.
+ * method and discounts (it throws the checkout refusals).
  */
 export interface ManualOrderAppFunctions {
   price(input: ManualOrderAppInput): Promise<ManualOrderAppOutcome>;
-  orderCart(input: ManualOrderAppCartInput): Promise<FunctionCart>;
 }

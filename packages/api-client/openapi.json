@@ -13587,7 +13587,6 @@
                     "checkout.discounts",
                     "checkout.shipping_rates",
                     "checkout.payment_methods",
-                    "order.risk",
                     "buyer.ui"
                   ]
                 },
@@ -13645,7 +13644,7 @@
                 "reads"
               ]
             },
-            "description": "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)."
+            "description": "The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods, buyer UI)."
           }
         },
         "required": [

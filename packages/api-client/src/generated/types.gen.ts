@@ -3018,10 +3018,10 @@ export type AppSummary = {
         total: number;
     };
     /**
-     * The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk).
+     * The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods, buyer UI).
      */
     functions: Array<{
-        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods' | 'order.risk' | 'buyer.ui';
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods' | 'buyer.ui';
         /**
          * Lower runs first among apps at the same point.
          */

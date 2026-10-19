@@ -589,7 +589,7 @@ export const orderDetailSchema = z.object({
     /** The part off delivery: show it on the delivery line ("Free", fee struck through). */
     shippingAmount: z.number(),
   })),
-  /** Apps' advisory risk checks (`order.risk`), newest first. Advice only: nothing acts on them. */
+  /** Apps' advisory risk checks (`ctx.orders.assessRisk`), newest first. Advice only: nothing acts on them. */
   appRiskChecks: z.array(z.object({
     appId: z.string(),
     appName: z.string(),
@@ -598,7 +598,7 @@ export const orderDetailSchema = z.object({
     checkedAt: timestampSchema,
   })),
   /**
-   * Apps' holds for staff review (`order.risk` with hold), open ones first.
+   * Apps' holds for staff review (`ctx.orders.hold`), open ones first.
    * While one is open the order is not shipped, handed over or moved on
    * (cancelling stays possible); staff release it.
    */

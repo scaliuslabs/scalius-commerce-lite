@@ -32,7 +32,6 @@ import {
   type CalculatedRateOptions,
 } from "@scalius/core/modules/checkout";
 import { type StorefrontOrderCommitPayload } from "@scalius/core/modules/orders/browser";
-import type { CreateStorefrontOrderResult } from "../orders";
 import {
   BUILT_IN_PAYMENT_PROVIDERS,
   isOnlinePaymentMethod,
@@ -164,16 +163,6 @@ export interface AgentStorefrontCheckoutSubmitResult {
   response: AgentStorefrontCheckoutSubmitView;
   postCommitPayload: StorefrontOrderCommitPayload | null;
   availabilityVariantIds: string[];
-  /**
-   * What the apps' advisory `order.risk` needs, set only when this submit
-   * committed the order (never on a replay): the API runs it in waitUntil.
-   */
-  orderRisk?: {
-    prepared: Pick<CreateStorefrontOrderResult, "orderId" | "paymentMethod" | "appCart" | "appDiscounts" | "commitPayload">;
-    discountCodes: string[];
-    customerId: string | null;
-    accountOwnerCustomerId: string | null;
-  } | null;
 }
 
 function toEpochSeconds(date: Date): number {
@@ -662,14 +651,6 @@ export async function submitAgentStorefrontCheckout(
     response,
     postCommitPayload: prepared.commitPayload,
     availabilityVariantIds: committed.availabilityTransitionVariantIds,
-    orderRisk: committed.alreadyCommitted
-      ? null
-      : {
-        prepared,
-        discountCodes: data.discountCodes,
-        customerId: committed.customerId,
-        accountOwnerCustomerId: committed.accountOwnerCustomerId,
-      },
   };
 }
 

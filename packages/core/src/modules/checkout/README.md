@@ -110,13 +110,15 @@ language with the merchant's edits).
   merchant's policy and readiness already allow; apps never add or enable
   one. The quote returns `paymentMethods`; placement refuses a hidden method
   (`payment_method_unavailable`). Gift-card cover is tender, never hidden.
-- **`order.risk`**: after the commit, in `waitUntil` (never on the buyer's
-  path), with the order total, method and the buyer's earlier order counts.
-  Each app's advice is one `app_risk` order fact (a retry adds nothing),
-  shown on the dashboard order next to the courier fraud check. An answer
-  with `hold: true` also places one hold per app (`orders/holds.ts`): the
-  order is not shipped, handed over, auto-fulfilled or moved on by status
-  edits until staff release it; cancelling stays possible.
+- **Order risk is an event, not a function** (a decision inside a request is
+  a function, a provider of a capability is a port, a reaction after commit
+  is an event). An app handles `order.created` and calls the host actions
+  `ctx.orders.riskHistory` (the buyer's earlier order counts),
+  `ctx.orders.assessRisk` (one `app_risk` order fact per app, shown on the
+  dashboard order next to the courier fraud check) and `ctx.orders.hold`
+  (one hold per app, `orders/holds.ts`): the order is not shipped, handed
+  over, auto-fulfilled or moved on by status edits until staff release it;
+  cancelling stays possible. A redelivered event adds nothing.
 - **Channels**: every channel runs the same merge rules. Buyer agents
   (`channel: "agent"`, `agent-storefront/`): the quote and submit price
   through `priceStorefrontCheckout`/`createStorefrontOrder` with the apps the
@@ -130,7 +132,7 @@ language with the merchant's edits).
   app prices the chosen delivery method only when staff kept its own fee (a
   typed charge is an override), a rename always applies, hiding it refuses.
   Amendments run no apps (an app-discounted order is not amendable).
-  `order.risk` runs after a committed agent or staff order, never a replay.
+  `order.created` reaches apps for every channel's order, once it is real.
 
 ## Order lines (Wave A)
 

@@ -93,7 +93,7 @@ Single tables with rules:
 - `theme_settings` holds the published storefront theme (the JSON document is in its `colors` column). `theme_settings_drafts` holds the one shared draft, `theme_settings_versions` the immutable publish snapshots, and `theme_preview_sessions` the hashed preview tokens.
 - `checkout_authority` is a one-row fence. Triggers advance its `revision` on every change to a fact that affects checkout prices or eligibility. The checkout commit batch asserts the revision it priced against.
 - `cache_generation` is a legacy singleton. Nothing in the application reads or writes it.
-- `order_holds` holds one row per order and app: an app's `order.risk` answer can hold fulfilment until staff release it.
+- `order_holds` holds one row per order and app: an app's `ctx.orders.hold` (from an event handler) holds fulfilment until staff release it.
 
 ## Database-enforced invariants
 

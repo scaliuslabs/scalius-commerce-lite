@@ -11,7 +11,8 @@
 // The order a checkout asks them in: cart.transform (the lines), then
 // cart.line_prices (their unit prices), then cart.validate,
 // checkout.discounts and checkout.shipping_rates together, then
-// checkout.payment_methods; order.risk after the order commits.
+// checkout.payment_methods. A reaction after the order commits is an event
+// handler (`ctx.orders.hold`, `ctx.orders.assessRisk`), not a function.
 // Part of the versioned plugin API.
 
 import { z } from "zod";
@@ -160,32 +161,6 @@ export const checkoutPaymentMethodsOutputSchema = z.object({
   ])).max(40),
 }).strict();
 
-// ── order.risk ────────────────────────────────────────────────────────────
-
-export const orderRiskInputSchema = z.object({
-  orderId: id,
-  cart: functionCartSchema,
-  totalMinor: nonNegativeMinor,
-  paymentMethod: z.string().max(64),
-  /** Prior orders by the same verified phone or account (counts only). */
-  history: z.object({
-    orders: z.number().int().min(0),
-    cancelled: z.number().int().min(0),
-    returnedToSender: z.number().int().min(0),
-  }).strict(),
-}).strict();
-
-/**
- * Shown to the merchant on the order. `hold: true` also puts the order on
- * hold for staff review: it cannot be shipped or advanced until staff
- * release it. Nothing is ever cancelled automatically.
- */
-export const orderRiskOutputSchema = z.object({
-  level: z.enum(["low", "medium", "high"]),
-  reasons: z.array(message).max(5),
-  hold: z.boolean().default(false),
-}).strict();
-
 // ── cart.transform ────────────────────────────────────────────────────────
 
 /** The most component SKUs one expanded line becomes. */
@@ -291,10 +266,6 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
   "checkout.payment_methods": {
     input: z.object({ cart: functionCartSchema, methods: z.array(z.object({ methodId: id, name: label }).strict()).max(20), reads }).strict(),
     output: checkoutPaymentMethodsOutputSchema,
-  },
-  "order.risk": {
-    input: orderRiskInputSchema,
-    output: orderRiskOutputSchema,
   },
 } as const satisfies Record<PluginFunctionPoint, { input: z.ZodType; output: z.ZodType }>;
 

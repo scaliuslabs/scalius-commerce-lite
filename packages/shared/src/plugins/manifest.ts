@@ -88,7 +88,6 @@ export const PLUGIN_FUNCTION_POINTS = [
   "checkout.discounts",
   "checkout.shipping_rates",
   "checkout.payment_methods",
-  "order.risk",
   "buyer.ui",
 ] as const;
 export type PluginFunctionPoint = (typeof PLUGIN_FUNCTION_POINTS)[number];

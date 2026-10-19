@@ -574,7 +574,6 @@ describe("App page", () => {
     await renderApp(
       detail({
         functions: [
-          { point: "order.risk", priority: 20, reads: [] },
           { point: "cart.validate", priority: 5, reads: [] },
           { point: "checkout.discounts", priority: 10, reads: [] },
         ],
@@ -589,7 +588,6 @@ describe("App page", () => {
     expect(rows).toEqual([
       "Checks carts before checkoutPriority 5",
       "Adds discounts at checkoutPriority 10",
-      "Rates new orders' risk (advice only)Priority 20",
     ]);
   });
 

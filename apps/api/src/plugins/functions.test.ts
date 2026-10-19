@@ -51,7 +51,7 @@ describe("runPluginFunctions", () => {
     await installPlugin(db, { manifest: manifest("idle.plugin", 1), source: "upload", bundleSha256: "2".repeat(64) });
     const loaderFor = vi.fn();
     expect(await runPluginFunctions("checkout.discounts", { cart: testCart(1000) }, env, pluginTestCtx(), { db, loaderFor })).toEqual([]);
-    expect(await runPluginFunctions("order.risk", {} as never, env, pluginTestCtx(), { db, loaderFor })).toEqual([]);
+    expect(await runPluginFunctions("cart.validate", { cart: testCart(1000) }, env, pluginTestCtx(), { db, loaderFor })).toEqual([]);
     expect(loaderFor).not.toHaveBeenCalled();
   });
 

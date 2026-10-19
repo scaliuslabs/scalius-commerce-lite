@@ -211,7 +211,7 @@ const appSummarySchema = z.object({
       customFields: z.array(z.string()).openapi({ description: "The app's own custom fields read (`<owner>:<key>`); empty for an object read." }),
       key: z.string().openapi({ description: "What the read is keyed by: customer, line.variantId, line.productId, attribute.<key>, or from:<read>.<field>." }),
     })).openapi({ description: "The app's data the function reads at checkout (checkout.discounts may also update those records with the order)." }),
-  })).openapi({ description: "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)." }),
+  })).openapi({ description: "The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods, buyer UI)." }),
 }).openapi("AppSummary");
 
 const settingValueSchema = appSettingValueSchema;

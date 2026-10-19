@@ -345,7 +345,7 @@ export interface OrderDiscount {
   shippingAmount: number;
 }
 
-/** An app's risk assessment made after the order was placed (`order.risk`): advice only, nothing acts on it. */
+/** An app's risk assessment made after the order was placed (`ctx.orders.assessRisk`): advice only, nothing acts on it. */
 export interface OrderAppRiskCheck {
   appId: string;
   appName: string;
@@ -356,7 +356,7 @@ export interface OrderAppRiskCheck {
 }
 
 /**
- * An app's hold (`order.risk` with hold). While open (`releasedAt` null) the
+ * An app's hold (`ctx.orders.hold`). While open (`releasedAt` null) the
  * order is not shipped, handed over or moved on; cancelling stays possible.
  * Staff release it, and the app never holds that order again.
  */

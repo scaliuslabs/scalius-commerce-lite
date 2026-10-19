@@ -3,12 +3,11 @@
 // schema with test apps (a fake loader): the same cart gets the same app
 // discount as the online store, in the quote and in the order's
 // `app_discount` facts; an app rule refuses the quote and the order; a
-// hidden cash on delivery refuses the order; `order.risk` is recorded once
-// after the commit and never for a replay; staff delivery-charge overrides
+// hidden cash on delivery refuses the order; staff delivery-charge overrides
 // beat an app's price; an app registered to block that cannot answer stops
-// checkout on every channel with the store's words; an `order.risk` hold
-// keeps the order from moving on until staff release it; and a store without
-// apps prices exactly as before.
+// checkout on every channel with the store's words; an app's hold
+// (`ctx.orders.hold`, from an event handler) keeps the order from moving on
+// until staff release it; and a store without apps prices exactly as before.
 import type { DatabaseSync } from "node:sqlite";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,6 +33,9 @@ import { PLUGIN_API_VERSION, type PluginManifestInput } from "@scalius/shared/pl
 import type { PluginInvocationResult } from "@scalius/plugin-sdk/runtime";
 import type { PluginLoader } from "./loaders/types";
 import { pluginTestCtx, pluginTestEnv } from "./testing/fixtures";
+import { PluginBridgeHost } from "./bridge";
+import { pluginBridgeAuthority } from "./host";
+import { requirePluginInstallation } from "@scalius/core/modules/plugins";
 import { errorResponseFromError } from "../utils/api-response";
 
 // The routes build their runner themselves: give it the test apps' loader.
@@ -121,10 +123,11 @@ describe("checkout app functions on the agent and admin channels", () => {
   const count = (query: string, ...params: Array<string | number>) => one<{ n: number }>(query, ...params).n;
   const pointCalls = (point: string) => calls.filter((call) => call.point === point);
 
-  async function installTestApp(id: string, points: Array<string | { point: string; onError?: "skip" | "block" }>) {
+  async function installTestApp(id: string, points: Array<string | { point: string; onError?: "skip" | "block" }>, extra: Partial<PluginManifestInput> = {}) {
     const manifest: PluginManifestInput = {
       id, name: `${id} app`, version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "A checkout test app.",
       author: { name: "Test" },
+      ...extra,
       functions: points.map((point) => (typeof point === "string" ? { point } : point)) as PluginManifestInput["functions"],
       limits: { cpuMs: 50, wallMs: 100 },
     };
@@ -368,47 +371,31 @@ describe("checkout app functions on the agent and admin channels", () => {
     expect(count("SELECT count(*) AS n FROM orders")).toBe(0);
   });
 
-  it("order.risk runs once after an agent or staff commit, sees its channel, and never for a replay", async () => {
-    await installTestApp("acme.risk", ["order.risk"]);
-    answers["acme.risk"] = () => ok({ level: "medium", reasons: ["New buyer."] });
-
-    const quoted = await agentQuote();
-    // Only order.risk: pricing never built a cart or asked an app.
-    expect(calls).toEqual([]);
-    const first = await agentSubmit(quoted.body.data!.quoteFingerprint);
-    const replay = await agentSubmit(quoted.body.data!.quoteFingerprint);
-    expect([first.status, replay.status]).toEqual([201, 201]);
-    expect(replay.body.data!.orderId).toBe(first.body.data!.orderId);
-    expect(pointCalls("order.risk").map((entry) => entry.channel)).toEqual(["agent"]);
-    expect(count("SELECT count(*) AS n FROM order_events WHERE order_id = ? AND kind = 'app_risk'", first.body.data!.orderId)).toBe(1);
-
-    const key = "55555555-5555-4555-8555-555555555555";
-    const created = await adminCreate(key);
-    const again = await adminCreate(key);
-    expect(again.body.data!.id).toBe(created.body.data!.id);
-    expect(pointCalls("order.risk").map((entry) => entry.channel)).toEqual(["agent", "admin"]);
-    const detail = await getOrderDetails(db, created.body.data!.id as string);
-    expect(detail?.appRiskChecks).toEqual([expect.objectContaining({ appId: "acme.risk", level: "medium", reasons: ["New buyer."] })]);
-    // Advice only: the order is untouched.
-    expect(one("SELECT status FROM orders WHERE id = ?", created.body.data!.id as string)).toEqual({ status: "confirmed" });
-  });
-
-  it("an order.risk hold keeps a staff order from moving on until staff release it; cancelling stays possible", async () => {
-    await installTestApp("acme.risk", ["order.risk"]);
-    answers["acme.risk"] = () => ok({ level: "high", reasons: ["Phone seen on returned orders."], hold: true });
+  it("an app's hold keeps a staff order from moving on until staff release it; cancelling stays possible", async () => {
+    // A reaction after commit: the app's order.created handler holds the order through the host.
+    await installTestApp("acme.risk", [], { scopes: ["write_orders"], events: ["order.created"] });
+    const installation = await requirePluginInstallation(db, "acme.risk");
+    const runtime = { env, ctx: pluginTestCtx(), db: () => db, composedEnv: async () => env };
+    const bridge = new PluginBridgeHost({ pluginId: installation.pluginId, version: installation.version, authority: pluginBridgeAuthority(installation) }, runtime);
 
     const created = await adminCreate("77777777-7777-4777-8777-777777777777");
     expect(created.status).toBe(201);
     const orderId = created.body.data!.id as string;
+    await bridge.ordersHold({ orderId, reason: "Phone seen on returned orders." });
+    await bridge.ordersAssessRisk({ orderId, level: "high", reasons: ["Phone seen on returned orders."] });
     const detail = await getOrderDetails(db, orderId);
+    expect(detail?.appRiskChecks).toEqual([expect.objectContaining({ appId: "acme.risk", level: "high", reasons: ["Phone seen on returned orders."] })]);
     expect(detail?.holds).toEqual([expect.objectContaining({ appId: "acme.risk", appName: "acme.risk app", reason: "Phone seen on returned orders.", releasedAt: null })]);
     // Nothing is handed over while it is held.
     expect(await bulkFulfillOrders(db, [orderId], { requestKey: "held-send" }))
       .toEqual([expect.objectContaining({ orderId, success: false, error: expect.stringContaining("on hold for review (acme.risk app: Phone seen on returned orders.)") })]);
     expect(one("SELECT status FROM orders WHERE id = ?", orderId)).toEqual({ status: "confirmed" });
 
-    // A retried risk run places nothing new.
+    // A redelivered event places nothing new.
+    await bridge.ordersHold({ orderId, reason: "Phone seen on returned orders." });
+    await bridge.ordersAssessRisk({ orderId, level: "low", reasons: ["Second look."] });
     expect(count("SELECT count(*) AS n FROM order_holds WHERE order_id = ?", orderId)).toBe(1);
+    expect(count("SELECT count(*) AS n FROM order_events WHERE order_id = ? AND kind = 'app_risk'", orderId)).toBe(1);
 
     const holdId = detail!.holds[0]!.id;
     const released = await call("POST", `/admin/orders/${orderId}/holds/${holdId}/release`, {});
@@ -476,7 +463,7 @@ describe("checkout app functions on the agent and admin channels", () => {
   });
 
   it("a store without an active app prices both channels exactly as before: no extra read beyond the registrations, no app call", async () => {
-    await installTestApp("idle.app", ["checkout.discounts", "cart.validate", "order.risk"]);
+    await installTestApp("idle.app", ["checkout.discounts", "cart.validate", "checkout.shipping_rates"]);
     sqlite.exec("UPDATE plugin_installations SET status = 'disabled' WHERE plugin_id = 'idle.app'");
     const none = await apps();
     expect([...none.points]).toEqual([]);

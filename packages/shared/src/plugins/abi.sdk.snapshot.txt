@@ -251,6 +251,22 @@ export interface PluginTimeline {
         id: string;
     }>;
 }
+export interface PluginOrders {
+    hold(input: {
+        orderId: string;
+        reason: string;
+    }): Promise<void>;
+    assessRisk(input: {
+        orderId: string;
+        level: "low" | "medium" | "high";
+        reasons: string[];
+    }): Promise<void>;
+    riskHistory(orderId: string): Promise<{
+        orders: number;
+        cancelled: number;
+        returnedToSender: number;
+    }>;
+}
 export interface PluginLogger {
     debug(message: string, fields?: Record<string, unknown>): void;
     info(message: string, fields?: Record<string, unknown>): void;
@@ -272,6 +288,7 @@ export interface PluginContext {
     customFields: PluginCustomFields;
     messaging: PluginMessaging;
     timeline: PluginTimeline;
+    orders: PluginOrders;
     log: PluginLogger;
 }
 export interface PluginEvent<T extends EventTopic = EventTopic> {
@@ -545,6 +562,13 @@ export interface PluginRuntimeBridge {
     timelineAdd?(input: unknown): Promise<{
         id: string;
     }>;
+    ordersHold?(input: unknown): Promise<void>;
+    ordersAssessRisk?(input: unknown): Promise<void>;
+    ordersRiskHistory?(orderId: unknown): Promise<{
+        orders: number;
+        cancelled: number;
+        returnedToSender: number;
+    }>;
 }
 export declare class PluginPlatformError extends Error {
     readonly code: string;
@@ -799,6 +823,11 @@ export interface PluginTestHarnessOptions {
     features?: string[];
     store?: Partial<PluginStoreInfo>;
     api?: (operationId: string, input: PluginApiCallInput | undefined) => PluginApiResult | Promise<PluginApiResult>;
+    riskHistory?: (orderId: string) => {
+        orders: number;
+        cancelled: number;
+        returnedToSender: number;
+    };
     fetch?: (url: string, init: unknown) => {
         status: number;
         headers?: Record<string, string>;
@@ -830,7 +859,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         allowedHosts: string[];
         events: import("@scalius/shared/events").EventTopicFilter[];
         functions: {
-            point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods" | "order.risk" | "buyer.ui";
+            point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods" | "buyer.ui";
             priority: number;
             onError: "skip" | "block";
             reads: ({
@@ -1974,6 +2003,8 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         notices: unknown[];
         pushes: unknown[];
         timeline: unknown[];
+        holds: unknown[];
+        risks: unknown[];
     };
     event: (topic: EventTopic, resource: {
         type: string;

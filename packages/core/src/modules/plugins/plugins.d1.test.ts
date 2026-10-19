@@ -177,7 +177,7 @@ describe("plugin installations", () => {
     }
     const rows = await listActiveFunctionPlugins(db, "checkout.discounts");
     expect(rows.map((row) => [row.installation.pluginId, row.priority])).toEqual([["beta.three", 5], ["alpha.two", 10], ["zeta.one", 10]]);
-    expect(await listActiveFunctionPlugins(db, "order.risk")).toEqual([]);
+    expect(await listActiveFunctionPlugins(db, "checkout.shipping_rates")).toEqual([]);
     expect((await listActiveEventPlugins(db, "order.paid")).map((row) => row.installation.pluginId)).toEqual(["alpha.two", "beta.three", "zeta.one"]);
   });
 

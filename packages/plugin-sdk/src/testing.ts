@@ -58,6 +58,8 @@ export interface PluginTestHarnessOptions {
   store?: Partial<PluginStoreInfo>;
   /** Answers `ctx.api.call`; by default every operation is unknown (404). */
   api?: (operationId: string, input: PluginApiCallInput | undefined) => PluginApiResult | Promise<PluginApiResult>;
+  /** Answers `ctx.orders.riskHistory`; by default a buyer with no earlier orders. */
+  riskHistory?: (orderId: string) => { orders: number; cancelled: number; returnedToSender: number };
   /** Answers `ctx.http.fetch` for allowed hosts; by default nothing is reachable. */
   fetch?: (url: string, init: unknown) => { status: number; headers?: Record<string, string>; body: string } | Promise<{ status: number; headers?: Record<string, string>; body: string }>;
 }
@@ -107,7 +109,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const revisionKey = (name: string, id: string) => `${name}\u0000${id}`;
   const customFields = new Map<string, Record<string, unknown>>();
   const logs: PluginLogRecord[] = [];
-  const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[] };
+  const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[], holds: [] as unknown[], risks: [] as unknown[] };
 
   const object = (name: string) => records.get(name) ?? refuse("object.undeclared_type", `Object type "${name}" is not declared in the manifest.`);
   const indexFor = (name: string, whereFields: string[], orderField: string | undefined) => {
@@ -329,6 +331,29 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       if (!manifest.timeline.some((declared) => declared.kind === entry.kind)) refuse("timeline.undeclared", `Timeline kind ${String(entry.kind)} is not declared in the manifest.`);
       sent.timeline.push(entry);
       return { id: `oev_test${sent.timeline.length}` };
+    },
+    // The host's checks (apps/api/src/plugins/bridge.ts); one hold and one assessment per order.
+    ordersHold: async (input) => {
+      const hold = copy(input) as { orderId?: unknown; reason?: unknown };
+      if (!permissions.has("orders.edit")) refuse("orders.not_allowed", "Holding orders needs the write_orders scope.");
+      if (typeof hold.orderId !== "string" || hold.orderId.length < 1 || hold.orderId.length > 128) refuse("orders.invalid", "orderId is an order id.");
+      if (typeof hold.reason !== "string" || !hold.reason.trim() || hold.reason.length > 500) refuse("orders.invalid", "reason is text of 1 to 500 characters.");
+      if (!sent.holds.some((entry) => (entry as { orderId: string }).orderId === hold.orderId)) sent.holds.push(hold);
+    },
+    ordersAssessRisk: async (input) => {
+      const risk = copy(input) as { orderId?: unknown; level?: unknown; reasons?: unknown };
+      if (!permissions.has("orders.edit")) refuse("orders.not_allowed", "Assessing orders needs the write_orders scope.");
+      if (typeof risk.orderId !== "string" || risk.orderId.length < 1 || risk.orderId.length > 128) refuse("orders.invalid", "orderId is an order id.");
+      if (risk.level !== "low" && risk.level !== "medium" && risk.level !== "high") refuse("orders.invalid", "level is low, medium or high.");
+      if (!Array.isArray(risk.reasons) || risk.reasons.length > 5 || !risk.reasons.every((reason) => typeof reason === "string" && reason.trim() && reason.length <= 200)) {
+        refuse("orders.invalid", "reasons are up to five texts of 1 to 200 characters.");
+      }
+      if (!sent.risks.some((entry) => (entry as { orderId: string }).orderId === risk.orderId)) sent.risks.push(risk);
+    },
+    ordersRiskHistory: async (orderId) => {
+      if (!permissions.has("orders.view")) refuse("orders.not_allowed", "Reading order history needs the read_orders scope.");
+      if (typeof orderId !== "string" || orderId.length < 1 || orderId.length > 128) refuse("orders.invalid", "orderId is an order id.");
+      return copy(options.riskHistory?.(orderId) ?? { orders: 0, cancelled: 0, returnedToSender: 0 });
     },
   };
 

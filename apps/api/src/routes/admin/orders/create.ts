@@ -25,7 +25,6 @@ import type { Database } from "@scalius/database/client";
 import { resolveCanonicalIdempotencyKey } from "../idempotency-key";
 import { adminOrderResourceMutationErrorResponses, adminWriteErrorResponses } from "./shared";
 import { createCheckoutAppFunctions } from "../../../plugins/checkout-functions";
-import { runAppOrderRiskChecks } from "../../../plugins/order-risk";
 import { getOptionalExecutionContext } from "../../../utils/execution-context";
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
 
@@ -235,25 +234,10 @@ app.openapi(createOrderRoute, async (c) => {
     const user = c.get("user") as { id?: string } | undefined;
     const ctx = getOptionalExecutionContext(c) as ExecutionContext | undefined;
     const apps = await manualOrderApps(c.env, ctx, db);
-    const { response, committed } = await createManualOrder(db, data, user?.id ?? null, {
+    const { response } = await createManualOrder(db, data, user?.id ?? null, {
         apps: createManualOrderAppFunctions(db, apps),
         appProviders: requestAppProviders(c),
     });
-    // Apps' advisory risk checks: after this request's commit (never on a replay), off the response path.
-    if (committed && apps.points.has("order.risk")) {
-        const risk = runAppOrderRiskChecks({
-            db,
-            apps,
-            orderId: committed.orderId,
-            paymentMethod: committed.paymentMethod,
-            totalMinor: committed.totalAmountMinor,
-            cart: committed.appCart,
-            customerId: committed.customerId,
-            accountOwnerCustomerId: null,
-        });
-        if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(risk);
-        else await risk;
-    }
     return created(c, response);
 });
 

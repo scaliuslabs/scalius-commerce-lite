@@ -35,7 +35,6 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { addressInputSchema } from "@scalius/core/modules/customers";
 import { customerAddressSchema } from "../schemas/entities";
 import { createCheckoutAppFunctions } from "../plugins/checkout-functions";
-import { runOrderRiskChecks } from "../plugins/order-risk";
 import type { AgentPrincipal } from "../agent-access/types";
 import { created, ok } from "../utils/api-response";
 import {
@@ -802,17 +801,8 @@ app.openapi(submitCheckoutRoute, async (c) => {
     },
   );
   const executionCtx = getOptionalExecutionContext(c);
-  const risk = submitted.orderRisk;
-  if (submitted.postCommitPayload || risk) {
-    const postCommit = Promise.all([
-      submitted.postCommitPayload
-        ? runStorefrontOrderPostCommitSideEffects(c.get("db"), { ...c.env, sendNotifications: notificationSender(c) }, submitted.postCommitPayload)
-        : null,
-      // Apps' advisory risk checks: after this submit's commit, never on a replay.
-      risk && apps.points.has("order.risk")
-        ? runOrderRiskChecks({ db: c.get("db"), apps, channel: "agent", ...risk })
-        : null,
-    ]);
+  if (submitted.postCommitPayload) {
+    const postCommit = runStorefrontOrderPostCommitSideEffects(c.get("db"), { ...c.env, sendNotifications: notificationSender(c) }, submitted.postCommitPayload);
     if (executionCtx) executionCtx.waitUntil(postCommit);
     else await postCommit;
   }

@@ -14,7 +14,7 @@ import { openOrderHolds } from "./primary-action";
 import type { Order, OrderHold } from "./types";
 
 /**
- * An app put the order on hold for staff review (`order.risk`): which app,
+ * An app put the order on hold for staff review (`ctx.orders.hold`): which app,
  * why and when, at the top of the page, with Release for staff who may
  * change the order's status. Shown only while a hold is open
  * (card-rules.ts); released holds are listed with the apps' risk checks in

@@ -141,4 +141,16 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
   async timelineAdd(input: Parameters<PluginBridgeApi["timelineAdd"]>[0]): Promise<{ id: string }> {
     return (await this.#host()).timelineAdd(input);
   }
+
+  async ordersHold(input: Parameters<PluginBridgeApi["ordersHold"]>[0]): Promise<void> {
+    return (await this.#host()).ordersHold(input);
+  }
+
+  async ordersAssessRisk(input: Parameters<PluginBridgeApi["ordersAssessRisk"]>[0]): Promise<void> {
+    return (await this.#host()).ordersAssessRisk(input);
+  }
+
+  async ordersRiskHistory(orderId: string): Promise<{ orders: number; cancelled: number; returnedToSender: number }> {
+    return (await this.#host()).ordersRiskHistory(orderId);
+  }
 }

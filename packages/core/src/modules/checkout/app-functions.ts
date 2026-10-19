@@ -99,7 +99,6 @@ const CART_POINTS: readonly PluginFunctionPoint[] = [
   "checkout.discounts",
   "checkout.shipping_rates",
   "checkout.payment_methods",
-  "order.risk",
   "buyer.ui",
 ];
 

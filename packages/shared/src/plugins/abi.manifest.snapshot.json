@@ -204,7 +204,7 @@
    },
    "functions": {
     "default": [],
-    "maxItems": 8,
+    "maxItems": 7,
     "type": "array",
     "items": {
      "type": "object",
@@ -218,7 +218,6 @@
         "checkout.discounts",
         "checkout.shipping_rates",
         "checkout.payment_methods",
-        "order.risk",
         "buyer.ui"
        ]
       },

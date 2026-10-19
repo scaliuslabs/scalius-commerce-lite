@@ -352,7 +352,7 @@ export interface OrderDetails extends OrderListItem, OrderBillingAddressFields {
         reasons: string[];
         checkedAt: Date;
     }>;
-    /** Apps' holds for staff review (`order.risk` with hold), open ones first. */
+    /** Apps' holds for staff review (`ctx.orders.hold`), open ones first. */
     holds: Array<{
         id: string;
         appId: string;

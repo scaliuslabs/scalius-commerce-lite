@@ -99,6 +99,12 @@ export interface PluginBridgeApi {
   messagingPush(input: { customerId: string; title: string; body?: string; url?: string; tag?: string }): Promise<{ delivered: boolean }>;
   /** A typed line on an order's timeline (`orders.edit`, a declared kind). */
   timelineAdd(input: { orderId: string; kind: string; message: string; fields?: Record<string, string | number | boolean>; idempotencyKey?: string }): Promise<{ id: string }>;
+  /** Holds an order for staff review (`orders.edit`): one per order and app. */
+  ordersHold(input: { orderId: string; reason: string }): Promise<void>;
+  /** Risk advice on an order (`orders.edit`): one per order and app. */
+  ordersAssessRisk(input: { orderId: string; level: "low" | "medium" | "high"; reasons: string[] }): Promise<void>;
+  /** The buyer's earlier orders, counts only (`orders.view`). */
+  ordersRiskHistory(orderId: string): Promise<{ orders: number; cancelled: number; returnedToSender: number }>;
 }
 
 /** Where the bridge runs: the Worker env and context of the current request. */
@@ -487,6 +493,58 @@ export class PluginBridgeHost implements PluginBridgeApi {
         if (error instanceof ValidationError) fail("timeline.invalid", error.message);
         throw error;
       }
+    });
+  }
+
+  // ── order actions (event handlers: a reaction after commit) ───────────
+
+  /** The order's owners, or the refusal of a missing order. */
+  private async orderOwners(orderId: unknown): Promise<{ id: string; customerId: string | null; accountOwnerCustomerId: string | null }> {
+    if (typeof orderId !== "string" || orderId.length < 1 || orderId.length > 128) fail("orders.invalid", "orderId is an order id.");
+    const [{ orders }, { and, eq, isNull }] = await Promise.all([import("@scalius/database/schema"), import("drizzle-orm")]);
+    const row = await this.runtime.db().select({ id: orders.id, customerId: orders.customerId, accountOwnerCustomerId: orders.accountOwnerCustomerId })
+      .from(orders).where(and(eq(orders.id, orderId), isNull(orders.deletedAt))).get();
+    if (!row) fail("orders.not_found", "The order was not found.");
+    return row;
+  }
+
+  async ordersHold(input: { orderId: string; reason: string }): Promise<void> {
+    return this.guard("ordersHold", async () => {
+      if (!this.props.authority.permissions.includes("orders.edit")) fail("orders.not_allowed", "Holding orders needs the write_orders scope.");
+      if (!isRecord(input) || typeof input.reason !== "string" || !input.reason.trim() || input.reason.length > 500) {
+        fail("orders.invalid", "reason is text of 1 to 500 characters.");
+      }
+      const order = await this.orderOwners(isRecord(input) ? input.orderId : undefined);
+      const { placeAppOrderHolds } = await import("@scalius/core/modules/orders");
+      await placeAppOrderHolds(this.runtime.db(), order.id, [{ pluginId: this.pluginId, appName: this.props.authority.appName ?? this.pluginId, reasons: [input.reason.trim()] }]);
+    });
+  }
+
+  async ordersAssessRisk(input: { orderId: string; level: "low" | "medium" | "high"; reasons: string[] }): Promise<void> {
+    return this.guard("ordersAssessRisk", async () => {
+      if (!this.props.authority.permissions.includes("orders.edit")) fail("orders.not_allowed", "Assessing orders needs the write_orders scope.");
+      if (!isRecord(input) || (input.level !== "low" && input.level !== "medium" && input.level !== "high")) fail("orders.invalid", "level is low, medium or high.");
+      const reasons = input.reasons;
+      if (!Array.isArray(reasons) || reasons.length > 5 || !reasons.every((reason) => typeof reason === "string" && reason.trim() && reason.length <= 200)) {
+        fail("orders.invalid", "reasons are up to five texts of 1 to 200 characters.");
+      }
+      const order = await this.orderOwners(input.orderId);
+      const { recordAppRiskChecks } = await import("@scalius/core/modules/order-kernel");
+      await recordAppRiskChecks(this.runtime.db(), order.id, [{
+        pluginId: this.pluginId,
+        appName: this.props.authority.appName ?? this.pluginId,
+        level: input.level,
+        reasons: reasons.map((reason) => reason.trim()),
+      }]);
+    });
+  }
+
+  async ordersRiskHistory(orderId: string): Promise<{ orders: number; cancelled: number; returnedToSender: number }> {
+    return this.guard("ordersRiskHistory", async () => {
+      if (!this.props.authority.permissions.includes("orders.view")) fail("orders.not_allowed", "Reading order history needs the read_orders scope.");
+      const order = await this.orderOwners(orderId);
+      const { readOrderRiskHistory } = await import("@scalius/core/modules/order-kernel");
+      return readOrderRiskHistory(this.runtime.db(), { orderId: order.id, customerId: order.customerId, accountOwnerCustomerId: order.accountOwnerCustomerId });
     });
   }
 

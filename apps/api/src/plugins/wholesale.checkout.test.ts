@@ -196,12 +196,15 @@ describe("wholesale accounts through storefront checkout (declared reads)", () =
     const items = [{ productId: "p_tea", variantId: "v_tea", quantity: 6 }, { productId: "p_mug", variantId: "v_mug", quantity: 3 }];
     await install({ ...wholesaleManifest, functions: wholesaleManifest.functions.map((fn) => ({ ...fn, reads: [] })) });
     await seed();
+    await call("/orders/tax-quote", quote(items, ["Q-7"]));
     const without = await call("/orders/tax-quote", quote(items, ["Q-7"]));
     expect(without.status, JSON.stringify(without.json)).toBe(200);
     sqlite.close();
     await fresh();
     await install();
     await seed();
+    // Each measured after a warm-up quote, so a first module load never splits a wave.
+    await call("/orders/tax-quote", quote(items, ["Q-7"]));
     const withReads = await call("/orders/tax-quote", quote(items, ["Q-7"]));
     expect(withReads.json.data).toMatchObject({ discountMinor: 5_000 });
     expect({ roundTrips: withReads.roundTrips, waves: withReads.waves }).toEqual({ roundTrips: without.roundTrips, waves: without.waves });
