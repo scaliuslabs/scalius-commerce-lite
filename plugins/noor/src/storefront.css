@@ -1154,6 +1154,13 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 .noor-crumbs a:hover { color: var(--n-ink); text-decoration: underline; }
 .noor-pdp { display: grid; gap: clamp(1.25rem, 1rem + 2vw, 3rem); align-items: start; }
 .noor-pdp-media { min-inline-size: 0; }
+/* The store's gallery in Noor's corners, lines and photo ground, as Noor's own
+   gallery draws them (large photos at the large radius, thumbnails at the small). */
+.noor-pdp-media :is(.mobile-media-stage, [data-image-stage], [data-desktop-image-zoom], .gallery-list > li) { border-radius: var(--n-radius-lg); background-color: var(--n-soft); }
+.noor-pdp-media [data-desktop-image-zoom] { border-color: transparent; }
+.noor-pdp-media :is(.thumbnail-btn, .thumb-ring) { border-radius: var(--n-radius); }
+.noor-pdp-media .thumbnail-btn { border-color: var(--n-line); background-color: var(--n-soft); }
+.noor-pdp-media .gallery-show-all-label { border-color: var(--n-line); border-radius: var(--n-btn-radius); }
 .noor-pdp-buy { display: grid; gap: 0.75rem; align-content: start; }
 .noor-pdp-description { margin-block-start: clamp(2rem, 1.5rem + 3vw, 4rem); }
 @media (min-width: 48rem) {
