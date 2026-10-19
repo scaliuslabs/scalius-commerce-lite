@@ -72,6 +72,12 @@ export function useAccessLine(feature: AppFeature): string {
   return parts.length > 0 ? parts.join(" · ") : t("accessNone");
 }
 
+/** Whether turning the feature on asks for anything beyond the app (the items `FeatureAccess` lists). */
+export function hasFeatureAccess({ request }: AppFeature): boolean {
+  return request.scopes.length > 0 || request.providers.length > 0 || request.functions.length > 0 || request.events.length > 0
+    || request.publicRoutes || request.cron.length > 0 || request.admin || request.storefront || request.allowedHosts.length > 0;
+}
+
 /** Everything turning a feature on allows, as the consent list: only its own part, never the app's base. */
 export function FeatureAccess({ feature }: { feature: AppFeature }) {
   const t = useMessages(appFeaturesMessages);
@@ -105,7 +111,7 @@ export function FeatureAccess({ feature }: { feature: AppFeature }) {
       return { key: `host:${host}`, content: <span className="wrap-anywhere">{before}<code>{host}</code>{after}</span> };
     }),
   ];
-  if (items.length === 0) return <p className="text-body text-muted-foreground">{t("noExtraAccess")}</p>;
+  if (!hasFeatureAccess(feature)) return <p className="text-body text-muted-foreground">{t("noExtraAccess")}</p>;
   return (
     <ul className="flex list-disc flex-col gap-1.5 ps-5 text-body">
       {items.map((item) => <li key={item.key}>{item.content}</li>)}
@@ -143,11 +149,18 @@ export function EnableFeatureDialog({ app, feature, open, onOpenChange, onEnable
           <DialogTitle>{t("enableTitle", { name: feature.name })}</DialogTitle>
           <DialogDescription>{feature.description}</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-2">
-          <p className="text-body font-medium">{t("enableWill", { app: app.name, name: feature.name })}</p>
-          <FeatureAccess feature={feature} />
-        </div>
-        <p className="text-body text-muted-foreground">{t("enableConsent", { app: app.name, name: feature.name })}</p>
+        {/* Nothing listed: one sentence says so, never a "can:" list and a consent to nothing. */}
+        {hasFeatureAccess(feature) ? (
+          <>
+            <div className="flex flex-col gap-2">
+              <p className="text-body font-medium">{t("enableWill", { app: app.name, name: feature.name })}</p>
+              <FeatureAccess feature={feature} />
+            </div>
+            <p className="text-body text-muted-foreground">{t("enableConsent", { app: app.name, name: feature.name })}</p>
+          </>
+        ) : (
+          <p className="text-body text-muted-foreground">{t("noExtraAccessFor", { app: app.name, name: feature.name })}</p>
+        )}
         <DialogFooter>
           <Button type="button" variant="outline" disabled={enable.isPending} onClick={() => onOpenChange(false)}>
             {t("cancel")}

@@ -55,6 +55,7 @@ export const appFeaturesMessages = defineMessages({
     enableFailed: "{name} could not be turned on.",
     enableConsent: "{app}'s actions for {name} are recorded as yours.",
     noExtraAccess: "Nothing beyond what the app already has.",
+    noExtraAccessFor: "{name} needs no access beyond what {app} already has.",
     access_publicRoutes: "Receive updates from outside services, such as payment and delivery updates",
     access_jobs: "Run scheduled jobs",
     access_admin: "Add pages or cards to your dashboard",
@@ -79,6 +80,8 @@ export const appFeaturesMessages = defineMessages({
     reviewTitle: "{count, plural, one {Turn on # feature?} other {Turn on # features?}}",
     reviewIntro: "Each feature asks only for its own access. With them on, {app} can:",
     reviewConsent: "{app}'s actions for these features are recorded as yours. You can turn any of them off later on its page in Apps.",
+    reviewNoAccess: "These features need no access beyond what {app} already has.",
+    reviewTurnOffLater: "You can turn any of them off later on {app}'s page in Apps.",
     turnedOn: "{count, plural, one {# feature is on.} other {# features are on.}}",
   },
   bn: {
@@ -129,6 +132,7 @@ export const appFeaturesMessages = defineMessages({
     enableFailed: "{name} চালু করা যায়নি।",
     enableConsent: "{name}-এর জন্য {app} যা করবে তা আপনার নামে রেকর্ড হবে।",
     noExtraAccess: "অ্যাপের যে অনুমতি আছে তার বাইরে কিছু নয়।",
+    noExtraAccessFor: "{app}-এর যে অনুমতি আছে তার বাইরে {name}-এর কিছু লাগে না।",
     access_publicRoutes: "বাইরের সেবা থেকে আপডেট পাওয়া, যেমন পেমেন্ট ও ডেলিভারির আপডেট",
     access_jobs: "নির্ধারিত সময়ে কাজ চালানো",
     access_admin: "আপনার ড্যাশবোর্ডে পেজ বা কার্ড যোগ করা",
@@ -153,6 +157,8 @@ export const appFeaturesMessages = defineMessages({
     reviewTitle: "{count}টি ফিচার চালু করবেন?",
     reviewIntro: "প্রতিটি ফিচার শুধু নিজের অনুমতি চায়। এগুলো চালু থাকলে {app} যা করতে পারবে:",
     reviewConsent: "এই ফিচারগুলোর জন্য {app} যা করবে তা আপনার নামে রেকর্ড হবে। পরে Apps-এ এর পেজ থেকে যেকোনোটি বন্ধ করতে পারবেন।",
+    reviewNoAccess: "{app}-এর যে অনুমতি আছে তার বাইরে এই ফিচারগুলোর কিছু লাগে না।",
+    reviewTurnOffLater: "পরে Apps-এ {app}-এর পেজ থেকে যেকোনোটি বন্ধ করতে পারবেন।",
     turnedOn: "{count}টি ফিচার চালু হয়েছে।",
   },
 });

@@ -642,6 +642,16 @@ describe("App page", () => {
     expect(toasts.warning).toHaveBeenCalledWith("Loyalty points reported a problem", expect.objectContaining({ description: "Couldn't reach the points service." }));
   });
 
+  it("agrees to nothing when the app asks for no access: no 'what is listed' sentence under an empty list", async () => {
+    const none = grant({ scopes: [], allowedHosts: [], events: [], functions: [], publicRoutes: false, customFieldOwners: [] });
+    await renderApp(detail({ request: none, added: none, scopes: [] }), [], true);
+    await click(button("Review and activate"));
+
+    expect(dialog().textContent).toContain("This app doesn't ask for access to your store.");
+    expect(dialog().textContent).not.toContain("what is listed");
+    expect(dialog().textContent).not.toContain("recorded as yours");
+  });
+
   it("refetches and asks to review again when the request changed meanwhile", async () => {
     sdk.postApiV1AdminAppsByIdActivate.mockImplementation(() => refused(409, { code: "installation.grant_changed" }));
     await renderApp(detail(), [], true);
@@ -884,6 +894,18 @@ describe("App page: sections", () => {
       body: { expectedRevision: 3, grantKey: "feature-key-bkash" },
     });
     await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith("bKash is on."));
+  });
+
+  it("says in one sentence that a feature needs nothing more, without a 'can:' list or a consent to nothing", async () => {
+    const quiet = feature({
+      request: { scopes: [], allowedHosts: [], providers: [], events: [], functions: [], publicRoutes: false, storefront: false, admin: false, cron: [] },
+    });
+    await renderApp(detail({ status: "active", features: [quiet, placesFeature()] }), MANAGER, true, "bkash");
+    await click(document.querySelector<HTMLButtonElement>('button[role="switch"]')!);
+
+    expect(dialog().textContent).toContain("bKash needs no access beyond what Loyalty points already has.");
+    expect(dialog().textContent).not.toContain("can:");
+    expect(dialog().textContent).not.toContain("recorded as yours");
   });
 
   it("lets a manager turn a feature off but not on, and says why", async () => {

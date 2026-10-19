@@ -93,7 +93,7 @@ export function ActivateAppDialog({ app, open, onOpenChange }: DialogProps) {
           <DialogTitle>{t(update ? "approveTitle" : "activateTitle", { name: app.name })}</DialogTitle>
           <DialogDescription>{t(update ? "approveIntro" : "activateIntro", { name: app.name })}</DialogDescription>
         </DialogHeader>
-        <AppAccess app={app} />
+        <AppAccess app={app} consent={<p className="text-body">{t("consentWarning", { name: app.name })}</p>} />
         {missing.length > 0 ? (
           <Alert variant="warning">
             <TriangleAlert aria-hidden="true" />
@@ -101,7 +101,6 @@ export function ActivateAppDialog({ app, open, onOpenChange }: DialogProps) {
             <AlertDescription>{t("missingBody", { settings: missing.map((field) => field.label).join(", ") })}</AlertDescription>
           </Alert>
         ) : null}
-        <p className="text-body">{t("consentWarning", { name: app.name })}</p>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={activate.isPending} onClick={() => onOpenChange(false)}>
             {t("cancel")}
