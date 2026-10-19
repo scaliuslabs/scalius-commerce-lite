@@ -39,6 +39,20 @@ describe("buyer reviews: only delivered lines (R1), uniqueness (R2), access (R7)
     expect(store.scalar("SELECT count(*) FROM product_reviews")).toBe(1);
   });
 
+  it("names every variant of the product bought on the order, not only the reviewed line's", async () => {
+    store.deliveredOrder("ord_1", [
+      { item: "item_1", product: "prod_shirt" },
+      { item: "item_2", product: "prod_shirt", label: "Size L" },
+      { item: "item_3", product: "prod_shirt", quantity: 2 },
+      { item: "item_4", product: "prod_mug" },
+    ]);
+    const lines = await listReviewableLines(store.db, rahim);
+    expect(lines.map((line) => [line.productId, line.variantLabel])).toEqual([["prod_shirt", "Size M, Size L"], ["prod_mug", null]]);
+    const result = await submitReview(store.db, rahim, { orderItemId: lines[0]!.orderItemId, rating: 5 });
+    expect(result.review.variantLabel).toBe("Size M, Size L");
+    expect(store.scalar("SELECT variant_label FROM product_reviews")).toBe("Size M, Size L");
+  });
+
   it("keeps a line outside the 365-day window from its first handover", async () => {
     store.order("ord_old", [{ item: "item_old", product: "prod_mug" }]);
     store.fulfil("ord_old", "item_old", 1, Math.floor(Date.now() / 1000) - 400 * 86_400);

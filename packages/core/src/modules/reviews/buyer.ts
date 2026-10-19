@@ -27,7 +27,7 @@ import {
   type NotificationSender,
 } from "../notifications";
 import type { ReviewStatus } from "./browser";
-import { findReviewableLineForProduct, readBuyerLine } from "./lines";
+import { findReviewableLineForProduct, readBuyerLine, readOrderVariantLabel } from "./lines";
 import {
   DAY_SECONDS,
   buyerOrderCondition,
@@ -340,6 +340,8 @@ export async function submitReview(
   const status = reviewStatusAfterCheck(settings.moderation, check);
   const now = nowSeconds();
   const id = newReviewId();
+  // The review names every variant of the product bought on this order, not only this line's.
+  const variantLabel = await readOrderVariantLabel(db, line.orderId, line.productId) ?? line.variantLabel;
   const insert = db.insert(productReviews).values({
     id,
     productId: line.productId,
@@ -350,7 +352,7 @@ export async function submitReview(
     customerId: buyer.kind === "customer" ? buyer.customerId : line.accountOwnerCustomerId,
     authorType: buyer.kind,
     authorDisplayName: displayName ?? defaultReviewerDisplayName(line.customerName),
-    variantLabel: line.variantLabel,
+    variantLabel,
     rating,
     title,
     body,
