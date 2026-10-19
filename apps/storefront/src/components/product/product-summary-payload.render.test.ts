@@ -178,14 +178,14 @@ describe("product summary browser payload", () => {
     expect(note?.textContent).toBe("This item can only be paid for online, and this store doesn't take online payments yet.");
     // The product controller keeps any purchase-blocking note's buttons off.
     expect(note?.hasAttribute("data-purchase-blocked")).toBe(true);
-    expect((blocked.querySelector("[data-action=add-to-cart]") as HTMLButtonElement).disabled).toBe(true);
-    expect((blocked.querySelector("[data-action=buy-now]") as HTMLButtonElement).disabled).toBe(true);
+    expect(blocked.querySelector("[data-action=add-to-cart]")?.hasAttribute("disabled")).toBe(true);
+    expect(blocked.querySelector("[data-action=buy-now]")?.hasAttribute("disabled")).toBe(true);
     // The note comes before the buttons it explains.
     expect(note!.compareDocumentPosition(blocked.querySelector(".buy-box-ctas")!) & 4).toBe(4);
 
     const buyable = await render(false);
     expect(buyable.querySelector("[data-purchase-blocked]")).toBeNull();
-    expect((buyable.querySelector("[data-action=add-to-cart]") as HTMLButtonElement).disabled).toBe(false);
+    expect(buyable.querySelector("[data-action=add-to-cart]")?.hasAttribute("disabled")).toBe(false);
   });
 
   it("shows a price of 24px/700 and no look-specific type sizes", async () => {
