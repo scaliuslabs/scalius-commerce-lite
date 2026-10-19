@@ -986,7 +986,11 @@ export function ThemeEditor({ workspace, refetch }: {
         onDiscard={() => afterText(() => setConfirmDiscard(true))}
         canPublish={publishable}
         publishing={draft.publishing}
-        onPublish={() => afterText(() => setPublishOpen(true))}
+        // Opening the summary saves what can be saved now; a setting to fix is named in it.
+        onPublish={() => afterText(() => {
+          setPublishOpen(true);
+          if (draft.dirty) void draft.save();
+        })}
         phone={phone}
       />
 
@@ -1132,6 +1136,7 @@ export function ThemeEditor({ workspace, refetch }: {
             onOpenChange={setPublishOpen}
             live={draft.published.theme}
             draft={draft.pending ?? draft.saved.theme}
+            held={draft.held.length > 0 || draft.pending === null ? Math.max(1, draft.held.length) : 0}
             unopenedAi={unopened}
             sectionName={sectionName}
             publishing={draft.publishing}
@@ -1143,6 +1148,10 @@ export function ThemeEditor({ workspace, refetch }: {
                   : (["product", "collection", "cart", "page"] as const).map((kind) => ({ kind })).find(({ kind }) => theme.pages.templates[kind].sections.some((section) => section.id === id)) ?? page;
               if (!samePage(where, page)) setPageState(where);
               select(id);
+            }}
+            onShowProblem={() => {
+              setPublishOpen(false);
+              showProblem();
             }}
             onPublish={(note) => void draft.publish(note).then((done) => { if (done) setPublishOpen(false); })}
           />

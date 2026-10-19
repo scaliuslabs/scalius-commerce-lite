@@ -316,6 +316,10 @@ export const themeEditorMessages = defineMessages({
     discardTitle: "Discard your draft?",
     discardBody: "Your draft goes back to the live theme. Unpublished edits are removed for everyone.",
     discarded: "Draft discarded",
+    heldRestored: "Edits that weren't saved yet are back. Fix the setting to save them.",
+    publishHeldOne: "1 setting needs fixing before your edit can be saved or published. It's kept in this browser until then.",
+    publishHeld: "{count} settings need fixing before your edits can be saved or published. They're kept in this browser until then.",
+    publishFix: "Fix it",
     publishNote: "Note (optional)",
     publishNoteHelp: "Describe what changed. Shown in version history (up to 500 characters).",
 
@@ -820,6 +824,10 @@ export const themeEditorMessages = defineMessages({
     discardTitle: "আপনার খসড়া বাতিল করবেন?",
     discardBody: "আপনার খসড়া লাইভ থিমে ফিরে যাবে। পাবলিশ না করা পরিবর্তন সবার জন্য মুছে যাবে।",
     discarded: "খসড়া বাতিল হয়েছে",
+    heldRestored: "যে পরিবর্তনগুলো এখনো সেভ হয়নি সেগুলো ফিরে এসেছে। সেভ করতে সেটিংটি ঠিক করুন।",
+    publishHeldOne: "একটি সেটিং ঠিক না করা পর্যন্ত আপনার পরিবর্তন সেভ বা পাবলিশ করা যাবে না। ততক্ষণ এটি এই ব্রাউজারে রাখা থাকবে।",
+    publishHeld: "{count}টি সেটিং ঠিক না করা পর্যন্ত আপনার পরিবর্তন সেভ বা পাবলিশ করা যাবে না। ততক্ষণ এগুলো এই ব্রাউজারে রাখা থাকবে।",
+    publishFix: "ঠিক করুন",
     publishNote: "নোট (ঐচ্ছিক)",
     publishNoteHelp: "কী বদলেছে লিখুন। সংস্করণ ইতিহাসে দেখা যাবে (সর্বোচ্চ ৫০০ অক্ষর)।",
 
