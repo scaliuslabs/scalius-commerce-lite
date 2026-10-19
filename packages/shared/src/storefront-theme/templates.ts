@@ -183,9 +183,11 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
         toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered",
         surface: "page", band: "inline",
       },
-      // The stacked gallery keeps its details column sticky.
+      // One photo with a thumbnail rail beside it, so a product with many
+      // photos keeps its options and Add to cart in the first view (stacked
+      // stays a choice in the theme editor).
       product: {
-        gallery: "stacked",
+        gallery: "thumbs-left",
         buyBox: ["classic", { cta: "stack" }],
         below: ["description", "content-blocks", "policies", "reviews", "related"],
         sticky: NO_STICKY,
@@ -295,7 +297,8 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
         toolbar: ["subcategory-pills", "facet-value-chips", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered",
         links: "tabs",
       },
-      product: { gallery: "stacked", buyBox: ["classic", { cta: "stack", whatsapp: true }], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
+      // One photo over a thumbnail strip: the buy button stays near the top.
+      product: { gallery: "thumbs-below", buyBox: ["classic", { cta: "stack", whatsapp: true }], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
       footer: ["columns"],
     }),
     // A landing page opens on its offer: the hero, the store's own delivery

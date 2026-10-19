@@ -421,9 +421,16 @@ describe("product page per preset", () => {
     expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.buyBox.look).toEqual({ cta: { layout: "row" }, facts: "list", features: "list", details: "below" });
   });
 
-  it("renders real gallery variants: stacked, a narrow thumbnail strip and the classic stage", () => {
-    expect(resolved("boutique").layout.productPage.gallery).toBe("stacked");
-    expect(resolved("showcase-landing").layout.productPage.gallery).toBe("stacked");
+  it("renders real gallery variants: one photo with thumbnails on every preset, stacked only by choice", () => {
+    // A product with many photos keeps its options and Add to cart in the first view.
+    for (const id of STOREFRONT_TEMPLATE_IDS) {
+      expect(resolved(id).layout.productPage.gallery).toBe("beside");
+    }
+    expect(resolved("boutique").layout.productPage).toMatchObject({ thumbnails: "beside", thumbnailSize: 48, phoneSideThumbnails: false });
+    expect(resolved("showcase-landing").layout.productPage).toMatchObject({ thumbnails: "below", thumbnailSize: 88 });
+    const stacked = storefrontTemplateTheme("boutique");
+    stacked.blocks.product.gallery = { variant: "stacked", settings: {} };
+    expect(resolveStorefrontTheme(stacked, EMPTY_STORE_SHAPE).layout.productPage.gallery).toBe("stacked");
     expect(resolved("marketplace").layout.productPage).toMatchObject({ thumbnails: "beside" });
     expect(resolved("daily-essentials").layout.productPage).toMatchObject({ thumbnails: "beside", phoneSideThumbnails: false });
     expect(resolved("daily-essentials").blocks.product.sticky.phoneBottom).toBe("none");

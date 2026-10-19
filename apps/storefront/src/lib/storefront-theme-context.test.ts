@@ -89,7 +89,7 @@ describe("request theme", () => {
     expect(resolveThemePreview).toHaveBeenCalledWith(`tpv_${"a".repeat(48)}`);
     expect(resolved.previewToken).toBe(`tpv_${"a".repeat(48)}`);
     expect(resolved.theme.template).toBe("boutique");
-    expect(resolved.layout.productPage).toMatchObject({ gallery: "stacked" });
+    expect(resolved.layout.productPage).toMatchObject({ gallery: "beside", thumbnails: "beside", thumbnailSize: 48 });
     expect(resolved.layout.productCard).toMatchObject({ facts: "swatches", action: "none", hoverImage: true, imageRatio: "square", imageFit: "cover", surface: "flat" });
     expect(resolved.layout.density).toBe("airy");
     expect(resolved.layout.grid).toBe(STOREFRONT_DENSITY_SPECS.airy);
