@@ -97,7 +97,7 @@ describe("ctx.api.call as a plugin principal", () => {
     const read = await call("dashboard.resources.orders.get", { path: { id: "ord_rbac1" } });
     expect(read).toMatchObject({ ok: true, status: 200, error: null, data: { id: "ord_rbac1", status: "pending" } });
 
-    const write = await call("dashboard.orders.comment_add", { path: { id: "ord_rbac1" }, body: { body: "Points granted", requestKey: "plugin-comment-1" } });
+    const write = await call("dashboard.orders.comment_add", { path: { id: "ord_rbac1" }, body: { body: "Points granted" }, idempotencyKey: "plugin-comment-1" });
     expect(write.ok).toBe(true);
     expect(sqlite.prepare("SELECT kind, body, actor_id FROM order_events WHERE order_id = 'ord_rbac1' AND body = 'Points granted'").all())
       .toEqual([expect.objectContaining({ body: "Points granted", actor_id: "owner" })]);

@@ -2170,6 +2170,7 @@ export type VariantResource = {
         locationId: string;
         onHand: number;
     }>;
+    stockVersion: number;
     updatedAt: string;
 };
 
@@ -21287,7 +21288,7 @@ export type PostApiV1AdminResourcesOrdersByIdFulfillmentsData = {
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -21414,7 +21415,7 @@ export type PostApiV1AdminResourcesOrdersByIdShipmentsData = {
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -21918,7 +21919,7 @@ export type PostApiV1AdminResourcesPriceListsData = {
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -21976,6 +21977,12 @@ export type PostApiV1AdminResourcesPriceListsResponse = PostApiV1AdminResourcesP
 
 export type DeleteApiV1AdminResourcesPriceListsByIdData = {
     body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -22105,6 +22112,12 @@ export type PatchApiV1AdminResourcesPriceListsByIdData = {
          * When it stops (exclusive); null: no end.
          */
         endsAt?: string | null;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -22246,6 +22259,12 @@ export type PutApiV1AdminResourcesPriceListsByIdPricesData = {
          * SKUs to take out of the list.
          */
         remove?: Array<string>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -22557,7 +22576,7 @@ export type PostApiV1AdminCategoriesData = {
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -22953,6 +22972,12 @@ export type DeleteApiV1AdminCategoriesByIdData = {
     body: {
         expectedRevision: number;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -23112,6 +23137,12 @@ export type PutApiV1AdminCategoriesByIdData = {
         listingTemplate?: string | null;
         expectedRevision: number;
         status: 'draft' | 'published' | 'internal';
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -23282,6 +23313,12 @@ export type PatchApiV1AdminCategoriesByIdStatusData = {
         expectedRevision: number;
         status: 'draft' | 'published' | 'internal';
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -23393,6 +23430,12 @@ export type DeleteApiV1AdminCategoriesByIdPermanentResponse = DeleteApiV1AdminCa
 export type PostApiV1AdminCategoriesByIdRestoreData = {
     body: {
         expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -23564,7 +23607,7 @@ export type PostApiV1AdminBrandsData = {
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -23783,6 +23826,12 @@ export type PutApiV1AdminBrandsByIdData = {
         status: 'draft' | 'published';
         expectedRevision: number;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -23842,6 +23891,12 @@ export type PatchApiV1AdminBrandsByIdStatusData = {
     body: {
         expectedRevision: number;
         status: 'draft' | 'published';
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -23905,6 +23960,12 @@ export type PostApiV1AdminBrandsTrashData = {
             expectedRevision: number;
         }>;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path?: never;
     query?: never;
     url: '/api/v1/admin/brands/trash';
@@ -23963,6 +24024,12 @@ export type PostApiV1AdminBrandsRestoreData = {
             id: string;
             expectedRevision: number;
         }>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;
@@ -24644,7 +24711,7 @@ export type PostApiV1AdminObjectsTypesData = {
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -24702,6 +24769,12 @@ export type PostApiV1AdminObjectsTypesResponse = PostApiV1AdminObjectsTypesRespo
 
 export type DeleteApiV1AdminObjectsTypesByTypeData = {
     body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         type: string;
     };
@@ -24822,6 +24895,12 @@ export type PatchApiV1AdminObjectsTypesByTypeData = {
         events?: boolean;
         expectedRevision: number;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         type: string;
     };
@@ -24940,6 +25019,12 @@ export type GetApiV1AdminObjectsByTypeResponse = GetApiV1AdminObjectsByTypeRespo
 
 export type DeleteApiV1AdminObjectsByTypeByIdData = {
     body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         type: string;
         id: string;
@@ -25054,6 +25139,12 @@ export type PutApiV1AdminObjectsByTypeByIdData = {
         handle?: string;
         status?: 'active' | 'draft' | 'published';
         position?: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         type: string;
@@ -25447,7 +25538,7 @@ export type PostApiV1AdminCollectionsData = {
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -25758,10 +25849,21 @@ export type PostApiV1AdminCollectionsBulkRestoreResponse = PostApiV1AdminCollect
 
 export type PostApiV1AdminCollectionsByIdRestoreData = {
     body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The collection version you read; a change since is refused with 409. Omit to act whatever happened since.
+         */
+        expectedVersion?: number;
+    };
     url: '/api/v1/admin/collections/{id}/restore';
 };
 
@@ -25938,10 +26040,21 @@ export type GetApiV1AdminCollectionsByIdSectionsBySectionResponse = GetApiV1Admi
 
 export type DeleteApiV1AdminCollectionsByIdData = {
     body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The collection version you read; a change since is refused with 409. Omit to act whatever happened since.
+         */
+        expectedVersion?: number;
+    };
     url: '/api/v1/admin/collections/{id}';
 };
 
@@ -25962,6 +26075,10 @@ export type DeleteApiV1AdminCollectionsByIdErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
     /**
      * Rate limit exceeded
      */
@@ -26059,6 +26176,12 @@ export type PutApiV1AdminCollectionsByIdData = {
          */
         listingTemplate?: string | null;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -26119,6 +26242,12 @@ export type PostApiV1AdminCollectionsByIdProductsData = {
         expectedVersion: number;
         add?: Array<string>;
         remove?: Array<string>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -26382,6 +26511,12 @@ export type PostApiV1AdminCustomersTagsBulkResponse = PostApiV1AdminCustomersTag
 export type PutApiV1AdminCustomersByIdTagsData = {
     body: {
         tags: Array<string>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -27313,7 +27448,7 @@ export type PostApiV1AdminCustomersData = {
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -27693,6 +27828,12 @@ export type PutApiV1AdminCustomersByIdData = {
         name?: string;
         email?: string | null;
         phone?: string;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -28539,7 +28680,7 @@ export type PostApiV1AdminPagesData = {
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -29174,6 +29315,12 @@ export type PutApiV1AdminPagesByIdData = {
             [key: string]: unknown;
         } | null;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -29513,7 +29660,7 @@ export type PostApiV1AdminDiscountsData = {
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -29574,6 +29721,12 @@ export type PostApiV1AdminDiscountsResponse = PostApiV1AdminDiscountsResponses[k
 export type DeleteApiV1AdminDiscountsByIdData = {
     body: {
         expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -29815,6 +29968,12 @@ export type PutApiV1AdminDiscountsByIdData = {
         }>;
         customerSegmentIds?: Array<string>;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -29958,6 +30117,12 @@ export type PostApiV1AdminDiscountsByIdActivateData = {
     body: {
         expectedRevision: number;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -30017,6 +30182,12 @@ export type PostApiV1AdminDiscountsByIdActivateResponse = PostApiV1AdminDiscount
 export type PostApiV1AdminDiscountsByIdPauseData = {
     body: {
         expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -30265,7 +30436,7 @@ export type PostApiV1AdminMediaUploadsImportUrlData = {
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -30770,6 +30941,12 @@ export type PatchApiV1AdminMediaByIdData = {
         posterMediaId?: string | null;
         folderId?: string | null;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -30850,6 +31027,12 @@ export type PatchApiV1AdminMediaByIdResponse = PatchApiV1AdminMediaByIdResponses
 export type PostApiV1AdminMediaByIdTrashData = {
     body: {
         expectedVersion: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -33186,16 +33369,19 @@ export type PostApiV1AdminInventoryLabelsArtifactResponse = PostApiV1AdminInvent
 
 export type PostApiV1AdminInventoryByVariantIdAdjustData = {
     body: {
-        operationKey?: string;
         delta: number;
         reason: 'received' | 'correction' | 'damage' | 'theft' | 'return' | 'other';
         notes?: string;
         pool?: 'stock' | 'preorderStock';
         locationId?: string;
+        /**
+         * The SKU's stockVersion you read; any stock change since is refused with 409. Omit to apply whatever happened since.
+         */
+        expectedStockVersion?: number;
     };
     headers?: {
         /**
-         * Standard retry key. May replace body.operationKey; if both are sent they must match.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -33407,7 +33593,7 @@ export type PostApiV1AdminInventoryStockAdjustData = {
     };
     headers?: {
         /**
-         * Standard retry key. May replace body.operationKey; if both are sent they must match.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -33460,7 +33646,6 @@ export type PostApiV1AdminInventoryStockAdjustResponse = PostApiV1AdminInventory
 
 export type PostApiV1AdminInventoryStockSetData = {
     body: {
-        operationKey?: string;
         /**
          * Variant ID
          */
@@ -33477,10 +33662,14 @@ export type PostApiV1AdminInventoryStockSetData = {
          * Active location counted or adjusted; the default location when omitted
          */
         locationId?: string;
+        /**
+         * The SKU's stockVersion you read; any stock change since is refused with 409. Omit to set the count whatever happened since.
+         */
+        expectedStockVersion?: number;
     };
     headers?: {
         /**
-         * Standard retry key. May replace body.operationKey; if both are sent they must match.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -46038,6 +46227,12 @@ export type PutApiV1AdminOrdersByIdStatusData = {
          */
         expectedVersion?: number;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -46086,10 +46281,21 @@ export type PutApiV1AdminOrdersByIdStatusResponse = PutApiV1AdminOrdersByIdStatu
 
 export type PostApiV1AdminOrdersByIdMarkDeliveredData = {
     body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The order version you read; a change since is refused with 409. Omit to mark it whatever happened since.
+         */
+        expectedVersion?: number;
+    };
     url: '/api/v1/admin/orders/{id}/mark-delivered';
 };
 
@@ -49690,14 +49896,10 @@ export type GetApiV1AdminOrdersByIdTimelineResponse = GetApiV1AdminOrdersByIdTim
 export type PostApiV1AdminOrdersByIdTimelineData = {
     body: {
         body: string;
-        /**
-         * One key per comment draft. Posting it again returns the first comment.
-         */
-        requestKey?: string;
     };
     headers?: {
         /**
-         * Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
          */
         'idempotency-key'?: string;
     };
@@ -50360,6 +50562,12 @@ export type PutApiV1AdminOrdersByIdDetailsData = {
         billingAdminArea?: string | null;
         billingPostalCode?: string | null;
         expectedVersion: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -51184,9 +51392,15 @@ export type PostApiV1AdminOrdersByIdFulfillmentsResponse = PostApiV1AdminOrdersB
 export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidData = {
     body: {
         /**
-         * Retry key: repeating the request returns the first result instead of acting twice.
+         * The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
-        requestKey: string;
+        expectedVersion?: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -51245,9 +51459,15 @@ export type PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponse = Po
 export type PostApiV1AdminOrdersByIdPickupReadyData = {
     body: {
         /**
-         * Retry key: repeating the request returns the first result instead of acting twice.
+         * The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.
          */
-        requestKey: string;
+        expectedVersion?: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -54116,6 +54336,12 @@ export type PutApiV1AdminProductsByIdPublicationsData = {
          */
         channelIds: Array<string>;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -54653,6 +54879,12 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionResponse = PatchApiV1Adm
 
 export type DeleteApiV1AdminProductsByIdData = {
     body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -55134,6 +55366,12 @@ export type PutApiV1AdminProductsByIdResponse = PutApiV1AdminProductsByIdRespons
 
 export type PostApiV1AdminProductsByIdRestoreData = {
     body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
     };
@@ -55463,6 +55701,12 @@ export type PostApiV1AdminProductsByIdVariantsResponse = PostApiV1AdminProductsB
 
 export type DeleteApiV1AdminProductsByIdVariantsByVariantIdData = {
     body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         id: string;
         variantId: string;
@@ -63405,6 +63649,12 @@ export type PutApiV1AdminCustomFieldsProductByOwnerIdData = {
             value?: unknown;
         }>;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         ownerId: string;
     };
@@ -63538,6 +63788,12 @@ export type PutApiV1AdminCustomFieldsVariantByOwnerIdData = {
              */
             value?: unknown;
         }>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         ownerId: string;
@@ -63673,6 +63929,12 @@ export type PutApiV1AdminCustomFieldsCustomerByOwnerIdData = {
             value?: unknown;
         }>;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         ownerId: string;
     };
@@ -63806,6 +64068,12 @@ export type PutApiV1AdminCustomFieldsOrderByOwnerIdData = {
              */
             value?: unknown;
         }>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         ownerId: string;
@@ -63941,6 +64209,12 @@ export type PutApiV1AdminCustomFieldsCategoryByOwnerIdData = {
             value?: unknown;
         }>;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         ownerId: string;
     };
@@ -64074,6 +64348,12 @@ export type PutApiV1AdminCustomFieldsCollectionByOwnerIdData = {
              */
             value?: unknown;
         }>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         ownerId: string;
@@ -64209,6 +64489,12 @@ export type PutApiV1AdminCustomFieldsBrandByOwnerIdData = {
             value?: unknown;
         }>;
     };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
     path: {
         ownerId: string;
     };
@@ -64342,6 +64628,12 @@ export type PutApiV1AdminCustomFieldsPageByOwnerIdData = {
              */
             value?: unknown;
         }>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         ownerId: string;
@@ -68131,6 +68423,12 @@ export type PostApiV1AdminSettingsDeliveryLocationsImportData = {
             legacyId?: string;
         }>;
         finish?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;

@@ -12,6 +12,7 @@ import type { ProtectedCustomerData } from "@scalius/shared/plugins/protected-da
 import { errorResponseFromError } from "../../utils/api-response";
 import { adminCustomerRoutes } from "./customers";
 import { adminOrdersRoutes } from "./orders";
+import { adminInventoryRoutes } from "./inventory";
 import { idempotentReplay } from "./idempotency";
 import { adminResourceRoutes } from "./resources";
 
@@ -50,6 +51,7 @@ async function call(method: string, path: string, options: { body?: unknown; hea
   app.route("/resources", adminResourceRoutes);
   app.route("/customers", adminCustomerRoutes);
   app.route("/orders", adminOrdersRoutes);
+  app.route("/inventory", adminInventoryRoutes);
   app.onError((error, c) => { const { body, status } = errorResponseFromError(error); return c.json(body, status); });
   const response = await app.request(`/api/v1/admin${path}`, {
     method,
@@ -100,6 +102,23 @@ describe("the stable app API's resources", () => {
     expect(stale.status).toBe(409);
     expect((sqlite.prepare("SELECT status, version FROM orders WHERE id = 'ord_a'").get() as { status: string; version: number }))
       .toEqual({ status: "pending", version: 1 });
+  });
+
+  it("sets stock under the stockVersion read and the Idempotency-Key, once", async () => {
+    const { stockVersion } = (await call("GET", "/resources/variants/v_tea")).body.data as { stockVersion: number };
+    const stale = await call("POST", "/inventory/stock-set", {
+      body: { variantId: "v_tea", newStock: 80, expectedStockVersion: stockVersion + 5 },
+      headers: { "Idempotency-Key": "stocktake 2026-10-19 aisle 4" },
+    });
+    expect(stale.status).toBe(409);
+    const body = { variantId: "v_tea", newStock: 80, expectedStockVersion: stockVersion };
+    const set = await call("POST", "/inventory/stock-set", { body, headers: { "Idempotency-Key": "stocktake 2026-10-19 aisle 5" } });
+    expect(set.status).toBe(200);
+    const again = await call("POST", "/inventory/stock-set", { body, headers: { "Idempotency-Key": "stocktake 2026-10-19 aisle 5" } });
+    expect(again).toMatchObject({ status: 200, replayed: "true" });
+    expect((await call("GET", "/resources/variants/v_tea")).body.data).toMatchObject({ onHand: 80, stockVersion: stockVersion + 1 });
+    // No key, no stock move.
+    expect((await call("POST", "/inventory/stock-set", { body: { variantId: "v_tea", newStock: 70 } })).status).toBe(400);
   });
 
   it("reads a product with its SKUs in minor units, and finds it by SKU", async () => {

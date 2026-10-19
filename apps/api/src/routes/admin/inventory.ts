@@ -1,6 +1,8 @@
 // src/server/routes/admin/inventory.ts
 // Admin OpenAPI routes for inventory.
 
+import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
+import type { Context } from "hono";
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import {
     getInventoryOverview,
@@ -59,24 +61,35 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
 
-const inventoryIdempotencyHeadersSchema = z.object({
-    "idempotency-key": inventoryOperationKeySchema.optional().openapi({
-        description: "Standard retry key. May replace body.operationKey; if both are sent they must match.",
-    }),
-});
+const inventoryIdempotencyHeadersSchema = idempotencyKeyHeaderSchema;
 
-function resolveInventoryOperationKey(
+/**
+ * The stock ledger's operation key for a request. The stable operations take
+ * only the Idempotency-Key header (any 8 to 200 printable characters) and
+ * derive the ledger key from it (the caller, the operation and the key), so
+ * a retry never moves stock twice. The dashboard scanner's own route (beta)
+ * keeps its ledger-shaped key, in the header or the body.
+ */
+async function inventoryOperationKey(
+    c: Context,
+    operationId: string,
     headerKey: string | undefined,
-    bodyKey: string | undefined,
-): string {
-    if (headerKey && bodyKey && headerKey !== bodyKey) {
-        throw new ValidationError("Idempotency-Key header must match body.operationKey.");
+    scanner?: { bodyKey: string | undefined },
+): Promise<string> {
+    if (scanner) {
+        if (headerKey && scanner.bodyKey && headerKey !== scanner.bodyKey) {
+            throw new ValidationError("Idempotency-Key header must match body.operationKey.");
+        }
+        const key = headerKey ?? scanner.bodyKey;
+        if (!key) throw new ValidationError("Idempotency-Key header or body.operationKey is required.");
+        const parsed = inventoryOperationKeySchema.safeParse(key);
+        if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message ?? "operationKey is not valid.");
+        return parsed.data;
     }
-    const operationKey = headerKey ?? bodyKey;
-    if (!operationKey) {
-        throw new ValidationError("Idempotency-Key header or body.operationKey is required.");
+    if (!headerKey) {
+        throw new ValidationError("Send an Idempotency-Key header: a stock change is never repeated by a retry.");
     }
-    return operationKey;
+    return scopedRequestKey(c, operationId, headerKey);
 }
 
 // ─── Inline response schemas ──
@@ -668,11 +681,8 @@ const adjustRoute = createRoute({
 app.openapi(adjustRoute, async (c) => {
     const db = c.get("db");
     const { variantId } = c.req.valid("param");
-    const { operationKey: bodyOperationKey, ...payload } = c.req.valid("json");
-    const operationKey = resolveInventoryOperationKey(
-        c.req.valid("header")["idempotency-key"],
-        bodyOperationKey,
-    );
+    const payload = c.req.valid("json");
+    const operationKey = await inventoryOperationKey(c, "dashboard.inventory.adjust", c.req.valid("header")["idempotency-key"]);
     const user = c.get("user");
     try {
         const result = await adjustInventory(db, variantId, { ...payload, operationKey }, user?.id);
@@ -850,9 +860,11 @@ const stockAdjustRoute = createRoute({
 app.openapi(stockAdjustRoute, async (c) => {
     const db = c.get("db");
     const { operationKey: bodyOperationKey, variantId, adjustment, reason, locationId } = c.req.valid("json");
-    const operationKey = resolveInventoryOperationKey(
+    const operationKey = await inventoryOperationKey(
+        c,
+        "dashboard.inventory.adjust_stock",
         c.req.valid("header")["idempotency-key"],
-        bodyOperationKey,
+        { bodyKey: bodyOperationKey },
     );
     const user = c.get("user");
     try {
@@ -879,11 +891,13 @@ const stockSetRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        operationKey: inventoryOperationKeySchema.optional(),
                         variantId: z.string().openapi({ description: "Variant ID" }),
                         newStock: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).openapi({ description: "Counted whole-number stock at the location" }),
                         reason: z.string().trim().max(500).optional().openapi({ description: "Reason for stocktake" }),
                         locationId: optionalLocationIdSchema,
+                        expectedStockVersion: z.number().int().min(0).optional().openapi({
+                            description: "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to set the count whatever happened since.",
+                        }),
                     }),
                 },
             },
@@ -901,14 +915,11 @@ const stockSetRoute = createRoute({
 
 app.openapi(stockSetRoute, async (c) => {
     const db = c.get("db");
-    const { operationKey: bodyOperationKey, variantId, newStock, reason, locationId } = c.req.valid("json");
-    const operationKey = resolveInventoryOperationKey(
-        c.req.valid("header")["idempotency-key"],
-        bodyOperationKey,
-    );
+    const { variantId, newStock, reason, locationId, expectedStockVersion } = c.req.valid("json");
+    const operationKey = await inventoryOperationKey(c, "dashboard.inventory.set_stock", c.req.valid("header")["idempotency-key"]);
     const user = c.get("user");
     try {
-        const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id, locationId);
+        const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id, locationId, { expectedStockVersion });
 
         return ok(c, result);
     } catch (error: unknown) {

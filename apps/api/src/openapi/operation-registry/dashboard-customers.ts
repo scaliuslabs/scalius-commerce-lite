@@ -7,7 +7,7 @@ export const DASHBOARD_CUSTOMER_OPERATIONS = {
     batch: "forbidden",
   },
   "dashboard.customers.bulk_restore": {},
-  "dashboard.customers.create": { stability: "stable", replay: true },
+  "dashboard.customers.create": { stability: "stable" },
   "dashboard.customers.delete": { risk: "destructive" },
   "dashboard.customers.delete_permanently": {
     risk: "destructive",

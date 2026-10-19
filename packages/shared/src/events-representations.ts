@@ -161,6 +161,8 @@ export const variantRepresentationSchema = z.object({
   trackInventory: z.boolean(),
   onHand: z.number().int(),
   levels: z.array(z.object({ locationId: id, onHand: z.number().int() })),
+  /** Advances with every stock change: the `expectedStockVersion` a stock write takes. */
+  stockVersion: z.number().int(),
   updatedAt: iso,
 });
 

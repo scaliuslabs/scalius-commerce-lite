@@ -33,7 +33,7 @@ mirror a dashboard screen, an editor section or a summary card.
   webhook delivery carries in `data` under `EVENTS_API_VERSION`. A webhook
   receiver and an API reader see one representation, and a truncated
   delivery's `fetch` names the matching `get`. Lists page by cursor in
-  `updatedAt, id` order (`updatedAfter` starts a sync) and stop early before a
+  `updatedAt, id` order (`updatedSince` starts a sync) and stop early before a
   page would pass the response budget.
 - **Money is integer minor units beside its currency**, the same rule as the
   webhook representations: `*Minor` integer fields, and an ISO 4217
@@ -46,20 +46,26 @@ mirror a dashboard screen, an editor section or a summary card.
 - **Regional and editor fields stay out.** `emiEligible`, product-level
   `freeDelivery` and product-level discount fields belong to the dashboard's
   editor routes (beta); no stable schema carries them.
-- **Creates are idempotent.** Every stable create accepts an optional
-  `Idempotency-Key` header (8 to 200 characters). A repeat with the same key,
-  by the same caller, for the same operation within 24 hours returns the
-  first response (`Idempotent-Replayed: true`); the same key with a different
-  request is refused with 422 `idempotency_key_reused`, and while the first is
-  still running with 409 `idempotency_in_progress`. The replay rows live in
-  `api_idempotency_keys` (`idempotency.ts` beside the admin routes); a 5xx is
-  not stored, so a retry runs again. An operation with its own durable retry
-  key (stock adjustments, fulfilments, pickup) keeps it and maps the header
-  onto it.
-- **Updates take a precondition.** An update to a resource with a revision
-  column takes it (`expectedRevision`, `expectedVersion` or
-  `expectedAggregateRevision`); a stale value is refused with 409 and changes
-  nothing.
+- **One retry key.** Every stable mutation accepts exactly one key: the
+  `Idempotency-Key` header, 8 to 200 printable characters (`ctx.api.call`'s
+  `idempotencyKey` is sent as it). A repeat with the same key, by the same
+  caller, for the same operation within 24 hours returns the first response
+  (`Idempotent-Replayed: true`); the same key with a different request is
+  refused with 422 `idempotency_key_reused`, and while the first is still
+  running with 409 `idempotency_in_progress`. The replay rows live in
+  `system_kv` (`routes/admin/idempotency.ts`); a 5xx is not stored, so a retry
+  runs again. No stable request body carries a key: an operation with a
+  durable retry key of its own (the stock ledger, fulfilments, timeline
+  notes) derives it from the header. Stock moves require the header.
+- **Writes take a precondition.** Every stable write that is not a create
+  takes the revision it was based on (`expectedRevision`, `expectedVersion`,
+  `expectedAggregateRevision` or `expectedStockVersion`, required or
+  optional); a stale value is refused with 409 and changes nothing. Reads
+  return them (`version` on orders, `stockVersion` on SKUs, `revision`
+  elsewhere). The few writes with no revision to compare yet (custom field
+  values, customers, the place import, publications) are listed in
+  `stable-operations.test.ts`; an optional precondition added later is
+  additive.
 - **Contact data is gated twice.** Protected fields read null without their
   `read_customer_*` scope (COMMERCE-HOOKS H5), and an app may not search or
   filter by what it may not read: an email filter or search needs

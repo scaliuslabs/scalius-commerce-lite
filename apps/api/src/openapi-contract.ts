@@ -406,17 +406,17 @@ function applySecuritySchemes(spec: OpenApiDocument): void {
 }
 
 /**
- * A create that replays its first response (`replay` in its registry row,
- * routes/admin/idempotency.ts) takes the optional header; the route reads it
- * in the shared middleware, so the contract states it here once.
+ * Every stable mutation takes the optional header (routes/admin/idempotency.ts
+ * replays its first response); the shared middleware reads it, so the
+ * contract states it here once, in one shape, replacing a route's own.
  */
 function documentIdempotencyKeyHeader(operation: OpenApiOperation): void {
-  const parameters = Array.isArray(operation.parameters) ? operation.parameters as Record<string, unknown>[] : [];
-  if (parameters.some((parameter) => parameter.in === "header" && String(parameter.name).toLowerCase() === "idempotency-key")) return;
+  const parameters = (Array.isArray(operation.parameters) ? operation.parameters as Record<string, unknown>[] : [])
+    .filter((parameter) => !(parameter.in === "header" && String(parameter.name).toLowerCase() === "idempotency-key"));
   operation.parameters = [...parameters, {
-    schema: { type: "string", minLength: 8, maxLength: 200 },
+    schema: { type: "string", pattern: "^[\\x20-\\x7E]{8,200}$", minLength: 8, maxLength: 200 },
     required: false,
-    description: "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+    description: "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
     name: "idempotency-key",
     in: "header",
   }];
@@ -480,7 +480,7 @@ function applyOperationContract(spec: OpenApiDocument): void {
           ? SCANNER_ADMIN_OR_AGENT_SECURITY
           : ADMIN_OR_AGENT_SECURITY;
       }
-      if (entry?.replay) documentIdempotencyKeyHeader(operation);
+      if (metadata.stability === "stable" && metadata.risk !== "read") documentIdempotencyKeyHeader(operation);
       operation.operationId ??= operationId;
       operation["x-scalius-agent"] ??= metadata;
       operation["x-scalius-rbac"] ??= operationRbac(path, method);

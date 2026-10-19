@@ -306,6 +306,7 @@ export async function readVariantRepresentation(db: Database, variantId: string)
     sku: productVariants.sku,
     trackInventory: productVariants.trackInventory,
     stock: productVariants.stock,
+    stockVersion: productVariants.stockVersion,
     updatedAt: productVariants.updatedAt,
   }).from(productVariants).where(eq(productVariants.id, variantId)).get();
   if (!variant) return null;
@@ -317,6 +318,7 @@ export async function readVariantRepresentation(db: Database, variantId: string)
     sku: variant.sku,
     trackInventory: variant.trackInventory,
     onHand: variant.stock,
+    stockVersion: variant.stockVersion,
     levels,
     updatedAt: isoRequired(variant.updatedAt),
   });

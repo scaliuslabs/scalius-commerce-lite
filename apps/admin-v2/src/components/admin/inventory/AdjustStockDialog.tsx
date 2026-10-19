@@ -170,14 +170,16 @@ export function AdjustStockDialog({
       const stocktakeReason = trimmedNotes || "Manual stocktake";
       const body = { variantId: current.id, newStock: targetStock!, reason: stocktakeReason, ...at };
       await apiData(postApiV1AdminInventoryStockSet({
-        body: { ...body, operationKey: operationKeyForIntent(JSON.stringify({ mode, ...body })) },
+        body,
+        headers: { "idempotency-key": operationKeyForIntent(JSON.stringify({ mode, ...body })) },
       }));
       return;
     }
     const body = { delta: effectiveDelta, reason, ...(trimmedNotes ? { notes: trimmedNotes } : {}), ...at };
     await apiData(postApiV1AdminInventoryByVariantIdAdjust({
       path: { variantId: current.id },
-      body: { ...body, operationKey: operationKeyForIntent(JSON.stringify({ mode, variantId: current.id, ...body })) },
+      body,
+      headers: { "idempotency-key": operationKeyForIntent(JSON.stringify({ mode, variantId: current.id, ...body })) },
     }));
   };
 

@@ -45,8 +45,8 @@ describe("order timeline cursor HTTP contract", () => {
     return (await response.json() as { data: Page }).data;
   }
   const post = () => app.request("/api/v1/admin/orders/order_a/timeline", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ body: "Original note", requestKey: "timeline-replay-0001" }),
+    method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "timeline-replay-0001" },
+    body: JSON.stringify({ body: "Original note" }),
   }, env);
 
   it("walks all 205 tied events without repeats or a false placed marker and filters app facts", async () => {

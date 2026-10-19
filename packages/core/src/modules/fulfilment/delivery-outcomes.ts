@@ -296,7 +296,12 @@ async function markOrderReturnedToSender(db: Database, orderId: string): Promise
  * Delivered for an order paid online and sent in full by the merchant's own
  * rider. (Cash-on-delivery orders are delivered by recording the cash.)
  */
-export async function markOrderDelivered(db: Database, orderId: string): Promise<StatusUpdateResult> {
+export async function markOrderDelivered(
+    db: Database,
+    orderId: string,
+    /** The order version the caller read; a change since refuses (exact under the status write's version CAS). */
+    options: { expectedVersion?: number } = {},
+): Promise<StatusUpdateResult> {
     const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
     if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED) {
@@ -316,5 +321,5 @@ export async function markOrderDelivered(db: Database, orderId: string): Promise
                 ? `${unsent} items haven't been sent yet. Send them first.`
                 : "Send the order first.");
     }
-    return applyOrderStatusChange(db, orderId, OrderStatus.DELIVERED, undefined, { generic: false });
+    return applyOrderStatusChange(db, orderId, OrderStatus.DELIVERED, { expectedVersion: options.expectedVersion }, { generic: false });
 }

@@ -260,10 +260,38 @@ describe("the stable app API", () => {
     expect(moneyProblems(stable)).toEqual([]);
   });
 
-  it("takes an optional Idempotency-Key on every create", () => {
-    const creates = stable.filter((operation) => operation.method === "POST" && /\.(create|import_url|comment_add)$/u.test(operation.operationId));
-    expect(creates.length).toBeGreaterThan(5);
-    expect(creates.filter((operation) => operation.idempotency === "none").map((operation) => operation.operationId)).toEqual([]);
+  it("has one retry contract: the Idempotency-Key header on every mutation, and no body key", () => {
+    const mutations = stable.filter((operation) => operation.risk !== "read");
+    expect(mutations.length).toBeGreaterThan(40);
+    expect(mutations.filter((operation) => operation.idempotency === "none").map((operation) => operation.operationId)).toEqual([]);
+    for (const operation of mutations) {
+      const input = operation.inputSchema as { parameters?: { name: string; in: string; schema?: { pattern?: string; maxLength?: number } }[] };
+      const header = input.parameters?.find((parameter) => parameter.in === "header" && parameter.name === "idempotency-key");
+      expect(header?.schema, operation.operationId).toMatchObject({ pattern: "^[\\x20-\\x7E]{8,200}$", maxLength: 200 });
+    }
+    const sealed = JSON.stringify(Object.fromEntries(Object.entries(currentSnapshot().operations).map(([id, operation]) => [id, operation.input])));
+    for (const field of ["requestKey", "operationKey"]) expect(sealed.includes(`"${field}"`), field).toBe(false);
+  });
+
+  it("takes a revision precondition on every write that is not a create", () => {
+    // No revision to compare yet: custom field values (each PUT checks the
+    // definitions' revisions), customers (no revision column; adding one
+    // touches every checkout write), the place import (an additive upsert
+    // of a dataset) and publications (outside the product revision by
+    // design). An optional precondition added later is additive.
+    const WITHOUT_REVISION = new Set([
+      ...["brand", "category", "collection", "customer", "order", "page", "product", "variant"].map((owner) => `dashboard.custom_fields.set_${owner}_values`),
+      "dashboard.customers.update",
+      "dashboard.customers.tags_set",
+      "dashboard.delivery_locations.import",
+      "dashboard.products.publications_set",
+    ]);
+    const creates = /\.(create|import_url|comment_add)$/u;
+    const unguarded = stable
+      .filter((operation) => operation.risk !== "read" && !creates.test(operation.operationId) && operation.revision === "none")
+      .map((operation) => operation.operationId);
+    expect(unguarded.filter((id) => !WITHOUT_REVISION.has(id))).toEqual([]);
+    expect([...WITHOUT_REVISION].filter((id) => !unguarded.includes(id))).toEqual([]);
   });
 
   it("reads each resource in the representation its webhooks carry, where a truncated delivery points", () => {

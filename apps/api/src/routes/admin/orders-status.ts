@@ -226,7 +226,14 @@ const markDeliveredRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Mark a paid order your own rider delivered in full as delivered",
     description: "Cash-on-delivery orders are delivered by recording the cash (POST /{id}/cod). Refused while anything is unsent or money is due.",
-    request: { params: z.object({ id: z.string() }) },
+    request: {
+        params: z.object({ id: z.string() }),
+        query: z.object({
+            expectedVersion: z.coerce.number().int().min(1).optional().openapi({
+                description: "The order version you read; a change since is refused with 409. Omit to mark it whatever happened since.",
+            }),
+        }),
+    },
     responses: {
         200: {
             description: "Order delivered",
@@ -239,7 +246,7 @@ const markDeliveredRoute = createRoute({
 app.openapi(markDeliveredRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const result = await markOrderDelivered(db, orderId);
+    const result = await markOrderDelivered(db, orderId, { expectedVersion: c.req.valid("query").expectedVersion });
     if (result.notification) {
         await recordOrderEvent(db, {
             orderId,

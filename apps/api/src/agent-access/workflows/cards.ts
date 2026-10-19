@@ -28,7 +28,7 @@ const createPolicies: AgentWorkflowStepPolicies = {
   nonInferenceRules: ["Use exact facts."],
 };
 
-/** A stable create that replays its first response for a repeated Idempotency-Key. */
+/** A stable write: it replays its first response for a repeated Idempotency-Key. */
 const replayCreatePolicies: AgentWorkflowStepPolicies = { ...createPolicies, idempotency: "supported" };
 
 export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
@@ -458,7 +458,7 @@ export const OPTIONED_PRODUCT_WORKFLOW: AgentWorkflowCard = {
             defaults: [],
           },
           policies: {
-            ...createPolicies,
+            ...replayCreatePolicies,
             revision: "required",
             stopConditions: ["Conflict: reread summary/readiness; no stale retry."],
           },

@@ -133,10 +133,11 @@ describe("admin order lifecycle routes", () => {
         ]);
     });
 
-    it("posts a comment once per request key and lets its author delete it (R2-ORD-04)", async () => {
+    it("posts a comment once per Idempotency-Key and lets its author delete it (R2-ORD-04)", async () => {
+        const request = json("POST", { body: "Customer confirmed by phone" });
         const post = () => app.request(
             "/api/v1/admin/orders/order_b/timeline",
-            json("POST", { body: "Customer confirmed by phone", requestKey: "comment-draft-0001" }),
+            { ...request, headers: { ...request.headers, "Idempotency-Key": "comment-draft-0001" } },
             env,
         );
         const first = await (await post()).json() as { data: { id: string; own: boolean } };

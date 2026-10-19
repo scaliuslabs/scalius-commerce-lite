@@ -38,7 +38,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   },
   "dashboard.orders.catalog_products": {},
   "dashboard.orders.cod_get": {},
-  "dashboard.orders.comment_add": { stability: "stable", replay: true },
+  "dashboard.orders.comment_add": { stability: "stable" },
   "dashboard.orders.comment_delete": { risk: "destructive" },
   "dashboard.orders.cod_update": {
     risk: "financial",
@@ -67,11 +67,13 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   },
   "dashboard.orders.fulfillment_void": {
     stability: "stable",
+    revision: "optional",
     batch: "forbidden",
   },
+  // A repeat returns the first mark; the Idempotency-Key is optional.
   "dashboard.orders.pickup_ready": {
     stability: "stable",
-    idempotency: "required",
+    revision: "optional",
     batch: "forbidden",
   },
   "dashboard.orders.get": {},
@@ -202,6 +204,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   },
   "dashboard.orders.mark_delivered": {
     stability: "stable",
+    revision: "optional",
     openWorld: true,
     batch: "forbidden",
   },

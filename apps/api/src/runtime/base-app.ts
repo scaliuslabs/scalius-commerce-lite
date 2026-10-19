@@ -94,8 +94,9 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
         "X-API-Token",
         "Accept",
         "X-Request-Id",
+        "Idempotency-Key",
       ],
-      exposeHeaders: ["Content-Type", "Cache-Control", "X-Request-Id"],
+      exposeHeaders: ["Content-Type", "Cache-Control", "X-Request-Id", "Idempotent-Replayed"],
       credentials: true,
     });
     return corsMiddleware(c, next);

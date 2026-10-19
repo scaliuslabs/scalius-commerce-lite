@@ -1,34 +1,38 @@
-// `Idempotency-Key` on the stable app API's creates
-// (operation-registry/README.md). A create whose registry row sets `replay`
-// keeps its first response for 24 hours in `system_kv`: the same caller
-// repeating the same operation with the same key gets that response again
-// (`Idempotent-Replayed: true`) instead of creating twice. The same key with
-// a different request is refused (422 idempotency_key_reused), and a repeat
-// while the first is still running waits for nothing (409
-// idempotency_in_progress). A 5xx is not kept, so its retry runs again.
+// `Idempotency-Key`: the one retry contract of the stable app API
+// (operation-registry/README.md). Every stable mutating operation accepts the
+// header (8 to 200 printable characters) and keeps its first response for 24
+// hours in `system_kv`: the same caller repeating the same operation with the
+// same key gets that response again (`Idempotent-Replayed: true`) instead of
+// acting twice. The same key with a different request is refused (422
+// idempotency_key_reused), and a repeat while the first is still running
+// waits for nothing (409 idempotency_in_progress). A 5xx is not kept, so its
+// retry runs again.
 //
-// The claim and the create are separate writes: if a Worker dies between
-// the create committing and its response being kept, the claim stays
-// "processing" and repeats answer 409 until it expires, rather than create a
-// second resource. Operations with their own durable retry key (stock moves,
-// fulfilments, pickup) keep it; `scopedRequestKey` maps the header onto it.
+// The claim and the write are separate: if a Worker dies between the write
+// committing and its response being kept, the claim stays "processing" and
+// repeats answer 409 until it expires, rather than act twice. Operations with
+// a durable retry key of their own (the stock ledger, fulfilments, pickup,
+// timeline notes) also derive it from the header (`scopedRequestKey`), so
+// even an expired claim never repeats their effect.
 import { z } from "@hono/zod-openapi";
 import type { Context, MiddlewareHandler } from "hono";
 import { systemKv } from "@scalius/database/schema";
 import { eq, lte, sql } from "drizzle-orm";
 import { sha256Hex } from "@scalius/shared/hash";
 import { AppError } from "@scalius/core/errors";
-import { registryEntry } from "../../openapi/operation-registry";
 
 /** How long a key is remembered: a retry after this creates again. */
 export const IDEMPOTENCY_WINDOW_SECONDS = 24 * 60 * 60;
 const KEY_PREFIX = "idem:";
 const MIN_KEY = 8;
 const MAX_KEY = 200;
+/** 8 to 200 printable ASCII characters (space included); opaque to the API. */
+export const IDEMPOTENCY_KEY_PATTERN = /^[\x20-\x7E]{8,200}$/u;
+export const IDEMPOTENCY_KEY_DESCRIPTION = "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.";
 
 export const idempotencyKeyHeaderSchema = z.object({
-  "idempotency-key": z.string().min(MIN_KEY).max(MAX_KEY).optional().openapi({
-    description: "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice.",
+  "idempotency-key": z.string().regex(IDEMPOTENCY_KEY_PATTERN, "Idempotency-Key is 8 to 200 printable characters.").optional().openapi({
+    description: IDEMPOTENCY_KEY_DESCRIPTION,
   }),
 });
 
@@ -53,7 +57,7 @@ function callerScope(c: Context): string {
  */
 export async function scopedRequestKey(c: Context, operationId: string, key: string | undefined): Promise<string> {
   if (!key) return crypto.randomUUID();
-  return `api_${(await sha256Hex(`${callerScope(c)}\n${operationId}\n${key}`)).slice(0, 48)}`;
+  return `api-${(await sha256Hex(`${callerScope(c)}\n${operationId}\n${key}`)).slice(0, 48)}`;
 }
 
 function refuse(status: number, code: string, message: string): never {
@@ -86,9 +90,9 @@ async function claim(c: Context, storeKey: string, request: string): Promise<Sto
 }
 
 /**
- * Replays a stable create's first response for a repeated `Idempotency-Key`.
- * Mounted on /admin/*; it acts only on operations whose registry row sets
- * `replay`, and only when the caller sent a key.
+ * Replays a stable mutating operation's first response for a repeated
+ * `Idempotency-Key`. Mounted on /admin/*; it acts only on stable operations,
+ * and only when the caller sent a key (beta routes keep their own rules).
  */
 export const idempotentReplay: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
   const key = c.req.header("Idempotency-Key");
@@ -97,9 +101,9 @@ export const idempotentReplay: MiddlewareHandler<{ Bindings: Env }> = async (c, 
   // The operation catalog loads only for a request that sent a key (route families never initialize it).
   const { resolveDirectAgentOperation } = await import("../../agent-access/direct-operation");
   const operation = resolveDirectAgentOperation(c.req.method, pathname.startsWith("/api/v1") ? pathname : `/api/v1${pathname}`);
-  if (!operation || registryEntry(operation.operationId)?.replay !== true) return next();
-  if (key.length < MIN_KEY || key.length > MAX_KEY) {
-    refuse(400, "idempotency_key_invalid", `Idempotency-Key is ${MIN_KEY} to ${MAX_KEY} characters.`);
+  if (!operation || operation.stability !== "stable") return next();
+  if (!IDEMPOTENCY_KEY_PATTERN.test(key)) {
+    refuse(400, "idempotency_key_invalid", `Idempotency-Key is ${MIN_KEY} to ${MAX_KEY} printable characters.`);
   }
 
   const scope = callerScope(c);

@@ -219,7 +219,8 @@ export function operationMetadata(
     principals: [...(entry.principals ?? DEFAULT_PRINCIPALS[surface])],
     risk,
     openWorld: entry.openWorld ?? false,
-    idempotency: entry.idempotency ?? (entry.replay ? "supported" : "none"),
+    // Every stable mutation takes an Idempotency-Key (README.md beside this file).
+    idempotency: entry.idempotency ?? (stability === "stable" && risk !== "read" ? "supported" : "none"),
     revision: entry.revision ?? "none",
     batch,
     transport: entry.transport ?? "json",

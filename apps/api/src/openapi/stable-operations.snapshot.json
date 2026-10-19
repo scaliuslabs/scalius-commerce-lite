@@ -14,11 +14,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
        "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -561,12 +562,26 @@
    "method": "POST",
    "path": "/api/v1/admin/brands/restore",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
    ],
    "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
     "requestBody": {
      "content": {
       "application/json": {
@@ -638,7 +653,7 @@
    "method": "PATCH",
    "path": "/api/v1/admin/brands/{id}/status",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -654,6 +669,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -724,12 +751,26 @@
    "method": "POST",
    "path": "/api/v1/admin/brands/trash",
    "risk": "destructive",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
    ],
    "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
     "requestBody": {
      "content": {
       "application/json": {
@@ -801,7 +842,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/brands/{id}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -817,6 +858,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -957,11 +1010,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
        "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -1667,7 +1721,7 @@
    "method": "POST",
    "path": "/api/v1/admin/categories/{id}/restore",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -1683,6 +1737,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -1729,7 +1795,7 @@
    "method": "PATCH",
    "path": "/api/v1/admin/categories/{id}/status",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -1745,6 +1811,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -1817,7 +1895,7 @@
    "method": "DELETE",
    "path": "/api/v1/admin/categories/{id}",
    "risk": "destructive",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -1833,6 +1911,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -1861,7 +1951,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/categories/{id}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -1877,6 +1967,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -2064,11 +2166,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
        "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -2758,8 +2861,8 @@
    "method": "POST",
    "path": "/api/v1/admin/collections/{id}/restore",
    "risk": "write",
-   "idempotency": "none",
-   "revision": "none",
+   "idempotency": "supported",
+   "revision": "optional",
    "scopes": [
     "write_products"
    ],
@@ -2772,6 +2875,29 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since."
+      },
+      "required": false,
+      "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since.",
+      "name": "expectedVersion",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ]
    },
@@ -2806,8 +2932,8 @@
    "method": "DELETE",
    "path": "/api/v1/admin/collections/{id}",
    "risk": "destructive",
-   "idempotency": "none",
-   "revision": "none",
+   "idempotency": "supported",
+   "revision": "optional",
    "scopes": [
     "write_products"
    ],
@@ -2820,6 +2946,29 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since."
+      },
+      "required": false,
+      "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since.",
+      "name": "expectedVersion",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ]
    },
@@ -2829,7 +2978,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/collections/{id}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -2843,6 +2992,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -2999,7 +3160,7 @@
    "method": "POST",
    "path": "/api/v1/admin/collections/{id}/products",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -3013,6 +3174,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -3101,11 +3274,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
        "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -3894,7 +4068,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/pages/{id}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_content"
@@ -3908,6 +4082,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -4954,7 +5140,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/brand/{ownerId}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_products"
@@ -4970,6 +5156,18 @@
       "required": true,
       "name": "ownerId",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -5079,7 +5277,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/category/{ownerId}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_products"
@@ -5095,6 +5293,18 @@
       "required": true,
       "name": "ownerId",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -5204,7 +5414,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/collection/{ownerId}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_products"
@@ -5220,6 +5430,18 @@
       "required": true,
       "name": "ownerId",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -5329,7 +5551,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/customer/{ownerId}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_customers"
@@ -5345,6 +5567,18 @@
       "required": true,
       "name": "ownerId",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -5454,7 +5688,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/order/{ownerId}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_orders"
@@ -5470,6 +5704,18 @@
       "required": true,
       "name": "ownerId",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -5579,7 +5825,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/page/{ownerId}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_content"
@@ -5595,6 +5841,18 @@
       "required": true,
       "name": "ownerId",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -5704,7 +5962,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/product/{ownerId}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_products"
@@ -5720,6 +5978,18 @@
       "required": true,
       "name": "ownerId",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -5829,7 +6099,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/custom-fields/variant/{ownerId}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_products"
@@ -5845,6 +6115,18 @@
       "required": true,
       "name": "ownerId",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -6139,11 +6421,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
        "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -6622,7 +6905,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/customers/{id}/tags",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_customers"
@@ -6638,6 +6921,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -6699,7 +6994,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/customers/{id}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_customers"
@@ -6713,6 +7008,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -6767,12 +7074,26 @@
    "method": "POST",
    "path": "/api/v1/admin/settings/delivery-locations/import",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_places"
    ],
    "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
     "requestBody": {
      "required": true,
      "content": {
@@ -6953,7 +7274,7 @@
    "method": "POST",
    "path": "/api/v1/admin/discounts/{id}/activate",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_discounts"
@@ -6969,6 +7290,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -7040,7 +7373,7 @@
    "method": "DELETE",
    "path": "/api/v1/admin/discounts/{id}",
    "risk": "destructive",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_discounts"
@@ -7056,6 +7389,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -7096,11 +7441,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
        "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -8358,7 +8704,7 @@
    "method": "POST",
    "path": "/api/v1/admin/discounts/{id}/pause",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_discounts"
@@ -8374,6 +8720,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -8445,7 +8803,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/discounts/{id}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_discounts"
@@ -8461,6 +8819,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -9186,7 +9556,7 @@
    "path": "/api/v1/admin/inventory/{variantId}/adjust",
    "risk": "write",
    "idempotency": "required",
-   "revision": "none",
+   "revision": "optional",
    "scopes": [
     "write_inventory"
    ],
@@ -9203,13 +9573,12 @@
      {
       "schema": {
        "type": "string",
-       "minLength": 16,
-       "maxLength": 128,
-       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-       "description": "Standard retry key. May replace body.operationKey; if both are sent they must match."
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
       },
       "required": false,
-      "description": "Standard retry key. May replace body.operationKey; if both are sent they must match.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -9220,12 +9589,6 @@
        "schema": {
         "type": "object",
         "properties": {
-         "operationKey": {
-          "type": "string",
-          "minLength": 16,
-          "maxLength": 128,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
-         },
          "delta": {
           "type": "integer",
           "minimum": -9007199254740991,
@@ -9258,6 +9621,11 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 100
+         },
+         "expectedStockVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to apply whatever happened since."
          }
         },
         "required": [
@@ -9533,7 +9901,7 @@
    "path": "/api/v1/admin/inventory/stock-set",
    "risk": "write",
    "idempotency": "required",
-   "revision": "none",
+   "revision": "optional",
    "scopes": [
     "write_inventory"
    ],
@@ -9542,13 +9910,12 @@
      {
       "schema": {
        "type": "string",
-       "minLength": 16,
-       "maxLength": 128,
-       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-       "description": "Standard retry key. May replace body.operationKey; if both are sent they must match."
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
       },
       "required": false,
-      "description": "Standard retry key. May replace body.operationKey; if both are sent they must match.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -9559,12 +9926,6 @@
        "schema": {
         "type": "object",
         "properties": {
-         "operationKey": {
-          "type": "string",
-          "minLength": 16,
-          "maxLength": 128,
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
-         },
          "variantId": {
           "type": "string",
           "description": "Variant ID"
@@ -9585,6 +9946,11 @@
           "minLength": 1,
           "maxLength": 100,
           "description": "Active location counted or adjusted; the default location when omitted"
+         },
+         "expectedStockVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to set the count whatever happened since."
          }
         },
         "required": [
@@ -9872,11 +10238,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
        "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -10372,7 +10739,7 @@
    "method": "POST",
    "path": "/api/v1/admin/media/{id}/trash",
    "risk": "destructive",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_files"
@@ -10388,6 +10755,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -10560,7 +10939,7 @@
    "method": "PATCH",
    "path": "/api/v1/admin/media/{id}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_files"
@@ -10576,6 +10955,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -10813,11 +11204,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
        "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -10832,13 +11224,6 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 2000
-         },
-         "requestKey": {
-          "type": "string",
-          "minLength": 8,
-          "maxLength": 128,
-          "pattern": "^[A-Za-z0-9_-]+$",
-          "description": "One key per comment draft. Posting it again returns the first comment."
          }
         },
         "required": [
@@ -10940,8 +11325,8 @@
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/fulfillments/{fulfillmentId}/void",
    "risk": "write",
-   "idempotency": "none",
-   "revision": "none",
+   "idempotency": "supported",
+   "revision": "optional",
    "scopes": [
     "write_fulfillments"
    ],
@@ -10962,6 +11347,18 @@
       "required": true,
       "name": "fulfillmentId",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -10971,15 +11368,12 @@
        "schema": {
         "type": "object",
         "properties": {
-         "requestKey": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Retry key: repeating the request returns the first result instead of acting twice."
+         "expectedVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
          }
         },
-        "required": [
-         "requestKey"
-        ],
         "additionalProperties": false
        }
       }
@@ -11029,8 +11423,8 @@
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/mark-delivered",
    "risk": "write",
-   "idempotency": "none",
-   "revision": "none",
+   "idempotency": "supported",
+   "revision": "optional",
    "scopes": [
     "write_fulfillments"
    ],
@@ -11043,6 +11437,29 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "description": "The order version you read; a change since is refused with 409. Omit to mark it whatever happened since."
+      },
+      "required": false,
+      "description": "The order version you read; a change since is refused with 409. Omit to mark it whatever happened since.",
+      "name": "expectedVersion",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ]
    },
@@ -11077,8 +11494,8 @@
    "method": "POST",
    "path": "/api/v1/admin/orders/{id}/pickup-ready",
    "risk": "write",
-   "idempotency": "required",
-   "revision": "none",
+   "idempotency": "supported",
+   "revision": "optional",
    "scopes": [
     "write_fulfillments"
    ],
@@ -11091,6 +11508,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -11100,15 +11529,12 @@
        "schema": {
         "type": "object",
         "properties": {
-         "requestKey": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Retry key: repeating the request returns the first result instead of acting twice."
+         "expectedVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
          }
         },
-        "required": [
-         "requestKey"
-        ],
         "additionalProperties": false
        }
       }
@@ -11919,7 +12345,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/orders/{id}/details",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_orders"
@@ -11933,6 +12359,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -12117,7 +12555,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/orders/{id}/status",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "optional",
    "scopes": [
     "write_orders"
@@ -12131,6 +12569,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -12210,7 +12660,7 @@
    "method": "DELETE",
    "path": "/api/v1/admin/products/{id}/variants/{variantId}",
    "risk": "destructive",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -12241,6 +12691,18 @@
       "required": true,
       "name": "expectedAggregateRevision",
       "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ]
    },
@@ -12276,7 +12738,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/products/{id}/publications",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_products"
@@ -12292,6 +12754,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -12355,7 +12829,7 @@
    "method": "POST",
    "path": "/api/v1/admin/products/{id}/restore",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -12378,6 +12852,18 @@
       "required": true,
       "name": "expectedAggregateRevision",
       "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ]
    },
@@ -12413,7 +12899,7 @@
    "method": "DELETE",
    "path": "/api/v1/admin/products/{id}",
    "risk": "destructive",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -12436,6 +12922,18 @@
       "required": true,
       "name": "expectedAggregateRevision",
       "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ]
    },
@@ -12668,12 +13166,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
-       "maxLength": 200,
-       "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice."
+       "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -13136,11 +13634,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
        "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -13251,7 +13750,7 @@
    "method": "DELETE",
    "path": "/api/v1/admin/resources/price-lists/{id}",
    "risk": "destructive",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -13277,6 +13776,18 @@
       "required": true,
       "name": "expectedRevision",
       "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ]
    },
@@ -13513,7 +14024,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/resources/price-lists/{id}/prices",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -13529,6 +14040,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -13650,7 +14173,7 @@
    "method": "PATCH",
    "path": "/api/v1/admin/resources/price-lists/{id}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_products"
@@ -13666,6 +14189,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -13982,12 +14517,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
-       "maxLength": 200,
-       "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice."
+       "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -14625,7 +15160,7 @@
    "method": "DELETE",
    "path": "/api/v1/admin/objects/{type}/{id}",
    "risk": "destructive",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_objects"
@@ -14660,6 +15195,18 @@
       "required": true,
       "name": "expectedRevision",
       "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ]
    },
@@ -14870,11 +15417,12 @@
      {
       "schema": {
        "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
        "minLength": 8,
        "maxLength": 200
       },
       "required": false,
-      "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
       "name": "idempotency-key",
       "in": "header"
      }
@@ -15008,7 +15556,7 @@
    "method": "DELETE",
    "path": "/api/v1/admin/objects/types/{type}",
    "risk": "destructive",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_objects"
@@ -15033,6 +15581,18 @@
       "required": true,
       "name": "expectedRevision",
       "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ]
    },
@@ -15139,7 +15699,7 @@
    "method": "PATCH",
    "path": "/api/v1/admin/objects/types/{type}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_objects"
@@ -15155,6 +15715,18 @@
       "required": true,
       "name": "type",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -15286,7 +15858,7 @@
    "method": "PUT",
    "path": "/api/v1/admin/objects/{type}/{id}",
    "risk": "write",
-   "idempotency": "none",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_objects"
@@ -15312,6 +15884,18 @@
       "required": true,
       "name": "id",
       "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
      }
     ],
     "requestBody": {
@@ -17073,6 +17657,9 @@
       ]
      }
     },
+    "stockVersion": {
+     "type": "integer"
+    },
     "updatedAt": {
      "type": "string",
      "minLength": 1,
@@ -17086,6 +17673,7 @@
     "trackInventory",
     "onHand",
     "levels",
+    "stockVersion",
     "updatedAt"
    ]
   }

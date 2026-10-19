@@ -33,7 +33,7 @@ export const DASHBOARD_MARKETING_OPERATIONS = {
     risk: "destructive",
     revision: "required",
   },
-  "dashboard.discounts.create": { stability: "stable", replay: true },
+  "dashboard.discounts.create": { stability: "stable" },
   "dashboard.discounts.get": { stability: "stable" },
   "dashboard.discounts.list": { stability: "stable" },
   "dashboard.discounts.pause": { stability: "stable", revision: "required" },

@@ -24,7 +24,7 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
     revision: "required",
   },
   "dashboard.categories.bulk_restore": { revision: "required" },
-  "dashboard.categories.create": { stability: "stable", replay: true },
+  "dashboard.categories.create": { stability: "stable" },
   "dashboard.categories.delete_permanently": {
     risk: "destructive",
     revision: "required",
@@ -58,7 +58,7 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
   "dashboard.collections.bulk_delete": { risk: "destructive" },
   "dashboard.collections.bulk_restore": {},
   "dashboard.collections.category_options": {},
-  "dashboard.collections.create": { stability: "stable", replay: true },
+  "dashboard.collections.create": { stability: "stable" },
   "dashboard.collections.delete_permanently": { risk: "destructive" },
   "dashboard.collections.form_options": {},
   "dashboard.collections.get": {
@@ -70,8 +70,8 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
   "dashboard.collections.list": { stability: "stable" },
   "dashboard.collections.product_options": {},
   "dashboard.collections.reorder": { revision: "required" },
-  "dashboard.collections.restore": { stability: "stable" },
-  "dashboard.collections.trash": { stability: "stable", risk: "destructive" },
+  "dashboard.collections.restore": { stability: "stable", revision: "optional" },
+  "dashboard.collections.trash": { stability: "stable", risk: "destructive", revision: "optional" },
   "dashboard.collections.update": { stability: "stable", revision: "required" },
   "dashboard.collections.update_products": { stability: "stable", revision: "required" },
   "dashboard.product_options.save_matrix": { revision: "required" },

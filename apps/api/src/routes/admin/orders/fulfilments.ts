@@ -38,6 +38,13 @@ const requestKeySchema = z.string().uuid().openapi({
     description: "Retry key: repeating the request returns the first result instead of acting twice.",
 });
 
+/** A repeat is safe (the first result comes back); the version, when sent, must still be the order's. */
+const orderVersionBodySchema = z.object({
+    expectedVersion: z.number().int().min(1).optional().openapi({
+        description: "The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since.",
+    }),
+}).strict();
+
 const fulfilmentLinesInputSchema = z.array(z.object({
     itemId: z.string().min(1).max(180),
     quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
@@ -211,7 +218,7 @@ const voidFulfilmentRoute = createRoute({
         params: z.object({ id: z.string(), fulfillmentId: z.string() }),
         body: {
             required: true,
-            content: { "application/json": { schema: z.object({ requestKey: requestKeySchema }).strict() } },
+            content: { "application/json": { schema: orderVersionBodySchema } },
         },
     },
     responses: {
@@ -237,7 +244,7 @@ const voidFulfilmentRoute = createRoute({
 app.openapi(voidFulfilmentRoute, async (c) => {
     const db = c.get("db");
     const { id: orderId, fulfillmentId } = c.req.valid("param");
-    const result = await voidOrderFulfilment(db, orderId, fulfillmentId);
+    const result = await voidOrderFulfilment(db, orderId, fulfillmentId, { expectedVersion: c.req.valid("json").expectedVersion });
     if (!result.replayed) {
         await recordOrderEvent(db, {
             orderId,
@@ -260,7 +267,7 @@ const pickupReadyRoute = createRoute({
         params: z.object({ id: z.string() }),
         body: {
             required: true,
-            content: { "application/json": { schema: z.object({ requestKey: requestKeySchema }).strict() } },
+            content: { "application/json": { schema: orderVersionBodySchema } },
         },
     },
     responses: {
@@ -284,7 +291,7 @@ const pickupReadyRoute = createRoute({
 app.openapi(pickupReadyRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const result = await markOrderReadyForPickup(db, orderId);
+    const result = await markOrderReadyForPickup(db, orderId, { expectedVersion: c.req.valid("json").expectedVersion });
     if (!result.replayed) {
         await recordOrderEvent(db, {
             orderId,

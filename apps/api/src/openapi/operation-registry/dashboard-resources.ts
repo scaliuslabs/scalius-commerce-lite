@@ -20,7 +20,6 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.shipments.create": {
     stability: "stable",
     openWorld: true,
-    replay: true,
     batch: "forbidden",
     uncurated: true,
   },
@@ -32,7 +31,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // Price lists (MARKETS-DESIGN D5), in minor units of the list's currency.
   "dashboard.resources.price_lists.list": { stability: "stable", uncurated: true },
   "dashboard.resources.price_lists.get": { stability: "stable", uncurated: true },
-  "dashboard.resources.price_lists.create": { stability: "stable", replay: true, uncurated: true },
+  "dashboard.resources.price_lists.create": { stability: "stable", uncurated: true },
   "dashboard.resources.price_lists.update": { stability: "stable", revision: "required", uncurated: true },
   "dashboard.resources.price_lists.delete": { stability: "stable", risk: "destructive", revision: "required", uncurated: true },
   "dashboard.resources.price_lists.prices_list": { stability: "stable", uncurated: true },

@@ -10502,6 +10502,9 @@
               ]
             }
           },
+          "stockVersion": {
+            "type": "integer"
+          },
           "updatedAt": {
             "type": "string",
             "minLength": 1,
@@ -10515,6 +10518,7 @@
           "trackInventory",
           "onHand",
           "levels",
+          "stockVersion",
           "updatedAt"
         ]
       },
@@ -75791,12 +75795,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
-              "maxLength": 200,
-              "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice."
+              "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -76207,12 +76211,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
-              "maxLength": 200,
-              "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice."
+              "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first result instead of acting twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -77786,11 +77790,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
               "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -77981,6 +77986,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -78180,7 +78197,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -78221,6 +78238,18 @@
             "required": true,
             "name": "expectedRevision",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "responses": {
@@ -78345,7 +78374,7 @@
           ],
           "risk": "destructive",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -78569,6 +78598,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -78780,7 +78821,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -79798,11 +79839,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
               "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -81301,6 +81343,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -81568,7 +81622,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -81598,6 +81652,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -81711,7 +81777,7 @@
           ],
           "risk": "destructive",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -82051,6 +82117,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -82213,7 +82291,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -82390,6 +82468,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -82526,7 +82616,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -83099,11 +83189,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
               "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -83579,6 +83670,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -83799,7 +83902,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -83831,6 +83934,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -83991,7 +84106,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -84165,6 +84280,20 @@
             "agentBearer": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
@@ -84174,7 +84303,7 @@
           ],
           "risk": "destructive",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -84348,6 +84477,20 @@
             "agentBearer": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
@@ -84357,7 +84500,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -86380,11 +86523,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
               "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -86579,6 +86723,18 @@
             "required": true,
             "name": "type",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -86800,7 +86956,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -86839,6 +86995,18 @@
             "required": true,
             "name": "expectedRevision",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "responses": {
@@ -86933,7 +87101,7 @@
           ],
           "risk": "destructive",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -87356,6 +87524,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -87523,7 +87703,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -87572,6 +87752,18 @@
             "required": true,
             "name": "expectedRevision",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "responses": {
@@ -87666,7 +87858,7 @@
           ],
           "risk": "destructive",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -88876,11 +89068,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
               "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -89634,6 +89827,29 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since."
+            },
+            "required": false,
+            "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since.",
+            "name": "expectedVersion",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "responses": {
@@ -89758,8 +89974,8 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
+          "idempotency": "supported",
+          "revision": "optional",
           "batch": "sequential",
           "transport": "json",
           "maximumResponseBytes": 65536,
@@ -90412,6 +90628,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -90658,7 +90886,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -90686,6 +90914,29 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since."
+            },
+            "required": false,
+            "description": "The collection version you read; a change since is refused with 409. Omit to act whatever happened since.",
+            "name": "expectedVersion",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "responses": {
@@ -90732,6 +90983,16 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -90770,8 +91031,8 @@
           ],
           "risk": "destructive",
           "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
+          "idempotency": "supported",
+          "revision": "optional",
           "batch": "sequential",
           "transport": "json",
           "maximumResponseBytes": 65536,
@@ -90800,6 +91061,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -90968,7 +91241,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -91563,6 +91836,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -91704,7 +91989,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -94764,11 +95049,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
               "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -95747,6 +96033,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -95881,7 +96179,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -99001,11 +99299,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
               "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -100488,6 +100787,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -100783,7 +101094,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -102228,11 +102539,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
               "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -102664,6 +102976,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -103314,7 +103638,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -103344,6 +103668,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -103459,7 +103795,7 @@
           ],
           "risk": "destructive",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -103794,6 +104130,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -103955,7 +104303,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -103987,6 +104335,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -104148,7 +104508,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -105156,11 +105516,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
               "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -106251,6 +106612,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -106560,7 +106933,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -106865,6 +107238,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -107127,7 +107512,7 @@
           ],
           "risk": "destructive",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -115035,13 +115420,12 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 16,
-              "maxLength": 128,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "description": "Standard retry key. May replace body.operationKey; if both are sent they must match."
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
             },
             "required": false,
-            "description": "Standard retry key. May replace body.operationKey; if both are sent they must match.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -115052,12 +115436,6 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "operationKey": {
-                    "type": "string",
-                    "minLength": 16,
-                    "maxLength": 128,
-                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
-                  },
                   "delta": {
                     "type": "integer",
                     "minimum": -9007199254740991,
@@ -115090,6 +115468,11 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 100
+                  },
+                  "expectedStockVersion": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to apply whatever happened since."
                   }
                 },
                 "required": [
@@ -115199,7 +115582,7 @@
           "risk": "write",
           "openWorld": false,
           "idempotency": "required",
-          "revision": "none",
+          "revision": "optional",
           "batch": "sequential",
           "transport": "json",
           "maximumResponseBytes": 65536,
@@ -115669,13 +116052,11 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 16,
-              "maxLength": 128,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "description": "Standard retry key. May replace body.operationKey; if both are sent they must match."
+              "pattern": "^[\\x20-\\x7E]{8,200}$/u",
+              "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice."
             },
             "required": false,
-            "description": "Standard retry key. May replace body.operationKey; if both are sent they must match.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -115848,13 +116229,12 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 16,
-              "maxLength": 128,
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-              "description": "Standard retry key. May replace body.operationKey; if both are sent they must match."
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
             },
             "required": false,
-            "description": "Standard retry key. May replace body.operationKey; if both are sent they must match.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -115865,12 +116245,6 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "operationKey": {
-                    "type": "string",
-                    "minLength": 16,
-                    "maxLength": 128,
-                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
-                  },
                   "variantId": {
                     "type": "string",
                     "description": "Variant ID"
@@ -115891,6 +116265,11 @@
                     "minLength": 1,
                     "maxLength": 100,
                     "description": "Active location counted or adjusted; the default location when omitted"
+                  },
+                  "expectedStockVersion": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to set the count whatever happened since."
                   }
                 },
                 "required": [
@@ -116002,7 +116381,7 @@
           "risk": "write",
           "openWorld": false,
           "idempotency": "required",
-          "revision": "none",
+          "revision": "optional",
           "batch": "sequential",
           "transport": "json",
           "maximumResponseBytes": 65536,
@@ -159108,6 +159487,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -159257,7 +159648,7 @@
           ],
           "risk": "write",
           "openWorld": true,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "optional",
           "batch": "forbidden",
           "transport": "json",
@@ -159288,6 +159679,29 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The order version you read; a change since is refused with 409. Omit to mark it whatever happened since."
+            },
+            "required": false,
+            "description": "The order version you read; a change since is refused with 409. Omit to mark it whatever happened since.",
+            "name": "expectedVersion",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "responses": {
@@ -159392,8 +159806,8 @@
           ],
           "risk": "write",
           "openWorld": true,
-          "idempotency": "none",
-          "revision": "none",
+          "idempotency": "supported",
+          "revision": "optional",
           "batch": "forbidden",
           "transport": "json",
           "maximumResponseBytes": 65536,
@@ -172023,6 +172437,7 @@
           "Admin - Orders"
         ],
         "summary": "Add a staff comment to the order timeline",
+        "description": "Send one Idempotency-Key per comment draft: posting it again returns the first comment.",
         "parameters": [
           {
             "schema": {
@@ -172035,11 +172450,12 @@
           {
             "schema": {
               "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
               "minLength": 8,
               "maxLength": 200
             },
             "required": false,
-            "description": "Retry key (8 to 200 characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of creating twice.",
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
             "name": "idempotency-key",
             "in": "header"
           }
@@ -172054,13 +172470,6 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 2000
-                  },
-                  "requestKey": {
-                    "type": "string",
-                    "minLength": 8,
-                    "maxLength": 128,
-                    "pattern": "^[A-Za-z0-9_-]+$",
-                    "description": "One key per comment draft. Posting it again returns the first comment."
                   }
                 },
                 "required": [
@@ -174566,6 +174975,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -174820,7 +175241,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -177965,6 +178386,18 @@
             "required": true,
             "name": "fulfillmentId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -177974,15 +178407,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "requestKey": {
-                    "type": "string",
-                    "format": "uuid",
-                    "description": "Retry key: repeating the request returns the first result instead of acting twice."
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
                   }
                 },
-                "required": [
-                  "requestKey"
-                ],
                 "additionalProperties": false
               }
             }
@@ -178112,8 +178542,8 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
+          "idempotency": "supported",
+          "revision": "optional",
           "batch": "forbidden",
           "transport": "json",
           "maximumResponseBytes": 65536,
@@ -178142,6 +178572,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -178151,15 +178593,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "requestKey": {
-                    "type": "string",
-                    "format": "uuid",
-                    "description": "Retry key: repeating the request returns the first result instead of acting twice."
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The order version you read; a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
                   }
                 },
-                "required": [
-                  "requestKey"
-                ],
                 "additionalProperties": false
               }
             }
@@ -178285,8 +178724,8 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "required",
-          "revision": "none",
+          "idempotency": "supported",
+          "revision": "optional",
           "batch": "forbidden",
           "transport": "json",
           "maximumResponseBytes": 65536,
@@ -187835,6 +188274,18 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -187978,7 +188429,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -191961,6 +192412,18 @@
             "required": true,
             "name": "expectedAggregateRevision",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "responses": {
@@ -192086,7 +192549,7 @@
           ],
           "risk": "destructive",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -192125,6 +192588,18 @@
             "required": true,
             "name": "expectedAggregateRevision",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "responses": {
@@ -192250,7 +192725,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -193657,6 +194132,18 @@
             "required": true,
             "name": "expectedAggregateRevision",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "responses": {
@@ -193782,7 +194269,7 @@
           ],
           "risk": "destructive",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "required",
           "batch": "sequential",
           "transport": "json",
@@ -218543,6 +219030,18 @@
             "required": true,
             "name": "ownerId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -218742,7 +219241,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -218957,6 +219456,18 @@
             "required": true,
             "name": "ownerId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -219156,7 +219667,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -219371,6 +219882,18 @@
             "required": true,
             "name": "ownerId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -219570,7 +220093,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -219785,6 +220308,18 @@
             "required": true,
             "name": "ownerId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -219984,7 +220519,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -220199,6 +220734,18 @@
             "required": true,
             "name": "ownerId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -220398,7 +220945,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -220613,6 +221160,18 @@
             "required": true,
             "name": "ownerId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -220812,7 +221371,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -221027,6 +221586,18 @@
             "required": true,
             "name": "ownerId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -221226,7 +221797,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -221441,6 +222012,18 @@
             "required": true,
             "name": "ownerId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -221640,7 +222223,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "sequential",
           "transport": "json",
@@ -233270,6 +233853,20 @@
             "agentBearer": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "x-scalius-agent": {
           "surface": "dashboard",
           "exposure": "execute",
@@ -233279,7 +233876,7 @@
           ],
           "risk": "write",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "supported",
           "revision": "none",
           "batch": "forbidden",
           "transport": "json",
@@ -237621,7 +238218,7 @@
                 },
                 "policies": {
                   "revision": "required",
-                  "idempotency": "none",
+                  "idempotency": "supported",
                   "confirmation": "required",
                   "stopConditions": [
                     "Conflict: reread summary/readiness; no stale retry."

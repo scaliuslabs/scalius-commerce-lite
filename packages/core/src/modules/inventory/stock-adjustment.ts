@@ -43,9 +43,11 @@ export async function adjustStock(
   reason?: string,
   adminUserId?: string,
   locationId?: string,
+  options: { expectedStockVersion?: number } = {},
 ): Promise<StockAdjustResult> {
   return executeInventoryOperation(db, {
     operationKey,
+    ...(options.expectedStockVersion !== undefined ? { expectedStockVersion: options.expectedStockVersion } : {}),
     operationType: "scanner_adjustment",
     variantId,
     pool: "stock",
@@ -68,9 +70,11 @@ export async function setStock(
   reason?: string,
   adminUserId?: string,
   locationId?: string,
+  options: { expectedStockVersion?: number } = {},
 ): Promise<StockSetResult> {
   return executeInventoryOperation(db, {
     operationKey,
+    ...(options.expectedStockVersion !== undefined ? { expectedStockVersion: options.expectedStockVersion } : {}),
     operationType: "stocktake",
     variantId,
     pool: "stock",

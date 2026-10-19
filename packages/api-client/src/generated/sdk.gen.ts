@@ -5475,6 +5475,8 @@ export const getApiV1AdminOrdersByIdTimeline = <ThrowOnError extends boolean = f
 
 /**
  * Add a staff comment to the order timeline
+ *
+ * Send one Idempotency-Key per comment draft: posting it again returns the first comment.
  */
 export const postApiV1AdminOrdersByIdTimeline = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdTimelineData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdTimelineResponses, PostApiV1AdminOrdersByIdTimelineErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdTimelineResponses, PostApiV1AdminOrdersByIdTimelineErrors, ThrowOnError>({
     url: '/api/v1/admin/orders/{id}/timeline',

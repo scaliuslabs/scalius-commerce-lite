@@ -625,6 +625,8 @@ export async function voidOrderFulfilment(
     db: Database,
     orderId: string,
     fulfillmentId: string,
+    /** The order version the caller read; a change since refuses (exact under the write's version CAS). */
+    options: { expectedVersion?: number } = {},
 ): Promise<VoidOrderFulfilmentResult> {
     const fulfilment = await readFulfilment(db, orderId, fulfillmentId);
     const quantity = fulfilment.lines.reduce((sum, line) => sum + line.quantity, 0);
@@ -632,6 +634,9 @@ export async function voidOrderFulfilment(
         return { orderId, fulfillmentId, quantity, replayed: true };
     }
     const order = await readOrderForFulfilment(db, orderId);
+    if (options.expectedVersion !== undefined && order.version !== options.expectedVersion) {
+        throw new ConflictError("This order changed. Reload to see the latest.");
+    }
     // The same rule the dashboard shows as `canVoid`.
     switch (fulfilmentVoidBlockedReason({
         status: fulfilment.status,

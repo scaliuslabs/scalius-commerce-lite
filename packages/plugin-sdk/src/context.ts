@@ -23,7 +23,11 @@ export interface PluginApiCallInput {
   path?: Record<string, string | number>;
   query?: Record<string, string | number | boolean | null | undefined>;
   body?: unknown;
-  /** Required for mutating operations; replays return the first result. */
+  /**
+   * The Idempotency-Key header (8 to 200 printable characters): every stable
+   * mutation takes it, and a repeat within 24 hours returns the first result.
+   * Required only where the operation's `idempotency` is `required` (stock moves).
+   */
   idempotencyKey?: string;
 }
 
@@ -221,7 +225,7 @@ export interface PluginContext {
  * Delivery is at least once. The same event can arrive again (a retry after
  * your handler threw or timed out, a lost acknowledgement), so make handlers
  * idempotent: `id` is stable across every attempt, use it as your
- * idempotency key (store it, or pass it as `idempotencyKey`/request key to
+ * idempotency key (store it, or pass it as `idempotencyKey` to
  * `ctx.api.call`). Events are not ordered across resources.
  *
  * Your plugin also receives events caused by its own writes (an

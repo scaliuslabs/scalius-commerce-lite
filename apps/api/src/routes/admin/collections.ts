@@ -453,6 +453,11 @@ const restoreRoute = createRoute({
     summary: "Restore a soft-deleted collection",
     request: {
         params: z.object({ id: z.string() }),
+        query: z.object({
+            expectedVersion: z.coerce.number().int().min(1).optional().openapi({
+                description: "The collection version you read; a change since is refused with 409. Omit to act whatever happened since.",
+            }),
+        }),
     },
     responses: {
         200: {
@@ -469,7 +474,7 @@ app.openapi(restoreRoute, async (c) => {
     const { id } = c.req.valid("param");
     // Note: do NOT call getCollectionById here — it filters deletedAt IS NULL,
     // which would always 404 for soft-deleted collections being restored
-    await restoreCollections(db, [id]);
+    await restoreCollections(db, [id], { expectedVersion: c.req.valid("query").expectedVersion });
 
     return ok(c, { message: "Collection restored" });
 });
@@ -664,9 +669,15 @@ const deleteCollectionRoute = createRoute({
     summary: "Soft-delete a collection",
     request: {
         params: z.object({ id: z.string() }),
+        query: z.object({
+            expectedVersion: z.coerce.number().int().min(1).optional().openapi({
+                description: "The collection version you read; a change since is refused with 409. Omit to act whatever happened since.",
+            }),
+        }),
     },
     responses: {
         204: noContentResponse,
+        409: conflictResponse,
         ...errorResponses,
     }
 });
@@ -674,7 +685,7 @@ const deleteCollectionRoute = createRoute({
 app.openapi(deleteCollectionRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await deleteCollection(db, id);
+    await deleteCollection(db, id, { expectedVersion: c.req.valid("query").expectedVersion });
 
     return noContent(c);
 });
