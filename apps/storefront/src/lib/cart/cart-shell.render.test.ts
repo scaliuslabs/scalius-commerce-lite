@@ -19,6 +19,7 @@
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ViteDevServer } from "vite";
+import { Window } from "happy-dom";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import {
   createOrderReceiptCookieHeader,
@@ -500,5 +501,47 @@ describe("conflict recovery receipt marker", () => {
     expect(html).not.toContain("chk_private_proof");
     expect(response.headers.getSetCookie()).toEqual([expect.stringContaining("Max-Age=0")]);
     expect(response.headers.getSetCookie()[0]).toContain("Path=/;");
+  });
+
+  it("says a payment that could not start failed and offers Try again and the store's other methods", async () => {
+    const ReceiptPage = (await server.ssrLoadModule("/src/pages/order-success.astro")).default;
+    const bkash = "scalius.bangladesh:bkash";
+    const nagad = "scalius.bangladesh:nagad";
+    const { response, html } = await renderPage(
+      ReceiptPage,
+      new Request(`https://shop.test/order-success?orderId=old_order&payment=${encodeURIComponent(bkash)}&result=failed`, { headers: { Cookie: proof } }),
+      reads({
+        "/api/v1/checkout/config": { status: 200, body: envelope({ ...COD_CONFIG, gateways: [
+          ...COD_CONFIG.gateways,
+          { id: bkash, name: "bKash", flow: "hosted" },
+          { id: nagad, name: "Nagad", flow: "hosted" },
+        ] }) },
+        "/api/v1/orders/receipt/old_order": { status: 200, body: envelope({ order: {
+          id: "old_order", orderNumber: 100501, customerName: "Buyer", customerPhone: "+8801712345678", customerEmail: null,
+          shippingAddress: null, city: null, zone: null, area: null,
+          totalAmount: 500, shippingCharge: 0, discountAmount: null, paymentMethod: bkash, paymentStatus: "unpaid",
+          status: "incomplete", paidAmount: 0, balanceDue: 500, accountLinked: false,
+          createdAt: "2026-10-12T12:00:00.000Z", updatedAt: "2026-10-12T12:00:00.000Z",
+          items: [], supportRequests: [], supportRequestActions: [], supportRequestIntro: "Contact the store for help.",
+        } }) },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const doc = new Window().document;
+    doc.write(html);
+    expect(doc.querySelector("h1")?.textContent).toBe("Payment didn't go through");
+    // Nothing says it is still checking a payment that is known to have failed.
+    expect(doc.querySelector("[data-payment-status-message]")).toBeNull();
+    expect(doc.title).not.toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.orderReceiptPaymentPendingTitleText);
+    const section = doc.querySelector("[data-order-success-state]")!;
+    expect(section.getAttribute("data-order-success-state")).toBe("payment_issue");
+    // The status check compares with what the store records, so it doesn't reload at once.
+    expect(section.getAttribute("data-order-recorded-state")).toBe("payment_pending");
+    const buttons = [...doc.querySelectorAll("[data-payment-retry-button]")];
+    expect(buttons.map((button) => button.getAttribute("data-gateway"))).toEqual([bkash, nagad]);
+    expect(buttons[0]!.textContent).toContain("Try again with bKash");
+    expect(doc.querySelector("[data-retry-other-methods]")?.textContent?.trim()).toBe("Or choose another method");
+    // No bearer proof in the page.
+    expect(html).not.toContain("chk_private_proof");
   });
 });

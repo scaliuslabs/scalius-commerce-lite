@@ -28,6 +28,8 @@ import {
   type ProductListSort,
 } from "./product-list-query";
 import { catalogSwatchPaint, type FacetDisplayValue } from "./catalog-swatch";
+import { catalogCopy, type CatalogCopy } from "./catalog-copy";
+import { pageLanguage } from "./store-time-zone";
 
 export { catalogSwatchPaint };
 
@@ -201,17 +203,20 @@ export function catalogSortOptions(input: {
   sortBy: ProductListSort;
   newestLabel: string;
   hasReviews: boolean;
+  /** The words, in the store's language (the page's by default). */
+  copy?: CatalogCopy["sort"];
 }): Array<{ value: string; label: string }> {
+  const copy = input.copy ?? catalogCopy(pageLanguage()).sort;
   return [
-    ...(input.defaultSort === "relevance" ? [{ value: "relevance", label: "Best match" }] : []),
+    ...(input.defaultSort === "relevance" ? [{ value: "relevance", label: copy.bestMatch }] : []),
     { value: "newest", label: input.newestLabel },
-    { value: "price-asc", label: "Price: Low to High" },
-    { value: "price-desc", label: "Price: High to Low" },
-    { value: "name-asc", label: "Name: A to Z" },
-    { value: "name-desc", label: "Name: Z to A" },
-    { value: "discount", label: "Biggest discount" },
+    { value: "price-asc", label: copy.priceLowHigh },
+    { value: "price-desc", label: copy.priceHighLow },
+    { value: "name-asc", label: copy.nameAZ },
+    { value: "name-desc", label: copy.nameZA },
+    { value: "discount", label: copy.biggestDiscount },
     // Amazon's "Avg. Customer Review": offered once the store has reviews.
-    ...(input.hasReviews || input.sortBy === "rating" ? [{ value: "rating", label: "Top rated" }] : []),
+    ...(input.hasReviews || input.sortBy === "rating" ? [{ value: "rating", label: copy.topRated }] : []),
   ];
 }
 
@@ -280,6 +285,7 @@ export function catalogFacetAnchor(slug: string): string {
 export function catalogAspectChips(
   facets: ReadonlyArray<Pick<ProductFacet, "slug" | "name"> & { selectedCount: number }>,
   price: { shown: boolean; applied: boolean },
+  priceLabel: string = catalogCopy(pageLanguage()).filters.price,
 ): CatalogAspectChip[] {
   const chips = facets.map((facet) => ({
     slug: facet.slug,
@@ -288,7 +294,7 @@ export function catalogAspectChips(
     anchor: catalogFacetAnchor(facet.slug),
   }));
   if (price.shown) {
-    chips.push({ slug: "price", label: "Price", selectedCount: price.applied ? 1 : 0, anchor: "catalog-facet-price" });
+    chips.push({ slug: "price", label: priceLabel, selectedCount: price.applied ? 1 : 0, anchor: "catalog-facet-price" });
   }
   return chips;
 }
@@ -390,14 +396,17 @@ export function catalogQuickFilters({
   currentFilters,
   pathname,
   defaultSort,
+  copy = catalogCopy(pageLanguage()).filters,
 }: {
   currentFilters: ProductListFilterState;
   pathname: string;
   defaultSort: ProductListSort;
+  /** The words, in the store's language (the page's by default). */
+  copy?: CatalogCopy["filters"];
 }): CatalogFilterLink[] {
   return [
-    { name: "hasDiscount", label: "On sale" },
-    { name: "freeDelivery", label: "Free delivery" },
+    { name: "hasDiscount", label: copy.onSale },
+    { name: "freeDelivery", label: copy.freeDelivery },
   ].map(({ name, label }) => {
     const active = currentFilters[name] === "true";
     return {

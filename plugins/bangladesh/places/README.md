@@ -28,5 +28,13 @@ switches off a merchant's own places. The rules are in
 - Load it into the local store without the pack: `pnpm places:import`.
 - Do not edit a place by hand. Refresh the dataset from Pathao's location API
   (`pnpm places:pathao-dataset --credentials <file.json>`), then review the
-  diff. A store refreshes its own places from Pathao's live list with "Refresh
+  diff.
+- Pathao's feed carries a few rows that are not places (a test city typed
+  "Dhakaaaaaaaa", a city with no thana). The pack's place rules
+  (`src/place-rules.ts`) keep them with their courier ids but switched off:
+  a junk name, a sibling whose name differs only by case or accents, and a
+  city with nothing below it. A refresh refuses to write a dataset that still
+  offers one, `pnpm places:pathao-dataset --recheck` applies the rules to the
+  committed dataset without calling Pathao, and `place-rules.test.ts` checks
+  the committed dataset. A store refreshes its own places from Pathao's live list with "Refresh
   from Pathao" on the pack's places page.

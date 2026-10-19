@@ -34,6 +34,11 @@ function itemTotal(item: InvoiceOrderItemSnapshot, decimalPlaces: number): numbe
   return item.lineSubtotalMinor ?? Math.round(item.price * item.quantity * (10 ** decimalPlaces));
 }
 
+/** A line its own discount pays in full (a free gift): it prints ৳0 with its price struck. */
+function isFreeLine(item: InvoiceOrderItemSnapshot): boolean {
+  return (item.lineSubtotalMinor ?? 0) > 0 && (item.discountAmountMinor ?? 0) >= (item.lineSubtotalMinor ?? 0);
+}
+
 /** Long free-text inputs are cut on the printout so an invoice stays one bounded page. */
 const PRINTED_PROPERTY_VALUE_LENGTH = 200;
 
@@ -85,10 +90,15 @@ export function renderPrintableInvoice(
     timeZone,
     new Date(typeof issuedAt === "number" && issuedAt < 1_000_000_000_000 ? issuedAt * 1000 : issuedAt),
   );
-  const rows = order.items.map((item) => `
+  const free = (amount: string) => `<s>${amount}</s> ${formatMoney(0, order.currencyCode, decimals, true)}`;
+  const rows = order.items.map((item) => {
+    const unit = formatMoney(item.unitPriceMinor ?? Math.round(item.price * (10 ** decimals)), order.currencyCode, decimals, true);
+    const total = formatMoney(itemTotal(item, decimals), order.currencyCode, decimals, true);
+    return `
     <tr><td>${html(item.productName || item.productId)}${item.variantLabel ? `<small>${html(item.variantLabel)}</small>` : ""}${itemProperties(item, order.currencyCode, decimals)}</td>
-    <td>${item.quantity}${item.returnedQuantity ? `<small>${item.returnedQuantity} returned</small>` : ""}</td><td>${formatMoney(item.unitPriceMinor ?? Math.round(item.price * (10 ** decimals)), order.currencyCode, decimals, true)}</td>
-    <td>${formatMoney(itemTotal(item, decimals), order.currencyCode, decimals, true)}</td></tr>`).join("");
+    <td>${item.quantity}${item.returnedQuantity ? `<small>${item.returnedQuantity} returned</small>` : ""}</td><td>${isFreeLine(item) ? free(unit) : unit}</td>
+    <td>${isFreeLine(item) ? free(total) : total}</td></tr>`;
+  }).join("");
   const subtotalMinor = order.subtotalAmountMinor ?? Math.round((order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)) * (10 ** decimals));
   const shippingMinor = order.shippingAmountMinor ?? Math.round(order.shippingCharge * (10 ** decimals));
   const shippingLabel = order.shippingMethodName

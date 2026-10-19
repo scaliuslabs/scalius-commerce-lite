@@ -16,6 +16,7 @@ import { featuredGalleryItem, productGalleryItems } from "./lib/gallery-media";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import VideoFacade from "./VideoFacade.astro";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { catalogCopy } from "@/lib/catalog-copy";
 import { formatPageNumber } from "@/lib/store-time-zone";
 
 interface Props {
@@ -54,6 +55,7 @@ const {
   positionLabel = (position: number | string, total: number | string) => `Photo ${position} of ${total}`,
 } = Astro.props;
 const { language } = await currentRequestTheme(Astro.locals);
+const words = catalogCopy(language).product;
 // Positions in the page's digits (Bangla digits on a Bangla page).
 const count = (value: number) => formatPageNumber(value, language);
 const thumbnails = layout.thumbnails;
@@ -194,7 +196,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
               class="pointer-events-none absolute inset-e-3 bottom-3 flex items-center gap-1 rounded-full bg-black/40 p-2 text-xs font-medium text-white opacity-0 backdrop-blur-md transition-opacity duration-300 group-hover/main:opacity-100 motion-reduce:transition-none"
             >
               <Icon name="maximize-2" class="h-3 w-3" />
-              Zoom
+              {words.zoom}
             </span>
           </button>
 
@@ -581,7 +583,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
     class="pointer-events-none fixed inset-0 z-100 flex touch-none flex-col bg-black/98 opacity-0 backdrop-blur-2xl transition-all duration-300 motion-reduce:transition-none"
     role="dialog"
     aria-modal="true"
-    aria-label="Product image zoom"
+    aria-label={words.imageZoom}
     aria-hidden="true"
     inert
   >
@@ -590,7 +592,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
         type="button"
         data-close-mobile-zoom
         class="rounded-full bg-white/10 p-2.5 text-white backdrop-blur-md transition-colors active:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none"
-        aria-label="Close image zoom"
+        aria-label={words.closeZoom}
         tabindex="-1"
       >
         <Icon name="x" class="h-6 w-6" />
@@ -602,7 +604,9 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
     >
       <img
         data-fullscreen-image
-        alt={`${initialImageAlt} — zoomed view`}
+        alt={words.zoomedView(initialImageAlt)}
+        data-zoomed-view={words.zoomedView("{name}")}
+        data-zoomed-image={words.zoomedImage}
         width={GALLERY_IMAGE_WIDTHS.zoom}
         height={GALLERY_IMAGE_WIDTHS.zoom}
         loading="lazy"
@@ -613,7 +617,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
     <div
       class="pointer-events-none absolute inset-e-0 bottom-8 inset-s-0 text-center text-xs text-white/50"
     >
-      Double tap to zoom • Drag to pan
+      {words.zoomHint}
     </div>
   </div>
 </div>

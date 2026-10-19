@@ -12,11 +12,48 @@ export function catalogCountText(total: number, capped = false): string {
   return `${formatCount(total)}${capped ? "+" : ""}`;
 }
 
+/**
+ * The progress line's words in the store's language: `{from}`, `{to}` and
+ * `{total}` stand for the numbers. The server writes them on the line
+ * (`data-progress-one`, …) for the pages appended in the browser.
+ */
+export interface CatalogProgressWords {
+  progressOne: string;
+  progressMany: string;
+  countOne: string;
+  countMany: string;
+}
+
+const ENGLISH_PROGRESS_WORDS: CatalogProgressWords = {
+  progressOne: "Showing {from}–{to} of {total} product",
+  progressMany: "Showing {from}–{to} of {total} products",
+  countOne: "{total} product",
+  countMany: "{total} products",
+};
+
+/** The words a server-rendered progress line carries; English when it carries none. */
+function progressWordsOf(element: HTMLElement): CatalogProgressWords {
+  const { progressOne, progressMany, countOne, countMany } = element.dataset;
+  return progressOne && progressMany && countOne && countMany
+    ? { progressOne, progressMany, countOne, countMany }
+    : ENGLISH_PROGRESS_WORDS;
+}
+
 /** "Showing 21–40 of 484 products". */
-export function catalogProgressLabel(from: number, to: number, total: number, capped = false): string {
-  const noun = total === 1 && !capped ? "product" : "products";
-  if (to <= 0) return `${catalogCountText(total, capped)} ${noun}`;
-  return `Showing ${formatCount(from)}–${formatCount(to)} of ${catalogCountText(total, capped)} ${noun}`;
+export function catalogProgressLabel(
+  from: number,
+  to: number,
+  total: number,
+  capped = false,
+  words: CatalogProgressWords = ENGLISH_PROGRESS_WORDS,
+): string {
+  const one = total === 1 && !capped;
+  const fill = (template: string) => template
+    .replace("{from}", formatCount(from))
+    .replace("{to}", formatCount(to))
+    .replace("{total}", catalogCountText(total, capped));
+  if (to <= 0) return fill(one ? words.countOne : words.countMany);
+  return fill(one ? words.progressOne : words.progressMany);
 }
 
 /** Infinite scroll loads this many pages by itself, then hands over to the button so the footer stays reachable. */
@@ -65,7 +102,7 @@ export async function loadNextCatalogPage(parts: PagingParts, fetcher: typeof fe
   grid.append(...next.cards.map((card) => document.adoptNode(card)));
   if (progress && Number.isFinite(next.to)) {
     progress.dataset.to = String(next.to);
-    progress.textContent = catalogProgressLabel(Number(progress.dataset.from), next.to, Number(progress.dataset.total), progress.dataset.capped === "true");
+    progress.textContent = catalogProgressLabel(Number(progress.dataset.from), next.to, Number(progress.dataset.total), progress.dataset.capped === "true", progressWordsOf(progress));
   }
   history.replaceState(history.state, "", href);
   if (next.next) link.setAttribute("href", next.next);
@@ -87,6 +124,7 @@ export function setupCatalogPaging(): void {
   if (!loader || !link) return;
   const progress = block.querySelector<HTMLElement>("[data-catalog-progress]");
   const label = link.textContent ?? "Load more";
+  const loadingLabel = link.dataset.loadingLabel || "Loading…";
   let busy = false;
   let autoPages = 0;
   let observer: IntersectionObserver | undefined;
@@ -95,7 +133,7 @@ export function setupCatalogPaging(): void {
     if (busy || !link.isConnected) return;
     busy = true;
     link.setAttribute("aria-busy", "true");
-    link.textContent = "Loading…";
+    link.textContent = loadingLabel;
     const target = link.href;
     const firstNew = await loadNextCatalogPage({ grid, link, progress }).catch(() => null);
     if (!firstNew) {
@@ -120,7 +158,7 @@ export function setupCatalogPaging(): void {
 
   if (mode === "infinite") {
     // The numbered pagination stays for crawlers and without JavaScript.
-    block.querySelector<HTMLElement>("nav[aria-label='Pagination']")?.setAttribute("hidden", "");
+    block.querySelector<HTMLElement>("nav[data-catalog-pagination]")?.setAttribute("hidden", "");
     loader.hidden = false;
     if ("IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       // Well ahead of the reader, so the next cards land below the screen

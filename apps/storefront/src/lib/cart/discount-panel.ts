@@ -4,7 +4,7 @@
  * automatic Buy X get Y offers the buyer can complete. Pure DOM rendering from
  * the server's discount facts; amounts always come from the server.
  */
-import { formatMoney } from "@scalius/shared/currency";
+import { formatMoney } from "@/lib/currency";
 import { formatCheckoutLanguageText, formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import {

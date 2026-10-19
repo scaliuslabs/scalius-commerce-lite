@@ -30,6 +30,7 @@ const NOTHING_DONE: SetupGuideData = {
   setupNeeded: false,
   steps: { product: false, details: false, theme: false, payments: false, shipping: false, domain: false, order: false },
   bangladeshPack: null,
+  onlinePayment: { ready: null, blockedProducts: 0 },
 };
 const guide = (patch: Partial<Omit<SetupGuideData, "steps">> & { steps?: Partial<SetupGuideData["steps"]> } = {}): SetupGuideData => ({
   ...NOTHING_DONE,

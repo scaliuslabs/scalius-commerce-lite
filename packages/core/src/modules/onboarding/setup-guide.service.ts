@@ -12,6 +12,7 @@ import {
     deliveryZones,
     orders,
     products,
+    productVariants,
     shippingMethods,
     themeSettingsVersions,
 } from "@scalius/database/schema";
@@ -26,7 +27,16 @@ export interface SetupGuideFacts {
     shippingReady: boolean;
     /** Any order exists, whatever its source. */
     hasOrders: boolean;
+    /**
+     * Active products a buyer can pay for only online: gift cards, and
+     * products whose every live SKU is digital (nothing is handed over, so
+     * cash on delivery never fits). Counted up to {@link ONLINE_PAID_PRODUCT_COUNT_CAP}.
+     */
+    onlinePaidProducts: number;
 }
+
+/** Home says "1,000+": the count stops there so the statement stays bounded. */
+export const ONLINE_PAID_PRODUCT_COUNT_CAP = 1000;
 
 /** The setup facts the database answers, in one round trip. */
 export async function getSetupGuideFacts(db: Database): Promise<SetupGuideFacts> {
@@ -47,6 +57,26 @@ export async function getSetupGuideFacts(db: Database): Promise<SetupGuideFacts>
                   ))
             )`,
             hasOrders: sql<number>`EXISTS (SELECT 1 FROM ${orders})`,
+            onlinePaidProducts: sql<number>`(SELECT COUNT(*) FROM (
+                SELECT 1 FROM ${products} AS online_paid
+                WHERE online_paid.deleted_at IS NULL AND online_paid.is_active = 1
+                  AND (
+                    online_paid.is_gift_card = 1
+                    OR (
+                      EXISTS (
+                        SELECT 1 FROM ${productVariants} AS digital_sku
+                        WHERE digital_sku.product_id = online_paid.id
+                          AND digital_sku.fulfillment_kind = 'digital' AND digital_sku.deleted_at IS NULL
+                      )
+                      AND NOT EXISTS (
+                        SELECT 1 FROM ${productVariants} AS handed_sku
+                        WHERE handed_sku.product_id = online_paid.id
+                          AND handed_sku.deleted_at IS NULL AND handed_sku.fulfillment_kind <> 'digital'
+                      )
+                    )
+                  )
+                LIMIT ${ONLINE_PAID_PRODUCT_COUNT_CAP}
+            ))`,
         })
         .from(sql`(SELECT 1 AS one) AS setup_guide_state`)
         .get();
@@ -55,5 +85,6 @@ export async function getSetupGuideFacts(db: Database): Promise<SetupGuideFacts>
         themePublished: Boolean(Number(row?.themePublished ?? 0)),
         shippingReady: Boolean(Number(row?.shippingReady ?? 0)),
         hasOrders: Boolean(Number(row?.hasOrders ?? 0)),
+        onlinePaidProducts: Number(row?.onlinePaidProducts ?? 0),
     };
 }

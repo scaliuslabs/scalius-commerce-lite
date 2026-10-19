@@ -150,6 +150,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
     "Confirmation is taking longer than usual. You can safely leave this receipt and return later.",
   orderReceiptStatusUpdatedText: "Payment status updated. Refreshing your receipt…",
   orderReceiptRetryWithProviderText: "Retry payment with {provider}",
+  orderReceiptTryAgainWithProviderText: "Try again with {provider}",
+  orderReceiptChooseAnotherMethodText: "Or choose another method",
   orderReceiptRetryPaymentText: "Retry payment",
   orderReceiptOpeningPaymentText: "Opening payment…",
   orderReceiptRetryUnavailableText: "Payment retry is unavailable for this order.",
@@ -165,6 +167,10 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   orderReceiptExistingOrderCardHelpText:
     "Your existing order will be updated. This will not create another order.",
   orderReceiptPaymentIssueTitleText: "Payment not completed",
+  // The payment could not start or the provider returned a failure: nothing was charged.
+  orderReceiptPaymentFailedTitleText: "Payment didn't go through",
+  orderReceiptPaymentFailedMessageText:
+    "Order #{orderId} is saved, but its payment didn't go through. Try again, or choose another method.",
   orderReceiptPaymentIssueMessageText:
     "Order #{orderId} is saved. Choose a payment method.",
   orderReceiptPaymentPendingTitleText: "Payment pending",
@@ -324,6 +330,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   paymentStepText: "Payment",
   confirmationStepText: "Confirmation",
   estimatedTotalText: "Estimated total",
+  // A sold-out or unavailable line is left out of the estimate until the buyer fixes it.
+  estimateLeavesOutText: "The estimate leaves out {items}, which can't be bought right now.",
   taxText: "Tax",
   freeText: "Free",
   calculatingText: "Calculating…",
@@ -391,6 +399,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   unexpectedErrorText: "An unexpected error occurred.",
   cartItemsNeedAttentionText: "{count} cart items need attention before checkout.",
   cartRulesBlockedText: "This order can't be placed yet.",
+  // A cart of digital items or gift cards on a store that takes only cash on delivery.
+  cartOnlinePaymentRequiredText: "{items} can only be paid for online, and this store doesn't take online payments yet. This order can't be placed.",
   orderPlacedSuccessText: "Your order was placed successfully. Order ID: {orderId}",
   checkingAccountText: "Checking account…",
   accountUnavailableText: "We could not verify your account right now. Please try again.",
@@ -549,6 +559,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   customizationOptionalText: "optional",
   customizationChoosePlaceholderText: "Choose…",
   customizationUnavailableText: "This product can't be ordered right now.",
+  onlinePaymentRequiredText: "This item can only be paid for online, and this store doesn't take online payments yet.",
   customizationNeededText: "Fill in your details below, then add it to your cart.",
   customizationInvalidText: "Some of your details can't be used. Check them below, then add it to your cart.",
   pickupAvailableText: "Pickup available",
@@ -882,6 +893,8 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
     "পেমেন্ট নিশ্চিত হতে স্বাভাবিকের চেয়ে বেশি সময় লাগছে। আপনি নিরাপদে এই রসিদ থেকে বের হয়ে পরে আবার দেখতে পারেন।",
   orderReceiptStatusUpdatedText: "পেমেন্টের অবস্থা হালনাগাদ হয়েছে। রসিদ রিফ্রেশ হচ্ছে…",
   orderReceiptRetryWithProviderText: "{provider} দিয়ে আবার পেমেন্ট করুন",
+  orderReceiptTryAgainWithProviderText: "{provider} দিয়ে আবার চেষ্টা করুন",
+  orderReceiptChooseAnotherMethodText: "অথবা অন্য পদ্ধতি বেছে নিন",
   orderReceiptRetryPaymentText: "আবার পেমেন্ট করুন",
   orderReceiptOpeningPaymentText: "পেমেন্ট খোলা হচ্ছে…",
   orderReceiptRetryUnavailableText: "এই অর্ডারের পেমেন্ট আবার চেষ্টা করা যাচ্ছে না।",
@@ -897,6 +910,9 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   orderReceiptExistingOrderCardHelpText:
     "আপনার বর্তমান অর্ডারটিই হালনাগাদ হবে। নতুন কোনো অর্ডার তৈরি হবে না।",
   orderReceiptPaymentIssueTitleText: "পেমেন্ট সম্পন্ন হয়নি",
+  orderReceiptPaymentFailedTitleText: "পেমেন্ট হয়নি",
+  orderReceiptPaymentFailedMessageText:
+    "অর্ডার #{orderId} সংরক্ষিত আছে, কিন্তু এর পেমেন্ট হয়নি। আবার চেষ্টা করুন, অথবা অন্য পদ্ধতি বেছে নিন।",
   orderReceiptPaymentIssueMessageText:
     "অর্ডার #{orderId} সংরক্ষিত আছে। পেমেন্ট পদ্ধতি বেছে নিন।",
   orderReceiptPaymentPendingTitleText: "পেমেন্ট অপেক্ষমাণ",
@@ -1055,6 +1071,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   paymentStepText: "পেমেন্ট",
   confirmationStepText: "নিশ্চিতকরণ",
   estimatedTotalText: "আনুমানিক সর্বমোট",
+  estimateLeavesOutText: "{items} এখন কেনা যাচ্ছে না, তাই আনুমানিক হিসাবে ধরা হয়নি।",
   taxText: "কর",
   freeText: "ফ্রি",
   calculatingText: "হিসাব করা হচ্ছে…",
@@ -1121,6 +1138,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   unexpectedErrorText: "একটি অপ্রত্যাশিত সমস্যা হয়েছে।",
   cartItemsNeedAttentionText: "চেকআউটের আগে কার্টের {count}টি পণ্য যাচাই করা দরকার।",
   cartRulesBlockedText: "এই অর্ডারটি এখনো দেওয়া যাচ্ছে না।",
+  cartOnlinePaymentRequiredText: "{items}-এর দাম শুধু অনলাইনে দেওয়া যায়, কিন্তু এই স্টোর এখনো অনলাইন পেমেন্ট নেয় না। তাই এই অর্ডারটি দেওয়া যাচ্ছে না।",
   orderPlacedSuccessText: "আপনার অর্ডারটি সফলভাবে দেওয়া হয়েছে। অর্ডার আইডি: {orderId}",
   checkingAccountText: "অ্যাকাউন্ট যাচাই করা হচ্ছে…",
   accountUnavailableText: "এখন আপনার অ্যাকাউন্ট যাচাই করা যায়নি। আবার চেষ্টা করুন।",
@@ -1276,6 +1294,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   customizationOptionalText: "ঐচ্ছিক",
   customizationChoosePlaceholderText: "বেছে নিন…",
   customizationUnavailableText: "এই পণ্যটি এখন অর্ডার করা যাচ্ছে না।",
+  onlinePaymentRequiredText: "এই পণ্যের দাম শুধু অনলাইনে দেওয়া যায়, কিন্তু এই স্টোর এখনো অনলাইন পেমেন্ট নেয় না।",
   customizationNeededText: "নিচে আপনার তথ্য দিন, তারপর কার্টে যোগ করুন।",
   customizationInvalidText: "আপনার দেওয়া কিছু তথ্য গ্রহণ করা যাচ্ছে না। নিচে দেখে নিন, তারপর কার্টে যোগ করুন।",
   pickupAvailableText: "দোকান থেকে সংগ্রহ করা যাবে",
@@ -1487,6 +1506,7 @@ export const PRODUCT_PAGE_COPY_KEYS = [
   "customizationOptionalText",
   "customizationChoosePlaceholderText",
   "customizationUnavailableText",
+  "onlinePaymentRequiredText",
   "customizationNeededText",
   "customizationInvalidText",
   "updateCartItemText",
@@ -1534,6 +1554,7 @@ export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS =/* @__PURE__ */ new Set<CheckoutL
   "orderReceiptConfirmationDelayedText",
   "orderReceiptCardLoadFailedText",
   "orderReceiptPaymentIssueMessageText",
+  "orderReceiptPaymentFailedMessageText",
   "orderReceiptPaymentPendingMessageText",
   "orderReceiptConfirmedMessageText",
   "orderReceiptProcessingMessageText",
@@ -1565,6 +1586,8 @@ export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS =/* @__PURE__ */ new Set<CheckoutL
   "checkoutDetailsMissingText",
   "checkoutDetailsUnreadableText",
   "noPaymentMethodsText",
+  "cartOnlinePaymentRequiredText",
+  "onlinePaymentRequiredText",
   "paymentMethodUnavailableMessage",
   "processingPaymentMessage",
   "placingOrderMessage",

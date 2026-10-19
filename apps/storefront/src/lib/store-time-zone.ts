@@ -12,7 +12,7 @@ import {
   formatNumber,
   numberLocale,
 } from "@scalius/shared/locale-format";
-import { getRuntimeStoreRegion, getRuntimeStoreTimeZone } from "./api/runtime";
+import { getRuntimeStoreLanguage, getRuntimeStoreRegion, getRuntimeStoreTimeZone } from "./api/runtime";
 
 export function storeTimeZone(): string {
   const server = getRuntimeStoreTimeZone();
@@ -36,11 +36,24 @@ export function storeRegion(): string {
 }
 
 /**
- * A count as buyers read it: Latin digits, grouped as the store's country
- * groups them ("12,34,567" in Bangladesh, "1,234,567" in the US).
+ * The language the page is written in: the store's words (server renders read
+ * the request's layout payload; browser code the `lang` Layout.astro puts on
+ * <html>). Its digits are the page's digits: Bangla on a Bangla page.
+ */
+export function pageLanguage(): string {
+  const server = getRuntimeStoreLanguage();
+  if (server) return server;
+  if (typeof document !== "undefined" && document.documentElement.lang) return document.documentElement.lang;
+  return "en";
+}
+
+/**
+ * A count as buyers read it: in the page's digits (Bangla on a Bangla page),
+ * grouped as the store's country groups them ("12,34,567" in Bangladesh,
+ * "1,234,567" in the US).
  */
 export function formatCount(value: number): string {
-  return formatNumber(value, numberLocale("en", storeRegion()));
+  return formatNumber(value, numberLocale(pageLanguage(), storeRegion()));
 }
 
 /**

@@ -5,7 +5,7 @@ import { registerGateway, getGateway } from "./registry";
 import { codHandler } from "./handlers/cod";
 import { resetStripePaymentElement, stripeHandler } from "./handlers/stripe";
 import { createHostedGatewayHandler } from "./handlers/hosted";
-import { formatMoney, DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import {

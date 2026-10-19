@@ -387,7 +387,7 @@ function PlaceRow({
 }
 
 function AreasOf({ zoneId, ...row }: { zoneId: string } & Omit<Parameters<typeof PlaceList>[0], "places" | "depth">) {
-  const areas = useQuery(deliveryLocationsQueryOptions({ ...addressPlaceQuery("area"), parentId: zoneId, limit: 500 }));
+  const areas = useQuery(deliveryLocationsQueryOptions({ ...addressPlaceQuery("area"), parentId: zoneId, isActive: "true", limit: 500 }));
   return <PlaceList {...row} places={areas.data?.locations ?? []} depth={2} />;
 }
 

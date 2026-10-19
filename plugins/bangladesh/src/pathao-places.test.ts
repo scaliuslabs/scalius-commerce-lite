@@ -87,10 +87,10 @@ describe("refresh from Pathao", () => {
     pathao_password: "password",
   };
 
-  function store(zonesPerCity = 1) {
+  function store(zonesPerCity = 1, extraCities: Array<{ city_id: number; city_name: string }> = [], citiesWithoutZones: number[] = []) {
     const imports: Array<{ version: string; places: PlaceEntry[]; finish?: boolean; source: string }> = [];
     const pathaoCalls: string[] = [];
-    const cities = [{ city_id: 1, city_name: "Dhaka" }, { city_id: 2, city_name: "Chattogram" }];
+    const cities = [{ city_id: 1, city_name: "Dhaka" }, { city_id: 2, city_name: "Chattogram" }, ...extraCities];
     const instance = createPluginTestHarness(pack, {
       settings,
       fetch: (url) => {
@@ -100,7 +100,7 @@ describe("refresh from Pathao", () => {
         if (path.endsWith("/issue-token")) return { status: 200, body: JSON.stringify({ access_token: "token" }) };
         if (path.endsWith("/city-list")) return data(cities);
         const city = /\/cities\/(\d+)\/zone-list$/.exec(path);
-        if (city) return data(Array.from({ length: zonesPerCity }, (_, index) => ({ zone_id: Number(city[1]) * 1000 + index, zone_name: `Zone ${city[1]}-${index}` })));
+        if (city) return data(citiesWithoutZones.includes(Number(city[1])) ? [] : Array.from({ length: zonesPerCity }, (_, index) => ({ zone_id: Number(city[1]) * 1000 + index, zone_name: `Zone ${city[1]}-${index}` })));
         const zone = /\/zones\/(\d+)\/area-list$/.exec(path);
         if (zone) return data([{ area_id: Number(zone[1]) * 10, area_name: `Area ${zone[1]}`, home_delivery_available: true, pickup_available: false }]);
         return { status: 404, body: "{}" };
@@ -125,6 +125,17 @@ describe("refresh from Pathao", () => {
     ]);
     expect(places.find((place) => place.key === "pathao:area:10000")).toMatchObject({ parent: "pathao:zone:1000", externalIds: { pathao: "10000" }, homeDelivery: true, pickup: false });
     expect(imports.every((call) => call.source === "bd" && call.finish === undefined && call.version.startsWith("pathao-"))).toBe(true);
+  });
+
+  it("switches off Pathao's test cities: a typed-over name, and a city with no thana", async () => {
+    const { instance, imports } = store(1, [{ city_id: 146, city_name: "Dhakaaaaaaaa" }, { city_id: 147, city_name: "Nahid" }], [147]);
+    await instance.route("admin", "refresh-pathao-places", { method: "POST" });
+    const last = new Map(imports.flatMap((call) => call.places).map((place) => [place.key, place]));
+    expect(last.get("pathao:city:146")).toMatchObject({ active: false, externalIds: { pathao: "146" } });
+    expect(last.get("pathao:city:147")).toMatchObject({ active: false, name: "Nahid", externalIds: { pathao: "147" } });
+    expect(last.get("pathao:city:1")).toMatchObject({ active: true });
+    // A switched-off city's thanas are never read.
+    expect([...last.keys()].some((key) => key.startsWith("pathao:zone:146"))).toBe(false);
   });
 
   it("reads Pathao a little at a time and the job finishes what a step left", async () => {

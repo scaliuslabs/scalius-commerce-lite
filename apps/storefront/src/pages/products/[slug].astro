@@ -5,6 +5,7 @@ import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 import {
   getCheckoutConfig,
   getLayoutData,
+  takesOnlinePayment,
   getProductBySlugResult,
   getShippingMethods,
 } from "@/lib/api";
@@ -501,6 +502,12 @@ const deliveryFacts = buildDeliveryFacts({
 });
 const fulfilmentBadge =
   pageFulfilment === "service" ? productPageCopy.noDeliveryNeededBadgeText : null;
+// Digital items and gift cards are paid online, never in cash: on a store
+// whose checkout takes only cash on delivery the page says so instead of
+// starting a purchase checkout must refuse. A product with a physical or
+// service SKU stays buyable, since such a cart can be paid in cash.
+const onlinePaymentUnavailable =
+  productFulfilment(product, buyerVariants) === "digital" && !takesOnlinePayment(checkoutConfig);
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData.seo?.returnPolicy,
   storefrontUrl,
@@ -581,6 +588,7 @@ const buyBox = {
     initialVariant: queryVariantSelection?.variant,
     initialUnavailableVariant: unavailableQueryVariantSelection?.variant,
     quickBuyNotice,
+    onlinePaymentUnavailable,
     actionCopy: productPageCopy,
     fulfilmentBadge,
     look: buyBoxLook,
@@ -855,7 +863,7 @@ const productCategoryAnalytics = productCategory
 
     <StickyBuyBar
       productName={product.name}
-      action={buyerStockSummary.canPurchaseAny && product.customizationUnavailable !== true
+      action={buyerStockSummary.canPurchaseAny && product.customizationUnavailable !== true && !onlinePaymentUnavailable
         ? { label: productPageCopy.addToCartText, disabled: false }
         : { label: productPageCopy.unavailableText, disabled: true }}
       price={formatMoney(buyerDisplayedPrice, { code: currencyCode, symbol: currencySymbol })}

@@ -210,11 +210,42 @@ export function showsCatalogPriceFilter(
     Boolean(priceRange && priceRange.max > priceRange.min);
 }
 
+/**
+ * The apply button's words in the store's language: `{count}` stands for the
+ * count. The server writes them on the button (`data-show-one`,
+ * `data-show-many`, `data-show-none`, `data-show-plain`) so the live count
+ * speaks the page's language without shipping the catalogs.
+ */
+export interface CatalogApplyWords {
+  one: string;
+  many: string;
+  none: string;
+}
+
+const ENGLISH_APPLY_WORDS: CatalogApplyWords = {
+  one: "Show {count} product",
+  many: "Show {count} products",
+  none: "No matching products",
+};
+
+/** The words a server-rendered apply button carries; English when it carries none. */
+export function catalogApplyWords(button: HTMLElement): CatalogApplyWords {
+  return {
+    one: button.dataset.showOne || ENGLISH_APPLY_WORDS.one,
+    many: button.dataset.showMany || ENGLISH_APPLY_WORDS.many,
+    none: button.dataset.showNone || ENGLISH_APPLY_WORDS.none,
+  };
+}
+
 /** The phone sheet's apply button for a selection matching `total` products. */
-export function catalogApplyButton(total: number, capped = false): { label: string; disabled: boolean } {
+export function catalogApplyButton(
+  total: number,
+  capped = false,
+  words: CatalogApplyWords = ENGLISH_APPLY_WORDS,
+): { label: string; disabled: boolean } {
   return total === 0
-    ? { label: "No matching products", disabled: true }
-    : { label: `Show ${formatCount(total)}${capped ? "+" : ""} ${total === 1 && !capped ? "product" : "products"}`, disabled: false };
+    ? { label: words.none, disabled: true }
+    : { label: (total === 1 && !capped ? words.one : words.many).replace("{count}", `${formatCount(total)}${capped ? "+" : ""}`), disabled: false };
 }
 
 /**
@@ -262,7 +293,7 @@ export function applyCatalogFilterCounts(
   }
   const apply = form.querySelector<HTMLButtonElement>("[data-catalog-filter-apply]");
   if (apply) {
-    const { label, disabled } = catalogApplyButton(total, totalIsCapped);
+    const { label, disabled } = catalogApplyButton(total, totalIsCapped, catalogApplyWords(apply));
     apply.textContent = label;
     apply.disabled = disabled;
   }
@@ -564,7 +595,7 @@ export function setupCatalogFilters(): void {
     if (!apply || !endpoint) return;
     clearTimeout(countTimer);
     countRequest?.abort();
-    apply.textContent = "Show products";
+    apply.textContent = apply.dataset.showPlain || "Show products";
     apply.disabled = false;
     countTimer = setTimeout(async () => {
       const request = new AbortController();

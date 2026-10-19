@@ -13,8 +13,8 @@ describe("placed order discounts", () => {
   it("shows an order-level promotion once, in the totals, and each line at full price", () => {
     const discounts = [{ kind: "order", amount: 100 }];
     expect(orderShowsLineDiscounts(discounts)).toBe(false);
-    const line = { grossSubtotalMinor: 100_000, discountMinor: 10_000, taxMinor: 0 };
-    expect(presentedLineTotalMinor(line, false, false)).toBe(100_000);
+    const line = { grossSubtotalMinor: 100_000, discountMinor: 10_000 };
+    expect(presentedLineTotalMinor(line, false)).toBe(100_000);
   });
 
   it("keeps item-level savings on their lines: product, buy-x-get-y, and line savings with no promotion", () => {
@@ -22,8 +22,12 @@ describe("placed order discounts", () => {
     expect(orderShowsLineDiscounts([{ kind: "buy_x_get_y", amount: 500 }, { kind: "shipping", amount: 0 }])).toBe(true);
     expect(orderShowsLineDiscounts([])).toBe(true);
     expect(orderShowsLineDiscounts(undefined)).toBe(true);
-    expect(presentedLineTotalMinor({ grossSubtotalMinor: 100_000, discountMinor: 20_000, taxMinor: 4_000 }, true, false)).toBe(84_000);
-    expect(presentedLineTotalMinor({ grossSubtotalMinor: 100_000, discountMinor: 20_000, taxMinor: 4_000 }, true, true)).toBe(80_000);
+    expect(presentedLineTotalMinor({ grossSubtotalMinor: 100_000, discountMinor: 20_000 }, true)).toBe(80_000);
+  });
+
+  it("reads a line as quantity × its unit price, whatever the tax: the tax is a totals row", () => {
+    // Qty 1 × ৳1,500 with 7.5% VAT added: the line reads ৳1,500, never ৳1,613.
+    expect(presentedLineTotalMinor({ grossSubtotalMinor: 150_000, discountMinor: 0 }, true)).toBe(150_000);
   });
 });
 

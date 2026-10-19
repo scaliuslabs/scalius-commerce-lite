@@ -21,6 +21,9 @@
 import type { PluginContext } from "@scalius/plugin-sdk";
 import { platformErrorCode, requireText } from "./common";
 import { PLACES_CHUNK, PLACES_COUNTRY, PLACES_SOURCE, type PlaceEntry } from "./places";
+import { deactivatePlaceDatasetProblems, isJunkPlaceName, normalizePlaceName, placeNameIdentity } from "./place-rules";
+
+export { normalizePlaceName } from "./place-rules";
 
 type PathaoType = "city" | "zone" | "area";
 const LEVEL: Record<PathaoType, 1 | 2 | 3> = { city: 1, zone: 2, area: 3 };
@@ -30,24 +33,18 @@ export const pathaoPlaceKey = (type: PathaoType, pathaoId: number | string) => `
 
 // ── Names ──────────────────────────────────────────────────────────────────
 
-const INVALID_PROVIDER_NAMES = new Set(["lost", "n/a", "not applicable", "null", "test", "undefined", "unknown"]);
 const PATHAO_INTERNAL_ZONE_NAMES = new Set(["banani hq", "bulk merchant", "central fulfillment", "document-central"]);
 
-/** Spelling kept; whitespace collapsed (as the store's place names are). */
-export function normalizePlaceName(value: unknown): string {
-  return typeof value === "string" ? value.trim().replace(/\s+/gu, " ") : "";
-}
-
 /**
- * Pathao's feed carries a few routing buckets beside buyer places. Only
- * exact, high-confidence artifacts are suppressed: keyword matching would
- * hide real places.
+ * Pathao's feed carries a few routing buckets and test rows beside buyer
+ * places. Only exact, high-confidence artifacts are suppressed (a junk name
+ * by ./place-rules, a routing bucket by its exact name): keyword matching
+ * would hide real places.
  */
 export function shouldSuppressPathaoLocationName(value: unknown, type: PathaoType): boolean {
   const normalized = normalizePlaceName(value);
-  if (!normalized) return true;
+  if (isJunkPlaceName(normalized)) return true;
   const key = normalized.toLocaleLowerCase("en-US");
-  if (INVALID_PROVIDER_NAMES.has(key)) return true;
   if (type !== "zone") return false;
   return PATHAO_INTERNAL_ZONE_NAMES.has(key)
     || key === "on-demand"
@@ -90,7 +87,8 @@ export function preparePathaoLocationItems(items: PathaoLocationImportItem[]): {
   }
   const acceptedByIdentity = new Map<string, PathaoLocationImportItem>();
   for (const item of candidatesByPathaoId.values()) {
-    const identity = [item.type, item.parentPathaoId ?? "", item.name.toLocaleLowerCase("en-US")].join("\u0000");
+    // One place per name under a parent, whatever its case or accents.
+    const identity = [item.type, item.parentPathaoId ?? "", placeNameIdentity(item.name)].join("\u0000");
     const current = acceptedByIdentity.get(identity);
     if (!current) {
       acceptedByIdentity.set(identity, item);
@@ -237,7 +235,8 @@ export async function buildPathaoPlaceDataset(
   const cities = pathaoDatasetEntries(await cityList(client));
   const zones = pathaoDatasetEntries((await parallelLimit(activeIds(cities).map((id) => () => zoneList(client, id)), concurrency)).flat());
   const areas = pathaoDatasetEntries((await parallelLimit(activeIds(zones).map((id) => () => areaList(client, id)), concurrency)).flat());
-  return [...cities, ...zones, ...areas].map((entry) => {
+  // A city with no thana is nowhere to deliver (Pathao's test cities): off, with its id.
+  return deactivatePlaceDatasetProblems([...cities, ...zones, ...areas]).map((entry) => {
     const legacyId = options.legacyIds?.get(entry.key);
     return legacyId ? { ...entry, legacyId } : entry;
   });
@@ -255,6 +254,8 @@ export interface PathaoRefreshState {
   version: string;
   startedAt: string;
   cityIds: number[];
+  /** The active cities' names, so a city with no thana can be switched off once its thanas are read. */
+  cityNames?: Record<string, string>;
   zoneIds: number[];
   /** The next city (zones phase) or zone (areas phase) to read. */
   next: number;
@@ -341,7 +342,8 @@ export async function continuePathaoRefresh(ctx: PluginContext, now: () => numbe
     if (state.phase === "cities") {
       const entries = pathaoDatasetEntries(await cityList(client));
       const applied = await importEntries(ctx, entries, state.version);
-      await save({ ...state, phase: "zones", cityIds: activeIds(entries), next: 0, created: state.created + applied.created, updated: state.updated + applied.updated });
+      const cityNames = Object.fromEntries(entries.filter((entry) => entry.active).map((entry) => [entry.externalIds.pathao, entry.name]));
+      await save({ ...state, phase: "zones", cityIds: activeIds(entries), cityNames, next: 0, created: state.created + applied.created, updated: state.updated + applied.updated });
     }
     while (state.phase === "zones" && calls < STEP_CALLS) {
       const batch = state.cityIds.slice(state.next, state.next + Math.max(1, STEP_CALLS - calls));
@@ -352,7 +354,14 @@ export async function continuePathaoRefresh(ctx: PluginContext, now: () => numbe
       const items: PathaoLocationImportItem[] = [];
       for (const cityId of batch) items.push(...await zoneList(client, cityId));
       const entries = pathaoDatasetEntries(items);
-      const applied = await importEntries(ctx, entries, state.version);
+      // A city with no thana is nowhere to deliver (Pathao's test cities): switched off.
+      const served = new Set(entries.filter((entry) => entry.active).map((entry) => entry.parent));
+      const empty = batch.flatMap((cityId): PlaceEntry[] => {
+        const key = pathaoPlaceKey("city", cityId);
+        const name = state.cityNames?.[String(cityId)];
+        return served.has(key) || !name ? [] : [{ key, level: 1, parent: null, name, externalIds: { pathao: String(cityId) }, active: false }];
+      });
+      const applied = await importEntries(ctx, [...empty, ...entries], state.version);
       await save({
         ...state,
         zoneIds: [...state.zoneIds, ...activeIds(entries)],

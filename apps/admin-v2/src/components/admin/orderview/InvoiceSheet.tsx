@@ -12,6 +12,7 @@ import type { ApiResult } from "~/lib/api";
 import {
   formatSavedMajorAmount,
   formatSavedMinorAmount,
+  isFreeOrderLine,
   resolveSavedOrderLineMoney,
   resolveSavedOrderMoneySummary,
 } from "~/lib/order-tax-presentation";
@@ -155,6 +156,8 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
         <tbody>
           {order.items.map((item) => {
             const line = resolveSavedOrderLineMoney(item, saved);
+            // A free gift prints free, its price struck (the discount row says which offer).
+            const free = isFreeOrderLine(line);
             return (
               <tr key={item.id}>
                 <td>
@@ -170,8 +173,8 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
                   {(item.returnedQuantity ?? 0) > 0 ? <small>{t("items.returned", { count: item.returnedQuantity ?? 0 })}</small> : null}
                 </td>
                 <td>{formatNumber(item.quantity)}</td>
-                <td>{line ? minor(line.unitPriceMinor) : money(item.price)}</td>
-                <td>{line ? minor(line.grossSubtotalMinor) : money(item.price * item.quantity)}</td>
+                <td>{line ? (free ? <><s>{minor(line.unitPriceMinor)}</s> {minor(0)}</> : minor(line.unitPriceMinor)) : money(item.price)}</td>
+                <td>{line ? (free ? <><s>{minor(line.grossSubtotalMinor)}</s> {minor(0)}</> : minor(line.grossSubtotalMinor)) : money(item.price * item.quantity)}</td>
               </tr>
             );
           })}

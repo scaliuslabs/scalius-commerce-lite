@@ -29,6 +29,7 @@ vi.mock("./browser-api", () => ({
 vi.mock("../checkout/tax-quote-client", () => ({
   fetchAuthoritativeTaxQuote: taxQuoteMocks.fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError: class TaxQuoteCartChangedError extends Error {},
+  TaxQuoteCartRulesError: class TaxQuoteCartRulesError extends Error {},
   TaxQuoteDeliveryRateError: class TaxQuoteDeliveryRateError extends Error {},
   TaxQuoteDeliveryLocationError: class TaxQuoteDeliveryLocationError extends Error {},
 }));
@@ -128,7 +129,7 @@ function renderCartDom(): void {
       <ul id="discountOffers" class="hidden"></ul><span id="subtotal"></span>
       <span id="shippingCost"></span><div id="taxRow"><span id="taxLabel"></span><span id="taxAmount"></span></div>
       <p id="shippingProgress" class="hidden"></p>
-      <p id="taxStatus"></p><span id="totalLabel" data-final-label="Total"></span><span id="total"></span></div>
+      <p id="taxStatus"></p><span id="totalLabel" data-final-label="Total"></span><span id="total"></span><p id="estimateNote" class="hidden"></p></div>
       <div id="cartValidationMessage" class="hidden"></div><div id="cartItems"></div>
     </div>`;
   window.__CHECKOUT_CONFIG__ = { allowedCountries: [], allowedCountriesMode: "include" } as never;
@@ -542,6 +543,62 @@ describe("cart discount checkout handoff", () => {
     expect(sessionStorage.getItem("scalius_checkout_data")).toBeNull();
     window.removeEventListener("open-auth-modal", openAuth);
     document.cookie = "cs_auth=; Max-Age=0; path=/";
+  });
+
+  it("leaves a sold-out line and its offer out of the estimate, and says so", async () => {
+    const mug = { id: "prod_2", name: "Mug", price: 50, quantity: 2, variantId: "var_2", freeDelivery: false };
+    const mugKey = createCartItemKey(mug);
+    const cart = { ...CART_STATE, items: { ...CART_STATE.items, [mugKey]: mug }, totalItems: 3, totalAmount: 200 };
+    localStorage.setItem("cart:v3", JSON.stringify(cart));
+    cartStore.set(cart);
+    const rice = { index: 0, cartKey: CART_LINE_KEY, productId: "prod_1", variantId: "var_1", quantity: 1, unitPrice: 100,
+      productName: "Rice", variantLabel: null, freeDelivery: false, inventoryTracked: false, availableQuantity: null };
+    vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        valid: false, subtotal: 100, hasFreeDeliveryProduct: false, items: [rice],
+        issues: [{ index: 1, cartKey: mugKey, productId: "prod_2", variantId: "var_2", code: "PRODUCT_UNAVAILABLE", action: "remove",
+          message: "Mug is sold out.", productName: "Mug", variantLabel: null, requestedQuantity: 2, availableQuantity: 0 }],
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    // The quote refuses a cart that changed: the totals are the estimate.
+    const { TaxQuoteCartChangedError } = await import("../checkout/tax-quote-client");
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockRejectedValue(new TaxQuoteCartChangedError([]));
+    // A buy-one-get-one on the mug would discount it; it is not counted.
+    apiMocks.previewCartDiscounts.mockImplementation(async (_codes: string[], lines: Array<{ id: string }>) =>
+      lines.some((line) => line.id === "prod_2") ? { ...NO_DISCOUNTS, totalDiscount: 50 } : NO_DISCOUNTS);
+    await startCartPage();
+    await settleCheckout();
+
+    expect(document.getElementById("subtotal")?.textContent).toBe(formatMoney(100));
+    const lastPreview = apiMocks.previewCartDiscounts.mock.calls.at(-1)!;
+    expect((lastPreview[1] as Array<{ id: string }>).map((line) => line.id)).toEqual(["prod_1"]);
+    const note = document.getElementById("estimateNote")!;
+    expect(note.classList.contains("hidden")).toBe(false);
+    expect(note.textContent).toBe(formatCheckoutLanguageText(ENGLISH_CHECKOUT_LANGUAGE_DATA.estimateLeavesOutText, { items: "Mug" }));
+    expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("names the items a cash-only store can't take, and why, instead of blaming the total", async () => {
+    document.getElementById("checkout-meta")!.setAttribute("data-cod-only", "true");
+    const line = { index: 0, cartKey: CART_LINE_KEY, productId: "prod_1", variantId: "var_1", quantity: 1, unitPrice: 100,
+      variantLabel: null, freeDelivery: false, inventoryTracked: false, availableQuantity: null, fulfillmentKind: "digital" };
+    vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        valid: true, issues: [], subtotal: 100, hasFreeDeliveryProduct: false, requiresDeliveryMethod: false, allowedPaymentMethods: [],
+        items: [{ ...line, productName: "Licence key", fulfillmentType: "digital" }],
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockImplementation(async () => ({ ...taxQuote(), allowedPaymentMethods: [] }));
+    await startCartPage();
+    await settleCheckout();
+
+    const message = document.getElementById("cartValidationMessage")!;
+    expect(message.classList.contains("hidden")).toBe(false);
+    expect(message.textContent).toBe(formatCheckoutLanguageText(ENGLISH_CHECKOUT_LANGUAGE_DATA.cartOnlinePaymentRequiredText, { items: "Licence key" }));
+    expect(message.textContent).not.toContain("order total");
+    expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("holds COD submit while Apply is pending, then permits the normal submit", async () => {

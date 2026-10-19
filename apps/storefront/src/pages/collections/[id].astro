@@ -21,6 +21,8 @@ import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import RichTextStyles from "@/components/RichTextStyles.astro";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { pageLanguage } from "@/lib/store-time-zone";
 import {
   countActiveProductListFilters,
   isIndexableProductListView,
@@ -195,7 +197,7 @@ await resolveRequestTheme(Astro, layoutData, resourceBindingContext(collection, 
       pathname: collectionPath,
       resetPath: collectionPath,
       searchLabel: "Search this collection",
-      newestLabel: categories.length > 0 ? "Latest" : "Featured",
+      newestLabel: categories.length > 0 ? catalogCopy(pageLanguage()).sort.latest : catalogCopy(pageLanguage()).sort.featured,
       countEndpoint: collectionPath,
       currencySymbol,
       currencyCode,

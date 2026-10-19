@@ -36,6 +36,7 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
 import { formatMoney } from "@/lib/currency";
+import { formatCount } from "@/lib/store-time-zone";
 import { PRODUCT_IMAGE_FALLBACK, productImageSources, resolveProductImageUrl } from "@/lib/product-media";
 import type { ImageSlot } from "@/lib/responsive-image";
 import { previewCartDiscounts } from "@/lib/cart/browser-api";
@@ -270,6 +271,32 @@ export default function CartFlyout({ onReady }: Props) {
   const [addedKey, setAddedKey] = useState<string | null>(null);
   const addedItem = addedKey ? cart.items[addedKey] : undefined;
   const announced = useDelayedFlag(isOpen && Boolean(addedItem), addedKey);
+  /**
+   * What the add came to once the server counted the stock: the line capped
+   * to the units left (Shopify: "All 40 … are in your cart"), or nothing
+   * left to add. Null while the add went through as asked.
+   */
+  const [addedOutcome, setAddedOutcome] = useState<{ key: string; left: number } | null>(null);
+  useEffect(() => {
+    if (!addedKey) {
+      setAddedOutcome(null);
+      return;
+    }
+    const issue = issues[addedKey];
+    const line = cart.items[addedKey];
+    if (!line || issue?.code !== "QUANTITY_UNAVAILABLE" || typeof issue.availableQuantity !== "number") return;
+    const left = Math.max(0, Math.floor(issue.availableQuantity));
+    // The buyer asked for more than is left: the line takes what is left,
+    // instead of an "added" note beside an error on the same line.
+    if (left >= 1 && line.quantity > left) updateCartItemByKey(addedKey, { quantity: left });
+    setAddedOutcome({ key: addedKey, left });
+  }, [addedKey, issues, cart.items]);
+  const outcome = addedOutcome && addedOutcome.key === addedKey ? addedOutcome : null;
+  const addedText = !outcome
+    ? "Added to your cart"
+    : outcome.left > 0
+      ? `Added ${formatCount(outcome.left)} (all that's left)`
+      : "Sold out: nothing more could be added";
 
   // Scroll & Swipe Logic
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -325,6 +352,7 @@ export default function CartFlyout({ onReady }: Props) {
     const openCart = (addedLineKey?: string) => {
       rememberTrigger();
       setAddedKey(addedLineKey ?? null);
+      setAddedOutcome(null);
       setCartOpen(true);
     };
 
@@ -452,9 +480,13 @@ export default function CartFlyout({ onReady }: Props) {
             <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <Check className="h-3 w-3" strokeWidth={3} />
             </span>
-            <span aria-hidden="true">Added to your cart</span>
+            <span aria-hidden="true" data-cart-added-text>{addedText}</span>
             <p role="status" className="sr-only">
-              {announced ? `${addedItem.name} added to your cart. Cart has ${cart.totalItems} ${cart.totalItems === 1 ? "item" : "items"}.` : ""}
+              {announced
+                ? outcome
+                  ? `${addedItem.name}: ${addedText}. Cart has ${cart.totalItems} ${cart.totalItems === 1 ? "item" : "items"}.`
+                  : `${addedItem.name} added to your cart. Cart has ${cart.totalItems} ${cart.totalItems === 1 ? "item" : "items"}.`
+                : ""}
             </p>
           </div>
         )}

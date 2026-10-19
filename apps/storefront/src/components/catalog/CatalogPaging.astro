@@ -8,6 +8,8 @@
 // lib/catalog-paging.ts appends the next page's cards in place.
 import CatalogPagination from "./CatalogPagination.astro";
 import { catalogProgressLabel } from "@/lib/catalog-paging";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 
 interface Props {
   mode: "numbered" | "load-more" | "infinite";
@@ -26,6 +28,14 @@ const { mode, page, totalPages, total, totalIsCapped = false, shown, limit, getP
 const from = (page - 1) * limit + 1;
 const to = from + shown - 1;
 const next = page < totalPages ? getPageUrl(page + 1) : null;
+const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language);
+// The progress line's words, written on it for the next pages' lines (lib/catalog-paging).
+const progressWords = {
+  progressOne: copy.paging.progress("{from}", "{to}", "{total}", true),
+  progressMany: copy.paging.progress("{from}", "{to}", "{total}", false),
+  countOne: copy.listing.products("{total}", true),
+  countMany: copy.listing.products("{total}", false),
+};
 ---
 
 {mode === "numbered" ? (
@@ -44,18 +54,23 @@ const next = page < totalPages ? getPageUrl(page + 1) : null;
         data-to={to}
         data-total={total}
         data-capped={totalIsCapped ? "true" : undefined}
+        data-progress-one={progressWords.progressOne}
+        data-progress-many={progressWords.progressMany}
+        data-count-one={progressWords.countOne}
+        data-count-many={progressWords.countMany}
         aria-live="polite"
         class="text-sm text-muted-foreground"
       >
-        {catalogProgressLabel(from, to, total, totalIsCapped)}
+        {catalogProgressLabel(from, to, total, totalIsCapped, progressWords)}
       </p>
       {next && (
         <a
           href={next}
           data-catalog-load-more
+          data-loading-label={copy.paging.loading}
           class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-6 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
         >
-          Load more
+          {copy.paging.loadMore}
         </a>
       )}
     </div>

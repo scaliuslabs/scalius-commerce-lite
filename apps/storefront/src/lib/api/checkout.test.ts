@@ -18,7 +18,7 @@ vi.mock("@/lib/api/transport", () => ({
   ): Promise<T | null> => fetcher(),
 }));
 
-import { getCheckoutConfig, isCodOnly } from "./checkout";
+import { getCheckoutConfig, isCodOnly, takesOnlinePayment } from "./checkout";
 
 describe("storefront checkout config", () => {
   afterEach(() => {
@@ -42,5 +42,18 @@ describe("storefront checkout config", () => {
       expect.any(Error),
     );
     errorSpy.mockRestore();
+  });
+});
+
+describe("takesOnlinePayment", () => {
+  it("is false only when checkout works and every method is cash on delivery", () => {
+    const cod = { id: "cod", name: "Cash on delivery", flow: "cod" as const, countries: ["BD"] };
+    const bkash = { id: "scalius.bangladesh:bkash", name: "bKash", flow: "hosted" as const };
+    expect(takesOnlinePayment({ gateways: [cod] })).toBe(false);
+    expect(takesOnlinePayment({ gateways: [cod, bkash] })).toBe(true);
+    expect(takesOnlinePayment({ gateways: [{ id: "stripe", name: "Card", flow: "card" }] })).toBe(true);
+    // An unavailable or unread checkout refuses everything and says so itself.
+    expect(takesOnlinePayment({ gateways: [], unavailable: true })).toBe(true);
+    expect(takesOnlinePayment(null)).toBe(true);
   });
 });

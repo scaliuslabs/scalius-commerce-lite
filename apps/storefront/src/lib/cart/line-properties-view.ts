@@ -3,7 +3,7 @@
  * with an Edit link back to the product page (Wave A §3.2, §3.4). Shared by
  * the cart page and the cart flyout so both say the same thing.
  */
-import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
+import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { fromMinor } from "@scalius/shared/money";
 import type { CartLineAdjustment, CartLineProperty } from "@/store/cart";

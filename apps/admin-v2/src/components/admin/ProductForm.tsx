@@ -53,6 +53,7 @@ import { ShippingCard } from "./product-form/ShippingCard";
 import { CollapsibleCard } from "./product-form/CollapsibleCard";
 import { ProductEditorSlotsContext, type ProductEditorSlots } from "./product-form/editor-slots";
 import { StatusCard } from "./product-form/StatusCard";
+import { OnlinePaymentNote } from "./product-form/OnlinePaymentNote";
 import { ProductKindRulesContext, productKindRules } from "./product-form/product-kind-rules";
 import { OrganizationCard } from "./product-form/OrganizationCard";
 import { WarrantyCard } from "./product-form/WarrantyCard";
@@ -547,7 +548,7 @@ function ProductEditor({
             </div>
             {/* On phones the status comes first; the rest of the side column follows the main cards. */}
             <div className="min-w-0 space-y-4 max-lg:contents">
-              <fieldset disabled={readOnly} className="min-w-0 max-lg:order-first">
+              <fieldset disabled={readOnly} className="min-w-0 space-y-4 max-lg:order-first">
                 <ProductStatusCard form={form} isEdit={isEdit} getStorefrontPath={getStorefrontPath} readOnly={readOnly} />
               </fieldset>
               <fieldset disabled={readOnly} className="min-w-0 space-y-4">
@@ -655,11 +656,14 @@ function ProductStatusCard({ form, isEdit, getStorefrontPath, readOnly }: {
 }) {
   const slug = useWatch({ control: form.control, name: "slug" });
   return (
-    <StatusCard
-      form={form}
-      readOnly={readOnly}
-      storefrontUrl={isEdit && slug ? getStorefrontPath(`/products/${slug}`) : undefined}
-    />
+    <>
+      <StatusCard
+        form={form}
+        readOnly={readOnly}
+        storefrontUrl={isEdit && slug ? getStorefrontPath(`/products/${slug}`) : undefined}
+      />
+      <OnlinePaymentNote form={form} />
+    </>
   );
 }
 

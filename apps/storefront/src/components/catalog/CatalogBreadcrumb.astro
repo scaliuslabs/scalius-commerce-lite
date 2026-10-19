@@ -4,6 +4,8 @@
 // last), and the current page is the last item. When the template hides the
 // trail visually it stays in the page for assistive technology: it matches
 // the BreadcrumbList JSON-LD.
+import { catalogCopy } from "@/lib/catalog-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 interface Props {
   crumbs: Array<{ label: string; href: string }>;
   /** The current page's name (the listing's title). */
@@ -16,10 +18,11 @@ interface Props {
 }
 
 const { crumbs, current, hidden = false, showCurrent = true, class: className } = Astro.props;
+const label = catalogCopy((await currentRequestTheme(Astro.locals)).language).breadcrumb.label;
 ---
 
 {crumbs.length > 0 && (
-  <nav aria-label="Breadcrumb" class:list={["catalog-band-crumbs", hidden && "sr-only", className]}>
+  <nav aria-label={label} class:list={["catalog-band-crumbs", hidden && "sr-only", className]}>
     <ol>
       {crumbs.map((crumb) => <li><a href={crumb.href}>{crumb.label}</a></li>)}
       <li class:list={[!showCurrent && "sr-only"]} aria-current="page">{current}</li>

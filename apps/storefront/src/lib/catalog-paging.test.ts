@@ -24,7 +24,7 @@ function listing({ mode, page, next, from, to, total, cards }: {
   return `
     <div class="product-grid-frame" data-catalog-results="grid"><div class="product-grid">${cards.join("")}</div></div>
     <div data-catalog-paging="${mode}">
-      ${mode === "infinite" ? `<nav aria-label="Pagination"><a href="?page=${page + 1}">${page + 1}</a></nav>` : ""}
+      ${mode === "infinite" ? `<nav aria-label="Pagination" data-catalog-pagination><a href="?page=${page + 1}">${page + 1}</a></nav>` : ""}
       <div data-catalog-load-more-block ${mode === "infinite" ? "hidden" : ""}>
         <p data-catalog-progress data-from="${from}" data-to="${to}" data-total="${total}">${catalogProgressLabel(from, to, total)}</p>
         ${next ? `<a href="${next}" data-catalog-load-more>Load more</a>` : ""}
@@ -110,7 +110,7 @@ describe("catalog paging", () => {
     });
     document.body.innerHTML = listing({ mode: "infinite", page: 1, next: "/categories/sarees?page=2", from: 1, to: 1, total: 3, cards: [card("a")] });
     setupCatalogPaging();
-    expect(document.querySelector("nav[aria-label='Pagination']")!.hasAttribute("hidden")).toBe(true);
+    expect(document.querySelector("nav[data-catalog-pagination]")!.hasAttribute("hidden")).toBe(true);
     const loader = document.querySelector<HTMLElement>("[data-catalog-load-more-block]")!;
     expect(loader.hidden).toBe(false);
     expect(observed).toEqual([loader]);

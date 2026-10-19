@@ -7,6 +7,10 @@
 import type { CheckoutConfig } from "./api/checkout";
 import type { ProductVariant, ShippingMethod } from "./api/types";
 import type { StorefrontReturnPolicySettings } from "./commerce-structured-data";
+import { catalogCopy, type CatalogCopy } from "./catalog-copy";
+import { formatCount, pageLanguage } from "./store-time-zone";
+
+type DeliveryCopy = CatalogCopy["delivery"];
 
 export interface DeliveryFact {
   kind: "delivery" | "pickup" | "cod" | "returns";
@@ -36,6 +40,8 @@ export interface DeliveryFactsInput {
   countries?: readonly string[];
   /** The pickup fact's title ("Pickup available"), from the checkout language. */
   pickupAvailableText?: string;
+  /** The facts' words; the page's language by default. */
+  copy?: DeliveryCopy;
 }
 
 /** How a product reaches the buyer, for what the page may claim about delivery. */
@@ -110,6 +116,7 @@ function deliveryFact(
   rates: DeliveryRateSplit,
   formatMoney: (amount: number) => string,
   freeDelivery: boolean,
+  copy: DeliveryCopy,
 ): DeliveryFact | null {
   const { delivery, zoned } = rates;
   if (delivery.length === 0) return null;
@@ -119,45 +126,47 @@ function deliveryFact(
   if (freeDelivery) {
     return {
       kind: "delivery",
-      title: "Free delivery",
-      detail: "Delivery is free on any order with this item.",
+      title: copy.freeDelivery,
+      detail: copy.freeDetail,
     };
   }
   if (delivery.some((method) => method.rateSource && method.rateSource !== "flat")) {
     return {
       kind: "delivery",
-      title: "Delivery calculated at checkout",
-      detail: "Price depends on your address and order.",
+      title: copy.calculated,
+      detail: copy.calculatedDetail,
     };
   }
 
-  const fee = (amount: number) => (amount === 0 ? "free" : formatMoney(amount));
+  const fee = (amount: number) => (amount === 0 ? copy.free : formatMoney(amount));
   const fees = delivery.map((method) => method.fee);
   const min = Math.min(...fees);
   const max = Math.max(...fees);
   if (zoned) {
     const thresholds = delivery.map((method) => method.freeOver ?? null);
     const freeOverAll = thresholds.every((value): value is number => value !== null && value > 0)
-      ? [`Free over ${formatMoney(Math.max(...thresholds))}`]
+      ? [copy.freeOver(formatMoney(Math.max(...thresholds)))]
       : [];
     return {
       kind: "delivery",
-      title: min === 0 ? "Free delivery in some areas" : `Delivery from ${formatMoney(min)}`,
-      detail: ["Price depends on your area", ...freeOverAll].join(" · "),
+      title: min === 0 ? copy.freeInSomeAreas : copy.from(formatMoney(min)),
+      detail: [copy.dependsOnArea, ...freeOverAll].join(" · "),
     };
   }
 
-  const freeOver = (method: ShippingMethod) =>
-    method.freeOver && method.fee > 0 ? `free over ${formatMoney(method.freeOver)}` : "";
+  const freeOver = (method: ShippingMethod, first = false) =>
+    method.freeOver && method.fee > 0
+      ? (first ? copy.freeOver : copy.freeOverLower)(formatMoney(method.freeOver))
+      : "";
   // One rate: its fee is the title, so the detail only adds what is new.
   const detail = delivery.length === 1
-    ? [freeOver(delivery[0]!)].filter(Boolean)
+    ? [freeOver(delivery[0]!, true)].filter(Boolean)
     : delivery.slice(0, MAX_LISTED_METHODS).map((method) =>
-        [`${method.name} ${fee(method.fee)}`, freeOver(method)].filter(Boolean).join(", "));
+        [copy.method(method.name, fee(method.fee)), freeOver(method)].filter(Boolean).join(", "));
   return {
     kind: "delivery",
-    title: min === max ? `Delivery ${fee(min)}` : `Delivery ${formatMoney(min)}–${formatMoney(max)}`,
-    detail: detail.join(" · ").replace(/^free/, "Free"),
+    title: min === max ? copy.single(fee(min)) : copy.range(formatMoney(min), formatMoney(max)),
+    detail: detail.join(" · "),
   };
 }
 
@@ -169,6 +178,7 @@ function pickupFact(
   rates: DeliveryRateSplit,
   formatMoney: (amount: number) => string,
   freeDelivery: boolean,
+  copy: DeliveryCopy,
   title = "Pickup available",
 ): DeliveryFact | null {
   const { pickup } = rates;
@@ -176,14 +186,14 @@ function pickupFact(
   const fees = pickup.map((method) => (freeDelivery ? 0 : method.fee));
   const min = Math.min(...fees);
   const max = Math.max(...fees);
-  const price = min === 0 ? "" : min === max ? formatMoney(min) : `from ${formatMoney(min)}`;
+  const price = min === 0 ? "" : min === max ? formatMoney(min) : copy.pickupFrom(formatMoney(min));
   const first = pickup[0]!;
   return {
     kind: "pickup",
     title: [title, price].filter(Boolean).join(" · "),
     detail: pickup.length === 1
       ? first.pickupAddress?.trim() || first.name
-      : `${pickup.length} pickup points`,
+      : copy.pickupPoints(formatCount(pickup.length)),
   };
 }
 
@@ -191,6 +201,7 @@ function codFact(
   config: CheckoutConfig | null | undefined,
   serviceDetail: string | null,
   countries: readonly string[] | undefined,
+  copy: DeliveryCopy,
 ): DeliveryFact | null {
   if (!config || config.unavailable) return null;
   const cod = config.gateways.find((gateway) => gateway.flow === "cod" || gateway.id === "cod");
@@ -202,31 +213,29 @@ function codFact(
   return {
     kind: "cod",
     // A service has no delivery: the buyer pays when it is done.
-    title: serviceDetail ? "Pay on service" : "Cash on delivery",
+    title: serviceDetail ? copy.payOnService : copy.cashOnDelivery,
     detail: serviceDetail
-      ?? (config.partialPaymentEnabled
-        ? "Pay a small advance online, the rest on delivery."
-        : "Pay when your order arrives."),
+      ?? (config.partialPaymentEnabled ? copy.payAdvance : copy.payOnArrival),
   };
 }
 
-function returnsFact(policy: StorefrontReturnPolicySettings | null | undefined): DeliveryFact | null {
+function returnsFact(policy: StorefrontReturnPolicySettings | null | undefined, copy: DeliveryCopy): DeliveryFact | null {
   if (!policy?.enabled) return null;
   const days = Number(policy.returnWindowDays);
   const category = policy.category;
   const title = category === "no_returns"
-    ? "Final sale"
+    ? copy.finalSale
     : category === "unlimited"
-      ? "Returns accepted"
+      ? copy.returnsAccepted
       : Number.isInteger(days) && days > 0
-        ? `${days}-day returns`
+        ? copy.dayReturns(formatCount(days))
         : null;
   if (!title) return null;
   const detail = category === "no_returns"
-    ? "Returns are not accepted."
+    ? copy.noReturns
     : policy.returnFees === "free"
-      ? "Free return shipping."
-      : "Return shipping is paid by the buyer.";
+      ? copy.freeReturn
+      : copy.buyerPaysReturn;
   const href = policy.policyUrl?.trim();
   return { kind: "returns", title, detail, ...(href ? { href } : {}) };
 }
@@ -236,10 +245,11 @@ export function buildDeliveryFacts(input: DeliveryFactsInput): DeliveryFact[] {
   const freeDelivery = input.freeDelivery === true;
   const fulfilment = input.fulfilment ?? "physical";
   const physical = fulfilment === "physical";
+  const copy = input.copy ?? catalogCopy(pageLanguage()).delivery;
   return [
-    physical ? deliveryFact(rates, input.formatMoney, freeDelivery) : null,
+    physical ? deliveryFact(rates, input.formatMoney, freeDelivery, copy) : null,
     physical
-      ? pickupFact(rates, input.formatMoney, freeDelivery, input.pickupAvailableText?.trim() || undefined)
+      ? pickupFact(rates, input.formatMoney, freeDelivery, copy, input.pickupAvailableText?.trim() || undefined)
       : null,
     // Nothing is handed over for a digital item, so there is no cash on delivery.
     fulfilment === "digital"
@@ -248,7 +258,8 @@ export function buildDeliveryFacts(input: DeliveryFactsInput): DeliveryFact[] {
         input.checkoutConfig,
         fulfilment === "service" ? (input.payAtServiceText?.trim() || "Pay when the service is done.") : null,
         input.countries,
+        copy,
       ),
-    returnsFact(input.returnPolicy),
+    returnsFact(input.returnPolicy, copy),
   ].filter((fact): fact is DeliveryFact => fact !== null);
 }

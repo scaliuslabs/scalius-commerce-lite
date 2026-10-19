@@ -14,6 +14,8 @@ import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { navigationFromCategoryTree } from "@/components/header/nav-tree";
 import { navigationChildren } from "@/components/header/navigation-state";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { formatCount, pageLanguage } from "@/lib/store-time-zone";
 
 
 const { layoutData, pageData: tree } = await loadPageWithLayout(() => getCategoryNavigation());
@@ -25,10 +27,12 @@ if (!layoutData || !tree) {
 
 const departments = navigationFromCategoryTree(tree.nodes);
 const total = tree.nodes.length;
-const title = "All categories";
+// The store's words, in its language (the layout read set it).
+const copy = catalogCopy(pageLanguage());
+const title = copy.directory.title;
 const description = departments.length > 0
-  ? `Shop ${departments.slice(0, 6).map((item) => item.title).join(", ")}${departments.length > 6 ? " and more" : ""}.`
-  : "Browse every category in the store.";
+  ? copy.directory.description(departments.slice(0, 6).map((item) => item.title).join(", "), departments.length > 6)
+  : copy.directory.emptyDescription;
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/categories");
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const breadcrumbJsonLd = canonicalUrl && storefrontUrl
@@ -36,7 +40,7 @@ const breadcrumbJsonLd = canonicalUrl && storefrontUrl
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: "Home", item: buildAbsoluteStorefrontSeoUrl("/") },
+        { "@type": "ListItem", position: 1, name: copy.breadcrumb.home, item: buildAbsoluteStorefrontSeoUrl("/") },
         { "@type": "ListItem", position: 2, name: title, item: canonicalUrl },
       ],
     })
@@ -52,26 +56,26 @@ const anchor = (index: number) => `department-${index + 1}`;
   </Fragment>
 
   <div class="cat-index">
-    <nav class="cat-index-crumbs" aria-label="Breadcrumb">
+    <nav class="cat-index-crumbs" aria-label={copy.breadcrumb.label}>
       <ol>
-        <li><a href="/">Home</a></li>
+        <li><a href="/">{copy.breadcrumb.home}</a></li>
         <li aria-current="page">{title}</li>
       </ol>
     </nav>
     <header class="cat-index-head">
       <h1>{title}</h1>
-      {total > 0 && <p>{departments.length} departments · {total} categories</p>}
+      {total > 0 && <p>{copy.directory.counts(formatCount(departments.length), formatCount(total))}</p>}
     </header>
 
     {
       departments.length === 0 ? (
         <p class="cat-index-empty">
-          No categories yet. <a href="/search">Browse all products</a>
+          {copy.directory.empty} <a href="/search">{copy.directory.browseAll}</a>
         </p>
       ) : (
         <>
           {jumpList && (
-            <nav class="cat-index-jump" aria-label="Departments">
+            <nav class="cat-index-jump" aria-label={copy.directory.departments}>
               <ul>
                 {departments.map((department, index) => (
                   <li>
@@ -126,7 +130,7 @@ const anchor = (index: number) => `department-${index + 1}`;
             })}
           </div>
           {tree.truncated && (
-            <p class="cat-index-note">Deeper categories are listed on each department's page.</p>
+            <p class="cat-index-note">{copy.directory.truncated}</p>
           )}
         </>
       )

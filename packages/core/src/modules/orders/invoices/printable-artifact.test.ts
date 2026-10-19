@@ -83,6 +83,22 @@ describe("printable invoice artifact", () => {
     expect(artifact).not.toContain("<b>Anika</b>");
   });
 
+  it("prints a free gift at zero with its price struck, as the payment counts it", () => {
+    const document = invoice();
+    document.order.items.push({
+      id: "oi_gift", productId: "p_gift", variantId: "v_gift", quantity: 1, price: 1200, productName: "Gift mug",
+      variantLabel: null, unitPriceMinor: 120_000, lineSubtotalMinor: 120_000,
+      discountAmountMinor: 120_000, taxableAmountMinor: 0, taxAmountMinor: 0,
+    });
+
+    const artifact = renderPrintableInvoice(document, "Asia/Dhaka");
+
+    expect(artifact).toContain("<td><s>BDT 1,200.00</s> BDT 0.00</td>");
+    expect(artifact.match(/<s>BDT 1,200\.00<\/s> BDT 0\.00/g)).toHaveLength(2);
+    // A paid line keeps its price.
+    expect(artifact).not.toContain("<s>BDT 100.00</s>");
+  });
+
   it("fails closed when the artifact cannot fit the operation result bound", () => {
     const document = invoice();
     document.order.items = Array.from({ length: 1_000 }, (_, index) => ({

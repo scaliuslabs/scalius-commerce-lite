@@ -12,6 +12,7 @@ import ThemePreviewBar from "../components/ThemePreviewBar.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { themePaint } from "@/lib/theme-paint";
 import type { AnalyticsConfig } from "@/lib/api";
 import { getSameOriginMediaSource, mediaImageUrl } from "@/lib/media-url";
@@ -124,7 +125,7 @@ const {
   ogPrice,
   ogCurrency,
   noindex,
-  documentLanguage = "en",
+  documentLanguage: requestedDocumentLanguage,
   localizedPaths = null,
   analytics = true,
   libraryPreview = false,
@@ -132,6 +133,8 @@ const {
 
 // Use provided layout data when pages load it in parallel; otherwise fetch here.
 const layoutData = providedLayoutData ?? (await getLayoutData());
+// A page in the store's own words is in its language (a Bangla store's catalog is `bn`).
+const documentLanguage = requestedDocumentLanguage ?? checkoutLanguageBaseCode(layoutData?.storefrontCopy?.languageCode);
 setRuntimeImageCdnPolicy(layoutData?.media);
 
 const {

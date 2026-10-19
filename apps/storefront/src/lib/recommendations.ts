@@ -1,20 +1,28 @@
 import type { ProductRecommendationReason, ProductRecommendations } from "@/lib/api/types";
 import { browserApiUrl } from "@/lib/api/browser-url";
+import { pageLanguage } from "@/lib/store-time-zone";
+
+const TITLES = {
+  en: { also_bought: "Customers also bought", popular: "Popular right now", new_arrivals: "New arrivals", similar: "You might also like" },
+  bn: { also_bought: "ক্রেতারা এগুলোও কিনেছেন", popular: "এখন জনপ্রিয়", new_arrivals: "নতুন এসেছে", similar: "আপনার পছন্দ হতে পারে" },
+} as const;
 
 /**
  * One honest title per kind of recommendation list: "Customers also bought"
- * only when the API says the list is mostly real co-purchase data.
+ * only when the API says the list is mostly real co-purchase data. In the
+ * page's language (Bangla on a Bangla page).
  */
-export function recommendationTitle(reason: ProductRecommendationReason): string {
+export function recommendationTitle(reason: ProductRecommendationReason, language: string = pageLanguage()): string {
+  const titles = language.toLowerCase().startsWith("bn") ? TITLES.bn : TITLES.en;
   switch (reason) {
     case "also_bought":
-      return "Customers also bought";
+      return titles.also_bought;
     case "popular":
-      return "Popular right now";
+      return titles.popular;
     case "new_arrivals":
-      return "New arrivals";
+      return titles.new_arrivals;
     default:
-      return "You might also like";
+      return titles.similar;
   }
 }
 

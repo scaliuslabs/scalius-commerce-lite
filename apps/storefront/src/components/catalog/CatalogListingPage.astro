@@ -23,6 +23,7 @@ import CatalogListing from "./CatalogListing.astro";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import { catalogCountText } from "@/lib/catalog-paging";
+import { catalogCopy } from "@/lib/catalog-copy";
 import { hasRenderableHtmlContent } from "@scalius/shared/html-sanitize";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import TemplateSections from "@/components/homepage/TemplateSections.astro";
@@ -75,10 +76,11 @@ const collectionTemplate = template ? resolved.pages.templates.collection : null
 const currency = template ? (await getLayoutData())?.currency ?? DEFAULT_CURRENCY : DEFAULT_CURRENCY;
 const toolbar = new Set(resolved.blocks.listing.toolbar);
 const banner = toolbar.has("category-banner") ? hero.banner : null;
+const copy = catalogCopy(requestTheme.language);
 const countLabel = hero.countLabel === undefined
-  ? `${catalogCountText(hero.count, hero.countCapped)} ${hero.count === 1 && !hero.countCapped ? "product" : "products"}`
+  ? copy.listing.products(catalogCountText(hero.count, hero.countCapped), hero.count === 1 && !hero.countCapped)
   : hero.countLabel;
-const breadcrumb = kind === "search" ? null : [{ label: "Home", href: "/" }, ...(hero.breadcrumb ?? [])];
+const breadcrumb = kind === "search" ? null : [{ label: copy.breadcrumb.home, href: "/" }, ...(hero.breadcrumb ?? [])];
 const description = hero.description && hasRenderableHtmlContent(hero.description) ? hero.description : null;
 const guide = content && hasRenderableHtmlContent(content.html) ? content : null;
 const { descriptionPlacement, surface, phoneBanner } = resolved.blocks.listing;
@@ -137,7 +139,7 @@ const listingEmbeds: EmbedRenderers = { filters: embed("filters"), toolbar: embe
       pills={(hero.links ?? []).map((link) => ({ id: link.href, label: link.label, href: link.href }))}
     >
       {projection.descriptionHtml && descriptionAbove && (
-        <section slot="description" class="mb-4" aria-label={`About ${projection.title}`} data-catalog-content="above">
+        <section slot="description" class="mb-4" aria-label={copy.listing.about(projection.title)} data-catalog-content="above">
           <CatalogDescription content={projection.descriptionHtml} name={projection.title} clamp />
         </section>
       )}
@@ -147,7 +149,7 @@ const listingEmbeds: EmbedRenderers = { filters: embed("filters"), toolbar: embe
     {((description && !descriptionAbove) || guide) && (
       <section
         class="mx-auto mt-10 max-w-4xl space-y-6 border-t border-border pt-8 sm:mt-12 sm:pt-10"
-        aria-label={guide?.label ?? `About ${hero.title}`}
+        aria-label={guide?.label ?? copy.listing.about(hero.title)}
         data-catalog-content="below"
       >
         {projection.descriptionHtml && !descriptionAbove && <CatalogDescription content={projection.descriptionHtml} name={projection.title} />}

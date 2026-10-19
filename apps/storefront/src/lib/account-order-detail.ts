@@ -530,8 +530,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
         ? minor(presentedLineTotalMinor({
             grossSubtotalMinor: item.lineSubtotalMinor!,
             discountMinor: item.discountAmountMinor ?? 0,
-            taxMinor: item.taxAmountMinor ?? 0,
-          }, showsLineDiscounts, Boolean(order.pricesIncludeTax)))
+          }, showsLineDiscounts))
         : accountMoney(item.lineTotal, order.currencyCode);
       const unit = hasMinor ? minor(item.unitPriceMinor!) : accountMoney(item.unitPrice, order.currencyCode);
       const name = escapeHtml(item.productName || "Product");

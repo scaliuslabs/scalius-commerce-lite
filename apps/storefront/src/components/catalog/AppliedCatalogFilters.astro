@@ -12,6 +12,9 @@ import {
   type ProductListSort,
 } from "@/lib/product-list-query";
 import { formatMoney } from "@/lib/currency";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { formatCount } from "@/lib/store-time-zone";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
@@ -30,13 +33,14 @@ const { facets, currentFilters, pathname, resetPath, defaultSort, currencySymbol
   Astro.props;
 const money = (amount: string) =>
   formatMoney(Number(amount), { symbol: currencySymbol, code: currencyCode });
+const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language);
 
 const navigationKeys = new Set(["page", "sortBy", "limit", "showAll"]);
 const priceKeys = new Set(["minPrice", "maxPrice"]);
 const booleanLabels: Record<string, string> = {
-  hasDiscount: "On sale",
-  freeDelivery: "Free delivery",
-  inStock: "In stock",
+  hasDiscount: copy.filters.onSale,
+  freeDelivery: copy.filters.freeDelivery,
+  inStock: copy.filters.inStock,
 };
 const facetsBySlug = new Map(facets.map((facet) => [facet.slug, facet]));
 const valueLabel = (key: string, value: string) =>
@@ -78,7 +82,7 @@ function rangeFilter(facet: ProductFacet): AppliedFilter {
   const min = single(minKey);
   const max = single(maxKey);
   const unit = facet.unit ? ` ${facet.unit}` : "";
-  const bounds = min && max ? `${min}–${max}${unit}` : min ? `From ${min}${unit}` : `Up to ${max}${unit}`;
+  const bounds = min && max ? `${min}–${max}${unit}` : min ? copy.filters.fromAmount(`${min}${unit}`) : copy.filters.upTo(`${max}${unit}`);
   const nextFilters = { ...currentFilters };
   delete nextFilters.page;
   delete nextFilters[minKey];
@@ -104,7 +108,7 @@ for (const [key, rawValue] of Object.entries(currentFilters)) {
   }
   if (key === PRODUCT_LIST_MIN_RATING_PARAM) {
     const stars = single(key);
-    if (stars) appliedFilters.push({ key: `${key}:${stars}`, label: `${stars}★ & up`, href: withoutFilterValue(key) });
+    if (stars) appliedFilters.push({ key: `${key}:${stars}`, label: `${formatCount(Number(stars))}★ ${copy.filters.andUp}`, href: withoutFilterValue(key) });
     continue;
   }
   const values = Array.isArray(rawValue) ? rawValue : [rawValue];
@@ -116,7 +120,7 @@ for (const [key, rawValue] of Object.entries(currentFilters)) {
       key: `${key}:${value}`,
       label:
         key === "q"
-          ? `Search: “${value}”`
+          ? copy.search.chip(value)
           : booleanLabels[key] ?? `${groupLabel}: ${valueLabel(key, value)}`,
       href: withoutFilterValue(
         key,
@@ -134,15 +138,15 @@ if (minPrice || maxPrice) {
     minPrice && maxPrice
       ? `${money(minPrice)}–${money(maxPrice)}`
       : minPrice
-        ? `From ${money(minPrice)}`
-        : `Up to ${money(maxPrice!)}`;
+        ? copy.filters.fromAmount(money(minPrice))
+        : copy.filters.upTo(money(maxPrice!));
   const nextFilters = { ...currentFilters };
   delete nextFilters.page;
   delete nextFilters.minPrice;
   delete nextFilters.maxPrice;
   appliedFilters.unshift({
     key: "price",
-    label: `Price: ${priceLabel}`,
+    label: `${copy.filters.price}: ${priceLabel}`,
     href: buildProductListHref({ pathname, currentFilters: nextFilters, defaultSort }),
   });
 }
@@ -151,14 +155,14 @@ if (minPrice || maxPrice) {
 {
   appliedFilters.length > 0 && (
     <nav
-      aria-label="Applied filters"
+      aria-label={copy.filters.appliedFilters}
       class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap"
     >
       {appliedFilters.map((filter) => (
         <a
           href={filter.href}
           class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-muted"
-          aria-label={`Remove ${filter.label} filter`}
+          aria-label={copy.filters.remove(filter.label)}
         >
           <span>{filter.label}</span>
           <Icon name="x" class="h-3.5 w-3.5" aria-hidden="true" />
@@ -169,7 +173,7 @@ if (minPrice || maxPrice) {
           href={resetPath}
           class="inline-flex min-h-9 shrink-0 items-center px-1 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
         >
-          Clear all
+          {copy.filters.clearAll}
         </a>
       )}
     </nav>

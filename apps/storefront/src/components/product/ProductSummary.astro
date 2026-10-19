@@ -10,7 +10,7 @@ import {
   type ProductPricing,
 } from "./lib/pricing-engine";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
-import { DEFAULT_CURRENCY, formatMoney } from "@scalius/shared/currency";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/currency";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { getBuyerStockSummary, isVariantAvailable } from "@/lib/product-sellable-variants";
@@ -28,6 +28,8 @@ import {
 import { describeBuyGetOffer, describeBundleTiers } from "./lib/product-offers";
 import { moneyPlaces, pickBuyerInputCopy } from "./lib/buyer-inputs";
 import { specificationValue } from "./lib/product-page-modules";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import type { StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 
@@ -48,6 +50,11 @@ interface Props {
   initialVariant?: ProductVariant | null;
   initialUnavailableVariant?: ProductVariant | null;
   quickBuyNotice?: string | null;
+  /**
+   * What the page sells is paid only online (digital items, gift cards) and
+   * checkout takes no online payment: the buttons are off and a note says why.
+   */
+  onlinePaymentUnavailable?: boolean;
   /** Product-page copy from the active checkout language (buttons, buyer inputs). */
   actionCopy?: Partial<ProductActionCopy & CheckoutLanguageData>;
   /** A fulfilment badge beside the stock badge ("No delivery needed" for services). */
@@ -79,6 +86,7 @@ const {
   initialVariant = null,
   initialUnavailableVariant = null,
   quickBuyNotice = null,
+  onlinePaymentUnavailable = false,
   actionCopy: providedCopy = {},
   fulfilmentBadge = null,
   look = CLASSIC_LOOK,
@@ -101,6 +109,7 @@ const compactFacts = factsColumn
   : [];
 
 const pageCopy: CheckoutLanguageData = { ...ENGLISH_CHECKOUT_LANGUAGE_DATA, ...providedCopy };
+const catalogWords = catalogCopy((await currentRequestTheme(Astro.locals)).language).product;
 const actionCopy: ProductActionCopy = pageCopy;
 const formatPrice = (price: number) => formatMoney(price, { code: currencyCode, symbol: currencySymbol });
 
@@ -122,7 +131,9 @@ const stockActionPresentation = getProductActionsPresentation({
 });
 // A broken buyer-input setup means the product can't be bought at all.
 const customizationUnavailable = product.customizationUnavailable === true;
-const actionPresentation = customizationUnavailable
+// Nothing here can be bought: a note says why, and the buttons stay off.
+const purchaseBlocked = customizationUnavailable || onlinePaymentUnavailable;
+const actionPresentation = purchaseBlocked
   ? {
       addToCart: { ...stockActionPresentation.addToCart, disabled: true },
       buyNow: { ...stockActionPresentation.buyNow, disabled: true },
@@ -404,7 +415,9 @@ function optionAriaLabel(
       )}
 
       {customizationUnavailable ? (
-        <p id="product-customization-unavailable" class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>
+        <p id="product-customization-unavailable" data-purchase-blocked class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>
+      ) : onlinePaymentUnavailable ? (
+        <p id="product-online-payment-unavailable" data-purchase-blocked class="rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground" role="status">{pageCopy.onlinePaymentRequiredText}</p>
       ) : null}
 
       {hasBuyerInputs ? (
@@ -456,9 +469,9 @@ function optionAriaLabel(
       <div hidden={allSoldOut}>
         <label for="quantity" class="mb-1 block text-sm font-medium text-foreground">{actionCopy.quantityLabelText}</label>
         <div class="flex items-center">
-          <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-s-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Decrease quantity"><Icon name="minus" class="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-s-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label={catalogWords.decreaseQuantity}><Icon name="minus" class="h-4 w-4" aria-hidden="true" /></button>
           <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" form={buyFormId} aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
-          <button type="button" id="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-e-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label="Increase quantity"><Icon name="plus" class="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" id="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-e-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label={catalogWords.increaseQuantity}><Icon name="plus" class="h-4 w-4" aria-hidden="true" /></button>
         </div>
         <p id="quantity-message" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
       </div>

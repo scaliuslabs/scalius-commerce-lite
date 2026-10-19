@@ -4,6 +4,8 @@
 // under the header while the product's real below-fold sections pass
 // underneath (Amazon and Daraz on phones, Star Tech on computers). Every
 // link remains a native anchor; the script only marks the current section.
+import { catalogCopy } from "@/lib/catalog-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
@@ -17,10 +19,11 @@ interface Props {
 }
 
 const { detailsId = null, exploreId = null, reviewsId = null, phone = true, desktop = false } = Astro.props;
+const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).product;
 const links = [
-  detailsId && { id: detailsId, label: "Details" },
-  exploreId && { id: exploreId, label: "Similar" },
-  reviewsId && { id: reviewsId, label: "Reviews" },
+  detailsId && { id: detailsId, label: copy.details },
+  exploreId && { id: exploreId, label: copy.similar },
+  reviewsId && { id: reviewsId, label: copy.reviews },
 ].filter((link): link is { id: string; label: string } => Boolean(link));
 ---
 
@@ -30,7 +33,7 @@ const links = [
     data-product-section-nav
     data-section-nav-phone={phone ? "" : undefined}
     data-section-nav-desktop={desktop ? "" : undefined}
-    aria-label="Product sections"
+    aria-label={copy.sections}
     class:list={[
       "sticky top-[var(--header-height,0px)] z-[var(--scalius-z-content-bar,40)] h-[52px] border-b border-border bg-background shadow-[0_3px_8px_-5px_rgb(0_0_0/0.35)]",
       phone && desktop ? "flex" : phone ? "flex lg:hidden" : "hidden lg:flex",
@@ -38,7 +41,7 @@ const links = [
   >
     <a href="#product-container" class="flex w-[72px] shrink-0 flex-col items-center justify-center bg-muted/50 text-sm leading-tight text-foreground">
       <Icon name="chevron-up" class="h-4 w-4" aria-hidden="true" />
-      Top
+      {copy.top}
     </a>
     {links.map((link, index) => (
       <a

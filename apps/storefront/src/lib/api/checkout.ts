@@ -106,6 +106,17 @@ export function isCheckoutConfigReadFailure(config: CheckoutConfig): boolean {
 }
 
 /**
+ * Whether checkout takes some online payment (card or hosted gateway). A
+ * digital item or gift card is never paid in cash, so a store whose checkout
+ * offers only cash on delivery can't sell one on its own. An unavailable
+ * checkout answers true: it refuses every order and says so itself.
+ */
+export function takesOnlinePayment(config: CheckoutConfig | null | undefined): boolean {
+  if (!config || config.unavailable) return true;
+  return config.gateways.some((gateway) => gateway.id !== "cod" && gateway.flow !== "cod");
+}
+
+/**
  * Check if only COD is active (simple COD-only flow).
  * If advance partial payments are enabled, this flow is disabled because a gateway is required.
  */

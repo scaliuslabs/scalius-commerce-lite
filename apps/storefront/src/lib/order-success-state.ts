@@ -87,6 +87,13 @@ const ACCEPTED_PAYMENT_STATUSES = new Set(["paid", "partial"]);
 /** A (partly) refunded payment reads like a settled one: no retry, nothing due. */
 const REFUNDED_PAYMENT_STATUSES = new Set(["refunded", "partially_refunded"]);
 const FAILED_PAYMENT_STATUSES = new Set(["failed"]);
+/** What a hosted payment's return (or a payment that could not start) says in `result`. */
+const FAILED_PAYMENT_RESULTS = new Set(["failed", "cancelled"]);
+
+/** The return says the payment failed or was cancelled. */
+export function isFailedPaymentResult(result: string | null | undefined): boolean {
+  return FAILED_PAYMENT_RESULTS.has(normalize(result));
+}
 export type OrderSuccessStateKind =
   | "order_placed"
   | "order_updated"
@@ -269,16 +276,26 @@ export function getOrderSuccessViewState(
   const durableKind = getOrderSuccessStateKind(order);
   const paymentStatus = normalize(order.paymentStatus);
   const payment = getOrderPaymentPresentation(order, copy);
-  void callbackResult;
-  const kind = durableKind;
+  // The order still waits for an online payment and the return says it
+  // failed (or never started): that is known, so the page says it and offers
+  // a retry instead of "pending". Anything the store recorded wins: a paid,
+  // failed or closed order reads from its own state whatever the URL says.
+  const failedReturn = durableKind === "payment_pending"
+    && isOnlinePaymentMethod(order.paymentMethod)
+    && !isAcceptedPayment(order)
+    && isFailedPaymentResult(callbackResult);
+  const kind: OrderSuccessStateKind = failedReturn ? "payment_issue" : durableKind;
   // Copy templates already carry the "#": "We received order #{orderId}."
   const orderId = formatOrderNumber(order.orderNumber, order.id).slice(1);
   if (kind === "payment_issue") {
     return {
       kind,
       shouldFinalizeClientSide: false,
-      title: copy.orderReceiptPaymentIssueTitleText,
-      message: formatCheckoutLanguageText(copy.orderReceiptPaymentIssueMessageText, { orderId }),
+      title: failedReturn ? copy.orderReceiptPaymentFailedTitleText : copy.orderReceiptPaymentIssueTitleText,
+      message: formatCheckoutLanguageText(
+        failedReturn ? copy.orderReceiptPaymentFailedMessageText : copy.orderReceiptPaymentIssueMessageText,
+        { orderId },
+      ),
       orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
       paymentStatusLabel: payment.statusLabel,
       orderBadgeClass: getOrderStatusBadgeClass(order.status),

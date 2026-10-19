@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   SUPPORTED_CURRENCY_CODES,
   formatMoney,
+  formatPrice,
   normalizeSupportedCurrencyCode,
 } from "./currency";
 
@@ -41,6 +42,13 @@ describe("buyer money format", () => {
     expect(formatMoney(1822.5, { code: "BDT" })).toBe("৳1,822.50");
     expect(formatMoney(-150, { code: "BDT" })).toBe("-৳150");
     expect(formatMoney(0, { code: "BDT" })).toBe("৳0");
+  });
+
+  it("writes a Bangla reader's amounts in Bangla digits, the same grouping", () => {
+    expect(formatMoney(1750, { code: "BDT", language: "bn" })).toBe("৳১,৭৫০");
+    expect(formatMoney(230690, { code: "BDT", language: "bn-BD" })).toBe("৳২,৩০,৬৯০");
+    expect(formatMoney(1822.5, { code: "BDT", language: "en" })).toBe("৳1,822.50");
+    expect(formatPrice(1250, { symbol: "৳", code: "BDT", language: "bn" })).toBe("৳১,২৫০.০০");
   });
 
   it("honors other currencies' grouping and precision", () => {

@@ -4,6 +4,9 @@
 // (when the template asks) the result count. They sit in the title band;
 // Dawn's bar layout puts them at the end of the filter line instead.
 import type { ComponentProps } from "astro/types";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { formatCount } from "@/lib/store-time-zone";
 import Icon from "@/components/icons/Icon.astro";
 import CatalogChipLinks from "./CatalogChipLinks.astro";
 import CatalogViewSelect from "./CatalogViewSelect.astro";
@@ -28,6 +31,7 @@ interface Props {
 }
 
 const { drawerButton, refinementCount, quickFilters, showPageSize, showSort, showViewToggle, limit, sortBy, sortOptions, viewSelect, results, countLabel = null, class: className } = Astro.props;
+const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).listing;
 ---
 
 <div class:list={["catalog-band-tools", className]}>
@@ -41,14 +45,14 @@ const { drawerButton, refinementCount, quickFilters, showPageSize, showSort, sho
         class="relative inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
       >
         <Icon name="sliders-horizontal" class="h-4 w-4" />
-        <span>Filter</span>
+        <span>{copy.filter}</span>
         {refinementCount > 0 && (
           <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-            {refinementCount}<span class="sr-only"> applied</span>
+            {formatCount(refinementCount)}<span class="sr-only"> {copy.applied}</span>
           </span>
         )}
       </button>
-      <CatalogChipLinks label="Quick filters" links={quickFilters} class="min-w-0" />
+      <CatalogChipLinks label={copy.quickFilters} links={quickFilters} class="min-w-0" />
     </Fragment>
   )}
   {showPageSize && <CatalogViewSelect id="pageSizeDesktop" name="limit" variant="labelled" selected={String(limit)} {...viewSelect} />}
