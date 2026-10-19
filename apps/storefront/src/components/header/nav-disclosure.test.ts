@@ -274,6 +274,33 @@ describe("menu row keys", () => {
     expect(document.activeElement!.getAttribute("href")).toBe("/panjabi");
   });
 
+  it("runs an app header's row by its data-nav-link controls", () => {
+    document.body.innerHTML = `
+      <ul class="noor-nav-list" data-nav-overflow>
+        <li data-nav-index="0" data-disclosure-item>
+          <button type="button" class="noor-nav-link" data-nav-link data-disclosure="popup" aria-expanded="false" aria-controls="noor-nav-panel-0">Heading</button>
+          <div id="noor-nav-panel-0" hidden><ul><li><a href="/x">X</a></li></ul></div>
+        </li>
+        <li data-nav-index="1" data-disclosure-item>
+          <a class="noor-nav-link" data-nav-link href="/shoes">Shoes</a>
+          <button type="button" class="noor-nav-toggle" data-disclosure="popup" aria-expanded="false" aria-controls="noor-nav-panel-1">Shoes menu</button>
+          <div id="noor-nav-panel-1" hidden><ul><li><a href="/sandals">Sandals</a></li></ul></div>
+        </li>
+      </ul>`;
+    button("noor-nav-panel-0").focus();
+    key("ArrowRight");
+    expect(document.activeElement!.getAttribute("href")).toBe("/shoes");
+    key("ArrowDown");
+    expect(panel("noor-nav-panel-1").hidden).toBe(false);
+    expect(document.activeElement!.getAttribute("href")).toBe("/sandals");
+    key("Escape");
+    expect(panel("noor-nav-panel-1").hidden).toBe(true);
+    expect(document.activeElement).toBe(button("noor-nav-panel-1"));
+    button("noor-nav-panel-0").click();
+    expect(panel("noor-nav-panel-0").hidden).toBe(false);
+    expect(document.documentElement.hasAttribute("data-nav-disclosure")).toBe(true);
+  });
+
   it("moves the menu itself into the condensed bar and back", () => {
     document.body.insertAdjacentHTML("afterbegin", '<div id="main-header"><div data-nav-compact-home="desktop-nav"></div></div>');
     const header = document.getElementById("main-header")!;

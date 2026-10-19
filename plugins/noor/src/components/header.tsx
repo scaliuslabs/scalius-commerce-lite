@@ -2,15 +2,21 @@
 // logo and the actions (logo centred between them, or first), mega menus on
 // computers and a drawer on phones. On a landing page it can turn into a
 // campaign header: the logo and one "Order now" button, nothing that leads
-// away from the order. Menus, search and the drawer are native HTML (hover,
-// focus and `popover`), so they work before any script; the one island marks
-// the bar once the page scrolls and turns the announcements.
+// away from the order. Menus follow the store's disclosure pattern (a button
+// with `aria-expanded` per menu; click, Enter, Escape, arrow keys and hover
+// intent come from the store's nav-disclosure script, and hover or focus
+// opens them before it runs). Search and the drawer are native `popover`s.
+// The drawer follows the theme's phone navigation: an accordion, or one
+// level at a time; with Bottom tabs the store draws its tab bar, whose menu
+// tab opens this drawer (`menuDrawer()`). The one island marks the bar once
+// the page scrolls and turns the announcements.
 
 import {
   CartCount,
   Image,
   Island,
   accountLink,
+  menuDrawer,
   openCart,
   stickyHeader,
   t,
@@ -75,22 +81,34 @@ function ItemLink({ item, class: className }: { item: StorefrontMenuItem; class?
 
 function Menu({ items, style, limit, context }: { items: StorefrontMenuItem[]; style: string; limit: number; context: Context }) {
   return (
-    <ul class="noor-nav-list">
-      {items.slice(0, limit).map((item) => {
+    <ul class="noor-nav-list" data-nav-overflow>
+      {items.slice(0, limit).map((item, index) => {
         const children = item.children;
         const deep = children.some((child) => child.children.length > 0);
-        const label = <><span>{item.title}</span>{children.length > 0 ? <Icon name="down" size={14} /> : null}</>;
+        const panel = `noor-nav-panel-${index}`;
+        const disclosure = children.length > 0
+          ? { "data-disclosure": "popup", "aria-expanded": "false", "aria-controls": panel }
+          : {};
         return (
-          <li class={cx("noor-nav-item", children.length > 0 && "has-menu")}>
+          <li class={cx("noor-nav-item", children.length > 0 && "has-menu")} data-nav-index={String(index)}
+            data-disclosure-item={children.length > 0 ? "" : undefined}>
             {linked(item) ? (
-              <a class="noor-nav-link" href={item.url} title={item.title} aria-haspopup={children.length > 0 ? "true" : undefined}>{label}</a>
+              <a class="noor-nav-link" href={item.url} title={item.title} data-nav-link><span>{item.title}</span></a>
             ) : (
-              // A heading opens its links on hover and focus like a linked item, without going anywhere.
-              <button type="button" class="noor-nav-link noor-nav-heading" title={item.title} aria-haspopup={children.length > 0 ? "true" : undefined}>{label}</button>
+              // A heading is the button that opens its links; it goes nowhere itself.
+              <button type="button" class="noor-nav-link noor-nav-heading" title={item.title} data-nav-link {...disclosure}>
+                <span>{item.title}</span>{children.length > 0 ? <Icon name="down" size={14} /> : null}
+              </button>
             )}
+            {children.length > 0 && linked(item) ? (
+              <button type="button" class="noor-nav-toggle" {...disclosure}>
+                <span class="noor-sr">{t(context, { en: `${item.title} menu`, bn: `${item.title} মেনু` })}</span>
+                <Icon name="down" size={14} />
+              </button>
+            ) : null}
             {children.length > 0 ? (
               style === "mega" && deep ? (
-                <div class="noor-mega">
+                <div class="noor-mega" id={panel} hidden>
                   <div class="noor-mega-inner">
                     {children.map((child) => (
                       <div class="noor-mega-col">
@@ -102,7 +120,7 @@ function Menu({ items, style, limit, context }: { items: StorefrontMenuItem[]; s
                   </div>
                 </div>
               ) : (
-                <div class="noor-drop">
+                <div class="noor-drop" id={panel} hidden>
                   <MenuLinks items={children} />
                 </div>
               )
@@ -137,7 +155,12 @@ function DrawerMenu({ items, context, nested = false }: { items: StorefrontMenuI
         <li>
           {item.children.length > 0 ? (
             <details>
-              <summary><span>{item.title}</span><Icon name="down" size={16} /></summary>
+              {/* One level at a time: an open level covers the one before, and its summary is the way back. */}
+              <summary>
+                <span class="noor-drawer-back" aria-hidden="true"><Icon name="back" size={16} /></span>
+                <span>{item.title}</span>
+                <Icon name="down" size={16} />
+              </summary>
               {linked(item) ? <ul><li><a href={item.url}>{t(context, { en: `All ${item.title}`, bn: `সব ${item.title}` })}</a></li></ul> : null}
               <DrawerMenu items={item.children} context={context} nested />
             </details>
@@ -222,7 +245,8 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
           </div>
         </header>
       </Island>
-      <div id="noor-drawer" popover="auto" class="noor-drawer" aria-label={t(context, { en: "Menu", bn: "মেনু" })}>
+      <div id="noor-drawer" popover="auto" class={cx("noor-drawer", data.phoneNavigation?.menu === "drill" && "is-drill")}
+        aria-label={t(context, { en: "Menu", bn: "মেনু" })} {...menuDrawer()}>
         <div class="noor-drawer-top">
           <span class="noor-drawer-title">{data.store.name}</span>
           <button type="button" class="noor-icon-btn" popovertarget="noor-drawer" popovertargetaction="hide" aria-label={t(context, { en: "Close menu", bn: "মেনু বন্ধ করুন" })}>
@@ -233,7 +257,7 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
           <Icon name="search" size={18} />
           <input type="search" name={data.searchParam} placeholder={t(context, { en: "Search products", bn: "পণ্য খুঁজুন" })} aria-label={searchLabel} />
         </form>
-        <nav aria-label={t(context, { en: "Main", bn: "প্রধান" })}><DrawerMenu items={data.menu} context={context} /></nav>
+        <nav class="noor-drawer-nav" aria-label={t(context, { en: "Main", bn: "প্রধান" })}><DrawerMenu items={data.menu} context={context} /></nav>
         <div class="noor-drawer-foot">
           <a href={data.routes.account} {...accountLink()}><Icon name="user" size={18} />{t(context, { en: "My account", bn: "আমার অ্যাকাউন্ট" })}</a>
         </div>

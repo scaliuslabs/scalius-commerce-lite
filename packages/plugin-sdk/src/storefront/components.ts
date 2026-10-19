@@ -130,6 +130,15 @@ export function stickyHeader(): Attributes {
   return { "data-sticky-header": "" };
 }
 
+/**
+ * Mark the header's menu drawer (a `popover` element or a `<dialog>`): the
+ * store's phone tab bar (`data.phoneNavigation.tabBar`) opens it from its
+ * menu tab, so the drawer stays the header's own.
+ */
+export function menuDrawer(): Attributes {
+  return { "data-menu-drawer": "" };
+}
+
 /** Open the host search palette. Supply a native button or an anchor with a search-page fallback. */
 export function searchOpener(): Attributes {
   return { "data-search-open": "" };

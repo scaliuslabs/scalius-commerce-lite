@@ -53,6 +53,7 @@ import { productGalleryItems } from "@/components/product/lib/gallery-media";
 import { objectFieldViews } from "@/lib/object-fields";
 import { isVariantAvailable } from "@/lib/product-sellable-variants";
 import { navigationFromCategoryTree, sourceNavigation, type NavigationSource } from "@/components/header/nav-tree";
+import { phoneNavigation } from "@/components/header/phone-navigation";
 import type { RequestTheme } from "@/lib/storefront-theme-context";
 import {
   collectionShowsProducts,
@@ -111,6 +112,7 @@ export function headerData(input: {
     announcement: text ? { text, url: typeof settings.link === "string" && settings.link ? settings.link : null } : null,
     routes: { home: "/", search: "/search", cart: "/cart", account: "/account" },
     searchParam: "q",
+    phoneNavigation: (({ menu, tabBar }) => ({ menu, tabBar }))(phoneNavigation(resolved.blocks)),
     ...(input.page !== undefined ? { page: input.page } : {}),
   };
 }

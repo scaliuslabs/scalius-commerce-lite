@@ -600,12 +600,14 @@
 }
 .noor-nav-link > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
 .noor-nav-more-item, .noor-nav-more-item > .noor-nav-link { flex: none; }
-.noor-nav-more, .noor-nav-heading { border: 0; background: transparent; font-family: inherit; line-height: inherit; cursor: pointer; }
-.noor-nav-heading { cursor: default; }
+.noor-nav-more, .noor-nav-heading, .noor-nav-toggle { border: 0; background: transparent; color: inherit; font-family: inherit; line-height: inherit; cursor: pointer; }
+.noor-nav-toggle { display: inline-flex; align-items: center; justify-content: center; flex: none; min-inline-size: 1.75rem; margin-inline-start: -0.5rem; padding: 0; }
+.noor-nav-toggle:focus-visible, .noor-nav-link:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; border-radius: var(--n-radius); }
 .noor-nav-link::after { content: ""; position: absolute; inset-inline: 0.75rem; inset-block-end: 0.25rem; block-size: 1px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform var(--n-base) var(--n-ease); }
-.noor-nav-item:is(:hover, :focus-within) > .noor-nav-link::after { transform: scaleX(1); }
-.noor-nav-link .noor-icon { opacity: 0.6; transition: transform var(--n-fast); }
-.noor-nav-item:is(:hover, :focus-within) > .noor-nav-link .noor-icon { transform: rotate(180deg); }
+.noor-nav-item:is(:hover, :focus-within, :has(> [aria-expanded="true"])) > .noor-nav-link::after { transform: scaleX(1); }
+.noor-nav-item .noor-icon { opacity: 0.6; transition: transform var(--n-fast); }
+[aria-expanded="true"] > .noor-icon { transform: rotate(180deg); }
+.noor-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .noor-mega, .noor-drop {
   position: absolute;
@@ -614,12 +616,13 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   overflow-wrap: anywhere;
-  visibility: hidden;
-  opacity: 0;
-  transform: translateY(-0.25rem);
-  transition: opacity var(--n-fast) var(--n-ease), transform var(--n-fast) var(--n-ease), visibility 0s linear var(--n-fast);
 }
-.noor-nav-item:is(:hover, :focus-within) > :is(.noor-mega, .noor-drop) { visibility: visible; opacity: 1; transform: none; transition-delay: 60ms, 60ms, 0s; }
+:is(.noor-mega, .noor-drop)[hidden] { display: none; }
+:is(.noor-mega, .noor-drop):not([hidden]) { animation: noor-menu-in var(--n-fast) var(--n-ease); }
+/* Before the store's disclosure script runs, hover and focus open a menu. */
+:root:not([data-nav-disclosure]) .noor-nav-item:is(:hover, :focus-within) > :is(.noor-mega, .noor-drop)[hidden] { display: block; }
+@keyframes noor-menu-in { from { opacity: 0; transform: translateY(-0.25rem); } }
+@media (prefers-reduced-motion: reduce) { :is(.noor-mega, .noor-drop):not([hidden]) { animation: none; } }
 .noor-mega { inset-inline: 0; inset-block-start: 100%; background: var(--n-surface); color: var(--n-ink); border-block: 1px solid var(--n-line); box-shadow: 0 24px 40px -28px rgb(20 16 12 / 0.35); }
 .noor-mega-inner { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 2rem; max-inline-size: var(--n-max); margin: 0 auto; padding: 2rem var(--n-gutter) 2.25rem; }
 .noor-mega-head { display: block; margin-block-end: 0.75rem; color: inherit; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-decoration: none; text-transform: uppercase; }
@@ -645,13 +648,13 @@
 :root:not(:has(main [data-scalius-lead-empty])) {
   .noor-header-shell.is-transparent { margin-block-end: calc((3.5rem + 2.25rem) * -1); }
   .noor-header-shell.is-transparent:not(:has(.noor-announce)) { margin-block-end: -3.5rem; }
-  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within)) .noor-header {
+  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within, .noor-nav [aria-expanded="true"])) .noor-header {
     background: transparent;
     border-color: transparent;
     color: #fff;
   }
-  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within)) .noor-search-trigger { color: inherit; }
-  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within)) .noor-header .noor-logo-img { filter: brightness(0) invert(1); }
+  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within, .noor-nav [aria-expanded="true"])) .noor-search-trigger { color: inherit; }
+  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within, .noor-nav [aria-expanded="true"])) .noor-header .noor-logo-img { filter: brightness(0) invert(1); }
   @media (min-width: 64rem) {
     .noor-header-shell.is-transparent { margin-block-end: calc((4.25rem + 2.25rem) * -1); }
     .noor-header-shell.is-transparent:not(:has(.noor-announce)) { margin-block-end: -4.25rem; }
@@ -691,7 +694,20 @@
 .noor-drawer-list a, .noor-drawer-list summary { display: flex; align-items: center; justify-content: space-between; min-block-size: 3.25rem; overflow-wrap: anywhere; color: inherit; font-size: 1rem; font-weight: 500; text-decoration: none; cursor: pointer; list-style: none; }
 .noor-drawer-list summary > span { min-inline-size: 0; }
 .noor-drawer-list summary::-webkit-details-marker { display: none; }
-.noor-drawer-list details[open] > summary .noor-icon { transform: rotate(180deg); }
+.noor-drawer-list details[open] > summary > .noor-icon:last-child { transform: rotate(180deg); }
+.noor-drawer-back { display: none; }
+/* Drill-in (the theme's phone navigation): an open level covers the one before it; its summary leads back. */
+.noor-drawer.is-drill .noor-drawer-nav { position: relative; min-block-size: 24rem; }
+.noor-drawer.is-drill .noor-drawer-list details[open] { position: absolute; inset: 0; z-index: 1; overflow-y: auto; padding-inline: 1.25rem; background: var(--n-surface); }
+.noor-drawer.is-drill .noor-drawer-list details > summary > .noor-icon:last-child { transform: rotate(-90deg); }
+[dir="rtl"] .noor-drawer.is-drill .noor-drawer-list details > summary > .noor-icon:last-child { transform: rotate(90deg); }
+.noor-drawer.is-drill .noor-drawer-list details[open] > summary { justify-content: flex-start; gap: 0.5rem; font-weight: 600; border-block-end: 1px solid var(--n-line); }
+.noor-drawer.is-drill .noor-drawer-list details[open] > summary > .noor-drawer-back { display: inline-flex; }
+.noor-drawer.is-drill .noor-drawer-list details[open] > summary > .noor-icon:last-child { display: none; }
+[dir="rtl"] .noor-drawer-back .noor-icon { transform: scaleX(-1); }
+.noor-drawer.is-drill .noor-drawer-list details ul { margin: 0; padding-inline-start: 0; border: 0; }
+.noor-drawer.is-drill .noor-drawer-list details li { border-block-end: 1px solid var(--n-line); }
+.noor-drawer.is-drill .noor-drawer-list details a { min-block-size: 3rem; color: inherit; font-size: 1rem; }
 .noor-drawer-list details ul { margin: 0 0 0.75rem; padding: 0; padding-inline-start: 0.75rem; list-style: none; border-inline-start: 1px solid var(--n-line); }
 .noor-drawer-list details a { min-block-size: 2.5rem; color: var(--n-muted); font-size: 0.9375rem; font-weight: 400; }
 .noor-drawer-foot { padding: 1.25rem; }

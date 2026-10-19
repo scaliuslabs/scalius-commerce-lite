@@ -2,7 +2,8 @@
 // The store header: the app header skin the theme names
 // (`apps.skins.header`), else the theme's own header (CoreHeader.astro). An
 // app header that is inactive, fails or is late gives way to the core
-// header, so a page always has one.
+// header, so a page always has one. Under an app header the store adds the
+// theme's phone tab bar and its menu disclosure behaviour (nav-disclosure.ts).
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import Skin from "@/components/apps/Skin.astro";
 import { appSkin } from "@/lib/extensions";
@@ -10,11 +11,17 @@ import { headerData, headerPageData } from "@/lib/extensions/data";
 import type { HomepageHeaderLead } from "@/lib/homepage-sections";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import CoreHeader from "./CoreHeader.astro";
+import MobileTabBar from "./MobileTabBar.astro";
+import AppHeaderBehaviour from "./AppHeaderBehaviour.astro";
+import { phoneNavigation } from "./phone-navigation";
 
 type Props = import("astro/types").ComponentProps<typeof CoreHeader> & { pageLead?: HomepageHeaderLead };
 
 const { pageLead, ...props } = Astro.props;
 const theme = await currentRequestTheme(Astro.locals);
+// Under an app header the store still draws the theme's phone tab bar.
+const phone = phoneNavigation(theme.resolved.blocks);
+const tabBar = phone.tabBar && props.mobileNavigation === "tabs";
 const data = async () => {
   const skin = await appSkin(Astro.locals, Astro.url, "header");
   return headerData({ theme, storeName: props.storeName ?? null, navigation: props.navigation ?? [], categoryTree: props.categoryTree,
@@ -26,5 +33,9 @@ const data = async () => {
 <div class="contents" data-storefront-header>
   <Skin target="header" data={data} editorMark={theme.preview !== null ? THEME_EDITOR_MARKS.header : undefined}>
     <CoreHeader {...props} />
+    <Fragment slot="drawn">
+      <AppHeaderBehaviour />
+      {tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}
+    </Fragment>
   </Skin>
 </div>

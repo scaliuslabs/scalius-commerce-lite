@@ -94,6 +94,7 @@ const EXTENSION = {
   skins: [
     { id: "pdp", target: "product-main", settings: [] },
     { id: "grid", target: "listing-main", settings: [] },
+    { id: "bar", target: "header", settings: [] },
   ],
   blocks: [{ type: "size-guide", target: "product.below", settings: [] }],
 };
@@ -277,6 +278,40 @@ describe("a product-main skin", () => {
     expect(none.page.querySelector("[data-product-main]")).toBeNull();
     expect(none.page.querySelector("#product-buy-form")).not.toBeNull();
     expect(jobs.some(({ job }) => job.target === "product-main")).toBe(false);
+  });
+});
+
+describe("an app header skin", () => {
+  const withHeader = (mobileNav: { variant: string; settings: Record<string, unknown> }): StorefrontThemeDocument => {
+    const document = theme();
+    return {
+      ...document,
+      blocks: { ...document.blocks, mobileNav } as StorefrontThemeDocument["blocks"],
+      apps: { skins: { ...document.apps?.skins, header: { app: "acme.theme/bar", values: {} } } },
+    } as StorefrontThemeDocument;
+  };
+  const header = '<header class="acme-header"><button type="button" popovertarget="acme-drawer">Menu</button><div id="acme-drawer" popover="auto" data-menu-drawer>Menu</div></header>';
+
+  it("keeps the theme's bottom tabs, whose menu tab opens the header's own drawer", async () => {
+    const jobs = app({ header: () => header, "product-main": () => null });
+    const { page } = await renderProduct(withHeader({ variant: "bottom-tabs", settings: { tabs: ["home", "categories", "offers", "account"], drawer: "drill-in" } }));
+    expect(page.querySelector(".acme-header")).not.toBeNull();
+    expect(page.querySelector("#site-header")).toBeNull();
+    expect(page.querySelectorAll("#mobile-tab-bar")).toHaveLength(1);
+    const tab = page.querySelector<HTMLAnchorElement>("#mobile-tab-bar [data-app-menu-open]")!;
+    expect(tab.getAttribute("href")).toBe("/categories");
+    expect(page.querySelector("#mobile-tab-bar [data-mobile-menu-open]")).toBeNull();
+    const data = jobs.find(({ job }) => job.target === "header")!.job.data as { phoneNavigation?: unknown };
+    expect(data.phoneNavigation).toEqual({ menu: "drill", tabBar: true });
+  });
+
+  it("draws no tab bar for a drawer phone navigation", async () => {
+    const jobs = app({ header: () => header, "product-main": () => null });
+    const { page } = await renderProduct(withHeader({ variant: "accordion-drawer", settings: {} }));
+    expect(page.querySelector(".acme-header")).not.toBeNull();
+    expect(page.querySelector("#mobile-tab-bar")).toBeNull();
+    const data = jobs.find(({ job }) => job.target === "header")!.job.data as { phoneNavigation?: unknown };
+    expect(data.phoneNavigation).toEqual({ menu: "accordion", tabBar: false });
   });
 });
 

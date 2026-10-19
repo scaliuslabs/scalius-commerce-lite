@@ -5,7 +5,8 @@
 // the default slot. Core draws whenever there is no skin, its app is not
 // active, or the skin draws nothing, fails, is late or misses a required
 // embed. The projection is built only when a skin will draw (`data` is
-// called lazily), and the core unit renders only when it is needed.
+// called lazily), and the core unit renders only when it is needed. Slot
+// `drawn` renders after the skin only when it drew (what core adds to it).
 import type { StorefrontSkinRef } from "@scalius/shared/storefront-theme";
 import type { StorefrontSkinTarget } from "@scalius/shared/plugins/storefront-protocol";
 import AppComponent from "./AppComponent.astro";
@@ -32,4 +33,4 @@ const markup = skin
   : null;
 ---
 
-{markup ? <AppComponent markup={markup} embeds={embeds} editorMark={editorMark} /> : <slot />}
+{markup ? <Fragment><AppComponent markup={markup} embeds={embeds} editorMark={editorMark} /><slot name="drawn" /></Fragment> : <slot />}

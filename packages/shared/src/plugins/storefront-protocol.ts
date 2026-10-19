@@ -237,6 +237,14 @@ export interface StorefrontHeaderData {
   routes: { home: string; search: string; cart: string; account: string };
   /** The search form's query parameter. */
   searchParam: string;
+  /**
+   * The theme's phone navigation (Online store -> Theme): the menu drawer as
+   * an accordion or one level at a time (`drill`), and whether the store
+   * draws its bottom tab bar under this header on phones. The bar's menu tab
+   * opens the element marked with `menuDrawer()` (a `popover` or a dialog).
+   * Absent from older stores.
+   */
+  phoneNavigation?: { menu: "accordion" | "drill"; tabBar: boolean };
   /** The first selected homepage render unit, only when desktop and phone agree. */
   page?: {
     lead:

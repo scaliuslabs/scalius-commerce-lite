@@ -1,0 +1,14 @@
+---
+// What the store adds under an app header skin: the menu disclosure
+// behaviour (nav-disclosure.ts) for markup that follows its contract
+// (`button[data-disclosure="popup"][aria-controls]` in a
+// `[data-disclosure-item]`, a `ul[data-nav-overflow]` row whose items carry
+// `data-nav-index` and whose top controls carry `data-nav-link`). CoreHeader
+// installs the same behaviour for the store's own headers.
+---
+
+<script>
+  import { installNavDisclosure } from "./nav-disclosure";
+
+  installNavDisclosure();
+</script>

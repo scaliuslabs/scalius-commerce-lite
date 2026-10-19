@@ -24,6 +24,12 @@ interface Props {
   tabs?: readonly Tab[];
   /** Comparing is possible (the product page offers compare-similar): show the Compare tab when the merchant chose it. */
   compare?: boolean;
+  /**
+   * Whose menu drawer the Categories tab opens: the store's (`#mobile-menu-panel`)
+   * or an app header's (the element it marked `menuDrawer()`), with the
+   * categories page as the link without JavaScript.
+   */
+  menu?: "core" | "app";
 }
 
 const DEFAULT_TABS: readonly Tab[] = ["home", "categories", "offers", "account"];
@@ -31,7 +37,7 @@ const DEFAULT_TABS: readonly Tab[] = ["home", "categories", "offers", "account"]
 const AVAILABLE = new Set<Tab>(["home", "categories", "offers", "account"]);
 const OFFERS_HREF = "/search?hasDiscount=true";
 
-const { tabs = DEFAULT_TABS, compare = false } = Astro.props;
+const { tabs = DEFAULT_TABS, compare = false, menu = "core" } = Astro.props;
 const { language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).chrome;
 const chosen = tabs.filter((tab) => AVAILABLE.has(tab) || (tab === "compare" && compare));
@@ -63,14 +69,15 @@ const active = {
           )}
           {tab === "categories" && (
             <a
-              href="#mobile-menu-panel"
+              href={menu === "app" ? "/categories" : "#mobile-menu-panel"}
               role="button"
               class="mobile-tab"
               aria-current={active.categories ? "true" : undefined}
               aria-haspopup="dialog"
-              aria-controls="mobile-menu-panel"
+              aria-controls={menu === "app" ? undefined : "mobile-menu-panel"}
               aria-expanded="false"
-              data-mobile-menu-open
+              data-mobile-menu-open={menu === "app" ? undefined : ""}
+              data-app-menu-open={menu === "app" ? "" : undefined}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <rect width="7" height="7" x="3" y="3" rx="1.5" />
@@ -121,6 +128,10 @@ const active = {
 
 <script>
   import { pagePath } from "@/lib/presence-url";
+  import { bindAppMenuTab } from "./app-menu-tab";
+
+  // Under an app header: the Categories tab opens the header's own drawer.
+  bindAppMenuTab(document);
   // The Compare tab opens the buyer's list (CompareTray keeps it in this
   // browser); without JavaScript or a list it opens the empty comparison.
   const tab = document.querySelector<HTMLAnchorElement>("[data-compare-tab]");

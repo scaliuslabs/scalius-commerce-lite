@@ -147,6 +147,7 @@ The SDK's primitives:
 - `Island`: interactive markup (`hydrate`: `visible`, `idle`, `load`, `interaction`).
 - `quickAdd(product)`, `openCart()`, `CartCount`: the core cart behaviour, no app JavaScript.
 - `searchOpener()`, `accountLink()`: opt into the host's search and account actions; custom popovers remain valid.
+- `menuDrawer()`: marks a header's menu drawer (a `popover` or `<dialog>`), which the store's phone tab bar opens.
 - `stickyHeader()`: declare the actual sticky header box so core navigation and anchors reserve its space.
 - `editable(context, key)`: marks the element that shows a text setting, so the editor edits it in place (preview only; the published page has no marks).
 - `asset(context, "public/font.woff2")`: a public file's URL.
@@ -184,6 +185,19 @@ detail tab rail from stacking over it. A desktop buy bar reserves its height
 before scrolling reveals it, so direct links stay clear; a phone bottom bar
 never contributes to the top offset. Header geometry is observed on size,
 breakpoint and markup changes, without a geometry read on every scroll.
+
+A header gets the theme's phone navigation in `data.phoneNavigation`: `menu`
+(`accordion` or `drill`, one level at a time) for its drawer, and `tabBar`.
+With `tabBar` the store draws its own bottom tab bar under the skin on phones
+(it reserves its height, and the product buy bar replaces it while shown); its
+Categories tab opens the element marked `menuDrawer()`, and links to
+/categories without one. Under a header skin the store also installs its menu
+disclosure behaviour: a `button[data-disclosure="popup"][aria-controls]` in a
+`[data-disclosure-item]` shows and hides its `hidden` panel with click, Enter,
+Escape, a press outside and mouse hover intent, and a `ul[data-nav-overflow]`
+row whose items carry `data-nav-index` (their top control `data-nav-link`)
+gets arrow keys. `<html data-nav-disclosure>` appears once it runs, so CSS can
+open menus on hover or focus only before then.
 
 Search/account helpers attach optional attributes to your controls. Use native
 buttons or links for keyboard behavior and supply a real link destination for

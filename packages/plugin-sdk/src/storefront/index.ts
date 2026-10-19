@@ -37,7 +37,7 @@ export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Rend
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
 export {
   BuyForm, CartCount, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Toolbar,
-  accountLink, asset, editable, openCart, quickAdd, searchOpener, stickyHeader,
+  accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader,
 } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
 export type { BuyFormProps, ImageProps, IslandProps, OrderFormProps, PriceProps } from "./components";

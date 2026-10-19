@@ -19,7 +19,10 @@
  * - `[data-nav-compact-from="<nav id>"]`: the condensed classic header's bar;
  *   the menu moves there on scroll and back to `[data-nav-compact-home]`.
  * - Arrow keys: Left/Right/Home/End move along a menu row, Down opens a
- *   popup and enters it, Up/Down/Home/End move inside an open popup.
+ *   popup and enters it, Up/Down/Home/End move inside an open popup. A row
+ *   item's control is a core `.desktop-nav-link` or carries `data-nav-link`.
+ * - Once installed, `<html data-nav-disclosure>`: CSS that reveals menus on
+ *   hover or focus before the script runs turns itself off.
  * - `[data-pill-scroller]`: the current pill is scrolled into view.
  */
 
@@ -176,7 +179,8 @@ export function placeCompactMenus(doc: Document): void {
   });
 }
 
-const ROW_CONTROL = ":scope > a.desktop-nav-link, :scope > button.desktop-nav-link, :scope > span.desktop-nav-link";
+// A row item's own control: the core header's classes, or `data-nav-link` (app header skins).
+const ROW_CONTROL = ":scope > :is(a, button, span):is(.desktop-nav-link, [data-nav-link])";
 
 function rowControls(list: Element): HTMLElement[] {
   return Array.from(list.querySelectorAll<HTMLElement>(":scope > [data-nav-index], :scope > [data-nav-more]"))
@@ -279,6 +283,8 @@ export function installNavDisclosure(doc: Document = document): void {
   const view = doc.defaultView as NavWindow | null;
   if (!view || view.__scaliusNavDisclosure) return;
   view.__scaliusNavDisclosure = true;
+  // Stylesheets that open menus on hover/focus before the script (app headers) stand down.
+  doc.documentElement.setAttribute("data-nav-disclosure", "");
 
   const timers = new Map<HTMLElement, number>();
   const clearTimer = (button: HTMLElement) => {

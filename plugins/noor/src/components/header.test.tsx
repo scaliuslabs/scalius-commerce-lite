@@ -77,6 +77,39 @@ describe("Noor bounded desktop navigation", () => {
       .toEqual(["/pages/x", "/categories/footwear", "/categories/sandals"]);
   });
 
+  it.each(["mega", "simple"])("gives every menu the store's disclosure pattern (%s menus)", (style) => {
+    const items: StorefrontMenuItem[] = [{ title: "Heading", url: "#", children: menu(1)[0]!.children }, ...menu(3)];
+    const fragment = render(items, "center", "en", style);
+    const row = fragment.querySelector<HTMLElement>(".noor-nav-list[data-nav-overflow]")!;
+    const buttons = [...row.querySelectorAll<HTMLButtonElement>('button[data-disclosure="popup"]')];
+    expect(buttons).toHaveLength(4);
+    for (const button of buttons) {
+      expect(button.getAttribute("aria-expanded")).toBe("false");
+      const panel = fragment.getElementById(button.getAttribute("aria-controls")!)!;
+      expect(panel.hidden).toBe(true);
+      expect(panel.id).toMatch(/^noor-/);
+      // The button and its panel share their item, which the script answers for.
+      expect(button.closest("[data-disclosure-item]")).toBe(panel.closest("[data-disclosure-item]"));
+    }
+    // The heading is its own button; a linked item keeps its link and gets a labelled toggle.
+    expect(buttons[0]!.classList.contains("noor-nav-heading")).toBe(true);
+    expect(buttons[1]!.textContent).toContain("Category 0 menu");
+    expect([...row.querySelectorAll("[data-nav-index] > [data-nav-link]")].map((control) => control.tagName)).toEqual(["BUTTON", "A", "A", "A"]);
+  });
+
+  it("follows the theme's phone navigation: a marked drawer, drilled into one level at a time when asked", () => {
+    const settings = resolveStorefrontSettings(schema, { layout: "center" }, { image: () => null, products: () => [] });
+    const draw = (phoneNavigation?: { menu: "accordion" | "drill"; tabBar: boolean }) => {
+      const template = document.createElement("template");
+      template.innerHTML = renderHeader(storefront, "noor-header", settings, { menu: menu(2), ...(phoneNavigation ? { phoneNavigation } : {}) }, { context: fixtureContext() });
+      return template.content.querySelector<HTMLElement>("#noor-drawer")!;
+    };
+    expect(draw().hasAttribute("data-menu-drawer")).toBe(true);
+    expect(draw().classList.contains("is-drill")).toBe(false);
+    expect(draw({ menu: "drill", tabBar: true }).classList.contains("is-drill")).toBe(true);
+    expect(draw({ menu: "accordion", tabBar: true }).classList.contains("is-drill")).toBe(false);
+  });
+
   it("keeps full long labels and translated More text available before hydration", () => {
     const items = menu(50);
     items[0]!.title = "Collection".repeat(10);
