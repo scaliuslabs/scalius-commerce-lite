@@ -12,7 +12,9 @@ import type { IndexedOperation, OutputMode, ResolvedProfile, Runtime, Structured
 // The agent-first commands: ask, search, describe, read, write and batch.
 // Each prints one envelope `{ok, data, meta}` (JSON when piped, text on a
 // terminal), and every change follows search -> describe -> dry run ->
-// confirm -> write -> verify with the merchant's approval for gated steps.
+// confirm -> write -> verify. A gated change answers 428 with the server's
+// summary and a one-use token; --yes (or the merchant's yes) repeats the
+// identical request with that token, and nothing more is sent without it.
 
 export interface OutputOptions {
   mode: OutputMode;
@@ -303,13 +305,7 @@ export interface WriteOutcome {
   envelope: Record<string, unknown>;
 }
 
-const GATED_RISKS = new Set(["destructive", "financial", "security"]);
-const MAX_WRITE_ATTEMPTS = 3;
-
-/** Changes that need the merchant's approval before the CLI sends them. */
-export function isGatedOperation(operation: IndexedOperation): boolean {
-  return GATED_RISKS.has(operation.agent.risk ?? "") || operation.agent.confirmation === "required";
-}
+const MAX_WRITE_ATTEMPTS = 4;
 
 function factValue(value: unknown): string | null {
   if (typeof value === "string") return value.length > 40 ? `${value.slice(0, 37)}...` : value;
@@ -363,12 +359,38 @@ async function approve(runtime: Runtime, summary: string): Promise<boolean> {
   return /^y(es)?$/i.test(answer);
 }
 
-function confirmationRequired(summary: string, operationId: string, details?: unknown): CliError {
+function confirmationRequired(summary: string, label: string, details?: unknown): CliError {
   return new CliError(10, "confirmation_required", `This change needs the merchant's approval: ${summary}`, details, {
     status: 428,
     retryable: false,
-    hint: `Show the summary to the merchant. Preview with 'scalius write ${operationId} --dry-run', then re-run with --yes (or --confirm-token from the dry run) once they approve.`,
+    hint: "Show the summary to the merchant. Once they approve, run the same command again with --yes. Nothing was changed.",
   });
+}
+
+/** The server's 428: its summary and one-use token (the fallback summary when it sent none). */
+function confirmationOf(value: Record<string, unknown>, fallbackSummary: string): { summary: string; token?: string; confirmation?: unknown } {
+  const confirmation = isRecord(value.confirmation) ? value.confirmation : undefined;
+  return {
+    summary: typeof confirmation?.summary === "string" ? confirmation.summary : fallbackSummary,
+    ...(typeof confirmation?.confirmToken === "string" ? { token: confirmation.confirmToken } : {}),
+    ...(confirmation ? { confirmation } : {}),
+  };
+}
+
+/**
+ * The merchant's answer to a 428: `--yes`, or an interactive yes. Without
+ * either (a pipe, an agent) the command ends with exit 10 and sends nothing
+ * more; the token is never spent unapproved.
+ */
+async function settleApproval(runtime: Runtime, yes: boolean, summary: string, label: string, details: unknown): Promise<void> {
+  if (yes) {
+    writeDiagnostic(runtime, `Approved with --yes: ${summary}`);
+    return;
+  }
+  if (!interactive(runtime)) throw confirmationRequired(summary, label, details);
+  if (!(await approve(runtime, summary))) {
+    throw new CliError(10, "confirmation_declined", "The change was not approved; nothing was written.");
+  }
 }
 
 /** The idempotency key this invocation uses for every attempt of one write. */
@@ -412,9 +434,10 @@ async function sendWrite(
   profile: ResolvedProfile,
   audience: Audience,
   args: Record<string, unknown>,
-  approved: () => Promise<boolean>,
+  yes: boolean,
   idempotent: boolean,
   operationId: string,
+  fallbackSummary: string,
   dryRun: () => Promise<string | undefined>,
 ): Promise<ToolResult> {
   let current = { ...args };
@@ -423,12 +446,12 @@ async function sendWrite(
     if (!result.isError) return result;
     const error = toolError(result.value);
     if (error.errorCode === "confirmation_required") {
-      const confirmation = isRecord(result.value.confirmation) ? result.value.confirmation : {};
-      const summary = typeof confirmation.summary === "string" ? confirmation.summary : operationId;
-      if (current.confirmToken || typeof confirmation.confirmToken !== "string" || !(await approved())) {
-        throw confirmationRequired(summary, operationId, { confirmation });
-      }
-      current = { ...current, confirmToken: confirmation.confirmToken };
+      // The server's 428: show its summary, then repeat the identical request
+      // (same input, same idempotency key) with the one-use token.
+      const { summary, token, confirmation } = confirmationOf(result.value, fallbackSummary);
+      if (current.confirmToken || token === undefined) throw confirmationRequired(summary, operationId, { confirmation });
+      await settleApproval(runtime, yes, summary, operationId, { confirmation });
+      current = { ...current, confirmToken: token };
       continue;
     }
     if (!idempotent || attempt >= MAX_WRITE_ATTEMPTS) throw error;
@@ -466,42 +489,22 @@ export async function write(runtime: Runtime, output: OutputOptions, operationId
     return { code: 11, envelope };
   }
 
-  const gated = isGatedOperation(operation);
-  const canAsk = interactive(runtime);
-  let confirmToken = options.confirmToken;
-  if (gated && !options.yes && !confirmToken) {
-    // Nothing is sent without the merchant's approval: no dry-run body either.
-    if (!canAsk) throw confirmationRequired(localSummary(operation, options.input), operationId);
-    const preview = await tool(runtime, profile, audience, "scalius_write", dryRunArgs, true);
-    const envelope = dryRunEnvelope(preview);
-    runtime.stderr.write(`${previewText(envelope)}\n`);
-    const confirmation = isRecord(envelope.confirmation) ? envelope.confirmation : undefined;
-    const summary = typeof confirmation?.summary === "string" ? confirmation.summary : localSummary(operation, options.input);
-    if (!(await approve(runtime, summary))) {
-      throw new CliError(10, "confirmation_declined", "The change was not approved; nothing was written.");
-    }
-    confirmToken = typeof confirmation?.confirmToken === "string" ? confirmation.confirmToken : undefined;
-  } else if (gated && !confirmToken) {
-    const preview = await tool(runtime, profile, audience, "scalius_write", dryRunArgs, true);
-    const confirmation = isRecord(preview.value.confirmation) ? preview.value.confirmation : undefined;
-    confirmToken = typeof confirmation?.confirmToken === "string" ? confirmation.confirmToken : undefined;
-    writeDiagnostic(runtime, `Approved with --yes: ${typeof confirmation?.summary === "string" ? confirmation.summary : localSummary(operation, options.input)}`);
-  }
-
   const freshToken = async () => {
     const preview = await tool(runtime, profile, audience, "scalius_write", dryRunArgs, true);
     const confirmation = isRecord(preview.value.confirmation) ? preview.value.confirmation : undefined;
     return typeof confirmation?.confirmToken === "string" ? confirmation.confirmToken : undefined;
   };
-  const approved = async () => options.yes || (canAsk && await approve(runtime, localSummary(operation, options.input)));
+  // Send the change itself: a gated one answers 428 with the server's summary
+  // and token, which sendWrite settles with the merchant (nothing is written before).
   const result = await sendWrite(
     runtime,
     profile,
     audience,
-    { ...base, ...(confirmToken ? { confirmToken } : {}) },
-    approved,
+    { ...base, ...(options.confirmToken ? { confirmToken: options.confirmToken } : {}) },
+    options.yes,
     idempotencyKey !== undefined,
     operationId,
+    localSummary(operation, options.input),
     freshToken,
   );
   const envelope = okEnvelope(result);
@@ -577,27 +580,19 @@ export async function batch(
     emit(runtime, output, envelope, () => previewText(envelope));
     return 11;
   }
-  const gated = resolved.filter(({ operation }) => isGatedOperation(operation));
   let confirmToken = options.confirmToken;
-  if (gated.length > 0 && !options.yes && !confirmToken) {
-    const summary = gated.map(({ step, operation }) => localSummary(operation, step.input ?? {})).join("; ");
-    if (!interactive(runtime)) throw confirmationRequired(summary, "<batch>");
-    const preview = await tool(runtime, profile, audience, "scalius_write", { steps: keyed, dryRun: true }, true);
-    const envelope = dryRunEnvelope(preview);
-    runtime.stderr.write(`${previewText(envelope)}\n`);
-    if (!(await approve(runtime, summary))) throw new CliError(10, "confirmation_declined", "The batch was not approved; nothing was written.");
-    const confirmation = isRecord(envelope.confirmation) ? envelope.confirmation : undefined;
-    confirmToken = typeof confirmation?.confirmToken === "string" ? confirmation.confirmToken : undefined;
-  } else if (gated.length > 0 && !confirmToken) {
-    const preview = await tool(runtime, profile, audience, "scalius_write", { steps: keyed, dryRun: true }, true);
-    const confirmation = isRecord(preview.value.confirmation) ? preview.value.confirmation : undefined;
-    confirmToken = typeof confirmation?.confirmToken === "string" ? confirmation.confirmToken : undefined;
-  }
-  const result = await callTool(runtime, profile, audience, "scalius_write", { steps: keyed, ...(confirmToken ? { confirmToken } : {}) }, { retry: false });
-  if (result.isError && !Array.isArray(result.value.steps)) {
+  let result: ToolResult;
+  for (;;) {
+    result = await callTool(runtime, profile, audience, "scalius_write", { steps: keyed, ...(confirmToken ? { confirmToken } : {}) }, { retry: false });
+    if (!(result.isError && !Array.isArray(result.value.steps))) break;
     const error = toolError(result.value);
-    if (error.errorCode === "confirmation_required") throw confirmationRequired(String((result.value.confirmation as Record<string, unknown> | undefined)?.summary ?? "batch"), "<batch>", { confirmation: result.value.confirmation });
-    throw error;
+    if (error.errorCode !== "confirmation_required") throw error;
+    // The server's 428 for the whole batch: nothing ran. Repeat the identical steps with its token.
+    const fallback = resolved.map(({ step, operation }) => localSummary(operation, step.input ?? {})).join("; ");
+    const { summary, token, confirmation } = confirmationOf(result.value, fallback);
+    if (confirmToken || token === undefined) throw confirmationRequired(summary, "<batch>", { confirmation });
+    await settleApproval(runtime, options.yes, summary, "<batch>", { confirmation });
+    confirmToken = token;
   }
   return finish(result);
 }

@@ -48,7 +48,8 @@ Note: Cancelling releases the order's reserved stock. A paid order also needs da
 Note: This stable operation takes minor units (60 BDT = 6000).
 
 ## Tag every customer with more than 3 orders as VIP
-1. cli    scalius bulk tags --filter '<orders > 3, from describe>' --set '{"add":["VIP"]}' --dry-run
+1. cli    scalius bulk tags --filter 'minOrders=4' --add VIP --dry-run: the customers it would tag
+2. cli    scalius bulk tags --filter 'minOrders=4' --add VIP --wait --yes: after the merchant approves the preview
 
 ## Approve pending reviews and reply to the 1-star one
 1. read   dashboard.reviews.list: pending first

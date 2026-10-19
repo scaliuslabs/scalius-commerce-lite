@@ -28,6 +28,13 @@ export interface LocalApi {
     usedTokens: Set<string>;
     failNextProductCreate: number;
     orders: Array<{ id: string; number: number }>;
+    /** Every bulk write the server accepted (not dry runs): what it got, with the Idempotency-Key and confirm token. */
+    bulkWrites: Array<{ operationId: string; input: Value; idempotencyKey?: string; confirmToken?: string }>;
+    /** Bulk dry runs the server saw. */
+    bulkDryRuns: Array<{ operationId: string; input: Value }>;
+    /** Times bulk_runs.get was read; the second read finds the run done. */
+    bulkRunReads: number;
+    batchWrites: number;
   };
   close: () => Promise<void>;
 }
@@ -75,6 +82,25 @@ export function localSpec(): Record<string, unknown> {
         summary: "Process order refund",
         parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
         requestBody: { content: { "application/json": { schema: { type: "object" } } } },
+      }),
+      "/api/v1/admin/resources/variants/bulk-set-prices": operation("dashboard.resources.variants.bulk_set_prices", "post", "write", {
+        summary: "Change many SKU prices at once",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } },
+        "x-scalius-agent": { idempotency: "supported", confirmation: "required" },
+      }),
+      "/api/v1/admin/resources/variants/bulk-set-stock": operation("dashboard.resources.variants.bulk_set_stock", "post", "write", {
+        summary: "Set many SKUs' on-hand quantities",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } },
+        "x-scalius-agent": { idempotency: "supported" },
+      }),
+      "/api/v1/admin/resources/customers/bulk-tag": operation("dashboard.resources.customers.bulk_tag", "post", "write", {
+        summary: "Add or remove tags on many customers",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } },
+        "x-scalius-agent": { idempotency: "supported" },
+      }),
+      "/api/v1/admin/resources/bulk-runs/{id}": operation("dashboard.resources.bulk_runs.get", "get", "read", {
+        summary: "Get a bulk run's progress",
+        parameters: [{ in: "path", name: "id", required: true, schema: { type: "string" } }],
       }),
       "/api/v1/admin/products": operation("dashboard.products.create", "post", "write", {
         summary: "Create a product",
@@ -129,6 +155,16 @@ function buildMcpServer(api: LocalApi): McpServer {
     outputs: { sales: { orders: 4, gross: "6000.00" } },
   }));
   server.registerTool("scalius_read", { description: "read", inputSchema: anyObject }, async (args) => {
+    if (args.operationId === "dashboard.resources.bulk_runs.get") {
+      const id = ((args.input as Value | undefined)?.path as Value | undefined)?.id;
+      api.state.bulkRunReads += 1;
+      const done = api.state.bulkRunReads >= 2;
+      return result({
+        ok: true,
+        data: { id, kind: "variants.set_prices", status: done ? "done" : "running", dryRun: false, total: 300, processed: done ? 300 : 90, changed: done ? 298 : 90, unchanged: 0, failed: done ? 2 : 0, sample: [], failures: [] },
+        meta: { operationId: args.operationId, status: 200 },
+      });
+    }
     if (args.operationId !== "dashboard.orders.list") {
       return failure({ code: "operation_not_found", status: 404, message: "Operation is unavailable or not authorized", retryable: false, hint: "scalius_search" });
     }
@@ -144,12 +180,60 @@ function buildMcpServer(api: LocalApi): McpServer {
     });
   });
   server.registerTool("scalius_write", { description: "write", inputSchema: anyObject }, async (args) => {
-    const gated = args.operationId === "dashboard.orders.refund";
+    const bulkRuns = new Set(["dashboard.resources.variants.bulk_set_prices", "dashboard.resources.variants.bulk_set_stock", "dashboard.resources.customers.bulk_tag"]);
+    const steps = Array.isArray(args.steps) ? args.steps as Array<{ id: string; operationId: string; input?: Value }> : undefined;
+    const gated = args.operationId === "dashboard.orders.refund" || args.operationId === "dashboard.resources.variants.bulk_set_prices"
+      || (steps?.some((step) => step.operationId === "dashboard.orders.refund") ?? false);
     const confirmation = { summary: "Process order refund: id=ord_1, amount=500", confirmToken: `sct_${api.state.usedTokens.size + 1}`, expiresAt: "2026-08-13T00:10:00.000Z" };
     if (args.dryRun === true) {
+      if (typeof args.operationId === "string" && bulkRuns.has(args.operationId)) {
+        const body = (args.input as Value | undefined)?.body as Value | undefined;
+        api.state.bulkDryRuns.push({ operationId: args.operationId, input: body ?? {} });
+        return result({ ok: true, dryRun: true, written: false, id: null, status: "preview", total: 2, changed: 2, ...(gated ? { confirmation } : {}) });
+      }
       return result({ ok: true, dryRun: true, written: false, operationId: args.operationId, support: "none", validated: true, ...(gated ? { confirmation } : {}) });
     }
     const input = args.input as Value | undefined;
+    if (steps && gated) {
+      if (typeof args.confirmToken !== "string") {
+        return failure({ code: "confirmation_required", status: 428, message: "This change needs the merchant's approval before it runs.", retryable: false, hint: "Show the summary" }, { confirmation: { ...confirmation, summary: "Process order refund: id=ord_1, amount=500" } });
+      }
+      if (api.state.usedTokens.has(args.confirmToken)) {
+        return failure({ code: "confirm_token_used", status: 409, message: "This confirmToken was already used", retryable: false, hint: "Read to verify" });
+      }
+      api.state.usedTokens.add(args.confirmToken);
+      api.state.batchWrites += 1;
+      return result({ ok: true, steps: steps.map((step) => ({ id: step.id, ok: true, data: { operationId: step.operationId } })) });
+    }
+    if (typeof args.operationId === "string" && bulkRuns.has(args.operationId)) {
+      if (gated) {
+        if (typeof args.confirmToken !== "string") {
+          return failure({ code: "confirmation_required", status: 428, message: "This change needs the merchant's approval before it runs.", retryable: false, hint: "Show the summary" }, { confirmation: { ...confirmation, summary: "Change the price of 2 SKUs by 5%" } });
+        }
+        if (api.state.usedTokens.has(args.confirmToken)) {
+          return failure({ code: "confirm_token_used", status: 409, message: "This confirmToken was already used", retryable: false, hint: "Read to verify" });
+        }
+        api.state.usedTokens.add(args.confirmToken);
+      }
+      const body = (input?.body ?? {}) as Value;
+      // One run per Idempotency-Key: a repeat gets the first run back.
+      const replayed = typeof args.idempotencyKey === "string" && api.state.bulkWrites.some((write) => write.idempotencyKey === args.idempotencyKey);
+      if (!replayed) {
+        api.state.bulkWrites.push({
+          operationId: args.operationId,
+          input: body,
+          ...(typeof args.idempotencyKey === "string" ? { idempotencyKey: args.idempotencyKey } : {}),
+          ...(typeof args.confirmToken === "string" ? { confirmToken: args.confirmToken } : {}),
+        });
+      }
+      // A filter selects an unknown number of SKUs: this store's run is over 250, so it runs on after the response (202).
+      const large = body.filter !== undefined;
+      return result({
+        ok: true,
+        data: { id: large ? "bulk_aaaa" : "bulk_bbbb", kind: "variants.set_prices", status: large ? "running" : "done", dryRun: false, total: large ? 300 : 2, processed: large ? 90 : 2, changed: large ? 90 : 2, unchanged: 0, failed: 0, sample: [], failures: [] },
+        meta: { operationId: args.operationId, requestId: "req_bulk", status: large ? 202 : 200, ...(replayed ? { replayed: true } : {}), ...(typeof args.idempotencyKey === "string" ? { idempotencyKey: args.idempotencyKey } : {}) },
+      });
+    }
     if (gated) {
       if (typeof args.confirmToken !== "string") {
         return failure({ code: "confirmation_required", status: 428, message: "This change needs the merchant's approval before it runs.", retryable: false, hint: "Show the summary" }, { confirmation });
@@ -189,7 +273,7 @@ export async function startLocalApi(): Promise<LocalApi> {
     origin: "",
     token: LOCAL_TOKEN,
     requests: [] as RecordedRequest[],
-    state: { refunds: [], products: [], usedTokens: new Set<string>(), failNextProductCreate: 0, orders: ORDERS },
+    state: { refunds: [], products: [], usedTokens: new Set<string>(), failNextProductCreate: 0, orders: ORDERS, bulkWrites: [], bulkDryRuns: [], bulkRunReads: 0, batchWrites: 0 },
     close: async () => undefined,
   } as LocalApi;
   const handler = createMcpHandler(() => buildMcpServer(api));

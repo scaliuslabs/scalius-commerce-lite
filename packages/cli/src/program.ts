@@ -2,7 +2,7 @@ import { Argument, Command, CommanderError, Option } from "commander";
 import { ask, batch, describe, read, search, write, type OutputOptions } from "./agent.js";
 import { login, importToken, authStatus, logout, revoke } from "./auth.js";
 import { serveMcpBridge } from "./bridge.js";
-import { BULK_KINDS, bulk, type BulkKind } from "./bulk.js";
+import { BULK_KINDS, bulk, type BulkKind, type BulkOptions } from "./bulk.js";
 import { ConfigStore } from "./config.js";
 import { doctorExitCode, renderDoctor, runDoctor } from "./doctor.js";
 import { asCliError, CliError } from "./errors.js";
@@ -267,15 +267,26 @@ export function createProgram(runtime: Runtime): Command {
   program.command("bulk")
     .description(`change many records at once: ${Object.keys(BULK_KINDS).join(", ")}`)
     .addArgument(new Argument("<kind>", "what to change").choices(Object.keys(BULK_KINDS)))
-    .option("--ids <ids>", "comma-separated record ids")
-    .option("--filter <json>", "which records, as the operation's filter")
-    .option("--set <json>", "what to change (see scalius describe)")
-    .option("--input <json|@file|->", "the exact {body} instead of --ids/--filter/--set")
+    .option("--ids <ids>", "comma-separated ids: SKUs (prices, stock), customers (tags) or products (status, publish)")
+    .option("--filter <filter>", "instead of ids: key=value,key=value or JSON. Products: search, category, status, salesChannel. Customers: tag, minOrders, maxOrders")
+    .option("--set <minor>", "prices: set every price to this amount, in minor units of the store currency")
+    .option("--percent <n>", "prices: change every price by this percent (5 raises 5%, -10 lowers 10%)")
+    .option("--amount <minor>", "prices: add (negative: take off) this many minor units")
+    .option("--items <pairs>", "stock: variantId=quantity,... the counted units on hand")
+    .option("--quantity <n>", "stock: the count for every --ids SKU")
+    .option("--location <id>", "stock: the location counted (the default one when omitted)")
+    .option("--reason <text>", "stock: shown on each stock movement")
+    .option("--add <tags>", "tags: comma-separated tags to add")
+    .option("--remove <tags>", "tags: comma-separated tags to remove")
+    .option("--status <status>", "status: active or draft")
+    .option("--channels <ids>", "publish: comma-separated sales channel ids")
+    .option("--action <action>", "publish: publish or unpublish")
+    .option("--input <json|@file|->", "the raw {\"body\": {...}} instead of the friendly flags")
     .option("--dry-run", "preview before and after; writes nothing (exit 11)", false)
     .option("--yes", "the merchant approved this change", false)
-    .option("--confirm-token <token>", "approval token from the dry run")
-    .option("--wait", "follow a large run until it finishes", false)
-    .action(async (kind: string, options: { ids?: string; filter?: string; set?: string; input?: string; dryRun: boolean; yes: boolean; confirmToken?: string; wait: boolean }, command) => {
+    .option("--confirm-token <token>", "approval token for exactly this request (from the 428 answer)")
+    .option("--wait", "follow a large run until it is done", false)
+    .action(async (kind: string, options: Omit<BulkOptions, "input"> & { input?: string }, command) => {
       if (!(kind in BULK_KINDS)) throw new CliError(2, "invalid_bulk_kind", `Bulk kind must be one of: ${Object.keys(BULK_KINDS).join(", ")}.`);
       finish(await bulk(runtime, output(command), kind as BulkKind, {
         ...options,

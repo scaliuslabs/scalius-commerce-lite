@@ -28,7 +28,7 @@ Follow the loop in `scalius`: search, describe, read facts, dry run, approval wh
 
 ## Bulk
 
-Many SKUs at once: `scalius bulk prices|stock --dry-run` shows before and after; the merchant approves the table, then run it with `--yes`. Large runs continue on the server: `--wait` follows them.
+Many SKUs at once: `scalius bulk prices --filter 'category=<id>' --percent 5 --dry-run` (or `--set <minor>`, `--amount <minor>`; amounts are minor units of the store currency) and `scalius bulk stock --items var_1=20,var_2=0 --dry-run` show before and after for the first 50. The merchant approves the table, then run the same command with `--yes`. Up to 250 items finish at once; larger runs continue on the server and `--wait` follows them (`data.id` is the run). Same shapes for `bulk status` and `bulk publish`.
 
 ## Feeds and SEO
 
