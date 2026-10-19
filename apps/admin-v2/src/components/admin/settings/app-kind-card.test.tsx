@@ -25,6 +25,7 @@ vi.mock("@tanstack/react-router", () => ({
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setLocale } from "~/i18n";
 import { APP_KIND_CARDS, AppKindCard } from "./AppKindCard";
+import { appProviderState } from "./AppProviderStatus";
 import { SETTINGS_CARDS } from "./settings-search";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -44,6 +45,7 @@ function provider(kind: string, configured: boolean) {
     canTestConnection: false,
     readiness: { configured, enabled: true, usable: configured, missingFields: configured ? [] : ["key"], credentialErrors: [] },
     environment: "unknown",
+    connection: { status: "none", testedAt: null, message: null },
   };
 }
 
@@ -107,5 +109,17 @@ describe("app provider kind cards", () => {
     expect(links).toContainEqual([`Set up Acme ${kind}`, `/admin/apps/acme.apps/${kind}`]);
     expect(links).toContainEqual([`Edit Acme ${kind} two settings`, `/admin/apps/acme.apps/${kind}2`]);
     expect(host.querySelector('a[href="/admin/apps"]')).toBeNull();
+  });
+});
+
+describe("an app provider's status word", () => {
+  const usable = { configured: true, enabled: true, usable: true, missingFields: [], credentialErrors: [] };
+  const connection = (status: "none" | "untested" | "passed" | "failed") => ({ status, testedAt: null, message: null });
+  it("says Ready only when usable and, with a connection test, after one passed", () => {
+    expect(appProviderState({ readiness: { ...usable, usable: false }, connection: connection("passed") })).toBe("notReady");
+    expect(appProviderState({ readiness: usable, connection: connection("none") })).toBe("ready");
+    expect(appProviderState({ readiness: usable, connection: connection("untested") })).toBe("untested");
+    expect(appProviderState({ readiness: usable, connection: connection("failed") })).toBe("testFailed");
+    expect(appProviderState({ readiness: usable, connection: connection("passed") })).toBe("ready");
   });
 });

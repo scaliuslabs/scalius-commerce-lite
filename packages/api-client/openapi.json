@@ -13875,6 +13875,35 @@
           }
         }
       },
+      "AppProviderConnection": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "untested",
+              "passed",
+              "failed"
+            ],
+            "description": "none: it offers no test; untested: not tested with its current settings."
+          },
+          "testedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "nullable": true,
+            "description": "The provider's answer when the last test failed."
+          }
+        },
+        "required": [
+          "status",
+          "testedAt",
+          "message"
+        ]
+      },
       "WarrantyClaim": {
         "type": "object",
         "properties": {
@@ -15963,6 +15992,9 @@
                           },
                           "description": "The keys its readiness needs set: its declared settings, else the app's required ones."
                         },
+                        "connection": {
+                          "$ref": "#/components/schemas/AppProviderConnection"
+                        },
                         "use": {
                           "type": "string",
                           "nullable": true,
@@ -15981,6 +16013,7 @@
                         "settings",
                         "own",
                         "required",
+                        "connection",
                         "use"
                       ]
                     }
@@ -159857,6 +159890,9 @@
                                   "live",
                                   "unknown"
                                 ]
+                              },
+                              "connection": {
+                                "$ref": "#/components/schemas/AppProviderConnection"
                               }
                             },
                             "required": [
@@ -159870,7 +159906,8 @@
                               "operations",
                               "canTestConnection",
                               "readiness",
-                              "environment"
+                              "environment",
+                              "connection"
                             ]
                           }
                         }

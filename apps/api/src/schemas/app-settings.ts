@@ -78,3 +78,10 @@ export function appSettingField(field: PluginSettingField): z.infer<typeof appSe
     ...(field.group ? { group: field.group } : {}),
   };
 }
+
+/** The provider's last connection test with its current settings: "Ready" needs `passed` when it offers one. */
+export const providerConnectionSchema = z.object({
+  status: z.enum(["none", "untested", "passed", "failed"]).openapi({ description: "none: it offers no test; untested: not tested with its current settings." }),
+  testedAt: z.string().nullable(),
+  message: z.string().nullable().openapi({ description: "The provider's answer when the last test failed." }),
+}).openapi("AppProviderConnection");

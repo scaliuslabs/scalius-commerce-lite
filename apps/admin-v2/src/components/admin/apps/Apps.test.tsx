@@ -25,6 +25,7 @@ const sdk = vi.hoisted(() => ({
   postApiV1AdminAppsByIdStop: vi.fn(),
   postApiV1AdminAppsByIdFeaturesByFeatureIdEnable: vi.fn(),
   postApiV1AdminAppsByIdFeaturesByFeatureIdDisable: vi.fn(),
+  postApiV1AdminSettingsProvidersByIdTest: vi.fn(),
 }));
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }));
 const navigate = vi.hoisted(() => vi.fn(() => Promise.resolve()));
@@ -1055,6 +1056,41 @@ describe("App page: sections", () => {
     await render("chosen", "sms");
     expect(text()).toContain("Ready");
     expect(document.querySelector('a[href="/admin/settings/notifications"]')).toBeNull();
+  });
+
+  it("calls a provider with a connection test ready only after a test passed, and tests only when asked", async () => {
+    const bkashOn = feature({ enabled: true, grantKey: null, settings: ["bkash_username"] });
+    const settings = {
+      fields: [field({ key: "bkash_username", label: "Username", type: "text", group: "bkash" })],
+      values: { bkash_username: "shop" },
+      secrets: {},
+      missing: [],
+      sections: [],
+    };
+    const bkash = { id: "acme.loyalty:bkash", providerId: "bkash", kind: "payment", name: "bKash", icon: null, settings: ["bkash_username"], own: true, required: ["bkash_username"], use: "offered" };
+    const withConnection = (connection: Record<string, unknown>) =>
+      detail({ status: "active", features: [bkashOn, placesFeature()], settings, providers: [{ ...bkash, connection }] });
+    sdk.postApiV1AdminSettingsProvidersByIdTest.mockImplementation(() => ok({ ok: false, message: "bKash refused the app key." }));
+    await renderApp(withConnection({ status: "untested", testedAt: null, message: null }), MANAGER, true, "bkash");
+    expect(text()).toContain("Set up (not tested)");
+    expect(text()).not.toContain("Ready");
+    // Loading the page never calls the provider.
+    expect(sdk.postApiV1AdminSettingsProvidersByIdTest).not.toHaveBeenCalled();
+
+    // Testing reads the page again: the stored outcome is the status.
+    sdk.getApiV1AdminAppsById.mockImplementation(() => ok({ app: withConnection({ status: "failed", testedAt: "2026-10-19T08:00:00.000Z", message: "bKash refused the app key." }) }));
+    await click(button("Test connection"));
+    expect(sdk.postApiV1AdminSettingsProvidersByIdTest).toHaveBeenCalledWith({ path: { id: "acme.loyalty:bkash" } });
+    await vi.waitFor(() => expect(text()).toContain("Connection failed"));
+    expect(text()).toContain("bKash refused the app key.");
+    expect(button("Test again")).toBeTruthy();
+
+    act(() => root.unmount());
+    queryClient.clear();
+    root = createRoot(host);
+    await renderApp(withConnection({ status: "passed", testedAt: "2026-10-19T08:00:00.000Z", message: null }), MANAGER, true, "bkash");
+    expect(text()).toContain("Ready");
+    expect(text()).toContain("Connection test passed");
   });
 
   it("says a feature's job failed, with when and why, on its page", async () => {

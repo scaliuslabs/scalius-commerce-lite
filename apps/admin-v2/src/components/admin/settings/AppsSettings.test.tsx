@@ -173,6 +173,7 @@ describe("Settings → Apps cards", () => {
       canTestConnection: true,
       readiness: { configured: true, enabled: true, usable: true, missingFields: [], credentialErrors: [] },
       environment: "live",
+      connection: { status: "passed", testedAt: "2026-10-19T08:00:00.000Z", message: null },
     };
     sdk.getApiV1AdminSettingsProviders.mockImplementation(() => ok({ providers: [radar] }));
     sdk.postApiV1AdminSettingsProvidersByIdTest.mockImplementation(() => ok({ ok: true, message: "Radar reachable." }));

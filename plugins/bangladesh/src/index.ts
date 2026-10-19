@@ -85,7 +85,8 @@ const SETTINGS = [
   secret("ecourier", "ecourier_api_key", "API key"),
   secret("ecourier", "ecourier_api_secret", "API secret"),
   text("ecourier", "ecourier_user_id", "User ID", 200),
-  url("pathao", "pathao_base_url", "API address", "https://api-hermes.pathao.com", "Live: https://api-hermes.pathao.com. Test account: https://courier-api-sandbox.pathao.com."),
+  // Every provider starts on its test system: going live is the merchant's own switch, with live keys.
+  url("pathao", "pathao_base_url", "API address", "https://courier-api-sandbox.pathao.com", "Starts on Pathao's test system. For real deliveries, enter https://api-hermes.pathao.com with your live account's keys."),
   text("pathao", "pathao_client_id", "Client ID", 500),
   secret("pathao", "pathao_client_secret", "Client secret"),
   text("pathao", "pathao_username", "Username (email)", 320),
@@ -99,11 +100,12 @@ const SETTINGS = [
   secret("steadfast", "steadfast_api_key", "API key"),
   secret("steadfast", "steadfast_secret_key", "Secret key"),
   secret("steadfast", "steadfast_webhook_secret", "Webhook token", "The Bearer token Steadfast sends with its updates. Left empty, the secret key is used."),
-  // No default: a store chooses test or live payments itself.
+  // Starts on sandbox, like bKash and Nagad: live payments are the merchant's own switch.
   {
     key: "sslcommerz_environment",
     label: "Environment",
     type: "select" as const,
+    default: "sandbox",
     options: [{ value: "sandbox", label: "Sandbox (test payments)" }, { value: "live", label: "Live" }],
     group: "sslcommerz" as const,
     help: "Sandbox uses SSLCommerz's test system. Switch to Live together with your live store ID and password.",

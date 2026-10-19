@@ -51,13 +51,14 @@ Every key is in the pack's settings. Secrets are sealed with `CREDENTIAL_ENCRYPT
 | FraudGuard | API URL, API key, API secret |
 | eCourier Fraud Alert | API URL, API key, API secret, user ID |
 | FraudChecker (custom API) | API URL, bearer token |
-| SSLCommerz | Environment (sandbox or live; no default: the store chooses), store ID, store password |
+| SSLCommerz | Environment (sandbox by default), store ID, store password |
 | bKash | Environment (sandbox by default), app key, app secret, username, password |
 | Nagad (unverified) | Environment (sandbox by default), merchant ID, merchant private key (PKCS#8 PEM), Nagad public key; merchant number and server IP (`X-KM-IP-V4`, default `127.0.0.1`) are optional |
-| Pathao | API address, client ID, client secret, username, password, store ID (and, for updates, a webhook secret; booking defaults: delivery type, item type, weight in kg) |
+| Pathao | API address (the sandbox by default), client ID, client secret, username, password, store ID (and, for updates, a webhook secret; booking defaults: delivery type, item type, weight in kg) |
 | Steadfast | API address, API key, secret key (and, for updates, a webhook token; empty: the secret key) |
 
-- The API URLs have the services' published addresses as defaults. A URL must be https on the service's own host (the app's allowed hosts). Pathao's test account is `https://courier-api-sandbox.pathao.com`.
+- Every provider with a test system starts on it: bKash, Nagad and SSLCommerz on sandbox, Pathao on `https://courier-api-sandbox.pathao.com` (live: `https://api-hermes.pathao.com`). Steadfast and the SMS and fraud services publish no test system. The other API URLs have the services' published addresses as defaults. A URL must be https on the service's own host (the app's allowed hosts).
+- A provider that offers a connection test (SSLCommerz, bKash, Nagad, Pathao, Steadfast) reads "Set up (not tested)" until **Test connection** passes with its current keys; saving a key resets it. Tests run only when the merchant asks, never on page load, and the outcome is kept in `system_kv` (`provider-test:<plugin id>:<provider id>`, with a hash of the stored settings it ran with).
 - A save refuses an obvious placeholder ("test", "your api key", "123456") in a provider's setting. A stored placeholder makes the provider not ready.
 
 ## Sending SMS

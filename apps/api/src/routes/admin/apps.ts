@@ -60,7 +60,7 @@ import {
   type PluginManifest,
 } from "@scalius/shared/plugins";
 import { PROVIDER_KINDS, qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
-import { appSettingField, appSettingFieldSchema, appSettingValueSchema } from "../../schemas/app-settings";
+import { appSettingField, appSettingFieldSchema, appSettingValueSchema, providerConnectionSchema } from "../../schemas/app-settings";
 import { ConflictError, ForbiddenError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -80,6 +80,7 @@ import {
 } from "../../plugins/listing";
 import { syncBundledPlugin, syncBundledPlugins } from "../../plugins/bundled-sync";
 import { chooseReadySmsProvider, offerTurnedOnPaymentProviders, providerUse } from "../../plugins/provider-adoption";
+import { providerConnections } from "../../plugins/provider-connection";
 import { requestProviderRuntime } from "../../plugins/providers/runtime";
 
 import { isPluginSandboxAvailable } from "../../plugins/loaders/sandbox-availability";
@@ -288,6 +289,7 @@ const appDetailSchema = appSummarySchema.extend({
     settings: z.array(z.string()).openapi({ description: "The setting keys shown with the provider where it is set up." }),
     own: z.boolean().openapi({ description: "Whether the provider has fields of its own (otherwise it uses the app's general settings)." }),
     required: z.array(z.string()).openapi({ description: "The keys its readiness needs set: its declared settings, else the app's required ones." }),
+    connection: providerConnectionSchema,
     use: z.enum(["offered", "hidden", "currency", "chosen", "not_chosen"]).nullable().openapi({
       description: "Whether the store uses it: a payment method checkout lists (offered), one hidden in Settings, Payments (hidden) or one that cannot charge the store currency (currency); the notification SMS service (chosen) or another one (not_chosen). Null for other kinds.",
     }),
@@ -499,7 +501,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
   const request = pluginGrantRequest(installation.declaredManifest, installation.features);
   const described = describePluginSettings(installation);
   const caps = planLimits().plugins;
-  const [approver, lastRuns, scopes, registrySettings, features, uses] = await Promise.all([
+  const [approver, lastRuns, scopes, registrySettings, features, uses, connections] = await Promise.all([
     installation.activatedBy
       ? db.select({ id: userTable.id, name: userTable.name }).from(userTable).where(eq(userTable.id, installation.activatedBy)).get()
       : Promise.resolve(undefined),
@@ -508,6 +510,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     installation.signerKeyId ? pluginRegistrySettingsDocument.read(db) : Promise.resolve({ registries: [], trustedKeys: [] }),
     featureRows(installation),
     providerUse(db, installation),
+    providerConnections(db, installation, manifest.providers),
   ]);
   const available = runtimeAvailable(c, installation);
   return {
@@ -534,6 +537,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
       settings: providerSettingKeys(manifest, provider.id),
       own: providerOwnSettingKeys(manifest, provider.id).length > 0,
       required: provider.settings ? [...provider.settings] : manifest.settings.filter((field) => field.required).map((field) => field.key),
+      connection: connections.get(qualifiedProviderId(installation.pluginId, provider.id))!,
       use: uses.get(qualifiedProviderId(installation.pluginId, provider.id)) ?? null,
     })),
     routes: {
