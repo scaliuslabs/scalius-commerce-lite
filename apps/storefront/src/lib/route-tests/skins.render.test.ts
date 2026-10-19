@@ -130,9 +130,11 @@ const envelope = (data: unknown) => JSON.stringify({ success: true, data });
 
 /** Photos on the product (the gallery cases); the other cases have none. */
 let productPhotos = false;
+/** The stored size of every photo (the gallery stage adapts to the first). */
+let photoSize = { width: 1200, height: 1200 };
 const photo = (id: string, index: number) => ({
   id: `pmed_${id}`, mediaId: `med_${id}`, kind: "image", url: `https://cdn.shop.test/media/${id}.jpg`, posterMediaId: null, posterUrl: null,
-  altText: `Linen ${id}`, caption: null, width: 1200, height: 1200, durationMs: null, isPrimary: index === 0, sortOrder: index, status: "ready",
+  altText: `Linen ${id}`, caption: null, ...photoSize, durationMs: null, isPrimary: index === 0, sortOrder: index, status: "ready",
 });
 
 function productData() {
@@ -263,6 +265,32 @@ describe("a product-main skin", () => {
     productPhotos = false;
     expect(own.page.querySelector("[data-product-gallery]")).toBeNull();
     expect(own.page.querySelector('link[rel="preload"][as="image"]')).toBeNull();
+  });
+
+  it("fits the gallery stage to the first photo's stored size, not the theme's card ratio: no bands", async () => {
+    app({
+      "product-main": () => '<article class="acme-pdp"><scalius-embed kind="gallery"></scalius-embed><h1>Linen</h1><scalius-embed kind="buy-form" data-title="false"></scalius-embed></article>',
+    });
+    // A portrait card ratio (Noor's) with square photos: a square stage.
+    const portraitCards = theme();
+    portraitCards.tokens = { ...portraitCards.tokens, imageRatio: "portrait" };
+    productPhotos = true;
+    const stages = (page: Document) => [...page.querySelectorAll('[data-image-stage="mobile"], [data-image-stage="desktop"]')].map((stage) => stage.getAttribute("style"));
+    try {
+      const square = await renderProduct(portraitCards);
+      expect(stages(square.page)).toEqual([null, null]);
+      // Portrait photos get their own 3:4 stage, a panorama the nearest bound.
+      photoSize = { width: 1200, height: 1600 };
+      expect(stages((await renderProduct(portraitCards)).page)).toEqual(["aspect-ratio: 0.75;", "aspect-ratio: 0.75;"]);
+      photoSize = { width: 3000, height: 1000 };
+      expect(stages((await renderProduct(portraitCards)).page)).toEqual(["aspect-ratio: 1.7778;", "aspect-ratio: 1.7778;"]);
+      // A photo of unknown size keeps the theme's ratio.
+      photoSize = { width: null, height: null } as never;
+      expect(stages((await renderProduct(portraitCards)).page)).toEqual(["aspect-ratio: 0.75;", "aspect-ratio: 0.75;"]);
+    } finally {
+      productPhotos = false;
+      photoSize = { width: 1200, height: 1200 };
+    }
   });
 
   it("leaves the product page to core when the skin places no buy form, draws nothing, or is not chosen", async () => {

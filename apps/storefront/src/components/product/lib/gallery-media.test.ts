@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProductMedia } from "@/lib/api";
-import { featuredGalleryItem, formatVideoDuration, productGalleryItems } from "./gallery-media";
+import { featuredGalleryItem, formatVideoDuration, mediaAspectRatio, productGalleryItems } from "./gallery-media";
 
 const item = (id: string, kind: "image" | "video", sortOrder: number, extra: Partial<ProductMedia> = {}) =>
   ({
@@ -29,5 +29,15 @@ describe("gallery media", () => {
     expect(featuredGalleryItem(items, "a")?.id).toBe("a");
     expect(featuredGalleryItem(items, "v")?.id).toBe("v");
     expect(formatVideoDuration(null)).toBeNull();
+  });
+
+  it("carries each item's stored ratio, null when a side is unknown", () => {
+    const items = productGalleryItems({ name: "Mug", imageAlt: null }, [
+      item("a", "image", 0, { width: 1200, height: 1200 }),
+      item("b", "image", 1, { width: 1200, height: 1600 }),
+      item("c", "image", 2, { width: null, height: 900 }),
+    ]);
+    expect(items.map((entry) => entry.aspectRatio)).toEqual([1, 0.75, null]);
+    expect(mediaAspectRatio({ width: 0, height: 10 })).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import { productImageSources, resolveProductImageUrl } from "@/lib/product-media
 import { responsiveImageSources } from "@/lib/responsive-image";
 import {
   GALLERY_IMAGE_WIDTHS,
+  boundedStageRatio,
   productGalleryMainSlot,
   productGalleryThumbnailSlot,
   type ProductGalleryLayout,
@@ -116,9 +117,10 @@ const posterSources = (posterUrl: string | null) =>
 // stages stay hidden, so their photo must not download at high priority.
 const mainImageLoading = videoFirst ? "lazy" : "eager";
 const mainImagePriority = videoFirst ? "low" : "high";
-// A 3:4 portrait stage (and Amazon's narrow strip) set inline; the square
-// stage keeps today's classes untouched.
-const stageStyle = layout.stageRatio === 1 ? undefined : `aspect-ratio: ${layout.stageRatio};`;
+// The stage's ratio (the page adapts it to the first photo, or the variant
+// states it) set inline; a square stage keeps the classes alone.
+const ratioStyle = (ratio: number) => (ratio === 1 ? undefined : `aspect-ratio: ${ratio};`);
+const stageStyle = ratioStyle(layout.stageRatio);
 const railStyle = layout.thumbnailSize === null ? "" : ` --gallery-thumb: ${layout.thumbnailSize}px;`;
 // Stacked (Dawn) and grid (Target): every photo in the wide column on
 // computers, the featured one first; phones keep the stage and the strip.
@@ -522,12 +524,17 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
   )}
   {listMedia.length > 0 && (
     <ul class="gallery-list hidden gap-2 lg:grid" aria-label="Product media">
+      {/* Stacked: each photo in its own (bounded) ratio, as Dawn stacks them;
+          the two-across grid keeps one ratio so its rows line up. */}
       {listMedia.map((entry, index) => {
         const sources = entry.item.kind === "image"
           ? responsiveImageSources(entry.url, mainSlot)
           : null;
         return (
-          <li class:list={["relative aspect-square w-full overflow-hidden rounded-xl bg-muted", index >= LIST_VISIBLE && "gallery-extra"]} style={stageStyle}>
+          <li
+            class:list={["relative aspect-square w-full overflow-hidden rounded-xl bg-muted", index >= LIST_VISIBLE && "gallery-extra"]}
+            style={layout.gallery === "stacked" && entry.item.aspectRatio !== null ? ratioStyle(boundedStageRatio(entry.item.aspectRatio)) : stageStyle}
+          >
             {sources ? (
               <img
                 src={sources.src}

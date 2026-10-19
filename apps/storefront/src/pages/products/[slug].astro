@@ -157,8 +157,6 @@ const resolvedTheme = resolveProductPageTheme(
 );
 const themeLayout = resolvedTheme.layout;
 const productPageLayout = themeLayout.productPage;
-// The photo box follows the theme's photo ratio, so a tall photo never sits in a square box with bars.
-const galleryLayout = { ...productPageLayout, stageRatio: galleryStageRatio(productPageLayout, requestTheme.theme.tokens.imageRatio) };
 const buyBoxLook = themeLayout.buyBox.look;
 const factsColumn = buyBoxLook.facts === "column";
 // Call and WhatsApp links and the EMI line show only when the buy box's settings ask for them.
@@ -326,6 +324,12 @@ const primaryImageUrl = productImageCandidates[0] ?? null;
 const galleryItems = productGalleryItems(product, media);
 const initialGalleryProductMediaId = queryVariantSelection?.variant.imageId ?? null;
 const initialGalleryMedia = featuredGalleryItem(galleryItems, initialGalleryProductMediaId);
+// The photo box adapts to the photo the page paints first (its stored size,
+// within bounds), so a square photo never sits in a tall box with bands.
+const galleryLayout = {
+  ...productPageLayout,
+  stageRatio: galleryStageRatio(productPageLayout, requestTheme.theme.tokens.imageRatio, initialGalleryMedia?.aspectRatio ?? null),
+};
 const galleryMainSlot = productGalleryMainSlot(productPageLayout, galleryItems.length > 1);
 const initialGalleryPreload =
   initialGalleryMedia?.kind === "video"

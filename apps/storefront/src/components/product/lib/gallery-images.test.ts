@@ -4,6 +4,8 @@ import { STOREFRONT_GALLERY_VARIANTS } from "@scalius/shared/storefront-theme";
 
 import {
   GALLERY_IMAGE_WIDTHS,
+  GALLERY_STAGE_RATIO_BOUNDS,
+  boundedStageRatio,
   productGalleryMainSlot,
   galleryStageRatio,
   productGalleryThumbnailSlot,
@@ -116,10 +118,24 @@ describe("product gallery image slots", () => {
     expect(evaluateSizes(sizes, 1440)).toBeGreaterThan(404);
   });
 
-  it("takes the stage ratio from the theme's photo ratio unless the variant states its own", () => {
+  it("adapts the stage to the first photo's stored ratio, within bounds, unless the variant states its own", () => {
+    // A square photo in a portrait-ratio theme (Noor) gets a square stage: no bands.
+    expect(galleryStageRatio(GALLERY.classic, "portrait", 1)).toBe(1);
+    expect(galleryStageRatio(GALLERY.stacked, "portrait", 1)).toBe(1);
+    expect(galleryStageRatio(GALLERY.classic, "square", 0.8)).toBe(0.8);
+    expect(galleryStageRatio(GALLERY.classic, "square", 1.5)).toBe(1.5);
+    // A very tall or very wide photo sits in the nearest bound, uncropped.
+    expect(galleryStageRatio(GALLERY.classic, "square", 0.3)).toBe(boundedStageRatio(GALLERY_STAGE_RATIO_BOUNDS.min));
+    expect(galleryStageRatio(GALLERY.classic, "square", 4)).toBe(boundedStageRatio(GALLERY_STAGE_RATIO_BOUNDS.max));
+    expect(boundedStageRatio(4 / 3)).toBe(1.3333);
+    // The portrait gallery is an explicit stage.
+    expect(galleryStageRatio(GALLERY.portrait, "square", 1)).toBe(0.75);
+  });
+
+  it("falls back to the theme's photo ratio only for a photo of unknown size", () => {
     expect(galleryStageRatio(GALLERY.classic, "portrait")).toBe(0.75);
-    expect(galleryStageRatio(GALLERY.classic, "landscape")).toBeCloseTo(4 / 3);
-    expect(galleryStageRatio(GALLERY.classic, "square")).toBe(1);
+    expect(galleryStageRatio(GALLERY.classic, "landscape", null)).toBeCloseTo(4 / 3);
+    expect(galleryStageRatio(GALLERY.classic, "square", Number.NaN)).toBe(1);
     expect(galleryStageRatio(GALLERY.portrait, "square")).toBe(0.75);
   });
 
