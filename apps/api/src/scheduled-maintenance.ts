@@ -16,6 +16,8 @@ import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
 import { sweepAutoFulfilment } from "@scalius/core/modules/fulfilment";
 import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
+import { flushTrackingDeliveries, purgeFinishedTrackingDeliveries } from "@scalius/core/integrations/tracking/deliveries";
+import { purgeExpiredTrackingSignals } from "@scalius/core/integrations/tracking/signals";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
   cleanupExpiredCustomerAuthOtpRateLimits,
@@ -49,6 +51,8 @@ export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
 /** Due review requests turned into outbox rows per run (Wave B §2.3). */
 export const REVIEW_REQUEST_SWEEP_LIMIT = 100;
 export const META_PURCHASE_OUTBOX_SWEEP_LIMIT = 25;
+export const TRACKING_DELIVERY_SWEEP_LIMIT = 25;
+export const TRACKING_PURGE_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
 export const ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
@@ -359,6 +363,33 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
           `[scheduled] Meta Purchase outbox flush: scanned=${metaPurchaseOutbox.scanned}, ` +
             `sent=${metaPurchaseOutbox.sent}, failed=${metaPurchaseOutbox.failed}, ` +
             `skipped=${metaPurchaseOutbox.skipped}, busy=${metaPurchaseOutbox.busy}`,
+        );
+      }
+    },
+  },
+  {
+    // GA4 and TikTok server deliveries due a retry, then the tracking
+    // snapshots past their 8 days and finished deliveries past 90 (audit spec S4).
+    name: "tracking_delivery_flush",
+    async run({ db, env, timed }) {
+      const flushed = await timed("tracking_delivery_flush", () =>
+        flushTrackingDeliveries(db, {
+          storefrontUrl: env.STOREFRONT_URL,
+          encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+          limit: scaled(TRACKING_DELIVERY_SWEEP_LIMIT),
+        }),
+      );
+      const purgedSignals = await timed("tracking_signals_purge", () =>
+        purgeExpiredTrackingSignals(db, { limit: scaled(TRACKING_PURGE_SWEEP_LIMIT) }),
+      );
+      const purgedDeliveries = await timed("tracking_deliveries_purge", () =>
+        purgeFinishedTrackingDeliveries(db, { limit: scaled(TRACKING_PURGE_SWEEP_LIMIT) }),
+      );
+      if (flushed.scanned > 0 || purgedSignals > 0 || purgedDeliveries > 0) {
+        console.log(
+          `[scheduled] Tracking deliveries: scanned=${flushed.scanned}, sent=${flushed.sent}, ` +
+            `failed=${flushed.failed}, skipped=${flushed.skipped}, deferred=${flushed.deferred}, ` +
+            `signalsPurged=${purgedSignals}, deliveriesPurged=${purgedDeliveries}`,
         );
       }
     },

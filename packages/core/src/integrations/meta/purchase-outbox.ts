@@ -13,6 +13,12 @@ import { fromMinor } from "@scalius/shared/money";
 import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
 
 import { sendCapiEvent, type SendCapiEventResult } from "./conversions-api";
+import { DEFAULT_TRACKING_CONSENT_SETTINGS } from "@scalius/shared/tracking-consent";
+import { orderConsent, readOrderTrackingSignals, type OrderTrackingSignalsRow } from "../tracking/signals";
+import { trackingConsentDocument } from "../tracking/settings";
+
+/** The skip reason of a purchase the buyer's consent does not allow (tracking_health counts it). */
+export const CONSENT_DENIED_REASON = "consent_denied: the buyer did not grant marketing consent.";
 
 type PurchaseOutboxRow = typeof metaCapiPurchaseOutbox.$inferSelect;
 type PurchaseOutboxInsert = typeof metaCapiPurchaseOutbox.$inferInsert;
@@ -60,8 +66,16 @@ interface BuildMetaPurchaseEventOptions {
     order: PurchaseOrder;
     items: PurchaseOrderItem[];
     storefrontUrl: string;
+    /** The order's commit time (epoch seconds); defaults to now. */
     eventTime?: number;
+    /** The browser match signals the checkout committed (order_tracking_signals). */
+    signals?: Pick<OrderTrackingSignalsRow, "fbp" | "fbc" | "clientIp" | "userAgent"> | null;
+    /** The buyer refused the sale or sharing of data: Meta Limited Data Use. */
+    limitedDataUse?: boolean;
 }
+
+/** Meta accepts an event up to 7 days after it happened. */
+export const META_MAX_EVENT_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 interface ProcessMetaPurchaseOptions {
     storefrontUrl?: string | null;
@@ -131,6 +145,12 @@ export function buildMetaPurchaseEvent(options: BuildMetaPurchaseEventOptions) {
     const city = order.cityName || order.shippingLocality || order.city;
     if (city) userData.ct = city;
     if (order.shippingPostalCode) userData.zp = order.shippingPostalCode;
+    // The browser's ids, IP and user agent from checkout (Meta's EMQ best practice).
+    const signals = options.signals;
+    if (signals?.fbp) userData.fbp = signals.fbp;
+    if (signals?.fbc) userData.fbc = signals.fbc;
+    if (signals?.clientIp) userData.client_ip_address = signals.clientIp;
+    if (signals?.userAgent) userData.client_user_agent = signals.userAgent;
 
     return {
         event_name: "Purchase",
@@ -153,6 +173,10 @@ export function buildMetaPurchaseEvent(options: BuildMetaPurchaseEventOptions) {
             order_id: order.id,
             num_items: items.reduce((sum, item) => sum + item.quantity, 0),
         },
+        // Limited Data Use, geolocated by Meta (country 0, state 0).
+        ...(options.limitedDataUse
+            ? { data_processing_options: ["LDU"], data_processing_options_country: 0, data_processing_options_state: 0 }
+            : {}),
     };
 }
 
@@ -355,25 +379,36 @@ async function buildMetaPurchasePayloadForOutbox(
         return { sendable: false, reason: "STOREFRONT_URL is not configured." };
     }
 
-    const order = await db
-        .select()
-        .from(orders)
-        .where(eq(orders.id, outbox.orderId))
-        .get();
+    const [order, items, signals] = await Promise.all([
+        db.select().from(orders).where(eq(orders.id, outbox.orderId)).get(),
+        db.select().from(orderItems).where(eq(orderItems.orderId, outbox.orderId)).all(),
+        readOrderTrackingSignals(db, outbox.orderId),
+    ]);
     if (!order) {
         return { sendable: false, reason: "Order no longer exists." };
     }
     if (!isOrderEligibleForMetaPurchase(order)) {
         return { sendable: false, reason: `Order is not eligible for Purchase CAPI in status ${order.status}/${order.paymentStatus}.` };
     }
-
-    const items = await db
-        .select()
-        .from(orderItems)
-        .where(eq(orderItems.orderId, outbox.orderId))
-        .all();
     if (items.length === 0) {
         return { sendable: false, reason: "Order has no items." };
+    }
+
+    // The consent the buyer gave at checkout; an order without a snapshot
+    // follows its country's default (opt-in in the EEA, the UK and CH).
+    const consent = orderConsent(
+        signals,
+        order.shippingCountryCode ?? order.billingCountryCode ?? null,
+        signals ? DEFAULT_TRACKING_CONSENT_SETTINGS : await trackingConsentDocument.read(db),
+    );
+    if (!consent.marketing) {
+        return { sendable: false, reason: CONSENT_DENIED_REASON };
+    }
+
+    // event_time is the commit time, not the send time.
+    const eventTime = signals?.createdAt ?? Math.floor(order.createdAt.getTime() / 1000);
+    if (Math.floor(Date.now() / 1000) - eventTime > META_MAX_EVENT_AGE_SECONDS) {
+        return { sendable: false, reason: "event_too_old: Meta accepts purchases up to 7 days old." };
     }
 
     return {
@@ -382,6 +417,9 @@ async function buildMetaPurchasePayloadForOutbox(
             order,
             items,
             storefrontUrl: baseUrl,
+            eventTime,
+            signals,
+            limitedDataUse: !consent.saleOfData,
         }),
     };
 }

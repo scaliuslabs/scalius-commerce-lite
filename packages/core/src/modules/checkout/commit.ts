@@ -15,6 +15,7 @@ import {
     orderTaxSnapshots,
     orders,
     codTracking,
+    OrderStatus,
     products,
     promotionRedemptions,
     warrantyPolicies,
@@ -36,6 +37,7 @@ import {
     buildMetaPurchaseOutboxClaimInsert,
     isOrderEligibleForMetaPurchase,
 } from "../../integrations/meta/purchase-outbox";
+import { buildOrderTrackingCommitStatements } from "../../integrations/tracking/signals";
 import { createCODTrackingInsertValues } from "../payments";
 import {
     ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW,
@@ -751,6 +753,14 @@ function buildOrderWriteBatch(
         writes.push(buildMetaPurchaseOutboxClaimInsert(db, {
             orderId: od.id,
             source: "storefront-order",
+        }));
+    }
+
+    // The order's consent snapshot and match signals (audit spec S4): with the
+    // order or not at all, so a server Purchase never runs without its consent.
+    if (payload.trackingSnapshot) {
+        writes.push(...buildOrderTrackingCommitStatements(db, od.id, payload.trackingSnapshot, {
+            awaitingPayment: od.status === OrderStatus.INCOMPLETE,
         }));
     }
 

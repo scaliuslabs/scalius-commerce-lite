@@ -10,6 +10,7 @@ import type { FunctionCart } from "@scalius/shared/plugins";
 import type { CustomerRequestType } from "../settings/browser";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
 import type { OrderChannel } from "@scalius/shared/order-channel";
+import type { OrderTrackingSnapshot } from "../../integrations/tracking/signals";
 import type {
     AdminOrderFulfilmentView,
     OrderLineFulfilmentFacts,
@@ -553,6 +554,11 @@ export interface StorefrontOrderCommitPayload {
         orderCreatedNotification: boolean;
         metaPurchase: boolean;
     };
+    /**
+     * The order's consent snapshot and match signals, committed in the order
+     * batch when a server tracking destination is on (audit spec S4).
+     */
+    trackingSnapshot?: OrderTrackingSnapshot | null;
     /** Verified storefront account owner. Guest checkout deliberately keeps this null. */
     existingCustomer: { id: string } | null;
     /**
