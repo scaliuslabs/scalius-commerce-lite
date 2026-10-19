@@ -14,7 +14,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Switch } from "~/components/ui/switch";
+import { ChoiceField } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { installedAppsMessages } from "~/i18n/apps";
@@ -217,14 +217,22 @@ export function AppSettingControl({ app, field, form, canManage, idPrefix }: {
   const described = (help: string | null) => (help ? { "aria-describedby": `${id}-note` } : {});
   switch (field.type) {
     case "boolean":
+      // Saved with the page's save bar, so a checkbox (F9): a switch would read as applying at once.
       return (
-        <label className="flex min-h-11 items-center justify-between gap-4 text-body">
-          <span>
-            <span className="block font-medium">{field.label}</span>
-            {field.help ? <span className="block text-muted-foreground">{field.help}</span> : null}
-          </span>
-          <Switch id={id} checked={value === true} disabled={disabled} onCheckedChange={(on) => setValue(field.key, on)} />
-        </label>
+        <ChoiceField
+          id={id}
+          label={field.label}
+          help={field.help}
+          control={(
+            <Checkbox
+              id={id}
+              checked={value === true}
+              disabled={disabled}
+              aria-describedby={field.help ? `${id}-help` : undefined}
+              onCheckedChange={(on) => setValue(field.key, on === true)}
+            />
+          )}
+        />
       );
     case "multiselect":
       return (

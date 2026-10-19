@@ -51,13 +51,13 @@ import {
   type CustomerRules,
   type NotificationEventGroup,
 } from "./notification-channel-policy";
-import { useOpenAppProvider } from "~/components/admin/apps/AppProviderSheetHost";
 import { AppProviderStatus, appProviderOption } from "./AppProviderStatus";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { usePushIssueText } from "./push-issue-text";
 import { webPushMessages } from "~/i18n/settings-web-push";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 import { FieldRow } from "~/components/ui/field";
+import { appProviderSetupPath } from "~/components/admin/apps/app-sections";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
 export const MASKED_VALUE = "••••••••••••";
@@ -369,8 +369,6 @@ function EmailFields() {
   // Installed apps' email providers sit beside the built-in senders.
   const apps = useQuery({ ...appProvidersQuery("email"), enabled: useProviderPortAccess("email").canView }).data ?? [];
   const appT = useMessages(appProvidersMessages);
-  const openProvider = useOpenAppProvider();
-  const canSeeApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
   if (!values.provider) return null;
   const app = apps.find((candidate) => candidate.id === values.provider);
   return (
@@ -380,9 +378,6 @@ function EmailFields() {
           value={values.provider}
           onValueChange={(provider) => {
             setValue("provider", provider as EmailSettings["provider"]);
-            // An app sender not set up yet opens its own setup.
-            const chosen = apps.find((candidate) => candidate.id === provider);
-            if (chosen && !chosen.readiness.configured && canSeeApps) openProvider?.(chosen.id);
           }}
         >
           {(["cloudflare", "resend"] as const).map((provider) => (
@@ -464,8 +459,6 @@ function SmsFields() {
   // Every SMS gateway is an installed app's (the Bangladesh gateways: the Bangladesh pack).
   const apps = useQuery({ ...appProvidersQuery("sms"), enabled: useProviderPortAccess("sms").canView }).data ?? [];
   const appT = useMessages(appProvidersMessages);
-  const openProvider = useOpenAppProvider();
-  const canSeeApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
   const provider = values.activeProvider;
   const app = apps.find((candidate) => candidate.id === provider);
   return (
@@ -477,9 +470,6 @@ function SmsFields() {
           placeholder={t("chooseSmsProvider")}
           onValueChange={(value) => {
             setValue("activeProvider", value);
-            // A gateway not set up yet opens its own setup: only its fields, beside this choice.
-            const chosen = apps.find((candidate) => candidate.id === value);
-            if (chosen && !chosen.readiness.configured && canSeeApps) openProvider?.(chosen.id);
           }}
           triggerClassName="w-full"
           options={apps.map((candidate) => appProviderOption(candidate, appT))}
@@ -664,7 +654,7 @@ export function SendingCard() {
             <span>{t("smsBlocked", { reason: smsBlocked })}</span>
             {canSeeApps && smsPluginId ? (
               <Button type="button" variant="link" asChild>
-                <Link to="/admin/apps/$pluginId" params={{ pluginId: smsPluginId }}>{t("smsOpenApp")}</Link>
+                <Link to={appProviderSetupPath(sms.data?.activeProvider ?? "")}>{t("smsOpenApp")}</Link>
               </Button>
             ) : null}
           </span>

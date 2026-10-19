@@ -216,7 +216,6 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
       label: hit.label,
       detail: hit.providerKind ? surfacesT("searchProvider", { kind: surfacesT(`kind_${hit.providerKind}`), app: hit.app }) : surfacesT("searchApp"),
       to: hit.to,
-      hash: hit.hash,
       icon: hit.kind === "app" ? Blocks : Plug,
     }));
     return [...navMatches, ...tasks, ...settingEntries, ...appEntries];

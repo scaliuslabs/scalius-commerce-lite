@@ -171,22 +171,23 @@ describe("app payment providers in payment settings", () => {
     expect(bkash.textContent).toContain("Provided by bKash Payments");
     expect(bkash.textContent).toContain("Off · Test mode");
     expect(toggle(BKASH).disabled).toBe(false);
-    // The chip links to the app; outside a settings page's sheet host, Manage opens the app too.
+    // The chip links to the app; Manage opens the method's own page in it.
     const links = [...bkash.querySelectorAll("a")];
-    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/admin/apps/scalius.bkash", "/admin/apps/scalius.bkash"]);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/admin/apps/scalius.bkash", "/admin/apps/scalius.bangladesh/bkash"]);
     expect(links.map((link) => link.textContent)).toEqual(["Provided by bKash Payments", "Manage"]);
     // The app's icon is the method's mark; an app without one keeps the neutral wallet.
     expect(bkash.querySelector("img")?.getAttribute("src")).toBe("/api/v1/admin/apps/scalius.bkash/assets/icon?v=63a5ccd16b4c0000");
     expect(row(NAGAD).querySelector("img")).toBeNull();
   });
 
-  it("fails an app provider closed with the server's reason, and links to the app to fix it", async () => {
+  it("fails an app provider closed with the server's reason, and links to its own page to fix it", async () => {
     await renderCard();
 
     const nagad = row(NAGAD);
     expect(nagad.textContent).toContain("Activate Nagad in Apps to use it.");
     expect(toggle(NAGAD).disabled).toBe(true);
-    expect([...nagad.querySelectorAll("a")].map((link) => link.textContent)).toContain("Open app");
+    const setUp = [...nagad.querySelectorAll("a")].find((link) => link.textContent === "Set up");
+    expect(setUp?.getAttribute("href")).toBe("/admin/apps/scalius.bangladesh/nagad");
     // Nothing to test while the app can't run.
     expect([...nagad.querySelectorAll("button")].some((button) => button.textContent === "Test connection")).toBe(false);
   });

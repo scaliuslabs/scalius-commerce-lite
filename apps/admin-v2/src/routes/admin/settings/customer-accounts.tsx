@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CustomerSignInCard } from "~/components/admin/settings/CustomerSignInCard";
-import { AppProviderSheetHost } from "~/components/admin/apps/AppProviderSheetHost";
 import { AppKindCard } from "~/components/admin/settings/AppKindCard";
 import { MarketingConsentCard } from "~/components/admin/settings/MarketingConsentCard";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
@@ -26,12 +25,10 @@ export const Route = createFileRoute("/admin/settings/customer-accounts")({
 function CustomerAccountsPage() {
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   return (
-    <AppProviderSheetHost>
-      <SettingsPage page="customerAccounts" readOnly={!canEdit}>
-        <CustomerSignInCard />
-        <AppKindCard kind="identity" />
-        <MarketingConsentCard />
-      </SettingsPage>
-    </AppProviderSheetHost>
+    <SettingsPage page="customerAccounts" readOnly={!canEdit}>
+      <CustomerSignInCard />
+      <AppKindCard kind="identity" />
+      <MarketingConsentCard />
+    </SettingsPage>
   );
 }

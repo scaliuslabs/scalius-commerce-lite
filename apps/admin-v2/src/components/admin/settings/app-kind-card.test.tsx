@@ -24,7 +24,6 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setLocale } from "~/i18n";
-import { AppProviderSheetHost } from "../apps/AppProviderSheetHost";
 import { APP_KIND_CARDS, AppKindCard } from "./AppKindCard";
 import { SETTINGS_CARDS } from "./settings-search";
 
@@ -56,9 +55,7 @@ async function render(kind: keyof typeof APP_KIND_CARDS, options: { superAdmin?:
   await act(async () => root.render(
     <QueryClientProvider client={queryClient}>
       <PermissionProvider isSuperAdmin={options.superAdmin ?? true}>
-        <AppProviderSheetHost>
-          <AppKindCard kind={kind} />
-        </AppProviderSheetHost>
+        <AppKindCard kind={kind} />
       </PermissionProvider>
     </QueryClientProvider>,
   ));
@@ -105,9 +102,10 @@ describe("app provider kind cards", () => {
     await vi.waitFor(() => expect(host.textContent).toContain(`Acme ${kind} two`));
     expect(host.textContent).toContain("Not ready");
     expect(host.textContent).toContain("Ready");
-    const buttons = [...host.querySelectorAll("button")].map((button) => button.textContent);
-    expect(buttons).toContain(`Set up Acme ${kind}`);
-    expect(buttons).toContain(`Edit Acme ${kind} two settings`);
+    // Each links to its feature's page in its app.
+    const links = [...host.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")]);
+    expect(links).toContainEqual([`Set up Acme ${kind}`, `/admin/apps/acme.apps/${kind}`]);
+    expect(links).toContainEqual([`Edit Acme ${kind} two settings`, `/admin/apps/acme.apps/${kind}2`]);
     expect(host.querySelector('a[href="/admin/apps"]')).toBeNull();
   });
 });

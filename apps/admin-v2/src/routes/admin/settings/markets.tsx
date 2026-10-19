@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AppProviderSheetHost } from "~/components/admin/apps/AppProviderSheetHost";
 import { AppKindCard } from "~/components/admin/settings/AppKindCard";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
@@ -21,11 +20,9 @@ export const Route = createFileRoute("/admin/settings/markets")({
 
 function MarketsPage() {
   return (
-    <AppProviderSheetHost>
-      <SettingsPage page="markets">
-        <MarketsList />
-        <AppKindCard kind="fx" />
-      </SettingsPage>
-    </AppProviderSheetHost>
+    <SettingsPage page="markets">
+      <MarketsList />
+      <AppKindCard kind="fx" />
+    </SettingsPage>
   );
 }

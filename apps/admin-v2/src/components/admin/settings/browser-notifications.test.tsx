@@ -30,7 +30,6 @@ vi.mock("@tanstack/react-router", () => ({
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setLocale } from "~/i18n";
 import { SaveScope, type SaveScopeState } from "../shared/SaveBar";
-import { AppProviderSheetHost } from "../apps/AppProviderSheetHost";
 import { BrowserNotificationsCard } from "./BrowserNotificationsCard";
 import { CustomerNotificationsCard } from "./NotificationSettings";
 
@@ -89,9 +88,7 @@ async function render(children: ReactNode) {
   await act(async () => root.render(
     <QueryClientProvider client={queryClient}>
       <PermissionProvider isSuperAdmin>
-        <AppProviderSheetHost>
-          <SaveScope render={(next) => { scope = next; return null; }}>{children}</SaveScope>
-        </AppProviderSheetHost>
+        <SaveScope render={(next) => { scope = next; return null; }}>{children}</SaveScope>
       </PermissionProvider>
     </QueryClientProvider>,
   ));

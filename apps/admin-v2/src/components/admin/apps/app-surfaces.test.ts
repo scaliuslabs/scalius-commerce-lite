@@ -16,7 +16,7 @@ import { PROVIDER_KINDS, qualifiedProviderId } from "@scalius/shared/plugins/pro
 import type { AppDetail } from "~/lib/api-query-options/apps";
 import { SETTINGS_NAV } from "../settings/settings-nav";
 import { SETTINGS_CARDS } from "../settings/settings-search";
-import { APP_PROVIDER_KINDS, PROVIDER_CAPABILITY, providerFromHash, providerHash } from "./app-capabilities";
+import { APP_PROVIDER_KINDS, PROVIDER_CAPABILITY } from "./app-capabilities";
 import { searchAppSurfaces } from "./app-search";
 import { itemSettingKeys, serviceGroups, serviceSettingKeys } from "./app-services";
 import { appearsEntries } from "./AppWhereItAppears";
@@ -166,7 +166,7 @@ describe("provider kinds", () => {
     for (const kind of APP_PROVIDER_KINDS) {
       const capability = PROVIDER_CAPABILITY[kind];
       expect(SETTINGS_NAV.some((item) => item.key === capability.page && item.to === capability.to), kind).toBe(true);
-      // The card is a settings card, so search and the setup-sheet link can find it.
+      // The card is a settings card, so search and the "Choose it in Settings" link can find it.
       expect(SETTINGS_CARDS.some((card) => card.page === capability.page && card.card === capability.card), kind).toBe(true);
     }
   });
@@ -180,7 +180,7 @@ describe("provider kinds", () => {
     expect(PROVIDER_CAPABILITY.search).toEqual({ page: "integrations", to: "/admin/settings/integrations", card: "appSearch" });
   });
 
-  it("opens a new kind's provider sheet on its capability page from dashboard search", () => {
+  it("opens a new kind's provider on its feature page in its app from dashboard search", () => {
     const app: AppSurfaces = {
       id: "acme.rates",
       name: "Acme rates",
@@ -199,8 +199,7 @@ describe("provider kinds", () => {
       label: "Daily rates",
       app: "Acme rates",
       providerKind: "fx",
-      to: "/admin/settings/markets",
-      hash: providerHash("acme.rates:daily"),
+      to: "/admin/apps/acme.rates/daily",
     }]);
   });
 });
@@ -258,15 +257,14 @@ describe("app surfaces in search", () => {
   const kinds = (kind: string) => (kind === "sms" ? ["SMS gateway", "এসএমএস গেটওয়ে"] : kind === "courier" ? ["Courier", "কুরিয়ার"] : [kind]);
   const all = () => true;
 
-  it("opens a provider's setup sheet where its capability lives", () => {
+  it("opens a provider's own page in its app (its switch and setup)", () => {
     expect(searchAppSurfaces([pack()], "pathao", all, kinds)).toEqual([{
       id: "provider:scalius.bangladesh:pathao",
       kind: "provider",
       label: "Pathao",
       app: "Bangladesh pack",
       providerKind: "courier",
-      to: "/admin/settings/shipping",
-      hash: providerHash("scalius.bangladesh:pathao"),
+      to: "/admin/apps/scalius.bangladesh/pathao",
     }]);
   });
 
@@ -279,8 +277,8 @@ describe("app surfaces in search", () => {
   });
 
   it("leaves out what the staff member cannot open", () => {
-    const noShipping = (path: string) => path !== "/admin/settings/shipping" && path !== "/admin/apps";
-    expect(searchAppSurfaces([pack()], "pathao", noShipping, kinds)).toEqual([]);
-    expect(searchAppSurfaces([pack()], "bangladesh", noShipping, kinds)).toEqual([]);
+    const noApps = (path: string) => path !== "/admin/apps";
+    expect(searchAppSurfaces([pack()], "pathao", noApps, kinds)).toEqual([]);
+    expect(searchAppSurfaces([pack()], "bangladesh", noApps, kinds)).toEqual([]);
   });
 });

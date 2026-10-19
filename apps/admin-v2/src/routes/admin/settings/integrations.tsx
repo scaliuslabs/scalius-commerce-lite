@@ -8,7 +8,6 @@ import {
   ScannerCard,
   TrackingCard,
 } from "~/components/admin/settings/AppsSettings";
-import { AppProviderSheetHost } from "~/components/admin/apps/AppProviderSheetHost";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { usePermissions } from "~/contexts/PermissionContext";
@@ -46,16 +45,14 @@ const EDIT_PERMISSIONS = [
 function IntegrationsPage() {
   const { hasPermission } = usePermissions();
   return (
-    <AppProviderSheetHost>
-      <SettingsPage page="integrations" readOnly={!EDIT_PERMISSIONS.some(hasPermission)}>
-        <TrackingCard />
-        <FacebookCard />
-        <FraudCheckCard />
-        <ScannerCard />
-        <AiAccessCard />
-        <AiDraftingCard />
-        <AppKindCard kind="search" />
-      </SettingsPage>
-    </AppProviderSheetHost>
+    <SettingsPage page="integrations" readOnly={!EDIT_PERMISSIONS.some(hasPermission)}>
+      <TrackingCard />
+      <FacebookCard />
+      <FraudCheckCard />
+      <ScannerCard />
+      <AiAccessCard />
+      <AiDraftingCard />
+      <AppKindCard kind="search" />
+    </SettingsPage>
   );
 }

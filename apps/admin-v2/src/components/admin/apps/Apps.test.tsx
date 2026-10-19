@@ -44,7 +44,6 @@ import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setLocale } from "~/i18n";
 import { appQueryOptions } from "~/lib/api-query-options/apps";
 import { AppDetailPage } from "./AppDetailPage";
-import { AppProviderSheetHost, useOpenAppProvider } from "./AppProviderSheetHost";
 import { AppsList } from "./AppsList";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -227,9 +226,9 @@ async function flush() {
 }
 
 /** The app page as its route shows it: from the detail query, so invalidation refetches. */
-function AppRoute({ id }: { id: string }) {
+function AppRoute({ id, section }: { id: string; section?: string }) {
   const { data } = useQuery(appQueryOptions(id));
-  return data ? <AppDetailPage app={data} /> : null;
+  return data ? <AppDetailPage app={data} sectionKey={section} /> : null;
 }
 
 async function render(node: ReactNode, permissions: string[], isSuperAdmin = false) {
@@ -243,9 +242,9 @@ async function render(node: ReactNode, permissions: string[], isSuperAdmin = fal
   await flush();
 }
 
-async function renderApp(app: object, permissions: string[], isSuperAdmin = false) {
+async function renderApp(app: object, permissions: string[], isSuperAdmin = false, section?: string) {
   sdk.getApiV1AdminAppsById.mockImplementation(() => ok({ app }));
-  await render(<AppRoute id="acme.loyalty" />, permissions, isSuperAdmin);
+  await render(<AppRoute id="acme.loyalty" section={section} />, permissions, isSuperAdmin);
   await vi.waitFor(() => expect(text()).toContain("Loyalty points"));
 }
 
@@ -828,27 +827,54 @@ function pack(overrides: Record<string, unknown> = {}) {
   });
 }
 
-describe("App page: features", () => {
-  it("lists every feature off, grouped, and asks a Super Admin to approve only that feature's access", async () => {
+describe("App page: sections", () => {
+  it("opens on an overview: every service by kind with whether it is on, each a link to its own page", async () => {
+    await renderApp(detail({ status: "active", features: [feature({ enabled: true, grantKey: null }), placesFeature()] }), MANAGER, true);
+    // The section column: Overview, the features under their kind, then the app's own Settings and Activity.
+    const nav = document.querySelector('nav[aria-label="Sections of Loyalty points"]')!;
+    expect([...nav.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
+      ["Overview", "/admin/apps/acme.loyalty"],
+      ["Bangladesh placesOff", "/admin/apps/acme.loyalty/places"],
+      ["bKash", "/admin/apps/acme.loyalty/bkash"],
+      ["Settings", "/admin/apps/acme.loyalty/settings"],
+      ["Activity", "/admin/apps/acme.loyalty/activity"],
+    ]);
+    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe("Overview");
+    // The health summary.
+    expect(text()).toContain("1 of 2 on");
+    const services = [...document.querySelectorAll<HTMLAnchorElement>('main a[href^="/admin/apps/acme.loyalty/"], a[href^="/admin/apps/acme.loyalty/"]')]
+      .filter((link) => !nav.contains(link))
+      .map((link) => link.getAttribute("href"));
+    // The ones that are on; the rest stay in the column, counted here.
+    expect(services).toEqual(["/admin/apps/acme.loyalty/bkash"]);
+    expect(text()).toContain("1 more service is off.");
+    // No switch on the overview: each feature turns on on its own page.
+    expect(document.querySelectorAll('button[role="switch"]')).toHaveLength(0);
+    expect(text()).toContain("About");
+    expect(text()).toContain("Turn off or uninstall");
+  });
+
+  it("keeps an app without features on one page, with no section column", async () => {
+    await renderApp(detail(), MANAGER);
+    expect(document.querySelector("nav[aria-label^='Sections of']")).toBeNull();
+    expect(text()).toContain("About");
+  });
+
+  it("asks a Super Admin to approve only that feature's access from its own page, and says it applies at once", async () => {
     sdk.postApiV1AdminAppsByIdFeaturesByFeatureIdEnable.mockImplementation(() =>
       ok({ app: detail({ status: "active", revision: 5, features: [feature({ enabled: true, grantKey: null }), placesFeature()] }), changed: true, hookError: null }));
-    await renderApp(detail({ status: "active", features: [feature(), placesFeature()] }), MANAGER, true);
+    await renderApp(detail({ status: "active", features: [feature(), placesFeature()] }), MANAGER, true, "bkash");
 
-    // One card per kind of service; the group with the recommended feature first.
-    expect([...document.querySelectorAll('[data-slot="card"] > div:first-child')].map((element) => element.textContent).slice(0, 2)).toEqual([
-      expect.stringContaining("General"),
-      "Payments",
-    ]);
-    expect(text()).toContain("Recommended");
-    expect(text()).toContain("Access: Connects to tokenized.pay.bka.sh and tokenized.sandbox.bka.sh");
+    expect(document.querySelector('nav [aria-current="page"]')?.textContent).toContain("bKash");
+    expect(text()).toContain("Turning it on or off applies right away, after you confirm.");
+    expect(text()).toContain("Turn on bKash to set it up. Its settings then appear here.");
+    expect(text()).toContain("tokenized.pay.bka.sh");
     const switches = [...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')];
-    expect(switches.map((element) => element.getAttribute("aria-checked"))).toEqual(["false", "false"]);
-    await click(switches[1]!);
+    expect(switches.map((element) => element.getAttribute("aria-checked"))).toEqual(["false"]);
+    await click(switches[0]!);
 
     expect(dialog().textContent).toContain("Turn on bKash?");
-    // Why: the feature's own description.
     expect(dialog().textContent).toContain("Take bKash payments at checkout.");
-    expect(dialog().textContent).toContain("tokenized.pay.bka.sh");
     expect(dialog().textContent).toContain("Takes payments");
     // Only this feature's access: not the places scope.
     expect(dialog().textContent).not.toContain("Load delivery places");
@@ -863,11 +889,15 @@ describe("App page: features", () => {
   it("lets a manager turn a feature off but not on, and says why", async () => {
     sdk.postApiV1AdminAppsByIdFeaturesByFeatureIdDisable.mockImplementation(() =>
       ok({ app: detail({ status: "active", revision: 4, features: [feature(), placesFeature()] }), changed: true, hookError: null }));
-    await renderApp(detail({ status: "active", features: [feature({ enabled: true, grantKey: null }), placesFeature()] }), MANAGER, false);
+    const app = detail({ status: "active", features: [feature({ enabled: true, grantKey: null }), placesFeature()] });
+    await renderApp(app, MANAGER, false, "places");
     expect(text()).toContain("Only a Super Admin can turn a feature on");
-    const [places, bkash] = [...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')];
-    expect(places!.disabled).toBe(true);
-    await click(bkash!);
+    expect(document.querySelector<HTMLButtonElement>('button[role="switch"]')!.disabled).toBe(true);
+
+    act(() => root.unmount());
+    root = createRoot(host);
+    await renderApp(app, MANAGER, false, "bkash");
+    await click(document.querySelector<HTMLButtonElement>('button[role="switch"]')!);
     expect(dialog().textContent).toContain("Turn off bKash?");
     // What stops for the store.
     expect(dialog().textContent).toContain("Buyers can no longer pay with it.");
@@ -880,13 +910,13 @@ describe("App page: features", () => {
   });
 
   it("keeps features off until the app is active, and says what each one would reach", async () => {
-    await renderApp(detail({ features: [feature(), placesFeature()] }), MANAGER, true);
+    await renderApp(detail({ features: [feature(), placesFeature()] }), MANAGER, true, "places");
     expect(text()).toContain("Activate the app first.");
-    expect([...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')].every((element) => element.disabled)).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('button[role="switch"]')!.disabled).toBe(true);
     expect(text()).toContain("Load delivery places");
   });
 
-  it("shows an on feature's own settings under it, its health and where it is chosen, and saves them with the page", async () => {
+  it("shows an on feature's own settings on its page, its health and where it is chosen, and saves them with the save bar", async () => {
     const bkashOn = feature({ enabled: true, grantKey: null, settings: ["bkash_app_key", "bkash_username"] });
     const app = (overrides: Record<string, unknown> = {}) => detail({
       status: "active",
@@ -905,11 +935,10 @@ describe("App page: features", () => {
       ...overrides,
     });
     sdk.putApiV1AdminAppsByIdSettings.mockImplementation(() => ok({ app: app({ revision: 4 }) }));
-    await renderApp(app(), MANAGER, true);
+    await renderApp(app(), MANAGER, true, "bkash");
 
     expect(input("bkash_app_key").type).toBe("password");
     expect(input("bkash_username").value).toBe("shop");
-    // The places feature is off: nothing of it shows but its row.
     expect(text()).toContain("Needs setup");
     expect(document.querySelector('a[href="/admin/settings/payments"]')?.textContent).toBe("Choose it in Settings → Payments");
     await type(input("bkash_username"), "my-shop");
@@ -917,13 +946,13 @@ describe("App page: features", () => {
     expect(sent.body.values).toEqual({ bkash_username: "my-shop" });
   });
 
-  it("says a feature's job failed, with when and why", async () => {
+  it("says a feature's job failed, with when and why, on its page", async () => {
     await renderApp(detail({
       status: "active",
       features: [placesFeature(), feature()].map((entry, index) => (index === 0 ? { ...entry, enabled: true, grantKey: null } : entry)),
       admin: { pages: [{ id: "places", title: "Bangladesh places", placement: "settings", route: "places", tabs: null }], cards: [], actions: [], widgets: [] },
       cron: [{ name: "places-sync", schedule: "17 * * * *", lastRun: { scheduledFor: "2026-10-01T08:00:00.000Z", status: "failed", finishedAt: "2026-10-01T08:00:05.000Z", durationMs: 5000, error: "Pathao answered 503." } }],
-    }), MANAGER, true);
+    }), MANAGER, true, "places");
     expect(text()).toContain("Not working");
     expect(text()).toContain("Pathao answered 503.");
     expect(document.querySelector('a[href="/admin/apps/acme.loyalty/pages/places"]')?.textContent).toBe("Open Bangladesh places");
@@ -938,7 +967,7 @@ describe("App page: features", () => {
         status: "active",
         features: [placesFeature()],
         translations: { bn: { features: { places: { name: "বাংলাদেশের এলাকা", description: "শহর, থানা ও এলাকা।" } } } },
-      }), MANAGER, true);
+      }), MANAGER, true, "places");
       expect(text()).toContain("বাংলাদেশের এলাকা");
       expect(text()).toContain("প্রস্তাবিত");
     } finally {
@@ -946,12 +975,6 @@ describe("App page: features", () => {
     }
   });
 });
-
-/** Opens a provider's setup sheet the way a capability settings page does. */
-function OpenSheet({ id }: { id: string }) {
-  const open = useOpenAppProvider();
-  return <button type="button" onClick={() => open?.(id)}>Open sheet</button>;
-}
 
 describe("App page: settings and services", () => {
   it("is one page: no tabs, what it is and what it can reach beside its services", async () => {
@@ -988,33 +1011,6 @@ describe("App page: settings and services", () => {
     await type(input("alpha_sender"), "ACMEBD");
     const sent = await saveSettings();
     expect(sent).toEqual({
-      path: { id: "acme.pack" },
-      body: { expectedRevision: 3, values: { store_code: "DHK-1", alpha_sender: "ACMEBD", beta_weight: 0.5 } },
-    });
-  });
-
-  it("opens a service's setup sheet with only its own fields, never a saved secret, and saves through the app", async () => {
-    sdk.getApiV1AdminAppsById.mockImplementation(() => ok({ app: pack() }));
-    sdk.putApiV1AdminAppsByIdSettings.mockImplementation(({ body }: { body: { values: Record<string, unknown> } }) =>
-      ok({ app: pack({ revision: 4, settings: { ...pack().settings, values: { ...pack().settings.values, alpha_sender: body.values.alpha_sender } } }) }));
-    await render(<AppProviderSheetHost><OpenSheet id="acme.pack:alpha" /></AppProviderSheetHost>, MANAGER);
-    await click(button("Open sheet"));
-    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')?.textContent).toContain("by Acme pack"));
-
-    const sheet = dialog();
-    const ids = [...sheet.querySelectorAll("input")].map((element) => element.id).filter(Boolean);
-    expect(ids).toEqual(["provider-setting-alpha_key", "provider-setting-alpha_sender"]);
-    const secret = sheet.querySelector<HTMLInputElement>("#provider-setting-alpha_key")!;
-    expect(secret.type).toBe("password");
-    expect(secret.value).toBe("");
-    expect(sheet.textContent).toContain("Configured");
-    expect(sheet.textContent).not.toContain("Token");
-
-    await type(sheet.querySelector<HTMLInputElement>("#provider-setting-alpha_sender")!, "ACMEBD");
-    await click(button("Save", sheet));
-    await vi.waitFor(() => expect(sdk.putApiV1AdminAppsByIdSettings).toHaveBeenCalledTimes(1));
-    // This service's field as edited; every other field as last saved; no secret unless typed.
-    expect(sdk.putApiV1AdminAppsByIdSettings.mock.calls[0]![0]).toEqual({
       path: { id: "acme.pack" },
       body: { expectedRevision: 3, values: { store_code: "DHK-1", alpha_sender: "ACMEBD", beta_weight: 0.5 } },
     });

@@ -60,7 +60,7 @@ import {
 import { COD_METHOD, paymentMethodRows, type PaymentMethodRow } from "./payment-method-rows";
 import { OfficialProviderMark, PROVIDER_MARKS, type ProviderMarkId } from "./provider-marks";
 import { AppIcon } from "~/components/admin/apps/AppIcon";
-import { useOpenAppProvider } from "~/components/admin/apps/AppProviderSheetHost";
+import { appProviderSetupPath } from "~/components/admin/apps/app-sections";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useWholeUnitPrices } from "../shared/MoneyInput";
@@ -343,7 +343,6 @@ export function PaymentMethodsCard() {
   const pendingTurnOn = useRef<MethodKey | null>(null);
   const setupButtons = useRef(new Map<MethodKey, HTMLButtonElement>());
   const canViewApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
-  const openProvider = useOpenAppProvider();
   const flow = useQuery(checkoutFlowQuery);
   const currency = useQuery(currencyQuery);
   const marketCurrencies = useQuery(marketCurrenciesQueryOptions());
@@ -489,17 +488,11 @@ export function PaymentMethodsCard() {
             {t("testConnection")}
           </Button>
         ) : null}
-        {/* The provider's own keys open in its setup sheet, here; the app page holds its activation. */}
+        {/* Its feature's page in the app: the switch, consent and the provider's own keys. */}
         {canViewApps && row.pluginId ? (
-          openProvider ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => openProvider(method)}>
-              {outcome.state === "needs_setup" ? t("set_up") : t("manage")}
-            </Button>
-          ) : (
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/apps/$pluginId" params={{ pluginId: row.pluginId }}>{unusable ? t("openApp") : t("manage")}</Link>
-            </Button>
-          )
+          <Button asChild variant="outline" size="sm">
+            <Link to={appProviderSetupPath(method)}>{unusable ? t("set_up") : t("manage")}</Link>
+          </Button>
         ) : null}
       </>
     ) : null;
