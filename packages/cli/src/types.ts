@@ -2,6 +2,15 @@ import type { Readable, Writable } from "node:stream";
 
 export type OutputMode = "human" | "json";
 
+export interface CommandResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+/** Runs one local program (a harness CLI) with arguments, never through a shell. */
+export type CommandRunner = (command: string, args: string[], options?: { timeoutMs?: number }) => Promise<CommandResult>;
+
 export interface Runtime {
   env: NodeJS.ProcessEnv;
   fetch: typeof globalThis.fetch;
@@ -14,6 +23,10 @@ export interface Runtime {
   stdin: Readable & { isTTY?: boolean; setRawMode?: (enabled: boolean) => void };
   stdout: Writable & { isTTY?: boolean };
   stderr: Writable & { isTTY?: boolean };
+  /** Local program runner for harness registration; absent means no harness CLI can be driven. */
+  run?: CommandRunner;
+  /** Absolute path of the running CLI entry script, for the stdio MCP launch command. */
+  entryScript?: string;
 }
 
 export interface Profile {
@@ -73,6 +86,11 @@ export interface AgentMetadata {
   artifactOutput?: AgentArtifactOutput;
   continuationOutput?: AgentContinuationOutput;
   exclusionReason?: string;
+  /** Registry additions (S2): when to use, dry-run support, an extra confirmation gate, opt-in grant scope. */
+  when?: string;
+  dryRun?: string;
+  confirmation?: "required" | "none";
+  grantScope?: string;
 }
 
 export interface AgentArtifactOutput {

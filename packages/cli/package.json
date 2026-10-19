@@ -1,13 +1,15 @@
 {
   "name": "scalius",
-  "version": "0.2.13",
-  "description": "Secure CLI for every reviewed Scalius Commerce operation",
+  "version": "0.3.0",
+  "description": "Run a Scalius Commerce store from the terminal or any agent: one-command setup, skills, and safe reviewed operations",
   "keywords": [
     "scalius",
     "commerce",
     "ecommerce",
     "cli",
     "mcp",
+    "agent",
+    "skills",
     "automation"
   ],
   "author": "Scalius Labs",
@@ -28,7 +30,10 @@
   "files": [
     "dist",
     "README.md",
-    "skill"
+    "skills",
+    ".claude-plugin",
+    ".codex-plugin",
+    ".mcp.json"
   ],
   "engines": {
     "node": ">=22.12"
@@ -41,7 +46,8 @@
     "lint": "oxlint -c ../../.oxlintrc.json src/ test/",
     "prepublishOnly": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "test": "vitest run",
-    "typecheck": "../../node_modules/typescript7/bin/tsc --build"
+    "typecheck": "../../node_modules/typescript7/bin/tsc --build",
+    "generate:recipes": "node scripts/generate-recipes.mjs"
   },
   "dependencies": {
     "commander": "15.0.0",
@@ -53,6 +59,7 @@
   "devDependencies": {
     "@scalius/tsconfig": "workspace:*",
     "@types/node": "^24.13.3",
-    "vitest": "^5.0.4"
+    "vitest": "^5.0.4",
+    "@modelcontextprotocol/server": "2.3.1"
   }
 }
