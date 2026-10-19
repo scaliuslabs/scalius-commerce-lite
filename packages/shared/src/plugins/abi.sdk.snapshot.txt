@@ -773,7 +773,7 @@ export declare function renderFooter(module: StorefrontModule, component: string
 export declare function renderProductCard(module: StorefrontModule, component: string, settings?: StorefrontResolvedSettings, product?: Partial<StorefrontProductCard>, options?: RenderOptions): string;
 
 // packages/plugin-sdk/src/testing.d.ts
-import { type PluginSettingValue } from "@scalius/shared/plugins";
+import { type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFunctionPoint, type PluginSettingValue } from "@scalius/shared/plugins";
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
@@ -795,6 +795,9 @@ export interface PluginTestHarnessOptions {
         body: string;
     }>;
 }
+export type PluginFunctionTestResult<P extends PluginFunctionPoint> = Omit<PluginInvocationResult, "value"> & {
+    value: PluginFunctionOutput<P> | null;
+};
 export declare function createPluginTestHarness(module: unknown, options?: PluginTestHarnessOptions): {
     manifest: {
         id: string;
@@ -1954,7 +1957,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         occurredAt?: string;
     }) => Promise<PluginInvocationResult>;
     deliver: (event: PluginEvent) => Promise<PluginInvocationResult>;
-    fn: (point: string, input: unknown) => Promise<PluginInvocationResult>;
+    fn: <P extends PluginFunctionPoint>(point: P, input: PluginFunctionInputDraft<P>) => Promise<PluginFunctionTestResult<P>>;
     runMigration: (version: number) => Promise<PluginInvocationResult>;
     runMigrations: (options?: {
         from?: number;

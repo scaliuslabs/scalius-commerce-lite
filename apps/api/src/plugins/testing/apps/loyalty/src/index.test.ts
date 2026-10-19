@@ -29,7 +29,7 @@ const snapshot = (points: number, revision = 4) => ({ revision, data: { points, 
 
 describe("acme.loyalty", () => {
   const buyer = {
-    target: "purchase.checkout.actions.render-before", language: "en", locale: "en-BD", currency: "BDT",
+    target: "purchase.checkout.actions.render-before" as const, language: "en", locale: "en-BD", currency: "BDT",
     cart: cart({ codes: [] }), attributes: {}, order: null, customer: { id: "cust_1" }, snapshot: snapshot(300),
   };
 
@@ -48,7 +48,7 @@ describe("acme.loyalty", () => {
     const harness = createPluginTestHarness(loyalty);
     expect((await harness.fn("buyer.ui", { ...buyer, customer: null, snapshot: null })).value).toEqual({ ui: null });
     for (const input of [
-      { ...buyer, target: "customer-account.order-index.block.render", cart: null },
+      { ...buyer, target: "customer-account.order-index.block.render" as const, cart: null },
       { ...buyer, snapshot: null },
       { ...buyer, snapshot: snapshot(49) },
       { ...buyer, cart: cart({ codes: ["points"] }) },

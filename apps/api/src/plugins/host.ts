@@ -30,7 +30,7 @@ import { readStoreIdentity } from "@scalius/core/modules/notifications";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { storeTimeZoneOf } from "../utils/store-time-zone";
 import {
-  PLUGIN_FUNCTION_SCHEMAS,
+  checkPluginFunctionOutput,
   pluginHandlerInventory,
   validatePluginSettingValues,
   type PluginFunctionOutput,
@@ -195,14 +195,12 @@ export class PluginHost {
     const wallMs = Math.min(installation.manifest.limits.wallMs, PLUGIN_FUNCTION_WALL_MS);
     const outcome = await this.run(installation, { kind: "function", point, input }, `function:${point}`, wallMs);
     if (!outcome.ok) return failed(outcome);
-    const parsed = PLUGIN_FUNCTION_SCHEMAS[point].output.safeParse(outcome.value);
-    if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      const reason = `Invalid ${point} output${issue ? ` at ${issue.path.join(".") || "(root)"}: ${issue.message}` : ""}.`;
-      await this.incident(installation, `function:${point}`, reason);
-      return { ok: false, value: null, error: reason, failure: "invalid" };
+    const checked = checkPluginFunctionOutput(point, outcome.value);
+    if (!checked.ok) {
+      await this.incident(installation, `function:${point}`, checked.message);
+      return { ok: false, value: null, error: checked.message, failure: "invalid" };
     }
-    return { ok: true, value: parsed.data as PluginFunctionOutput<P>, error: null };
+    return { ok: true, value: checked.value, error: null };
   }
 
   /**

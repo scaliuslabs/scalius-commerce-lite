@@ -3,7 +3,7 @@ import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
 import notes from "./index";
 
 const buyer = {
-  target: "purchase.checkout.contact.render-after", language: "en", locale: "en-BD", currency: "BDT",
+  target: "purchase.checkout.contact.render-after" as const, language: "en", locale: "en-BD", currency: "BDT",
   cart: null, attributes: {}, order: null, customer: null,
 };
 
@@ -19,7 +19,7 @@ describe("acme.notes buyer UI", () => {
 
   it("reads account text only from the supplied customer snapshot", async () => {
     const harness = createPluginTestHarness(notes);
-    const input = { ...buyer, target: "customer-account.order-index.block.render", customer: { id: "cust_1" } };
+    const input = { ...buyer, target: "customer-account.order-index.block.render" as const, customer: { id: "cust_1" } };
     expect((await harness.fn("buyer.ui", { ...input, snapshot: { revision: 2, data: { text: "Your next delivery is on Friday." } } })).value)
       .toEqual({ ui: { type: "text", text: "Your next delivery is on Friday." } });
     expect((await harness.fn("buyer.ui", { ...input, snapshot: null })).value)

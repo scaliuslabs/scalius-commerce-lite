@@ -293,5 +293,30 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
   },
 } as const satisfies Record<PluginFunctionPoint, { input: z.ZodType; output: z.ZodType }>;
 
+/** What a function receives (defaults applied). */
 export type PluginFunctionInput<P extends PluginFunctionPoint> = z.infer<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["input"]>;
+/** An input as a caller may write it (defaults left out): what the test harness takes. */
+export type PluginFunctionInputDraft<P extends PluginFunctionPoint> = z.input<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["input"]>;
 export type PluginFunctionOutput<P extends PluginFunctionPoint> = z.infer<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["output"]>;
+
+/** The refusal code of an answer that fails its point's schema; the host skips the app (or blocks, `onError`). */
+export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function.invalid_output";
+
+/**
+ * A function's answer checked the way the host checks it: the parsed output,
+ * or `function.invalid_output` with the first issue's path. The host and the
+ * SDK test harness both use this, so a test sees what production does.
+ */
+export function checkPluginFunctionOutput<P extends PluginFunctionPoint>(
+  point: P,
+  value: unknown,
+): { ok: true; value: PluginFunctionOutput<P> } | { ok: false; code: typeof PLUGIN_FUNCTION_INVALID_OUTPUT; message: string } {
+  const parsed = PLUGIN_FUNCTION_SCHEMAS[point].output.safeParse(value);
+  if (parsed.success) return { ok: true, value: parsed.data as PluginFunctionOutput<P> };
+  const issue = parsed.error.issues[0];
+  return {
+    ok: false,
+    code: PLUGIN_FUNCTION_INVALID_OUTPUT,
+    message: `Invalid ${point} output${issue ? ` at ${issue.path.join(".") || "(root)"}: ${issue.message}` : ""}.`,
+  };
+}

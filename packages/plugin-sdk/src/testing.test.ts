@@ -87,6 +87,42 @@ describe("harness migrations", () => {
   });
 });
 
+describe("the harness is as strict as the platform", () => {
+  const strict = (answer: unknown, scopes: PluginManifestInput["scopes"] = []) => definePlugin({
+    manifest: { ...manifest, id: "acme.strict", scopes, functions: [{ point: "cart.line_prices" }], events: ["order.created"], routes: { admin: [], public: [], webhooks: [] }, migrations: [] },
+    functions: { "cart.line_prices": () => answer as never },
+    events: {
+      "order.created": async (event, ctx) => {
+        await ctx.messaging.email({ to: "buyer@example.test", subject: "Hi", html: "<p>Hi</p>" });
+      },
+    },
+  });
+
+  it("returns the host's function.invalid_output for an answer production would skip", async () => {
+    const harness = createPluginTestHarness({ default: strict({ prices: [{ lineId: "line_1", unitPriceMinor: 0.5 }] }) });
+    const result = await harness.fn("cart.line_prices", { cart: fixtures.cart(), lines: [{ lineId: "line_1", source: "base", bundle: null }] });
+    expect(result).toMatchObject({ ok: false, value: null, error: { code: "function.invalid_output" } });
+    expect(result.error?.message).toMatch(/^Invalid cart\.line_prices output at prices\.0\.unitPriceMinor: /);
+  });
+
+  it("parses the input with the point's schema and refuses an undeclared point", async () => {
+    const harness = createPluginTestHarness({ default: strict({ prices: [] }) });
+    await expect(harness.fn("cart.line_prices", { cart: fixtures.cart(), lines: [{ lineId: "line_1", source: "nowhere", bundle: null }] } as never))
+      .rejects.toThrow(/Invalid cart\.line_prices input at lines\.0\.source/);
+    await expect(harness.fn("checkout.discounts", fixtures.checkoutDiscountsInput())).rejects.toThrow(/declares no checkout\.discounts/);
+    expect(await harness.fn("cart.line_prices", { cart: fixtures.cart(), lines: [] })).toMatchObject({ ok: true, value: { prices: [] } });
+  });
+
+  it("refuses customer messages without read_customers, as the host does", async () => {
+    const refused = createPluginTestHarness({ default: strict({ prices: [] }) });
+    expect(await refused.deliver(fixtures.event("order.created"))).toMatchObject({ ok: false, error: { code: "messaging.not_allowed" } });
+    expect(refused.sent.emails).toEqual([]);
+    const allowed = createPluginTestHarness({ default: strict({ prices: [] }, ["read_customers"]) });
+    expect(await allowed.deliver(fixtures.event("order.created"))).toMatchObject({ ok: true });
+    expect(allowed.sent.emails).toHaveLength(1);
+  });
+});
+
 describe("fixtures", () => {
   it("is the same export from the testing entry and the fixtures entry", () => {
     expect(fixtures).toBe(fixturesModule.fixtures);
