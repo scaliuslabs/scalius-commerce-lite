@@ -66,6 +66,8 @@ describe("MCP server construction", () => {
     expect(AGENT_MCP_INSTRUCTIONS).toContain("operations.read");
     expect(AGENT_MCP_INSTRUCTIONS).toContain("operations.write");
     expect(AGENT_MCP_INSTRUCTIONS).toContain("never arbitrary code, HTTP, or SQL");
+    // Each operation's tier is in operations.describe; beta ones stay callable.
+    expect(AGENT_MCP_INSTRUCTIONS).toContain("Prefer stable ops.");
     expect(AGENT_MCP_INSTRUCTIONS.length).toBeLessThan(360);
   });
 

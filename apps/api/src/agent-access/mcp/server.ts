@@ -148,7 +148,7 @@ interface McpServerDependencies {
   ctx: ExecutionContext;
 }
 
-export const AGENT_MCP_INSTRUCTIONS = "For data questions try workflows.read; on unavailable, or for changes, use workflows.resolve. Describe only selected IDs, then use operations.read/read_batch or operations.write/write_batch; confirm and verify writes. Fixed reviewed operations only—never arbitrary code, HTTP, or SQL. Never invent IDs, revisions, money, stock, or secrets.";
+export const AGENT_MCP_INSTRUCTIONS = "For data questions try workflows.read; on unavailable, or for changes, use workflows.resolve. Describe only selected IDs, then use operations.read/read_batch or operations.write/write_batch; confirm and verify writes. Fixed reviewed operations only—never arbitrary code, HTTP, or SQL. Never invent IDs, revisions, money, stock, or secrets. Prefer stable ops.";
 
 export function formatAgentToolResult(value: Record<string, unknown>) {
   const oneTimeResult = typeof value.result === "object" && value.result !== null
