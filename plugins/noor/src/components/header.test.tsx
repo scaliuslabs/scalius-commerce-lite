@@ -125,6 +125,19 @@ describe("Noor bounded desktop navigation", () => {
     expect(draw({ menu: "accordion", tabBar: true }).classList.contains("is-drill")).toBe(false);
   });
 
+  it.each([
+    [true, undefined], [true, { menu: "accordion", tabBar: true }], [true, { menu: "drill", tabBar: false }],
+    [false, undefined], [false, { menu: "accordion", tabBar: true }],
+  ] as const)("gives phones one search (header search %s, phone navigation %j)", (showSearch, phoneNavigation) => {
+    const settings = resolveStorefrontSettings(schema, { layout: "center", show_search: showSearch }, { image: () => null, products: () => [] });
+    const template = document.createElement("template");
+    template.innerHTML = renderHeader(storefront, "noor-header", settings, { menu: menu(2), ...(phoneNavigation ? { phoneNavigation } : {}) }, { context: fixtureContext() });
+    const header = template.content;
+    // The header's own search button (with or without the store's tab bar, which has no Search tab), else the drawer's field.
+    expect(header.querySelectorAll('.noor-header-end [popovertarget="noor-search"]')).toHaveLength(showSearch ? 1 : 0);
+    expect(header.querySelectorAll('#noor-drawer form[role="search"]')).toHaveLength(showSearch ? 0 : 1);
+  });
+
   it.each(["mega", "simple"])("marks the current page and its section in every %s menu, More and the drawer", (style) => {
     const items = menu(8);
     const current = (fragment: DocumentFragment, selector: string) =>

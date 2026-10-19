@@ -254,6 +254,9 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
   }
   const searchLabel = t(context, { en: "Search", bn: "খুঁজুন" });
   const current = menuCurrent(context.page.path, data.store.url);
+  // Phones get one search: the header's button when it shows one (with or
+  // without the store's tab bar, which never repeats Search), else the drawer's field.
+  const drawerSearch = !settings.show_search;
   return (
     <div class={cx("noor-header-shell", settings.sticky && "is-sticky", transparent && "is-transparent")} {...(settings.sticky ? stickyHeader() : {})} style={{ "--noor-logo-width": `${data.store.logoWidth}px` }}>
       <Island name="header" hydrate="idle" class="noor-header-island">
@@ -304,10 +307,12 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
             <Icon name="close" size={22} />
           </button>
         </div>
-        <form class="noor-field is-search" action={data.routes.search} method="get" role="search">
-          <Icon name="search" size={18} />
-          <input type="search" name={data.searchParam} placeholder={t(context, { en: "Search products", bn: "পণ্য খুঁজুন" })} aria-label={searchLabel} />
-        </form>
+        {drawerSearch ? (
+          <form class="noor-field is-search" action={data.routes.search} method="get" role="search">
+            <Icon name="search" size={18} />
+            <input type="search" name={data.searchParam} placeholder={t(context, { en: "Search products", bn: "পণ্য খুঁজুন" })} aria-label={searchLabel} />
+          </form>
+        ) : null}
         <nav class="noor-drawer-nav" aria-label={t(context, { en: "Main", bn: "প্রধান" })}><DrawerMenu items={data.menu} context={context} current={current} /></nav>
         <div class="noor-drawer-foot">
           <a href={data.routes.account} {...accountLink()}><Icon name="user" size={18} />{t(context, { en: "My account", bn: "আমার অ্যাকাউন্ট" })}</a>
