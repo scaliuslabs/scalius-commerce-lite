@@ -33,6 +33,9 @@ vi.mock("@/lib/api/runtime", () => ({
   getRuntimeImageCdnBaseUrl: mocks.getRuntimeImageCdnBaseUrl,
   getRuntimeImageCdnCanonicalHostAliases: mocks.getRuntimeImageCdnCanonicalHostAliases,
   setRuntimeImageCdnPolicy: mocks.setRuntimeImageCdnPolicy,
+  renderForPresence: (presence: string) => {
+    runtimePresence.value = presence;
+  },
 }));
 
 import { GET as getProfile } from "../../pages/.well-known/ucp";
@@ -136,12 +139,17 @@ describe("UCP storefront routes", () => {
     expect(body.ucp.services["dev.ucp.shopping"][0].endpoint).toBe(
       "https://storefront.example.test/ucp",
     );
+    expect(body.ucp.services["dev.ucp.shopping"][1].endpoint).toBe(
+      "https://storefront.example.test/ucp/mcp",
+    );
     expect(Object.keys(body.ucp.capabilities)).toEqual([
       "dev.ucp.shopping.catalog.search",
       "dev.ucp.shopping.catalog.lookup",
     ]);
+    // Required by the 2026-08-25 business schema, and empty: nothing here takes payment.
     expect(body.payment_handlers).toBeUndefined();
-    expect(body.ucp.payment_handlers).toBeUndefined();
+    expect(body.ucp.payment_handlers).toEqual({});
+    const advertised = JSON.stringify({ services: body.ucp.services, capabilities: body.ucp.capabilities }).toLowerCase();
     for (const unsafeCapability of [
       "checkout",
       "cart",
@@ -151,7 +159,8 @@ describe("UCP storefront routes", () => {
       "recovery",
       "customer",
     ]) {
-      expect(serializedProfile).not.toContain(unsafeCapability);
+      expect(advertised).not.toContain(unsafeCapability);
+      expect(serializedProfile.replace("payment_handlers", "")).not.toContain(unsafeCapability);
     }
   });
 
@@ -202,7 +211,7 @@ describe("UCP storefront routes", () => {
     } as never);
     const body = await response.json();
 
-    expect(response.status).toBe(422);
+    expect(response.status).toBe(400);
     expect(body.messages[0].code).toBe("invalid_profile_url");
     expect(mocks.getFeedProducts).not.toHaveBeenCalled();
   });
@@ -228,7 +237,7 @@ describe("UCP storefront routes", () => {
     } as never);
     const body = await response.json();
 
-    expect(response.status).toBe(422);
+    expect(response.status).toBe(400);
     expect(body.messages[0].code).toBe("invalid_profile_url");
     expect(mocks.getFeedProducts).not.toHaveBeenCalled();
   });
@@ -268,7 +277,7 @@ describe("UCP storefront routes", () => {
 
     const response = await searchCatalog({
       request: request(
-        { ucp: { version: "2026-04-08" }, query: "khaki" },
+        { ucp: { version: "2026-08-25" }, query: "khaki" },
         { "UCP-Agent": 'profile="https://agent.example.test/.well-known/ucp"' },
       ),
     } as never);
@@ -321,7 +330,7 @@ describe("UCP storefront routes", () => {
 
     const response = await searchCatalog({
       request: request(
-        { ucp: { version: "2026-04-08" }, query: "khaki" },
+        { ucp: { version: "2026-08-25" }, query: "khaki" },
         { "UCP-Agent": 'profile="https://agent.example.test/.well-known/ucp"' },
       ),
     } as never);
@@ -346,7 +355,7 @@ describe("UCP storefront routes", () => {
 
     const response = await lookupCatalog({
       request: request(
-        { ucp: { version: "2026-04-08" }, ids: ["khaki-shoes"] },
+        { ucp: { version: "2026-08-25" }, ids: ["khaki-shoes"] },
         { "UCP-Agent": 'profile="https://agent.example.test/.well-known/ucp"' },
         "/ucp/catalog/lookup",
       ),
@@ -362,10 +371,7 @@ describe("UCP storefront routes", () => {
     });
     expect(mocks.getProductBySlug).not.toHaveBeenCalled();
     expect(body.products).toEqual([]);
-    expect(body.messages[0]).toMatchObject({
-      type: "info",
-      code: "partial_lookup",
-    });
+    expect(body.messages).toEqual([{ type: "info", code: "not_found", content: "khaki-shoes" }]);
   });
 
   it("returns product not_found as a non-cacheable UCP application error", async () => {

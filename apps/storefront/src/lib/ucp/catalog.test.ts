@@ -35,7 +35,11 @@ import type { Product } from "@/lib/api/types";
 
 const context = {
   baseUrl: "https://storefront.example.test",
+  presence: "",
   currency: { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
+  messages: [],
+  policies: [],
+  seller: null,
 };
 
 function productFixture(): Product {
@@ -163,31 +167,45 @@ describe("UCP catalog mapping", () => {
     mocks.getLayoutData.mockReset();
   });
 
-  it("advertises only read-only catalog capabilities", () => {
+  it("advertises only read-only catalog capabilities over REST and MCP", () => {
     const profile = buildUcpProfile("https://storefront.example.test");
 
-    expect(profile.ucp.services["dev.ucp.shopping"][0].endpoint).toBe(
-      "https://storefront.example.test/ucp",
-    );
-    expect(profile.ucp.services["dev.ucp.shopping"][0]).toMatchObject({
-      version: "2026-04-08",
-      spec: "https://ucp.dev/2026-04-08/specification/overview",
-      schema: "https://ucp.dev/2026-04-08/services/shopping/rest.openapi.json",
+    expect(profile.ucp.version).toBe("2026-08-25");
+    expect(profile.ucp.services["dev.ucp.shopping"]).toEqual([
+      {
+        version: "2026-08-25",
+        transport: "rest",
+        endpoint: "https://storefront.example.test/ucp",
+        spec: "https://ucp.dev/2026-08-25/specification/overview",
+        schema: "https://ucp.dev/2026-08-25/services/shopping/rest.openapi.json",
+      },
+      {
+        version: "2026-08-25",
+        transport: "mcp",
+        endpoint: "https://storefront.example.test/ucp/mcp",
+        spec: "https://ucp.dev/2026-08-25/specification/overview",
+        schema: "https://ucp.dev/2026-08-25/services/shopping/mcp.openrpc.json",
+      },
+    ]);
+    expect(profile.ucp.capabilities["dev.ucp.shopping.catalog.search"][0]).toEqual({
+      version: "2026-08-25",
+      spec: "https://ucp.dev/2026-08-25/specification/shopping/catalog/search",
+      schema: "https://ucp.dev/2026-08-25/schemas/shopping/catalog_search.json",
     });
-    expect(profile.ucp.capabilities["dev.ucp.shopping.catalog.search"][0]).toMatchObject({
-      spec: "https://ucp.dev/2026-04-08/specification/catalog/search",
-      schema: "https://ucp.dev/2026-04-08/schemas/shopping/catalog_search.json",
-    });
-    expect(profile.ucp.capabilities["dev.ucp.shopping.catalog.lookup"][0]).toMatchObject({
-      spec: "https://ucp.dev/2026-04-08/specification/catalog/lookup",
-      schema: "https://ucp.dev/2026-04-08/schemas/shopping/catalog_lookup.json",
+    expect(profile.ucp.capabilities["dev.ucp.shopping.catalog.lookup"][0]).toEqual({
+      version: "2026-08-25",
+      spec: "https://ucp.dev/2026-08-25/specification/shopping/catalog/lookup",
+      schema: "https://ucp.dev/2026-08-25/schemas/shopping/catalog_lookup.json",
     });
     expect(Object.keys(profile.ucp.capabilities)).toEqual([
       "dev.ucp.shopping.catalog.search",
       "dev.ucp.shopping.catalog.lookup",
     ]);
+    // The registry is required by the schema and stays empty: no checkout, no handlers.
+    expect(profile.ucp.payment_handlers).toEqual({});
+    expect(profile).not.toHaveProperty("keys");
     expect(JSON.stringify(profile)).not.toContain("checkout");
-    expect(JSON.stringify(profile)).not.toContain("payment_handlers");
+    expect(JSON.stringify(profile)).not.toContain("supported_versions");
   });
 
   it("maps search results with minor-unit prices and merchant option labels", async () => {
@@ -573,10 +591,9 @@ describe("UCP catalog mapping", () => {
     });
     expect(mocks.getProductBySlug).not.toHaveBeenCalled();
     expect(result.body.products).toEqual([]);
-    expect(result.body.messages?.[0]).toMatchObject({
-      type: "info",
-      code: "partial_lookup",
-    });
+    expect(result.body.messages).toEqual([
+      { type: "info", code: "not_found", content: "khaki-shoes" },
+    ]);
   });
 
   it("returns lookup 503 when the feed projection cannot be read", async () => {
