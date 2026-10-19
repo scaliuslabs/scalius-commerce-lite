@@ -101,6 +101,8 @@ export interface TaxQuoteItem {
   fulfillmentType: FulfillmentType | null;
   properties: TaxQuoteItemProperty[];
   propertiesPriceMinor: number;
+  /** Apps' add-ons to each unit, in `unitPrice` ("Add-on: …"); never buyer inputs. */
+  adjustments?: TaxQuoteItemProperty[];
   propertiesHash: string | null;
 }
 
@@ -510,6 +512,27 @@ export function parseRequestGiftCards(value: unknown): Array<{ handle: string }>
   return handles.length > 0 ? handles.map((handle) => ({ handle })) : undefined;
 }
 
+/** The apps' add-ons of a quote line (at most five, display only). */
+function parseQuoteAdjustments(value: unknown): TaxQuoteItemProperty[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 5) fail();
+  return value.map((entry) => {
+    if (!isRecord(entry)) fail();
+    return {
+      key: requiredString(entry.key, 40),
+      label: requiredString(entry.label, 120),
+      value: requiredString(entry.value, 120),
+      displayValue: requiredString(entry.displayValue, 120),
+      priceMinor: nonNegativeSafeInteger(entry.priceMinor),
+    };
+  });
+}
+
+function adjustmentsOf(value: unknown): { adjustments?: TaxQuoteItemProperty[] } {
+  const adjustments = parseQuoteAdjustments(value);
+  return adjustments.length > 0 ? { adjustments } : {};
+}
+
 function parseQuoteItem(value: unknown): TaxQuoteItem {
   if (!isRecord(value)) fail();
   const variantId = requiredString(value.variantId, MAX_ID_LENGTH);
@@ -540,6 +563,7 @@ function parseQuoteItem(value: unknown): TaxQuoteItem {
     propertiesPriceMinor: value.propertiesPriceMinor === undefined
       ? 0
       : nonNegativeSafeInteger(value.propertiesPriceMinor),
+    ...adjustmentsOf(value.adjustments),
     propertiesHash: typeof value.propertiesHash === "string" ? value.propertiesHash : null,
   };
 }

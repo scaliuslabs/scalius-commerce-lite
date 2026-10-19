@@ -348,7 +348,7 @@ export {};
 
 // packages/plugin-sdk/src/index.d.ts
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
-import type { FunctionReadRecord, FunctionReads, PluginFunctionInput, PluginFunctionOutput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
+import type { FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
 import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
 export type * from "./context";
@@ -358,7 +358,7 @@ export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInp
 export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiTarget, } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 export type PluginEventHandler<T extends EventTopic = EventTopic> = (event: PluginEvent<T>, ctx: PluginContext) => Promise<void> | void;
-export type PluginFunctionHandler<P extends PluginFunctionPoint> = (input: PluginFunctionInput<P>, settings: Readonly<Record<string, PluginSettingValue>>) => PluginFunctionOutput<P> | Promise<PluginFunctionOutput<P>>;
+export type PluginFunctionHandler<P extends PluginFunctionPoint> = (input: PluginFunctionInput<P>, settings: Readonly<Record<string, PluginSettingValue>>) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
 export type { FunctionReadRecord, FunctionReads };
 export declare function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): {
     revision: number;

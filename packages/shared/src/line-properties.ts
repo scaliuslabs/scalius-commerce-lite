@@ -352,6 +352,19 @@ export interface CanonicalLineProperty {
   value: string;
 }
 
+/**
+ * An app's add-on to a line (`cart.line_prices` adjustments), frozen on the
+ * order line beside its buyer inputs as "Add-on: <title> (+price)". It is
+ * never a buyer input: it is not sent back by the cart and has no identity.
+ */
+export const LINE_ADJUSTMENT_PROPERTY_KEY = "_adjustment";
+export const LINE_ADJUSTMENT_LABEL = "Add-on";
+
+export function lineAdjustmentProperty(title: string, amountMinor: number): ResolvedLineProperty {
+  const text = title.trim().slice(0, 80);
+  return { key: LINE_ADJUSTMENT_PROPERTY_KEY, type: "text", label: LINE_ADJUSTMENT_LABEL, value: text, displayValue: text, priceMinor: amountMinor };
+}
+
 /** The frozen `order_items.properties` entry. */
 export interface ResolvedLineProperty {
   key: string;

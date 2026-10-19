@@ -6,7 +6,7 @@
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { fromMinor } from "@scalius/shared/money";
-import type { CartLineProperty } from "@/store/cart";
+import type { CartLineAdjustment, CartLineProperty } from "@/store/cart";
 import { pagePath } from "@/lib/presence-url";
 
 function escapeHtml(value: string): string {
@@ -53,7 +53,7 @@ export function cartLineEditHref(item: { slug?: string; variantId?: string }): s
  * page (`window.editCartLine`), which replaces it on "Update cart".
  */
 export function renderCartLineProperties(
-  item: { properties?: CartLineProperty[]; slug?: string; variantId?: string; name: string },
+  item: { properties?: CartLineProperty[]; adjustments?: CartLineAdjustment[]; slug?: string; variantId?: string; name: string },
   options: {
     surchargeText: string;
     editText: string;
@@ -63,12 +63,14 @@ export function renderCartLineProperties(
   },
 ): string {
   const properties = item.properties ?? [];
-  if (properties.length === 0) return "";
-  const rows = properties
+  // Apps' add-ons are line components too, but not inputs: no Edit link of their own.
+  const adjustments = item.adjustments ?? [];
+  if (properties.length === 0 && adjustments.length === 0) return "";
+  const rows = [...properties, ...adjustments]
     .map((property) =>
       `<li class="break-words">${escapeHtml(cartLinePropertyText(property, options.surchargeText))}</li>`)
     .join("");
-  const href = cartLineEditHref(item);
+  const href = properties.length > 0 ? cartLineEditHref(item) : null;
   const edit = href
     ? `<a href="${escapeHtml(href)}" class="mt-0.5 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-0" aria-label="${escapeHtml(formatCheckoutLanguageText(options.editLabelText, { item: item.name }))}" onclick="return window.editCartLine ? window.editCartLine(${options.jsCartKey}) : true" data-cart-line-edit>${escapeHtml(options.editText)}</a>`
     : "";

@@ -544,8 +544,9 @@ function appendOrderItemRows(
         }),
       ].filter(Boolean).join(" · "),
     );
-    // Buyer inputs as the order will keep them: "Engraving: Anika (+৳200)".
-    for (const property of item.properties) {
+    // Buyer inputs as the order will keep them: "Engraving: Anika (+৳200)",
+    // then the apps' add-ons: "Add-on: Gift wrap (+৳50)".
+    for (const property of [...item.properties, ...(item.adjustments ?? [])]) {
       appendTextElement(
         itemCopy,
         "p",

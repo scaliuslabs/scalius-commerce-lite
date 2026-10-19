@@ -864,8 +864,9 @@ export async function createStorefrontOrder(
             unitPriceMinor: validatedItem.unitPriceMinor,
             baseUnitPriceMinor: validatedItem.baseUnitPriceMinor,
             isGiftCard: validatedItem.isGiftCard === true,
-            propertiesPriceMinor: validatedItem.propertiesPriceMinor,
-            properties: serializeOrderLineProperties([...validatedItem.properties, ...bundleLineProperties(validatedItem.bundle)]),
+            // The order line keeps the apps' add-ons with its buyer inputs: unit = base + both.
+            propertiesPriceMinor: validatedItem.propertiesPriceMinor + (validatedItem.adjustmentsMinor ?? 0),
+            properties: serializeOrderLineProperties([...validatedItem.properties, ...bundleLineProperties(validatedItem.bundle), ...(validatedItem.adjustments ?? [])]),
             fulfillmentType: lineTypeByIndex.get(idx)!,
             productName: validatedItem.productName,
             variantLabel: validatedItem.variantLabel,

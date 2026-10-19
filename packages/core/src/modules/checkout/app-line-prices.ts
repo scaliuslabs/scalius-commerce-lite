@@ -19,10 +19,22 @@ import { validateCheckoutAttributes } from "./attributes";
 //   (money) and a line that is not in the cart.
 // - The price rounds half-up to the market's price increment and is never
 //   zero; buyer-input surcharges are added on top.
+//
+// Add-ons (`adjustments`, pure, `resolveAppLineAdjustments`): added to each
+// unit after the whole precedence, whatever priced the line (sale, segment
+// and list lines take them too). Every app's add-ons apply, in priority
+// order, at most LINE_ADJUSTMENTS_PER_LINE_MAX per line; each rounds half-up
+// to the cart's price increment (an add-on that rounds to nothing is
+// skipped). A gift card (money), a bundle line and a line not in the cart
+// take none: skipped and logged. They ride the line as `adjustments` (the
+// buyer sees "Add-on: <title>") and are frozen on the order line with its
+// buyer inputs, so receipts, emails, tax, totals and refunds include them.
 
 import type { Database } from "@scalius/database/client";
-import type { FunctionCart, PluginFunctionOutput } from "@scalius/shared/plugins";
+import { LINE_ADJUSTMENTS_PER_LINE_MAX, type FunctionCart, type PluginFunctionOutput } from "@scalius/shared/plugins";
 import type { AppLinePrice, ResolvedPriceSource } from "@scalius/shared/market-pricing";
+import { lineAdjustmentProperty, type ResolvedLineProperty } from "@scalius/shared/line-properties";
+import { roundToIncrementMinor } from "@scalius/shared/money";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
 import {
     appCartMarketCountry,
@@ -36,12 +48,20 @@ import type {
     StorefrontCartValidationResult,
 } from "./cart-validation";
 
+/** The apps' answers for a cart, by line index: unit prices and add-ons. */
+export interface AppLinePricing {
+    prices: ReadonlyMap<number, AppLinePrice>;
+    adjustments: ReadonlyMap<number, ResolvedLineProperty[]>;
+}
+
+const NO_APP_LINE_PRICING: AppLinePricing = { prices: new Map(), adjustments: new Map() };
+
 /**
  * Prices a first-pass cart with the apps: the answers by line index. Built
  * per request by `createAppLinePricer`; absent when no app implements the
  * point.
  */
-export type AppLinePricer = (preliminary: StorefrontCartValidationResult) => Promise<ReadonlyMap<number, AppLinePrice>>;
+export type AppLinePricer = (preliminary: StorefrontCartValidationResult) => Promise<AppLinePricing>;
 
 /** Sources whose price an app may replace: lists stay authoritative. */
 const APP_PRICEABLE_SOURCES: ReadonlySet<ResolvedPriceSource> = new Set(["fx", "base"]);
@@ -66,7 +86,7 @@ export function createAppLinePricer(
     const attributes = validateCheckoutAttributes(apps, context.attributes);
     return async (preliminary) => {
         const items = preliminary.items;
-        if (items.length === 0) return new Map();
+        if (items.length === 0) return NO_APP_LINE_PRICING;
         const customerId = (await context.customerId) ?? null;
         const lineIds = items.map((item) => buildStorefrontTaxAllocationLineId(item.index, item.variantId));
         const facts = await loadAppFunctionCartFacts(db, {
@@ -101,7 +121,7 @@ export function createAppLinePricer(
         } catch (error) {
             // A cart that fails its own schema is a platform fault: no app runs (fail-open).
             console.error(`[checkout] app line-price cart could not be built: ${error instanceof Error ? error.name : "error"}`);
-            return new Map();
+            return NO_APP_LINE_PRICING;
         }
         const results = await apps.run("cart.line_prices", {
             cart,
@@ -112,7 +132,10 @@ export function createAppLinePricer(
                 bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300) } : null,
             })),
         });
-        return resolveAppLinePrices(items, lineIds, results, apps);
+        return {
+            prices: resolveAppLinePrices(items, lineIds, results, apps),
+            adjustments: resolveAppLineAdjustments(items, lineIds, results, preliminary.money.incrementMinor, apps),
+        };
     };
 }
 
@@ -144,16 +167,58 @@ export function resolveAppLinePrices(
     return prices;
 }
 
+/** Each line's add-ons, by line index (see the rules above). */
+export function resolveAppLineAdjustments(
+    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "bundle">>,
+    lineIds: readonly string[],
+    results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
+    incrementMinor: number,
+    apps?: Pick<CheckoutAppFunctions, "report">,
+): Map<number, ResolvedLineProperty[]> {
+    const byLineId = new Map(lineIds.map((lineId, position) => [lineId, items[position]!]));
+    const adjustments = new Map<number, ResolvedLineProperty[]>();
+    for (const result of results) {
+        for (const answer of (result.output as PluginFunctionOutput<"cart.line_prices">).adjustments ?? []) {
+            const item = byLineId.get(answer.lineId);
+            if (!item) {
+                apps?.report(result.pluginId, "cart.line_prices", `An add-on names line ${answer.lineId}, which is not in the cart; it was skipped.`);
+                continue;
+            }
+            if (item.isGiftCard || item.bundle) {
+                apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is ${item.isGiftCard ? "a gift card" : "part of a bundle"}, which takes no add-on; "${answer.title}" was skipped.`);
+                continue;
+            }
+            const list = adjustments.get(item.index) ?? [];
+            if (list.length >= LINE_ADJUSTMENTS_PER_LINE_MAX) {
+                apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} already has ${LINE_ADJUSTMENTS_PER_LINE_MAX} add-ons; "${answer.title}" was skipped.`);
+                continue;
+            }
+            const amountMinor = roundToIncrementMinor(answer.amountMinor, incrementMinor);
+            if (amountMinor <= 0) continue;
+            list.push(lineAdjustmentProperty(answer.title, amountMinor));
+            adjustments.set(item.index, list);
+        }
+    }
+    return adjustments;
+}
+
 /**
- * Validates a cart with the apps' line prices: `resolve` is the cart's pure
- * resolution from its rows. Without a pricer it runs once.
+ * Validates a cart with the apps' line prices and add-ons: `resolve` is the
+ * cart's pure resolution from its rows. Without a pricer it runs once.
  */
 export async function resolveCartWithAppLinePrices(
     pricer: AppLinePricer | undefined,
-    resolve: (options: { appPrices?: ReadonlyMap<number, AppLinePrice>; deferSubmittedPriceCheck?: boolean }) => StorefrontCartValidationResult,
+    resolve: (options: {
+        appPrices?: ReadonlyMap<number, AppLinePrice>;
+        appAdjustments?: ReadonlyMap<number, ResolvedLineProperty[]>;
+        deferSubmittedPriceCheck?: boolean;
+    }) => StorefrontCartValidationResult,
 ): Promise<StorefrontCartValidationResult> {
     if (!pricer) return resolve({});
     const preliminary = resolve({ deferSubmittedPriceCheck: true });
-    const appPrices = await pricer(preliminary);
-    return resolve(appPrices.size > 0 ? { appPrices } : {});
+    const { prices, adjustments } = await pricer(preliminary);
+    return resolve({
+        ...(prices.size > 0 ? { appPrices: prices } : {}),
+        ...(adjustments.size > 0 ? { appAdjustments: adjustments } : {}),
+    });
 }

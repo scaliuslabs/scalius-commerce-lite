@@ -65875,6 +65875,50 @@
                                   ]
                                 }
                               },
+                              "adjustments": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text",
+                                        "textarea",
+                                        "select",
+                                        "checkbox"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "displayValue": {
+                                      "type": "string"
+                                    },
+                                    "price": {
+                                      "type": "number"
+                                    },
+                                    "priceMinor": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "type",
+                                    "label",
+                                    "value",
+                                    "displayValue",
+                                    "price",
+                                    "priceMinor"
+                                  ]
+                                }
+                              },
                               "propertiesHash": {
                                 "type": "string"
                               },
@@ -65934,6 +65978,7 @@
                               "propertiesPrice",
                               "propertiesPriceMinor",
                               "properties",
+                              "adjustments",
                               "propertiesHash",
                               "fulfillmentKind",
                               "fulfillmentType",
@@ -67597,6 +67642,50 @@
                               "propertiesPriceMinor": {
                                 "type": "integer"
                               },
+                              "adjustments": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text",
+                                        "textarea",
+                                        "select",
+                                        "checkbox"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "displayValue": {
+                                      "type": "string"
+                                    },
+                                    "price": {
+                                      "type": "number"
+                                    },
+                                    "priceMinor": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "type",
+                                    "label",
+                                    "value",
+                                    "displayValue",
+                                    "price",
+                                    "priceMinor"
+                                  ]
+                                }
+                              },
                               "propertiesHash": {
                                 "type": "string"
                               }
@@ -67611,6 +67700,7 @@
                               "fulfillmentType",
                               "properties",
                               "propertiesPriceMinor",
+                              "adjustments",
                               "propertiesHash"
                             ]
                           }

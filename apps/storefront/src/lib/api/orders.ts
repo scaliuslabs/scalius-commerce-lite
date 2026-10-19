@@ -105,6 +105,8 @@ export type CartValidationItem = {
   propertiesPriceMinor?: number;
   /** The inputs as the order will keep them (labels frozen). */
   properties?: OrderLineProperty[];
+  /** Apps' add-ons to each unit, in `unitPrice` ("Add-on: …"); never sent back. */
+  adjustments?: OrderLineProperty[];
   /** Canonical inputs hash for the v3 line key; "none" without inputs. */
   propertiesHash?: string;
   fulfillmentKind?: FulfillmentKind;

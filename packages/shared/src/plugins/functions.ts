@@ -214,17 +214,41 @@ export const functionLinePriceFactsSchema = z.object({
   bundle: z.object({ id, title: z.string().max(300) }).strict().nullable(),
 }).strict();
 
+/** App add-ons one line takes, from every app together; later ones are skipped and logged. */
+export const LINE_ADJUSTMENTS_PER_LINE_MAX = 5;
+/** The largest add-on to one unit, in minor units. */
+export const LINE_ADJUSTMENT_MAX_MINOR = 1_000_000_000_000;
+
 /**
- * Unit prices in the cart currency's minor units, before buyer-input
- * surcharges (they are added on top). The platform rounds each half-up to
- * the market's price increment. Several apps: the first in priority order
- * that prices a line wins. A line not named keeps its price.
+ * `prices`: unit prices in the cart currency's minor units, before
+ * buyer-input surcharges (they are added on top), only for lines priced at
+ * `fx` or `base`. Several apps: the first in priority order that prices a
+ * line wins. A line not named keeps its price.
+ *
+ * `adjustments`: add-ons to each unit of a line (an engraving's letters, a
+ * gift wrap), applied after the whole price precedence, so sale, segment
+ * and price-list lines take them too. Every app's add-ons apply, in priority
+ * order, at most LINE_ADJUSTMENTS_PER_LINE_MAX per line. Not on gift cards or
+ * bundle lines. The buyer sees each as a line component ("Add-on: <title>")
+ * in the cart, checkout, receipt and emails; tax, discounts, totals and
+ * refunds include it as part of the unit price.
+ *
+ * Every amount is in the cart currency (the presentment currency of the
+ * market) and is rounded half-up to the market's price increment; one that
+ * rounds to nothing is skipped.
  */
 export const cartLinePricesOutputSchema = z.object({
   prices: z.array(z.object({
     lineId: id,
     unitPriceMinor: minor.positive(),
-  }).strict()).max(250),
+  }).strict()).max(250).default([]),
+  adjustments: z.array(z.object({
+    lineId: id,
+    /** Added to each unit of the line. */
+    amountMinor: minor.positive().max(LINE_ADJUSTMENT_MAX_MINOR),
+    /** What the buyer sees on the line ("Engraving, 6 letters"). */
+    title: label,
+  }).strict()).max(250).default([]),
 }).strict();
 
 // ── Registry ──────────────────────────────────────────────────────────────
@@ -273,7 +297,10 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
 export type PluginFunctionInput<P extends PluginFunctionPoint> = z.infer<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["input"]>;
 /** An input as a caller may write it (defaults left out): what the test harness takes. */
 export type PluginFunctionInputDraft<P extends PluginFunctionPoint> = z.input<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["input"]>;
+/** An answer as the platform reads it (defaults applied). */
 export type PluginFunctionOutput<P extends PluginFunctionPoint> = z.infer<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["output"]>;
+/** An answer as a function writes it (defaults may be left out). */
+export type PluginFunctionAnswer<P extends PluginFunctionPoint> = z.input<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["output"]>;
 
 /** The refusal code of an answer that fails its point's schema; the host skips the app (or blocks, `onError`). */
 export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function.invalid_output";

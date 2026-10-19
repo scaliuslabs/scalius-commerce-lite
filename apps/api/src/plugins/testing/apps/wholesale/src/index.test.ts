@@ -22,7 +22,7 @@ describe("acme.wholesale", () => {
       lines: [{ lineId: "cart:0:v_tea", source: "base", bundle: null }, { lineId: "cart:1:v_mug", source: "sale", bundle: null }],
       reads: { member: { revision: 1, data: { company_id: "co_1" } }, company: company({ prices: { v_tea: 40_000, v_mug: 20_000 } }) },
     });
-    expect(result.value).toEqual({ prices: [{ lineId: "cart:0:v_tea", unitPriceMinor: 40_000 }] });
+    expect(result.value).toEqual({ prices: [{ lineId: "cart:0:v_tea", unitPriceMinor: 40_000 }], adjustments: [] });
   });
 
   it("blocks a line under the higher of its SKU minimum and its product's field", async () => {

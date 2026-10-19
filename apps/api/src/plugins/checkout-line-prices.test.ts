@@ -26,6 +26,7 @@ import {
   createTrustedStorefrontCheckoutPolicySnapshot,
   loadStorefrontCheckoutAuthority,
   priceStorefrontCheckout,
+  resolveAppLineAdjustments,
   resolveAppLinePrices,
   validateStorefrontCartItems,
   type CheckoutAppFunctions,
@@ -212,6 +213,69 @@ describe("cart.line_prices (real schema, test apps)", () => {
       .toEqual({ unit: 40_000, base: 40_000 });
   });
 
+  it("adds add-ons after the whole precedence: a discounted line takes them, the quote, order and receipt keep them", async () => {
+    // The tea is 10% off (450.00): the add-on goes on top of whatever priced the line.
+    sqlite.exec("UPDATE product_variants SET discount_type = 'percentage', discount_bps = 1000 WHERE id = 'v_tea'");
+    await installPricer("acme.engraving");
+    answers["acme.engraving"] = (fn) => {
+      const cart = fn.cart as { lines: Array<{ lineId: string; productId: string }> };
+      const tea = cart.lines.find((entry) => entry.productId === "p_tea")!;
+      return ok({
+        // 200.49 per unit rounds half-up to whole taka.
+        adjustments: [{ lineId: tea.lineId, amountMinor: 20_049, title: "Engraving, 6 letters" }, { lineId: "cart:9:v_none", amountMinor: 100, title: "Lost" }],
+      });
+    };
+    const runner = await apps();
+    const validated = await validateStorefrontCartItems(db, [line("p_tea", "v_tea", 2, 650)], {
+      currencyCode: "BDT", priceIncrementMinor: 100, linePricer: createAppLinePricer(db, runner, { channel: "online_store" }),
+    });
+    expect(validated.issues).toEqual([]);
+    expect(validated.items[0]).toMatchObject({
+      unitPriceMinor: 65_000,
+      baseUnitPriceMinor: 45_000,
+      priceSource: "base",
+      propertiesPriceMinor: 0,
+      adjustmentsMinor: 20_000,
+      adjustments: [{ key: "_adjustment", type: "text", label: "Add-on", value: "Engraving, 6 letters", displayValue: "Engraving, 6 letters", priceMinor: 20_000 }],
+    });
+    const data = input([line("p_tea", "v_tea", 2, 650)]);
+    const reviewed = await quote(data, await apps());
+    expect(reviewed.taxQuote.subtotalMinor).toBe(2 * 65_000);
+    const result = await place(data, await apps());
+    expect(result.taxQuote.totalMinor).toBe(reviewed.taxQuote.totalMinor);
+    const row = sqlite.prepare("SELECT unit_price_minor AS unit, base_unit_price_minor AS base, properties_price_minor AS extra, properties FROM order_items WHERE order_id = ?").get(result.orderId) as { unit: number; base: number; extra: number; properties: string };
+    expect({ ...row, properties: JSON.parse(row.properties) }).toEqual({
+      unit: 65_000, base: 45_000, extra: 20_000,
+      properties: [{ key: "_adjustment", type: "text", label: "Add-on", value: "Engraving, 6 letters", displayValue: "Engraving, 6 letters", priceMinor: 20_000 }],
+    });
+    const logs = (await listPluginLogs(db, "acme.engraving")).map((entry) => entry.message);
+    expect(logs).toEqual(expect.arrayContaining(["An add-on names line cart:9:v_none, which is not in the cart; it was skipped."]));
+  });
+
+  it("bounds add-ons: none on a gift card, at most five per line", () => {
+    const reports: string[] = [];
+    const adjustments = resolveAppLineAdjustments(
+      [{ index: 0, isGiftCard: false, bundle: null }, { index: 1, isGiftCard: true, bundle: null }],
+      ["cart:0:v_a", "cart:1:v_card"],
+      [{ pluginId: "acme.wrap", output: { prices: [], adjustments: [
+        ...Array.from({ length: 6 }, (_, position) => ({ lineId: "cart:0:v_a", amountMinor: 1_000 + position, title: `Extra ${position + 1}` })),
+        { lineId: "cart:0:v_a", amountMinor: 40, title: "Rounds to nothing" },
+        { lineId: "cart:1:v_card", amountMinor: 5_000, title: "Wrap" },
+      ] } }],
+      100,
+      { report: (_plugin, _point, message) => reports.push(message) },
+    );
+    expect(adjustments.get(0)!.map((entry) => [entry.displayValue, entry.priceMinor])).toEqual([
+      ["Extra 1", 1_000], ["Extra 2", 1_000], ["Extra 3", 1_000], ["Extra 4", 1_000], ["Extra 5", 1_000],
+    ]);
+    expect(adjustments.has(1)).toBe(false);
+    expect(reports).toEqual([
+      "Line cart:0:v_a already has 5 add-ons; \"Extra 6\" was skipped.",
+      "Line cart:0:v_a already has 5 add-ons; \"Rounds to nothing\" was skipped.",
+      "Line cart:1:v_card is a gift card, which takes no add-on; \"Wrap\" was skipped.",
+    ]);
+  });
+
   it("lets the first app by priority win a line, never prices a gift card and logs a line it does not know", async () => {
     await installPricer("acme.first", { priority: 1 });
     await installPricer("acme.second", { priority: 2 });
@@ -239,7 +303,7 @@ describe("cart.line_prices (real schema, test apps)", () => {
     const prices = resolveAppLinePrices(
       [{ index: 0, isGiftCard: false, priceSource: "market" }, { index: 1, isGiftCard: false, priceSource: "fx" }],
       ["cart:0:v_a", "cart:1:v_b"],
-      [{ pluginId: "acme.b2b", output: { prices: [{ lineId: "cart:0:v_a", unitPriceMinor: 100 }, { lineId: "cart:1:v_b", unitPriceMinor: 200 }] } }],
+      [{ pluginId: "acme.b2b", output: { prices: [{ lineId: "cart:0:v_a", unitPriceMinor: 100 }, { lineId: "cart:1:v_b", unitPriceMinor: 200 }], adjustments: [] } }],
       { report: (_plugin, _point, message) => reports.push(message) },
     );
     expect([...prices]).toEqual([[1, { amountMinor: 200, pluginId: "acme.b2b" }]]);

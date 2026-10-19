@@ -19,8 +19,8 @@ import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
 import type {
   FunctionReadRecord,
   FunctionReads,
+  PluginFunctionAnswer,
   PluginFunctionInput,
-  PluginFunctionOutput,
   PluginFunctionPoint,
   PluginManifestInput,
   PluginSettingValue,
@@ -92,7 +92,7 @@ export type PluginEventHandler<T extends EventTopic = EventTopic> = (event: Plug
 export type PluginFunctionHandler<P extends PluginFunctionPoint> = (
   input: PluginFunctionInput<P>,
   settings: Readonly<Record<string, PluginSettingValue>>,
-) => PluginFunctionOutput<P> | Promise<PluginFunctionOutput<P>>;
+) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
 
 export type { FunctionReadRecord, FunctionReads };
 

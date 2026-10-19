@@ -168,6 +168,8 @@ const taxQuoteResponseSchema = z.object({
     fulfillmentType: fulfillmentTypeSchema,
     properties: z.array(orderLinePropertySchema),
     propertiesPriceMinor: z.number().int(),
+    /** Apps' add-ons to each unit (in `unitPrice`), shown as line components; never buyer inputs. */
+    adjustments: z.array(orderLinePropertySchema),
     propertiesHash: z.string(),
   })),
 });
@@ -430,6 +432,10 @@ app.openapi(taxQuoteRoute, async (c) => {
         price: toAmount(property.priceMinor),
       })),
       propertiesPriceMinor: item.propertiesPriceMinor,
+      adjustments: (item.adjustments ?? []).map((adjustment) => ({
+        ...adjustment,
+        price: toAmount(adjustment.priceMinor),
+      })),
       propertiesHash: linePropertiesHashes[position]!,
       };
     }),

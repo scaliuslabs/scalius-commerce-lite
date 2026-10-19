@@ -523,12 +523,26 @@ export default function CartFlyout({ onReady }: Props) {
                               ))}
                             </div>
                           )}
+                          {item.adjustments && item.adjustments.length > 0 && !(item.properties && item.properties.length > 0) && (
+                            <ul className="text-xs text-muted-foreground">
+                              {item.adjustments.map((adjustment, position) => (
+                                <li key={`adjustment:${position}`} className="break-words">
+                                  {cartLinePropertyText(adjustment, "+{price}")}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                           {item.properties && item.properties.length > 0 && (
                             <div className="text-xs text-muted-foreground">
                               <ul>
                                 {item.properties.map((property) => (
                                   <li key={property.key} className="break-words">
                                     {cartLinePropertyText(property, "+{price}")}
+                                  </li>
+                                ))}
+                                {(item.adjustments ?? []).map((adjustment, position) => (
+                                  <li key={`adjustment:${position}`} className="break-words">
+                                    {cartLinePropertyText(adjustment, "+{price}")}
                                   </li>
                                 ))}
                               </ul>

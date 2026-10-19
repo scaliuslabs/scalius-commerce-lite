@@ -18470,6 +18470,15 @@ export type PostApiV1OrdersCartValidationResponses = {
                     price: number;
                     priceMinor: number;
                 }>;
+                adjustments: Array<{
+                    key: string;
+                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    label: string;
+                    value: string;
+                    displayValue: string;
+                    price: number;
+                    priceMinor: number;
+                }>;
                 propertiesHash: string;
                 /**
                  * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
@@ -18928,6 +18937,15 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     priceMinor: number;
                 }>;
                 propertiesPriceMinor: number;
+                adjustments: Array<{
+                    key: string;
+                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    label: string;
+                    value: string;
+                    displayValue: string;
+                    price: number;
+                    priceMinor: number;
+                }>;
                 propertiesHash: string;
             }>;
         };
