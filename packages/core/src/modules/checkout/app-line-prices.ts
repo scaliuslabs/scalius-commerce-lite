@@ -48,7 +48,7 @@ const APP_PRICEABLE_SOURCES: ReadonlySet<ResolvedPriceSource> = new Set(["fx", "
 
 export interface AppLinePricerContext {
     channel: FunctionCart["channel"];
-    /** The signed-in buyer (contract prices, snapshots); a promise is awaited only when an app runs. */
+    /** The signed-in buyer (contract prices, its declared reads); a promise is awaited only when an app runs. */
     customerId?: string | null | PromiseLike<string | null>;
     /** The region the order ships to, when known. */
     destination?: { country?: string | null; city: string | null; zone: string | null } | null;
@@ -74,6 +74,9 @@ export function createAppLinePricer(
             variantIds: items.map((item) => item.variantId),
             customerId,
             marketCountry: appCartMarketCountry(context.destination ?? null),
+            apps,
+            points: ["cart.line_prices"],
+            attributes,
         });
         let cart: FunctionCart;
         try {

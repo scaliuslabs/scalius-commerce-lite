@@ -1,6 +1,6 @@
 // Unit tests for acme.loyalty with the SDK's harness (the same runtime as
-// the platform over an in-memory bridge): redemption from the snapshot with
-// the balance committed with the order, and earning once per paid order even
+// the platform over an in-memory bridge): redemption from the declared read
+// of the buyer's balance with the balance committed with the order, and earning once per paid order even
 // when events are redelivered or race.
 import { describe, expect, it } from "vitest";
 import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
@@ -25,32 +25,33 @@ function cart(options: { codes?: string[]; signedIn?: boolean; itemsMinor?: numb
   };
 }
 
-const snapshot = (points: number, revision = 4) => ({ revision, data: { points, earned: points, spent: 0 } });
+const balance = (points: number, revision = 4) => ({ balance: { revision, data: { points, earned: points, spent: 0 } } });
+const noBalance = { balance: null };
 
 describe("acme.loyalty", () => {
   const buyer = {
     target: "purchase.checkout.actions.render-before" as const, language: "en", locale: "en-BD", currency: "BDT",
-    cart: cart({ codes: [] }), attributes: {}, order: null, customer: { id: "cust_1" }, snapshot: snapshot(300),
+    cart: cart({ codes: [] }), attributes: {}, order: null, customer: { id: "cust_1" }, reads: balance(300),
   };
 
-  it("shows snapshot points and redeems through the existing checkout discount code", async () => {
+  it("shows the read balance and redeems through the existing checkout discount code", async () => {
     const harness = createPluginTestHarness(loyalty);
     expect((await harness.fn("buyer.ui", buyer)).value).toEqual({ ui: { type: "stack", children: [
       { type: "key-value", items: [{ label: "Loyalty points", value: "300" }] },
       { type: "button", label: "Redeem points", action: { kind: "apply_code", code: "POINTS" } },
     ] } });
-    const result = await harness.fn("checkout.discounts", { cart: cart({ codes: ["POINTS"] }), snapshot: buyer.snapshot });
-    expect(result.value).toMatchObject({ commit: { record: { points: 0, spent: 300 } } });
+    const result = await harness.fn("checkout.discounts", { cart: cart({ codes: ["POINTS"] }), reads: buyer.reads });
+    expect(result.value).toMatchObject({ commit: [{ as: "balance", record: { points: 0, spent: 300 } }] });
     expect(harness.records.get("balances")!.size).toBe(0);
   });
 
   it("omits redemption for guests, account pages, missing balances, and an already-applied code", async () => {
     const harness = createPluginTestHarness(loyalty);
-    expect((await harness.fn("buyer.ui", { ...buyer, customer: null, snapshot: null })).value).toEqual({ ui: null });
+    expect((await harness.fn("buyer.ui", { ...buyer, customer: null, reads: noBalance })).value).toEqual({ ui: null });
     for (const input of [
       { ...buyer, target: "customer-account.order-index.block.render" as const, cart: null },
-      { ...buyer, snapshot: null },
-      { ...buyer, snapshot: snapshot(49) },
+      { ...buyer, reads: noBalance },
+      { ...buyer, reads: balance(49) },
       { ...buyer, cart: cart({ codes: ["points"] }) },
     ]) {
       const result = await harness.fn("buyer.ui", input);
@@ -69,7 +70,7 @@ describe("acme.loyalty", () => {
 
   it("redeems with the code: a discount worth the points spent and the reduced balance to commit", async () => {
     const harness = createPluginTestHarness(loyalty);
-    const result = await harness.fn("checkout.discounts", { cart: cart(), snapshot: snapshot(300) });
+    const result = await harness.fn("checkout.discounts", { cart: cart(), reads: balance(300) });
     expect(result.value).toEqual({
       discounts: [{
         title: "Loyalty points (300 points)",
@@ -78,26 +79,26 @@ describe("acme.loyalty", () => {
         value: { type: "fixed_amount", amountMinor: 30_000 },
         maxAmountMinor: 30_000,
       }],
-      commit: { record: { points: 0, earned: 300, spent: 300 } },
+      commit: [{ as: "balance", record: { points: 0, earned: 300, spent: 300 } }],
     });
   });
 
   it("spends no more than the items are worth", async () => {
     const harness = createPluginTestHarness(loyalty);
-    const result = await harness.fn("checkout.discounts", { cart: cart({ itemsMinor: 8_050 }), snapshot: snapshot(500) });
+    const result = await harness.fn("checkout.discounts", { cart: cart({ itemsMinor: 8_050 }), reads: balance(500) });
     expect(result.value).toMatchObject({
       discounts: [{ value: { type: "fixed_amount", amountMinor: 8_000 } }],
-      commit: { record: { points: 420, spent: 80 } },
+      commit: [{ as: "balance", record: { points: 420, spent: 80 } }],
     });
   });
 
-  it("offers nothing without the code, to a guest, without a snapshot, or below the minimum", async () => {
+  it("offers nothing without the code, to a guest, without a balance, or below the minimum", async () => {
     const harness = createPluginTestHarness(loyalty);
     for (const input of [
-      { cart: cart({ codes: [] }), snapshot: snapshot(300) },
-      { cart: cart({ signedIn: false }), snapshot: snapshot(300) },
-      { cart: cart(), snapshot: null },
-      { cart: cart(), snapshot: snapshot(49) },
+      { cart: cart({ codes: [] }), reads: balance(300) },
+      { cart: cart({ signedIn: false }), reads: balance(300) },
+      { cart: cart(), reads: noBalance },
+      { cart: cart(), reads: balance(49) },
     ]) {
       expect((await harness.fn("checkout.discounts", input)).value).toEqual({ discounts: [] });
     }

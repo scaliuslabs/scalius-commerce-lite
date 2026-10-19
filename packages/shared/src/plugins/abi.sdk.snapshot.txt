@@ -305,28 +305,33 @@ export interface PluginRouteResponse {
 
 // packages/plugin-sdk/src/fixtures.d.ts
 import type { EventTopic } from "@scalius/shared/events";
-import type { FunctionCart, PluginFunctionInput } from "@scalius/shared/plugins";
+import type { FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
 import type { PluginEvent, PluginRouteRequest } from "./context";
 declare function event<T extends EventTopic>(topic: T, overrides?: Partial<PluginEvent<T>>): PluginEvent<T>;
 declare function cartLine(overrides?: Partial<FunctionCart["lines"][number]>): FunctionCart["lines"][number];
 declare function cart(overrides?: Partial<FunctionCart>): FunctionCart;
 declare function checkoutDiscountsInput(overrides?: {
     cart?: Partial<FunctionCart>;
-    snapshot?: PluginFunctionInput<"checkout.discounts">["snapshot"];
+    reads?: FunctionReads;
 }): PluginFunctionInput<"checkout.discounts">;
+declare function readRecord<T extends Record<string, unknown>>(data: T, revision?: number): {
+    revision: number;
+    data: T;
+};
 declare function adminRouteRequest(overrides?: Partial<PluginRouteRequest>): PluginRouteRequest;
 export declare const fixtures: {
     event: typeof event;
     cartLine: typeof cartLine;
     cart: typeof cart;
     checkoutDiscountsInput: typeof checkoutDiscountsInput;
+    readRecord: typeof readRecord;
     adminRouteRequest: typeof adminRouteRequest;
 };
 export {};
 
 // packages/plugin-sdk/src/index.d.ts
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
-import type { PluginFunctionInput, PluginFunctionOutput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
+import type { FunctionReadRecord, FunctionReads, PluginFunctionInput, PluginFunctionOutput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
 import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
 export type * from "./context";
@@ -337,6 +342,15 @@ export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestI
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 export type PluginEventHandler<T extends EventTopic = EventTopic> = (event: PluginEvent<T>, ctx: PluginContext) => Promise<void> | void;
 export type PluginFunctionHandler<P extends PluginFunctionPoint> = (input: PluginFunctionInput<P>, settings: Readonly<Record<string, PluginSettingValue>>) => PluginFunctionOutput<P> | Promise<PluginFunctionOutput<P>>;
+export type { FunctionReadRecord, FunctionReads };
+export declare function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): {
+    revision: number;
+    data: T;
+} | null;
+export declare function readMany<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): Record<string, {
+    revision: number;
+    data: T;
+}>;
 export type PluginRouteHandler = (request: PluginRouteRequest, ctx: PluginContext) => Promise<PluginRouteResponse> | PluginRouteResponse;
 export type PluginCronHandler = (ctx: PluginContext, run: {
     name: string;
@@ -819,10 +833,22 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
             point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods" | "order.risk" | "buyer.ui";
             priority: number;
             onError: "skip" | "block";
-            targets?: ("purchase.checkout.contact.render-after" | "purchase.checkout.shipping-option-list.render-after" | "purchase.checkout.cart-line-list.render-after" | "purchase.checkout.payment-method-list.render-after" | "purchase.checkout.actions.render-before" | "purchase.thank-you.customer-information.render-after" | "customer-account.order-status.block.render" | "customer-account.order-index.block.render" | "customer-account.profile.block.render")[] | undefined;
-            snapshot?: {
+            reads: ({
+                as: string;
                 object: string;
-            } | undefined;
+                key: string | {
+                    from: string;
+                };
+                max?: number | undefined;
+            } | {
+                as: string;
+                customFields: string[];
+                key?: string | {
+                    from: string;
+                } | undefined;
+                max?: number | undefined;
+            })[];
+            targets?: ("purchase.checkout.contact.render-after" | "purchase.checkout.shipping-option-list.render-after" | "purchase.checkout.cart-line-list.render-after" | "purchase.checkout.payment-method-list.render-after" | "purchase.checkout.actions.render-before" | "purchase.thank-you.customer-information.render-after" | "customer-account.order-status.block.render" | "customer-account.order-index.block.render" | "customer-account.profile.block.render")[] | undefined;
         }[];
         providers: import("@scalius/shared/plugins/providers").PluginProviderDeclaration[];
         routes: {

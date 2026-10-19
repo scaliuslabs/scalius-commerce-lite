@@ -5,9 +5,10 @@
 //   credited to the signed-in buyer's account in one atomic object batch
 //   with a ledger entry keyed by the order, so a redelivered event changes
 //   nothing.
-// - Redeem (`checkout.discounts` with a `snapshot` of `balances`): a buyer who
-//   enters the redeem code gets a discount worth their points (at most the
-//   items' value), and the function's answer `commit`s the reduced balance.
+// - Redeem (`checkout.discounts`, which reads the buyer's `balances` record):
+//   a buyer who enters the redeem code gets a discount worth their points (at
+//   most the items' value), and the function's answer `commit`s the reduced
+//   balance.
 //   The platform writes that balance in the order's own commit batch at the
 //   revision the function saw: if anything spent or earned points meanwhile,
 //   the order fails and the buyer reviews it again. Two orders can never
@@ -17,13 +18,13 @@
 // in this example; the ledger keeps what each order earned for a merchant to
 // adjust by hand.
 
-import { definePlugin, PLUGIN_API_VERSION, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
+import { definePlugin, PLUGIN_API_VERSION, readOne, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
 import { formatNumber } from "@scalius/shared/locale-format";
 
 export const manifest = {
   id: "acme.loyalty",
   name: "Loyalty points",
-  version: "0.1.2",
+  version: "0.2.0",
   apiVersion: PLUGIN_API_VERSION,
   description: "Signed-in buyers earn points on paid orders and spend them at checkout with a code. Points are taken with the order itself, so they can never be spent twice.",
   author: { name: "Scalius" },
@@ -34,8 +35,8 @@ export const manifest = {
   scopes: ["read_orders"],
   events: ["order.paid"],
   functions: [
-    { point: "checkout.discounts", priority: 200, snapshot: { object: "balances" } },
-    { point: "buyer.ui", targets: ["purchase.checkout.actions.render-before", "customer-account.order-index.block.render"], snapshot: { object: "balances" } },
+    { point: "checkout.discounts", priority: 200, reads: [{ as: "balance", object: "balances", key: "customer" }] },
+    { point: "buyer.ui", targets: ["purchase.checkout.actions.render-before", "customer-account.order-index.block.render"], reads: [{ as: "balance", object: "balances", key: "customer" }] },
   ],
   objects: {
     // Record id: the buyer's customer id. `{ points, earned, spent }`.
@@ -163,9 +164,9 @@ export default definePlugin({
   },
 
   functions: {
-    "buyer.ui": ({ target, cart, customer, snapshot, locale }, settings) => {
+    "buyer.ui": ({ target, cart, customer, reads, locale }, settings) => {
       if (!customer) return { ui: null };
-      const balance = balanceOf(snapshot?.data);
+      const balance = balanceOf(readOne(reads, "balance")?.data);
       const code = String(settings.code ?? "").trim().toUpperCase();
       const canRedeem = target.startsWith("purchase.checkout.") && cart && code
         && balance.points >= Math.max(1, wholeSetting(settings.min_redeem, 50))
@@ -175,11 +176,12 @@ export default definePlugin({
         ...(canRedeem ? [{ type: "button" as const, label: "Redeem points", action: { kind: "apply_code" as const, code } }] : []),
       ] } };
     },
-    "checkout.discounts": ({ cart, snapshot }, settings) => {
+    "checkout.discounts": ({ cart, reads }, settings) => {
       const code = String(settings.code ?? "").trim().toUpperCase();
       const entered = cart.discountCodes.some((value) => value.trim().toUpperCase() === code);
-      if (!cart.customer || !snapshot || !code || !entered) return { discounts: [] };
-      const balance = balanceOf(snapshot.data);
+      const record = readOne(reads, "balance");
+      if (!cart.customer || !record || !code || !entered) return { discounts: [] };
+      const balance = balanceOf(record.data);
       const valueMinor = pointValueMinor(settings, cart.decimalPlaces);
       const itemsMinor = cart.lines.reduce((total, line) => total + line.lineTotalMinor, 0);
       // Spend what the items are worth, never more than the balance.
@@ -195,7 +197,7 @@ export default definePlugin({
           value: { type: "fixed_amount" as const, amountMinor },
           maxAmountMinor: amountMinor,
         }],
-        commit: { record: { ...balance, points: balance.points - spend, spent: balance.spent + spend } },
+        commit: [{ as: "balance", record: { ...balance, points: balance.points - spend, spent: balance.spent + spend } }],
       };
     },
   },

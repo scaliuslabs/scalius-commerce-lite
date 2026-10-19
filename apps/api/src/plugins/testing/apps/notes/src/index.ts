@@ -1,11 +1,12 @@
-// Buyer UI dogfood: core owns the delivery input; account notes arrive as a
-// customer-scoped snapshot. Neither surface returns HTML or runs browser code.
-import { definePlugin, PLUGIN_API_VERSION, type PluginManifestInput } from "@scalius/plugin-sdk";
+// Buyer UI dogfood: core owns the delivery input; account notes arrive as the
+// buyer's `notes` record (a declared read). Neither surface returns HTML or
+// runs browser code.
+import { definePlugin, PLUGIN_API_VERSION, readOne, type PluginManifestInput } from "@scalius/plugin-sdk";
 
 export const manifest = {
   id: "acme.notes",
   name: "Notes",
-  version: "1.0.0",
+  version: "1.1.0",
   apiVersion: PLUGIN_API_VERSION,
   description: "Shows short notes at checkout and in customer accounts.",
   author: { name: "Acme" },
@@ -15,16 +16,17 @@ export const manifest = {
   functions: [{
     point: "buyer.ui",
     targets: ["purchase.checkout.contact.render-after", "customer-account.order-index.block.render"],
-    snapshot: { object: "notes" },
+    reads: [{ as: "note", object: "notes", key: "customer" }],
   }],
 } satisfies PluginManifestInput;
 
 export default definePlugin({
   manifest,
   functions: {
-    "buyer.ui": ({ target, snapshot }, settings) => {
+    "buyer.ui": ({ target, reads }, settings) => {
       if (target === "customer-account.order-index.block.render") {
-        return { ui: { type: "text", text: typeof snapshot?.data.text === "string" ? snapshot.data.text : "Earn points on every order." } };
+        const text = readOne(reads, "note")?.data.text;
+        return { ui: { type: "text", text: typeof text === "string" ? text : "Earn points on every order." } };
       }
       return { ui: { type: "stack", children: [
         { type: "text", text: String(settings.delivery_note ?? "") },

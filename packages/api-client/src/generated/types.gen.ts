@@ -3031,9 +3031,23 @@ export type AppSummary = {
          */
         onError: 'skip' | 'block';
         /**
-         * checkout.discounts and cart.line_prices: the app reads the signed-in buyer's record in this object type (checkout.discounts also updates it with each order).
+         * The app's data the function reads at checkout (checkout.discounts may also update those records with the order).
          */
-        snapshotObject: string | null;
+        reads: Array<{
+            as: string;
+            /**
+             * The app's object type read; null for a custom-field read.
+             */
+            object: string | null;
+            /**
+             * The app's own custom fields read (`<owner>:<key>`); empty for an object read.
+             */
+            customFields: Array<string>;
+            /**
+             * What the read is keyed by: customer, line.variantId, line.productId, attribute.<key>, or from:<read>.<field>.
+             */
+            key: string;
+        }>;
     }>;
 };
 

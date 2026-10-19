@@ -115,13 +115,14 @@ function destinationOf(input: CartSource) {
         : null;
 }
 
-function loadCartFacts(db: Database, input: CartSource) {
+function loadCartFacts(db: Database, input: CartSource, apps?: CheckoutAppFunctions) {
     return loadAppFunctionCartFacts(db, {
         productIds: input.lines.map((line) => line.productId),
         variantIds: input.lines.map((line) => line.variantId),
         // A staff order belongs to no signed-in account: apps see a guest, as at a guest checkout.
         customerId: null,
         marketCountry: appCartMarketCountry(destinationOf(input)),
+        ...(apps ? { apps, points: PRICING_POINTS } : {}),
     });
 }
 
@@ -222,7 +223,7 @@ export async function applyManualOrderAppFunctions(
     const chosenMethod = input.deliveryMethod;
     const wantsRates = apps.points.has("checkout.shipping_rates") && chosenMethod !== null;
     const [facts, rateOptions] = await Promise.all([
-        loadCartFacts(db, input),
+        loadCartFacts(db, input, apps),
         wantsRates ? listRateOptions(db, input, chosenMethod) : Promise.resolve([] as CheckoutRateOption[]),
     ]);
     let cart: FunctionCart;

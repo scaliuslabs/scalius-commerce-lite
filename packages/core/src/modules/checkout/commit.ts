@@ -134,7 +134,7 @@ export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 19;
 const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW;
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
 const CHECKOUT_AUTHORITY_CHANGED = "CHECKOUT_AUTHORITY_CHANGED";
-/** An app's offer (its snapshot record) changed between the quote and the commit. */
+/** An app's offer (a record its function read) changed between the quote and the commit. */
 export const APP_OFFER_CHANGED_REASON = "APP_OFFER_CHANGED";
 const CHECKOUT_AUTHORITY_CHANGED_MESSAGE =
     "Checkout details changed while the order was being placed. Return to your cart to review them and try again.";
@@ -717,7 +717,7 @@ function buildOrderWriteBatch(
         }) as SQLiteBatchItem[]);
     }
 
-    // App snapshot writes (a balance the discount spends) commit with the
+    // App record writes (a balance the discount spends) commit with the
     // order, each at the revision its app saw: a lost race fails the order.
     const storageCommits = payload.appObjectCommits ?? [];
     if (storageCommits.length > 0) {

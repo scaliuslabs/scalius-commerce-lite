@@ -5,7 +5,7 @@ import { objectTypeDeclarationSchema } from "@scalius/shared/plugins/objects";
 // base), the buyer's submitted price is checked against the final price,
 // the quote and the order agree, the first app by priority wins a line, a
 // gift card is never app-priced, a contract read from the buyer's record
-// (snapshot) prices a signed-in buyer, failures are fail-open unless the app
+// (a declared read of the buyer's contract) prices a signed-in buyer, failures are fail-open unless the app
 // blocks, and a store without such an app prices with one pass and no read.
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -93,7 +93,7 @@ describe("cart.line_prices (real schema, test apps)", () => {
     return createCheckoutAppFunctions({ env, ctx: pluginTestCtx(), db, registrations: await listActiveFunctionRegistrations(db), loaderFor: loaderFor() });
   }
 
-  async function installPricer(id: string, options: { priority?: number; onError?: "skip" | "block"; snapshot?: string } = {}) {
+  async function installPricer(id: string, options: { priority?: number; onError?: "skip" | "block"; contracts?: string } = {}) {
     const manifest: PluginManifestInput = {
       id, name: `${id} app`, version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "A pricing test app.",
       author: { name: "Test" },
@@ -101,9 +101,9 @@ describe("cart.line_prices (real schema, test apps)", () => {
         point: "cart.line_prices",
         priority: options.priority ?? 100,
         onError: options.onError ?? "skip",
-        ...(options.snapshot ? { snapshot: { object: options.snapshot } } : {}),
+        ...(options.contracts ? { reads: [{ as: "contract", object: options.contracts, key: "customer" as const }] } : {}),
       }],
-      ...(options.snapshot ? { objects: { [options.snapshot]: contracts } } : {}),
+      ...(options.contracts ? { objects: { [options.contracts]: contracts } } : {}),
       limits: { cpuMs: 50, wallMs: 100 },
     };
     await installPlugin(db, { manifest, source: "upload", bundleSha256: "4".repeat(64), actorUserId: "owner" });
@@ -246,14 +246,14 @@ describe("cart.line_prices (real schema, test apps)", () => {
     expect(reports).toEqual(["Line cart:0:v_a is priced by a market price list, which an app price never replaces; it was skipped."]);
   });
 
-  it("prices a signed-in buyer from their contract record (snapshot)", async () => {
-    await installPricer("acme.b2b", { snapshot: "contracts" });
+  it("prices a signed-in buyer from their contract record (a declared read)", async () => {
+    await installPricer("acme.b2b", { contracts: "contracts" });
     await putObjectRecord(db, "acme.b2b", "contracts", contracts, "cus_b2b", { skus: { "MUG-1": 21_000 } });
     answers["acme.b2b"] = (fn) => {
-      const snapshot = fn.snapshot as { data: { skus: Record<string, number> } } | null;
+      const contract = (fn.reads as Record<string, { data: { skus: Record<string, number> } } | null>).contract;
       const cart = fn.cart as { lines: Array<{ lineId: string; sku: string | null }> };
-      if (!snapshot) return ok({ prices: [] });
-      return ok({ prices: cart.lines.flatMap((entry) => (entry.sku && snapshot.data.skus[entry.sku] ? [{ lineId: entry.lineId, unitPriceMinor: snapshot.data.skus[entry.sku]! }] : [])) });
+      if (!contract) return ok({ prices: [] });
+      return ok({ prices: cart.lines.flatMap((entry) => (entry.sku && contract.data.skus[entry.sku] ? [{ lineId: entry.lineId, unitPriceMinor: contract.data.skus[entry.sku]! }] : [])) });
     };
     const runner = await apps();
     const guest = await validateStorefrontCartItems(db, [line("p_mug", "v_mug", 1, 300)], {

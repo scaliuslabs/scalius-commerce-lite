@@ -16,6 +16,7 @@
 
 import { z } from "zod";
 import { buyerUiOutputSchema, checkoutAttributesSchema } from "./buyer-ui";
+import { FUNCTION_READ_AS_PATTERN, FUNCTION_READS_MAX, functionReadsSchema } from "./function-reads";
 import { PLUGIN_BLOCK_TARGETS } from "./storefront";
 import type { PluginFunctionPoint } from "./manifest";
 
@@ -89,17 +90,17 @@ export const cartValidateOutputSchema = z.object({
   errors: z.array(z.object({ code, message, lineId: id.optional() }).strict()).max(20),
 }).strict();
 
-// ── checkout.discounts ────────────────────────────────────────────────────
+// ── Declared reads ────────────────────────────────────────────────────────
 
 /**
- * The signed-in buyer's record in the collection the function declares
- * (`snapshot` in the manifest), with its revision; null for a guest or when
- * the buyer has none yet. Only apps that declare a snapshot receive it.
+ * The function's declared reads (`reads` in the manifest, function-reads.ts),
+ * resolved by the host: by `as`, `{ revision, data } | null` for a
+ * single-key read, `Record<key, { revision, data }>` for a per-line read.
+ * Empty when the function declares none.
  */
-export const functionSnapshotSchema = z.object({
-  revision: z.number().int().min(1),
-  data: z.record(z.string(), z.unknown()),
-}).strict().nullable();
+const reads = functionReadsSchema.default({});
+
+// ── checkout.discounts ────────────────────────────────────────────────────
 
 export const checkoutDiscountsOutputSchema = z.object({
   discounts: z.array(z.object({
@@ -119,12 +120,16 @@ export const checkoutDiscountsOutputSchema = z.object({
     maxAmountMinor: minor.positive().optional(),
   }).strict()).max(10),
   /**
-   * The snapshot record's next version, committed with the order (same
-   * batch, at the snapshot's revision) only when one of these discounts
-   * applies; a concurrent change aborts the order instead. Needs a declared
-   * snapshot and a signed-in buyer.
+   * New versions of records this function read (`as`: a single-key object
+   * read), committed with the order (same batch, each at the revision the
+   * function saw) only when one of these discounts applies; a concurrent
+   * change aborts the order instead. A read whose key resolved to no id (a
+   * guest's `customer` read, an empty attribute or hop) cannot be committed.
    */
-  commit: z.object({ record: z.record(z.string(), z.unknown()) }).strict().optional(),
+  commit: z.array(z.object({
+    as: z.string().regex(FUNCTION_READ_AS_PATTERN),
+    record: z.record(z.string(), z.unknown()),
+  }).strict()).max(FUNCTION_READS_MAX).optional(),
 }).strict();
 
 // ── checkout.shipping_rates ───────────────────────────────────────────────
@@ -253,38 +258,38 @@ export const buyerUiInputSchema = z.object({
   target: z.enum(PLUGIN_BLOCK_TARGETS), language: z.string().min(1).max(35), locale: z.string().min(1).max(35), currency: z.string().length(3),
   cart: functionCartSchema.nullable(), attributes: checkoutAttributesSchema,
   order: z.object({ orderId: id, status: z.string().max(64), paymentStatus: z.string().max(64), lines: z.array(z.object({ productId: id, variantId: id, quantity: z.number().int().min(1) }).strict()).max(250) }).strict().nullable(),
-  customer: z.object({ id }).strict().nullable(), snapshot: functionSnapshotSchema.optional(),
+  customer: z.object({ id }).strict().nullable(), reads,
 }).strict();
 export type BuyerUiInput = z.infer<typeof buyerUiInputSchema>;
 
 export const PLUGIN_FUNCTION_SCHEMAS = {
   "buyer.ui": { input: buyerUiInputSchema, output: buyerUiOutputSchema },
   "cart.transform": {
-    input: z.object({ cart: functionCartSchema }).strict(),
+    input: z.object({ cart: functionCartSchema, reads }).strict(),
     output: cartTransformOutputSchema,
   },
   "cart.line_prices": {
     input: z.object({
       cart: functionCartSchema,
       lines: z.array(functionLinePriceFactsSchema).max(250),
-      snapshot: functionSnapshotSchema.optional(),
+      reads,
     }).strict(),
     output: cartLinePricesOutputSchema,
   },
   "cart.validate": {
-    input: z.object({ cart: functionCartSchema }).strict(),
+    input: z.object({ cart: functionCartSchema, reads }).strict(),
     output: cartValidateOutputSchema,
   },
   "checkout.discounts": {
-    input: z.object({ cart: functionCartSchema, snapshot: functionSnapshotSchema.optional() }).strict(),
+    input: z.object({ cart: functionCartSchema, reads }).strict(),
     output: checkoutDiscountsOutputSchema,
   },
   "checkout.shipping_rates": {
-    input: z.object({ cart: functionCartSchema, rates: z.array(functionShippingRateSchema).max(50) }).strict(),
+    input: z.object({ cart: functionCartSchema, rates: z.array(functionShippingRateSchema).max(50), reads }).strict(),
     output: checkoutShippingRatesOutputSchema,
   },
   "checkout.payment_methods": {
-    input: z.object({ cart: functionCartSchema, methods: z.array(z.object({ methodId: id, name: label }).strict()).max(20) }).strict(),
+    input: z.object({ cart: functionCartSchema, methods: z.array(z.object({ methodId: id, name: label }).strict()).max(20), reads }).strict(),
     output: checkoutPaymentMethodsOutputSchema,
   },
   "order.risk": {

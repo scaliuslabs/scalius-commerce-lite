@@ -104,6 +104,9 @@ export function createCartTransformer(
             variantIds: valid.map((item) => item.variantId),
             customerId,
             marketCountry: appCartMarketCountry(context.destination ?? null),
+            apps,
+            points: ["cart.transform"],
+            attributes,
         });
         let cart: FunctionCart;
         try {

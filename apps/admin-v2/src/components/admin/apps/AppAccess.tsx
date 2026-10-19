@@ -91,9 +91,9 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
         {request.blockingFunctions.map((point) =>
           row(`block:${point}`, t("checkoutBlocking", { point: pointLabel(point) }), isNew("blockingFunctions", point)),
         )}
-        {app.functions.flatMap((fn) => (fn.snapshotObject
-          ? [row(`snapshot:${fn.point}`, t(fn.point === "checkout.discounts" ? "checkoutSnapshot" : "checkoutSnapshotRead", { collection: fn.snapshotObject }), false)]
-          : []))}
+        {app.functions.flatMap((fn) => fn.reads.flatMap((read) => (read.object
+          ? [row(`reads:${fn.point}:${read.as}`, t(fn.point === "checkout.discounts" ? "checkoutReadsUpdate" : "checkoutReads", { collection: read.object }), false)]
+          : [row(`reads:${fn.point}:${read.as}`, t("checkoutReadsFields", { fields: read.customFields.join(", ") }), false)])))}
       </Section>,
     );
   }

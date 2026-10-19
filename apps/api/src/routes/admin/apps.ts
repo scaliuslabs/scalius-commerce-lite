@@ -58,6 +58,8 @@ import {
   providerSettingKeys,
   type PluginGrantRequest,
   type PluginManifest,
+  functionReadKey,
+  type FunctionReadKey,
 } from "@scalius/shared/plugins";
 import { PROVIDER_KINDS, qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { appSettingField, appSettingFieldSchema, appSettingValueSchema } from "../../schemas/app-settings";
@@ -203,7 +205,12 @@ const appSummarySchema = z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
     priority: z.number().int().openapi({ description: "Lower runs first among apps at the same point." }),
     onError: z.enum(["skip", "block"]).openapi({ description: "block: the app pauses checkout when it cannot answer (needs approval)." }),
-    snapshotObject: z.string().nullable().openapi({ description: "checkout.discounts and cart.line_prices: the app reads the signed-in buyer's record in this object type (checkout.discounts also updates it with each order)." }),
+    reads: z.array(z.object({
+      as: z.string(),
+      object: z.string().nullable().openapi({ description: "The app's object type read; null for a custom-field read." }),
+      customFields: z.array(z.string()).openapi({ description: "The app's own custom fields read (`<owner>:<key>`); empty for an object read." }),
+      key: z.string().openapi({ description: "What the read is keyed by: customer, line.variantId, line.productId, attribute.<key>, or from:<read>.<field>." }),
+    })).openapi({ description: "The app's data the function reads at checkout (checkout.discounts may also update those records with the order)." }),
   })).openapi({ description: "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)." }),
 }).openapi("AppSummary");
 
@@ -396,9 +403,19 @@ function summary(installation: PluginInstallation) {
       point: fn.point,
       priority: fn.priority,
       onError: fn.onError,
-      snapshotObject: fn.snapshot?.object ?? null,
+      reads: fn.reads.map((read) => ({
+        as: read.as,
+        object: "object" in read ? read.object : null,
+        customFields: "customFields" in read ? read.customFields : [],
+        key: readKeyLabel(functionReadKey(read)),
+      })),
     })),
   };
+}
+
+/** A read's key as one label: `from:<read>.<field>` for a hop. */
+function readKeyLabel(key: FunctionReadKey): string {
+  return typeof key === "object" ? `from:${key.from}` : key;
 }
 
 const settingField = appSettingField;

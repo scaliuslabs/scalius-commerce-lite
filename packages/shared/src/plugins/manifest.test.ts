@@ -133,7 +133,7 @@ describe("plugin manifest", () => {
     const result = parsePluginManifest(FULL);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.manifest.functions[0]).toEqual({ point: "checkout.discounts", priority: 100, onError: "skip" });
+    expect(result.manifest.functions[0]).toEqual({ point: "checkout.discounts", priority: 100, onError: "skip", reads: [] });
     expect(result.manifest.limits).toEqual({ cpuMs: 50, wallMs: 10_000 });
     expect(result.manifest.storefront.scripts[0]!.placement).toBe("body-end");
   });
@@ -160,8 +160,8 @@ describe("plugin manifest", () => {
     ["a translation of a page in another language it doesn't have", { translations: { fr: { pages: { missing: "Page" } } } }, "translations.fr.pages.missing"],
     ["twenty-one translations", { translations: Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`a${String.fromCharCode(97 + index)}`, { name: "X" }])) }, "translations"],
     ["a discount that blocks checkout", { functions: [{ point: "checkout.discounts", onError: "block" }] }, "functions.0.onError"],
-    ["a snapshot outside checkout.discounts", { functions: [{ point: "cart.validate", snapshot: { object: "visits" } }] }, "functions.0.snapshot"],
-    ["a snapshot of an undeclared object", { functions: [{ point: "checkout.discounts", snapshot: { object: "nope" } }] }, "functions.0.snapshot.object"],
+    ["a retired snapshot (reads replace it)", { functions: [{ point: "checkout.discounts", snapshot: { object: "ledger" } }] }, "functions.0"],
+    ["a read of an undeclared object", { functions: [{ point: "checkout.discounts", reads: [{ as: "x", object: "nope", key: "customer" }] }] }, "functions.0.reads.0.object"],
     ["an object named batch", { objects: { batch: { name: "Batch", fields: [{ key: "value", name: "Value", type: "integer" }] } } }, "objects.batch"],
     ["an icon outside the plugin", { icon: "../secret.svg" }, "icon"],
     ["a JPEG icon", { icon: "assets/icon.jpg" }, "icon"],
@@ -435,17 +435,71 @@ describe("plugin functions", () => {
     expect(Object.keys(PLUGIN_FUNCTION_SCHEMAS).sort()).toEqual([...PLUGIN_FUNCTION_POINTS].sort());
   });
 
-  it("lets cart.transform and cart.line_prices block, and cart.line_prices read a snapshot it never commits", () => {
+  it("lets cart.transform and cart.line_prices block, and every point declare reads", () => {
     const withFunctions = (functions: PluginManifestInput["functions"]) => parsePluginManifest({ ...FULL, functions });
-    expect(withFunctions([{ point: "cart.transform", onError: "block" }, { point: "cart.line_prices", onError: "block", snapshot: { object: "ledger" } }]).ok).toBe(true);
+    expect(withFunctions([{ point: "cart.transform", onError: "block" }, { point: "cart.line_prices", onError: "block", reads: [{ as: "ledger", object: "ledger", key: "customer" }] }]).ok).toBe(true);
     expect(withFunctions([{ point: "checkout.shipping_rates", onError: "block" }]).ok).toBe(false);
-    expect(withFunctions([{ point: "cart.transform", snapshot: { object: "ledger" } }]).ok).toBe(false);
+    expect(withFunctions([{ point: "cart.transform", reads: [{ as: "ledger", object: "ledger", key: "line.variantId", max: 20 }] }]).ok).toBe(true);
+    expect(withFunctions([{ point: "cart.transform", snapshot: { object: "ledger" } } as never]).ok).toBe(false);
     const prices = PLUGIN_FUNCTION_SCHEMAS["cart.line_prices"].output;
     expect(prices.safeParse({ prices: [{ lineId: "cart:0:v", unitPriceMinor: 0 }] }).success).toBe(false);
     expect(prices.safeParse({ prices: [{ lineId: "cart:0:v", unitPriceMinor: 12.5 }] }).success).toBe(false);
     const transform = PLUGIN_FUNCTION_SCHEMAS["cart.transform"].output;
     expect(transform.safeParse({ operations: [{ op: "expand", lineId: "cart:0:v", components: [] }] }).success).toBe(false);
     expect(transform.safeParse({ operations: [{ op: "merge", lineIds: ["cart:0:v"], title: "Set" }] }).success).toBe(false);
+  });
+
+  it("checks declared reads against the app's objects, custom fields and attributes", () => {
+    const manifest = {
+      ...FULL,
+      checkout: { attributes: [{ key: "company", label: "Company", type: "text" as const }] },
+      customFields: [{ ownerType: "customer" as const, key: "points", name: "Points", type: "integer" }, { ownerType: "product" as const, key: "min_qty", name: "Minimum", type: "integer" }],
+      objects: {
+        ...FULL.objects,
+        members: { name: "Members", fields: [{ key: "company_id", name: "Company", type: "object_reference" as const, to: "acme.loyalty.companies" }, { key: "note", name: "Note", type: "integer" as const }] },
+        companies: { name: "Companies", fields: [{ key: "name", name: "Name", type: "single_line_text" as const }] },
+      },
+    };
+    const issues = (reads: unknown) => {
+      const parsed = parsePluginManifest({ ...manifest, functions: [{ point: "cart.validate", reads }] });
+      return parsed.ok ? [] : parsed.issues.map((issue) => `${issue.path} ${issue.message}`);
+    };
+    expect(issues([
+      { as: "member", object: "members", key: "customer" },
+      { as: "company", object: "companies", key: { from: "member.company_id" } },
+      { as: "moq", customFields: ["product:min_qty"], max: 50 },
+      { as: "picked", object: "companies", key: "attribute.company" },
+    ])).toEqual([]);
+    // At most four reads, each name once.
+    expect(issues(Array.from({ length: 5 }, (_, index) => ({ as: `r${index}`, object: "ledger", key: "customer" }))).length).toBeGreaterThan(0);
+    expect(issues([{ as: "a", object: "ledger", key: "customer" }, { as: "a", object: "ledger", key: "line.productId" }])).toEqual(["functions.0.reads.1.as Read a is declared twice."]);
+    // Declared objects, fields and attributes only.
+    expect(issues([{ as: "a", object: "nope", key: "customer" }])).toEqual(["functions.0.reads.0.object Object type nope is not declared."]);
+    expect(issues([{ as: "a", customFields: ["product:nope"] }])).toEqual(["functions.0.reads.0.customFields Custom field product:nope is not declared in customFields."]);
+    expect(issues([{ as: "a", customFields: ["product:min_qty", "customer:points"] }])).toEqual(["functions.0.reads.0.customFields One custom-field read names fields of one owner type."]);
+    expect(issues([{ as: "a", customFields: ["product:min_qty"], key: "customer" }])).toEqual(["functions.0.reads.0.key product fields are read by line.productId."]);
+    expect(issues([{ as: "a", object: "ledger", key: "attribute.nope" }])).toEqual(["functions.0.reads.0.key Checkout attribute nope is not declared in checkout.attributes."]);
+    // max only on a per-line read.
+    expect(issues([{ as: "a", object: "ledger", key: "customer", max: 5 }])).toEqual(["functions.0.reads.0.max Only a per-line read (line.variantId, line.productId) takes max."]);
+    // One hop, from an earlier single-key read, along a field that holds the hop object's id.
+    expect(issues([{ as: "company", object: "companies", key: { from: "member.company_id" } }])).toHaveLength(1);
+    expect(issues([{ as: "m", object: "members", key: "line.variantId" }, { as: "c", object: "companies", key: { from: "m.company_id" } }])).toHaveLength(1);
+    expect(issues([{ as: "m", object: "members", key: "customer" }, { as: "c", object: "ledger", key: { from: "m.company_id" } }])).toEqual([
+      "functions.0.reads.1.key.from m.company_id references acme.loyalty.companies, not acme.loyalty.ledger.",
+    ]);
+    expect(issues([{ as: "m", object: "members", key: "customer" }, { as: "c", object: "companies", key: { from: "m.note" } }])).toHaveLength(1);
+    expect(issues([
+      { as: "m", object: "members", key: "customer" },
+      { as: "c", object: "companies", key: { from: "m.company_id" } },
+      { as: "d", object: "companies", key: { from: "c.name" } },
+    ])).toHaveLength(1);
+  });
+
+  it("commits only named single-key reads, at most four", () => {
+    const output = PLUGIN_FUNCTION_SCHEMAS["checkout.discounts"].output;
+    expect(output.safeParse({ discounts: [], commit: [{ as: "balance", record: { points: 1 } }] }).success).toBe(true);
+    expect(output.safeParse({ discounts: [], commit: { record: { points: 1 } } }).success).toBe(false);
+    expect(output.safeParse({ discounts: [], commit: Array.from({ length: 5 }, (_, index) => ({ as: `r${index}`, record: {} })) }).success).toBe(false);
   });
 
   it("keeps discounts in minor units and rejects a negative or fractional amount", () => {

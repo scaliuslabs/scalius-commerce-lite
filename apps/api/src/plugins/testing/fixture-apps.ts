@@ -11,7 +11,9 @@
 //   cron, a signed webhook, a checkout function and head tags).
 // - acme.wishlist: a proxy page, a product.updated handler and a dashboard
 //   page.
-// - acme.loyalty: checkout.discounts with a snapshot and a commit.
+// - acme.loyalty: checkout.discounts with a declared read and a commit.
+// - acme.wholesale: B2B on declared reads (a hop, per-line records, custom
+//   fields) at four points, and a commit of the hop's record.
 // - acme.bulk-discount: checkout.discounts and cart.validate by quantity.
 // - acme.order-tagger: an order card and actions through `ctx.api`.
 // - acme.notes: checkout and customer-account blocks.
@@ -25,6 +27,7 @@ import { manifest as loyaltyManifest } from "./apps/loyalty/src/index";
 import { manifest as notesManifest } from "./apps/notes/src/index";
 import { manifest as orderTaggerManifest } from "./apps/order-tagger/src/index";
 import { manifest as wishlistManifest } from "./apps/wishlist/src/index";
+import { manifest as wholesaleManifest } from "./apps/wholesale/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -35,6 +38,7 @@ export const FIXTURE_APP_SOURCES = {
   "acme.bulk-discount": "./apps/api/src/plugins/testing/apps/bulk-discount",
   "acme.order-tagger": "./apps/api/src/plugins/testing/apps/order-tagger",
   "acme.notes": "./apps/api/src/plugins/testing/apps/notes",
+  "acme.wholesale": "./apps/api/src/plugins/testing/apps/wholesale",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -50,6 +54,7 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.bulk-discount": { version: bulkDiscountManifest.version, sha256: "b01c".repeat(16), load: () => import("./apps/bulk-discount/src/index") },
   "acme.order-tagger": { version: orderTaggerManifest.version, sha256: "0da9".repeat(16), load: () => import("./apps/order-tagger/src/index") },
   "acme.notes": { version: notesManifest.version, sha256: "4073".repeat(16), load: () => import("./apps/notes/src/index") },
+  "acme.wholesale": { version: wholesaleManifest.version, sha256: "b2b0".repeat(16), load: () => import("./apps/wholesale/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */

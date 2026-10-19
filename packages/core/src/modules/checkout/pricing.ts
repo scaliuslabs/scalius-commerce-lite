@@ -271,6 +271,10 @@ export async function priceStorefrontCheckout(
         customerId: input.customerId,
         // An order that ships nothing is placed in its billing country, where it is taxed.
         marketCountry: appCartMarketCountry(appDestination, input.billing?.countryCode),
+        // The apps' declared reads for every point this cart is asked at ride the same batch.
+        apps,
+        points: ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", "buyer.ui"],
+        attributes: input.attributes,
       }),
       wantsRates ? listRateOptions(db, input) : Promise.resolve([] as CheckoutRateOption[]),
     ]);
@@ -477,6 +481,9 @@ export async function checkStorefrontCartRules(
     variantIds: cartValidation.items.map((item) => item.variantId),
     customerId: input.customerId,
     marketCountry: appCartMarketCountry(destination),
+    apps,
+    points: ["cart.validate", "buyer.ui"],
+    attributes: input.attributes,
   });
   const cart = safeAppCart(() => buildAppFunctionCart({
     currency: input.currency,
@@ -532,6 +539,8 @@ export async function previewStorefrontAppDiscounts(
     variantIds: input.lines.map((line) => line.variantId),
     // A preview knows no address: the backup market.
     marketCountry: null,
+    apps,
+    points: ["checkout.discounts"],
   });
   const platformLines = new Map((input.platformAllocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
   const cart = safeAppCart(() => buildAppFunctionCart({
