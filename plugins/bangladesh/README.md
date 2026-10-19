@@ -32,7 +32,8 @@ A store that picks Bangladesh in the new-store setup (`/admin/welcome`) sees the
 
    A Super Admin approves it. The feature's provider, settings, routes and jobs start with the same write. Turning a feature off needs no approval: its access is revoked and its provider, routes and jobs stop at once. Its saved keys stay for when it is turned on again.
 4. Turning **Places** on loads the places. It sends them in calls of 500, parents first, for at most 20 seconds. The hourly `places-sync` job finishes a load that did not complete. The **Bangladesh places** page (Settings) shows the progress and has **Load places now**.
-5. Each service's keys are entered where it is set up: payments in Settings → Payments, couriers in Settings → Shipping → Couriers, SMS in Settings → Notifications, fraud checkers in Settings → Apps and integrations.
+5. Each service's keys are entered on its page in the pack, under its switch (the Set up links in Settings → Payments, Shipping → Couriers, Notifications and Apps and integrations land there).
+6. One switch puts a payment or SMS service to use. A payment feature that is turned on joins checkout's payment methods, after the ones already there, and checkout offers it as soon as its keys are saved; Settings → Payments stays the place to reorder or hide it, and a hidden one is not added back until its feature is turned off and on again. When no SMS service is chosen, the first SMS provider whose keys are saved becomes the notification SMS service. The service's status says "Ready" only while checkout offers it or notifications send through it, and otherwise why not ("Hidden at checkout", "Not used for sending").
 
 An off feature's provider is not offered anywhere; a saved choice of it reads "Turn on <feature> in Bangladesh pack's features to use it."
 

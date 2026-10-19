@@ -40,6 +40,7 @@ import {
   featureProviders,
   itemSettingKeys,
   lastJobRun,
+  SERVICE_HEALTH,
   serviceGroups,
   serviceHealth,
   type ServiceHealth,
@@ -50,7 +51,8 @@ import { AppIcon } from "./AppIcon";
 import { AppSettingControl, settingFieldId, type AppSettingsDraftApi } from "./AppSettingsForm";
 import { appPagePath } from "./ui/surfaces";
 
-const HEALTH_VARIANT = { ready: "success", setup: "warning", error: "destructive" } as const;
+/** Provider kinds the store uses as soon as they are on (`apps/api/src/plugins/provider-adoption.ts`). */
+const USED_WHEN_ON: ReadonlySet<string> = new Set(["payment", "sms"]);
 
 function isFunctionPoint(point: string): point is (typeof APP_FUNCTION_POINTS)[number] {
   return (APP_FUNCTION_POINTS as readonly string[]).includes(point);
@@ -214,7 +216,7 @@ export function DisableFeatureDialog({ app, feature, open, onOpenChange }: Featu
 export function HealthBadge({ health }: { health: ServiceHealth }) {
   const t = useMessages(appFeaturesMessages);
   if (!health) return null;
-  return <Badge variant={HEALTH_VARIANT[health.status]}>{t(`status_${health.status}`)}</Badge>;
+  return <Badge variant={SERVICE_HEALTH[health.status].variant}>{t(`status_${health.status}`)}</Badge>;
 }
 
 /**
@@ -235,13 +237,21 @@ export function RunningDetail({ app, item, form, canManage, health, inRow = true
   const keys = itemSettingKeys(app, item);
   const fields = app.settings.fields.filter((field) => keys.includes(field.key));
   const providers = item.kind === "feature" ? featureProviders(app, item.feature) : [item.provider];
-  const capabilities = [...new Map(providers.flatMap((provider) => (isAppProviderKind(provider.kind) ? [[provider.kind, PROVIDER_CAPABILITY[provider.kind]] as const] : []))).values()];
+  // Payment and SMS providers are used once they are on (checkout offers them; the
+  // first ready SMS service is chosen), so they link to Settings only when they are not.
+  const kinds = [...new Set(providers.map((provider) => provider.kind))].filter(isAppProviderKind).filter((kind) => !USED_WHEN_ON.has(kind));
   const pages = item.kind === "feature" ? app.admin.pages.filter((page) => item.feature.pages.includes(page.id)) : [];
   const lastRun = item.kind === "feature" ? lastJobRun(app, item.feature) : null;
   const active = app.status === "active";
+  const unused = health?.status === "hidden" || health?.status === "currency" || health?.status === "notChosen" ? health.status : null;
+  const settingsLink = (kind: "payment" | "sms", text: string) => (
+    <Link key={`use:${kind}`} to={PROVIDER_CAPABILITY[kind].to} className="text-link hover:underline">{text}</Link>
+  );
   const links = [
-    ...capabilities.map((capability) => (
-      <Link key={capability.to} to={capability.to} className="text-link hover:underline">{t("chooseIn", { page: settingsPage(capability.page) })}</Link>
+    ...(unused === "hidden" ? [settingsLink("payment", t("showAtCheckout"))] : []),
+    ...(unused === "notChosen" ? [settingsLink("sms", t("chooseIn", { page: settingsPage(PROVIDER_CAPABILITY.sms.page) }))] : []),
+    ...kinds.map((kind) => (
+      <Link key={kind} to={PROVIDER_CAPABILITY[kind].to} className="text-link hover:underline">{t("chooseIn", { page: settingsPage(PROVIDER_CAPABILITY[kind].page) })}</Link>
     )),
     ...(active ? pages.map((page) => (
       <Link key={page.id} to={appPagePath(app.id, page.id)} className="text-link hover:underline">{t("openPage", { title: page.title })}</Link>
@@ -254,6 +264,7 @@ export function RunningDetail({ app, item, form, canManage, health, inRow = true
             {fields.map((field) => <AppSettingControl key={field.key} app={app} field={field} form={form} canManage={canManage} />)}
           </FieldGroup>
         ) : links.length === 0 ? <p className="text-body text-muted-foreground">{t("noSettings")}</p> : null}
+        {unused ? <p className="text-body text-muted-foreground">{t(`unusedHelp_${unused}`)}</p> : null}
         {links.length > 0 ? <div className="flex flex-col items-start gap-1 text-body">{links}</div> : null}
         {health?.status === "error" ? (
           <p className="text-body text-destructive wrap-anywhere">

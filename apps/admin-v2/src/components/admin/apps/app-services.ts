@@ -84,16 +84,48 @@ export function serviceSettingKeys(app: Pick<AppDetail, "features" | "providers"
   return new Set([...app.features.flatMap((feature) => feature.settings), ...app.providers.flatMap(ownKeys)]);
 }
 
+/**
+ * How a running service is doing. "Ready" means it works: a payment method
+ * checkout offers, the SMS service notifications send through. Set up but not
+ * used says why: hidden in Settings, Payments, a currency it cannot charge,
+ * or another SMS service chosen.
+ */
 export type ServiceHealth =
   | { status: "ready" }
   | { status: "setup"; missing: number }
   | { status: "error"; error: string; at: string | null }
+  | { status: "hidden" }
+  | { status: "currency" }
+  | { status: "notChosen" }
   | null;
+
+export type ServiceHealthStatus = NonNullable<ServiceHealth>["status"];
+
+/** Each status's badge, and how urgent it is (lower first): not working, needs setup, set up but unused, ready. */
+export const SERVICE_HEALTH: Readonly<Record<ServiceHealthStatus, { variant: "success" | "warning" | "destructive" | "secondary"; rank: number }>> = {
+  error: { variant: "destructive", rank: 0 },
+  setup: { variant: "warning", rank: 1 },
+  currency: { variant: "warning", rank: 1 },
+  hidden: { variant: "secondary", rank: 2 },
+  notChosen: { variant: "secondary", rank: 2 },
+  ready: { variant: "success", rank: 3 },
+};
+
+/** Whether the store uses a set-up provider, in `ServiceHealth` terms (null: it does). */
+function unusedHealth(provider: Provider): ServiceHealth {
+  switch (provider.use) {
+    case "hidden": return { status: "hidden" };
+    case "currency": return { status: "currency" };
+    case "not_chosen": return { status: "notChosen" };
+    default: return null;
+  }
+}
 
 /**
  * How a running row is doing, from what the app reports: a scheduled job of
  * its own that failed last time, else whether its providers have every
- * required setting. Null while off, and for a feature with nothing to check.
+ * required setting, else whether the store uses them (`use`). Null while off,
+ * and for a feature with nothing to check.
  */
 export function serviceHealth(app: Pick<AppDetail, "providers" | "cron" | "settings">, item: ServiceItem): ServiceHealth {
   const on = item.kind === "provider" || item.feature.enabled;
@@ -104,7 +136,8 @@ export function serviceHealth(app: Pick<AppDetail, "providers" | "cron" | "setti
   const providers = item.kind === "feature" ? featureProviders(app, item.feature) : [item.provider];
   if (providers.length === 0) return null;
   const missing = providers.flatMap((provider) => provider.required).filter((key) => !providerConfigured(app, { required: [key] })).length;
-  return missing === 0 ? { status: "ready" } : { status: "setup", missing };
+  if (missing > 0) return { status: "setup", missing };
+  return providers.map(unusedHealth).find(Boolean) ?? { status: "ready" };
 }
 
 /** The newest finished run of a feature's own jobs, for its "Last ran" line. */

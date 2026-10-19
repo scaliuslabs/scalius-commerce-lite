@@ -14,8 +14,8 @@ import { appFeaturesMessages } from "~/i18n/app-features";
 import { installedAppsMessages } from "~/i18n/apps";
 import type { AppDetail } from "~/lib/api-query-options/apps";
 import { appSectionNav, appSectionPath, type AppSection } from "./app-sections";
+import { SERVICE_HEALTH } from "./app-services";
 
-const HEALTH_VARIANT = { setup: "warning", error: "destructive" } as const;
 
 const ROW =
   "flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-start text-body outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-accent aria-[current=page]:font-semibold lg:min-h-8";
@@ -79,7 +79,7 @@ export function AppSectionNav({ app, current }: { app: AppDetail; current: strin
                   >
                     <span className="min-w-0 flex-1 truncate" title={label(section)}>{label(section)}</span>
                     {health ? (
-                      <Badge variant={HEALTH_VARIANT[health.status]}>{words}</Badge>
+                      <Badge variant={SERVICE_HEALTH[health.status].variant}>{words}</Badge>
                     ) : words ? (
                       <span className="shrink-0 text-body font-normal text-muted-foreground">{words}</span>
                     ) : null}

@@ -1010,10 +1010,51 @@ describe("App page: sections", () => {
     expect(input("bkash_app_key").type).toBe("password");
     expect(input("bkash_username").value).toBe("shop");
     expect(text()).toContain("Needs setup");
-    expect(document.querySelector('a[href="/admin/settings/payments"]')?.textContent).toBe("Choose it in Settings → Payments");
+    // Turning it on offers it at checkout: no second switch to send the merchant to.
+    expect(document.querySelector('a[href="/admin/settings/payments"]')).toBeNull();
     await type(input("bkash_username"), "my-shop");
     const sent = await saveSettings();
     expect(sent.body.values).toEqual({ bkash_username: "my-shop" });
+  });
+
+  it("calls a payment ready only while checkout offers it, and an SMS service only while it sends", async () => {
+    const bkashOn = feature({ enabled: true, grantKey: null, settings: ["bkash_username"] });
+    const settings = {
+      fields: [field({ key: "bkash_username", label: "Username", type: "text", group: "bkash" })],
+      values: { bkash_username: "shop" },
+      secrets: {},
+      missing: [],
+      sections: [],
+    };
+    const bkash = { id: "acme.loyalty:bkash", providerId: "bkash", kind: "payment", name: "bKash", icon: null, settings: ["bkash_username"], own: true, required: ["bkash_username"] };
+    const render = async (use: string, kind = "payment") => {
+      act(() => root.unmount());
+      queryClient.clear();
+      root = createRoot(host);
+      await renderApp(detail({ status: "active", features: [bkashOn, placesFeature()], settings, providers: [{ ...bkash, kind, use }] }), MANAGER, true, "bkash");
+    };
+
+    await render("offered");
+    expect(text()).toContain("Ready");
+    expect(document.querySelector('a[href="/admin/settings/payments"]')).toBeNull();
+
+    await render("hidden");
+    expect(text()).toContain("Hidden at checkout");
+    expect(text()).not.toContain("Ready");
+    expect(text()).toContain("it is hidden in Settings → Payments");
+    expect(document.querySelector('a[href="/admin/settings/payments"]')?.textContent).toBe("Show it at checkout in Settings → Payments");
+
+    await render("currency");
+    expect(text()).toContain("Not offered at checkout");
+    expect(text()).toContain("can't take payments in your store's currency");
+
+    // An SMS provider set up while notifications send through another one.
+    await render("not_chosen", "sms");
+    expect(text()).toContain("Not used for sending");
+    expect(document.querySelector('a[href="/admin/settings/notifications"]')?.textContent).toBe("Choose it in Settings → Notifications");
+    await render("chosen", "sms");
+    expect(text()).toContain("Ready");
+    expect(document.querySelector('a[href="/admin/settings/notifications"]')).toBeNull();
   });
 
   it("says a feature's job failed, with when and why, on its page", async () => {

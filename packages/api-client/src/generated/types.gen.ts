@@ -3598,6 +3598,10 @@ export type AppDetail = AppSummary & {
          * The keys its readiness needs set: its declared settings, else the app's required ones.
          */
         required: Array<string>;
+        /**
+         * Whether the store uses it: a payment method checkout lists (offered), one hidden in Settings, Payments (hidden) or one that cannot charge the store currency (currency); the notification SMS service (chosen) or another one (not_chosen). Null for other kinds.
+         */
+        use: 'offered' | 'hidden' | 'currency' | 'chosen' | 'not_chosen' | null;
     }>;
     routes: {
         admin: Array<{

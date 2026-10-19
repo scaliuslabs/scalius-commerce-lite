@@ -13,6 +13,7 @@ import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { requirePluginInstallation } from "@scalius/core/modules/plugins";
 import { putObjectRecord } from "@scalius/core/modules/objects";
+import { paymentMethodsDocument, smsDocument } from "@scalius/core/modules/settings";
 import { errorResponseFromError } from "../../utils/api-response";
 import { BUNDLED_PLUGINS } from "../../plugins/bundled.gen";
 import { pluginTestCtx, pluginTestEnv } from "../../plugins/testing/fixtures";
@@ -319,6 +320,46 @@ describe("admin app routes", () => {
     const off = await call("POST", "/apps/scalius.bangladesh/features/bkash/disable", { expectedRevision: listed.revision });
     expect(off.json.data.app).toMatchObject({ granted: { features: [], providers: [], allowedHosts: [] }, providers: [] });
     expect((await call("POST", "/apps/scalius.bangladesh/features/ghost/disable", { expectedRevision: off.json.data.app.revision })).status).toBe(404);
+  });
+
+  it("puts a turned-on payment or SMS service to use without a second switch, and says when it is not used", async () => {
+    await call("GET", "/apps");
+    const detail = (await call("GET", "/apps/scalius.bangladesh")).json.data.app;
+    let current = (await call("POST", "/apps/scalius.bangladesh/activate", { expectedRevision: detail.revision, grantKey: detail.grantKey })).json.data.app;
+    const turnOn = async (id: string) => {
+      const feature = current.features.find((entry: Json) => entry.id === id);
+      const response = await call("POST", `/apps/scalius.bangladesh/features/${id}/enable`, { expectedRevision: current.revision, grantKey: feature.grantKey });
+      expect(response.status).toBe(200);
+      current = response.json.data.app;
+    };
+    const use = (id: string) => current.providers.find((provider: Json) => provider.id === id)?.use;
+
+    // bKash joins checkout's methods after cash on delivery (never saved: COD was implied); checkout offers it once its keys are saved.
+    await turnOn("bkash");
+    expect((await paymentMethodsDocument.read(db)).enabledMethods).toEqual(["cod", "scalius.bangladesh:bkash"]);
+    expect(use("scalius.bangladesh:bkash")).toBe("offered");
+
+    // Hidden in Settings, Payments: the app page says so, and saving the app's settings never adds it back.
+    await paymentMethodsDocument.write(db, { enabledMethods: ["cod"], defaultMethod: "cod" });
+    current = (await call("GET", "/apps/scalius.bangladesh")).json.data.app;
+    expect(use("scalius.bangladesh:bkash")).toBe("hidden");
+    current = (await call("PUT", "/apps/scalius.bangladesh/settings", { expectedRevision: current.revision, values: { bkash_username: "shop-01" } })).json.data.app;
+    expect((await paymentMethodsDocument.read(db)).enabledMethods).toEqual(["cod"]);
+    expect(use("scalius.bangladesh:bkash")).toBe("hidden");
+
+    // An SMS provider without its key is not chosen; saving the key makes it the SMS service.
+    await turnOn("smsnetbd");
+    expect((await smsDocument.read(db)).activeProvider).toBe("");
+    expect(use("scalius.bangladesh:smsnetbd")).toBe("not_chosen");
+    current = (await call("PUT", "/apps/scalius.bangladesh/settings", { expectedRevision: current.revision, values: { smsnetbd_api_key: "k3J9xQ2mP7vL5nR8wT4z" } })).json.data.app;
+    expect((await smsDocument.read(db)).activeProvider).toBe("scalius.bangladesh:smsnetbd");
+    expect(use("scalius.bangladesh:smsnetbd")).toBe("chosen");
+
+    // A chosen service is never replaced by the next ready one.
+    await turnOn("bdbulksms");
+    current = (await call("PUT", "/apps/scalius.bangladesh/settings", { expectedRevision: current.revision, values: { bdbulksms_token: "Zq8Lm2Np5Rt7Vx9Bc4Df" } })).json.data.app;
+    expect((await smsDocument.read(db)).activeProvider).toBe("scalius.bangladesh:smsnetbd");
+    expect(use("scalius.bangladesh:bdbulksms")).toBe("not_chosen");
   });
 
   it("lists what active apps add to the dashboard: pages by placement, cards, actions, widgets and their admin routes", async () => {
