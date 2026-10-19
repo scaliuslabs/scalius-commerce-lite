@@ -324,7 +324,12 @@ Inventory protection: a status transition writes a deterministic `inventory_move
 
 ## Money
 
-Money is stored and computed as integer minor units of the order or store currency (`*_minor` columns, `packages/shared/src/money.ts`). Gateways receive integer minor units plus an ISO 4217 code across the payment port. The HTTP contract carries decimal major units, converted once at the edge.
+Money is stored and computed as integer minor units of the order or store currency (`*_minor` columns, `packages/shared/src/money.ts`). Gateways receive integer minor units plus an ISO 4217 code across the payment port.
+
+### Money on the wire
+
+- **The stable app API, webhooks, functions and ports** carry one format: integer minor units in `*Minor` fields with the ISO 4217 code in a `currency` field on the same object or the resource that holds it (`{ currency: "BDT", totalMinor: 125000 }`). Inputs take minor units only, in the resource's currency, so a high-denomination currency (VND, IDR) is never capped by a major-unit limit. No stable operation carries a decimal amount or a decimal twin of a minor one; `stable-operations.test.ts` enforces it ([operation registry README](../apps/api/src/openapi/operation-registry/README.md)).
+- **The dashboard's own routes** (beta and internal tiers) and the storefront contract (beta) may carry decimal major units, converted exactly once at that edge with `toMinor` / `fromMinor`.
 
 ## Payment pipeline
 
