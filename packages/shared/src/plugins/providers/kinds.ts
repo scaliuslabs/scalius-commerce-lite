@@ -54,6 +54,37 @@ export const PROVIDER_OPERATIONS = {
   identity: { required: ["authorize", "exchange"], optional: ["testConnection"] },
 } as const satisfies Record<ProviderKind, { required: readonly string[]; optional: readonly string[] }>;
 
+/**
+ * How far each port is sealed. `stable`: a real provider implements it and
+ * its schemas change only additively within `PLUGIN_API_VERSION` (the ABI
+ * snapshot seals them). `beta`: no app implementation proves it yet, so its
+ * schemas may still change; any app may implement it, and the consent screen
+ * labels it Beta. Promoting a port is changing its entry to `stable`, which
+ * only adds to the sealed ABI; a stable port never goes back
+ * (abi.snapshot.test.ts refuses it).
+ */
+export const PROVIDER_PORT_TIERS = {
+  payment: "stable",
+  courier: "stable",
+  sms: "stable",
+  fraud: "stable",
+  email: "beta",
+  tax: "beta",
+  translation: "beta",
+  ai: "beta",
+  messaging: "beta",
+  push: "beta",
+  search: "beta",
+  address: "beta",
+  fx: "beta",
+  identity: "beta",
+} as const satisfies Record<ProviderKind, "stable" | "beta">;
+export type ProviderPortTier = (typeof PROVIDER_PORT_TIERS)[ProviderKind];
+
+export function isStableProviderPort(kind: ProviderKind): boolean {
+  return PROVIDER_PORT_TIERS[kind] === "stable";
+}
+
 export type ProviderOperationName<K extends ProviderKind> =
   | (typeof PROVIDER_OPERATIONS)[K]["required"][number]
   | (typeof PROVIDER_OPERATIONS)[K]["optional"][number];

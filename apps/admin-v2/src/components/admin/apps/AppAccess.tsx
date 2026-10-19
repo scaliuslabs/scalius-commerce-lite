@@ -2,6 +2,7 @@
 // the activation dialog share. Built only from the API's grant request; when
 // an update asks for more than was approved, the additions are marked "New".
 import type { ReactNode } from "react";
+import { PROVIDER_PORT_TIERS, type ProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { Badge } from "~/components/ui/badge";
 import { useMessages } from "~/i18n";
 import { appScopeMessages } from "~/i18n/app-scopes";
@@ -99,7 +100,18 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
   if (request.providers.length > 0) {
     sections.push(
       <Section key="services" title={t("access_services")}>
-        {request.providers.map((kind) => row(kind, known(PROVIDER_KINDS, kind) ? t(`provider_${kind}`) : kind, isNew("providers", kind)))}
+        {request.providers.map((kind) => row(
+          kind,
+          known(PROVIDER_KINDS, kind)
+            ? (
+              <>
+                {t(`provider_${kind}`)}
+                {PROVIDER_PORT_TIERS[kind as ProviderKind] === "beta" ? <Badge variant="outline" title={t("betaPortHelp")}>{t("betaPort")}</Badge> : null}
+              </>
+            )
+            : kind,
+          isNew("providers", kind),
+        ))}
       </Section>,
     );
   }
