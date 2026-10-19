@@ -6,6 +6,8 @@ import type { OperationRegistryEntry } from "./entry";
 export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.orders.list": { stability: "stable", uncurated: true },
   "dashboard.resources.orders.get": { stability: "stable", uncurated: true },
+  // The manual-order attempt table replays a repeated Idempotency-Key exactly.
+  "dashboard.resources.orders.create": { stability: "stable", batch: "forbidden", uncurated: true },
   "dashboard.resources.payments.list": { stability: "stable", uncurated: true },
   "dashboard.resources.fulfillments.list": { stability: "stable", uncurated: true },
   // The fulfilment ledger's own request key carries the Idempotency-Key.

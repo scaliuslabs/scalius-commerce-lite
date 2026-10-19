@@ -35,6 +35,15 @@ mirror a dashboard screen, an editor section or a summary card.
   delivery's `fetch` names the matching `get`. Lists page by cursor in
   `updatedAt, id` order (`updatedSince` starts a sync) and stop early before a
   page would pass the response budget.
+- **Apps place orders for customers.** `dashboard.resources.orders.create`
+  places a confirmed order the way staff do (stock reserved, tax and app
+  discounts priced, app attributes checked) for a `customerId`, whose contact
+  becomes the order's, so the app needs no contact scope. Lines may carry a
+  `unitPriceMinor` set by hand (recorded on the timeline as `prices_set`),
+  addresses use the canonical fields (Bangladesh may add its place ids), and
+  an app's order is `channel: "app"`. The dashboard's own form stays
+  `dashboard.orders.create` (beta). Payment is cash on delivery until the
+  deferred-payment slice adds methods (an additive enum value).
 - **Money is integer minor units beside its currency**, the same rule as the
   webhook representations: `*Minor` integer fields, and an ISO 4217
   `currency` on the same object or the resource that holds it. Inputs take

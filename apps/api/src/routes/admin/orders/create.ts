@@ -1,5 +1,6 @@
 // Manual order quotes, creation and COD amendments.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import {
     confirmManualOrderAmendment,
     createManualOrder,
@@ -10,6 +11,7 @@ import {
     previewManualOrderAmendmentSchema,
     confirmManualOrderAmendmentObjectSchema,
     refineDeliveryLine,
+    type CreateOrderInput,
 } from "@scalius/core/modules/orders";
 import { ok, created } from "../../../utils/api-response";
 import {
@@ -20,7 +22,7 @@ import {
 } from "../../../schemas/responses";
 
 import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
-import { createManualOrderAppFunctions } from "@scalius/core/modules/checkout";
+import { createManualOrderAppFunctions, validateCheckoutAttributes } from "@scalius/core/modules/checkout";
 import type { Database } from "@scalius/database/client";
 import { resolveCanonicalIdempotencyKey } from "../idempotency-key";
 import { adminOrderResourceMutationErrorResponses, adminWriteErrorResponses } from "./shared";
@@ -45,7 +47,8 @@ const manualOrderIdempotencyHeadersSchema = z.object({
         description: "Standard retry key. May replace body.requestKey; if both are sent they must match.",
     }),
 });
-const createOrderRequestSchema = createOrderObjectSchema.extend({
+// Staff orders are channel "admin"; only the app API attributes an order to an app.
+const createOrderRequestSchema = createOrderObjectSchema.omit({ channel: true }).extend({
     requestKey: manualOrderRequestKeySchema.optional(),
 }).superRefine(refineDeliveryLine);
 
@@ -224,18 +227,29 @@ const createOrderRoute = createRoute({
 });
 
 app.openapi(createOrderRoute, async (c) => {
-    const db = c.get("db");
     const { requestKey: bodyRequestKey, ...payload } = c.req.valid("json");
     const requestKey = resolveCanonicalIdempotencyKey(
         c.req.valid("header")["idempotency-key"],
         bodyRequestKey,
         "requestKey",
     );
-    const data = { ...payload, requestKey };
+    const { response } = await placeManualOrder(c, { ...payload, requestKey });
+    return created(c, response);
+});
+
+/**
+ * Places a staff or app order with the apps' checkout functions, then runs
+ * their advisory risk checks after the commit (never on a replay). Shared by
+ * `dashboard.orders.create` and `dashboard.resources.orders.create`.
+ * `attributes` are checked against the apps' declared checkout fields.
+ */
+export async function placeManualOrder(c: Context<{ Bindings: Env }>, data: CreateOrderInput) {
+    const db = c.get("db");
     const user = c.get("user") as { id?: string } | undefined;
     const ctx = getOptionalExecutionContext(c) as ExecutionContext | undefined;
     const apps = await manualOrderApps(c.env, ctx, db);
-    const { response, committed } = await createManualOrder(db, data, user?.id ?? null, {
+    const attributes = data.attributes ? validateCheckoutAttributes(apps, data.attributes) : undefined;
+    const { response, committed } = await createManualOrder(db, { ...data, ...(attributes ? { attributes } : {}) }, user?.id ?? null, {
         apps: createManualOrderAppFunctions(db, apps),
         appProviders: requestAppProviders(c),
     });
@@ -254,7 +268,7 @@ app.openapi(createOrderRoute, async (c) => {
         if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(risk);
         else await risk;
     }
-    return created(c, response);
-});
+    return { response, committed };
+}
 
 export { app as adminOrderCreateRoutes };

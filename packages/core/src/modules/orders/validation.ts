@@ -10,6 +10,7 @@ import { ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import { ADDRESS_FIELD_MAX_LENGTH, usesDeliveryHierarchy } from "@scalius/shared/address";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 
 /** The one order line limit (`@scalius/shared/order-limits`). */
 export const MAX_ORDER_LINE_ITEMS = MAX_ORDER_LINES;
@@ -112,6 +113,13 @@ const sellableOrderItemSchema = z.object({
         .max(MAX_LINE_QUANTITY, `Quantity must be at most ${MAX_LINE_QUANTITY}`),
     /** Buyer inputs the product asks for; priced from its schema. */
     properties: orderLinePropertiesInputSchema.optional(),
+    /**
+     * Staff or an app sets the unit price by hand (a quote, a renewal at its
+     * agreed price): it replaces the catalogue price, in minor units of the
+     * store currency at its price increment, and the order's timeline
+     * records it (`prices_set`). Buyer-input surcharges still apply.
+     */
+    unitPriceMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional(),
 });
 
 const sellableOrderContentSchema = orderBaseContentSchema.extend({
@@ -157,6 +165,12 @@ export const createOrderObjectSchema = sellableOrderContentSchema.extend({
      * channel; omitted, the online store. Staff may sell any product.
      */
     salesChannelId: z.string().max(SALES_CHANNEL_ID_MAX_LENGTH).refine(isSalesChannelId, "Use a sales channel id.").nullable().optional(),
+    /** File the order under this customer instead of the guest record of its phone. */
+    customerId: z.string().trim().min(1).max(128).nullable().optional(),
+    /** Validated app checkout attributes (the route checks them against the apps' declarations). */
+    attributes: z.record(z.string(), z.string()).optional(),
+    /** Who placed it: staff ("admin", the default) or an app ("app"). */
+    channel: z.enum(["admin", "app"]).optional(),
 });
 
 /** Schema for creating a new order (POST /api/orders). */

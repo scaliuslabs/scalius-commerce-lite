@@ -97,6 +97,29 @@ describe("the stable app API's resources", () => {
     expect((await call("GET", "/resources/customers?email=rahim@buyer.test")).status).toBe(403);
   });
 
+  it("places an app's order for a customer, at a price set by hand, once per Idempotency-Key", async () => {
+    sqlite.exec(`INSERT INTO customers (id, name, phone, email, origin) VALUES ('cust_b2b', 'Trader Ltd', '+8801744444444', 'buyer@trader.test', 'merchant')`);
+    principal = { pluginId: "acme.b2b", protectedData: new Set() };
+    const body = {
+      customerId: "cust_b2b",
+      items: [{ productId: "p_tea", variantId: "v_tea", quantity: 3, unitPriceMinor: 45_000 }],
+      shippingAddress: { countryCode: "IN", line1: "12 MG Road", locality: "Bengaluru", adminArea: "KA", postalCode: "560001" },
+      shippingMinor: 0,
+    };
+    const headers = { "Idempotency-Key": "renewal sub_42 2026-10" };
+    const placed = await call("POST", "/resources/orders", { body, headers });
+    expect({ status: placed.status, error: placed.body.error }).toEqual({ status: 201, error: undefined });
+    const order = placed.body.data.order;
+    expect(order).toMatchObject({ customerId: "cust_b2b", channel: "app", currency: "BDT", subtotalMinor: 135_000, lines: [{ quantity: 3, unitPriceMinor: 45_000 }] });
+    expect(sqlite.prepare("SELECT kind FROM order_events WHERE order_id = ? AND kind = 'prices_set'").all(order.id)).toHaveLength(1);
+    const again = await call("POST", "/resources/orders", { body, headers });
+    expect(again.body.data.order.id).toBe(order.id);
+    expect((sqlite.prepare("SELECT count(*) AS n FROM orders WHERE customer_id = 'cust_b2b'").get() as { n: number }).n).toBe(1);
+    // Contact or a customer, and a price on the store's increment.
+    expect((await call("POST", "/resources/orders", { body: { ...body, customerId: undefined } })).status).toBe(400);
+    expect((await call("POST", "/resources/orders", { body: { ...body, items: [{ ...body.items[0], unitPriceMinor: 45_050 }] } })).status).toBe(400);
+  });
+
   it("refuses a status change made on a stale order version, changing nothing", async () => {
     const stale = await call("PUT", "/orders/ord_a/status", { body: { status: "cancelled", expectedVersion: 7 } });
     expect(stale.status).toBe(409);

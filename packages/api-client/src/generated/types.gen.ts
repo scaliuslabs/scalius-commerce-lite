@@ -21101,6 +21101,173 @@ export type GetApiV1AdminResourcesOrdersResponses = {
 
 export type GetApiV1AdminResourcesOrdersResponse = GetApiV1AdminResourcesOrdersResponses[keyof GetApiV1AdminResourcesOrdersResponses];
 
+export type PostApiV1AdminResourcesOrdersData = {
+    body: {
+        /**
+         * File the order under this customer: its name, phone and email become the order's contact, so the app needs no contact scope. Send this or contact.
+         */
+        customerId?: string;
+        contact?: {
+            name: string;
+            email?: string | null;
+            /**
+             * Required for a cash-on-delivery order.
+             */
+            phone?: string | null;
+        };
+        items: Array<{
+            productId: string;
+            variantId: string;
+            quantity: number;
+            /**
+             * A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it.
+             */
+            unitPriceMinor?: number;
+            properties?: Array<{
+                key: string;
+                value: string;
+            }>;
+        }>;
+        /**
+         * The delivery or pickup method; a physical line needs one with an address, or a pickup method.
+         */
+        shippingMethodId?: string | null;
+        /**
+         * Where it ships; none for pickup, digital and service orders.
+         */
+        shippingAddress?: {
+            /**
+             * ISO 3166-1 alpha-2.
+             */
+            countryCode: string;
+            company?: string | null;
+            line1: string;
+            line2?: string | null;
+            dependentLocality?: string | null;
+            locality?: string | null;
+            adminArea?: string | null;
+            postalCode?: string | null;
+            /**
+             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             */
+            placeIds?: {
+                city?: string | null;
+                zone?: string | null;
+                area?: string | null;
+            };
+        } | null;
+        /**
+         * Omit or null when the shipping address bills.
+         */
+        billingAddress?: {
+            /**
+             * ISO 3166-1 alpha-2.
+             */
+            countryCode: string;
+            company?: string | null;
+            line1?: string | null;
+            line2?: string | null;
+            dependentLocality?: string | null;
+            locality?: string | null;
+            adminArea?: string | null;
+            postalCode?: string | null;
+            /**
+             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             */
+            placeIds?: {
+                city?: string | null;
+                zone?: string | null;
+                area?: string | null;
+            };
+            name?: string | null;
+        } | null;
+        /**
+         * The delivery charge, in minor units of the store currency.
+         */
+        shippingMinor: number;
+        /**
+         * An order discount set by hand, in minor units of the store currency.
+         */
+        discountMinor?: number;
+        /**
+         * How the buyer pays: cash on delivery (more methods join this list).
+         */
+        paymentMethod?: 'cod';
+        /**
+         * Checkout attributes the store's apps declare (`<app id>.<key>`); unknown keys are dropped.
+         */
+        attributes?: {
+            [key: string]: string;
+        };
+        notes?: string | null;
+        /**
+         * Where it came in; an app's order defaults to the app's id.
+         */
+        channelSource?: string | null;
+        salesChannelId?: string | null;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/orders';
+};
+
+export type PostApiV1AdminResourcesOrdersErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesOrdersError = PostApiV1AdminResourcesOrdersErrors[keyof PostApiV1AdminResourcesOrdersErrors];
+
+export type PostApiV1AdminResourcesOrdersResponses = {
+    /**
+     * The order
+     */
+    201: {
+        success: true;
+        data: {
+            order: OrderResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesOrdersResponse = PostApiV1AdminResourcesOrdersResponses[keyof PostApiV1AdminResourcesOrdersResponses];
+
 export type GetApiV1AdminResourcesOrdersByIdData = {
     body?: never;
     path: {
@@ -48753,6 +48920,7 @@ export type PostApiV1AdminOrdersData = {
                 key: string;
                 value: string;
             }>;
+            unitPriceMinor?: number;
         }>;
         requestKey?: string;
         shippingMethodId?: string | null;
@@ -48761,6 +48929,10 @@ export type PostApiV1AdminOrdersData = {
          */
         channelSource?: string | null;
         salesChannelId?: string | null;
+        customerId?: string | null;
+        attributes?: {
+            [key: string]: string;
+        };
     };
     headers?: {
         /**
@@ -49269,6 +49441,7 @@ export type PostApiV1AdminOrdersQuoteData = {
                 key: string;
                 value: string;
             }>;
+            unitPriceMinor?: number;
         }>;
         discountAmount: number | null;
         shippingCharge: number;
@@ -49396,6 +49569,7 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
                 key: string;
                 value: string;
             }>;
+            unitPriceMinor?: number;
             orderItemId?: string;
         }>;
     };
@@ -49524,6 +49698,7 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
                 key: string;
                 value: string;
             }>;
+            unitPriceMinor?: number;
             orderItemId?: string;
         }>;
         requestKey?: string;
@@ -49873,7 +50048,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'app_event';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -49943,7 +50118,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'app_event';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
             body: string | null;
             data: {
                 [key: string]: unknown;

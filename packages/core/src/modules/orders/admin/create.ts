@@ -16,7 +16,8 @@ import {
 } from "@scalius/database/schema";
 import { prepareStockReservationBatch } from "../../inventory";
 import type { ReservationEntry } from "../../inventory";
-import { sql, eq } from "drizzle-orm";
+import { and, isNull, sql, eq } from "drizzle-orm";
+import { buildOrderEventInsert, orderEventIdForRequest } from "../timeline";
 import { guestRecordForContact } from "../../customers";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { orderMoneyChainColumns } from "@scalius/shared/money-chain";
@@ -172,11 +173,20 @@ export async function createManualOrder(
             totalAmountMinor: taxQuote.totalMinor,
             paidAmountMinor: 0,
         });
-        const existingCustomer = await db
-            .select()
-            .from(customers)
-            .where(guestRecordForContact({ phone: data.customerPhone }))
-            .get();
+        // A named customer files the order under that record (an app's
+        // renewal, a B2B buyer); otherwise the guest record of its phone.
+        const existingCustomer = data.customerId
+            ? await db.select().from(customers)
+                .where(and(eq(customers.id, data.customerId), isNull(customers.deletedAt)))
+                .get()
+            : await db
+                .select()
+                .from(customers)
+                .where(guestRecordForContact({ phone: data.customerPhone }))
+                .get();
+        if (data.customerId && !existingCustomer) {
+            throw new ValidationError("That customer doesn't exist or is in the trash.");
+        }
         const reservationEntries: ReservationEntry[] = trackedItems
             .filter((item) => item.inventoryTracked)
             .map((item) => ({
@@ -373,8 +383,9 @@ export async function createManualOrder(
             customerId,
             inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
             // Staff-created; the source says where it came in (facebook, walk_in, …).
-            channel: "admin",
+            channel: data.channel ?? "admin",
             channelSource: normalizeOrderChannelSource(data.channelSource),
+            attributes: JSON.stringify(data.attributes ?? {}),
             salesChannelId,
             version: 1,
             createdAt: sql`unixepoch()`,
@@ -452,6 +463,18 @@ export async function createManualOrder(
             discounts: appDiscounts,
             orderItemIdByLineId,
         }) as SQLiteBatchItem[]);
+    }
+
+    // Prices set by hand are part of the order's record, in the same batch.
+    const pricedByHand = data.items.filter((item) => item.unitPriceMinor !== undefined).length;
+    if (pricedByHand > 0) {
+        writeBatch.push(buildOrderEventInsert(db, {
+            id: await orderEventIdForRequest(orderId, "prices_set", data.requestKey),
+            orderId,
+            kind: "prices_set",
+            actorId,
+            data: { lines: pricedByHand },
+        }, sql`1`) as unknown as SQLiteBatchItem);
     }
 
     writeBatch.push(buildAdminOrderCreateAttemptCommit(db, attempt, response));

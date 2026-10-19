@@ -75334,6 +75334,494 @@
           "type": "permission",
           "permission": "orders.view"
         }
+      },
+      "post": {
+        "operationId": "dashboard.resources.orders.create",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Place an order for a customer",
+        "description": "Places a confirmed order the way staff do, with the store's apps' checkout functions applied: stock is reserved, tax and app discounts are priced, and the order is attributed to the app (channel `app`) or to staff. Amounts are minor units of the store currency. Send an Idempotency-Key: a repeat returns the first order.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "description": "File the order under this customer: its name, phone and email become the order's contact, so the app needs no contact scope. Send this or contact."
+                  },
+                  "contact": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 100
+                      },
+                      "email": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 254,
+                        "format": "email"
+                      },
+                      "phone": {
+                        "type": "string",
+                        "nullable": true,
+                        "minLength": 7,
+                        "maxLength": 16,
+                        "description": "Required for a cash-on-delivery order."
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "productId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "variantId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000
+                        },
+                        "unitPriceMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it."
+                        },
+                        "properties": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              },
+                              "value": {
+                                "type": "string",
+                                "maxLength": 1000
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value"
+                            ]
+                          },
+                          "maxItems": 20
+                        }
+                      },
+                      "required": [
+                        "productId",
+                        "variantId",
+                        "quantity"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 99
+                  },
+                  "shippingMethodId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 180,
+                    "description": "The delivery or pickup method; a physical line needs one with an address, or a pickup method."
+                  },
+                  "shippingAddress": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "countryCode": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 2,
+                        "description": "ISO 3166-1 alpha-2."
+                      },
+                      "company": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 100
+                      },
+                      "line1": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      "line2": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 200
+                      },
+                      "dependentLocality": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 120
+                      },
+                      "locality": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 120
+                      },
+                      "adminArea": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 120
+                      },
+                      "postalCode": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 20
+                      },
+                      "placeIds": {
+                        "type": "object",
+                        "properties": {
+                          "city": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1,
+                            "maxLength": 180
+                          },
+                          "zone": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1,
+                            "maxLength": 180
+                          },
+                          "area": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1,
+                            "maxLength": 180
+                          }
+                        },
+                        "additionalProperties": false,
+                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                      }
+                    },
+                    "required": [
+                      "countryCode",
+                      "line1"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Where it ships; none for pickup, digital and service orders."
+                  },
+                  "billingAddress": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "countryCode": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 2,
+                        "description": "ISO 3166-1 alpha-2."
+                      },
+                      "company": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 100
+                      },
+                      "line1": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 500
+                      },
+                      "line2": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 200
+                      },
+                      "dependentLocality": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 120
+                      },
+                      "locality": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 120
+                      },
+                      "adminArea": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 120
+                      },
+                      "postalCode": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 20
+                      },
+                      "placeIds": {
+                        "type": "object",
+                        "properties": {
+                          "city": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1,
+                            "maxLength": 180
+                          },
+                          "zone": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1,
+                            "maxLength": 180
+                          },
+                          "area": {
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1,
+                            "maxLength": 180
+                          }
+                        },
+                        "additionalProperties": false,
+                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                      },
+                      "name": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 100
+                      }
+                    },
+                    "required": [
+                      "countryCode"
+                    ],
+                    "additionalProperties": false,
+                    "description": "Omit or null when the shipping address bills."
+                  },
+                  "shippingMinor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991,
+                    "description": "The delivery charge, in minor units of the store currency."
+                  },
+                  "discountMinor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991,
+                    "description": "An order discount set by hand, in minor units of the store currency."
+                  },
+                  "paymentMethod": {
+                    "type": "string",
+                    "enum": [
+                      "cod"
+                    ],
+                    "default": "cod",
+                    "description": "How the buyer pays: cash on delivery (more methods join this list)."
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    "description": "Checkout attributes the store's apps declare (`<app id>.<key>`); unknown keys are dropped."
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "channelSource": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 64,
+                    "description": "Where it came in; an app's order defaults to the app's id."
+                  },
+                  "salesChannelId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 160
+                  }
+                },
+                "required": [
+                  "items",
+                  "shippingMinor"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "order": {
+                          "$ref": "#/components/schemas/OrderResource"
+                        }
+                      },
+                      "required": [
+                        "order"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "supported",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.create"
+        }
       }
     },
     "/api/v1/admin/resources/orders/{id}": {
@@ -168438,6 +168926,11 @@
                             ]
                           },
                           "maxItems": 10
+                        },
+                        "unitPriceMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9000000000000
                         }
                       },
                       "required": [
@@ -168469,6 +168962,18 @@
                     "type": "string",
                     "nullable": true,
                     "maxLength": 160
+                  },
+                  "customerId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
@@ -170207,6 +170712,11 @@
                             ]
                           },
                           "maxItems": 10
+                        },
+                        "unitPriceMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9000000000000
                         }
                       },
                       "required": [
@@ -170714,6 +171224,11 @@
                             ]
                           },
                           "maxItems": 10
+                        },
+                        "unitPriceMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9000000000000
                         },
                         "orderItemId": {
                           "type": "string",
@@ -171240,6 +171755,11 @@
                             ]
                           },
                           "maxItems": 10
+                        },
+                        "unitPriceMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9000000000000
                         },
                         "orderItemId": {
                           "type": "string",
@@ -172314,6 +172834,7 @@
                                   "unarchived",
                                   "invoice_issued",
                                   "fulfillment_location_changed",
+                                  "prices_set",
                                   "app_event"
                                 ]
                               },
@@ -172523,6 +173044,7 @@
                             "unarchived",
                             "invoice_issued",
                             "fulfillment_location_changed",
+                            "prices_set",
                             "app_event"
                           ]
                         },
@@ -247735,6 +248257,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.fulfillments.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.orders.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.orders.create"
           ]
         },
         {

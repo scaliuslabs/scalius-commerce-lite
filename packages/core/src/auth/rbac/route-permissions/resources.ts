@@ -11,7 +11,7 @@ const productsEdit = { permission: PERMISSIONS.PRODUCTS_EDIT };
 const customers = { permission: PERMISSIONS.CUSTOMERS_VIEW };
 
 export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
-  "/api/v1/admin/resources/orders": { GET: orders },
+  "/api/v1/admin/resources/orders": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_CREATE } },
   "/api/v1/admin/resources/orders/*": { GET: orders },
   "/api/v1/admin/resources/orders/*/payments": { GET: orders },
   "/api/v1/admin/resources/orders/*/fulfillments": { GET: orders, POST: shipments },

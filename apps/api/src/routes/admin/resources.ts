@@ -15,7 +15,9 @@ import { MANUAL_FULFILLMENT_TYPES } from "@scalius/shared/fulfilment";
 import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pagination";
 import { fromMinor } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
+import { createOrderSchema } from "@scalius/core/modules/orders";
+import { placeManualOrder } from "./orders/create";
 import { created, ok } from "../../utils/api-response";
 import { errorResponses, conflictResponse, namedSharedSchema, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import {
@@ -197,6 +199,158 @@ app.openapi(createRoute({
   const [order] = await readOrderRepresentations(c.get("db"), [c.req.valid("param").id]);
   if (!order) throw new NotFoundError("Order not found");
   return ok(c, order);
+});
+
+// ─── Placing an order ────────────────────────────────────────────────────────
+
+const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
+
+/** A postal address in the canonical fields (AGENTS.md address rules); Bangladesh may add its delivery place ids. */
+const addressInputSchema = z.object({
+  countryCode: z.string().trim().length(2).openapi({ description: "ISO 3166-1 alpha-2." }),
+  company: optionalText(100),
+  line1: z.string().trim().min(1).max(500),
+  line2: optionalText(200),
+  dependentLocality: optionalText(120),
+  locality: optionalText(120),
+  adminArea: optionalText(120),
+  postalCode: optionalText(20),
+  placeIds: z.object({
+    city: z.string().trim().min(1).max(180).nullable().optional(),
+    zone: z.string().trim().min(1).max(180).nullable().optional(),
+    area: z.string().trim().min(1).max(180).nullable().optional(),
+  }).strict().optional().openapi({ description: "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them." }),
+}).strict();
+
+const orderCreateBody = z.object({
+  customerId: z.string().trim().min(1).max(128).optional().openapi({
+    description: "File the order under this customer: its name, phone and email become the order's contact, so the app needs no contact scope. Send this or contact.",
+  }),
+  contact: z.object({
+    name: z.string().trim().min(3).max(100),
+    email: z.string().trim().email().max(254).nullable().optional(),
+    phone: z.string().trim().min(7).max(16).nullable().optional().openapi({ description: "Required for a cash-on-delivery order." }),
+  }).strict().optional(),
+  items: z.array(z.object({
+    productId: z.string().min(1).max(180),
+    variantId: z.string().min(1).max(180),
+    quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
+    unitPriceMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional().openapi({
+      description: "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it.",
+    }),
+    properties: z.array(z.object({ key: z.string().min(1).max(40), value: z.string().max(1000) })).max(20).optional(),
+  }).strict()).min(1).max(MAX_ORDER_LINES),
+  shippingMethodId: z.string().trim().min(1).max(180).nullable().optional().openapi({ description: "The delivery or pickup method; a physical line needs one with an address, or a pickup method." }),
+  shippingAddress: addressInputSchema.nullable().optional().openapi({ description: "Where it ships; none for pickup, digital and service orders." }),
+  billingAddress: addressInputSchema.extend({ name: optionalText(100), line1: z.string().trim().max(500).nullable().optional() })
+    .nullable().optional().openapi({ description: "Omit or null when the shipping address bills." }),
+  shippingMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).openapi({ description: "The delivery charge, in minor units of the store currency." }),
+  discountMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional().openapi({ description: "An order discount set by hand, in minor units of the store currency." }),
+  paymentMethod: z.enum(["cod"]).default("cod").openapi({ description: "How the buyer pays: cash on delivery (more methods join this list)." }),
+  attributes: z.record(z.string().max(120), z.string().max(500)).optional().openapi({ description: "Checkout attributes the store's apps declare (`<app id>.<key>`); unknown keys are dropped." }),
+  notes: optionalText(500),
+  channelSource: z.string().trim().max(64).nullable().optional().openapi({ description: "Where it came in; an app's order defaults to the app's id." }),
+  salesChannelId: z.string().trim().min(1).max(160).nullable().optional(),
+}).strict().refine((value) => Boolean(value.customerId) !== Boolean(value.contact), {
+  message: "Send customerId or contact, not both.",
+  path: ["customerId"],
+});
+
+/** A UUID the order-create attempt table takes, derived from the caller's Idempotency-Key (random without one). */
+async function orderRequestKey(c: Context, key: string | undefined): Promise<string> {
+  if (!key) return crypto.randomUUID();
+  const hex = (await scopedRequestKey(c, "dashboard.resources.orders.create", key)).slice(4, 36);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.orders.create",
+  method: "post",
+  path: "/orders",
+  tags: ["App API - Orders"],
+  summary: "Place an order for a customer",
+  description: "Places a confirmed order the way staff do, with the store's apps' checkout functions applied: stock is reserved, tax and app discounts are priced, and the order is attributed to the app (channel `app`) or to staff. Amounts are minor units of the store currency. Send an Idempotency-Key: a repeat returns the first order.",
+  request: {
+    headers: idempotencyKeyHeaderSchema,
+    body: { required: true, content: { "application/json": { schema: orderCreateBody } } },
+  },
+  responses: {
+    201: { description: "The order", content: { "application/json": { schema: successEnvelope(z.object({ order: OrderResource })) } } },
+    ...errorResponses,
+    409: conflictResponse,
+    503: serviceUnavailableResponse,
+  },
+}), async (c) => {
+  const body = c.req.valid("json");
+  const db = c.get("db");
+  const appPrincipal = c.get("pluginPrincipal");
+  const customer = body.customerId
+    ? await db.select({ name: customers.name, email: customers.email, phone: customers.phone })
+      .from(customers).where(and(eq(customers.id, body.customerId), isNull(customers.deletedAt))).get()
+    : null;
+  if (body.customerId && !customer) throw new NotFoundError("Customer not found");
+  const contact = customer
+    ? { name: customer.name, email: customer.email ?? null, phone: (customer.phone as string | null) || null }
+    : { name: body.contact!.name, email: body.contact!.email ?? null, phone: body.contact!.phone ?? null };
+  if (!contact.phone) {
+    throw new ValidationError("A cash-on-delivery order needs the buyer's phone.", { issues: [{ field: body.customerId ? "customerId" : "contact.phone", code: "phone_required" }] });
+  }
+  const places = getDecimalPlaces((await readStoreCurrency(db)).code);
+  const ship = body.shippingAddress ?? null;
+  const bill = body.billingAddress ?? null;
+  const parsed = createOrderSchema.safeParse({
+    requestKey: await orderRequestKey(c, c.req.valid("header")["idempotency-key"]),
+    customerId: body.customerId ?? null,
+    customerName: contact.name,
+    customerPhone: contact.phone,
+    customerEmail: contact.email,
+    shippingCountryCode: ship?.countryCode ?? null,
+    shippingAddress: ship?.line1 ?? null,
+    shippingAddressLine2: ship?.line2 ?? null,
+    shippingDependentLocality: ship?.dependentLocality ?? null,
+    shippingLocality: ship?.locality ?? null,
+    shippingAdminArea: ship?.adminArea ?? null,
+    shippingPostalCode: ship?.postalCode ?? null,
+    shippingCompany: ship?.company ?? null,
+    city: ship?.placeIds?.city ?? null,
+    zone: ship?.placeIds?.zone ?? null,
+    area: ship?.placeIds?.area ?? null,
+    billingSameAsShipping: bill ? false : null,
+    ...(bill ? {
+      billingCountryCode: bill.countryCode,
+      billingName: bill.name ?? null,
+      billingCompany: bill.company ?? null,
+      billingAddress: bill.line1 ?? null,
+      billingAddressLine2: bill.line2 ?? null,
+      billingDependentLocality: bill.dependentLocality ?? null,
+      billingLocality: bill.locality ?? null,
+      billingAdminArea: bill.adminArea ?? null,
+      billingPostalCode: bill.postalCode ?? null,
+    } : {}),
+    notes: body.notes ?? null,
+    // The manual-order core takes the editor's major units; the conversion is exact for every safe minor amount.
+    discountAmount: body.discountMinor === undefined ? null : fromMinor(body.discountMinor, places),
+    shippingCharge: fromMinor(body.shippingMinor, places),
+    items: body.items.map((item) => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      quantity: item.quantity,
+      ...(item.properties ? { properties: item.properties } : {}),
+      ...(item.unitPriceMinor !== undefined ? { unitPriceMinor: item.unitPriceMinor } : {}),
+    })),
+    shippingMethodId: body.shippingMethodId ?? null,
+    channelSource: body.channelSource ?? (appPrincipal ? appPrincipal.pluginId.replace(/[^a-z0-9]+/gu, "_") : null),
+    salesChannelId: body.salesChannelId ?? null,
+    ...(body.attributes ? { attributes: body.attributes } : {}),
+    channel: appPrincipal ? "app" : "admin",
+  });
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.issues[0]?.message ?? "Check the order.", { issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })) });
+  }
+  const { response } = await placeManualOrder(c, parsed.data);
+  const [order] = await readOrderRepresentations(db, [response.id]);
+  if (!order) throw new NotFoundError("Order not found");
+  return created(c, { order });
 });
 
 async function requireOrderCurrency(c: Context, orderId: string): Promise<string> {
