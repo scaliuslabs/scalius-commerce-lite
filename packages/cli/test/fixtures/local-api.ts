@@ -234,7 +234,23 @@ export async function startLocalApi(): Promise<LocalApi> {
         ...(body ? { body } : {}),
       }));
       response.writeHead(forwarded.status, Object.fromEntries(forwarded.headers.entries()));
-      response.end(Buffer.from(await forwarded.arrayBuffer()));
+      if (!forwarded.body) {
+        response.end();
+        return;
+      }
+      // Stream as the SDK writes it: a subscription stream stays open.
+      const reader = forwarded.body.getReader();
+      response.on("close", () => void reader.cancel().catch(() => undefined));
+      try {
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          response.write(Buffer.from(chunk.value));
+        }
+      } catch {
+        // The client went away.
+      }
+      response.end();
       return;
     }
     json(404, { error: "not found" });

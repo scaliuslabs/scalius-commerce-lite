@@ -1,5 +1,6 @@
 import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { PassThrough } from "node:stream";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -159,6 +160,32 @@ describe("scalius mcp (stdio bridge)", () => {
     const forwarded = api.requests.filter((request) => request.path === "/api/v1/mcp/dashboard" && request.rpcMethod === "tools/list").at(-1)!;
     expect(forwarded.headers.authorization).toBe(`Bearer ${api.token}`);
     expect(forwarded.headers["mcp-protocol-version"]).toBe("2025-11-25");
+  });
+
+  it("relays a 2026-07-28 subscription stream as it arrives and ends it when the harness closes stdin", async () => {
+    const { runtime: setup } = await machine({ plugins: true });
+    const store = new ConfigStore(setup);
+    await store.putProfile("default", api.origin);
+    await store.putCredential("default", { token: api.token, resource: "dashboard", createdAt: "2026-08-13T00:00:00.000Z" });
+    const envelope = { "io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {} };
+    const messages = [
+      { jsonrpc: "2.0", id: "listen-1", method: "subscriptions/listen", params: { notifications: { toolsListChanged: true }, _meta: envelope } },
+      { jsonrpc: "2.0", id: 11, method: "tools/list", params: { _meta: envelope } },
+    ];
+    const stdin = new PassThrough();
+    const runtime = { ...createTestRuntime({ directory: setup.homedir(), env: setup.env, fetch: globalThis.fetch }), stdin } as ReturnType<typeof createTestRuntime>;
+    const serving = serveMcpBridge(runtime, { audience: "dashboard" });
+    for (const message of messages) stdin.write(`${JSON.stringify(message)}\n`);
+    // The harness keeps stdin open while it listens; the ack arrives on the open stream.
+    for (let wait = 0; wait < 200 && !runtime.stdoutText().includes("acknowledged") && !runtime.stdoutText().includes('"listen-1"'); wait += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    stdin.end();
+    await serving;
+    const replies = runtime.stdoutText().trim().split("\n").map((line) => JSON.parse(line) as { id?: unknown; method?: string; result?: Record<string, unknown> });
+    if (process.env.SCALIUS_SHOW_TRANSCRIPT) process.stdout.write(`${JSON.stringify(replies)}\n`);
+    expect(replies.find((reply) => reply.id === 11)?.result?.tools).toHaveLength(5);
+    expect(replies.some((reply) => reply.method === "notifications/subscriptions/acknowledged" || reply.id === "listen-1")).toBe(true);
   });
 
   it("answers every request with a connect hint when no credential exists", async () => {
