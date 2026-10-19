@@ -159,7 +159,10 @@ export interface CardOptions {
   action?: string;
   showRating?: boolean;
   showHover?: boolean;
+  /** The photo shows before the first scroll: load it eagerly. */
   eager?: boolean;
+  /** An eager photo that is not one of the likely largest: eager at normal priority. */
+  normalPriority?: boolean;
   sizes?: string;
 }
 
@@ -185,7 +188,7 @@ export function ProductCard({ product, context, options = {} }: { product: Store
       <div class="noor-card-media">
         <a href={product.url} tabindex="-1" aria-hidden="true" class="noor-card-photo">
           {product.image
-            ? <Image image={product.image} sizes={sizes} loading={options.eager ? "eager" : "lazy"} alt="" class="noor-card-img" />
+            ? <Image image={product.image} sizes={sizes} loading={options.eager ? "eager" : "lazy"} fetchpriority={options.eager && options.normalPriority ? "auto" : undefined} alt="" class="noor-card-img" />
             : <span class="noor-card-blank" />}
           {hover ? <Image image={product.hoverImage} sizes={sizes} alt="" class="noor-card-img is-alt" /> : null}
         </a>
@@ -222,6 +225,9 @@ export function ProductCard({ product, context, options = {} }: { product: Store
   );
 }
 
+/** Cards of an eager first row that load at high priority: a phone's first row. */
+const EAGER_HIGH_PRIORITY_CARDS = 2;
+
 /** Product cards in a grid (wrapping) or a row (scrolling, snapping; arrows on computers). */
 export function Products({ products, context, layout = "grid", columns = 4, card, label }: {
   products: StorefrontProductCard[];
@@ -232,8 +238,15 @@ export function Products({ products, context, layout = "grid", columns = 4, card
   label?: string | null;
 }) {
   const cols = Math.max(2, Math.min(6, Math.round(columns)));
+  // A list that shows before the first scroll loads its first row eagerly; a
+  // phone's first row (two cards, either of which may be the largest photo)
+  // keeps high priority, the rest of the row loads at normal priority.
   const cards = products.map((product, index) => (
-    <li class="noor-products-item" data-slide><ProductCard product={product} context={context} options={{ ...card, eager: card?.eager && index < 2 }} /></li>
+    <li class="noor-products-item" data-slide><ProductCard product={product} context={context} options={{
+      ...card,
+      eager: card?.eager === true && index < cols,
+      normalPriority: index >= EAGER_HIGH_PRIORITY_CARDS,
+    }} /></li>
   ));
   if (layout !== "row") return <ul class="noor-products is-grid" style={{ "--noor-cols": cols }}>{cards}</ul>;
   return (

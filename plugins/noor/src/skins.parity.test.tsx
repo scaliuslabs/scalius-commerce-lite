@@ -37,12 +37,12 @@ function skinSettings(component: string, values: Record<string, unknown>) {
 }
 
 /** Renders a section skin the way the storefront asks for it, under the instance id the section had. */
-function draw(component: string, legacyType: string, settings: Record<string, unknown>, data: Record<string, unknown>): string {
+function draw(component: string, legacyType: string, settings: Record<string, unknown>, data: Record<string, unknown>, aboveFold?: boolean): string {
   const target = manifest.storefront.skins.find((entry) => entry.id === component)!.target;
   const job = {
     id: "job_1", kind: "skin", target, component, instanceId: `app-${legacyType}`,
     settings: skinSettings(component, settings),
-    data: { type: target.slice("section:".length), version: 1, tiles: [], cards: [], settings: data } satisfies StorefrontSectionSkinData,
+    data: { type: target.slice("section:".length), version: 1, tiles: [], cards: [], settings: data, ...(aboveFold === undefined ? {} : { aboveFold }) } satisfies StorefrontSectionSkinData,
   } as StorefrontSkinJob;
   const reply = storefront.render({ abi: STOREFRONT_COMPONENT_ABI, context: fixtureContext(), jobs: [job] });
   const result = reply.results[0]!;
@@ -122,6 +122,24 @@ describe("Noor skins draw what Noor's own sections drew", () => {
 });
 
 describe("Noor skins of the store's sections", () => {
+  it("loads the lead section's first row of photos eagerly, high priority for a phone's first two, the rest lazy", () => {
+    const photos = (html: string) => [...html.matchAll(/<img [^>]*class="noor-card-img"[^>]*>/g)].map(([tag]) => [
+      /loading="(\w+)"/.exec(tag)?.[1], /fetchpriority="(\w+)"/.exec(tag)?.[1] ?? null,
+    ]);
+    const tabs = { title: "New arrivals", limit: 8, tabs: [{ label: "New in", source: list("newest", 6) }, { label: "On sale", source: list("on-sale") }] };
+    const lead = photos(draw("noor-products-tabs", "products", { columns: 4 }, tabs, true));
+    // The first tab: its first row of four eager (two high, two normal), then lazy; the hidden tab stays lazy.
+    expect(lead.slice(0, 6)).toEqual([["eager", "high"], ["eager", "high"], ["eager", null], ["eager", null], ["lazy", null], ["lazy", null]]);
+    expect(lead.slice(6).every(([loading]) => loading === "lazy")).toBe(true);
+    // A grid's first row is its column count; a section below the lead loads lazily.
+    const grid = photos(draw("noor-products-grid", "products", {}, { title: "All", source: list("newest", 6), columns: 3, rows: 2 }, true));
+    expect(grid.map(([loading]) => loading)).toEqual(["eager", "eager", "eager", "lazy", "lazy", "lazy"]);
+    for (const aboveFold of [false, undefined]) {
+      const below = photos(draw("noor-products-rail", "products", { columns: 4 }, { title: "Popular", source: list("popular"), limit: 12 }, aboveFold));
+      expect(below.every(([loading, priority]) => loading === "lazy" && priority === null)).toBe(true);
+    }
+  });
+
   it("draws several hero slides as the slideshow, and nothing for a hero without a photo", () => {
     const slides = [{ ...heroSlide, heading: "One" }, { ...heroSlide, image: image("second"), alt: "second", heading: "Two" }];
     const html = draw("noor-hero", "hero", { height: "m" }, { layout: "full-bleed", slides });

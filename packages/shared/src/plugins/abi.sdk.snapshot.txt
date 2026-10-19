@@ -546,6 +546,7 @@ export interface ImageProps {
     image: StorefrontImage | null | undefined;
     sizes?: string;
     loading?: "lazy" | "eager";
+    fetchpriority?: "high" | "auto" | "low";
     class?: string;
     alt?: string;
 }
@@ -2257,6 +2258,7 @@ export interface StorefrontSectionSkinData<Settings = Record<string, unknown>> {
     settings: Settings;
     tiles: StorefrontTile[];
     cards: StorefrontProductCard[];
+    aboveFold?: boolean;
 }
 export type StorefrontResolvedSettings = Record<string, StorefrontResolvedValue>;
 export type StorefrontResolvedValue = string | number | boolean | string[] | StorefrontImage | StorefrontProductCard | StorefrontProductCard[] | Array<Record<string, string | number | boolean | StorefrontImage | null>> | null;

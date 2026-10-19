@@ -356,6 +356,7 @@ export function coreSectionSkinData<Type extends StorefrontSkinnableSectionType>
   section: StorefrontSectionOf<Type>,
   content: HomepageContent,
   money: { currencySymbol: string; currencyCode: string; ratings: boolean },
+  aboveFold = false,
 ): StorefrontSectionSkinData<CoreSectionSettings<Type>> {
   const shown = storefrontVisibleSection(section);
   const visible: StorefrontSection = shown;
@@ -414,5 +415,6 @@ export function coreSectionSkinData<Type extends StorefrontSkinnableSectionType>
       }))
       : [],
     cards: visible.type === "collections" ? cards(homepageCollectionsFallback(visible, content)) : [],
+    aboveFold,
   };
 }

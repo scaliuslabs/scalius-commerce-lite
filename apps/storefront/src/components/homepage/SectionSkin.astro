@@ -16,15 +16,17 @@ interface Props {
   content: HomepageContent;
   currencySymbol: string;
   currencyCode: string;
+  /** The page's lead section: the skin loads its first row of photos eagerly. */
+  aboveFold?: boolean;
 }
 
-const { section, content, currencySymbol, currencyCode } = Astro.props;
+const { section, content, currencySymbol, currencyCode, aboveFold = false } = Astro.props;
 const skin = section.type === "app" ? null : section.skin ?? null;
 const target = `section:${section.type}` as const;
 const skinnable = skin !== null && storefrontSkinTargetSection(target) !== null;
 const data = async () => {
   const { resolved } = await currentRequestTheme(Astro.locals);
-  return coreSectionSkinData(section as never, content, { currencySymbol, currencyCode, ratings: resolved.facts.hasReviews });
+  return coreSectionSkinData(section as never, content, { currencySymbol, currencyCode, ratings: resolved.facts.hasReviews }, aboveFold);
 };
 ---
 
