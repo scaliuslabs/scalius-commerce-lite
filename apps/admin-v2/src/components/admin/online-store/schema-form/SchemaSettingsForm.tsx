@@ -103,8 +103,10 @@ function useLabels() {
       const key = settingLabelKey(scope, path);
       return key ? t(key) : fallback;
     },
-    help: (path: string) => {
-      const key = settingHelpKey(settingLabelKey(scope, path));
+    /** The help under a setting: its chosen value's own (`<value key>.help`), else the setting's. */
+    help: (path: string, value?: unknown) => {
+      const chosen = typeof value === "string" ? settingHelpKey(settingLabelKey(scope, path, value)) : null;
+      const key = chosen ?? settingHelpKey(settingLabelKey(scope, path));
       return key ? t(key) : undefined;
     },
     value: (path: string, value: string | number) => {
@@ -497,7 +499,8 @@ function SettingControl({ fieldKey, spec, path, dataPath, value, parent, onChang
   const labels = useLabels();
   const id = settingFieldId(form.idPrefix, dataPath);
   const label = labels.label(path, fieldKey);
-  const help = labels.help(path);
+  // A hint about one choice shows only while it is chosen (never beside another position).
+  const help = labels.help(path, value);
   const error = form.errors.get(dataPath);
   const Widget = form.widgets[path] ?? KEY_WIDGETS[fieldKey];
   if (Widget) {

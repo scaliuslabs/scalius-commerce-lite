@@ -167,6 +167,9 @@ function TurnOffCard({ app, onDialog }: { app: AppDetail; onDialog: (name: Dialo
   const t = useMessages(installedAppsMessages);
   const active = app.status === "active";
   const row = "flex flex-col items-start gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between";
+  // An app compiled into this deployment that never ran has nothing to turn off, and
+  // uninstalling it only lists it again as installed: no card to offer either.
+  if (!active && app.runtime === "bundled" && app.activatedAt === null) return null;
   return (
     <Card>
       <CardHeader>

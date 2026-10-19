@@ -720,6 +720,19 @@ describe("App page", () => {
     expect(text()).toContain("Enter a whole number.");
   });
 
+  it("offers no turn off or uninstall for a bundled app that never ran", async () => {
+    await renderApp(detail({ status: "installed", runtime: "bundled", activatedAt: null }), MANAGER, true);
+    expect(hasButton("Uninstall")).toBe(false);
+    expect(hasButton("Deactivate")).toBe(false);
+
+    // Once it has run, uninstalling can delete its data: offered.
+    act(() => root.unmount());
+    queryClient.clear();
+    root = createRoot(host);
+    await renderApp(detail({ status: "disabled", runtime: "bundled", activatedAt: "2026-10-01T09:00:00.000Z" }), MANAGER, true);
+    expect(hasButton("Uninstall")).toBe(true);
+  });
+
   it("uninstalls keeping the data unless the merchant chooses to delete it", async () => {
     sdk.postApiV1AdminAppsByIdUninstall.mockImplementation(() => ok({ id: "acme.loyalty", uninstalled: true, keepData: false, hookError: null }));
     await renderApp(detail({ status: "active", activatedAt: "2026-10-01T09:00:00.000Z" }), MANAGER);
