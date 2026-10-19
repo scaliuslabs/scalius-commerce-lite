@@ -12,6 +12,8 @@ import { readApiFieldIssues } from "./api-field-errors";
 export function getServerFnError(error: unknown, fallback = translate(saveBarMessages, "serverError")): string {
   const kind = classifyAdminError(error);
   if (kind === "server") return translate(saveBarMessages, "serverError");
+  // A lost session says what happened and what to do, never the API's cookie wording.
+  if (error instanceof AdminApiResponseError && error.status === 401) return translate(saveBarMessages, "sessionLost");
   if (error instanceof AdminApiResponseError) {
     // A refusal without words of its own is never told as "our side".
     if (!error.message || error.message.startsWith("API error")) return fallback;

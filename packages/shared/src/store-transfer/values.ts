@@ -77,7 +77,13 @@ export function parseImportBoolean(value: string): boolean | null {
   return null;
 }
 
-export type ParsedNumber = { ok: true; value: number | null } | { ok: false };
+/** `negative`: a number below 0 ("-5"), which no amount, weight or quantity here may be. */
+export type ParsedNumber = { ok: true; value: number | null } | { ok: false; negative?: true };
+
+/** Why an amount column was refused, in the row's words: below 0, or not a number at all. */
+export function importNumberProblem(label: string, raw: string, parsed: ParsedNumber): string {
+  return !parsed.ok && parsed.negative ? `${label} "${raw}" must be 0 or more.` : `${label} "${raw}" is not a number.`;
+}
 
 /**
  * A decimal amount as spreadsheets write it: "1,250.50", "৳ 1,250", "১২৫০",
@@ -86,6 +92,9 @@ export type ParsedNumber = { ok: true; value: number | null } | { ok: false };
 export function parseImportDecimal(value: string): ParsedNumber {
   let text = toLatinDigits(value).trim();
   if (!text) return { ok: true, value: null };
+  // A minus sign (ASCII or U+2212) before an otherwise valid amount ("-5", "-৳ 1,250"): a number, but below 0.
+  const negative = /^[-\u2212]/.test(text);
+  if (negative) text = text.slice(1).trimStart();
   text = text.replace(/^(?:৳|tk\.?|bdt|taka|\$|usd|€|£|rs\.?)\s*/i, "").replace(/\s*(?:৳|tk\.?|bdt|taka)$/i, "");
   text = text.replace(/[\s\u00A0\u202F]/g, "");
   if (/^\d{1,3}(,\d{2})+,\d{3}(\.\d+)?$/.test(text)) {
@@ -100,7 +109,8 @@ export function parseImportDecimal(value: string): ParsedNumber {
   }
   if (!/^\d+(\.\d+)?$/.test(text)) return { ok: false };
   const parsed = Number(text);
-  return Number.isFinite(parsed) ? { ok: true, value: parsed } : { ok: false };
+  if (!Number.isFinite(parsed)) return { ok: false };
+  return negative && parsed > 0 ? { ok: false, negative: true } : { ok: true, value: parsed };
 }
 
 /** A whole number ("12", "১২", "12.0"); fractions and words fail. */

@@ -23,6 +23,7 @@ import {
   type WebhookDeliveryStatus,
   type WebhookSubscription,
 } from "~/lib/api-query-options/webhooks";
+import { DeliveryError } from "./DeliveryError";
 import { deliveryStatusVariant, formatDuration, formatWhen, topicLabel } from "./webhook-format";
 
 /** The statuses a merchant filters by. */
@@ -44,7 +45,7 @@ function DeliveryDetails({ delivery, canRetry, retrying, onRetry }: {
       {delivery.error ? (
         <section className="space-y-1">
           <h3 className="text-body font-medium">{t("error")}</h3>
-          <p className="break-words text-body text-destructive">{delivery.error}</p>
+          <DeliveryError error={delivery.error} tone="destructive" />
         </section>
       ) : null}
       {delivery.responseExcerpt ? (
