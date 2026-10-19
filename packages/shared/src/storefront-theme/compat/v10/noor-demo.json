@@ -1,0 +1,375 @@
+[
+ {
+  "version": 10,
+  "template": "department-mall",
+  "tokens": {
+   "colors": {
+    "background": "#f7f3ec",
+    "foreground": "#1a1714",
+    "card": "#ffffff",
+    "card-foreground": "#1a1714",
+    "popover": "#ffffff",
+    "popover-foreground": "#1a1714",
+    "primary": "#1f3d33",
+    "primary-foreground": "#f7f3ec",
+    "secondary": "#efe8dc",
+    "secondary-foreground": "#1a1714",
+    "muted": "#efe8dc",
+    "muted-foreground": "#625a50",
+    "accent": "#e8d9bf",
+    "accent-foreground": "#3b2c16",
+    "destructive": "#b42318",
+    "destructive-foreground": "#ffffff",
+    "border": "#e3dbce",
+    "input": "#cfc4b3",
+    "ring": "#1f3d33"
+   },
+   "typography": "editorial",
+   "typeScale": "display",
+   "headingCase": "sentence",
+   "density": "comfortable",
+   "radius": "subtle",
+   "buttonShape": "radius",
+   "surface": "flat",
+   "imageRatio": "portrait",
+   "imageFit": "cover",
+   "headerTone": "light",
+   "container": "1360"
+  },
+  "brand": {
+   "logo": null,
+   "logoWidth": 180,
+   "footerLogo": null,
+   "favicon": null
+  },
+  "blocks": {
+   "topBar": {
+    "variant": "utility",
+    "settings": {
+     "text": "Free delivery inside Dhaka on orders over ৳3,000",
+     "link": "/delivery"
+    }
+   },
+   "header": {
+    "variant": "search-first",
+    "settings": {
+     "search": "scoped",
+     "rowTone": "page",
+     "cartTotal": true
+    }
+   },
+   "navigation": {
+    "source": "menu",
+    "maxTopItems": 7,
+    "linkBudget": 150
+   },
+   "desktopNav": {
+    "variant": "mega-panel",
+    "settings": {
+     "promoImages": false
+    }
+   },
+   "mobileNav": {
+    "variant": "accordion-drawer",
+    "settings": {}
+   },
+   "card": {
+    "variant": "standard",
+    "settings": {
+     "facts": "none",
+     "action": "full",
+     "hoverImage": false
+    }
+   },
+   "listing": {
+    "layout": {
+     "variant": "grid",
+     "settings": {}
+    },
+    "searchLayout": "same",
+    "descriptionPlacement": "below",
+    "filters": {
+     "style": "sidebar-dense",
+     "openByDefault": true,
+     "column": 262,
+     "rowPitch": 24,
+     "label": 14,
+     "searchPlacement": "same",
+     "ruled": false
+    },
+    "toolbar": [
+     "breadcrumb",
+     "result-count",
+     "sort",
+     "applied-chips"
+    ],
+    "phoneLayout": "grid",
+    "paging": "numbered",
+    "surface": "muted",
+    "band": "standard",
+    "phoneBar": "standard",
+    "links": "chips",
+    "phoneBanner": true,
+    "maxColumns": null
+   },
+   "product": {
+    "gallery": {
+     "variant": "classic",
+     "settings": {}
+    },
+    "buyBox": {
+     "variant": "classic",
+     "settings": {
+      "cta": "row",
+      "features": true,
+      "details": "below",
+      "emi": false,
+      "whatsapp": false
+     }
+    },
+    "below": [
+     "description",
+     "reviews",
+     "related"
+    ],
+    "sticky": {
+     "phoneTop": "none",
+     "phoneBottom": "buy-bar",
+     "desktop": "none"
+    }
+   },
+   "footer": {
+    "variant": "columns",
+    "settings": {
+     "tone": "page",
+     "tagline": "Handwoven sarees and genuine electronics, delivered across Bangladesh.",
+     "about": "Nakshi Bazar started as one stall in New Market in 2009.\n\nToday we ship to all 64 districts from our warehouse in Tejgaon, with cash on delivery and official warranty.",
+     "copyright": "Nakshi Bazar Limited"
+    }
+   }
+  },
+  "apps": {
+   "skins": {
+    "header": {
+     "app": "scalius.noor/noor-header",
+     "values": {
+      "announcements": []
+     }
+    },
+    "footer": {
+     "app": "scalius.noor/noor-footer",
+     "values": {
+      "payments": [],
+      "tagline": "",
+      "newsletter_heading": "Stay in touch",
+      "newsletter_text": ""
+     }
+    },
+    "product-card": {
+     "app": "scalius.noor/noor-card",
+     "values": {}
+    },
+    "product-main": {
+     "app": "scalius.noor/noor-product",
+     "values": {}
+    }
+   },
+   "template": "scalius.noor/noor"
+  },
+  "pages": {
+   "home": [
+    {
+     "id": "noor-hero",
+     "type": "hero",
+     "version": 1,
+     "settings": {
+      "layout": "full-bleed",
+      "slides": []
+     },
+     "skin": {
+      "app": "scalius.noor/noor-hero",
+      "values": {
+       "height": "l",
+       "scrim": "soft"
+      }
+     }
+    },
+    {
+     "id": "noor-new",
+     "type": "product-tabs",
+     "version": 1,
+     "settings": {
+      "title": "New arrivals",
+      "tabs": [
+       {
+        "label": "New in",
+        "source": {
+         "kind": "newest"
+        }
+       },
+       {
+        "label": "On sale",
+        "source": {
+         "kind": "on-sale"
+        }
+       }
+      ],
+      "limit": 8
+     },
+     "skin": {
+      "app": "scalius.noor/noor-products-tabs",
+      "values": {}
+     }
+    },
+    {
+     "id": "noor-tiles",
+     "type": "category-tiles",
+     "version": 1,
+     "settings": {
+      "style": "photo",
+      "title": "Shop by category",
+      "categoryIds": []
+     },
+     "skin": {
+      "app": "scalius.noor/noor-tiles-categories",
+      "values": {}
+     }
+    },
+    {
+     "id": "noor-feature",
+     "type": "app",
+     "version": 1,
+     "settings": {
+      "app": "scalius.noor/featured-product",
+      "values": {
+       "eyebrow": "Featured product",
+       "points": [],
+       "product": "prod_0"
+      }
+     }
+    },
+    {
+     "id": "noor-best",
+     "type": "product-rail",
+     "version": 1,
+     "settings": {
+      "title": "Popular products",
+      "source": {
+       "kind": "popular"
+      },
+      "limit": 12
+     },
+     "skin": {
+      "app": "scalius.noor/noor-products-rail",
+      "values": {
+       "link_label": "Shop all"
+      }
+     }
+    },
+    {
+     "id": "noor-signup",
+     "type": "newsletter",
+     "version": 1,
+     "settings": {
+      "heading": "Stay in touch",
+      "text": "",
+      "email": "optional",
+      "whatsapp": false
+     },
+     "skin": {
+      "app": "scalius.noor/noor-signup",
+      "values": {}
+     }
+    }
+   ],
+   "homeMode": {
+    "kind": "sections"
+   },
+   "landing": {
+    "eid-campaign": {
+     "title": "Eid campaign",
+     "description": "The Eid saree, ready to order.",
+     "sections": [
+      {
+       "id": "lp-hero",
+       "type": "app",
+       "version": 1,
+       "settings": {
+        "app": "scalius.noor/landing-hero",
+        "values": {
+         "badge": "",
+         "product": "prod_0"
+        }
+       }
+      },
+      {
+       "id": "lp-features",
+       "type": "app",
+       "version": 1,
+       "settings": {
+        "app": "scalius.noor/landing-features",
+        "values": {}
+       }
+      },
+      {
+       "id": "lp-steps",
+       "type": "app",
+       "version": 1,
+       "settings": {
+        "app": "scalius.noor/landing-features",
+        "values": {
+         "heading": "How to order",
+         "style": "steps",
+         "items": [
+          {
+           "title": "Choose your options",
+           "text": "Review the product details and select the options you need."
+          },
+          {
+           "title": "Review your order",
+           "text": "Check your items, quantities and the total before confirming."
+          },
+          {
+           "title": "Place your order",
+           "text": "Follow the available checkout steps to complete your order."
+          }
+         ],
+         "tone": "soft"
+        }
+       }
+      },
+      {
+       "id": "lp-order",
+       "type": "app",
+       "version": 1,
+       "settings": {
+        "app": "scalius.noor/landing-order",
+        "values": {
+         "product": "prod_0"
+        }
+       }
+      }
+     ]
+    }
+   },
+   "templates": {
+    "product": {
+     "sections": [],
+     "main": 0
+    },
+    "collection": {
+     "sections": [],
+     "main": 0
+    },
+    "cart": {
+     "sections": [],
+     "main": 0
+    },
+    "page": {
+     "sections": [],
+     "main": 0
+    }
+   }
+  }
+ }
+]

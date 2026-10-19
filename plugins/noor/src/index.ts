@@ -572,6 +572,8 @@ const templates = [
     id: "noor",
     name: "Noor",
     description: "An editorial store with a hero, product rows, collection tiles and a featured product. Add your own story, reviews and policies from the section library.",
+    // The theme document version these values are written for; the store upgrades them from here.
+    themeVersion: 10,
     theme: {
       tokens,
       blocks: { navigation: { source: "menu", maxTopItems: 7, linkBudget: 150 } },
@@ -606,6 +608,7 @@ const pagePresets = [
     id: "product-campaign",
     name: "Product campaign",
     description: "A single-product page with its price, space for your selling points, checkout guidance and the store's order form when available.",
+    themeVersion: 10,
     sections: [
       section("lp-hero", "landing-hero", { badge: "" }),
       // The existing renderer leaves this section out until the merchant adds items.

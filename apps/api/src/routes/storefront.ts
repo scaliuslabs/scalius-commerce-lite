@@ -40,7 +40,9 @@ import {
   STOREFRONT_PAGE_TEMPLATES,
   homeSectionRequests,
   type HomeAppSectionRequest,
+  type StorefrontThemeText,
 } from "@scalius/shared/storefront-theme";
+import { translatePluginSettingValues } from "@scalius/shared/plugins/settings-schema";
 import { readWorkerVersion } from "@scalius/shared/cache-generation";
 import {
   MAX_STOREFRONT_BATCH_PARTS,
@@ -458,7 +460,7 @@ const homepageRoute = createRoute({
  * from one read of the apps.
  */
 function homeAppRenderer(c: Context<{ Bindings: Env }>) {
-  return async (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null; cardFields: string[]; loadObjects: StorefrontObjectLoader; resource?: BindingResource }) => {
+  return async (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null; cardFields: string[]; loadObjects: StorefrontObjectLoader; resource?: BindingResource; text?: StorefrontThemeText }) => {
     const db = c.get("db");
     // The active apps among these (`plg:<id>` each: an app that starts, stops or drops a type changes the answer).
     const installations = activePluginInstallationsFromRows(await selectActivePluginInstallations(db, [...new Set(requests.map((request) => request.pluginId))]));
@@ -469,7 +471,9 @@ function homeAppRenderer(c: Context<{ Bindings: Env }>) {
       if (!installation || !section) continue;
       // Drawn at the edge only while the approved grant covers storefront code.
       if (installation.grant?.storefrontCode === true) {
-        components.push({ sectionId: request.sectionId, pluginId: request.pluginId, type: request.type, schema: section.settings, values: request.values, reads: section.reads, bindings: request.bindings, resource: page.resource });
+        // The section's words in the page's language (its text settings, as its schema names them).
+        const values = page.text ? translatePluginSettingValues(section.settings, request.values, page.text) : request.values;
+        components.push({ sectionId: request.sectionId, pluginId: request.pluginId, type: request.type, schema: section.settings, values, reads: section.reads, bindings: request.bindings, resource: page.resource });
       }
     }
     const data = await readAppComponentData(db, components, page.pricing, page.cardFields, page.loadObjects);

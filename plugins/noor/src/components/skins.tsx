@@ -143,14 +143,14 @@ export function ProductTabsSkin({ settings, data, context, instanceId }: Section
   const { title, limit = 8 } = data.settings;
   return (
     <Showcase settings={settings} heading={title} context={context} instanceId={instanceId} layout={settings.layout} eager={data.aboveFold === true}
-      link={listLink(settings.link, settings.link_label, tabs[0]?.source)}
-      tabs={tabs.map((tab) => ({ label: tab.label, products: cardsOf(tab.source, limit) }))} />
+      link={listLink(settings.link, settings.link_label, tabs[0]?.products)}
+      tabs={tabs.map((tab) => ({ label: tab.label, products: cardsOf(tab.products, limit) }))} />
   );
 }
 
 /** A grid: the core grid's columns and rows. */
 export function ProductGridSkin({ settings, data, context, instanceId }: SectionSkinProps<"product-grid", ProductsSkinSettings>) {
-  const { title, source, columns = 4, rows = 2 } = data.settings;
+  const { title, products: source, columns = 4, rows = 2 } = data.settings;
   return (
     <ProductShowcase objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow,
@@ -170,7 +170,7 @@ export function ProductGridSkin({ settings, data, context, instanceId }: Section
 
 /** A scrolling row. */
 export function ProductRailSkin({ settings, data, context, instanceId }: SectionSkinProps<"product-rail", ProductsSkinSettings>) {
-  const { title, source, limit = 12 } = data.settings;
+  const { title, products: source, limit = 12 } = data.settings;
   return (
     <Showcase settings={settings} heading={title} context={context} instanceId={instanceId} layout="row" eager={data.aboveFold === true}
       link={listLink(settings.link, settings.link_label, source)}
@@ -212,7 +212,7 @@ function Tiles({ settings, heading, tiles, context, instanceId }: {
 export function CategoryTilesSkin({ settings, data, context, instanceId }: SectionSkinProps<"category-tiles", TilesSkinSettings>) {
   return (
     <Tiles settings={settings} heading={data.settings.title} context={context} instanceId={instanceId}
-      tiles={listOf(data.settings.categoryIds).map((tile) => ({ image: tile.image, title: tile.title, link: tile.url }))} />
+      tiles={listOf(data.settings.categories).map((tile) => ({ image: tile.image, title: tile.title, link: tile.url }))} />
   );
 }
 
@@ -220,7 +220,7 @@ export function CategoryTilesSkin({ settings, data, context, instanceId }: Secti
 export function ShopByTilesSkin({ settings, data, context, instanceId }: SectionSkinProps<"shop-by", TilesSkinSettings>) {
   return (
     <Tiles settings={settings} heading={data.settings.title} context={context} instanceId={instanceId}
-      tiles={listOf(data.settings.cards).map((card) => ({ image: card.mediaId, title: card.title, subtitle: card.subtitle, link: card.href }))} />
+      tiles={listOf(data.settings.cards).map((card) => ({ image: card.image, title: card.title, subtitle: card.subtitle, link: card.href }))} />
   );
 }
 
@@ -232,7 +232,7 @@ interface PromoSkinSettings extends Shell {
 export function PromoTilesSkin({ settings, data, context, instanceId }: SectionSkinProps<"banner-mosaic", PromoSkinSettings>) {
   return (
     <PromoTiles objects={{}} instanceId={instanceId} context={context} settings={{
-      items: listOf(data.settings.tiles).slice(0, 3).map((tile) => ({ image: tile.mediaId, eyebrow: null, heading: text(tile.alt), label: null, link: tile.href })),
+      items: listOf(data.settings.tiles).slice(0, 3).map((tile) => ({ image: tile.image, eyebrow: null, heading: text(tile.alt), label: null, link: tile.href })),
       height: settings.height,
       tone: settings.tone,
       spacing: settings.spacing,
@@ -251,13 +251,13 @@ interface LookSkinSettings extends Shell {
 
 /** A lookbook's photo with Noor's numbered points, beside its products. */
 export function LookSkin({ settings, data, context, instanceId }: SectionSkinProps<"lookbook", LookSkinSettings>) {
-  const { title, mediaId, source } = data.settings;
+  const { title, image, products: source } = data.settings;
   return (
     <ShopTheLook objects={{}} instanceId={instanceId} context={context} settings={{
       eyebrow: settings.eyebrow,
       heading: none(title),
       text: settings.text,
-      image: mediaId,
+      image,
       hotspots: listOf(settings.hotspots),
       products: cardsOf(source, 4),
       image_side: settings.image_side,
@@ -278,13 +278,13 @@ interface SaleSkinSettings extends Shell {
 
 /** A deal block as a banner counting down to its promotion's end, then its products in a row. */
 export function SaleSkin({ settings, data, context, instanceId }: SectionSkinProps<"deal-block", SaleSkinSettings>) {
-  const { title, source, promotionId } = data.settings;
-  const end = promotionId ? Date.parse(promotionId.endsAt) : Number.NaN;
+  const { title, products: source, promotion } = data.settings;
+  const end = promotion ? Date.parse(promotion.endsAt) : Number.NaN;
   const products = listOf(source?.cards);
   return (
     <>
       <PromoCountdown objects={{}} instanceId={instanceId} context={context} settings={{
-        image: data.settings.mediaId ?? null,
+        image: data.settings.image ?? null,
         eyebrow: settings.eyebrow,
         heading: none(title),
         text: settings.text,
@@ -368,7 +368,7 @@ export function StorySkin({ settings, data, context, instanceId }: SectionSkinPr
   if (section.layout === "image-with-text") {
     return (
       <Story objects={{}} instanceId={instanceId} context={context} settings={{
-        eyebrow: settings.eyebrow, heading: none(section.heading), text: section.body, image: section.mediaId, image_side: section.imageSide,
+        eyebrow: settings.eyebrow, heading: none(section.heading), text: section.body, image: section.image, image_side: section.imageSide,
         points: listOf(settings.points), stats: listOf(settings.stats),
         cta_label: settings.cta_label, cta_link: settings.cta_link, tone: settings.tone, spacing: settings.spacing,
       }} />
@@ -425,7 +425,7 @@ interface SignupSkinSettings extends Shell {
 export function SignupSkin({ settings, data, context, instanceId }: SectionSkinProps<"newsletter", SignupSkinSettings>) {
   return (
     <SignupCall objects={{}} instanceId={instanceId} context={context} settings={{
-      image: data.settings.mediaId ?? null,
+      image: data.settings.image ?? null,
       eyebrow: settings.eyebrow,
       heading: none(data.settings.heading),
       text: none(data.settings.text),
@@ -440,7 +440,7 @@ export function SignupSkin({ settings, data, context, instanceId }: SectionSkinP
 /** Specifications use the same resolved custom-field values as the core section. */
 export function SpecificationsSkin({ settings, data }: SectionSkinProps<"specifications", Shell>) {
   const rows = listOf(data.settings.rows).filter((row) => text(row.label) && text(row.value));
-  const fields = data.settings.objectField ?? [];
+  const fields = data.settings.objectFields ?? [];
   if (!rows.length && !fields.length) return null;
   return <Section name="specifications" tone={settings.tone} space={settings.spacing}>
     {text(data.settings.heading) ? <h2 class="noor-h2">{data.settings.heading}</h2> : null}

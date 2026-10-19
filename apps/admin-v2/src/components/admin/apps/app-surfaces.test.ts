@@ -93,6 +93,7 @@ function detailOf(manifest: PluginManifest, status: AppDetail["status"] = "activ
       sections: manifest.storefront.sections.map(({ type, name }) => ({ type, name })),
       productBlocks: manifest.storefront.productBlocks.map(({ type, name, placement }) => ({ type, name, placement })),
       scripts: [],
+      themeProblems: [],
     },
   } as unknown as AppDetail;
 }

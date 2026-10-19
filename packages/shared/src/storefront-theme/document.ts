@@ -29,6 +29,7 @@ import { storefrontProductSourceSchema, storefrontSectionListSchemaOf } from "./
 import { storefrontSettingBindingsSchema } from "./bindings";
 import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefrontPageTemplateSchemaOf, storefrontPageTemplatesSchemaOf } from "./pages";
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
+import { storefrontThemeTranslationsSchema } from "./text";
 
 export const STOREFRONT_THEME_DOCUMENT_VERSION = 10 as const;
 
@@ -151,6 +152,12 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
       landing: storefrontLandingPagesSchemaOf(landingPage),
       templates: storefrontPageTemplatesSchemaOf(pageTemplate),
     }).strict(),
+    /**
+     * The words of sections, skins, the announcement, the footer and landing
+     * pages in the store's other languages, keyed by the source words
+     * (text.ts). Absent: the theme shows its words in every language.
+     */
+    translations: storefrontThemeTranslationsSchema.optional(),
   }).strict().superRefine((value, context) => {
     for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(value)) {
       context.addIssue({
@@ -175,26 +182,6 @@ export type StorefrontThemePages = StorefrontThemeDocument["pages"];
 /** JSON Schema of the document (structure only; contrast lives in the Zod schema). */
 export function storefrontThemeDocumentJsonSchema(): Record<string, unknown> {
   return z.toJSONSchema(storefrontThemeDocumentSchema, { unrepresentable: "any" }) as Record<string, unknown>;
-}
-
-/**
- * Parses a stored document strictly. Returns null for invalid documents (any
- * other version included); callers decide what that means (the dashboard
- * fails closed, the storefront renders the default theme).
- */
-export function parseStoredStorefrontThemeDocument(value: string | null | undefined): StorefrontThemeDocument | null {
-  if (!value) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    return null;
-  }
-  try {
-    return storefrontThemeDocumentSchema.parse(parsed);
-  } catch {
-    return null;
-  }
 }
 
 /** CSS custom properties for a document: only constants and validated hex colours. */

@@ -69,13 +69,17 @@ export type StorefrontSkinDeclaration = z.infer<typeof storefrontSkinDeclaration
  * A ready-made look (`storefront.templates`): theme values the template
  * library applies like a built-in template, keeping the merchant's content.
  * `theme` holds any of the document's `tokens`, `blocks` and `apps` and the
- * homepage `sections`; the API checks it against the live document schema
- * when it lists the template, so a template that no longer fits is hidden.
+ * homepage `sections`, as theme document version `themeVersion` has them.
+ * The API upgrades it to the store's version when it lists the template; one
+ * that still does not fit is left out of the library and reported on the
+ * app's page.
  */
 export const storefrontTemplateDeclarationSchema = z.object({
   id: name,
   name: title,
   description: description.optional(),
+  /** The theme document version `theme` was written for (absent: 10, `STOREFRONT_DECLARATION_THEME_VERSION`). */
+  themeVersion: z.number().int().positive().optional(),
   theme: z.record(z.string(), z.unknown()).refine((value) => JSON.stringify(value).length <= 64 * 1024, "A template's theme is at most 64 KiB."),
 }).strict();
 export type StorefrontTemplateDeclaration = z.infer<typeof storefrontTemplateDeclarationSchema>;
@@ -85,13 +89,15 @@ export type StorefrontTemplateDeclaration = z.infer<typeof storefrontTemplateDec
  * offers when the merchant makes a new landing page (`/pages/<slug>`), for
  * a campaign, a launch or one product's single-page order. Its `product`
  * settings take the product the merchant picks in the same step. The API
- * checks `sections` against the live section schema when it lists the
- * preset, so a preset that no longer fits is hidden.
+ * upgrades `sections` from `themeVersion` when it lists the preset; one that
+ * still does not fit is left out and reported on the app's page.
  */
 export const storefrontPagePresetDeclarationSchema = z.object({
   id: name,
   name: title,
   description: description.optional(),
+  /** The theme document version `sections` were written for (absent: 10, `STOREFRONT_DECLARATION_THEME_VERSION`). */
+  themeVersion: z.number().int().positive().optional(),
   sections: z.array(z.record(z.string(), z.unknown())).min(1).max(24)
     .refine((value) => JSON.stringify(value).length <= 64 * 1024, "A page preset's sections are at most 64 KiB."),
 }).strict();
@@ -236,6 +242,21 @@ export interface StorefrontExtension {
   islands: string[];
   stylesheet: boolean;
   connect: string[];
+}
+
+/**
+ * The settings schema of each active app surface (a component section, a
+ * skin, a product block) by its `<plugin id>/<id>` theme key: what the theme's
+ * translated text reads to know which values are words (`text`, `textarea`).
+ */
+export function storefrontExtensionSettingSchemas(extensions: readonly StorefrontExtension[]): (kind: "section" | "skin" | "block", key: string) => PluginSettingsSchema | null {
+  const schemas = new Map<string, PluginSettingsSchema>();
+  for (const extension of extensions) {
+    for (const [type, schema] of Object.entries(extension.sectionSettings)) schemas.set(`section:${extension.pluginId}/${type}`, schema);
+    for (const skin of extension.skins) schemas.set(`skin:${extension.pluginId}/${skin.id}`, skin.settings);
+    for (const block of extension.blocks) schemas.set(`block:${extension.pluginId}/${block.type}`, block.settings);
+  }
+  return (kind, key) => schemas.get(`${kind}:${key}`) ?? null;
 }
 
 const RELEASE = /^[0-9a-f]{64}$/;

@@ -1,7 +1,7 @@
 import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
-import { readStorefrontAppTemplateTheme, readStorefrontPagePresetSections, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
+import { STOREFRONT_DECLARATION_THEME_VERSION, readStorefrontAppTemplateTheme, readStorefrontPagePresetSections, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import {
   THEME_VERSION_CHANGES_MAX,
   storefrontLandingSlugSchema,
@@ -295,7 +295,7 @@ function themeAppSurfaces(installations: PluginInstallations) {
           settings: skin.settings.map(appSettingField),
         })) : [],
         templates: code ? storefront.templates.flatMap((template) => {
-          const theme = readStorefrontAppTemplateTheme(template.theme);
+          const theme = readStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
           return theme ? [{
             key: pluginSurfaceKey(installation.pluginId, template.id),
             id: template.id,
@@ -305,7 +305,7 @@ function themeAppSurfaces(installations: PluginInstallations) {
           }] : [];
         }) : [],
         pagePresets: code ? storefront.pagePresets.flatMap((preset) => {
-          const sections = readStorefrontPagePresetSections(preset.sections);
+          const sections = readStorefrontPagePresetSections(preset.sections, preset.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
           return sections ? [{
             key: pluginSurfaceKey(installation.pluginId, preset.id),
             id: preset.id,

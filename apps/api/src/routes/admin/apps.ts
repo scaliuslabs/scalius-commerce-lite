@@ -81,6 +81,7 @@ import { syncBundledPlugin, syncBundledPlugins } from "../../plugins/bundled-syn
 
 import { isPluginSandboxAvailable } from "../../plugins/loaders/sandbox-availability";
 import { planLimits } from "@scalius/shared/plan-limits";
+import { storefrontAppThemeProblems } from "@scalius/shared/storefront-theme/app-templates";
 import { registerAppLifecycleRoutes } from "./apps-lifecycle";
 
 // The plugin host with its lifecycle hooks and the operation catalogue (risk
@@ -305,6 +306,12 @@ const appDetailSchema = appSummarySchema.extend({
     sections: z.array(z.object({ type: z.string(), name: z.string() })),
     productBlocks: z.array(z.object({ type: z.string(), name: z.string(), placement: z.enum(["buy-box", "below"]) })),
     scripts: z.array(z.object({ src: z.string(), placement: z.string(), pages: z.array(z.string()) })),
+    themeProblems: z.array(z.object({
+      kind: z.enum(["template", "page-preset"]),
+      id: z.string(),
+      name: z.string(),
+      problem: z.string(),
+    })).openapi({ description: "Templates and page presets the store's theme cannot use after upgrading them from the version they were written for; the theme editor leaves them out." }),
   }),
   admin: z.object({
     pages: z.array(appPageSchema),
@@ -548,6 +555,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
       sections: manifest.storefront.sections.map((section) => ({ type: section.type, name: section.name })),
       productBlocks: manifest.storefront.productBlocks.map((block) => ({ type: block.type, name: block.name, placement: block.placement })),
       scripts: manifest.storefront.scripts.map((script) => ({ src: script.src, placement: script.placement, pages: [...script.pages] })),
+      themeProblems: storefrontAppThemeProblems(manifest.storefront),
     },
     admin: {
       pages: manifest.admin.pages.map(pageEntry),

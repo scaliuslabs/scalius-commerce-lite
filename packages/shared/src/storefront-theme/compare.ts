@@ -9,7 +9,7 @@ import { STOREFRONT_PAGE_TEMPLATES } from "./pages";
 /** Theme-wide settings, grouped the way the editor shows them. */
 export const THEME_CHANGE_AREAS = [
   "template", "colors", "typography", "style", "brand", "header", "navigation", "footer",
-  "productCard", "listing", "productPage", "homeMode",
+  "productCard", "listing", "productPage", "homeMode", "translations",
 ] as const;
 export type ThemeChangeArea = (typeof THEME_CHANGE_AREAS)[number];
 
@@ -118,6 +118,7 @@ export function compareThemeDocuments(before: StorefrontThemeDocument, after: St
     ...areas(before.apps?.skins ?? {}, after.apps?.skins ?? {}, SKIN_AREA, "template"),
     ...(before.apps?.template === after.apps?.template ? [] : ["template" as const]),
     ...(equal(before.pages.homeMode, after.pages.homeMode) ? [] : ["homeMode" as const]),
+    ...(equal(before.translations ?? [], after.translations ?? []) ? [] : ["translations" as const]),
   ]);
   for (const area of THEME_CHANGE_AREAS) if (changed.has(area)) changes.push({ kind: "settings-changed", area });
   return changes;

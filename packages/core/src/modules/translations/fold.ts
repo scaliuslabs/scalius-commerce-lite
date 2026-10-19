@@ -26,6 +26,7 @@ import {
   resolveTranslatedRecord,
   translationChain,
   type TranslatableResourceType,
+  type TranslationContext,
   type TranslationRow,
 } from "@scalius/shared/translations";
 import { isLanguageSubfolder, isMarketSubfolder } from "@scalius/shared/markets";
@@ -232,6 +233,43 @@ export function applyTranslation<T extends object>(
     next = { ...next, slug: localizedSlug };
   }
   return next;
+}
+
+/**
+ * A presence's translation context as one JSON text (`{"l","m","d"}`), for a
+ * resource that carries its own translations (the theme document's
+ * `translations`) and is read in a statement the page already runs: the
+ * presence's locale while it is served (a language subfolder only while its
+ * language is published), its market, and the store default locale. Literal
+ * presence only, so it binds no parameter. Declares `tr:locales`.
+ */
+export function translationContextSql(scope: TranslationScope): SQL<string | null> {
+  deps.translationLocales();
+  const language = isLanguageSubfolder(scope.presence);
+  const locale = language
+    ? sql`(SELECT tr_language.locale FROM store_languages AS tr_language WHERE tr_language.locale = ${localeLiteral(scope)} AND tr_language.published = 1)`
+    : sql`(SELECT tr_presence.locale FROM market_presences AS tr_presence WHERE tr_presence.kind = 'subfolder' AND tr_presence.value = ${presenceLiteral(scope)})`;
+  const market = language
+    ? sql.raw(`'${BACKUP_MARKET_ID}'`)
+    : sql`(SELECT tr_market.market_id FROM market_presences AS tr_market WHERE tr_market.kind = 'subfolder' AND tr_market.value = ${presenceLiteral(scope)})`;
+  return sql<string | null>`json_object('l', ${locale}, 'm', ${market}, 'd',
+    (SELECT tr_default.locale FROM market_presences AS tr_default WHERE tr_default.kind = 'subfolder' AND tr_default.value = ''))`;
+}
+
+/** A `translationContextSql` value as the chain's context; null when the presence is not served in a language. */
+export function parseTranslationContext(value: unknown): TranslationContext | null {
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const { l, m, d } = parsed as { l?: unknown; m?: unknown; d?: unknown };
+  if (typeof l !== "string" || l === "") return null;
+  return { locale: l, marketId: typeof m === "string" && m !== "" ? m : null, defaultLocale: typeof d === "string" && d !== "" ? d : l };
 }
 
 /** Parses a `localizedSlugsSql` value into locale → handle. */

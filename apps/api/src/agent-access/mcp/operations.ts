@@ -227,8 +227,11 @@ function describeOperationFull(operation: AgentOperationManifestEntry) {
     [operation.inputSchema, operation.outputSchema],
     AGENT_COMPONENT_SCHEMAS,
   );
+  // The exact schemas replace the compact input contract: the same facts,
+  // stated once, so a large write (the whole theme document) fits one result.
+  const { inputContract: _inputContract, ...compact } = describeOperationCompact(operation);
   return {
-    ...describeOperationCompact(operation),
+    ...compact,
     inputSchema: operation.inputSchema,
     outputSchema: operation.outputSchema,
     ...(Object.keys(schemas).length > 0 ? { components: { schemas } } : {}),

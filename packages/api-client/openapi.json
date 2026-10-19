@@ -3350,6 +3350,37 @@
               "templates"
             ],
             "additionalProperties": false
+          },
+          "translations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "locale": {
+                  "type": "string",
+                  "pattern": "^[a-z]{2}$"
+                },
+                "marketId": {
+                  "type": "string",
+                  "nullable": true,
+                  "pattern": "^[A-Za-z0-9_-]{1,64}$"
+                },
+                "fields": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string",
+                    "maxLength": 8000
+                  }
+                }
+              },
+              "required": [
+                "locale",
+                "marketId",
+                "fields"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 40
           }
         },
         "required": [
@@ -12235,7 +12266,8 @@
                         "productCard",
                         "listing",
                         "productPage",
-                        "homeMode"
+                        "homeMode",
+                        "translations"
                       ]
                     }
                   },
@@ -14915,6 +14947,37 @@
                         "pages"
                       ]
                     }
+                  },
+                  "themeProblems": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "template",
+                            "page-preset"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "problem": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id",
+                        "name",
+                        "problem"
+                      ]
+                    },
+                    "description": "Templates and page presets the store's theme cannot use after upgrading them from the version they were written for; the theme editor leaves them out."
                   }
                 },
                 "required": [
@@ -14922,7 +14985,8 @@
                   "head",
                   "sections",
                   "productBlocks",
-                  "scripts"
+                  "scripts",
+                  "themeProblems"
                 ]
               },
               "admin": {

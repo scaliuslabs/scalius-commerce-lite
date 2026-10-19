@@ -106,6 +106,8 @@ describe("MCP operation descriptions", () => {
     const described = describeOperation(operation, true);
     expect(described.inputSchema).toEqual(operation.inputSchema);
     expect(described.outputSchema).toEqual(operation.outputSchema);
+    // The exact input schema replaces the compact contract rather than repeating it.
+    expect(described).not.toHaveProperty("inputContract");
   });
 
   it("keeps live settings and upload contracts actionable without full schemas", () => {

@@ -57,7 +57,10 @@ import {
   HOME_MAX_MEDIA,
   homeSectionRequests,
   parseStoredStorefrontThemeDocument,
+  storefrontThemeTextOf,
+  translateStorefrontTheme,
   type HomeAppSectionRequest,
+  type StorefrontThemeText,
   type HomeSectionRequests,
   type StorefrontPageTemplate,
 } from "@scalius/shared/storefront-theme";
@@ -83,15 +86,18 @@ import {
 } from "../plugins";
 import type { PluginInstallationRow } from "@scalius/database/schema";
 import { PLUGIN_RENDER_RETRY_SECONDS } from "@scalius/shared/plugins";
+import { storefrontExtensionSettingSchemas } from "@scalius/shared/plugins/storefront-components";
 import { activePluginStorefrontServices } from "./app-render";
 import { deps } from "../../cache-deps";
 import {
     NAME_FIELDS,
     localizedSlugSql,
+    parseTranslationContext,
     pickCheckoutCopy,
     selectCheckoutCopyRows,
     translateRows,
     translationColumns,
+    translationContextSql,
     translationScope,
     translationScopeOf,
     type CheckoutCopyRow,
@@ -233,7 +239,14 @@ export async function getHomepageData(
      * second batch, so a homepage with app sections adds no wave before its
      * apps' own reads. Without it, app sections draw nothing.
      */
-    renderApps?: (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null; cardFields: string[]; loadObjects: StorefrontObjectLoader; resource?: BindingResource }) => Promise<HomepageAppSection[]>;
+    renderApps?: (requests: HomeAppSectionRequest[], page: {
+      pricing: MarketPricing | null;
+      cardFields: string[];
+      loadObjects: StorefrontObjectLoader;
+      resource?: BindingResource;
+      /** The theme's words in the page's language: translate the sections' text settings with it (none at the root). */
+      text?: StorefrontThemeText;
+    }) => Promise<HomepageAppSection[]>;
     resource?: BindingResourceSelector;
     /** A presence page's market pricing (MARKETS-DESIGN D5); null at the root. */
     pricing?: MarketPricing | null;
@@ -269,9 +282,14 @@ export async function getHomepageData(
           : requestedCollectionIds.length ? inArray(collections.id, requestedCollectionIds) : sql`false`))
       .orderBy(collections.sortOrder),
 
-    // 2. The published theme: its sections and home mode name the reads.
+    // 2. The published theme: its sections and home mode name the reads. A
+    // presence folds in which of the theme's translations apply (none at the root).
     db
-      .select({ value: themeSettings.colors, ...(options.resource ? { bindingResource: resourceProductFieldsSql(options.resource) } : {}) })
+      .select({
+        value: themeSettings.colors,
+        ...(options.resource ? { bindingResource: resourceProductFieldsSql(options.resource) } : {}),
+        ...(translation && !options.requests ? { textContext: translationContextSql(translation) } : {}),
+      })
       .from(themeSettings)
       .where(eq(themeSettings.id, "default"))
       .limit(1),
@@ -288,9 +306,15 @@ export async function getHomepageData(
     homepageTitle: seo?.value.homepageTitle.trim() || null,
     homepageMetaDescription: seo?.value.homepageMetaDescription.trim() || null,
   };
-  // An unreadable theme renders the default whole (as the layout read does).
-  const theme = parseStoredStorefrontThemeDocument((themeResults as { value?: string }[])[0]?.value)
-    ?? DEFAULT_STOREFRONT_THEME;
+  // An unreadable theme renders the default whole (as the layout read does),
+  // in the page's words (a landing page's title and its sections' text).
+  const themeRow = (themeResults as Array<{ value?: string; textContext?: unknown }>)[0];
+  const storedTheme = parseStoredStorefrontThemeDocument(themeRow?.value) ?? DEFAULT_STOREFRONT_THEME;
+  // A preview names its own sections; their words stay the draft's.
+  const text = translation && !options.requests
+    ? storefrontThemeTextOf(storedTheme, parseTranslationContext(themeRow?.textContext))
+    : null;
+  const theme = translateStorefrontTheme(storedTheme, text);
   const landing = options.pageSlug ? theme.pages.landing[options.pageSlug] ?? null : null;
   const pageSections = options.template ? theme.pages.templates[options.template].sections : landing?.sections;
   const requests = options.requests ?? (options.pageSlug || options.template
@@ -310,7 +334,7 @@ export async function getHomepageData(
   const loadObjects: StorefrontObjectLoader = (reads) => { declareAppObjects(reads); return appObjectData; };
   let previewAppFailed = false;
   const appSections: Promise<HomepageAppSection[]> = (requests.apps ?? []).length > 0 && options.renderApps
-    ? options.renderApps(requests.apps ?? [], { pricing: options.pricing ?? null, cardFields: theme.blocks.card.fields ?? [], loadObjects, resource }).then((sections) => { declareAppObjects([]); return sections; }).catch((error: unknown) => {
+    ? options.renderApps(requests.apps ?? [], { pricing: options.pricing ?? null, cardFields: theme.blocks.card.fields ?? [], loadObjects, resource, ...(text ? { text } : {}) }).then((sections) => { declareAppObjects([]); return sections; }).catch((error: unknown) => {
       declareAppObjects([]);
       // A preview must retain its previous DOM and report failure, not erase
       // an app section because a required dependency temporarily failed.
@@ -575,9 +599,9 @@ export async function getLayoutData(
     // 1. Settings documents the layout projects
     selectSettingsDocuments(db, LAYOUT_DOCUMENTS),
 
-    // 2. Published theme
+    // 2. Published theme (and, at a presence, which of its translations apply)
     db
-      .select({ value: themeSettings.colors })
+      .select({ value: themeSettings.colors, ...(translation ? { textContext: translationContextSql(translation) } : {}) })
       .from(themeSettings)
       .where(eq(themeSettings.id, "default"))
       .limit(1),
@@ -723,13 +747,18 @@ export async function getLayoutData(
       priceIncrementMinor: storeCurrencyOf(currency.value, backupPriceIncrementMinor).priceIncrementMinor,
     };
   // The storefront renders a stored theme whole or the default whole, never a mix.
-  const themeRow = (themeResults as { value?: string }[])[0];
+  const themeRow = (themeResults as Array<{ value?: string; textContext?: unknown }>)[0];
   const publishedTheme = parseStoredStorefrontThemeDocument(themeRow?.value);
   if (themeRow && !publishedTheme) {
     console.warn("[Storefront] Published theme is unreadable; rendering the default theme.");
   }
   const storefrontTheme = publishedTheme ?? DEFAULT_STOREFRONT_THEME;
   const brand = brandMedia.resolve(brandMediaRows, themeRow?.value, storefrontTheme.brand);
+  // Apps with storefront components (sections, slots, islands, stylesheet).
+  const appExtensions = activePluginStorefrontExtensions(activeApps.values());
+  // The theme in the page's words: its sections', skins' and bars' text in a
+  // presence's language, with the apps' own schemas for their text settings.
+  const themeText = translation ? storefrontThemeTextOf(storefrontTheme, parseTranslationContext(themeRow?.textContext)) : null;
   const storeShape = storeShapeFromCounts(
     (storeShapeResults as StoreShapeCountsRow[])[0],
     navigationData,
@@ -764,7 +793,7 @@ export async function getLayoutData(
     footerMenus,
     currency: currencyData,
     markets: marketMatrix,
-    theme: storefrontTheme,
+    theme: translateStorefrontTheme(storefrontTheme, themeText, storefrontExtensionSettingSchemas(appExtensions)),
     /** The published theme's brand images; a preview resolves its draft's own. */
     brand,
     storeShape,
@@ -781,8 +810,7 @@ export async function getLayoutData(
     policies: publicPolicies,
     // Active apps' approved scripts: the storefront loads them on their pages and adds their hosts to the CSP.
     appScripts: activePluginStorefrontScripts(activeApps.values()),
-    // Apps with storefront components (sections, slots, islands, stylesheet).
-    appExtensions: activePluginStorefrontExtensions(activeApps.values()),
+    appExtensions,
     // The page groups where an active app draws a checkout or account block:
     // only those pages read their blocks part (none: no read at all).
     // Buyer services apps provide (search, address autocomplete, sign-in): the pages call them only when named.

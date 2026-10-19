@@ -937,8 +937,11 @@ settings permissions; a translation needs the view or edit permission of
 its resource type. The SDK is regenerated.
 
 **Left for later.** Search matches and sorts by source text. Attribute
-names and values, theme text, the SEO document, email, SMS and invoice
-templates, and agent product sections show source text. Per-menu navigation
+names and values, the SEO document, email, SMS and invoice
+templates, and agent product sections show source text. Theme text
+carries its own translations in the theme document (`translations`,
+resolved by the same chain at presences; the theme editor does not edit
+them yet: `packages/shared/src/storefront-theme.md`, Compatibility). Per-menu navigation
 reads and footer placement labels are not translated. RTL (step 6
 locale basics).
 

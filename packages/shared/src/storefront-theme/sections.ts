@@ -96,27 +96,44 @@ export const storefrontProductSourceSchema = z.discriminatedUnion("kind", [
 ]);
 export type StorefrontProductSource = z.infer<typeof storefrontProductSourceSchema>;
 
+/**
+ * One step of a section type's upgrade chain: its settings at version `n`
+ * (JSON as stored) in, its settings at `n + 1` out. Pure; it throws when the
+ * settings cannot be upgraded (the document then reads as unreadable).
+ */
+export type StorefrontSectionSettingsUpgrade = (settings: unknown) => unknown;
+
 function storefrontSectionRegistryOf(
   skin: typeof storefrontSkinRefSchema,
   bindings: typeof storefrontSettingBindingsSchema,
   productSource: typeof storefrontProductSourceSchema,
 ) {
   const blockHidden = { hidden: z.boolean().optional(), bindings: bindings.optional() };
-  function section<const Type extends string, Settings extends z.ZodType>(spec: {
+  /**
+   * One section type. `version` is its settings' version (1 unless given);
+   * `upgrades[n]` turns its settings at version `n` into version `n + 1`
+   * (upgrade.ts runs them on read), so stored sections of an older version
+   * still read. Bump the version only with the step from the one before.
+   */
+  function section<const Type extends string, Settings extends z.ZodType, const Version extends number = 1>(spec: {
     type: Type;
+    version?: Version;
+    upgrades?: Readonly<Record<number, StorefrontSectionSettingsUpgrade>>;
     settings: Settings;
     defaults: z.infer<Settings>;
     requires?: readonly FitCondition[];
   }) {
+    const version = (spec.version ?? 1) as Version;
     return {
-      version: 1 as const,
+      version,
+      upgrades: spec.upgrades ?? {},
       settings: spec.settings,
       defaults: spec.defaults,
       requires: spec.requires ?? [],
       schema: z.object({
         id: sectionIdSchema,
         type: z.literal(spec.type),
-        version: z.literal(1),
+        version: z.literal(version),
         hidden: z.boolean().optional(),
         aiDraft,
         settings: spec.settings,
@@ -538,7 +555,7 @@ export function storefrontSectionDefault<Type extends StorefrontSectionType>(typ
   return {
     id,
     type,
-    version: 1,
+    version: STOREFRONT_SECTION_REGISTRY[type].version,
     settings: structuredClone(STOREFRONT_SECTION_REGISTRY[type].defaults),
   } as StorefrontSectionOf<Type>;
 }

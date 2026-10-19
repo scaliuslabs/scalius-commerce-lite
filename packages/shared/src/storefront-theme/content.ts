@@ -77,8 +77,11 @@ export function storefrontThemeWithContent(
     const match = source?.pages.home.filter((each) => each.type === section.type)[index] ?? null;
     return withSectionContent(section, match);
   });
+  const { translations: _look, ...look } = target;
   return {
-    ...target,
+    ...look,
+    // The merchant's translations are content: keyed by their words, they follow them into the new look.
+    ...(source?.translations ? { translations: structuredClone(source.translations) } : {}),
     brand: source ? structuredClone(source.brand) : { ...DEFAULT_STOREFRONT_THEME_BRAND },
     blocks: {
       ...target.blocks,

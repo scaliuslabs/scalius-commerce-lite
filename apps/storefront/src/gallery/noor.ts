@@ -1,7 +1,7 @@
 /** Real bundled Noor metadata and fixture data; all rendering stays in the production host. */
 import { parsePluginManifest } from "@scalius/shared/plugins/manifest";
 import { storefrontSettingNeeds, type StorefrontExtension, type StorefrontSkinTarget } from "@scalius/shared/plugins/storefront-components";
-import { applyStorefrontAppTemplate, readStorefrontAppTemplateTheme, readStorefrontPagePresetSections, type StorefrontSection, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
+import { STOREFRONT_DECLARATION_THEME_VERSION, applyStorefrontAppTemplate, readStorefrontAppTemplateTheme, readStorefrontPagePresetSections, type StorefrontSection, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import { BUNDLED_STOREFRONT_EXTENSIONS } from "../extensions/bundled.gen";
 import { manifest } from "../../../../plugins/noor/src/index";
 import type { HomepageAppSurface } from "../lib/app-surfaces";
@@ -31,7 +31,7 @@ export const NOOR_EXTENSION: StorefrontExtension = {
 
 /** Apply the actual plugin template through the same shared operation as the merchant builder. */
 export function noorTheme(base: StorefrontThemeDocument): StorefrontThemeDocument {
-  const template = readStorefrontAppTemplateTheme(storefront.templates[0]?.theme);
+  const template = readStorefrontAppTemplateTheme(storefront.templates[0]?.theme, storefront.templates[0]?.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
   if (!template) throw new Error("The Noor template no longer fits the theme document.");
   const theme = applyStorefrontAppTemplate(base, "scalius.noor/noor", template);
   theme.pages.home = theme.pages.home.map((section) => {
@@ -50,7 +50,7 @@ export function noorTheme(base: StorefrontThemeDocument): StorefrontThemeDocumen
 }
 
 export function noorLandingSections(): StorefrontSection[] {
-  const sections = readStorefrontPagePresetSections(storefront.pagePresets[0]?.sections);
+  const sections = readStorefrontPagePresetSections(storefront.pagePresets[0]?.sections, storefront.pagePresets[0]?.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
   if (!sections) throw new Error("The Noor campaign preset no longer fits the section document.");
   return sections.map((section) => section.type === "app" && ["scalius.noor/landing-hero", "scalius.noor/landing-order"].includes(section.settings.app)
     ? { ...section, settings: { ...section.settings, values: { ...section.settings.values, product: "prod_0" } } }

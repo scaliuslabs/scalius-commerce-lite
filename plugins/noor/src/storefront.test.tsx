@@ -66,9 +66,9 @@ describe("Noor manifest", () => {
       const result = validatePluginSettingValues(schema.filter((field) => Object.hasOwn(values, field.key)), values);
       expect(result.ok ? [] : result.errors, label).toEqual([]);
     };
-    const sections = declared.storefront.pagePresets.flatMap((preset) => readStorefrontPagePresetSections(preset.sections)!);
+    const sections = declared.storefront.pagePresets.flatMap((preset) => readStorefrontPagePresetSections(preset.sections, preset.themeVersion!)!);
     for (const template of declared.storefront.templates) {
-      const theme = readStorefrontAppTemplateTheme(template.theme)!;
+      const theme = readStorefrontAppTemplateTheme(template.theme, template.themeVersion!)!;
       sections.push(...(theme.sections ?? []));
       for (const placement of Object.values(theme.apps?.skins ?? {})) {
         if (!placement) continue;
@@ -122,7 +122,7 @@ describe("Noor manifest", () => {
 
   it("is one template: the look applies to a store's theme as a valid document", () => {
     expect(declared.storefront.templates.map((template) => template.id)).toEqual(["noor"]);
-    const theme = readStorefrontAppTemplateTheme(declared.storefront.templates[0]!.theme);
+    const theme = readStorefrontAppTemplateTheme(declared.storefront.templates[0]!.theme, declared.storefront.templates[0]!.themeVersion!);
     expect(theme).not.toBeNull();
     const document = applyStorefrontAppTemplate(DEFAULT_STOREFRONT_THEME, "scalius.noor/noor", theme!);
     const result = storefrontThemeDocumentSchema.safeParse(document);
@@ -137,8 +137,8 @@ describe("Noor manifest", () => {
   });
 
   it("starts new stores and campaigns with product facts, without invented trust claims", () => {
-    const template = readStorefrontAppTemplateTheme(declared.storefront.templates[0]!.theme)!;
-    const campaign = readStorefrontPagePresetSections(declared.storefront.pagePresets[0]!.sections)!;
+    const template = readStorefrontAppTemplateTheme(declared.storefront.templates[0]!.theme, declared.storefront.templates[0]!.themeVersion!)!;
+    const campaign = readStorefrontPagePresetSections(declared.storefront.pagePresets[0]!.sections, declared.storefront.pagePresets[0]!.themeVersion!)!;
     const sections = [...(template.sections ?? []), ...campaign];
     // Testimonials, questions and promises are the merchant's to write: a template starts with none of them.
     const trustTypes = ["scalius.noor/testimonials", "faq", "usp-strip", "editorial"];
@@ -186,7 +186,7 @@ describe("Noor manifest", () => {
   it("keeps merchant-authored saved claims and testimonials renderable", () => {
     const saved = [{ id: "lp-reviews", type: "app", version: 1, settings: { app: "scalius.noor/testimonials", values: { heading: "Our customer reviews", items: [{ quote: "A real review supplied by this merchant", name: "Verified customer", rating: 4 }] } } }];
     const before = JSON.stringify(saved);
-    expect(readStorefrontPagePresetSections(saved)).toEqual(saved);
+    expect(readStorefrontPagePresetSections(saved, declared.storefront.pagePresets[0]!.themeVersion!)).toEqual(saved);
     const html = renderSection(storefront, "testimonials", settingsFor("testimonials", saved[0]!.settings.values));
     expect(html).toContain("A real review supplied by this merchant");
     expect(JSON.stringify(saved)).toBe(before);
@@ -195,7 +195,7 @@ describe("Noor manifest", () => {
   it("offers a campaign page preset built from its own landing sections", () => {
     const [preset] = declared.storefront.pagePresets;
     expect(preset?.id).toBe("product-campaign");
-    const sections = readStorefrontPagePresetSections(preset!.sections);
+    const sections = readStorefrontPagePresetSections(preset!.sections, preset!.themeVersion!);
     expect(sections).not.toBeNull();
     const types = sections!.map((section) => (section.type === "app" ? section.settings.app : section.type));
     for (const type of types) expect(declared.storefront.sections.map((section) => `scalius.noor/${section.type}`)).toContain(type);

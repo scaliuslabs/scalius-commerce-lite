@@ -42,8 +42,8 @@ The storefront runs the module in one of two loaders, with the same input and th
 | Component product block | `productBlocks: [{ type, name, placement, settings }]` (no `route`) | `blocks[type]` | `blocks.product.apps: [{ id, app: "<id>/<type>", values }]` |
 | Skin of a unit | `skins: [{ id, target, name, settings }]` (≤ 30) | `skins[id]` | `apps.skins.<target>: { app: "<id>/<skin id>", values }` |
 | Skin of a core section | `skins: [{ id, target: "section:<type>", … }]` | `skins[id]` | the core section's `skin: { app, values }` |
-| Template | `templates: [{ id, name, theme }]` | | `apps.template` (a label) |
-| Page preset | `pagePresets: [{ id, name, sections }]` | | a new landing page's sections |
+| Template | `templates: [{ id, name, themeVersion?, theme }]` | | `apps.template` (a label) |
+| Page preset | `pagePresets: [{ id, name, themeVersion?, sections }]` | | a new landing page's sections |
 | Island | `islands: [{ name }]` | `src/islands/<name>.ts` with `defineIsland` | |
 | Stylesheet | `stylesheet: true` | `src/storefront.css` | |
 | Browser hosts | `connect: ["api.example.com"]` | | |
@@ -51,6 +51,8 @@ The storefront runs the module in one of two loaders, with the same input and th
 Component sections and product blocks have no render route: they run at the edge with data supplied by the existing page batch and can show product cards, images and core embeds. A section may declare bounded public object `reads`; these add data to its input, not network access to its renderer. Private buyer pages use declarative `buyer.ui` functions rendered by core. The static `storefront.blocks` and `request.render` APIs are retired; only proxy pages (`/apps/<id>/*`) accept route-returned page HTML.
 
 A **page preset** is a ready-made landing page: when the merchant makes a new landing page (`/pages/<slug>`), the editor offers "a blank page" or the presets of the active apps, and asks for a product when a preset's sections have `product` settings, which it fills in. Noor's "Product campaign" preset builds a complete Facebook-ad page (offer, promises, features, steps, reviews, questions, order form) in one step; every section stays editable and reorderable.
+
+A template or page preset is written for one theme document version (`themeVersion`, absent: 10). The store upgrades it through the stored documents' upgrade chain (`packages/shared/src/storefront-theme.md`, Compatibility) before listing it, so an app built for an older version keeps working. One that still does not fit is left out of the theme editor and named, with the reason, on the app's page.
 
 A page may hold 24 app sections, all of them component sections.
 
@@ -64,12 +66,12 @@ A **skin** is app markup for a core-owned unit. It gets the unit's public projec
 | `product-card` | `StorefrontProductCardData` (`{ product, position, aboveFold }`) | none (`quickAdd`) | empty → core |
 | `product-main` | `StorefrontProductPage` | **`buy-form` (required, one)**, `gallery`, `reviews`, `recommendations` | no buy form → core |
 | `listing-main` | `StorefrontListingPage` | `filters`, `toolbar`, `pagination` (appended when left out) | empty → core |
-| `section:<type>` | `StorefrontSectionSkinData<CoreSectionSettings<type>>` | none (`quickAdd`) | empty → the core section |
+| `section:<type>` | `StorefrontSectionSkinData<StorefrontSectionSkinSettings[type]>` | none (`quickAdd`) | empty → the core section |
 
 - `product-main` draws the product page's breadcrumbs, gallery and buy box. The buy form is `ProductBuyBox.astro`, the same component the core page draws: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app blocks, kept current as the buyer chooses. The gallery (`<Gallery />`) is `ProductGallery.astro` with the theme's gallery setting: one main photo with thumbnails, previous/next and zoom on computers, a swipeable photo with its position on phones, and the chosen SKU's own photo when a variant is picked (exact SKU image, else the product photo); its first photo is preloaded as the LCP image. Prefer it to drawing `product.media` yourself, which stacks every photo above the buy form on phones. The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
 - A buy column that should stay in view beside the gallery marks itself `data-sticky-column` and writes its top as `calc(<offset> + var(--sticky-column-shift, 0px))`; the store's product script shifts a column taller than the window so it scrolls until its end is in view and back (`sticky-column.ts`). Core's stacked and grid galleries use the same.
 - `listing-main` draws the listing between the collection template's sections. The page links are numbered links on every listing, so crawlers reach every product.
-- A core section's projection is its settings at its `version` with references resolved by fixed rules (`resolveCoreSectionSettings`): `image`/`phoneImage`/`mediaId` → `StorefrontImage | null`; a product source → `StorefrontProductList` (`{ title, url, cards }`, as many cards as the core section shows); `categoryIds`/`collectionIds` → `StorefrontTile[]`; `promotionId` → `{ endsAt } | null`; a delivery-facts source → the store's facts; hidden blocks left out. A brand wall's brands arrive in `tiles`, a collections section's fallback products in `cards`. `aboveFold` is true for the homepage's lead section (the first section with photos): load its first row of photos eagerly, the likely largest at high priority, as the core section does. `recently-viewed`, `endless-grid` and `objects` have no skin.
+- A core section's projection is declared in the protocol, one interface per type (`StorefrontSectionSkinSettings`, `StorefrontHeroSkinSettings`, ...), each with its own version (`STOREFRONT_SECTION_SKIN_PROJECTIONS`, the `version` in `data`); core's stored settings never reach a skin directly. The host maps a section to it in one place (`coreSectionSkinSettings`): `image`, `phoneImage` and `mediaId` → `image`/`phoneImage` as `StorefrontImage | null`; a product `source` → `products` (`StorefrontProductList`: `{ title, url, cards }`, as many cards as the core section shows); `categoryIds`/`collectionIds` → `categories`/`collections` (`StorefrontTile[]`); `promotionId` → `promotion` (`{ endsAt } | null`); a Specifications custom field → `objectFields`; a delivery-facts source → the store's facts; hidden blocks and the editor's `hidden`/`bindings` keys left out. A projection only gains optional fields; when core changes a section, the host adapts it so a skin's input stays the same. A brand wall's brands arrive in `tiles`, a collections section's fallback products in `cards`. `aboveFold` is true for the homepage's lead section (the first section with photos): load its first row of photos eagerly, the likely largest at high priority, as the core section does. `recently-viewed`, `endless-grid` and `objects` have no skin.
 - JSON-LD stays core's on product and listing pages: the host strips app JSON-LD from `product-main`, `listing-main` and product blocks.
 - **Product blocks** (component `productBlocks`) draw as `block` jobs at `product.buy-box` (in the buy box, after the buttons) or `product.below` (after the modules), from the same `StorefrontProductPage`.
 
@@ -93,7 +95,7 @@ The page reads every image, product list and picked product its component sectio
 
 A section, block value, skin or app placement may store `bindings` beside its literal settings. Each setting path maps to `{ source }`, for example `heading: { source: "resource.title" }` or `subtitle: { source: "object.custom.testimonials.featured.quote" }`. Sources cover resource title/description/image/URL, `resource.cf.<namespace>.<key>`, a published object field, or an object list. The literal value remains the fallback when a source is absent or incompatible. The builder's Connect picker writes this same contract.
 
-Theme writes validate target paths and source types; stored documents parse only the current version. Objects resolve in the API's existing section read wave, with a bounded number of distinct types and `obj:<typeId>` dependency proofs. Public object rows must be published in a storefront-visible type. Unused sources add no database reads.
+Theme writes validate target paths and source types; stored documents of an older version read through the upgrade chain (`packages/shared/src/storefront-theme.md`, Compatibility). Objects resolve in the API's existing section read wave, with a bounded number of distinct types and `obj:<typeId>` dependency proofs. Public object rows must be published in a storefront-visible type. Unused sources add no database reads.
 
 A component section may declare `reads: [{ object, where?, limit }]`. The host validates the declared type, visibility and indexed filter, resolves any setting-backed filter from the placement, and supplies the result as `objects` in its section props. An app cannot use this declaration to read private records or another app's namespace. Noor's testimonials exercise the Objects path.
 
@@ -344,7 +346,7 @@ The merchant owns their apps (private or uploaded). The platform makes what an a
 
 ## Stored themes
 
-The document keeps skins under `apps.skins` (`header`, `footer`, `product-card`, `product-main`, `listing-main`) and a core section's own `skin`. The old `apps.header`, `apps.footer` and `apps.productCard` keys no longer parse: a stored theme that still has them reads as invalid (the storefront draws the default theme, the dashboard fails closed) until a data migration moves or resets them.
+The document keeps skins under `apps.skins` (`header`, `footer`, `product-card`, `product-main`, `listing-main`) and a core section's own `skin`. Stored themes are never reset: a shape change ships an upgrade step (`packages/shared/src/storefront-theme.md`, Compatibility).
 
 ## Versioning
 

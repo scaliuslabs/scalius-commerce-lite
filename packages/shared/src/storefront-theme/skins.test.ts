@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { StorefrontImage, StorefrontProductList, StorefrontTile } from "../plugins/storefront-protocol";
+import { STOREFRONT_SECTION_SKIN_PROJECTIONS, type StorefrontHeroSkinSettings, type StorefrontImage, type StorefrontProductList, type StorefrontTile } from "../plugins/storefront-protocol";
 import { storefrontThemeDocumentSchema } from "./document";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
-import { storefrontSectionDefault, storefrontVisibleSection, type StorefrontSectionOf } from "./sections";
+import { STOREFRONT_SECTION_RENDERERS, storefrontSectionDefault, storefrontVisibleSection, type StorefrontSectionOf } from "./sections";
 import {
   STOREFRONT_SKINNABLE_SECTION_TYPES,
   isStorefrontSkinTarget,
-  resolveCoreSectionSettings,
+  coreSectionSkinSettings,
   storefrontSectionSkinTarget,
   storefrontSkinTargetSection,
   type CoreSectionResolver,
-  type CoreSectionSettings,
+
 } from "./skins";
 
 const image = (id: string): StorefrontImage => ({ url: `https://media.example.com/${id}.webp`, srcset: null, width: 1200, height: 800, alt: id });
@@ -48,7 +48,7 @@ describe("skin targets", () => {
       pages: { ...DEFAULT_STOREFRONT_THEME.pages, home: [hero] },
     };
     expect(storefrontThemeDocumentSchema.safeParse(document).success).toBe(true);
-    // The old slot keys are gone: such a stored row no longer parses (reset by a data migration).
+    // The old slot keys are gone: a document with them does not parse.
     expect(storefrontThemeDocumentSchema.safeParse({ ...DEFAULT_STOREFRONT_THEME, apps: { header: { app: "acme.theme/head", values: {} } } }).success).toBe(false);
     expect(storefrontThemeDocumentSchema.safeParse({ ...document, apps: { skins: { sidebar: { app: "acme.theme/x", values: {} } } } }).success).toBe(false);
     expect(storefrontThemeDocumentSchema.safeParse({ ...document, apps: { skins: { header: { app: "not a key", values: {} } } } }).success).toBe(false);
@@ -56,28 +56,44 @@ describe("skin targets", () => {
 });
 
 describe("a core section's projection", () => {
+  it("is sealed per type in the protocol, versioned on its own", () => {
+    expect(STOREFRONT_SKINNABLE_SECTION_TYPES).toEqual(Object.keys(STOREFRONT_SECTION_SKIN_PROJECTIONS));
+    expect(STOREFRONT_SKINNABLE_SECTION_TYPES.filter((type) => !STOREFRONT_SECTION_RENDERERS.includes(type))).toEqual([]);
+    expect(STOREFRONT_SECTION_RENDERERS.filter((type) => !(STOREFRONT_SKINNABLE_SECTION_TYPES as string[]).includes(type)))
+      .toEqual(["endless-grid", "recently-viewed", "objects"]);
+  });
+
+  it("leaves out what only the editor reads: hidden marks and dynamic sources", () => {
+    const faq: StorefrontSectionOf<"faq"> = {
+      ...storefrontSectionDefault("faq", "faq"),
+      bindings: { heading: { source: "resource.title" } },
+      settings: { heading: "Questions", items: [{ question: "Cash on delivery?", answer: "Yes", bindings: { answer: { source: "resource.description" } } }] },
+    };
+    expect(coreSectionSkinSettings(storefrontVisibleSection(faq), resolver)).toEqual({ heading: "Questions", items: [{ question: "Cash on delivery?", answer: "Yes" }] });
+  });
+
   it("resolves a qualified Specifications object field without changing its literal fallback", () => {
     const section = storefrontSectionDefault("specifications", "size-chart");
     section.settings.objectField = "custom.size_chart";
     section.settings.rows = [{ label: "Fit", value: "Ask us" }];
     const fields = [{ key: "chest", name: "Chest", list: false, parts: [{ kind: "text" as const, text: "38 inches" }] }];
-    expect(resolveCoreSectionSettings(section, { ...resolver, objectField: (key) => key === "custom.size_chart" ? fields : [] }))
-      .toMatchObject({ objectField: fields, rows: section.settings.rows });
-    expect(resolveCoreSectionSettings(section, resolver).objectField).toEqual([]);
+    expect(coreSectionSkinSettings(section, { ...resolver, objectField: (key) => key === "custom.size_chart" ? fields : [] }))
+      .toMatchObject({ objectFields: fields, rows: section.settings.rows });
+    expect(coreSectionSkinSettings(section, resolver).objectFields).toEqual([]);
   });
 
   it("resolves restored section images and preserves a tile's subtitle", () => {
     const deal = storefrontSectionDefault("deal-block", "sale");
     deal.settings.mediaId = "sale-photo";
-    expect(resolveCoreSectionSettings(deal, resolver).mediaId).toEqual(image("sale-photo"));
+    expect(coreSectionSkinSettings(deal, resolver).image).toEqual(image("sale-photo"));
     const newsletter = storefrontSectionDefault("newsletter", "newsletter");
     newsletter.settings.mediaId = "signup-photo";
-    expect(resolveCoreSectionSettings(newsletter, resolver).mediaId).toEqual(image("signup-photo"));
+    expect(coreSectionSkinSettings(newsletter, resolver).image).toEqual(image("signup-photo"));
     newsletter.settings.mediaId = "gone";
-    expect(resolveCoreSectionSettings(newsletter, resolver).mediaId).toBeNull();
+    expect(coreSectionSkinSettings(newsletter, resolver).image).toBeNull();
     const cards = storefrontSectionDefault("shop-by", "cards");
     cards.settings.cards = [{ mediaId: "tile", title: "Linen", subtitle: "Made for summer", href: "/linen" }];
-    expect(resolveCoreSectionSettings(cards, resolver).cards[0]).toMatchObject({ subtitle: "Made for summer", mediaId: image("tile") });
+    expect(coreSectionSkinSettings(cards, resolver).cards[0]).toEqual({ subtitle: "Made for summer", image: image("tile"), title: "Linen", href: "/linen" });
   });
 
   it("resolves media, product sources, tiles, promotions and delivery facts by fixed rules", () => {
@@ -92,30 +108,30 @@ describe("a core section's projection", () => {
         sideBanners: [{ mediaId: "m3", alt: "Side", href: "/new" }],
       },
     };
-    const settings: CoreSectionSettings<"hero"> = resolveCoreSectionSettings(storefrontVisibleSection(hero), resolver);
+    const settings: StorefrontHeroSkinSettings = coreSectionSkinSettings(storefrontVisibleSection(hero), resolver);
     expect(settings.slides).toHaveLength(1);
     expect(settings.slides[0]!.image).toEqual(image("m1"));
     expect(settings.slides[0]!.phoneImage).toEqual(image("m2"));
     expect(settings.slides[0]!.link).toBe("/sale");
-    expect(settings.sideBanners?.[0]?.mediaId).toEqual(image("m3"));
+    expect(settings.sideBanners).toEqual([{ image: image("m3"), alt: "Side", href: "/new" }]);
 
     const deal: StorefrontSectionOf<"deal-block"> = {
       ...storefrontSectionDefault("deal-block", "deal"),
       settings: { ...storefrontSectionDefault("deal-block", "deal").settings, source: { kind: "category", categoryId: "cat_1" }, promotionId: "promo_live" },
     };
-    const dealSettings = resolveCoreSectionSettings(deal, resolver);
-    expect(dealSettings.source).toEqual({ title: "category", url: "/search", cards: [] });
-    expect(dealSettings.promotionId).toEqual({ endsAt: "2026-12-01T00:00:00.000Z" });
+    const dealSettings = coreSectionSkinSettings(deal, resolver);
+    expect(dealSettings.products).toEqual({ title: "category", url: "/search", cards: [] });
+    expect(dealSettings.promotion).toEqual({ endsAt: "2026-12-01T00:00:00.000Z" });
 
     const tiles: StorefrontSectionOf<"category-tiles"> = {
       ...storefrontSectionDefault("category-tiles", "tiles"),
       settings: { ...storefrontSectionDefault("category-tiles", "tiles").settings, categoryIds: ["cat_1", "gone", "cat_2"] },
     };
-    expect(resolveCoreSectionSettings(tiles, resolver).categoryIds.map((each) => each.id)).toEqual(["cat_1", "cat_2"]);
+    expect(coreSectionSkinSettings(tiles, resolver).categories.map((each) => each.id)).toEqual(["cat_1", "cat_2"]);
 
     const strip = storefrontSectionDefault("usp-strip", "usp");
-    expect(resolveCoreSectionSettings(strip, resolver).source).toEqual({ kind: "delivery-facts", items: [{ title: "Free delivery", detail: "Over ৳2,000" }] });
+    expect(coreSectionSkinSettings(strip, resolver).source).toEqual({ kind: "delivery-facts", items: [{ title: "Free delivery", detail: "Over ৳2,000" }] });
     const custom: StorefrontSectionOf<"usp-strip"> = { ...strip, settings: { style: "icons", source: { kind: "custom", items: [{ title: "Gift wrap", detail: "Free" }] } } };
-    expect(resolveCoreSectionSettings(custom, resolver).source).toEqual({ kind: "custom", items: [{ title: "Gift wrap", detail: "Free" }] });
+    expect(coreSectionSkinSettings(custom, resolver).source).toEqual({ kind: "custom", items: [{ title: "Gift wrap", detail: "Free" }] });
   });
 });

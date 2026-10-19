@@ -17,18 +17,19 @@ import type {
   StorefrontProductPage,
   StorefrontResolvedSettings,
   StorefrontSectionSkinData,
+  StorefrontSectionSkinSettings,
+  StorefrontSkinnableSection,
   StorefrontTile,
 } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_SECTION_SKIN_PROJECTIONS } from "@scalius/shared/plugins/storefront-protocol";
 import {
   HOME_PRODUCT_LIST_LIMIT,
+  coreSectionSkinSettings,
   homeSectionProductLists,
-  resolveCoreSectionSettings,
   storefrontProductSourceKey,
   storefrontVisibleSection,
-  type CoreSectionSettings,
   type StorefrontSectionOf,
   type StorefrontSection,
-  type StorefrontSkinnableSectionType,
 } from "@scalius/shared/storefront-theme";
 import { resolveBuyerAvailabilityBand, type BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
@@ -349,20 +350,20 @@ export function listingPageData(input: {
 /**
  * A core section's projection (`StorefrontSectionSkinData`): its settings
  * with references resolved from the page's section data by the fixed rules
- * (`resolveCoreSectionSettings`), each product source to as many cards as
+ * (`coreSectionSkinSettings`), each product source to as many cards as
  * the core section shows.
  */
-export function coreSectionSkinData<Type extends StorefrontSkinnableSectionType>(
+export function coreSectionSkinData<Type extends StorefrontSkinnableSection>(
   section: StorefrontSectionOf<Type>,
   content: HomepageContent,
   money: { currencySymbol: string; currencyCode: string; ratings: boolean },
   aboveFold = false,
-): StorefrontSectionSkinData<CoreSectionSettings<Type>> {
+): StorefrontSectionSkinData<StorefrontSectionSkinSettings[Type]> {
   const shown = storefrontVisibleSection(section);
   const visible: StorefrontSection = shown;
   const cards = (products: readonly unknown[]) => productCardsOf(products as ProductCardProduct[], money);
   const limits = new Map(homeSectionProductLists(shown).map((list) => [storefrontProductSourceKey(list.source), list.limit]));
-  const settings = resolveCoreSectionSettings<Type>(shown, {
+  const settings = coreSectionSkinSettings<Type>(shown, {
     image: (id) => storefrontImageOf(homepageMedia(content, id)),
     products: (source) => {
       const list = homepageSourceProducts(source, limits.get(storefrontProductSourceKey(source)) ?? HOME_PRODUCT_LIST_LIMIT, content);
@@ -403,7 +404,8 @@ export function coreSectionSkinData<Type extends StorefrontSkinnableSectionType>
   });
   return {
     type: visible.type,
-    version: visible.version,
+    // The projection's own version: core may change its section's version without changing what skins get.
+    version: STOREFRONT_SECTION_SKIN_PROJECTIONS[visible.type as StorefrontSkinnableSection],
     settings,
     tiles: visible.type === "brand-wall"
       ? content.brands.map((brand) => ({

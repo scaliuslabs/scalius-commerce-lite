@@ -11,6 +11,7 @@ import {
   STOREFRONT_PRODUCT_MODULES,
   STOREFRONT_TEMPLATES,
   STOREFRONT_THEME_COLOR_KEYS,
+  STOREFRONT_THEME_DOCUMENT_VERSION,
   STOREFRONT_TYPE_PAIRING_SPECS,
   applyStorefrontAppTemplate,
   isStorefrontThemeHexColor,
@@ -267,10 +268,10 @@ export interface AppTemplateEntry {
   theme: StorefrontAppTemplateTheme;
 }
 
-/** The active apps' templates, each as this document version reads it (one that does not parse is left out). */
+/** The active apps' templates, as the API lists them at this document version (one that does not parse is left out). */
 export function appTemplates(apps: readonly ThemeApp[]): AppTemplateEntry[] {
   return apps.flatMap((app) => app.templates.flatMap((template) => {
-    const theme = readStorefrontAppTemplateTheme(template.theme);
+    const theme = readStorefrontAppTemplateTheme(template.theme, STOREFRONT_THEME_DOCUMENT_VERSION);
     return theme ? [{ key: template.key, name: template.name, description: template.description, app, theme }] : [];
   }));
 }

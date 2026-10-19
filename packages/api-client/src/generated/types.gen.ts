@@ -777,6 +777,13 @@ export type StorefrontThemeDocument = {
             page: StorefrontPageTemplate;
         };
     };
+    translations?: Array<{
+        locale: string;
+        marketId: string | null;
+        fields: {
+            [key: string]: string;
+        };
+    }>;
 };
 
 export type StorefrontSettingBindings = {
@@ -2597,7 +2604,7 @@ export type ThemeVersionSummary = {
         page: string;
     } | {
         kind: 'settings-changed';
-        area: 'template' | 'colors' | 'typography' | 'style' | 'brand' | 'header' | 'navigation' | 'footer' | 'productCard' | 'listing' | 'productPage' | 'homeMode';
+        area: 'template' | 'colors' | 'typography' | 'style' | 'brand' | 'header' | 'navigation' | 'footer' | 'productCard' | 'listing' | 'productPage' | 'homeMode' | 'translations';
     }>;
     moreChanges: number;
     note: string | null;
@@ -3394,6 +3401,15 @@ export type AppDetail = AppSummary & {
             src: string;
             placement: string;
             pages: Array<string>;
+        }>;
+        /**
+         * Templates and page presets the store's theme cannot use after upgrading them from the version they were written for; the theme editor leaves them out.
+         */
+        themeProblems: Array<{
+            kind: 'template' | 'page-preset';
+            id: string;
+            name: string;
+            problem: string;
         }>;
     };
     admin: {
