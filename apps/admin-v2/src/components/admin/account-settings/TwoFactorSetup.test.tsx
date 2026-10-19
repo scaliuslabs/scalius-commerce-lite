@@ -148,6 +148,13 @@ describe("TwoFactorSetup", () => {
     act(() => button("Done").click());
     expect(host.querySelector('[data-method="totp"]')?.textContent).toContain("In use");
     expect(button("Get new recovery codes")).toBeDefined();
+    // The rows run straight into the footer: the footer's top border closes the last row,
+    // so no empty bordered band sits between "Recovery codes" and "Turn off".
+    const rows = host.querySelector('[data-method="totp"]')!.parentElement!;
+    expect(rows.className).not.toMatch(/\bborder-(y|b)\b/);
+    expect(rows.className).toContain("-mb-4");
+    expect(rows.nextElementSibling).toBeNull();
+    expect(rows.parentElement!.nextElementSibling?.textContent).toContain("Turn off");
   });
 
   it("turns off with the password and a current code", async () => {

@@ -256,8 +256,9 @@ export function TwoFactorSetup({ user, required = false }: {
     footer = <Button type="button" onClick={() => start("enable")}>{t("turnOn")}</Button>;
   } else if (mode === null) {
     // One row per way to get a code; the one in use is marked, the other is one click away.
+    // The rows run into the footer, whose top border closes the last one (no empty band between).
     content = (
-      <ul className="-mx-4 divide-y divide-border border-y border-border">
+      <ul className="-mx-4 -mb-4 divide-y divide-border border-t border-border">
         {(["totp", "email"] as const).map((option) => {
           const Icon = METHOD_ICON[option];
           const inUse = option === currentMethod;
