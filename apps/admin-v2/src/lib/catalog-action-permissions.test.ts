@@ -55,6 +55,7 @@ describe("catalog action permissions", () => {
       },
       inventory: {
         canAdjustStock: false,
+        canSetAlertLevels: false,
         canAcknowledgeAlerts: false,
         canViewCosts: false,
         canEditCosts: false,
@@ -66,9 +67,10 @@ describe("catalog action permissions", () => {
   });
 
   it("keeps costs and inventory operations behind their own permissions", () => {
-    // Editing products adjusts stock but neither shows costs nor runs purchasing.
+    // Editing products keeps alert levels; stock needs "Adjust stock"; neither shows costs nor runs purchasing.
     expect(resolveCatalogActions([PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT]).inventory).toMatchObject({
-      canAdjustStock: true,
+      canAdjustStock: false,
+      canSetAlertLevels: true,
       canViewCosts: false,
       canEditCosts: false,
       canManageOperations: false,
@@ -86,7 +88,7 @@ describe("catalog action permissions", () => {
       .toMatchObject({ canManageLocations: true, canManageOperations: false });
   });
 
-  it("keeps product actions granular and ties stock adjustment to product edit", () => {
+  it("keeps product actions granular and ties stock adjustment to its own permission", () => {
     expect(
       resolveCatalogActions([PERMISSIONS.PRODUCTS_EDIT]),
     ).toMatchObject({
@@ -98,8 +100,10 @@ describe("catalog action permissions", () => {
         canPermanentDelete: false,
         canBulkDelete: false,
       },
-      inventory: { canAdjustStock: true, canAcknowledgeAlerts: true, canViewCosts: false },
+      inventory: { canAdjustStock: false, canSetAlertLevels: true, canAcknowledgeAlerts: true, canViewCosts: false },
     });
+    expect(resolveCatalogActions([PERMISSIONS.PRODUCTS_ADJUST_STOCK]).inventory)
+      .toMatchObject({ canAdjustStock: true, canSetAlertLevels: false });
 
     expect(
       resolveCatalogActions([PERMISSIONS.PRODUCTS_BULK_OPERATIONS]).products,

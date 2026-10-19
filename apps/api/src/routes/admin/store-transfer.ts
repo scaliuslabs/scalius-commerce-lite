@@ -154,8 +154,8 @@ importApp.openapi(productsRoute, async (c) => {
   if (batch.items.some((item) => item.variants.some((variant) => variant.cost != null))) {
     requireImportPermissions(c, [PERMISSIONS.PRODUCTS_VIEW_COSTS]);
   }
-  // New SKUs' starting quantities are stock changes.
-  if (batch.items.some((item) => item.variants.some((variant) => (variant.stock ?? 0) > 0))) {
+  // New SKUs' starting quantities are stock changes (a reprice never touches stock).
+  if (batch.mode !== "price" && batch.items.some((item) => item.variants.some((variant) => (variant.stock ?? 0) > 0))) {
     requireImportPermissions(c, [PERMISSIONS.PRODUCTS_ADJUST_STOCK]);
   }
   const granted = permissionsOf(c);

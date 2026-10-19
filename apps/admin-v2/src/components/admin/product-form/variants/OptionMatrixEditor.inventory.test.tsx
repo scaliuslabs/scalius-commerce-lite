@@ -8,6 +8,7 @@ import type { ProductVariant } from "@/lib/api-query-options/products";
 import { translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { OptionMatrixEditor } from "./OptionMatrixEditor";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 import type { OptionMatrixEditorHandle, ProductCreateComposition } from "./option-matrix-editor-model";
 
 const mocks = vi.hoisted(() => ({
@@ -79,7 +80,8 @@ describe("OptionMatrixEditor inventory for products without options", () => {
 
   function render(element: React.ReactElement) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    return act(async () => root.render(<QueryClientProvider client={client}>{element}</QueryClientProvider>));
+    // A product editor who adjusts stock (products.adjust_stock).
+    return act(async () => root.render(<QueryClientProvider client={client}><PermissionProvider permissions={["products.view", "products.edit", "products.adjust_stock"]}>{element}</PermissionProvider></QueryClientProvider>));
   }
 
   const trackCheckbox = () => host.querySelector<HTMLButtonElement>('button[role="checkbox"]')!;

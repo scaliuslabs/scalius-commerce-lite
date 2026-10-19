@@ -21,6 +21,7 @@ vi.mock("@/hooks/use-currency", () => {
 });
 
 import { VariantTable } from "./VariantTable";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -53,6 +54,8 @@ function Harness({ readOnly = false, initial, missing = [], reveal = null, issue
   const valueLabel = new Map(opts.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
   return (
     <QueryClientProvider client={queryClient}>
+    {/* A product editor who adjusts stock (products.adjust_stock). */}
+    <PermissionProvider permissions={["products.view", "products.edit", "products.adjust_stock"]}>
     <VariantTable
       readOnly={readOnly}
       options={opts}
@@ -75,6 +78,7 @@ function Harness({ readOnly = false, initial, missing = [], reveal = null, issue
       printingDisabled={false}
       fulfilmentColumn={fulfilmentColumn}
     />
+    </PermissionProvider>
     </QueryClientProvider>
   );
 }

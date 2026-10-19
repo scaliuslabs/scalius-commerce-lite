@@ -1,6 +1,6 @@
 // API-layer wiring of the event outbox (COMMERCE-HOOKS H3): sending webhook
 // and app deliveries and the scheduled drain. Core owns the state machines;
-// this file supplies the credential key, the admin representations, the staff
+// this file supplies the credential key, the sealed representations, the staff
 // notice and, for app deliveries, the host. Every step works from a durable
 // row (backoff in `next_attempt_at`, terminal `dead_lettered`/`exhausted`), so
 // a drain that stops early leaves the rest due for the next tick.

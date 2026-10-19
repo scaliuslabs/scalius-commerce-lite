@@ -3,7 +3,8 @@
 // as the plugin principal. The result is the route's own response, unwrapped
 // from the `{ success, data }` envelope; refusals are results, not throws.
 // A third-party app reaches the stable app API only (`x-scalius-agent.stability`);
-// anything else refuses with `api.operation_not_stable`.
+// anything else refuses with `api.operation_not_stable`. Buyer contact fields
+// the grant does not reveal read null (protected-response.ts, H5).
 
 import type { Database } from "@scalius/database/client";
 import type { PluginApiCallInput, PluginApiResult } from "@scalius/plugin-sdk";

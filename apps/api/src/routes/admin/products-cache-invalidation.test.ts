@@ -140,6 +140,7 @@ function createTestApp() {
   });
   app.use("*", async (c, next) => {
     c.set("db", db as never);
+    c.set("adminPermissions" as never, new Set(["products.view", "products.edit", "products.adjust_stock"]) as never);
     await next();
   });
   app.route("/admin/products", adminProductsRoutes);

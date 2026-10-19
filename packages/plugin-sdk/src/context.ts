@@ -39,7 +39,9 @@ export interface PluginApi {
    * Calls a stable app-API operation by id (`dashboard.orders.get`):
    * `x-scalius-agent.stability: "stable"` in the OpenAPI contract. Any other
    * operation refuses with `api.operation_not_stable`, and one the approved
-   * scopes do not cover with `api.operation_forbidden`.
+   * scopes do not cover with `api.operation_forbidden`. Buyer contact
+   * fields (`x-scalius-protected` in the contract) read null unless the app
+   * holds the matching `read_customer_*` scope.
    */
   call<T = unknown>(operationId: string, input?: PluginApiCallInput): Promise<PluginApiResult<T>>;
 }
