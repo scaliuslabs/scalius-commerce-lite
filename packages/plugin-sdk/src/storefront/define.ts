@@ -20,8 +20,9 @@ import {
   type StorefrontRenderReply,
   type StorefrontResolvedSettings,
   type StorefrontSectionSkinData,
+  type StorefrontSectionSkinSettings,
+  type StorefrontSkinnableSection,
 } from "@scalius/shared/plugins/storefront-protocol";
-import type { CoreSectionSettings, StorefrontSkinnableSectionType } from "@scalius/shared/storefront-theme/skins";
 import { toHtml, type Renderable } from "./html";
 
 export interface SectionProps<Settings = StorefrontResolvedSettings> {
@@ -46,9 +47,9 @@ export type ProductCardProps<Settings = StorefrontResolvedSettings> = SkinProps<
 export type ProductMainProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontProductPage, Settings>;
 /** A listing-main skin: `<Filters />`, `<Toolbar />` and `<Pagination />` place the store's own (pagination is appended when left out). */
 export type ListingMainProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontListingPage, Settings>;
-/** A core section's skin (`section:<type>`): its settings with references resolved (`CoreSectionSettings<type>`). */
-export type SectionSkinProps<Type extends StorefrontSkinnableSectionType = StorefrontSkinnableSectionType, Settings = StorefrontResolvedSettings> =
-  SkinProps<StorefrontSectionSkinData<CoreSectionSettings<Type>>, Settings> & {
+/** A core section's skin (`section:<type>`): the section's sealed projection (`StorefrontSectionSkinSettings[type]`). */
+export type SectionSkinProps<Type extends StorefrontSkinnableSection = StorefrontSkinnableSection, Settings = StorefrontResolvedSettings> =
+  SkinProps<StorefrontSectionSkinData<StorefrontSectionSkinSettings[Type]>, Settings> & {
     /** The theme's id of the section placement. */
     instanceId: string;
   };

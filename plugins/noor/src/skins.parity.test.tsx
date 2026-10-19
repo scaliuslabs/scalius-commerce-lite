@@ -62,34 +62,34 @@ describe("Noor skins draw what Noor's own sections drew", () => {
       { layout: "full-bleed", slides: [{ ...heroSlide, heading: "Linen season", buttonLabel: "Shop all" }] }],
     ["products-tabs", "noor-products-tabs", "products",
       { eyebrow: "Shop", text: "Fresh this week.", link: "/search", link_label: "View all", layout: "grid", columns: 4, tone: "soft", spacing: "l" },
-      { title: "New arrivals", limit: 8, tabs: [{ label: "New in", source: list("newest") }, { label: "On sale", source: list("on-sale") }, { label: "Popular", source: list("popular") }] }],
+      { title: "New arrivals", limit: 8, tabs: [{ label: "New in", products: list("newest") }, { label: "On sale", products: list("on-sale") }, { label: "Popular", products: list("popular") }] }],
     ["products-row", "noor-products-rail", "products",
       { link: "/search", link_label: "Shop all", columns: 4, tone: "plain", spacing: "m" },
-      { title: "Popular products", source: list("popular"), limit: 12 }],
+      { title: "Popular products", products: list("popular"), limit: 12 }],
     ["products-grid", "noor-products-grid", "products",
       { link: "/search", link_label: "View all", tone: "plain", spacing: "s" },
-      { title: "All products", source: list("newest"), columns: 3, rows: 2 }],
+      { title: "All products", products: list("newest"), columns: 3, rows: 2 }],
     ["tiles-mosaic", "noor-tiles-categories", "collection-tiles",
       { eyebrow: "Browse", link: "/search", link_label: "All categories", layout: "mosaic", tone: "plain", spacing: "m" },
-      { style: "photo", title: "Shop by category", categoryIds: [tile("c1", "Sarees", "a", "/categories/sarees"), tile("c2", "Panjabi", "b", "/categories/panjabi"), tile("c3", "Kids", "c", "/categories/kids")] }],
+      { style: "photo", title: "Shop by category", categories: [tile("c1", "Sarees", "a", "/categories/sarees"), tile("c2", "Panjabi", "b", "/categories/panjabi"), tile("c3", "Kids", "c", "/categories/kids")] }],
     ["tiles-circles", "noor-tiles-cards", "collection-tiles",
       { layout: "circles", tone: "soft", spacing: "s" },
-      { title: "Categories", cards: [{ mediaId: image("a"), title: "Sarees", href: "/categories/sarees" }, { mediaId: image("b"), title: "Panjabi", href: "/categories/panjabi" }] }],
+      { title: "Categories", cards: [{ image: image("a"), title: "Sarees", href: "/categories/sarees" }, { image: image("b"), title: "Panjabi", href: "/categories/panjabi" }] }],
     ["tiles-row", "noor-tiles-categories", "collection-tiles",
       { layout: "row", tone: "ink", spacing: "m" },
-      { style: "photo", title: "Collections", categoryIds: [tile("c1", "Eid", "a", "/collections/eid"), tile("c2", "Winter", "b", "/collections/winter")] }],
+      { style: "photo", title: "Collections", categories: [tile("c1", "Eid", "a", "/collections/eid"), tile("c2", "Winter", "b", "/collections/winter")] }],
     ["promo-tiles", "noor-promo-tiles", "promo-tiles",
       { height: "m", tone: "plain", spacing: "m" },
-      { tiles: [{ mediaId: image("a"), alt: "Summer sale", href: "/collections/sale" }, { mediaId: image("b"), alt: "New arrivals", href: "/collections/new" }] }],
+      { tiles: [{ image: image("a"), alt: "Summer sale", href: "/collections/sale" }, { image: image("b"), alt: "New arrivals", href: "/collections/new" }] }],
     ["shop-the-look", "noor-look", "shop-the-look",
       {
         eyebrow: "Shop the look", text: "Pieces from the lookbook.", image_side: "end", tone: "soft", spacing: "m",
         hotspots: [{ x: 30, y: 40, title: "Panjabi", text: "Cotton, regular fit", link: "/products/panjabi" }, { x: 70, y: 60, title: "Scarf" }],
       },
-      { title: "The Eid edit", mediaId: image("look"), source: list("popular"), photo: "tall" }],
+      { title: "The Eid edit", image: image("look"), products: list("popular"), photo: "tall" }],
     ["sale-countdown", "noor-sale", "sale-countdown",
       { eyebrow: "Limited time", text: "Up to 40% off.", label: "View products", link: "/collections/sale", tone: "accent", spacing: "l" },
-      { title: "End of season sale", source: list("on-sale", 0), promotionId: { endsAt: new Date(Date.UTC(2026, 11, 31, 12)).toISOString() } }],
+      { title: "End of season sale", products: list("on-sale", 0), promotion: { endsAt: new Date(Date.UTC(2026, 11, 31, 12)).toISOString() } }],
     ["promises", "noor-promises", "promises",
       { eyebrow: "Why us", heading: "Our promises", style: "cards", tone: "soft", spacing: "s" },
       { style: "icons", source: { kind: "custom", items: [{ title: "Free delivery", detail: "Over ৳2,000" }, { title: "Cash on delivery", detail: "Pay when it arrives" }, { title: "Easy returns", detail: "Seven days" }] } }],
@@ -98,7 +98,7 @@ describe("Noor skins draw what Noor's own sections drew", () => {
         eyebrow: "Our story", points: [{ text: "Natural dyes" }, { text: "Fair pay" }], stats: [{ value: "12", label: "Studios" }, { value: "4,000", label: "Pieces" }],
         cta_label: "Read more", cta_link: "/pages/about", tone: "soft", spacing: "m",
       },
-      { layout: "image-with-text", heading: "Made by hand", body: "Every piece is woven in Dhaka.\n\nWe work with small studios.", mediaId: image("story"), imageSide: "end" }],
+      { layout: "image-with-text", heading: "Made by hand", body: "Every piece is woven in Dhaka.\n\nWe work with small studios.", image: image("story"), imageSide: "end" }],
     ["rich-text", "noor-story", "rich-text",
       { eyebrow: "Notes", cta_label: "Shop fabrics", cta_link: "/search", align: "start", size: "l", tone: "plain", spacing: "m" },
       { layout: "rich-text", heading: "About our fabrics", body: "Soft cotton.\n\nBreathable linen." }],
@@ -126,16 +126,16 @@ describe("Noor skins of the store's sections", () => {
     const photos = (html: string) => [...html.matchAll(/<img [^>]*class="noor-card-img"[^>]*>/g)].map(([tag]) => [
       /loading="(\w+)"/.exec(tag)?.[1], /fetchpriority="(\w+)"/.exec(tag)?.[1] ?? null,
     ]);
-    const tabs = { title: "New arrivals", limit: 8, tabs: [{ label: "New in", source: list("newest", 6) }, { label: "On sale", source: list("on-sale") }] };
+    const tabs = { title: "New arrivals", limit: 8, tabs: [{ label: "New in", products: list("newest", 6) }, { label: "On sale", products: list("on-sale") }] };
     const lead = photos(draw("noor-products-tabs", "products", { columns: 4 }, tabs, true));
     // The first tab: its first row of four eager (two high, two normal), then lazy; the hidden tab stays lazy.
     expect(lead.slice(0, 6)).toEqual([["eager", "high"], ["eager", "high"], ["eager", null], ["eager", null], ["lazy", null], ["lazy", null]]);
     expect(lead.slice(6).every(([loading]) => loading === "lazy")).toBe(true);
     // A grid's first row is its column count; a section below the lead loads lazily.
-    const grid = photos(draw("noor-products-grid", "products", {}, { title: "All", source: list("newest", 6), columns: 3, rows: 2 }, true));
+    const grid = photos(draw("noor-products-grid", "products", {}, { title: "All", products: list("newest", 6), columns: 3, rows: 2 }, true));
     expect(grid.map(([loading]) => loading)).toEqual(["eager", "eager", "eager", "lazy", "lazy", "lazy"]);
     for (const aboveFold of [false, undefined]) {
-      const below = photos(draw("noor-products-rail", "products", { columns: 4 }, { title: "Popular", source: list("popular"), limit: 12 }, aboveFold));
+      const below = photos(draw("noor-products-rail", "products", { columns: 4 }, { title: "Popular", products: list("popular"), limit: 12 }, aboveFold));
       expect(below.every(([loading, priority]) => loading === "lazy" && priority === null)).toBe(true);
     }
   });
@@ -165,7 +165,7 @@ describe("Noor skins of the store's sections", () => {
   });
 
   it("draws the deal's products in a row under the banner", () => {
-    const html = draw("noor-sale", "sale-countdown", { label: "See all" }, { title: "Eid sale", source: list("on-sale", 3), promotionId: null });
+    const html = draw("noor-sale", "sale-countdown", { label: "See all" }, { title: "Eid sale", products: list("on-sale", 3), promotion: null });
     expect(html).toContain('class="noor-s noor-s-sale"');
     expect(html).toContain('href="/collections/on-sale"');
     expect(html.match(/<article class="noor-card /g)).toHaveLength(3);
@@ -173,14 +173,14 @@ describe("Noor skins of the store's sections", () => {
   });
 
   it("draws saved tile subtitles and optional sale/signup images", () => {
-    const tiles = draw("noor-tiles-cards", "collection-tiles", {}, { title: "Linen", cards: [{ mediaId: image("tile"), title: "Summer", subtitle: "Made for warm days", href: "/linen" }] });
+    const tiles = draw("noor-tiles-cards", "collection-tiles", {}, { title: "Linen", cards: [{ image: image("tile"), title: "Summer", subtitle: "Made for warm days", href: "/linen" }] });
     expect(tiles).toContain("Made for warm days");
     for (const [skin, type, data] of [
-      ["noor-sale", "sale-countdown", { title: "Season sale", source: list("on-sale", 0), promotionId: null, mediaId: image("sale") }],
-      ["noor-signup", "signup", { heading: "Stay in touch", text: "News", mediaId: image("signup") }],
+      ["noor-sale", "sale-countdown", { title: "Season sale", products: list("on-sale", 0), promotion: null, image: image("sale") }],
+      ["noor-signup", "signup", { heading: "Stay in touch", text: "News", image: image("signup") }],
     ] as const) {
       const html = draw(skin, type, {}, data);
-      expect(html).toContain(`src="${data.mediaId.url}"`);
+      expect(html).toContain(`src="${data.image.url}"`);
       expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
     }
   });
@@ -195,7 +195,7 @@ describe("Noor skins of the store's sections", () => {
   });
 
   it("draws the same resolved size chart object fields and keeps literal fallback", () => {
-    const settings = { heading: "Size chart", rows: [{ label: "Fit", value: "Ask us" }], objectField: [
+    const settings = { heading: "Size chart", rows: [{ label: "Fit", value: "Ask us" }], objectFields: [
       { key: "chest", name: "Chest", list: false, parts: [{ kind: "text", text: "38 inches" }] },
       { key: "guide", name: "Guide", list: false, parts: [{ kind: "link", href: "/size-guide", label: "Size guide", external: false }] },
     ] };
@@ -205,17 +205,17 @@ describe("Noor skins of the store's sections", () => {
     expect(html).toContain('href="/size-guide"');
     expect(html).not.toContain("Ask us");
     expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
-    expect(draw("noor-specifications", "specifications", {}, { ...settings, objectField: [] })).toContain("Ask us");
+    expect(draw("noor-specifications", "specifications", {}, { ...settings, objectFields: [] })).toContain("Ask us");
   });
 
   it("keeps countdown units in a semantic list", () => {
-    const html = draw("noor-sale", "sale-countdown", {}, { title: "Sale", source: list("on-sale", 0), promotionId: { endsAt: "2026-12-31T00:00:00Z" } });
+    const html = draw("noor-sale", "sale-countdown", {}, { title: "Sale", products: list("on-sale", 0), promotion: { endsAt: "2026-12-31T00:00:00Z" } });
     expect(html).toContain('<ol class="noor-timer-list" aria-live="off">');
     expect(html).not.toContain('role="timer"');
   });
 
   it("falls back to the products' own listing for a view-all link", () => {
-    const html = draw("noor-products-rail", "products", { link_label: "View all" }, { title: "Popular", source: list("popular"), limit: 12 });
+    const html = draw("noor-products-rail", "products", { link_label: "View all" }, { title: "Popular", products: list("popular"), limit: 12 });
     expect(html).toContain('<a class="noor-more" href="/collections/popular">');
   });
 

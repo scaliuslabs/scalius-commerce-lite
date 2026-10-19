@@ -10,7 +10,7 @@ import { formatDateTime } from "@scalius/shared/locale-format";
 import { formatMoney } from "@/lib/currency";
 import type { HomepageMediaAsset, HomepageObjectField } from "@/lib/api/storefront";
 import type { NewsletterLanguage } from "@/lib/newsletter-copy";
-import type { CoreObjectFieldView } from "@scalius/shared/storefront-theme/skins";
+import type { StorefrontObjectFieldView } from "@scalius/shared/plugins/storefront-protocol";
 
 /** One drawn piece of a field value (a list field has several). */
 export type ObjectPart =
@@ -20,7 +20,7 @@ export type ObjectPart =
   | { kind: "image"; asset: HomepageMediaAsset };
 
 /** A field ready to draw: its name and the parts of its value, or null when it has nothing to show. */
-export type ObjectFieldView = CoreObjectFieldView;
+export type ObjectFieldView = StorefrontObjectFieldView;
 type ObjectFieldInput = Omit<HomepageObjectField, "value"> & { value: unknown };
 
 export interface ObjectFieldContext {

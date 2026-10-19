@@ -1131,12 +1131,13 @@ describe("section skins", () => {
     try {
       const page = await renderSkinned([rail], store("large"));
       expect(draw).toHaveBeenCalledOnce();
-      const job = draw.mock.calls[0]![1] as unknown as { kind: string; target: string; instanceId: string; data: { type: string; settings: { source: { title: string; url: string | null; cards: unknown[] } } } };
+      const job = draw.mock.calls[0]![1] as unknown as { kind: string; target: string; instanceId: string; data: { type: string; version: number; settings: { products: { title: string; url: string | null; cards: unknown[] } } } };
       expect(job).toMatchObject({ kind: "skin", target: "section:product-rail", instanceId: "rail" });
       // The product source as the core rail shows it: its title, its listing and as many cards as the rail's limit.
       expect(job.data.type).toBe("product-rail");
-      expect(job.data.settings.source).toMatchObject({ title: "New arrivals", url: "/search" });
-      expect(job.data.settings.source.cards).toHaveLength(4);
+      expect(job.data.version).toBe(1);
+      expect(job.data.settings.products).toMatchObject({ title: "New arrivals", url: "/search" });
+      expect(job.data.settings.products.cards).toHaveLength(4);
       const unit = page.querySelector('[data-section-id="rail"]')!;
       expect(unit.querySelector('[data-sx-app="acme.hello"] .acme-rail')).not.toBeNull();
       expect(unit.querySelector("[data-product-card], article")).toBeNull();

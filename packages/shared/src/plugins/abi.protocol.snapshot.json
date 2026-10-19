@@ -12449,6 +12449,27 @@
   "STOREFRONT_STYLESHEET_FILE": "styles.css",
   "STOREFRONT_FILE_PATH": "^(?:storefront\\.js|styles\\.css|islands\\/[a-z][a-z0-9-]{0,47}\\.js|public\\/(?:[a-z0-9][a-z0-9_-]{0,63}\\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$",
   "STOREFRONT_SEAL_PREFIX": "//# scalius-storefront ",
+  "STOREFRONT_SECTION_SKIN_PROJECTIONS": {
+   "hero": 1,
+   "usp-strip": 1,
+   "category-tiles": 1,
+   "collections": 1,
+   "product-rail": 1,
+   "product-grid": 1,
+   "deal-block": 1,
+   "product-tabs": 1,
+   "lookbook": 1,
+   "banner": 1,
+   "shop-by": 1,
+   "banner-mosaic": 1,
+   "brand-wall": 1,
+   "editorial": 1,
+   "faq": 1,
+   "specifications": 1,
+   "utility-cards": 1,
+   "seo-text": 1,
+   "newsletter": 1
+  },
   "STOREFRONT_EXTENSION_PREFIX": "/_x/"
  }
 }

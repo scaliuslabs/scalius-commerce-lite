@@ -1,17 +1,16 @@
 ---
-import type { StorefrontSectionSkinData } from "@scalius/shared/plugins/storefront-protocol";
-import type { CoreSectionSettings } from "@scalius/shared/storefront-theme";
+import type { StorefrontSectionSkinData, StorefrontSpecificationsSkinSettings } from "@scalius/shared/plugins/storefront-protocol";
 import Container from "@/components/ui/Container.astro";
 import ObjectFieldValue from "./ObjectFieldValue.astro";
 
 interface Props {
   sectionId: string;
-  data: StorefrontSectionSkinData<CoreSectionSettings<"specifications">>;
+  data: StorefrontSectionSkinData<StorefrontSpecificationsSkinSettings>;
 }
 const { sectionId, data } = Astro.props;
 const heading = data.settings.heading.trim();
 const rows = data.settings.rows.filter((row) => row.label.trim() && row.value.trim());
-const fields = data.settings.objectField ?? [];
+const fields = data.settings.objectFields ?? [];
 const headingId = `home-${sectionId}-title`;
 ---
 

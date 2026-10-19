@@ -376,16 +376,231 @@ export interface StorefrontProductList {
   cards: StorefrontProductCard[];
 }
 
+// ── Core section projections ──────────────────────────────────────────────
+//
+// What a core section's skin gets as `data.settings`: a projection of the
+// section the merchant filled in, declared here and versioned on its own, so
+// core can change how it stores a section while skins keep reading this. The
+// host maps core's settings to these in one place; a projection only gains
+// optional fields within its version. Hidden blocks are left out.
+
+/** Where a photo's subject is, in percent of its width (`x`) and height (`y`). */
+export interface StorefrontFocalPoint {
+  x: number;
+  y: number;
+}
+
+/** A delivery-facts strip's facts, as the store words them. */
+export interface StorefrontDeliveryFacts {
+  kind: "delivery-facts";
+  items: Array<{ title: string; detail: string }>;
+}
+
+/** One public field of an object a section shows, formatted once by the store. */
+export interface StorefrontObjectFieldView {
+  key: string;
+  name: string;
+  parts: Array<
+    | { kind: "text"; text: string }
+    | { kind: "link"; href: string; label: string; external: boolean }
+    | { kind: "color"; value: string }
+    | { kind: "image"; asset: { id: string; url: string; alt: string; width: number | null; height: number | null } }
+  >;
+  list: boolean;
+}
+
+/** A running promotion's end (ISO 8601); null once it ended or when it is unknown. */
+export interface StorefrontPromotionEnd {
+  endsAt: string;
+}
+
+export interface StorefrontHeroSkinSettings {
+  layout: "full-bleed" | "contained-banners" | "split" | "full-screen" | "wide-editorial";
+  slides: Array<{
+    image: StorefrontImage | null;
+    phoneImage?: StorefrontImage | null;
+    focalPoint: StorefrontFocalPoint;
+    phoneFocalPoint?: StorefrontFocalPoint;
+    alt: string;
+    heading?: string;
+    text?: string;
+    buttonLabel?: string;
+    link: string | null;
+  }>;
+  phonePlacement?: "after-categories";
+  sideBanners?: Array<{ image: StorefrontImage | null; alt: string; href: string | null }>;
+  phoneHeight?: "screen" | "compact";
+}
+
+export interface StorefrontUspStripSkinSettings {
+  style: "icons" | "ticker";
+  source: StorefrontDeliveryFacts | { kind: "custom"; items: Array<{ title: string; detail: string }> };
+}
+
+export interface StorefrontCategoryTilesSkinSettings {
+  style: "photo" | "photo-grid" | "round" | "round-small" | "round-row" | "icons" | "quad" | "square";
+  title: string;
+  categories: StorefrontTile[];
+}
+
+export interface StorefrontCollectionsSkinSettings {
+  carousel: "large" | "compact";
+  /** Each collection with its own products (`cards`); none until the merchant picks them (see `data.cards`). */
+  collections: StorefrontTile[];
+  title?: string;
+}
+
+export interface StorefrontProductRailSkinSettings {
+  title: string;
+  products: StorefrontProductList;
+  limit: number;
+}
+
+export interface StorefrontProductGridSkinSettings {
+  title: string;
+  products: StorefrontProductList;
+  columns: number;
+  rows: number;
+}
+
+export interface StorefrontDealBlockSkinSettings {
+  title: string;
+  products: StorefrontProductList;
+  promotion?: StorefrontPromotionEnd | null;
+  image?: StorefrontImage | null;
+}
+
+export interface StorefrontProductTabsSkinSettings {
+  title: string;
+  tabs: Array<{ label: string; products: StorefrontProductList }>;
+  limit: number;
+}
+
+export interface StorefrontShopBySkinSettings {
+  title: string;
+  cards: Array<{ image: StorefrontImage | null; title: string; subtitle?: string; href: string }>;
+}
+
+export interface StorefrontBannerMosaicSkinSettings {
+  tiles: Array<{ image: StorefrontImage | null; alt: string; href: string | null }>;
+}
+
+export interface StorefrontLookbookSkinSettings {
+  title: string;
+  image: StorefrontImage | null;
+  products: StorefrontProductList;
+  photo: "tall" | "square";
+}
+
+export interface StorefrontBannerSkinSettings {
+  layout: "full" | "two-up" | "four-up";
+  heading: string;
+  text: string;
+  image: StorefrontImage | null;
+  cta: { label: string; href: string } | null;
+}
+
+export interface StorefrontBrandWallSkinSettings {
+  title: string;
+  style: "grid" | "rail";
+}
+
+export type StorefrontEditorialSkinSettings =
+  | { layout: "rich-text"; heading: string; body: string }
+  | { layout: "image-with-text"; heading: string; body: string; image: StorefrontImage | null; imageSide: "start" | "end" }
+  | { layout: "multicolumn"; heading: string; columns: Array<{ title: string; text: string }> }
+  | { layout: "testimonial"; quotes: Array<{ quote: string; author: string }> };
+
+export interface StorefrontFaqSkinSettings {
+  heading: string;
+  items: Array<{ question: string; answer: string }>;
+}
+
+export interface StorefrontSpecificationsSkinSettings {
+  heading: string;
+  /** The connected custom field's object fields, when the section names one (they replace `rows`). */
+  objectFields?: StorefrontObjectFieldView[];
+  rows: Array<{ label: string; value: string }>;
+}
+
+export interface StorefrontUtilityCardsSkinSettings {
+  cards: Array<{ title: string; text: string; href: string }>;
+}
+
+export interface StorefrontSeoTextSkinSettings {
+  heading: string;
+  body: string;
+}
+
+export interface StorefrontNewsletterSkinSettings {
+  heading: string;
+  text: string;
+  image?: StorefrontImage | null;
+  email?: "optional" | "required" | "hidden";
+  whatsapp?: boolean;
+  buttonLabel?: string;
+}
+
+/** Each skinnable core section type's projection (`data.settings` of a `section:<type>` skin). */
+export interface StorefrontSectionSkinSettings {
+  hero: StorefrontHeroSkinSettings;
+  "usp-strip": StorefrontUspStripSkinSettings;
+  "category-tiles": StorefrontCategoryTilesSkinSettings;
+  collections: StorefrontCollectionsSkinSettings;
+  "product-rail": StorefrontProductRailSkinSettings;
+  "product-grid": StorefrontProductGridSkinSettings;
+  "deal-block": StorefrontDealBlockSkinSettings;
+  "product-tabs": StorefrontProductTabsSkinSettings;
+  lookbook: StorefrontLookbookSkinSettings;
+  banner: StorefrontBannerSkinSettings;
+  "shop-by": StorefrontShopBySkinSettings;
+  "banner-mosaic": StorefrontBannerMosaicSkinSettings;
+  "brand-wall": StorefrontBrandWallSkinSettings;
+  editorial: StorefrontEditorialSkinSettings;
+  faq: StorefrontFaqSkinSettings;
+  specifications: StorefrontSpecificationsSkinSettings;
+  "utility-cards": StorefrontUtilityCardsSkinSettings;
+  "seo-text": StorefrontSeoTextSkinSettings;
+  newsletter: StorefrontNewsletterSkinSettings;
+}
+/** A core section type a skin may draw (`section:<type>`). */
+export type StorefrontSkinnableSection = keyof StorefrontSectionSkinSettings;
+
 /**
- * What a core section's skin (`section:<type>`) gets: the section's settings
- * at its `version` with every reference resolved by fixed rules (a media id
- * as `StorefrontImage | null`, a product source as `StorefrontProductList`,
- * category and collection ids as `StorefrontTile[]`, a promotion id as
- * `{ endsAt }`), hidden blocks left out. `CoreSectionSettings<"hero">`
- * (`@scalius/shared/storefront-theme`) types one section's settings.
+ * The projection version of each skinnable core section type, as
+ * `StorefrontSectionSkinData.version` carries it. A projection only gains
+ * optional fields within its version.
+ */
+export const STOREFRONT_SECTION_SKIN_PROJECTIONS = {
+  hero: 1,
+  "usp-strip": 1,
+  "category-tiles": 1,
+  collections: 1,
+  "product-rail": 1,
+  "product-grid": 1,
+  "deal-block": 1,
+  "product-tabs": 1,
+  lookbook: 1,
+  banner: 1,
+  "shop-by": 1,
+  "banner-mosaic": 1,
+  "brand-wall": 1,
+  editorial: 1,
+  faq: 1,
+  specifications: 1,
+  "utility-cards": 1,
+  "seo-text": 1,
+  newsletter: 1,
+} as const satisfies Record<StorefrontSkinnableSection, number>;
+
+/**
+ * What a core section's skin (`section:<type>`) gets: the section's
+ * projection (`StorefrontSectionSkinSettings[type]`, at the projection
+ * `version`) and the store data it shows beyond its settings.
  */
 export interface StorefrontSectionSkinData<Settings = Record<string, unknown>> {
   type: string;
+  /** The projection's version (`STOREFRONT_SECTION_SKIN_PROJECTIONS[type]`), not core's section version. */
   version: number;
   settings: Settings;
   /** Store data the section shows beyond its settings: a brand wall's brands. */

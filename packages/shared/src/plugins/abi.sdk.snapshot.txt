@@ -597,8 +597,7 @@ export declare function OrderForm(props: OrderFormProps): Html;
 export {};
 
 // packages/plugin-sdk/src/storefront/define.d.ts
-import { type StorefrontBlockTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCardData, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontRenderJob, type StorefrontResolvedSettings, type StorefrontSectionSkinData } from "@scalius/shared/plugins/storefront-protocol";
-import type { CoreSectionSettings, StorefrontSkinnableSectionType } from "@scalius/shared/storefront-theme/skins";
+import { type StorefrontBlockTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCardData, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontRenderJob, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSectionSkinSettings, type StorefrontSkinnableSection } from "@scalius/shared/plugins/storefront-protocol";
 import { type Renderable } from "./html";
 export interface SectionProps<Settings = StorefrontResolvedSettings> {
     objects: NonNullable<Extract<StorefrontRenderJob, {
@@ -618,7 +617,7 @@ export type FooterProps<Settings = StorefrontResolvedSettings> = SkinProps<Store
 export type ProductCardProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontProductCardData, Settings>;
 export type ProductMainProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontProductPage, Settings>;
 export type ListingMainProps<Settings = StorefrontResolvedSettings> = SkinProps<StorefrontListingPage, Settings>;
-export type SectionSkinProps<Type extends StorefrontSkinnableSectionType = StorefrontSkinnableSectionType, Settings = StorefrontResolvedSettings> = SkinProps<StorefrontSectionSkinData<CoreSectionSettings<Type>>, Settings> & {
+export type SectionSkinProps<Type extends StorefrontSkinnableSection = StorefrontSkinnableSection, Settings = StorefrontResolvedSettings> = SkinProps<StorefrontSectionSkinData<StorefrontSectionSkinSettings[Type]>, Settings> & {
     instanceId: string;
 };
 export interface BlockProps<Settings = StorefrontResolvedSettings> {
@@ -673,8 +672,7 @@ export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
 export { BuyForm, CartCount, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Toolbar, accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
 export type { BuyFormProps, ImageProps, IslandProps, OrderFormProps, PriceProps } from "./components";
-export type { StorefrontBlockTarget, StorefrontFooterData, StorefrontHeaderData, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontMenuItem, StorefrontMoney, StorefrontProductCard, StorefrontProductCardData, StorefrontProductList, StorefrontProductPage, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSkinTarget, StorefrontStoreInfo, StorefrontTile, } from "@scalius/shared/plugins/storefront-protocol";
-export type { CoreSectionSettings, StorefrontSkinnableSectionType } from "@scalius/shared/storefront-theme/skins";
+export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontBlockTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductPage, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
 
 // packages/plugin-sdk/src/storefront/island.d.ts
 import { type StorefrontIslandContext, type StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
@@ -2254,6 +2252,249 @@ export interface StorefrontProductList {
     url: string | null;
     cards: StorefrontProductCard[];
 }
+export interface StorefrontFocalPoint {
+    x: number;
+    y: number;
+}
+export interface StorefrontDeliveryFacts {
+    kind: "delivery-facts";
+    items: Array<{
+        title: string;
+        detail: string;
+    }>;
+}
+export interface StorefrontObjectFieldView {
+    key: string;
+    name: string;
+    parts: Array<{
+        kind: "text";
+        text: string;
+    } | {
+        kind: "link";
+        href: string;
+        label: string;
+        external: boolean;
+    } | {
+        kind: "color";
+        value: string;
+    } | {
+        kind: "image";
+        asset: {
+            id: string;
+            url: string;
+            alt: string;
+            width: number | null;
+            height: number | null;
+        };
+    }>;
+    list: boolean;
+}
+export interface StorefrontPromotionEnd {
+    endsAt: string;
+}
+export interface StorefrontHeroSkinSettings {
+    layout: "full-bleed" | "contained-banners" | "split" | "full-screen" | "wide-editorial";
+    slides: Array<{
+        image: StorefrontImage | null;
+        phoneImage?: StorefrontImage | null;
+        focalPoint: StorefrontFocalPoint;
+        phoneFocalPoint?: StorefrontFocalPoint;
+        alt: string;
+        heading?: string;
+        text?: string;
+        buttonLabel?: string;
+        link: string | null;
+    }>;
+    phonePlacement?: "after-categories";
+    sideBanners?: Array<{
+        image: StorefrontImage | null;
+        alt: string;
+        href: string | null;
+    }>;
+    phoneHeight?: "screen" | "compact";
+}
+export interface StorefrontUspStripSkinSettings {
+    style: "icons" | "ticker";
+    source: StorefrontDeliveryFacts | {
+        kind: "custom";
+        items: Array<{
+            title: string;
+            detail: string;
+        }>;
+    };
+}
+export interface StorefrontCategoryTilesSkinSettings {
+    style: "photo" | "photo-grid" | "round" | "round-small" | "round-row" | "icons" | "quad" | "square";
+    title: string;
+    categories: StorefrontTile[];
+}
+export interface StorefrontCollectionsSkinSettings {
+    carousel: "large" | "compact";
+    collections: StorefrontTile[];
+    title?: string;
+}
+export interface StorefrontProductRailSkinSettings {
+    title: string;
+    products: StorefrontProductList;
+    limit: number;
+}
+export interface StorefrontProductGridSkinSettings {
+    title: string;
+    products: StorefrontProductList;
+    columns: number;
+    rows: number;
+}
+export interface StorefrontDealBlockSkinSettings {
+    title: string;
+    products: StorefrontProductList;
+    promotion?: StorefrontPromotionEnd | null;
+    image?: StorefrontImage | null;
+}
+export interface StorefrontProductTabsSkinSettings {
+    title: string;
+    tabs: Array<{
+        label: string;
+        products: StorefrontProductList;
+    }>;
+    limit: number;
+}
+export interface StorefrontShopBySkinSettings {
+    title: string;
+    cards: Array<{
+        image: StorefrontImage | null;
+        title: string;
+        subtitle?: string;
+        href: string;
+    }>;
+}
+export interface StorefrontBannerMosaicSkinSettings {
+    tiles: Array<{
+        image: StorefrontImage | null;
+        alt: string;
+        href: string | null;
+    }>;
+}
+export interface StorefrontLookbookSkinSettings {
+    title: string;
+    image: StorefrontImage | null;
+    products: StorefrontProductList;
+    photo: "tall" | "square";
+}
+export interface StorefrontBannerSkinSettings {
+    layout: "full" | "two-up" | "four-up";
+    heading: string;
+    text: string;
+    image: StorefrontImage | null;
+    cta: {
+        label: string;
+        href: string;
+    } | null;
+}
+export interface StorefrontBrandWallSkinSettings {
+    title: string;
+    style: "grid" | "rail";
+}
+export type StorefrontEditorialSkinSettings = {
+    layout: "rich-text";
+    heading: string;
+    body: string;
+} | {
+    layout: "image-with-text";
+    heading: string;
+    body: string;
+    image: StorefrontImage | null;
+    imageSide: "start" | "end";
+} | {
+    layout: "multicolumn";
+    heading: string;
+    columns: Array<{
+        title: string;
+        text: string;
+    }>;
+} | {
+    layout: "testimonial";
+    quotes: Array<{
+        quote: string;
+        author: string;
+    }>;
+};
+export interface StorefrontFaqSkinSettings {
+    heading: string;
+    items: Array<{
+        question: string;
+        answer: string;
+    }>;
+}
+export interface StorefrontSpecificationsSkinSettings {
+    heading: string;
+    objectFields?: StorefrontObjectFieldView[];
+    rows: Array<{
+        label: string;
+        value: string;
+    }>;
+}
+export interface StorefrontUtilityCardsSkinSettings {
+    cards: Array<{
+        title: string;
+        text: string;
+        href: string;
+    }>;
+}
+export interface StorefrontSeoTextSkinSettings {
+    heading: string;
+    body: string;
+}
+export interface StorefrontNewsletterSkinSettings {
+    heading: string;
+    text: string;
+    image?: StorefrontImage | null;
+    email?: "optional" | "required" | "hidden";
+    whatsapp?: boolean;
+    buttonLabel?: string;
+}
+export interface StorefrontSectionSkinSettings {
+    hero: StorefrontHeroSkinSettings;
+    "usp-strip": StorefrontUspStripSkinSettings;
+    "category-tiles": StorefrontCategoryTilesSkinSettings;
+    collections: StorefrontCollectionsSkinSettings;
+    "product-rail": StorefrontProductRailSkinSettings;
+    "product-grid": StorefrontProductGridSkinSettings;
+    "deal-block": StorefrontDealBlockSkinSettings;
+    "product-tabs": StorefrontProductTabsSkinSettings;
+    lookbook: StorefrontLookbookSkinSettings;
+    banner: StorefrontBannerSkinSettings;
+    "shop-by": StorefrontShopBySkinSettings;
+    "banner-mosaic": StorefrontBannerMosaicSkinSettings;
+    "brand-wall": StorefrontBrandWallSkinSettings;
+    editorial: StorefrontEditorialSkinSettings;
+    faq: StorefrontFaqSkinSettings;
+    specifications: StorefrontSpecificationsSkinSettings;
+    "utility-cards": StorefrontUtilityCardsSkinSettings;
+    "seo-text": StorefrontSeoTextSkinSettings;
+    newsletter: StorefrontNewsletterSkinSettings;
+}
+export type StorefrontSkinnableSection = keyof StorefrontSectionSkinSettings;
+export declare const STOREFRONT_SECTION_SKIN_PROJECTIONS: {
+    readonly hero: 1;
+    readonly "usp-strip": 1;
+    readonly "category-tiles": 1;
+    readonly collections: 1;
+    readonly "product-rail": 1;
+    readonly "product-grid": 1;
+    readonly "deal-block": 1;
+    readonly "product-tabs": 1;
+    readonly lookbook: 1;
+    readonly banner: 1;
+    readonly "shop-by": 1;
+    readonly "banner-mosaic": 1;
+    readonly "brand-wall": 1;
+    readonly editorial: 1;
+    readonly faq: 1;
+    readonly specifications: 1;
+    readonly "utility-cards": 1;
+    readonly "seo-text": 1;
+    readonly newsletter: 1;
+};
 export interface StorefrontSectionSkinData<Settings = Record<string, unknown>> {
     type: string;
     version: number;
