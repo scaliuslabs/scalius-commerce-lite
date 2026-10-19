@@ -828,8 +828,8 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
       {
         version: 159,
         name: "0159_order_tracking_signals",
-        sqliteStatements: 10,
-        postgresStatements: 10,
+        sqliteStatements: 11,
+        postgresStatements: 11,
       },
     ]);
   });

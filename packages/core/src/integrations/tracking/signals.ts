@@ -14,6 +14,7 @@ import {
   signalsAllowedBy,
   type BrowserTrackingSignals,
   type ConsentState,
+  type OrderTrackingSnapshot,
   type TrackingConsentSettings,
 } from "@scalius/shared/tracking-consent";
 
@@ -38,14 +39,7 @@ export interface TrackingDestinations {
   tiktok: boolean;
 }
 
-export interface OrderTrackingSnapshot {
-  consent: ConsentState;
-  signals: BrowserTrackingSignals;
-  clientIp: string | null;
-  userAgent: string | null;
-  /** The server purchase deliveries this order owes (GA4 and TikTok; Meta has its outbox). */
-  deliveries: Array<"ga4" | "tiktok">;
-}
+export type { OrderTrackingSnapshot };
 
 const EMPTY_SIGNALS: BrowserTrackingSignals = {
   fbp: null, fbc: null, ttp: null, ttclid: null, gaClientId: null, gaSessionId: null, gclid: null,
@@ -175,8 +169,13 @@ export function orderConsent(
 
 /** Deletes snapshots older than the retention, oldest first, at most `limit`. */
 export async function purgeExpiredTrackingSignals(db: Database, options: { limit: number; nowSeconds?: number }): Promise<number> {
+  return (await expiredTrackingSignalsDelete(db, options)).length;
+}
+
+/** The purge as one batchable statement (the cron runs it in its tracking batch). */
+export function expiredTrackingSignalsDelete(db: Database, options: { limit: number; nowSeconds?: number }) {
   const cutoff = (options.nowSeconds ?? Math.floor(Date.now() / 1000)) - TRACKING_SIGNALS_RETENTION_SECONDS;
-  const rows = await db
+  return db
     .delete(orderTrackingSignals)
     .where(sql`${orderTrackingSignals.orderId} IN (
       SELECT ${orderTrackingSignals.orderId} FROM ${orderTrackingSignals}
@@ -184,7 +183,6 @@ export async function purgeExpiredTrackingSignals(db: Database, options: { limit
       ORDER BY ${orderTrackingSignals.createdAt} LIMIT ${Math.max(1, Math.floor(options.limit))}
     )`)
     .returning({ orderId: orderTrackingSignals.orderId });
-  return rows.length;
 }
 
 function randomId(): string {

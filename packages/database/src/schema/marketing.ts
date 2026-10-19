@@ -113,6 +113,8 @@ export const trackingDeliveries = sqliteTable("tracking_deliveries", {
     index("tracking_deliveries_due_idx").on(table.status, table.nextAttemptAt),
     index("tracking_deliveries_claim_idx").on(table.status, table.claimExpiresAt),
     index("tracking_deliveries_created_idx").on(table.createdAt),
+    // The order's deliveries (payment confirmation) and the orders foreign key.
+    index("tracking_deliveries_order_idx").on(table.orderId),
 ]);
 
 export type MetaConversionsLog = InferSelectModel<typeof metaConversionsLogs>;

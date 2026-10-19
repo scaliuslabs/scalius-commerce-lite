@@ -287,9 +287,14 @@ export async function flushPendingMetaPurchaseOutbox(options: {
     storefrontUrl?: string | null;
     encryptionKey?: string;
     limit?: number;
-}): Promise<{ scanned: number; sent: number; failed: number; skipped: number; busy: number }> {
+    /**
+     * Statements read in the same round trip as the due rows (the cron's
+     * GA4/TikTok sweep), so an idle tick pays one D1 call for both.
+     */
+    batchWith?: SQLiteBatchItem[];
+}): Promise<{ scanned: number; sent: number; failed: number; skipped: number; busy: number; batchedResults: unknown[] }> {
     const limit = Math.max(1, Math.min(options.limit ?? 10, MAX_FLUSH_LIMIT));
-    const dueRows = await options.db
+    const dueQuery = options.db
         .select({ id: metaCapiPurchaseOutbox.id })
         .from(metaCapiPurchaseOutbox)
         .where(
@@ -305,8 +310,16 @@ export async function flushPendingMetaPurchaseOutbox(options: {
             ),
         )
         .orderBy(asc(metaCapiPurchaseOutbox.nextAttemptAt), asc(metaCapiPurchaseOutbox.createdAt))
-        .limit(limit)
-        .all();
+        .limit(limit);
+    let dueRows: Array<{ id: string }>;
+    let batchedResults: unknown[] = [];
+    if (options.batchWith?.length) {
+        const results = await options.db.batch([dueQuery as SQLiteBatchItem, ...options.batchWith] as [SQLiteBatchItem, ...SQLiteBatchItem[]]);
+        dueRows = results[0] as Array<{ id: string }>;
+        batchedResults = results.slice(1);
+    } else {
+        dueRows = await dueQuery.all();
+    }
 
     let sent = 0;
     let failed = 0;
@@ -324,7 +337,7 @@ export async function flushPendingMetaPurchaseOutbox(options: {
         else busy += 1;
     }
 
-    return { scanned: dueRows.length, sent, failed, skipped, busy };
+    return { scanned: dueRows.length, sent, failed, skipped, busy, batchedResults };
 }
 
 async function processMetaPurchaseOutboxById(

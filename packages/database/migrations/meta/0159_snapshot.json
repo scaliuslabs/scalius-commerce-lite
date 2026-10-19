@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d6fa8664-95aa-4c80-99d6-7c81381231cf",
+  "id": "dd886636-e3f3-4dac-a747-cdb2af6c5ade",
   "prevId": "577a52e3-5fab-484d-8bb6-2962abb15503",
   "tables": {
     "account": {
@@ -19569,6 +19569,13 @@
           "name": "tracking_deliveries_created_idx",
           "columns": [
             "created_at"
+          ],
+          "isUnique": false
+        },
+        "tracking_deliveries_order_idx": {
+          "name": "tracking_deliveries_order_idx",
+          "columns": [
+            "order_id"
           ],
           "isUnique": false
         }

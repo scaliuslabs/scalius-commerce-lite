@@ -575,7 +575,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 159,
     name: "0159_order_tracking_signals",
-    sourceSha256: "e58c37cebd0a69920373afbdd0d2d10491fabbb9cfe9e00885df351cadafe79f",
+    sourceSha256: "2288de59a047c4daea18883f65b105cf4b2be5fc9004f85311611b0dc9301382",
   },
 ] as const;
 

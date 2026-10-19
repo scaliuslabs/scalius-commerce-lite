@@ -253,6 +253,16 @@ export function signalsAllowedBy(state: Pick<ConsentState, "analytics" | "market
   };
 }
 
+/** What a storefront order commits about tracking (order_tracking_signals, audit spec 3.10). */
+export interface OrderTrackingSnapshot {
+  consent: ConsentState;
+  signals: BrowserTrackingSignals;
+  clientIp: string | null;
+  userAgent: string | null;
+  /** The server purchase deliveries the order owes (GA4 and TikTok; Meta has its own outbox). */
+  deliveries: Array<"ga4" | "tiktok">;
+}
+
 /**
  * The shared browser/server event id (Meta `eventID`/`event_id`, TikTok
  * `event_id`): `<Event>:<stable key>`. Purchase uses the order id, so the

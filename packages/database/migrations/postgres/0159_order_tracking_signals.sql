@@ -47,6 +47,8 @@ CREATE INDEX "tracking_deliveries_claim_idx" ON "tracking_deliveries" ("status",
 --> statement-breakpoint
 CREATE INDEX "tracking_deliveries_created_idx" ON "tracking_deliveries" ("created_at");
 --> statement-breakpoint
+CREATE INDEX "tracking_deliveries_order_idx" ON "tracking_deliveries" ("order_id");
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."tracking_ga4_refund_insert_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -81,4 +83,4 @@ FOR EACH ROW
 WHEN (NEW."payment_type" = 'refund' AND NEW."status" = 'refunded' AND OLD."status" IS DISTINCT FROM 'refunded' AND EXISTS (SELECT 1 FROM "tracking_deliveries" WHERE "destination" = 'ga4' AND "dedup_key" = 'purchase:' || NEW."order_id" AND "status" = 'sent'))
 EXECUTE FUNCTION scalius_compat."tracking_ga4_refund_update_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (159, '0159_order_tracking_signals', 'e58c37cebd0a69920373afbdd0d2d10491fabbb9cfe9e00885df351cadafe79f');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (159, '0159_order_tracking_signals', '2288de59a047c4daea18883f65b105cf4b2be5fc9004f85311611b0dc9301382');

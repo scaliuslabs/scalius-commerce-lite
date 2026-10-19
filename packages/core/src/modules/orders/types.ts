@@ -10,7 +10,7 @@ import type { FunctionCart } from "@scalius/shared/plugins";
 import type { CustomerRequestType } from "../settings/browser";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
 import type { OrderChannel } from "@scalius/shared/order-channel";
-import type { OrderTrackingSnapshot } from "../../integrations/tracking/signals";
+import type { OrderTrackingSnapshot } from "@scalius/shared/tracking-consent";
 import type {
     AdminOrderFulfilmentView,
     OrderLineFulfilmentFacts,

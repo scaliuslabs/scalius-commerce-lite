@@ -13,6 +13,9 @@
 import type { Database } from "@scalius/database/client";
 import { orderItems, orderPayments, orders, orderTrackingSignals, trackingDeliveries } from "@scalius/database/schema";
 import { and, asc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
+
+type SQLiteBatchItem = BatchItem<"sqlite">;
 import type { ConsentState } from "@scalius/shared/tracking-consent";
 import { selectSettingsDocuments } from "../../settings-store";
 import { createMetaPurchaseEventId, isOrderEligibleForMetaPurchase } from "../meta/purchase-outbox";
@@ -35,7 +38,7 @@ import {
   tiktokEventsDocument,
   trackingConsentDocument,
 } from "./settings";
-import { orderConsent, TRACKING_SIGNALS_RETENTION_SECONDS, type OrderTrackingSignalsRow } from "./signals";
+import { expiredTrackingSignalsDelete, orderConsent, TRACKING_SIGNALS_RETENTION_SECONDS, type OrderTrackingSignalsRow } from "./signals";
 
 export type TrackingDestination = "ga4" | "tiktok";
 export type TrackingDeliveryStatus = "pending" | "processing" | "sent" | "failed" | "skipped";
@@ -71,9 +74,8 @@ export interface TrackingFlushResult {
 type Outcome = "sent" | "failed" | "skipped" | "deferred" | "busy";
 
 /** Due rows, oldest first, through the due and claim indexes (bounded walks). */
-export async function flushTrackingDeliveries(db: Database, runtime: TrackingRuntime & { limit?: number }): Promise<TrackingFlushResult> {
-  const limit = Math.max(1, Math.min(runtime.limit ?? 10, MAX_FLUSH_LIMIT));
-  const rows = await db
+function dueDeliveries(db: Database, limit: number) {
+  return db
     .select({ id: trackingDeliveries.id })
     .from(trackingDeliveries)
     .where(or(
@@ -81,13 +83,60 @@ export async function flushTrackingDeliveries(db: Database, runtime: TrackingRun
       and(eq(trackingDeliveries.status, "processing"), lte(trackingDeliveries.claimExpiresAt, sql`unixepoch()`)),
     ))
     .orderBy(asc(trackingDeliveries.nextAttemptAt))
-    .limit(limit)
-    .all();
+    .limit(Math.max(1, Math.min(limit, MAX_FLUSH_LIMIT)));
+}
+
+async function processRows(db: Database, rows: ReadonlyArray<{ id: string }>, runtime: TrackingRuntime): Promise<TrackingFlushResult> {
   const result: TrackingFlushResult = { scanned: rows.length, sent: 0, failed: 0, skipped: 0, deferred: 0, busy: 0 };
   for (const row of rows) {
     result[await processTrackingDelivery(db, row.id, runtime)] += 1;
   }
   return result;
+}
+
+export async function flushTrackingDeliveries(db: Database, runtime: TrackingRuntime & { limit?: number }): Promise<TrackingFlushResult> {
+  return processRows(db, await dueDeliveries(db, runtime.limit ?? 10).all(), runtime);
+}
+
+/**
+ * The cron's tracking pass in one round trip when idle: the due deliveries,
+ * the snapshots past their 8 days and the finished deliveries past 90, then
+ * the sends.
+ */
+export async function runTrackingSweep(
+  db: Database,
+  runtime: TrackingRuntime & { limit: number; purgeLimit: number; purgeAt?: number },
+): Promise<TrackingSweepResult> {
+  const plan = planTrackingSweep(db, runtime);
+  return plan.finish(await db.batch(plan.statements as [SQLiteBatchItem, ...SQLiteBatchItem[]]));
+}
+
+export type TrackingSweepResult = TrackingFlushResult & { signalsPurged: number; deliveriesPurged: number };
+
+/**
+ * The sweep's three statements, to batch with another job's read (the Meta
+ * outbox's due rows), and what to do with their results.
+ */
+export function planTrackingSweep(
+  db: Database,
+  runtime: TrackingRuntime & { limit: number; purgeLimit: number; purgeAt?: number; purge?: boolean },
+): { statements: SQLiteBatchItem[]; finish(results: readonly unknown[] | undefined): Promise<TrackingSweepResult> } {
+  const purge = { limit: runtime.purgeLimit, nowSeconds: runtime.purgeAt };
+  return {
+    statements: [
+      dueDeliveries(db, runtime.limit) as unknown as SQLiteBatchItem,
+      // The purges run once an hour (`purge`); retention is days, not minutes.
+      ...(runtime.purge === false ? [] : [
+        expiredTrackingSignalsDelete(db, purge) as unknown as SQLiteBatchItem,
+        finishedTrackingDeliveriesDelete(db, purge) as unknown as SQLiteBatchItem,
+      ]),
+    ],
+    async finish(results) {
+      const [due, signals, finished] = (results ?? []) as [Array<{ id: string }>?, unknown[]?, unknown[]?];
+      const flushed = await processRows(db, due ?? [], runtime);
+      return { ...flushed, signalsPurged: signals?.length ?? 0, deliveriesPurged: finished?.length ?? 0 };
+    },
+  };
 }
 
 /**
@@ -197,6 +246,10 @@ async function attemptDelivery(db: Database, row: DeliveryRow, runtime: Tracking
     if (order.status === "incomplete" && now - committedAt < TRACKING_SIGNALS_RETENTION_SECONDS) {
       return { outcome: "deferred", error: `${AWAITING_PAYMENT}: the hosted payment is not confirmed yet.`, delaySeconds: 60 * 60 };
     }
+    // Past the snapshot's 8 days a purchase is history, not an ad signal.
+    if (now - committedAt > TRACKING_SIGNALS_RETENTION_SECONDS) {
+      return { outcome: "skipped", error: "event_too_old: the purchase is older than 8 days." };
+    }
     if (!isOrderEligibleForMetaPurchase(order)) {
       return { outcome: "skipped", error: `not_eligible: order is ${order.status}/${order.paymentStatus}.` };
     }
@@ -219,7 +272,10 @@ async function attemptDelivery(db: Database, row: DeliveryRow, runtime: Tracking
   };
 
   if (row.destination === "ga4") {
-    if (!consent.analytics) return { outcome: "skipped", error: `${CONSENT_DENIED}: the buyer did not grant analytics consent.` };
+    // A refund is queued only after its purchase was sent under analytics
+    // consent (the trigger), and it can come after the snapshot is purged:
+    // it follows the purchase, never a later default.
+    if (row.eventName === "purchase" && !consent.analytics) return { outcome: "skipped", error: `${CONSENT_DENIED}: the buyer did not grant analytics consent.` };
     const read = await ga4MeasurementDocument.fromRows(settingRows, { encryptionKey: runtime.encryptionKey });
     const settings = read.value;
     if (!settings.isEnabled || !settings.measurementId || !settings.apiSecret) {
@@ -296,8 +352,12 @@ function bounded(message: string): string {
 
 /** Deletes finished deliveries past the retention, at most `limit`. */
 export async function purgeFinishedTrackingDeliveries(db: Database, options: { limit: number; nowSeconds?: number }): Promise<number> {
+  return (await finishedTrackingDeliveriesDelete(db, options)).length;
+}
+
+function finishedTrackingDeliveriesDelete(db: Database, options: { limit: number; nowSeconds?: number }) {
   const cutoff = (options.nowSeconds ?? Math.floor(Date.now() / 1000)) - TRACKING_DELIVERY_RETENTION_SECONDS;
-  const rows = await db
+  return db
     .delete(trackingDeliveries)
     .where(sql`${trackingDeliveries.id} IN (
       SELECT ${trackingDeliveries.id} FROM ${trackingDeliveries}
@@ -305,5 +365,4 @@ export async function purgeFinishedTrackingDeliveries(db: Database, options: { l
       ORDER BY ${trackingDeliveries.createdAt} LIMIT ${Math.max(1, Math.floor(options.limit))}
     )`)
     .returning({ id: trackingDeliveries.id });
-  return rows.length;
 }

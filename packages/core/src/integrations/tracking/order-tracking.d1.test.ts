@@ -16,7 +16,7 @@ import { createStorefrontOrder, createTrustedStorefrontCheckoutPolicySnapshot } 
 import type { CreateStorefrontOrderInput } from "../../modules/orders/types";
 import { metaConversionsDocument } from "../../modules/settings";
 import { processExistingMetaPurchaseOutboxForOrder } from "../meta/purchase-outbox";
-import { flushTrackingDeliveries, processTrackingDeliveriesForOrder } from "./deliveries";
+import { flushTrackingDeliveries, processTrackingDeliveriesForOrder, runTrackingSweep } from "./deliveries";
 import { getTrackingHealth } from "../../modules/analytics/tracking-health";
 import { ga4MeasurementDocument, tiktokEventsDocument } from "./settings";
 import {
@@ -86,7 +86,7 @@ describe("order tracking signals and server purchases (audit spec S4)", () => {
     sqlite.close();
   });
 
-  async function checkout(request: CheckoutTrackingRequest | null, options: { country?: string; staleAuthority?: boolean } = {}) {
+  async function checkout(request: CheckoutTrackingRequest | null, options: { country?: string; staleAuthority?: boolean; noSnapshot?: boolean } = {}) {
     const data: CreateStorefrontOrderInput = {
       checkoutRequestId: `request_${crypto.randomUUID()}`,
       expectedQuoteFingerprint: "taxq_unused_in_core_tests0",
@@ -136,6 +136,7 @@ describe("order tracking signals and server purchases (audit spec S4)", () => {
       consentSettings: authority.sideEffects.tracking.consent,
       destinations: { meta: authority.sideEffects.metaPurchase, ga4: authority.sideEffects.tracking.ga4, tiktok: authority.sideEffects.tracking.tiktok },
     });
+    if (options.noSnapshot) result.commitPayload.trackingSnapshot = null;
     if (options.staleAuthority) sqlite.exec("UPDATE checkout_authority SET revision = revision + 1 WHERE id = 'default'");
     batches = [];
     await commitStorefrontOrderPayload(db, result.commitPayload, { attempt, response: { orderId: result.orderId } });
@@ -189,6 +190,24 @@ describe("order tracking signals and server purchases (audit spec S4)", () => {
     await processExistingMetaPurchaseOutboxForOrder({ db, orderId: ldu, source: "storefront-order", storefrontUrl: STORE, encryptionKey: KEY });
     const event = (sent.find((call) => call.url.includes("graph.facebook.com"))!.body.data as Array<Record<string, unknown>>)[0]!;
     expect(event).toMatchObject({ data_processing_options: ["LDU"], data_processing_options_country: 0, data_processing_options_state: 0 });
+  });
+
+  it("costs the commit batch at most two statements and three rows (the snapshot and the GA4/TikTok purchases)", async () => {
+    const changes = () => Number((sqlite.prepare("SELECT total_changes() AS n").get() as { n: number }).n);
+    // The same buyer each time (the first order creates the customer).
+    await checkout(BROWSER, { noSnapshot: true });
+    let before = changes();
+    await checkout(BROWSER, { noSnapshot: true });
+    const plain = { statements: batches[0]!.length, rows: changes() - before };
+    before = changes();
+    await checkout(BROWSER);
+    const tracked = { statements: batches[0]!.length, rows: changes() - before };
+    expect(tracked.statements - plain.statements).toBe(2);
+    expect(tracked.rows - plain.rows).toBe(3);
+    // Marketing and analytics denied: the snapshot alone (no delivery is owed).
+    before = changes();
+    await checkout({ ...BROWSER, consent: { analytics: false, marketing: false, saleOfData: false } });
+    expect({ statements: batches[0]!.length - plain.statements, rows: changes() - before - plain.rows }).toEqual({ statements: 1, rows: 1 });
   });
 
   it("writes nothing when the commit batch fails (the snapshot is atomic with the order)", async () => {
@@ -277,5 +296,13 @@ describe("order tracking signals and server purchases (audit spec S4)", () => {
     expect(signalsRow(orderId)).toBeDefined();
     expect(await purgeExpiredTrackingSignals(db, { limit: 100, nowSeconds: createdAt + TRACKING_SIGNALS_RETENTION_SECONDS + 1 })).toBe(1);
     expect(signalsRow(orderId)).toBeUndefined();
+
+    // The cron's sweep (one batch with Meta's due rows) purges the same way.
+    const later = await checkout(BROWSER);
+    const laterAt = Number(signalsRow(later)!.created_at);
+    const swept = await runTrackingSweep(db, { ...runtime, limit: 5, purgeLimit: 50, purgeAt: laterAt + TRACKING_SIGNALS_RETENTION_SECONDS + 1 });
+
+    expect(swept).toMatchObject({ signalsPurged: 1, scanned: 4, sent: 4 });
+    expect(signalsRow(later)).toBeUndefined();
   });
 });
