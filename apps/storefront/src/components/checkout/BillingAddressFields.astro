@@ -29,10 +29,17 @@ interface Props {
   /** What the buyer posted (a page rendered again after a post). */
   values?: Partial<Record<BillingAddressField, string>>;
   sameAsShipping?: boolean;
+  /** The fields the billing country's rules require, when the page read them (the browser marks them otherwise). */
+  requiredFields?: readonly BillingAddressField[];
+  /** What the page found wrong with a posted field (the no-JavaScript checkout). */
+  errors?: Partial<Record<BillingAddressField, string>>;
+  /** Focus the first field with an error when the page loads (no other field on the page has one). */
+  focusFirstError?: boolean;
 }
 
 const {
   countries, selected, requireFull, labels, language = "en", labelClass, fieldClass, path, values = {}, sameAsShipping = true,
+  requiredFields = [], errors = {}, focusFirstError = false,
 } = Astro.props;
 // With a known path, the section shows only when checkout asks for a billing address.
 const need = path ? billingAddressNeed({ path, requireFullBillingAddress: requireFull }) : null;
@@ -41,6 +48,7 @@ const options = countries
   .sort((left, right) => left.name.localeCompare(right.name, language));
 // A minimal billing address keeps only what tax regions match on.
 const fields: readonly BillingAddressField[] = requireFull ? BILLING_ADDRESS_FIELDS : MINIMAL_BILLING_FIELDS;
+const firstError = focusFirstError ? fields.find((field) => errors[field]) : undefined;
 const AUTOCOMPLETE: Record<BillingAddressField, string> = {
   billingName: "billing name",
   billingCompany: "billing organization",
@@ -90,11 +98,14 @@ const AUTOCOMPLETE: Record<BillingAddressField, string> = {
     {
       fields.map((field) => {
         const id = `billing-${field}`;
+        const errorId = `${id}-error`;
         const wide = field === "billingAddress" || field === "billingAddressLine2";
+        const required = requiredFields.includes(field);
+        const error = errors[field];
         return (
           <div class={wide ? "sm:col-span-2" : undefined} data-address-rule={BILLING_FIELD_RULE[field]}>
             <label for={id} class={labelClass}>
-              {labels[field]}<span aria-hidden="true" class="ms-0.5 hidden text-destructive" data-required-mark>*</span>
+              {labels[field]}<span aria-hidden="true" class:list={["ms-0.5 text-destructive", !required && "hidden"]} data-required-mark>*</span>
             </label>
             <input
               id={id}
@@ -105,8 +116,14 @@ const AUTOCOMPLETE: Record<BillingAddressField, string> = {
               list={field === "billingAdminArea" ? `${id}-options` : undefined}
               value={values[field] ?? ""}
               class={fieldClass}
+              aria-describedby={errorId}
+              aria-required={required ? "true" : undefined}
+              aria-invalid={error ? "true" : undefined}
+              data-billing-field={field}
+              autofocus={field === firstError}
             />
             {field === "billingAdminArea" && <datalist id={`${id}-options`} />}
+            <p id={errorId} class:list={["mt-1 text-sm font-medium text-destructive", !error && "hidden"]} role="alert">{error ?? ""}</p>
           </div>
         );
       })

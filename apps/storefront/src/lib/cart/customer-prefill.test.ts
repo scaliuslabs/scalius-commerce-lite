@@ -194,6 +194,9 @@ describe("customer checkout prefill", () => {
     control("shippingAddress").value = "";
     captureDraft(true);
     expect(readCheckoutFormDraft()).toMatchObject({ customerName: "", shippingAddress: "", customerEmail: "", city: "", zone: "", shippingLocation: "standard" });
-    expect(JSON.parse(sessionStorage.getItem("scalius_checkout_data")!)).toMatchObject({ customerName: "", shippingAddress: "", checkoutId: "checkout_test" });
+    // The transfer keeps the address as submit writes it: an empty one is no address.
+    const transfer = JSON.parse(sessionStorage.getItem("scalius_checkout_data")!);
+    expect(transfer).toMatchObject({ customerName: "", checkoutId: "checkout_test" });
+    expect(transfer).not.toHaveProperty("shippingAddress");
   });
 });

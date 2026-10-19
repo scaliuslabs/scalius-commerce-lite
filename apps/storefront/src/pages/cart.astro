@@ -1301,7 +1301,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   document.addEventListener("cart-updated", syncDeliveryPath, { signal: cartPageSignal });
   // The billing country's rules (full, or the minimal region and postal code)
   // follow the country and the path.
-  enhanceBillingAddress(document, {
+  const billingAddress = enhanceBillingAddress(document, {
     readMode: () => (requireFullBillingAddress ? "full" : "minimal"),
     signal: cartPageSignal,
   });
@@ -1896,7 +1896,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     );
 
     const fields = enhanceCheckoutFields(
-      checkoutInformationFields(form, checkoutCopy, () => readCheckoutDeliveryMode()),
+      checkoutInformationFields(form, checkoutCopy, () => readCheckoutDeliveryMode(), () => billingAddress?.readRules() ?? null),
       cartPageSignal,
     );
     // A restored draft never blurred: say now if a typed value (an email) is wrong.

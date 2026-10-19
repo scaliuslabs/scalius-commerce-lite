@@ -15,6 +15,9 @@ import {
   type CheckoutRequiredField,
 } from "./delivery-mode";
 import { LOCATION_COUNTRY, isLocationCountry } from "./shipping-country";
+import type { AddressRules } from "@scalius/shared/address";
+import type { BillingAddressField } from "./billing-address";
+import { billingAddressAsked, billingAddressProblems, billingProblemMessage } from "./billing-validation";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -55,6 +58,8 @@ export function checkoutInformationFields(
   root: ParentNode,
   copy: CheckoutLanguageData,
   readMode: () => CheckoutDeliveryMode = () => "delivery",
+  /** The billing country's rules once loaded (`enhanceBillingAddress`). */
+  readBillingRules: () => AddressRules | null = () => null,
 ): CheckoutField[] {
   const fields: CheckoutField[] = [];
   const add = (controlId: string, errorId: string, check: () => string) => {
@@ -120,7 +125,50 @@ export function checkoutInformationFields(
       },
     });
   }
+  fields.push(...billingFields(root, copy, readMode, readBillingRules));
   return fields;
+}
+
+/**
+ * The billing address fields, when checkout asks for one (billing-
+ * validation.ts): each checked by the billing country's rules once they
+ * are loaded; before that the API checks them when the order is placed.
+ */
+function billingFields(
+  root: ParentNode,
+  copy: CheckoutLanguageData,
+  readMode: () => CheckoutDeliveryMode,
+  readRules: () => AddressRules | null,
+): CheckoutField[] {
+  const section = root.querySelector<HTMLElement>("[data-billing-section]");
+  if (!section) return [];
+  const inputs = [...section.querySelectorAll<HTMLInputElement>("input[data-billing-field]")];
+  const problems = () => {
+    const asked = billingAddressAsked({
+      path: readMode(),
+      requireFullBillingAddress: section.dataset.billingFull === "true",
+      sameAsShipping: section.querySelector<HTMLInputElement>("[data-billing-same]")?.checked === true,
+    });
+    const rules = readRules();
+    if (!asked.asked || !rules) return [];
+    const values = Object.fromEntries(inputs.map((input) => [input.name, input.value]));
+    return billingAddressProblems(rules, asked.mode, values);
+  };
+  return inputs.flatMap((input) => {
+    const error = root.querySelector<HTMLElement>(`#${input.id}-error`);
+    if (!error) return [];
+    const field = input.dataset.billingField as BillingAddressField;
+    const label = () => root.querySelector(`label[for="${input.id}"]`)?.firstChild?.textContent?.trim() ?? "";
+    return [{
+      control: input,
+      error,
+      check: () => {
+        if (input.closest<HTMLElement>("[data-address-rule]")?.hidden) return "";
+        const problem = problems().find((entry) => entry.field === field)?.problem;
+        return problem ? billingProblemMessage(field, problem, label(), copy) : "";
+      },
+    }];
+  });
 }
 
 /**
