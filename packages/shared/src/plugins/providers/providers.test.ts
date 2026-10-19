@@ -25,6 +25,8 @@ const manifest = {
   apiVersion: PLUGIN_API_VERSION,
   description: "Port contract fixtures.",
   author: { name: "Acme" },
+  // Every port these fixtures declare receives its buyer data (COMMERCE-HOOKS H5).
+  scopes: ["read_customer_names", "read_customer_emails", "read_customer_phones", "read_customer_addresses"],
 };
 
 const HOSTED_REFUNDS = ["verifyReturn", "queryPayment", "refund", "refundStatus"];

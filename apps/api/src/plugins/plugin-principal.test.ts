@@ -61,7 +61,7 @@ describe("plugin-available operations (operation metadata)", () => {
     expect(derivePluginRiskCeiling(new Set(["team.manage_roles", "agent_access.manage"]), true)).toBe("read");
     const get = AGENT_OPERATIONS.find((operation) => operation.operationId === "dashboard.orders.get")!;
     const principal = (permissions: string[], riskCeiling: PluginPrincipal["riskCeiling"]): PluginPrincipal => ({
-      kind: "plugin", pluginId: "acme.rbac", version: "1.0.0", pluginName: "x", actorUserId: "owner", firstParty: false, permissions: new Set(permissions), riskCeiling,
+      kind: "plugin", pluginId: "acme.rbac", version: "1.0.0", pluginName: "x", actorUserId: "owner", firstParty: false, permissions: new Set(permissions), protectedData: new Set(), riskCeiling,
     });
     expect(authorizePluginOperation(principal(["orders.view"], "read"), get)).toBe(true);
     expect(authorizePluginOperation(principal(["customers.view"], "read"), get)).toBe(false);
@@ -82,8 +82,8 @@ describe("ctx.api.call as a plugin principal", () => {
     ({ sqlite, db, binding } = createSqliteD1Database());
     env = pluginTestEnv(binding);
     sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1)").run();
-    sqlite.prepare(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
-      VALUES ('ord_rbac1', 'Rahim', '+8801711111111', 'House 1', 'city_1', 'zone_1', 'pending')`).run();
+    sqlite.prepare(`INSERT INTO orders (id, customer_name, customer_phone, customer_email, shipping_address, city, zone, status)
+      VALUES ('ord_rbac1', 'Rahim', '+8801711111111', 'rahim@buyer.test', 'House 1', 'city_1', 'zone_1', 'pending')`).run();
     await installPlugin(db, { manifest, source: "upload", bundleSha256: "e".repeat(64), actorUserId: "owner" });
     await activatePlugin(db, "acme.rbac", { actorUserId: "owner", expectedRevision: 1 });
   });
@@ -105,6 +105,51 @@ describe("ctx.api.call as a plugin principal", () => {
       { plugin_id: "acme.rbac", operation_id: "dashboard.orders.get", outcome: "success", http_status: 200, error_class: null },
       { plugin_id: "acme.rbac", operation_id: "dashboard.orders.comment_add", outcome: "success", http_status: write.status, error_class: null },
     ]);
+  });
+
+  it("reads buyer contact fields as null unless a protected customer data scope reveals them", async () => {
+    // acme.rbac holds write_orders only: the order reads, its contact does not.
+    const hidden = await call("dashboard.orders.get", { path: { id: "ord_rbac1" } });
+    expect(hidden).toMatchObject({
+      ok: true,
+      data: { id: "ord_rbac1", customerName: null, customerPhone: null, customerEmail: null, shippingAddress: null, city: "city_1", zone: "zone_1" },
+    });
+    // Field by field: names and phones granted, emails and street addresses not.
+    await installPlugin(db, {
+      manifest: { ...manifest, id: "acme.contacts", scopes: ["read_orders", "read_customer_names", "read_customer_phones"] },
+      source: "upload", bundleSha256: "d".repeat(64), actorUserId: "owner",
+    });
+    await activatePlugin(db, "acme.contacts", { actorUserId: "owner", expectedRevision: 1 });
+    const partial = await callPluginOperation({
+      pluginId: "acme.contacts", version: "1.0.0", operationId: "dashboard.orders.get", input: { path: { id: "ord_rbac1" } }, db, env, ctx: pluginTestCtx(),
+    });
+    expect(partial).toMatchObject({
+      ok: true,
+      data: { customerName: "Rahim", customerPhone: "+8801711111111", customerEmail: null, shippingAddress: null, city: "city_1" },
+    });
+    const list = await callPluginOperation({
+      pluginId: "acme.contacts", version: "1.0.0", operationId: "dashboard.orders.list", input: {}, db, env, ctx: pluginTestCtx(),
+    });
+    expect((list.data as { orders: Array<Record<string, unknown>> }).orders[0]).toMatchObject({ customerName: "Rahim", customerEmail: null });
+    // The route itself still answers in full (staff and the merchant's agents): the projection is the app edge's.
+    const route = await fetchRuntimeApiApp(new Request("https://api.shop.test/api/v1/admin/orders/ord_rbac1"), withOperationDispatchPrincipal(env, {
+      kind: "plugin", pluginId: "acme.rbac", version: "1.0.0", pluginName: "Acme RBAC", actorUserId: "owner", firstParty: false,
+      permissions: new Set(["orders.view"]), protectedData: new Set(), riskCeiling: "read",
+    }), pluginTestCtx());
+    expect(((await route.json()) as { data: Record<string, unknown> }).data).toMatchObject({ customerEmail: "rahim@buyer.test" });
+  });
+
+  it("changes stock only with write_inventory, never write_products", async () => {
+    await installPlugin(db, {
+      manifest: { ...manifest, id: "acme.catalog", scopes: ["write_products"] },
+      source: "upload", bundleSha256: "c".repeat(64), actorUserId: "owner",
+    });
+    await activatePlugin(db, "acme.catalog", { actorUserId: "owner", expectedRevision: 1 });
+    const adjust = await callPluginOperation({
+      pluginId: "acme.catalog", version: "1.0.0", operationId: "dashboard.inventory.adjust",
+      input: { path: { variantId: "var_x" }, body: { delta: 1 }, idempotencyKey: "plugin-adjust-1" }, db, env, ctx: pluginTestCtx(),
+    });
+    expect(adjust).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_forbidden" } });
   });
 
   it("refuses an operation the grant does not cover, and audits the refusal", async () => {
@@ -147,6 +192,7 @@ describe("ctx.api.call as a plugin principal", () => {
       actorUserId: "owner",
       firstParty: true,
       permissions: new Set(["team.view", "team.manage", "orders.view"]),
+      protectedData: new Set(),
       riskCeiling: "financial",
     };
     const ctx = pluginTestCtx();

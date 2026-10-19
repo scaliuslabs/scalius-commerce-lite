@@ -31,6 +31,8 @@ function app() {
   router.use("*", async (c, next) => {
     c.set("db", db as never);
     c.set("user" as never, { id: "usr_staff" } as never);
+    // Staff who edit products adjust stock too (migration 0158 kept that).
+    c.set("adminPermissions" as never, new Set(["products.view", "products.edit", "products.adjust_stock"]) as never);
     await next();
   });
   router.route("/inventory", adminInventoryRoutes);

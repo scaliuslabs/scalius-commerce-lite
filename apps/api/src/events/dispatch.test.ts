@@ -1,5 +1,5 @@
 // The tick's event drain: a due event fans out to webhook deliveries and the
-// delivery POSTs the order's admin representation in the same drain. A failed
+// delivery POSTs the order's sealed representation in the same drain. A failed
 // delivery backs off in its row and the next due tick sends it again; a drain
 // never takes more than the plan's share.
 import type { DatabaseSync } from "node:sqlite";
@@ -34,7 +34,7 @@ describe("the scheduled event drain", () => {
     sqlite.close();
   });
 
-  it("dispatches, then delivers the order's admin representation in the same drain", async () => {
+  it("dispatches, then delivers the order's sealed representation in the same drain", async () => {
     const eventId = (sqlite.prepare("SELECT id FROM event_outbox").get() as { id: string }).id;
     const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);

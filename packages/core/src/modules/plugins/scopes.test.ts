@@ -2,14 +2,24 @@
 // confers exists and is plugin-grantable, a scope's staff gate is one of its
 // own permissions, and rows stored before scopes read safely.
 import { describe, expect, it } from "vitest";
-import { PLUGIN_API_VERSION, PLUGIN_SCOPES, PLUGIN_SCOPE_NAMES, legacyPermissionScope, parsePluginManifest } from "@scalius/shared/plugins";
+import {
+  PLUGIN_API_VERSION,
+  PLUGIN_SCOPES,
+  PLUGIN_SCOPE_NAMES,
+  PROTECTED_CUSTOMER_DATA,
+  PROTECTED_DATA_SCOPES,
+  isProtectedDataScope,
+  legacyPermissionScope,
+  parsePluginManifest,
+  type PluginScopeDefinition,
+} from "@scalius/shared/plugins";
 import { PERMISSION_METADATA } from "../../auth/rbac/permission-metadata";
 import { effectivePluginPermissions, isFirstPartyBundledPlugin, isKnownPermission, isPluginGrantablePermission } from "./grants";
 import { parseStoredPluginGrant, upgradeStoredPluginManifest } from "./installations";
 
 describe("PLUGIN_SCOPES", () => {
-  it("maps every scope to live, plugin-grantable RBAC permissions", () => {
-    for (const scope of PLUGIN_SCOPE_NAMES) {
+  it("maps every access scope to live, plugin-grantable RBAC permissions", () => {
+    for (const scope of PLUGIN_SCOPE_NAMES.filter((name) => !isProtectedDataScope(name))) {
       const { rbac, staff } = PLUGIN_SCOPES[scope];
       expect(rbac.length, scope).toBeGreaterThan(0);
       for (const permission of rbac) {
@@ -19,6 +29,24 @@ describe("PLUGIN_SCOPES", () => {
       expect((rbac as readonly string[]).includes(staff), `${scope} staff gate`).toBe(true);
       expect(scope).toMatch(/^(read|write)_[a-z]+$/);
     }
+  });
+
+  it("has one protected customer data scope per category, conferring no RBAC", () => {
+    const protectedScopes = PLUGIN_SCOPE_NAMES.filter((name) => isProtectedDataScope(name));
+    expect(protectedScopes.sort()).toEqual(Object.values(PROTECTED_DATA_SCOPES).sort());
+    for (const category of PROTECTED_CUSTOMER_DATA) {
+      const definition = PLUGIN_SCOPES[PROTECTED_DATA_SCOPES[category]] as PluginScopeDefinition;
+      expect(definition.protects).toBe(category);
+      expect(definition.rbac).toEqual([]);
+      expect(isKnownPermission(definition.staff)).toBe(true);
+    }
+  });
+
+  it("keeps stock out of write_products and contacts out of write_marketing", () => {
+    expect(effectivePluginPermissions({ scopes: ["write_products"] }).has("products.adjust_stock")).toBe(false);
+    expect(effectivePluginPermissions({ scopes: ["write_inventory"] }).has("products.adjust_stock")).toBe(true);
+    expect([...effectivePluginPermissions({ scopes: ["read_inventory"] })]).toEqual(["inventory.view"]);
+    expect([...effectivePluginPermissions({ scopes: ["write_marketing"] })]).toEqual(["marketing.send"]);
   });
 
   it("makes every write scope include its read scope", () => {

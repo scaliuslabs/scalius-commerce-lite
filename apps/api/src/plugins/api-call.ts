@@ -3,7 +3,8 @@
 // as the plugin principal. The result is the route's own response, unwrapped
 // from the `{ success, data }` envelope; refusals are results, not throws.
 // A third-party app reaches the stable app API only (`x-scalius-agent.stability`);
-// anything else refuses with `api.operation_not_stable`.
+// anything else refuses with `api.operation_not_stable`. Buyer contact fields
+// the grant does not reveal read null (protected-response.ts, H5).
 
 import type { Database } from "@scalius/database/client";
 import type { PluginApiCallInput, PluginApiResult } from "@scalius/plugin-sdk";
@@ -18,6 +19,7 @@ import { writeAgentAuditEvent } from "../agent-access/audit";
 import { resolveAgentOperationById } from "../agent-access/direct-operation";
 import type { PluginPrincipal } from "../agent-access/types";
 import { authorizePluginOperation, pluginTierAllows, pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
+import { redactOperationResponse } from "./protected-response";
 
 const OPERATION_ID = /^(?:dashboard(\.[a-z][a-z0-9_]*){2,}|objects\.(?:types\.(?:list|get|create|update|delete)|list|get|upsert|delete))$/;
 
@@ -138,7 +140,9 @@ export async function callPluginOperation(options: {
       env: options.env,
       ctx: options.ctx,
     });
-    return unwrap(result.status, result.ok, result.data);
+    // Buyer contact fields the grant does not reveal read as null (H5).
+    const body = result.ok ? redactOperationResponse(operation, result.data, principal.protectedData) : result.data;
+    return unwrap(result.status, result.ok, body);
   } catch (error) {
     if (error instanceof AgentDispatchError) {
       if (error.code === "operation_forbidden" && !pluginTierAllows(principal.firstParty, operation.stability)) {

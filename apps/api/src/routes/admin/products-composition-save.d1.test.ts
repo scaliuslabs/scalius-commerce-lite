@@ -45,7 +45,7 @@ beforeEach(() => {
 afterEach(() => sqlite.close());
 
 /** The editor's staff member: edits products and sees their costs. */
-const EDITOR = [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_VIEW_COSTS];
+const EDITOR = [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_ADJUST_STOCK, PERMISSIONS.PRODUCTS_VIEW_COSTS];
 let permissions: readonly string[] = EDITOR;
 
 function app() {
@@ -280,7 +280,7 @@ describe("PUT /products/{id} with the page's sections and costs", () => {
 
 describe("costs per item without View product costs", () => {
   beforeEach(() => {
-    permissions = [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT];
+    permissions = [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_ADJUST_STOCK];
   });
 
   it("leaves every SKU's cost out of the product and its variants", async () => {

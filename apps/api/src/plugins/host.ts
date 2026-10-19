@@ -47,6 +47,7 @@ import {
   type ProviderOperationInput,
   type ProviderOperationOutput,
 } from "@scalius/shared/plugins/providers";
+import { PROVIDER_PROTECTED_DATA, grantedProtectedData, projectProviderInput } from "@scalius/shared/plugins/protected-data";
 import type { PluginEvent, PluginRouteRequest, PluginRouteResponse, PluginStoreInfo } from "@scalius/plugin-sdk";
 import type { PluginBridgeAuthority, PluginBridgeEnvironment, PluginBridgeProps } from "./bridge";
 import { BundledLoader } from "./loaders/bundled";
@@ -233,11 +234,21 @@ export class PluginHost {
     const schemas = providerOperationSchemas(kind, operation)!;
     const checked = schemas.input.safeParse(input);
     if (!checked.success) throw new TypeError(`invokeProvider(${kind}.${operation}) received an input that does not match the port.`);
+    // Buyer contact data (H5): a port that needs it runs only with its scopes
+    // approved; optional fields leave the store only when granted.
+    const granted = grantedProtectedData(installation.grant.scopes);
+    const ungranted = PROVIDER_PROTECTED_DATA[kind].required.filter((category) => !granted.has(category));
+    if (ungranted.length > 0) {
+      throw new ProviderError("misconfigured", `${installation.manifest.name} is not approved to receive buyers' ${ungranted.join(", ")}.`, {
+        code: "provider.customer_data_not_approved",
+      });
+    }
+    const projected = projectProviderInput(kind, operation, checked.data, granted);
 
     const wallMs = Math.min(installation.manifest.limits.wallMs, options.wallMs ?? Number.POSITIVE_INFINITY);
     const outcome = await this.run(
       installation,
-      { kind: "provider", provider: providerId, operation, input: checked.data },
+      { kind: "provider", provider: providerId, operation, input: projected },
       source,
       wallMs,
       { provider: { kind } },

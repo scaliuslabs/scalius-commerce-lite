@@ -1,9 +1,10 @@
 // `ctx.messaging`: e-mail, SMS and buyer pushes through the store's configured providers
 // (the same core integrations order notifications use) and staff pushes
 // through the staff notice path. Contact details are resolved here from the
-// customer id when the plugin passes one; sending to customers needs the
-// `customers.view` permission, since it reaches their contact data.
-// `marketing: true` messages go only to a customer subscribed on that channel
+// customer id when the plugin passes one and never returned to it; sending a
+// message to a customer needs `customers.view` (read_customers).
+// `marketing: true` messages need only `marketing.send` (write_marketing,
+// COMMERCE-HOOKS H5): they go only to a customer subscribed on that channel
 // now (Customers & marketing), to the subscribed address, and e-mail carries
 // the unsubscribe footer and RFC 2369/8058 list headers.
 
@@ -95,7 +96,7 @@ export async function sendPluginEmail(
   context: PluginMessagingContext,
   input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean },
 ): Promise<{ queued: boolean }> {
-  requireContactAccess(context);
+  if (input?.marketing !== true) requireContactAccess(context);
   const subject = text(input?.subject, "subject", 200)!;
   let html = text(input?.html, "html", 100_000)!;
   let plain = text(input?.text, "text", 50_000, false);
@@ -136,7 +137,7 @@ export async function sendPluginSms(
   context: PluginMessagingContext,
   input: { customerId?: string; to?: string; text: string; marketing?: boolean },
 ): Promise<{ queued: boolean }> {
-  requireContactAccess(context);
+  if (input?.marketing !== true) requireContactAccess(context);
   const message = text(input?.text, "text", 1000)!;
   const marketing = input?.marketing === true ? await marketingPermission(context, input.customerId, "sms") : undefined;
   if (marketing === null) return { queued: false };

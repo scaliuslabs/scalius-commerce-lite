@@ -518,7 +518,7 @@ describe("App page", () => {
     expect(text()).toContain("View customers");
     expect(text()).toContain("View orders");
     // Each scope says what it lets the app do.
-    expect(text()).toContain("Orders include buyers' names, phone numbers and addresses.");
+    expect(text()).toContain("Buyers' contact details stay hidden unless the app may also see them.");
     expect(text()).toContain("Sensitive");
     expect(text()).toContain("Read");
     expect(text()).toContain("Order created");

@@ -3,6 +3,7 @@ export type AgentGrantKind = "oauth" | "pat" | "cli";
 export type AgentGrantPreset = "read" | "operator" | "full" | "custom";
 export type AgentRisk = "read" | "write" | "destructive" | "financial" | "security";
 import type { AgentOperationRbac } from "../openapi/agent-operation-manifest";
+import type { ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
 
 export interface AgentPrincipal {
   kind: "agent";
@@ -37,6 +38,8 @@ export interface PluginPrincipal {
   firstParty: boolean;
   /** The RBAC permissions its granted scopes confer (`PLUGIN_SCOPES`). */
   permissions: Set<string>;
+  /** The protected customer data its granted scopes reveal; other contact fields read null. */
+  protectedData: ReadonlySet<ProtectedCustomerData>;
   riskCeiling: AgentRisk;
   /** Host-attested staff initiating this invocation; absent for background jobs. */
   operator?: { userId: string };

@@ -25,6 +25,7 @@ import {
   isFirstPartyBundledPlugin,
   isPluginGrantablePermission,
 } from "@scalius/core/modules/plugins";
+import { grantedProtectedData } from "@scalius/shared/plugins/protected-data";
 import { eq } from "drizzle-orm";
 import { AGENT_OPERATIONS } from "../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry, AgentOperationRbac, AgentOperationStability } from "../openapi/agent-operation-manifest";
@@ -130,6 +131,7 @@ export async function resolvePluginPrincipal(db: Database, pluginId: string): Pr
     actorUserId: actor.id,
     firstParty,
     permissions,
+    protectedData: grantedProtectedData(installation.grant.scopes),
     riskCeiling: derivePluginRiskCeiling(permissions, firstParty),
   };
 }

@@ -819,6 +819,12 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
         sqliteStatements: 1,
         postgresStatements: 1,
       },
+      {
+        version: 158,
+        name: "0158_app_access_contract",
+        sqliteStatements: 7,
+        postgresStatements: 7,
+      },
     ]);
   });
 
@@ -1067,6 +1073,7 @@ describe("provider-neutral schema upgrades", { timeout: 30_000 }, () => {
           { version: 155, name: "0155_v2_beta_contract" },
           { version: 156, name: "0156_custom_field_object_references" },
           { version: 157, name: "0157_order_search_update_guards" },
+          { version: 158, name: "0158_app_access_contract" },
         ],
       });
     } finally {

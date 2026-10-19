@@ -3,7 +3,7 @@
 // All available permissions in the system
 export const PERMISSIONS = {
   // =============================================
-  // Products (8 permissions)
+  // Products (9 permissions)
   // =============================================
   PRODUCTS_VIEW: "products.view",
   // Shopify's "View product costs": unit costs (cost per item), margins,
@@ -16,11 +16,15 @@ export const PERMISSIONS = {
   PRODUCTS_RESTORE: "products.restore",
   PRODUCTS_PERMANENT_DELETE: "products.permanent_delete",
   PRODUCTS_BULK_OPERATIONS: "products.bulk_operations",
+  // Changing on-hand quantities: stock adjustments, counts, imports and the
+  // quantities a product or SKU save sets (Shopify's separate inventory
+  // permission). Migration 0158 gave it to everyone who had products.edit.
+  PRODUCTS_ADJUST_STOCK: "products.adjust_stock",
 
   // =============================================
   // Inventory operations (2 permissions): locations and their addresses,
   // suppliers, purchase orders and transfers. Stock levels themselves are
-  // product data (products.view reads them, products.edit adjusts them).
+  // product data (products.view reads them, products.adjust_stock changes them).
   // =============================================
   INVENTORY_VIEW: "inventory.view",
   INVENTORY_MANAGE: "inventory.manage",

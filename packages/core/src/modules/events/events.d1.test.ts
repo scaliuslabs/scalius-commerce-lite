@@ -6,7 +6,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { verifyWebhookSignature, type EventEnvelope } from "@scalius/shared/events";
+import { buildEventRepresentation, verifyWebhookSignature, type EventEnvelope } from "@scalius/shared/events";
+import { allProtectedData } from "@scalius/shared/plugins/protected-data";
 import {
   EVENT_FAN_OUT_TARGETS,
   MAX_EVENT_DISPATCH_ATTEMPTS,
@@ -44,7 +45,20 @@ function eventIds(sqlite: DatabaseSync, topic?: string): string[] {
     .all(...(topic ? [topic] : [])) as Array<{ id: string }>).map((row) => row.id);
 }
 
-const representation = vi.fn(async () => ({ id: "ord_1", status: "pending" }));
+const ORDER_REPRESENTATION = buildEventRepresentation("order", {
+  id: "ord_1", orderNumber: 1, status: "pending", paymentStatus: "unpaid", fulfillmentStatus: "unfulfilled", channel: "online_store",
+  salesChannelId: "sc_online_store", marketId: null, currency: "BDT", subtotalMinor: 1000, shippingMinor: 0, discountMinor: 0, taxMinor: 0,
+  totalMinor: 1000, paidMinor: 0, balanceDueMinor: 1000, pricesIncludeTax: false, paymentMethod: "cod", customerId: null,
+  contact: { name: "Rahim", email: "rahim@buyer.test", phone: "+8801711111111" },
+  requiresShipping: true, shippingMethodId: null,
+  shippingAddress: {
+    name: "Rahim", phone: "+8801711111111", company: null, line1: "House 1", line2: null, dependentLocality: null,
+    locality: "Dhaka", adminArea: null, postalCode: null, countryCode: "BD", placeIds: { city: "city", zone: "zone", area: null },
+  },
+  billingAddress: null, fulfillmentLocationId: null, lines: [],
+  createdAt: "2026-10-19T00:00:00.000Z", updatedAt: "2026-10-19T00:00:00.000Z", deletedAt: null,
+}, allProtectedData());
+const representation = vi.fn(async () => ORDER_REPRESENTATION);
 
 describe("event outbox dispatch", () => {
   let sqlite: DatabaseSync;
@@ -200,7 +214,12 @@ describe("webhook deliveries", () => {
       topic: "order.created",
       resource: { type: "order", id: "ord_1" },
       facts: { orderId: "ord_1", status: "pending", channel: "online_store" },
-      data: { id: "ord_1", status: "pending" },
+      data: { id: "ord_1", status: "pending", totalMinor: 1000, currency: "BDT" },
+    });
+    // No buyer contact data leaves the store unless the endpoint opted in (COMMERCE-HOOKS H5).
+    expect(envelope.data).toMatchObject({
+      contact: { name: null, email: null, phone: null },
+      shippingAddress: { name: null, phone: null, line1: null, locality: "Dhaka", placeIds: { city: "city" } },
     });
     expect(representation).toHaveBeenCalledWith(expect.objectContaining({ id: eventId, resourceType: "order" }));
     const row = sqlite.prepare("SELECT status, attempts, response_status, response_excerpt FROM webhook_event_deliveries WHERE id = ?").get(deliveryId);

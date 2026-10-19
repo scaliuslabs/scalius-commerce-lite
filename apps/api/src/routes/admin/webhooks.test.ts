@@ -91,6 +91,8 @@ describe("admin webhook routes", () => {
     expect(insecure.json.error.details).toMatchObject({ field: "url", issue: "private_address" });
     const unknownTopic = await call("POST", "/webhooks", { url: "https://hooks.example.com/b", topics: ["order.shipped"] });
     expect(unknownTopic.status).toBe(400);
+    const unknownData = await call("POST", "/webhooks", { url: "https://hooks.example.com/c", topics: ["*"], customerData: ["passwords"] });
+    expect(unknownData.status).toBe(400);
   });
 
   it("guards edits by version with a specific conflict code", async () => {
@@ -100,6 +102,18 @@ describe("admin webhook routes", () => {
     const saved = await call("PATCH", `/webhooks/${webhookId}`, { expectedVersion: 1, topics: ["*"], status: "disabled" });
     expect(saved.status).toBe(200);
     expect(saved.json.data.subscription).toMatchObject({ topics: ["*"], status: "disabled", disabledReason: "manual", version: 2 });
+  });
+
+  it("sends no buyer contact data until the endpoint opts in, category by category", async () => {
+    expect((await call("GET", `/webhooks/${webhookId}`)).json.data.subscription.customerData).toEqual([]);
+    const current = (await call("GET", `/webhooks/${webhookId}`)).json.data.subscription;
+    const saved = await call("PATCH", `/webhooks/${webhookId}`, { expectedVersion: current.version, customerData: ["phone", "name", "phone"] });
+    expect(saved.status).toBe(200);
+    // Catalog order, each once.
+    expect(saved.json.data.subscription.customerData).toEqual(["name", "phone"]);
+    expect(sqlite.prepare("SELECT customer_data FROM webhook_subscriptions WHERE id = ?").get(webhookId)).toEqual({ customer_data: '["name","phone"]' });
+    const cleared = await call("PATCH", `/webhooks/${webhookId}`, { expectedVersion: saved.json.data.subscription.version, customerData: [] });
+    expect(cleared.json.data.subscription.customerData).toEqual([]);
   });
 
   it("sends a signed test (also to a disabled endpoint) and logs it", async () => {

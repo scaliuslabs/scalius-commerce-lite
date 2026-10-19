@@ -16,6 +16,8 @@ export const NOTIFY_FIXTURE_MANIFEST = {
   apiVersion: PLUGIN_API_VERSION,
   description: "An SMS, email and fraud check provider fixture.",
   author: { name: "Acme" },
+  // SMS and fraud checks carry the phone, email the address (COMMERCE-HOOKS H5).
+  scopes: ["read_customer_emails", "read_customer_phones"],
   settings: [{ key: "api_key", label: "API key", type: "secret", required: true }],
   objects: { sent: { name: "Sent messages", fields: [{ key: "answer", name: "Answer", type: "json" }] } },
   providers: {

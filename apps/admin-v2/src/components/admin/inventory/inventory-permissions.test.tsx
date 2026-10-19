@@ -16,7 +16,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 vi.mock("~/hooks/use-catalog-action-permissions", () => ({
   useCatalogActionPermissions: () => ({
-    inventory: { canAdjustStock: mocks.canEdit, canAcknowledgeAlerts: mocks.canEdit },
+    inventory: { canAdjustStock: mocks.canEdit, canSetAlertLevels: mocks.canEdit, canAcknowledgeAlerts: mocks.canEdit },
   }),
 }));
 vi.mock("~/lib/api", () => ({ apiData: (call: Promise<unknown>) => call }));
@@ -105,7 +105,7 @@ describe("inventory actions follow stock permissions", () => {
     } else {
       expect(button).toBeUndefined();
     }
-    // The store alert level is always visible; only staff who can change stock can edit it.
+    // The store alert level is always visible; only staff who edit products can change it.
     await vi.waitFor(() => expect(host.textContent).toContain(storeLevel));
     expect(Boolean(buttonNamed(storeLevel))).toBe(canEdit);
   });

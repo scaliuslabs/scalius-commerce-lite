@@ -8,12 +8,20 @@ import { EVENTS_API_VERSION, EVENT_FACT_SCHEMAS, EVENT_TOPIC_RESOURCE } from "..
 import { pluginManifestSchema, PLUGIN_API_VERSION } from "./manifest";
 import { PLUGIN_FUNCTION_SCHEMAS } from "./functions";
 import { PROVIDER_PORTS } from "./providers";
+import { PROVIDER_PORT_TIERS, type ProviderKind } from "./providers/kinds";
 import { PLUGIN_SCOPES } from "./scopes";
 import * as protocol from "./storefront-protocol";
 import { pluginUiDocumentSchema } from "./ui";
 
 const schema = (value: z.ZodType, io: "input" | "output" = "input") => z.toJSONSchema(value, { io });
 const json = (value: unknown): string => `${JSON.stringify(value, null, 1)}\n`;
+const port = (value: { input: z.ZodType; output: z.ZodType }) => ({ input: schema(value.input), output: schema(value.output, "output") });
+/** The ports of one tier with their operations' schemas. */
+const portsOfTier = (tier: "stable" | "beta") => Object.fromEntries(Object.entries(PROVIDER_PORTS)
+  .filter(([kind]) => PROVIDER_PORT_TIERS[kind as ProviderKind] === tier)
+  .map(([name, operations]) => [name,
+    Object.fromEntries(Object.entries(operations).map(([operation, value]) => [operation, port(value)])),
+  ]));
 
 /** Emit the SDK's actual declarations in memory, without a workspace build/typecheck. */
 async function sdkDeclarations(): Promise<string> {
@@ -54,14 +62,12 @@ describe("the versioned plugin ABI", () => {
       .toMatchFileSnapshot("./abi.manifest.snapshot.json");
   });
 
-  it("seals functions, provider ports, UI, scopes, events and storefront protocol constants", async () => {
-    const port = (value: { input: z.ZodType; output: z.ZodType }) => ({ input: schema(value.input), output: schema(value.output, "output") });
+  it("seals functions, stable provider ports, UI, scopes, events and storefront protocol constants", async () => {
     await expect(json({
       apiVersion: PLUGIN_API_VERSION,
       functions: Object.fromEntries(Object.entries(PLUGIN_FUNCTION_SCHEMAS).map(([name, value]) => [name, port(value)])),
-      providers: Object.fromEntries(Object.entries(PROVIDER_PORTS).map(([name, operations]) => [name,
-        Object.fromEntries(Object.entries(operations).map(([operation, value]) => [operation, port(value)])),
-      ])),
+      providerTiers: PROVIDER_PORT_TIERS,
+      providers: portsOfTier("stable"),
       adminUi: schema(pluginUiDocumentSchema), scopes: PLUGIN_SCOPES,
       events: { apiVersion: EVENTS_API_VERSION, resources: EVENT_TOPIC_RESOURCE,
         facts: Object.fromEntries(Object.entries(EVENT_FACT_SCHEMAS).map(([topic, value]) => [topic, schema(value, "output")])),
@@ -69,6 +75,28 @@ describe("the versioned plugin ABI", () => {
       storefront: Object.fromEntries(Object.entries(protocol).filter(([name, value]) => name === name.toUpperCase() && typeof value !== "function")
         .map(([name, value]) => [name, value instanceof RegExp ? value.source : value])),
     })).toMatchFileSnapshot("./abi.protocol.snapshot.json");
+  });
+
+  it("keeps beta provider ports outside the seal, in a reviewed snapshot of their own", async () => {
+    await expect(json({ apiVersion: PLUGIN_API_VERSION, providers: portsOfTier("beta") }))
+      .toMatchFileSnapshot("./abi.beta.snapshot.json");
+  });
+
+  it("never moves a stable provider port back to beta (promotion is additive)", async () => {
+    // A runtime specifier keeps Node types out of this Workers package (as in sdkDeclarations).
+    const [{ readFileSync }] = await Promise.all(["node:fs"].map((specifier) => import(/* @vite-ignore */ specifier))) as [
+      { readFileSync(path: URL, encoding: "utf8"): string },
+    ];
+    let committed: { providerTiers?: Record<string, string> } = {};
+    try {
+      committed = JSON.parse(readFileSync(new URL("./abi.protocol.snapshot.json", import.meta.url), "utf8"));
+    } catch {
+      // No committed snapshot yet: the sealing test writes it.
+    }
+    const demoted = Object.entries(committed.providerTiers ?? {})
+      .filter(([kind, tier]) => tier === "stable" && PROVIDER_PORT_TIERS[kind as ProviderKind] !== "stable")
+      .map(([kind]) => kind);
+    expect(demoted).toEqual([]);
   });
 
   it("seals the SDK export map and emitted public declarations", async () => {

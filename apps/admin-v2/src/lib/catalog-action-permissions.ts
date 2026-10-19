@@ -48,7 +48,10 @@ export interface CatalogActionPermissions {
     canReorder: boolean;
   };
   inventory: {
+    /** On-hand quantities: adjustments, counts, imports and the quantities a product save sets. */
     canAdjustStock: boolean;
+    /** Low-stock alert levels (product data). */
+    canSetAlertLevels: boolean;
     canAcknowledgeAlerts: boolean;
     /** "View product costs": cost per item, margins, inventory value, purchase-order money. */
     canViewCosts: boolean;
@@ -117,7 +120,8 @@ export function getCatalogActionPermissions(
       canReorder: canEditCollections,
     },
     inventory: {
-      canAdjustStock: canEditProducts,
+      canAdjustStock: hasPermission(PERMISSIONS.PRODUCTS_ADJUST_STOCK),
+      canSetAlertLevels: canEditProducts,
       canAcknowledgeAlerts: canEditProducts,
       canViewCosts,
       canEditCosts: canEditProducts && canViewCosts,

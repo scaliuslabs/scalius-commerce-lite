@@ -3,6 +3,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { listGiftCardPaymentLinks } from "../../shared/gift-card-payment-links";
 import { relatedObjectsProjection, withRelatedObjects } from "../related-objects";
 import { relatedObjectRecordSchema } from "../../../schemas/related-objects";
+import { protectedField as pii } from "../../../schemas/protected";
 import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import {
     ORDER_COMMENT_MAX_LENGTH,
@@ -218,9 +219,9 @@ const orderFormDataSchema = z.object({
     id: z.string(),
     orderNumber: z.number().int().nullable(),
     version: z.number().int().min(1),
-    customerName: z.string(),
-    customerPhone: z.string().nullable().openapi({ description: "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)." }),
-    customerEmail: z.string().nullable(),
+    customerName: pii("name", z.string()),
+    customerPhone: pii("phone", z.string().nullable().openapi({ description: "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)." })),
+    customerEmail: pii("email", z.string().nullable()),
     /**
      * The shipping-address snapshot; null fields when nothing ships (pickup or
      * service-only orders). The saved place names label the City/Thana/Area

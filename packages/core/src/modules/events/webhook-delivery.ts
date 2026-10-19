@@ -4,7 +4,8 @@
 // masked response excerpt, never a full response body.
 //
 // A delivery POSTs `{id, topic, apiVersion, occurredAt, resource, facts,
-// data}` where `data` is the resource's current admin API representation,
+// data}` where `data` is the resource's sealed representation (H5) as the
+// endpoint's `customerData` lets it see it,
 // signed `Scalius-Signature: t=<unix>,v1=<hex HMAC-SHA256(secret, t.body)>`,
 // with `Scalius-Event-Id` as the receiver's idempotency key. Failures retry 8
 // attempts over about 23 hours; an endpoint failing for a day is disabled
@@ -26,9 +27,13 @@ import {
   WEBHOOK_SIGNATURE_HEADER,
   WEBHOOK_TEST_TOPIC,
   WEBHOOK_TOPIC_HEADER,
+  eventDataTruncation,
+  projectEventRepresentation,
   signWebhookPayload,
   topicMatchesAnyFilter,
+  type EventRepresentation,
 } from "@scalius/shared/events";
+import type { ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
 import { checkOutboundUrl } from "@scalius/shared/outbound-url";
 import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -39,7 +44,7 @@ import {
   type EventFanOutTarget,
   type OutboxEvent,
 } from "./event-outbox";
-import { parseStoredTopicFilters, readWebhookSecret } from "./webhook-subscriptions";
+import { parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret } from "./webhook-subscriptions";
 
 export const WEBHOOK_MAX_ATTEMPTS = 8;
 /** Delay after attempt n (1-based) fails; 7 waits over about 22.6 hours. */
@@ -49,7 +54,7 @@ export const WEBHOOK_DISABLE_AFTER_FAILING_SECONDS = 24 * 60 * 60;
 export const WEBHOOK_DISABLE_MIN_FAILURES = WEBHOOK_MAX_ATTEMPTS;
 export const WEBHOOK_REQUEST_TIMEOUT_MS = 10_000;
 export const WEBHOOK_RESPONSE_EXCERPT_LENGTH = 256;
-/** Bodies above this send `data: null` with `dataOmitted: "too_large"`. */
+/** Bodies above this carry the truncation shape in `data` (`{ truncated: true, id, fetch }`). */
 export const WEBHOOK_MAX_BODY_BYTES = 512 * 1024;
 const PROCESSING_LEASE_SECONDS = 120;
 const MAX_ERROR_LENGTH = 500;
@@ -194,13 +199,25 @@ export async function sendWebhookRequest(options: {
 // ── Representation and body ───────────────────────────────────────────────
 
 /**
- * The resource's current admin API representation, or null when it no longer
- * exists. The API layer provides it from the same core reads its admin GET
- * routes use, so webhook `data` equals what the admin API returns.
+ * The resource's sealed representation in full (`EVENT_REPRESENTATION_SCHEMAS`,
+ * built through `buildEventRepresentation`), or null when it no longer exists.
+ * The API layer reads it; each delivery then applies its subscription's
+ * `customerData` (COMMERCE-HOOKS H5).
  */
-export type WebhookRepresentationResolver = (event: OutboxEvent) => Promise<unknown | null>;
+export type WebhookRepresentationResolver = (event: OutboxEvent) => Promise<EventRepresentation | null>;
 
-export function buildWebhookBody(event: OutboxEvent, apiVersion: string, data: unknown): string {
+/**
+ * The signed body: the envelope with the representation as this endpoint may
+ * see it (protected fields outside `customerData` read null). A body above
+ * 512 KiB carries the documented truncation shape in `data` instead (the id
+ * and the operation that reads it), never a silent null.
+ */
+export function buildWebhookBody(
+  event: OutboxEvent,
+  apiVersion: string,
+  data: EventRepresentation | null,
+  customerData: ReadonlySet<ProtectedCustomerData> = new Set(),
+): string {
   const envelope = {
     id: event.id,
     topic: event.topic,
@@ -208,11 +225,14 @@ export function buildWebhookBody(event: OutboxEvent, apiVersion: string, data: u
     occurredAt: new Date(event.occurredAt * 1000).toISOString(),
     resource: { type: event.resourceType, id: event.resourceId },
     facts: event.facts,
-    data: data ?? null,
+    data: data ? projectEventRepresentation(event.resourceType, data, customerData) : null,
   };
   const body = JSON.stringify(envelope);
   if (new TextEncoder().encode(body).byteLength <= WEBHOOK_MAX_BODY_BYTES) return body;
-  return JSON.stringify({ ...envelope, data: null, dataOmitted: "too_large" });
+  return JSON.stringify({
+    ...envelope,
+    data: eventDataTruncation(event.resourceType, event.resourceId, event.facts as Record<string, unknown>),
+  });
 }
 
 // ── Fan-out target ────────────────────────────────────────────────────────
@@ -334,7 +354,12 @@ export async function processWebhookDelivery(options: {
   let internalError: string | null = secret ? null : "signing_secret_unreadable: check CREDENTIAL_ENCRYPTION_KEY, then rotate the secret";
   if (secret) {
     try {
-      body = buildWebhookBody(event, subscription.apiVersion, await options.resolveRepresentation(event));
+      body = buildWebhookBody(
+        event,
+        subscription.apiVersion,
+        await options.resolveRepresentation(event),
+        new Set(parseStoredCustomerData(subscription.customerData)),
+      );
     } catch (error) {
       internalError = `representation_failed: ${normalizeError(error)}`;
     }

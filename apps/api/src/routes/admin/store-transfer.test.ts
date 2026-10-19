@@ -74,7 +74,7 @@ describe("store transfer RBAC map", () => {
     expect(getRoutePermission("/api/v1/admin/import/products", "POST")).toEqual({ anyOf: [PERMISSIONS.PRODUCTS_CREATE, PERMISSIONS.PRODUCTS_EDIT] });
     expect(getRoutePermission("/api/v1/admin/import/product-images", "POST")).toEqual({ allOf: [PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.MEDIA_UPLOAD] });
     expect(getRoutePermission("/api/v1/admin/import/customers", "POST")).toEqual({ anyOf: [PERMISSIONS.CUSTOMERS_CREATE, PERMISSIONS.CUSTOMERS_EDIT] });
-    expect(getRoutePermission("/api/v1/admin/import/inventory", "POST")).toEqual({ permission: PERMISSIONS.PRODUCTS_EDIT });
+    expect(getRoutePermission("/api/v1/admin/import/inventory", "POST")).toEqual({ permission: PERMISSIONS.PRODUCTS_ADJUST_STOCK });
     expect(getRoutePermission("/api/v1/admin/export/products", "GET")).toEqual({ permission: PERMISSIONS.PRODUCTS_VIEW });
     expect(getRoutePermission("/api/v1/admin/export/inventory", "GET")).toEqual({ permission: PERMISSIONS.PRODUCTS_VIEW });
     expect(getRoutePermission("/api/v1/admin/import/products", "GET")).toBeNull();
@@ -117,9 +117,18 @@ describe("store transfer routes", () => {
     expect((await editOnly.post("/products", { mode: "upsert", items: [product()] })).status).toBe(403);
     expect((await editOnly.post("/products", { mode: "price", items: [product()] })).status).toBe(200);
 
-    const createOnly = createApp([PERMISSIONS.PRODUCTS_CREATE, PERMISSIONS.CATEGORIES_CREATE]);
+    const createOnly = createApp([PERMISSIONS.PRODUCTS_CREATE, PERMISSIONS.CATEGORIES_CREATE, PERMISSIONS.PRODUCTS_ADJUST_STOCK]);
     expect((await createOnly.post("/products", { mode: "create", items: [product()] })).body.data.results[0].status).toBe("created");
     expect((await createOnly.post("/products", { mode: "price", items: [product()] })).status).toBe(403);
+  });
+
+  it("needs products.adjust_stock to give new SKUs starting stock", async () => {
+    const noStock = createApp([PERMISSIONS.PRODUCTS_CREATE, PERMISSIONS.CATEGORIES_CREATE]);
+    const stocked = product();
+    expect(stocked.variants.some((variant: { stock?: number | null }) => (variant.stock ?? 0) > 0)).toBe(true);
+    expect((await noStock.post("/products", { mode: "create", items: [stocked] })).status).toBe(403);
+    const unstocked = product({ variants: stocked.variants.map((variant: Record<string, unknown>) => ({ ...variant, stock: 0 })) });
+    expect((await noStock.post("/products", { mode: "create", items: [unstocked] })).body.data.results[0].status).toBe("created");
   });
 
   /** The export's "Cost per item" cells: a whole-string search would match ids and timestamps. */
@@ -148,7 +157,7 @@ describe("store transfer routes", () => {
   });
 
   it("refuses to create categories and brands without categories.create", async () => {
-    const { post } = createApp([PERMISSIONS.PRODUCTS_CREATE, PERMISSIONS.PRODUCTS_EDIT]);
+    const { post } = createApp([PERMISSIONS.PRODUCTS_CREATE, PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_ADJUST_STOCK]);
     const response = await post("/products", { mode: "create", items: [product()] });
     expect(response.status).toBe(200);
     expect(response.body.data.results[0]).toMatchObject({ status: "failed", issues: [{ code: "forbidden" }] });

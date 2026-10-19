@@ -110,7 +110,7 @@ describe("digital SKUs in the variant editor", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     // A staff member who edits products (Import keys is an edit).
     await act(async () => root.render(
-      <PermissionProvider permissions={[PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT]}>
+      <PermissionProvider permissions={[PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_ADJUST_STOCK]}>
         <QueryClientProvider client={client}>{element}</QueryClientProvider>
       </PermissionProvider>,
     ));

@@ -316,7 +316,7 @@ describe("agent operation contract", () => {
     }
     expect(byId(manifest, "dashboard.scanner_device.create_link").rbac).toEqual({
       type: "allOf",
-      permissions: ["products.edit", "products.view"],
+      permissions: ["products.adjust_stock", "products.view"],
     });
   });
 

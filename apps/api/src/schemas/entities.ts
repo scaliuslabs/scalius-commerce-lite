@@ -7,6 +7,7 @@
 import { localizedHandleFields } from "./translations";
 import { z } from "@hono/zod-openapi";
 import { orderBillingAddressShape } from "./billing-address";
+import { protectedField as pii } from "./protected";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import { ORDER_SHIPMENT_RECOVERY_REASONS } from "@scalius/core/modules/orders/browser";
@@ -329,19 +330,19 @@ const orderListFactsShape = {
  * nothing ships.
  */
 export const buyerOrderShippingAddressShape = {
-  shippingAddress: z.string().nullable(),
-  shippingAddressLine2: z.string().nullable(),
+  shippingAddress: pii("address", z.string().nullable()),
+  shippingAddressLine2: pii("address", z.string().nullable()),
   /** ISO 3166-1 alpha-2; it decided the order's market. */
   shippingCountryCode: z.string().nullable(),
-  shippingDependentLocality: z.string().nullable(),
+  shippingDependentLocality: pii("address", z.string().nullable()),
   shippingLocality: z.string().nullable(),
   shippingAdminArea: z.string().nullable(),
   shippingPostalCode: z.string().nullable(),
-  shippingCompany: z.string().nullable(),
+  shippingCompany: pii("address", z.string().nullable()),
   /** The recipient when not the order contact (null: `customerName`). */
-  shippingName: z.string().nullable(),
+  shippingName: pii("name", z.string().nullable()),
   /** The recipient's phone (E.164) when not the contact's (null: `customerPhone`). */
-  shippingPhone: z.string().nullable(),
+  shippingPhone: pii("phone", z.string().nullable()),
   /** Bangladesh adapter: delivery location ids and names. */
   city: z.string().nullable(),
   zone: z.string().nullable(),
@@ -368,18 +369,18 @@ export const customerAddressSchema = z.object({
   /** ISO 3166-1 alpha-2. */
   countryCode: z.string(),
   /** The recipient when not the customer (null: the customer's name). */
-  name: z.string().nullable(),
-  company: z.string().nullable(),
-  line1: z.string().nullable(),
-  line2: z.string().nullable(),
-  dependentLocality: z.string().nullable(),
+  name: pii("name", z.string().nullable()),
+  company: pii("address", z.string().nullable()),
+  line1: pii("address", z.string().nullable()),
+  line2: pii("address", z.string().nullable()),
+  dependentLocality: pii("address", z.string().nullable()),
   locality: z.string().nullable(),
   adminArea: z.string().nullable(),
   postalCode: z.string().nullable(),
   /** E.164 (null: the customer's phone, or one that could not be read). */
-  phone: z.string().nullable(),
+  phone: pii("phone", z.string().nullable()),
   /** What was typed for the phone. */
-  phoneRaw: z.string().nullable(),
+  phoneRaw: pii("phone", z.string().nullable()),
   /** Bangladesh adapter: delivery location ids and names. */
   city: z.string().nullable(),
   zone: z.string().nullable(),
@@ -396,9 +397,9 @@ export const customerAddressSchema = z.object({
 /** Order summary — returned by listOrders (admin). */
 export const orderSummarySchema = z.object({
   id: z.string(),
-  customerName: z.string(),
-  customerPhone: z.string().nullable().openapi({ description: "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)." }),
-  customerEmail: z.string().nullable(),
+  customerName: pii("name", z.string()),
+  customerPhone: pii("phone", z.string().nullable().openapi({ description: "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)." })),
+  customerEmail: pii("email", z.string().nullable()),
   customerId: z.string().nullable(),
   totalAmount: z.number(),
   /** The order's currency: its market's (MARKETS-DESIGN step 6). Its amounts are in it. */
@@ -523,17 +524,17 @@ export const orderSupportRequestSchema = z.object({
 /** Order detail — returned by getOrderDetails (admin). */
 export const orderDetailSchema = z.object({
   id: z.string(),
-  customerName: z.string(),
-  customerPhone: z.string().nullable().openapi({ description: "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)." }),
-  customerEmail: z.string().nullable(),
+  customerName: pii("name", z.string()),
+  customerPhone: pii("phone", z.string().nullable().openapi({ description: "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)." })),
+  customerEmail: pii("email", z.string().nullable()),
   /** A separate WhatsApp number when Customer accounts collects one; null means the phone. */
-  customerWhatsapp: z.string().nullable(),
+  customerWhatsapp: pii("phone", z.string().nullable()),
   customerId: z.string().nullable(),
   /** The customer record the order is filed under; its title can differ from the order's own name. */
   customerRecord: z.object({
     id: z.string(),
-    name: z.string(),
-    phone: z.string().nullable(),
+    name: pii("name", z.string()),
+    phone: pii("phone", z.string().nullable()),
     kind: z.enum(["account", "guest", "merchant"]),
   }).nullable(),
   totalAmount: z.number(),
@@ -718,21 +719,21 @@ export const categoryDetailSchema = z.object({
 const customerTitleFields = {
   kind: z.enum(["account", "guest", "merchant"]),
   /** The name on the record's most recent order (a guest record's secondary text). */
-  latestOrderName: z.string().nullable(),
+  latestOrderName: pii("name", z.string().nullable()),
 };
 
 export const customerSummarySchema = z.object({
   id: z.string(),
-  name: z.string(),
-  email: z.string().nullable(),
+  name: pii("name", z.string()),
+  email: pii("email", z.string().nullable()),
   /** E.164; null for a customer without a phone (keyed by email). */
-  phone: z.string().nullable(),
+  phone: pii("phone", z.string().nullable()),
   /** The default address (a staff order prefills it); null without one. */
   defaultAddress: z.object({
     countryCode: z.string(),
-    line1: z.string().nullable(),
-    line2: z.string().nullable(),
-    dependentLocality: z.string().nullable(),
+    line1: pii("address", z.string().nullable()),
+    line2: pii("address", z.string().nullable()),
+    dependentLocality: pii("address", z.string().nullable()),
     locality: z.string().nullable(),
     adminArea: z.string().nullable(),
     postalCode: z.string().nullable(),
@@ -756,10 +757,10 @@ export const customerSummarySchema = z.object({
 /** Customer detail — returned by getCustomerById (admin). Full DB row. */
 export const customerDetailSchema = z.object({
   id: z.string(),
-  name: z.string(),
-  email: z.string().nullable(),
+  name: pii("name", z.string()),
+  email: pii("email", z.string().nullable()),
   /** E.164; null for a customer without a phone (keyed by email). */
-  phone: z.string().nullable(),
+  phone: pii("phone", z.string().nullable()),
   accountClaimedAt: nullableTimestampSchema,
   ...customerTitleFields,
   totalOrders: z.number(),
@@ -769,7 +770,7 @@ export const customerDetailSchema = z.object({
   updatedAt: timestampSchema,
   deletedAt: nullableTimestampSchema,
   /** On a retired guest record whose every order joined this account by a verified contact. */
-  mergedInto: z.object({ id: z.string(), name: z.string() }).nullable(),
+  mergedInto: z.object({ id: z.string(), name: pii("name", z.string()) }).nullable(),
   /** Normalised tags, alphabetical. */
   tags: z.array(z.string()),
   /** Marketing consent per channel for the customer's current address. */

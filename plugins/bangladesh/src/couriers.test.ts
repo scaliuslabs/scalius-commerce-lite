@@ -90,8 +90,9 @@ describe("the Bangladesh pack's courier declarations", () => {
     // Each courier is its own feature: off by default, reaching only its own hosts.
     const feature = (id: string) => manifest.features.find((entry) => entry.id === id);
     expect(manifest.scopes).toEqual([]);
-    expect(feature("pathao")).toMatchObject({ providers: ["pathao"], scopes: ["write_places"], allowedHosts: ["api-hermes.pathao.com", "courier-api-sandbox.pathao.com"] });
-    expect(feature("steadfast")).toMatchObject({ providers: ["steadfast"], allowedHosts: ["portal.packzy.com"] });
+    // A booking carries the recipient's name, phone and street: each courier asks for exactly those.
+    expect(feature("pathao")).toMatchObject({ providers: ["pathao"], scopes: ["write_places", "read_customer_names", "read_customer_phones", "read_customer_addresses"], allowedHosts: ["api-hermes.pathao.com", "courier-api-sandbox.pathao.com"] });
+    expect(feature("steadfast")).toMatchObject({ providers: ["steadfast"], scopes: ["read_customer_names", "read_customer_phones", "read_customer_addresses"], allowedHosts: ["portal.packzy.com"] });
   });
 });
 

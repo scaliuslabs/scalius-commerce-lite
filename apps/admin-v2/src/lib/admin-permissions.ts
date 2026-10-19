@@ -3,6 +3,7 @@ export const ADMIN_PERMISSIONS = {
   PRODUCTS_VIEW: "products.view",
   PRODUCTS_CREATE: "products.create",
   PRODUCTS_EDIT: "products.edit",
+  PRODUCTS_ADJUST_STOCK: "products.adjust_stock",
   CATEGORIES_VIEW: "categories.view",
   CATEGORIES_CREATE: "categories.create",
   CATEGORIES_EDIT: "categories.edit",

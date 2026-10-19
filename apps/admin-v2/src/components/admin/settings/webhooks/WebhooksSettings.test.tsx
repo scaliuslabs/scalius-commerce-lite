@@ -261,11 +261,14 @@ describe("Settings › Webhooks", () => {
     expect(checkbox("Order paid").getAttribute("data-state")).toBe("checked");
     expect(checkbox("Order paid").disabled).toBe(true);
     await click(checkbox("Product created"));
+    // Buyer contact data starts off; this endpoint takes phone numbers only.
+    expect(checkbox("Phone numbers").getAttribute("data-state")).toBe("unchecked");
+    await click(checkbox("Phone numbers"));
     await click(button("Create webhook", dialog()));
 
     expect(sdk.postApiV1AdminWebhooks).toHaveBeenCalledOnce();
     expect(sdk.postApiV1AdminWebhooks.mock.calls[0]![0]).toEqual({
-      body: { url: "https://hooks.example.com/scalius", topics: ["order.*", "product.created"], description: null },
+      body: { url: "https://hooks.example.com/scalius", topics: ["order.*", "product.created"], description: null, customerData: ["phone"] },
     });
     await vi.waitFor(() =>
       expect(document.querySelector<HTMLInputElement>('input[aria-label="Signing secret"]')?.value).toBe(SECRET),

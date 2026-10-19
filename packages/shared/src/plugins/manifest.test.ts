@@ -7,6 +7,9 @@ import {
   PLUGIN_FUNCTION_SCHEMAS,
   parsePluginManifest,
   pluginCompatibility,
+  PLUGIN_GRANT_FLAG_DIMENSIONS,
+  PLUGIN_GRANT_LIST_DIMENSIONS,
+  emptyPluginGrantRequest,
   pluginGrantExpands,
   pluginGrantKey,
   pluginGrantRequest,
@@ -28,7 +31,7 @@ const FULL: PluginManifestInput = {
   apiVersion: PLUGIN_API_VERSION,
   description: "Points for every order, redeemable at checkout.",
   author: { name: "Acme", url: "https://acme.example" },
-  scopes: ["read_orders", "read_customers"],
+  scopes: ["read_orders", "read_customers", "read_customer_phones"],
   allowedHosts: ["api.acme.example", "*.cdn.acme.example"],
   events: ["order.paid", "order.refunded"],
   functions: [{ point: "checkout.discounts" }],
@@ -241,10 +244,10 @@ describe("plugin manifest", () => {
     const granted = parse({ ...FULL, events: ["order.*"] });
     // A covered exact topic, the same grant reordered, or fewer scopes: no new approval.
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.paid"] }))).toBe(false);
-    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], scopes: ["read_customers", "read_orders"] }))).toBe(false);
-    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], scopes: ["read_orders"] }))).toBe(false);
+    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], scopes: ["read_customers", "read_orders", "read_customer_phones"] }))).toBe(false);
+    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], scopes: ["read_orders", "read_customer_phones"] }))).toBe(false);
     // New data, hosts, topics or scripts need approval.
-    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], scopes: ["read_orders", "write_orders"] }))).toBe(true);
+    expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], scopes: ["read_orders", "write_orders", "read_customer_phones"] }))).toBe(true);
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*", "product.created"] }))).toBe(true);
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["*"] }))).toBe(true);
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], allowedHosts: ["api.other.example"] }))).toBe(true);
@@ -255,8 +258,24 @@ describe("plugin manifest", () => {
     expect(pluginGrantExpands(validating, blocking)).toBe(true);
     expect(pluginGrantExpands(blocking, validating)).toBe(false);
     // The key is order-independent.
-    expect(pluginGrantKey(parse({ ...FULL, scopes: ["read_customers", "read_orders"] })))
-      .toBe(pluginGrantKey(parse({ ...FULL, scopes: ["read_orders", "read_customers"] })));
+    expect(pluginGrantKey(parse({ ...FULL, scopes: ["read_customers", "read_orders", "read_customer_phones"] })))
+      .toBe(pluginGrantKey(parse({ ...FULL, scopes: ["read_orders", "read_customers", "read_customer_phones"] })));
+  });
+
+  it("keys a grant canonically, versioned, with defaults left out so new dimensions are additive", () => {
+    const request = { ...emptyPluginGrantRequest(), scopes: ["read_orders" as const], publicRoutes: true, allowedHosts: ["b.example", "a.example", "a.example"] };
+    expect(pluginGrantKey(request)).toBe('g1:{"allowedHosts":["a.example","b.example"],"publicRoutes":true,"scopes":["read_orders"]}');
+    // Key order of the object never matters.
+    const reordered = Object.fromEntries(Object.entries(request).reverse()) as typeof request;
+    expect(pluginGrantKey(reordered)).toBe(pluginGrantKey(request));
+    // A dimension added later at its default (an unknown key here) changes nothing.
+    expect(pluginGrantKey({ ...request, storefrontConnect: [], features: [], storefrontCode: false })).toBe(pluginGrantKey(request));
+    expect(pluginGrantKey(emptyPluginGrantRequest())).toBe("g1:{}");
+    // Every dimension the request carries is keyed (none is silently ignored).
+    for (const dimension of [...PLUGIN_GRANT_LIST_DIMENSIONS, ...PLUGIN_GRANT_FLAG_DIMENSIONS]) {
+      expect(Object.keys(emptyPluginGrantRequest())).toContain(dimension);
+    }
+    expect(Object.keys(emptyPluginGrantRequest()).sort()).toEqual([...PLUGIN_GRANT_LIST_DIMENSIONS, ...PLUGIN_GRANT_FLAG_DIMENSIONS].sort());
   });
 });
 
@@ -328,6 +347,7 @@ describe("settings groups and page tabs in the manifest", () => {
   };
   const pack = {
     ...FULL,
+    scopes: ["read_orders", "read_customers", "read_customer_names", "read_customer_phones", "read_customer_addresses"],
     providers: { sms: [{ id: "alpha", name: "Alpha", settings: ["alpha_key"] }], courier: [{ id: "beta", name: "Beta" }] },
     settings: [
       { key: "store_code", label: "Store code", type: "text", group: "store" },

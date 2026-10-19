@@ -1,6 +1,6 @@
 {
   "name": "@scalius/plugin-bangladesh",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Scalius Bangladesh pack, each service a feature turned on by itself: bKash, Nagad and SSLCommerz payments, the Pathao and Steadfast couriers, the Bangladesh SMS gateways, the courier-history fraud checkers and the Bangladesh place directory (City, Thana, Area)",
   "private": true,
   "type": "module",
