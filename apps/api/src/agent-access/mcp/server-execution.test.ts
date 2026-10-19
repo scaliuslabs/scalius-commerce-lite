@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { AGENT_OPERATIONS } from "../../generated/agent-operations.gen";
 import { AgentDispatchError, type AgentOperationResult } from "../dispatch";
-import type { AgentAuditInput, AgentPrincipal } from "../types";
+import type { AgentPrincipal } from "../types";
 
 const mocks = vi.hoisted(() => ({
   authorizeOperation: vi.fn(),
@@ -41,7 +41,8 @@ vi.mock("../dispatch", async (importOriginal) => {
 
 import { writeAgentConfirmPolicy } from "./confirm";
 import { AGENT_ERROR_MAX_BYTES } from "./errors";
-import { createAgentMcpServer } from "./server";
+import { InMemoryTransport, type JSONRPCMessage } from "@modelcontextprotocol/server";
+import { createAgentMcpServer, createAgentMcpServerForRequest, peekMcpMethod } from "./server";
 import { selectPointers } from "./shape";
 
 const principal: AgentPrincipal = {
@@ -434,5 +435,70 @@ describe("MCP surface v2 execution", () => {
     const output = await tool("scalius_write")({ operationId: sequentialWrite.operationId, input: { path: { nope: "x" } }, dryRun: true });
     expect(output.structuredContent).toMatchObject({ ok: false, error: { code: "unknown_path_parameter", field: "path.nope" } });
     expect(mocks.dispatchAgentOperation).not.toHaveBeenCalled();
+  });
+
+  describe("store context in the handshake", () => {
+    async function initialize(method: string | null) {
+      const server = await createAgentMcpServerForRequest({ surface: "dashboard", env, ctx: {} as ExecutionContext }, method);
+      const [client, transport] = InMemoryTransport.createLinkedPair();
+      const response = new Promise<{ result: { instructions: string } }>((resolve) => {
+        client.onmessage = (message) => resolve(message as never);
+      });
+      await client.start();
+      await server.connect(transport);
+      await client.send({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "context-test", version: "1" } },
+      } as JSONRPCMessage);
+      const { result } = await response;
+      await client.close();
+      await server.close();
+      return result.instructions;
+    }
+
+    it("adds the store name, currency, markets and what is not set up, read through the grant", async () => {
+      mocks.dispatchAgentOperation.mockImplementation(async ({ operation }) => result(operation.operationId, 200, {
+        success: true,
+        data: operation.operationId === "dashboard.settings.store_setup_get"
+          ? { needed: false, done: "has_orders", currencyLocked: true, current: { storeName: "Dhaka Panjabi House", countryCode: "BD", currencyCode: "BDT", locale: "bn", timeZone: "Asia/Dhaka", unitSystem: "metric", weightUnit: "kg" } }
+          : operation.operationId === "dashboard.markets.list"
+            ? { items: [{ name: "Bangladesh", status: "active", isBackup: true, currencyCode: "BDT", countries: ["BD"] }, { name: "Draft EU", status: "draft", currencyCode: "EUR", countries: ["DE"] }] }
+            : { status: "incomplete", issues: [{ code: "no_shipping", message: "No active shipping method" }], hasActiveShippingMethod: false, hasActiveDeliveryHierarchy: true, customerSignInRequired: false, hasUsableCustomerSignIn: true },
+      }));
+      const instructions = await initialize("initialize");
+      expect(instructions).toContain("Store: Dhaka Panjabi House · BDT · Asia/Dhaka · markets: Bangladesh (BDT) · checkout incomplete · not set up: No active shipping method.");
+      expect(instructions).not.toContain("Draft EU");
+      expect(new TextEncoder().encode(instructions).byteLength).toBeLessThanOrEqual(600);
+      expect(mocks.dispatchAgentOperation.mock.calls.map(([options]) => options.operation.operationId).sort()).toEqual([
+        "dashboard.checkout.readiness_get",
+        "dashboard.markets.list",
+        "dashboard.settings.store_setup_get",
+      ]);
+    });
+
+    it("leaves out facts the grant cannot read and reads nothing for other methods", async () => {
+      mocks.authorizeOperation.mockResolvedValue(false);
+      expect(await initialize("initialize")).toBe((await initialize("tools/call")));
+      mocks.authorizeOperation.mockResolvedValue(true);
+      mocks.dispatchAgentOperation.mockReset();
+      await initialize("tools/call");
+      expect(mocks.dispatchAgentOperation).not.toHaveBeenCalled();
+    });
+
+    it("peeks the method from the header or a small handshake body only", async () => {
+      const post = (body: string, headers: Record<string, string> = {}) => new Request("https://api.example.test/mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Content-Length": String(body.length), ...headers },
+        body,
+      });
+      expect(await peekMcpMethod(post("{}", { "Mcp-Method": "server/discover" }))).toBe("server/discover");
+      const handshake = post(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }));
+      expect(await peekMcpMethod(handshake)).toBe("initialize");
+      expect(await handshake.json()).toMatchObject({ method: "initialize" });
+      expect(await peekMcpMethod(post(JSON.stringify({ method: "tools/call", params: { x: "y".repeat(9000) } })))).toBeNull();
+      expect(await peekMcpMethod(post("not json"))).toBeNull();
+    });
   });
 });

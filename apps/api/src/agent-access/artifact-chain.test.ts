@@ -267,7 +267,7 @@ describe("continuous MCP artifact execution and one-use download", () => {
     } as unknown as Env;
     const ctx = executionContext(chain.props!);
 
-    // Exercise the registered operations.read callback, rather than calling
+    // Exercise the registered scalius_read callback, rather than calling
     // the artifact adapter directly. Only operation discovery is controlled so
     // this pre-freeze test can use the live finalized contract instead of the
     // intentionally stale checked-in generated snapshot.

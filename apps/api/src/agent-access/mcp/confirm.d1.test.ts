@@ -33,7 +33,14 @@ import { createAgentMcpServer } from "./server";
 const OWNER = "00000000-0000-4000-8000-000000000042";
 const GRANT = "agr_confirmrefund0000001";
 
-type ToolOutput = { isError?: boolean; structuredContent: Record<string, any> };
+type ToolOutput = {
+  isError?: boolean;
+  structuredContent: {
+    error?: Record<string, unknown>;
+    confirmation?: { confirmToken: string; summary: string };
+    [key: string]: unknown;
+  };
+};
 
 /** Every row of every table except the agent audit trail (and the grant's last-used stamp it moves). */
 function snapshot(sqlite: DatabaseSync): Record<string, unknown[]> {
@@ -162,7 +169,7 @@ describe("confirmed refunds through MCP on D1", () => {
       error_class: "confirmation_required",
     })]);
 
-    const token = refused.structuredContent.confirmation.confirmToken as string;
+    const token = refused.structuredContent.confirmation!.confirmToken;
     const confirmed = await write({ ...refund(), confirmToken: token });
     expect(confirmed.isError, JSON.stringify(confirmed)).toBeUndefined();
     expect(confirmed.structuredContent).toMatchObject({ ok: true, meta: { operationId: "dashboard.orders.refund", status: 200 } });

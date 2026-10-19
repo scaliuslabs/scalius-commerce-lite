@@ -76,7 +76,7 @@ export const AGENT_MCP_PROTOCOL_VERSIONS = ["2026-07-28", ...SUPPORTED_PROTOCOL_
 const LIST_CACHE = { ttlMs: 3_600_000, cacheScope: "private" as const };
 const INSTRUCTIONS_MAX_BYTES = 600;
 
-export const AGENT_MCP_INSTRUCTIONS = "Scalius store tools. Loop: scalius_search for the goal, scalius_describe the chosen ids, then scalius_read or scalius_write, and verify with scalius_read. scalius_answer answers common data questions in one call. Before a change run scalius_write with dryRun:true; destructive and financial changes run only after the merchant approves (confirmToken). Use only ids, revisions and amounts read from the store; money is decimal major units. Reviewed operations only.";
+export const AGENT_MCP_INSTRUCTIONS = "Scalius tools: scalius_search a goal, scalius_describe ids, then scalius_read or scalius_write; verify with a read. scalius_answer handles common data questions. Changes: dryRun:true first; destructive or financial ones need the merchant's approval (confirmToken). Use only ids, revisions and amounts read from the store; money is decimal major units.";
 
 /** The static loop plus one live store line, within 600 bytes. */
 export function buildAgentInstructions(storeLine = ""): string {
@@ -1070,4 +1070,25 @@ export async function createAgentMcpServerForRequest(
     line = "";
   }
   return createAgentMcpServer(deps, { instructions: buildAgentInstructions(line) });
+}
+
+const HANDSHAKE_PEEK_MAX_BYTES = 8 * 1024;
+
+/**
+ * The JSON-RPC method of a request: the 2026-07-28 `Mcp-Method` header, or,
+ * for a small 2025-era body (a handshake is a few hundred bytes), the body's
+ * `method`. Larger bodies are tool calls and are never read twice.
+ */
+export async function peekMcpMethod(request: Request): Promise<string | null> {
+  const header = request.headers.get("Mcp-Method")?.trim();
+  if (header) return header;
+  if (request.method !== "POST" || request.body === null) return null;
+  const length = Number(request.headers.get("Content-Length") ?? Number.NaN);
+  if (!Number.isFinite(length) || length > HANDSHAKE_PEEK_MAX_BYTES) return null;
+  try {
+    const body = JSON.parse(await request.clone().text()) as { method?: unknown };
+    return typeof body?.method === "string" ? body.method : null;
+  } catch {
+    return null;
+  }
 }

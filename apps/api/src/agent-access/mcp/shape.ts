@@ -216,7 +216,7 @@ export function selectPointers(value: unknown, pointers: readonly string[]): unk
   let projected: unknown;
   for (const pointer of pointers) projected = merge(projected, pick(value, parsePointer(pointer)));
   const compact = (candidate: unknown): unknown => {
-    if (Array.isArray(candidate)) return candidate.map((item) => item === undefined ? null : compact(item));
+    if (Array.isArray(candidate)) return Array.from(candidate, (item) => item === undefined ? null : compact(item));
     if (isRecord(candidate)) return Object.fromEntries(Object.entries(candidate).map(([key, item]) => [key, compact(item)]));
     return candidate;
   };
