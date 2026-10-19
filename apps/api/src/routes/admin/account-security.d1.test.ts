@@ -126,7 +126,7 @@ async function ownerWithEmailCodes(env: Env) {
   // Enabling rotates the session; onboarding (not under test here) marks the new one verified.
   await database.db.update(sessionTable).set({ twoFactorVerified: true }).where(eq(sessionTable.userId, user.id));
   await database.db.update(userTable).set({ twoFactorMethod: "email" }).where(eq(userTable.id, user.id));
-  return { userId: user.id, cookie: sessionCookie(verified) };
+  return { userId: user.id, cookie: sessionCookie(verified), secret };
 }
 
 async function emailedCode(userId: string): Promise<string> {
@@ -268,6 +268,20 @@ describe("turning off two-step verification", () => {
     expect(refused.status).toBe(403);
     expect(refused.json.error?.code).toBe("TWO_FACTOR_REQUIRED");
     expect(database.sqlite.prepare("SELECT two_factor_enabled AS enabled FROM user WHERE id = ?").get(userId)).toEqual({ enabled: 1 });
+  });
+
+  it("checks the method in use now, not the one in the session's 5-minute cookie cache", async () => {
+    const env = makeEnv();
+    const { userId, cookie, secret } = await ownerWithEmailCodes(env);
+    // A dashboard read refreshes Better Auth's cookie cache while the account uses email codes.
+    const warm = await authRoute(env, "/api/auth/get-session", { headers: { Cookie: cookie, Origin: DASHBOARD } });
+    const cached = `${cookie}; ${cookieNamed(warm, "session_data")}`;
+    // Then the account moves to its authenticator app (the cached copy still says email).
+    await database.db.update(userTable).set({ twoFactorMethod: "totp" }).where(eq(userTable.id, userId));
+
+    const off = await adminApi(env)(cached, "/2fa/disable", { password: PASSWORD, code: totp(secret) });
+    expect(off.status, JSON.stringify(off.json)).toBe(200);
+    expect(database.sqlite.prepare("SELECT two_factor_enabled AS enabled FROM user WHERE id = ?").get(userId)).toEqual({ enabled: 0 });
   });
 });
 

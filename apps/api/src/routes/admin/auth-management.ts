@@ -1280,7 +1280,7 @@ const start2faMethodChallengeRoute = createRoute({
 
 app.openapi(start2faMethodChallengeRoute, async (c) => {
     const db = c.get("db");
-    const sessionUser = c.get("user");
+    const sessionUser = await currentTwoFactorUser(db, c.get("user"));
     const session = c.get("session");
     const { method, password } = c.req.valid("json");
 
@@ -1371,6 +1371,26 @@ const update2faMethodSchema = z.union([
  * Auth may rotate the session while enrolling, so the proof names the one to
  * mark verified.
  */
+/**
+ * The account's two-step state as stored now. The session's user rides in
+ * Better Auth's 5-minute cookie cache, so right after turning two-step on or
+ * switching its method it still names the old method; every two-step handler
+ * reads this instead.
+ */
+async function currentTwoFactorUser<T extends { id: string }>(db: Database, sessionUser: T) {
+    const row = await db
+        .select({
+            twoFactorEnabled: user.twoFactorEnabled,
+            twoFactorMethod: user.twoFactorMethod,
+            mustEnrollTwoFactor: user.mustEnrollTwoFactor,
+        })
+        .from(user)
+        .where(eq(user.id, sessionUser.id))
+        .get();
+    if (!row) throw new UnauthorizedError("No active session found");
+    return { ...sessionUser, ...row };
+}
+
 async function verifySessionTwoFactorCode(
     c: Context<{ Bindings: Env }>,
     verificationMethod: "totp" | "email",
@@ -1468,7 +1488,7 @@ const update2faMethodRoute = createRoute({
 
 app.openapi(update2faMethodRoute, async (c) => {
     const db = c.get("db");
-    const sessionUser = c.get("user");
+    const sessionUser = await currentTwoFactorUser(db, c.get("user"));
     const session = c.get("session");
     const methodInput = c.req.valid("json");
     const { method } = methodInput;
@@ -1777,7 +1797,7 @@ const disable2faRoute = createRoute({
 
 app.openapi(disable2faRoute, async (c) => {
     const db = c.get("db");
-    const sessionUser = c.get("user");
+    const sessionUser = await currentTwoFactorUser(db, c.get("user"));
     const session = c.get("session");
     const { password, code } = c.req.valid("json");
 
