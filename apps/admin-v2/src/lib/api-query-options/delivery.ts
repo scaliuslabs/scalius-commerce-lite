@@ -97,10 +97,11 @@ export const deliveryLocationByIdQueryOptions = (id: string) =>
 
 async function getAllDeliveryLocations(type?: DeliveryHierarchyField) {
   const filter = type ? addressPlaceQuery(type) : {};
-  const firstPage = await getDeliveryLocations({ ...filter, limit: 500, page: 1 });
+  // Only places a buyer can choose: a switched-off place (a courier's test row) is nowhere to deliver.
+  const firstPage = await getDeliveryLocations({ ...filter, isActive: "true", limit: 500, page: 1 });
   const locations = [...firstPage.locations];
   for (let page = 2; page <= firstPage.pagination.totalPages; page += 1) {
-    const nextPage = await getDeliveryLocations({ ...filter, limit: 500, page });
+    const nextPage = await getDeliveryLocations({ ...filter, isActive: "true", limit: 500, page });
     locations.push(...nextPage.locations);
   }
   return { locations, pagination: firstPage.pagination };
