@@ -159,7 +159,10 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
           <Suspense fallback={null}>
             <div className="border-t pt-4">
               <ConversationComposer key={order.id} onPosted={(posted) => setFollowRequest({ conversationId: posted.id, seq: posted.messages.at(-1)?.seq ?? 0 })} primary={false} allowInternalNotes={!actions.canEditOrders} conversationId={conversation?.id ?? null} orderId={order.id} />
-              <ReplyReachNote order={order} />
+              {/* Its own boundary: the reply box never waits for this note's code. */}
+              <Suspense fallback={null}>
+                <ReplyReachNote order={order} />
+              </Suspense>
             </div>
           </Suspense>
         ) : null}

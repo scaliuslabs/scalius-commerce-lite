@@ -776,7 +776,9 @@ describe("App page", () => {
         ? ok({ lines: [line("log_1")], nextCursor: null })
         : ok({ lines: [line("log_3", { level: "error", fields: { orderId: "ord_9" } }), line("log_2")], nextCursor: "log_2" }));
     await renderApp(detail({ status: "active" }), VIEWER);
-    const logTab = [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find((tab) => tab.textContent === "Log")!;
+    const findLogTab = () => [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find((tab) => tab.textContent === "Log");
+    await vi.waitFor(() => expect(findLogTab()).toBeDefined());
+    const logTab = findLogTab()!;
     await act(async () => {
       logTab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
     });
