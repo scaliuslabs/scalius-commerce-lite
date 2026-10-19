@@ -64,15 +64,15 @@ export function GiftCardProductCard({ form, readOnly }: {
       summary={<p className="text-body text-muted-foreground">{t(isGiftCard ? "productSummaryOn" : "productSummaryOff")}</p>}
     >
         {readOnly ? <ReadOnlyValue label={t("productSwitch")} value={t(isGiftCard ? "productSummaryOn" : "productSummaryOff")} /> : <ChoiceField
-          id="product-gift-card"
+          id="product-gift-card-switch"
           controlAt="end"
           label={t("productSwitch")}
           help={t("productSwitchHelp")}
           control={(
             <Switch
-              id="product-gift-card"
+              id="product-gift-card-switch"
               checked={isGiftCard}
-              aria-describedby="product-gift-card-help"
+              aria-describedby="product-gift-card-switch-help"
               onCheckedChange={change}
             />
           )}

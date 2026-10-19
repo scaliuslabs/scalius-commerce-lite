@@ -276,6 +276,35 @@ describe("problem lines in the save banner", () => {
   });
 });
 
+describe("the product form's ids", () => {
+  const duplicates = () => {
+    const counts = new Map<string, number>();
+    for (const element of container.querySelectorAll("[id]")) counts.set(element.id, (counts.get(element.id) ?? 0) + 1);
+    return [...counts].filter(([, count]) => count > 1).map(([id]) => id);
+  };
+
+  it("are unique on a new and a saved product, so every label names its own control", async () => {
+    await mount(false);
+    await vi.waitFor(() => expect(container.querySelector("#product-gift-card")).not.toBeNull());
+    // The gift card card opens to its switch: the switch, not the card, carries the label's id.
+    const disclosure = container.querySelector<HTMLButtonElement>("#product-gift-card button[aria-expanded]");
+    if (disclosure?.getAttribute("aria-expanded") === "false") await act(async () => disclosure.click());
+    const toggle = await vi.waitFor(() => {
+      const found = container.querySelector<HTMLButtonElement>("#product-gift-card-switch");
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(toggle.getAttribute("role")).toBe("switch");
+    expect(container.querySelector('label[for="product-gift-card-switch"]')?.textContent).toBeTruthy();
+    expect(duplicates()).toEqual([]);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await mount(true);
+    expect(duplicates()).toEqual([]);
+  });
+});
+
 describe("variant prices on a new product", () => {
   const p = (key: string, values?: Record<string, string | number>) => translate(productMessages, key as never, values as never);
   const input = (label: string) => container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
