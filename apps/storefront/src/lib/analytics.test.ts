@@ -447,7 +447,7 @@ describe("storefront analytics", () => {
     expect(sendServerEventMock).not.toHaveBeenCalled();
   });
 
-  it("bridges storefront commerce wrappers to TikTok standard events with event_id and no PII", () => {
+  it("bridges storefront commerce wrappers to TikTok standard events with event_id and no PII", async () => {
     trackFbViewContent({
       content_ids: ["sku_view"],
       content_name: "Product view",
@@ -532,7 +532,8 @@ describe("storefront analytics", () => {
       currency: "BDT",
       value: 600,
     });
-    expect(window.ttq?.track).toHaveBeenCalledWith("Purchase", {
+    // The purchase follows TikTok's (hashed) advanced matching, asynchronously.
+    await vi.waitFor(() => expect(window.ttq?.track).toHaveBeenCalledWith("Purchase", {
       event_id: "Purchase:order_1",
       content_type: "product",
       content_ids: ["sku_cart"],
@@ -540,7 +541,7 @@ describe("storefront analytics", () => {
       quantity: 2,
       currency: "BDT",
       value: 600,
-    });
+    }));
     expect(window.ttq?.track).toHaveBeenCalledWith("Search", {
       event_id: "Search:generated",
       content_type: "product",

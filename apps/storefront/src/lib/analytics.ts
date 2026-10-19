@@ -7,6 +7,7 @@
  * NOW INCLUDES SERVER-SIDE EVENT DISPATCHING FOR META CONVERSIONS API (CAPI).
  */
 import { sendServerEvent } from "./tracking/meta-capi";
+import { marketingAllowed } from "./tracking/consent";
 import { createMetaEventId } from "./tracking/meta-event-id";
 import { normalizeSearchQuery } from "./search-query";
 
@@ -43,13 +44,18 @@ type FbCommerceContent = {
   item_price?: number;
 };
 
+// TikTok's current standard events (ads.tiktok.com/help/article/standard-events-parameters):
+// the purchase is `Purchase` (`CompletePayment` is retired), a newsletter
+// signup `SubmitForm`, an account `CompleteRegistration`.
 type TikTokStandardEvent =
   | "ViewContent"
   | "AddToCart"
   | "InitiateCheckout"
   | "AddPaymentInfo"
   | "Purchase"
-  | "Search";
+  | "Search"
+  | "SubmitForm"
+  | "CompleteRegistration";
 
 type TikTokCommerceData = {
   content_ids?: string[];
@@ -457,7 +463,7 @@ function trackTikTokEvent(
 ): void {
   // Only a configured TikTok pixel may receive events; fail closed otherwise
   // so an unrelated `ttq` global cannot surface an `undefined.track` error.
-  if (window.__TIKTOK_PIXEL_ENABLED__ !== true) {
+  if (window.__TIKTOK_PIXEL_ENABLED__ !== true || !marketingAllowed()) {
     return;
   }
 
@@ -478,7 +484,7 @@ function trackTikTokEvent(
 }
 
 function bridgeFbCommerceToTikTok(
-  eventName: Exclude<TikTokStandardEvent, "Search">,
+  eventName: Exclude<TikTokStandardEvent, "Search" | "SubmitForm" | "CompleteRegistration">,
   data: TikTokCommerceData,
   eventId: string,
 ): void {
@@ -695,11 +701,14 @@ export function trackFbViewContent(data: {
   const eventId = createMetaEventId("ViewContent");
 
   // Client-side Pixel
-  if (typeof window.fbq === "function") {
+  if (marketingAllowed() && typeof window.fbq === "function") {
     window.fbq("track", "ViewContent", data, pixelEventOptions(eventId));
   }
 
-  bridgeFbCommerceToTikTok("ViewContent", data, eventId);
+  // A list (category, collection) is a product group: GA4 calls it
+  // view_item_list, and TikTok has no list event (audit spec 3.10).
+  const listView = data.content_type === "product_group";
+  if (!listView) bridgeFbCommerceToTikTok("ViewContent", data, eventId);
 
   const products = mapFbContentsToZarazProducts(
     data.contents,
@@ -717,7 +726,15 @@ export function trackFbViewContent(data: {
     value: data.value,
   });
 
-  bridgeFbCommerceToDataLayer("view_item", data, eventId);
+  if (listView) {
+    pushDataLayerEcommerceEvent("view_item_list", {
+      item_list_name: data.content_name ?? data.content_category,
+      currency: data.currency ?? window.__CURRENCY_CODE__,
+      items: normalizeGa4Items(data, { includeContentName: false }),
+    }, eventId);
+  } else {
+    bridgeFbCommerceToDataLayer("view_item", data, eventId);
+  }
 
   // CAPI: Server-side Event
   sendServerEvent({
@@ -750,7 +767,7 @@ export function trackFbAddToCart(data: {
   const eventId = createMetaEventId("AddToCart");
 
   // Client-side Pixel
-  if (typeof window.fbq === "function") {
+  if (marketingAllowed() && typeof window.fbq === "function") {
     window.fbq("track", "AddToCart", data, pixelEventOptions(eventId));
   }
 
@@ -805,7 +822,7 @@ export function trackFbInitiateCheckout(data: {
   const eventId = createMetaEventId("InitiateCheckout");
 
   // Client-side Pixel
-  if (typeof window.fbq === "function") {
+  if (marketingAllowed() && typeof window.fbq === "function") {
     window.fbq("track", "InitiateCheckout", data, pixelEventOptions(eventId));
   }
 
@@ -853,7 +870,7 @@ export function trackFbAddPaymentInfo(data?: {
   const eventId = createMetaEventId("AddPaymentInfo");
 
   // Client-side Pixel
-  if (typeof window.fbq === "function") {
+  if (marketingAllowed() && typeof window.fbq === "function") {
     window.fbq(
       "track",
       "AddPaymentInfo",
@@ -905,11 +922,15 @@ export function trackFbPurchase(
     options.eventId ?? createMetaEventId("Purchase", data.order_id);
 
   // Client-side Pixel
-  if (typeof window.fbq === "function") {
+  if (marketingAllowed() && typeof window.fbq === "function") {
     window.fbq("track", "Purchase", data, pixelEventOptions(eventId));
   }
 
-  bridgeFbCommerceToTikTok("Purchase", data, eventId);
+  // TikTok matches the buyer (hashed contact) before the purchase it dedupes
+  // with the Events API by the same `Purchase:<orderId>` id.
+  void identifyTikTokBuyer({ email: userData.em, phone: userData.ph })
+    .catch(() => undefined)
+    .finally(() => bridgeFbCommerceToTikTok("Purchase", data, eventId));
 
   sendZarazEcommerce("Order Completed", {
     order_id: data.order_id,
@@ -950,7 +971,7 @@ export function trackFbSearch(data: {
   const eventId = createMetaEventId("Search");
 
   // Client-side Pixel
-  if (typeof window.fbq === "function") {
+  if (marketingAllowed() && typeof window.fbq === "function") {
     window.fbq("track", "Search", data, pixelEventOptions(eventId));
   }
 
@@ -982,4 +1003,68 @@ export function trackFbSearch(data: {
       ...data,
     },
   });
+}
+
+/**
+ * A newsletter signup: Meta Lead (pixel and CAPI), TikTok SubmitForm and
+ * GA4 generate_lead, one event id. It carries no contact data.
+ */
+export function trackLead(data: { source?: string } = {}): void {
+  const eventId = createMetaEventId("Lead");
+  if (marketingAllowed() && typeof window.fbq === "function") {
+    window.fbq("track", "Lead", data.source ? { content_name: data.source } : {}, pixelEventOptions(eventId));
+  }
+  trackTikTokEvent("SubmitForm", { event_id: eventId });
+  pushDataLayerEvent("generate_lead", data.source ? { lead_source: data.source } : {}, eventId);
+  sendServerEvent({ eventId, eventName: "Lead", customData: data.source ? { content_name: data.source } : undefined });
+}
+
+/**
+ * A new customer account: Meta and TikTok CompleteRegistration and GA4
+ * sign_up, deduplicated by the customer id. The id reaches Meta hashed
+ * (external_id), never in the clear.
+ */
+export function trackCompleteRegistration(data: { customerId?: string | null; method?: string } = {}): void {
+  const customerId = data.customerId?.trim() || undefined;
+  const eventId = createMetaEventId("CompleteRegistration", customerId);
+  if (!claimAnalyticsEventKey(eventId)) return;
+  if (marketingAllowed() && typeof window.fbq === "function") {
+    window.fbq("track", "CompleteRegistration", { status: true }, pixelEventOptions(eventId));
+  }
+  trackTikTokEvent("CompleteRegistration", { event_id: eventId });
+  pushDataLayerEvent("sign_up", { method: data.method ?? "otp" }, eventId);
+  sendServerEvent({
+    eventId,
+    eventName: "CompleteRegistration",
+    ...(customerId ? { userData: { external_id: [customerId] } } : {}),
+  });
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * TikTok advanced matching before the purchase: SHA-256 of the trimmed
+ * lowercase email, of the E.164 phone and of the customer id, never the raw
+ * values (ttq.identify).
+ */
+export async function identifyTikTokBuyer(contact: { email?: string | null; phone?: string | null; customerId?: string | null }): Promise<void> {
+  if (window.__TIKTOK_PIXEL_ENABLED__ !== true || !marketingAllowed()) return;
+  const identify = window.ttq?.identify;
+  if (typeof identify !== "function" || !globalThis.crypto?.subtle) return;
+  const email = contact.email?.trim().toLowerCase();
+  const phone = contact.phone?.replace(/[^\d+]/g, "");
+  const customerId = contact.customerId?.trim().toLowerCase();
+  const identity: Record<string, string> = {};
+  if (email) identity.sha256_email = await sha256Hex(email);
+  if (phone) identity.sha256_phone_number = await sha256Hex(phone.startsWith("+") ? phone : `+${phone}`);
+  if (customerId) identity.external_id = await sha256Hex(customerId);
+  if (Object.keys(identity).length === 0) return;
+  try {
+    identify.call(window.ttq, identity);
+  } catch (error) {
+    console.warn("TikTok Pixel identify failed:", error);
+  }
 }

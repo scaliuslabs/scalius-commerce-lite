@@ -17,6 +17,7 @@ import type { CreateStorefrontOrderInput } from "../../modules/orders/types";
 import { metaConversionsDocument } from "../../modules/settings";
 import { processExistingMetaPurchaseOutboxForOrder } from "../meta/purchase-outbox";
 import { flushTrackingDeliveries, processTrackingDeliveriesForOrder } from "./deliveries";
+import { getTrackingHealth } from "../../modules/analytics/tracking-health";
 import { ga4MeasurementDocument, tiktokEventsDocument } from "./settings";
 import {
   purgeExpiredTrackingSignals,
@@ -246,6 +247,27 @@ describe("order tracking signals and server purchases (audit spec S4)", () => {
     expect(tiktokEvent.user.email[0]).toMatch(/^[0-9a-f]{64}$/);
     expect(JSON.stringify(tiktok.body)).not.toContain("buyer@example.com");
     expect(tiktokEvent.event_time).toBe(signalsRow(orderId)!.created_at);
+  });
+
+  it("(e) tracking_health reports consent outcomes, match-signal coverage and delivery status per destination, with no identifier", async () => {
+    const granted = await checkout(BROWSER);
+    await checkout({ ...BROWSER, consent: null }, { country: "DE" });
+    await processExistingMetaPurchaseOutboxForOrder({ db, orderId: granted, source: "storefront-order", storefrontUrl: STORE, encryptionKey: KEY });
+    await processTrackingDeliveriesForOrder(db, granted, runtime);
+    const health = await getTrackingHealth(db, { encryptionKey: KEY });
+    expect(health.consent).toMatchObject({ orders: 2, marketingGranted: 1, analyticsGranted: 1, bySource: { banner: 1, default: 1, gpc: 0 } });
+    expect(health.matchSignalCoverage).toEqual({
+      orders: 2,
+      percent: expect.objectContaining({ em: 100, ph: 100, fbp: 50, fbc: 50, ip: 50, ua: 50, ttp: 50, gaClientId: 50 }),
+    });
+    const byDestination = Object.fromEntries(health.destinations.map((destination) => [destination.destination, destination]));
+    expect(byDestination.meta).toMatchObject({ configured: true, testMode: false, skippedByConsent: 0 });
+    expect(byDestination.meta!.events.find((event) => event.event === "Purchase")).toMatchObject({ sent: 1, pending: 1 });
+    expect(byDestination.ga4).toMatchObject({ configured: true, testMode: false, skippedByConsent: 1, matchSignals: { client_id: 1, session_id: 1, user_id: 1 } });
+    expect(byDestination.ga4!.events).toEqual([{ event: "purchase", sent: 1, failed: 0, skipped: 0, pending: 0 }]);
+    expect(byDestination.tiktok).toMatchObject({ configured: true, testMode: true, skippedByConsent: 1, matchSignals: expect.objectContaining({ email: 1, ttp: 1, ip: 1 }) });
+    const text = JSON.stringify(health);
+    for (const secret of ["buyer@example.com", "203.0.113.7", BROWSER.signals.fbp!, "+8801712345678", granted]) expect(text).not.toContain(secret);
   });
 
   it("(g) purges a snapshot after 8 days, not before", async () => {

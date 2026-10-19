@@ -14,6 +14,8 @@ import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { getOptionalExecutionContext } from "../utils/execution-context";
 import { isWithinRateLimit } from "../utils/rate-limit";
 import { isMetaCapiBrowserCircuitOpen, openMetaCapiBrowserCircuit } from "../utils/meta-capi-circuit";
+import { isTikTokBrowserCircuitOpen, openTikTokBrowserCircuit } from "../utils/tiktok-events-circuit";
+import { sendTikTokBrowserEvent, tiktokEventForMetaEvent } from "@scalius/core/integrations/tiktok/browser-relay";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const eventPayloadSchema = z.object({
@@ -50,6 +52,9 @@ const eventPayloadSchema = z.object({
       client_user_agent: z.string().optional(),
       fbp: z.string().optional(),
       fbc: z.string().optional(),
+      /** TikTok's `_ttp` browser id and landing `ttclid` (the Events API relay only). */
+      ttp: z.string().max(128).optional(),
+      ttclid: z.string().max(500).optional(),
       external_id: z.union([z.string(), z.array(z.string())]).optional(),
       fn: z.string().optional(),
       ln: z.string().optional(),
@@ -82,7 +87,9 @@ const eventPayloadSchema = z.object({
       search_string: z.string().optional()
     })
     .passthrough()
-    .optional()
+    .optional(),
+  /** The buyer refused the sale or sharing of data: Meta Limited Data Use, TikTok limited_data_use. */
+  limitedDataUse: z.boolean().optional(),
 });
 
 function isTrustedEventSource(eventSourceUrl: string, storefrontUrl?: string): boolean {
@@ -135,7 +142,14 @@ app.openapi(postEventRoute, async (c) => {
   }
 
   const db = c.get("db");
-  if (await isMetaCapiBrowserCircuitOpen(db, c.env)) {
+  // The same event also goes to the TikTok Events API (its own circuit), with
+  // the event id the pixels used. Purchase is the server outboxes' alone.
+  const [metaOpen, tiktokOpen] = await Promise.all([
+    isMetaCapiBrowserCircuitOpen(db, c.env),
+    isTikTokBrowserCircuitOpen(db, c.env),
+  ]);
+  const relayTikTok = !tiktokOpen && tiktokEventForMetaEvent(body.eventName) !== null;
+  if (metaOpen && !relayTikTok) {
     return ok(c, {
       message:
         "Event skipped because Meta CAPI recently failed. Save valid Meta settings to retry sooner.",
@@ -152,23 +166,29 @@ app.openapi(postEventRoute, async (c) => {
   const clientIpForMeta =
     clientIp === "unknown" ? c.req.header("x-real-ip") : clientIp;
 
-  const eventPromise = sendCapiEvent(db, {
+  const eventTime = Math.floor(Date.now() / 1000);
+  const encryptionKey = getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>);
+  const clientIpAddress = body.userData.client_ip_address || clientIpForMeta;
+  const clientUserAgent = body.userData.client_user_agent || c.req.header("user-agent");
+
+  const metaPromise = metaOpen ? null : sendCapiEvent(db, {
     event_name: body.eventName,
-    event_time: Math.floor(Date.now() / 1000),
+    event_time: eventTime,
     event_source_url: body.eventSourceUrl,
     event_id: eventId,
     action_source: body.actionSource,
     user_data: {
       ...body.userData,
-      client_ip_address:
-        body.userData.client_ip_address ||
-        clientIpForMeta,
-      client_user_agent:
-        body.userData.client_user_agent || c.req.header("user-agent")
+      client_ip_address: clientIpAddress,
+      client_user_agent: clientUserAgent,
     },
-    custom_data: body.customData
+    custom_data: body.customData,
+    // Limited Data Use, geolocated by Meta.
+    ...(body.limitedDataUse
+      ? { data_processing_options: ["LDU"], data_processing_options_country: 0, data_processing_options_state: 0 }
+      : {}),
   }, {
-    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    encryptionKey,
   }).then(async (result) => {
     if (!result.success && result.retryable === false) {
       await openMetaCapiBrowserCircuit(db, c.env, result.error || "non-retryable Meta CAPI failure", body.eventName);
@@ -176,6 +196,32 @@ app.openapi(postEventRoute, async (c) => {
     return result;
   });
 
+  const tiktokPromise = relayTikTok
+    ? sendTikTokBrowserEvent(db, {
+      eventName: body.eventName,
+      eventId,
+      eventTime,
+      eventSourceUrl: body.eventSourceUrl,
+      userData: {
+        em: body.userData.em,
+        ph: body.userData.ph,
+        external_id: body.userData.external_id,
+        ttp: typeof body.userData.ttp === "string" ? body.userData.ttp.slice(0, 128) : undefined,
+        ttclid: typeof body.userData.ttclid === "string" ? body.userData.ttclid.slice(0, 500) : undefined,
+        client_ip_address: clientIpAddress,
+        client_user_agent: clientUserAgent,
+      },
+      customData: body.customData,
+      limitedDataUse: body.limitedDataUse === true,
+    }, { encryptionKey }).then(async (result) => {
+      if (!result.success && result.retryable === false) {
+        await openTikTokBrowserCircuit(db, c.env, result.error || "non-retryable TikTok Events API failure");
+      }
+      return result;
+    })
+    : null;
+
+  const eventPromise = Promise.all([metaPromise, tiktokPromise]);
   const executionCtx = getOptionalExecutionContext(c);
   if (executionCtx && typeof executionCtx.waitUntil === "function") {
     executionCtx.waitUntil(eventPromise);

@@ -5,3 +5,5 @@ export * from "./meta-pixel-parity";
 export * from "./provider-health";
 export * from "./reports";
 export * from "./rollup";
+export * from "./tracking-health";
+export * from "./tracking-test-event";

@@ -2,6 +2,7 @@ import type { Database } from "@scalius/database/client";
 import {
     metaCapiPurchaseOutbox,
     orderItems,
+    orderTrackingSignals,
     orders,
     PaymentMethod,
     PaymentStatus,
@@ -14,7 +15,7 @@ import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
 
 import { sendCapiEvent, type SendCapiEventResult } from "./conversions-api";
 import { DEFAULT_TRACKING_CONSENT_SETTINGS } from "@scalius/shared/tracking-consent";
-import { orderConsent, readOrderTrackingSignals, type OrderTrackingSignalsRow } from "../tracking/signals";
+import { orderConsent, type OrderTrackingSignalsRow } from "../tracking/signals";
 import { trackingConsentDocument } from "../tracking/settings";
 
 /** The skip reason of a purchase the buyer's consent does not allow (tracking_health counts it). */
@@ -379,11 +380,14 @@ async function buildMetaPurchasePayloadForOutbox(
         return { sendable: false, reason: "STOREFRONT_URL is not configured." };
     }
 
-    const [order, items, signals] = await Promise.all([
-        db.select().from(orders).where(eq(orders.id, outbox.orderId)).get(),
-        db.select().from(orderItems).where(eq(orderItems.orderId, outbox.orderId)).all(),
-        readOrderTrackingSignals(db, outbox.orderId),
+    // One round trip: the order, its lines and its tracking snapshot.
+    const [orderRows, items, signalRows] = await db.batch([
+        db.select().from(orders).where(eq(orders.id, outbox.orderId)).limit(1),
+        db.select().from(orderItems).where(eq(orderItems.orderId, outbox.orderId)),
+        db.select().from(orderTrackingSignals).where(eq(orderTrackingSignals.orderId, outbox.orderId)).limit(1),
     ]);
+    const order = orderRows[0];
+    const signals = signalRows[0];
     if (!order) {
         return { sendable: false, reason: "Order no longer exists." };
     }

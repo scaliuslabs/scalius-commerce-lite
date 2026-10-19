@@ -337,6 +337,11 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     POST: { permission: PERMISSIONS.ANALYTICS_EDIT },
     DELETE: { permission: PERMISSIONS.ANALYTICS_EDIT },
   },
+  // Tracking consent, GA4 Measurement Protocol and TikTok Events API (audit spec S4).
+  "/api/v1/admin/settings/tracking": {
+    GET: { permission: PERMISSIONS.ANALYTICS_VIEW },
+    POST: { permission: PERMISSIONS.ANALYTICS_EDIT },
+  },
   "/api/v1/admin/settings/notification-channels": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },

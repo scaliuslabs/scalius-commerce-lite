@@ -106,6 +106,15 @@ vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
   flushPendingMetaPurchaseOutbox: mocks.flushPendingMetaPurchaseOutbox,
 }));
 
+vi.mock("@scalius/core/integrations/tracking/deliveries", () => ({
+  flushTrackingDeliveries: vi.fn(async () => ({ scanned: 0, sent: 0, failed: 0, skipped: 0, deferred: 0, busy: 0 })),
+  purgeFinishedTrackingDeliveries: vi.fn(async () => 0),
+}));
+
+vi.mock("@scalius/core/integrations/tracking/signals", () => ({
+  purgeExpiredTrackingSignals: vi.fn(async () => 0),
+}));
+
 vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/customers")>()),
   cleanupExpiredCustomerAuthOtpChallenges: mocks.cleanupExpiredCustomerAuthOtpChallenges,

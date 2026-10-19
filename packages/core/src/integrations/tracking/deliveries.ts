@@ -11,7 +11,7 @@
 // once. A delivery stores which match signals it carried, never their values.
 
 import type { Database } from "@scalius/database/client";
-import { orderItems, orderPayments, orders, trackingDeliveries } from "@scalius/database/schema";
+import { orderItems, orderPayments, orders, orderTrackingSignals, trackingDeliveries } from "@scalius/database/schema";
 import { and, asc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
 import type { ConsentState } from "@scalius/shared/tracking-consent";
 import { selectSettingsDocuments } from "../../settings-store";
@@ -35,7 +35,7 @@ import {
   tiktokEventsDocument,
   trackingConsentDocument,
 } from "./settings";
-import { orderConsent, readOrderTrackingSignals, TRACKING_SIGNALS_RETENTION_SECONDS, type OrderTrackingSignalsRow } from "./signals";
+import { orderConsent, TRACKING_SIGNALS_RETENTION_SECONDS, type OrderTrackingSignalsRow } from "./signals";
 
 export type TrackingDestination = "ga4" | "tiktok";
 export type TrackingDeliveryStatus = "pending" | "processing" | "sent" | "failed" | "skipped";
@@ -177,18 +177,19 @@ async function settle(db: Database, row: DeliveryRow, claimId: string, attempt: 
 
 async function attemptDelivery(db: Database, row: DeliveryRow, runtime: TrackingRuntime): Promise<Attempt> {
   const now = runtime.nowSeconds?.() ?? Math.floor(Date.now() / 1000);
-  const [order, lines, signals, settingRows, refund] = await Promise.all([
-    db.select().from(orders).where(eq(orders.id, row.orderId)).get(),
-    row.eventName === "purchase"
-      ? db.select().from(orderItems).where(eq(orderItems.orderId, row.orderId)).all()
-      : Promise.resolve([]),
-    readOrderTrackingSignals(db, row.orderId),
-    selectSettingsDocuments(db, [trackingConsentDocument, row.destination === "ga4" ? ga4MeasurementDocument : tiktokEventsDocument]).all(),
-    row.eventName === "refund" && row.paymentId
-      ? db.select({ amountMinor: orderPayments.amountMinor, status: orderPayments.status, paymentType: orderPayments.paymentType })
-        .from(orderPayments).where(eq(orderPayments.id, row.paymentId)).get()
-      : Promise.resolve(undefined),
+  // One round trip: the order, its lines, its snapshot, the settings and the refund.
+  const [orderRows, lineRows, signalRows, settingRows, refundRows] = await db.batch([
+    db.select().from(orders).where(eq(orders.id, row.orderId)).limit(1),
+    db.select().from(orderItems).where(and(eq(orderItems.orderId, row.orderId), sql`${row.eventName === "purchase" ? 1 : 0} = 1`)),
+    db.select().from(orderTrackingSignals).where(eq(orderTrackingSignals.orderId, row.orderId)).limit(1),
+    selectSettingsDocuments(db, [trackingConsentDocument, row.destination === "ga4" ? ga4MeasurementDocument : tiktokEventsDocument]),
+    db.select({ amountMinor: orderPayments.amountMinor, status: orderPayments.status, paymentType: orderPayments.paymentType })
+      .from(orderPayments).where(eq(orderPayments.id, row.paymentId ?? "")).limit(1),
   ]);
+  const order = orderRows[0];
+  const lines = lineRows;
+  const signals = signalRows[0];
+  const refund = row.eventName === "refund" ? refundRows[0] : undefined;
   if (!order || order.deletedAt) return { outcome: "skipped", error: "order_missing: the order no longer exists." };
 
   const committedAt = signals?.createdAt ?? Math.floor(order.createdAt.getTime() / 1000);

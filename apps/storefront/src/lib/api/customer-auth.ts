@@ -339,6 +339,11 @@ export async function verifyCustomerOtp(input: VerifyCustomerOtpInput): Promise<
     if (!data.customer) return { success: false, error: "Something went wrong. Please try again." };
     if (data.customer.customerId) reconcileCheckoutAfterSignIn(data.customer.customerId);
     clearInFlightCustomerSessionRead();
+    if (data.isNewUser === true) {
+      // Meta and TikTok CompleteRegistration, GA4 sign_up (consent permitting).
+      const customerId = data.customer.customerId;
+      void import("../analytics").then(({ trackCompleteRegistration }) => trackCompleteRegistration({ customerId })).catch(() => undefined);
+    }
     return { success: true, status: "signed_in", customer: data.customer, isNewUser: data.isNewUser === true };
   } catch (error: unknown) {
     return { success: false, error: networkErrorMessage(error) };

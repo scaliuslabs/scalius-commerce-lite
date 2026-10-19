@@ -51,7 +51,7 @@ export const EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
 /** Due review requests turned into outbox rows per run (Wave B §2.3). */
 export const REVIEW_REQUEST_SWEEP_LIMIT = 100;
 export const META_PURCHASE_OUTBOX_SWEEP_LIMIT = 25;
-export const TRACKING_DELIVERY_SWEEP_LIMIT = 25;
+export const TRACKING_DELIVERY_SWEEP_LIMIT = 10;
 export const TRACKING_PURGE_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
 export const ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT = 200;
@@ -343,13 +343,18 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
-    name: "meta_purchase_outbox_flush",
+    // Server tracking (audit spec S4): Meta Purchase CAPI rows, then GA4 and
+    // TikTok deliveries due a retry, then the tracking snapshots past their
+    // 8 days and finished deliveries past 90. One job, so the rotation keeps
+    // its length; the GA4/TikTok share stays small on Free (2 rows a run).
+    name: "tracking_outbox_flush",
     async run({ db, env, timed }) {
+      const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
       const metaPurchaseOutbox = await timed("meta_purchase_outbox_flush", () =>
         flushPendingMetaPurchaseOutbox({
           db,
           storefrontUrl: env.STOREFRONT_URL,
-          encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+          encryptionKey,
           limit: scaled(META_PURCHASE_OUTBOX_SWEEP_LIMIT),
         }),
       );
@@ -365,17 +370,10 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
             `skipped=${metaPurchaseOutbox.skipped}, busy=${metaPurchaseOutbox.busy}`,
         );
       }
-    },
-  },
-  {
-    // GA4 and TikTok server deliveries due a retry, then the tracking
-    // snapshots past their 8 days and finished deliveries past 90 (audit spec S4).
-    name: "tracking_delivery_flush",
-    async run({ db, env, timed }) {
       const flushed = await timed("tracking_delivery_flush", () =>
         flushTrackingDeliveries(db, {
           storefrontUrl: env.STOREFRONT_URL,
-          encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+          encryptionKey,
           limit: scaled(TRACKING_DELIVERY_SWEEP_LIMIT),
         }),
       );
