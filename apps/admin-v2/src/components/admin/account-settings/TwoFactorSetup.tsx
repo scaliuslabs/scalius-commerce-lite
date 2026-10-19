@@ -420,10 +420,10 @@ export function TwoFactorSetup({ user, required = false }: {
     <Card id="two-step" className="scroll-mt-4">
       <UnsavedChangesGuard isDirty={dirty && step !== "codes"} isSubmitting={busy} />
       <CardHeader>
-        <CardTitle className="flex flex-wrap items-center gap-2">
-          {t("twoStep")}
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle>{t("twoStep")}</CardTitle>
           {mode === null && isEnabled ? <Badge variant="success">{t("on")}</Badge> : null}
-        </CardTitle>
+        </div>
         <CardDescription>{t(description)}</CardDescription>
       </CardHeader>
       <form
