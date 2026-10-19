@@ -15,7 +15,8 @@
 // from its projection, and through its core component whenever the skin
 // cannot (SectionSkin.astro).
 import type { StorefrontSection } from "@scalius/shared/storefront-theme";
-import { resolveDocumentBindings, storefrontSectionSchema } from "@scalius/shared/storefront-theme";
+import { resolveDocumentBindings, storefrontSectionNeedsContent, storefrontSectionSchema } from "@scalius/shared/storefront-theme";
+import Container from "@/components/ui/Container.astro";
 import { bindingResourceMedia } from "@/lib/setting-bindings";
 import {
   dealEndsAt,
@@ -106,6 +107,20 @@ const phoneOrder = new Map(phoneUnits.map((unit, index) => [unit, index]));
 const money = { currencySymbol, currencyCode };
 const unitIds = (unit: (typeof units)[number]) => unit.kind === "banners" ? unit.sections.map((section) => section.id) : [unit.section.id];
 const shown = only ? units.filter((unit) => unitIds(unit).includes(only)) : units;
+// The theme editor's page preview: a section that needs content (a hero
+// without slides) draws a placeholder in its place, so the merchant sees why
+// nothing shows and can select it. The published page draws nothing there.
+const placeholders = previewMarks && !only
+  ? sections.filter((section) => !section.hidden && section.type !== "app" && storefrontSectionNeedsContent(section))
+  : [];
+const sectionIndex = new Map(sections.map((section, index) => [section.id, index]));
+type Entry = { kind: "unit"; unit: (typeof shown)[number] } | { kind: "placeholder"; section: StorefrontSection };
+const entries: Entry[] = [
+  ...shown.map((unit): Entry => ({ kind: "unit", unit })),
+  ...placeholders.map((section): Entry => ({ kind: "placeholder", section })),
+].sort((left, right) =>
+  (sectionIndex.get(left.kind === "unit" ? unitIds(left.unit)[0]! : left.section.id) ?? 0)
+  - (sectionIndex.get(right.kind === "unit" ? unitIds(right.unit)[0]! : right.section.id) ?? 0));
 const marks = previewMarks || Boolean(only);
 const root = only
   ? { "data-theme-preview-unit": "" }
@@ -113,7 +128,21 @@ const root = only
 ---
 
 <div {...root}>
-  {shown.map((unit) => {
+  {entries.map((entry) => {
+    if (entry.kind === "placeholder") {
+      const words = entry.section.type === "hero" ? copy.emptyHero : copy.emptySection;
+      return (
+        <div class="contents" data-home-placeholder data-home-section={entry.section.type} data-section-id={entry.section.id} data-theme-section-id={entry.section.id}>
+          <Container class="home-section">
+            <div class:list={["flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border bg-muted/40 px-6 text-center", entry.section.type === "hero" ? "min-h-56 md:min-h-72" : "min-h-32"]} role="note">
+              <p class="text-base font-semibold text-foreground">{words.title}</p>
+              <p class="max-w-md text-sm text-muted-foreground">{words.text}</p>
+            </div>
+          </Container>
+        </div>
+      );
+    }
+    const { unit } = entry;
     const wrapper = {
       class: "contents home-render-unit",
       "data-home-render-unit": "",

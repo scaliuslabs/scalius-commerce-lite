@@ -58,6 +58,9 @@ export interface StorefrontCopy {
   chrome: ChromeCopy;
   /** The home page's sections, hero and carousels. */
   home: {
+    /** Theme editor only: a section that draws nothing until the merchant fills it. */
+    emptyHero: { title: string; text: string };
+    emptySection: { title: string; text: string };
     featured: string;
     slideOf: (position: number, total: number) => string;
     goToSlide: (position: number) => string;
@@ -127,6 +130,14 @@ const EN: StorefrontCopy = {
   },
   chrome: CHROME_EN,
   home: {
+    emptyHero: {
+      title: "Add a slide to show this hero",
+      text: "A hero with no slides shows nothing on your store. Add a slide with a photo in this section's settings.",
+    },
+    emptySection: {
+      title: "This section has nothing to show yet",
+      text: "Buyers don't see it until you add its content in this section's settings.",
+    },
     featured: "Featured",
     slideOf: (position, total) => `${position} of ${total}`,
     goToSlide: (position) => `Go to slide ${position}`,
@@ -196,6 +207,14 @@ const BN: StorefrontCopy = {
   },
   chrome: CHROME_BN,
   home: {
+    emptyHero: {
+      title: "এই হিরো দেখাতে একটি স্লাইড যোগ করুন",
+      text: "স্লাইড ছাড়া হিরো আপনার স্টোরে কিছুই দেখায় না। এই সেকশনের সেটিংসে ছবিসহ একটি স্লাইড যোগ করুন।",
+    },
+    emptySection: {
+      title: "এই সেকশনে এখনো দেখানোর কিছু নেই",
+      text: "এই সেকশনের সেটিংসে কনটেন্ট যোগ না করা পর্যন্ত ক্রেতারা এটি দেখবেন না।",
+    },
     featured: "বিশেষ আয়োজন",
     slideOf: (position, total) => `${total}-এর ${position} নম্বর`,
     goToSlide: (position) => `${position} নম্বর স্লাইডে যান`,

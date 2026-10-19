@@ -375,6 +375,28 @@ describe("homepage section library", () => {
     expect(homepageLeadSection(EVERY_SECTION, EMPTY)).toBeNull();
   });
 
+  it("draws an empty hero as nothing for buyers, and as an 'Add a slide' placeholder in the theme editor", async () => {
+    const empty = { id: "noor-hero", type: "hero", version: 1, settings: { layout: "full-bleed", slides: [] } } as unknown as StorefrontSection;
+    const sections = [empty, ...EVERY_SECTION.filter((section) => section.id === "story")];
+    const published = await render(sections, EMPTY);
+    expect(published.querySelector('[data-section-id="noor-hero"]')).toBeNull();
+    expect(published.querySelector("[data-home-placeholder]")).toBeNull();
+
+    const html = await container.renderToString(HomepageSections, {
+      props: { sections, content: EMPTY, leadSectionId: null, currencySymbol: "৳", currencyCode: "BDT", previewMarks: true },
+      locals: { storefrontTheme: Promise.resolve(requestThemeFor(DEFAULT_STOREFRONT_THEME)) },
+      request: new Request("https://shop.test/"),
+    });
+    const preview = parse(html);
+    const placeholder = preview.querySelector<HTMLElement>("[data-home-placeholder]")!;
+    expect(placeholder.dataset.themeSectionId).toBe("noor-hero");
+    expect(placeholder.textContent).toContain("Add a slide to show this hero");
+    // In the section's own place: before the story.
+    expect(Array.from(preview.querySelectorAll("[data-section-id]")).map((node) => node.getAttribute("data-section-id"))).toEqual(["noor-hero", "story"]);
+    // A placeholder never leads the page: no photo, nothing preloaded.
+    expect(placeholder.querySelector("img")).toBeNull();
+  });
+
   it("keeps one banner and one category section while putting categories first on phones", async () => {
     const page = await render([
       hero({ layout: "full-bleed", phonePlacement: "after-categories" }),
