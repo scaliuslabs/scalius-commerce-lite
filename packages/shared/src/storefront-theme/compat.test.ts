@@ -19,6 +19,7 @@ import { STOREFRONT_BLOCK_REGISTRY, STOREFRONT_BLOCK_SLOTS, storefrontBlockValue
 import { STOREFRONT_THEME_DOCUMENT_VERSION, storefrontThemeDocumentSchema, type StorefrontThemeDocument } from "./document";
 import { STOREFRONT_SECTION_REGISTRY, STOREFRONT_SECTION_TYPES, type StorefrontSection } from "./sections";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
+import { STOREFRONT_BLOCK_TEXT, STOREFRONT_LANDING_TEXT, STOREFRONT_SECTION_TEXT } from "./text";
 import { checkStorefrontAppTemplateTheme, checkStorefrontPagePresetSections, storefrontAppThemeProblems } from "./app-templates";
 import {
   STOREFRONT_THEME_DOCUMENT_UPGRADES,
@@ -88,8 +89,9 @@ function contract() {
     oldestReadable: STOREFRONT_THEME_OLDEST_READABLE_VERSION,
     sections: Object.fromEntries(STOREFRONT_SECTION_TYPES.map((type) => {
       const entry = STOREFRONT_SECTION_REGISTRY[type];
-      return [type, { version: entry.version, settings: jsonSchema(entry.settings) }];
+      return [type, { version: entry.version, text: STOREFRONT_SECTION_TEXT[type], settings: jsonSchema(entry.settings) }];
     })),
+    text: { blocks: STOREFRONT_BLOCK_TEXT, landing: STOREFRONT_LANDING_TEXT },
     document: jsonSchema(storefrontThemeDocumentSchema),
   };
 }
@@ -160,6 +162,27 @@ describe("the theme document's compatibility gate", () => {
       const entry = STOREFRONT_SECTION_REGISTRY[type];
       for (let version = 1; version < entry.version; version += 1) {
         expect(typeof (entry.upgrades as Record<number, unknown>)[version], `${type} from ${version}`).toBe("function");
+      }
+    }
+  });
+
+  it("declares translatable text only where a section's settings hold text", () => {
+    type Schema = { type?: unknown; properties?: Record<string, Schema>; items?: Schema; anyOf?: Schema[]; oneOf?: Schema[] };
+    /** The schemas a dotted path reaches, through every union variant. */
+    const reach = (schema: Schema, path: string[]): Schema[] => {
+      const variants = [...(schema.anyOf ?? []), ...(schema.oneOf ?? [])];
+      if (variants.length > 0) return variants.flatMap((variant) => reach(variant, path));
+      if (path.length === 0) return [schema];
+      const [head, ...rest] = path;
+      const next = head === "*" ? schema.items : schema.properties?.[head!];
+      return next ? reach(next, rest) : [];
+    };
+    for (const type of STOREFRONT_SECTION_TYPES) {
+      const settings = z.toJSONSchema(STOREFRONT_SECTION_REGISTRY[type].settings, { unrepresentable: "any", io: "input" }) as Schema;
+      for (const path of STOREFRONT_SECTION_TEXT[type]) {
+        const leaves = reach(settings, path.split("."));
+        expect(leaves.length, `${type} ${path}`).toBeGreaterThan(0);
+        expect(leaves.every((leaf) => leaf.type === "string"), `${type} ${path}`).toBe(true);
       }
     }
   });

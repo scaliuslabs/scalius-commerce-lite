@@ -311,6 +311,44 @@ export function resolvePluginSettingValues(schema: PluginSettingsSchema, stored:
   return result;
 }
 
+/**
+ * Stored storefront values with their buyer words translated: each `text` and
+ * `textarea` setting, and those fields of `list` items, through `text`, kept
+ * only within the field's `maxLength`. Everything else stays as stored; the
+ * same object comes back when nothing changes.
+ */
+export function translatePluginSettingValues(schema: PluginSettingsSchema, stored: unknown, text: (source: string) => string): unknown {
+  if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return stored;
+  const values = stored as Record<string, unknown>;
+  const words = (field: { type: string; maxLength?: number }, value: unknown): unknown => {
+    if ((field.type !== "text" && field.type !== "textarea") || typeof value !== "string" || value === "") return value;
+    const translated = text(value);
+    return translated.length <= (field.maxLength ?? Number.POSITIVE_INFINITY) ? translated : value;
+  };
+  let next: Record<string, unknown> | null = null;
+  for (const field of schema) {
+    const value = values[field.key];
+    let translated: unknown = value;
+    if (field.type === "list" && Array.isArray(value)) {
+      const items = value.map((item) => {
+        if (typeof item !== "object" || item === null || Array.isArray(item)) return item;
+        let changed: Record<string, unknown> | null = null;
+        for (const itemField of field.fields) {
+          const entry = (item as Record<string, unknown>)[itemField.key];
+          const result = words(itemField, entry);
+          if (result !== entry) (changed ??= { ...item })[itemField.key] = result;
+        }
+        return changed ?? item;
+      });
+      if (items.some((item, index) => item !== value[index])) translated = items;
+    } else {
+      translated = words(field, value);
+    }
+    if (translated !== value) (next ??= { ...values })[field.key] = translated;
+  }
+  return next ?? stored;
+}
+
 /** Defaults for a fresh installation (secrets have none). */
 export function pluginSettingDefaults(schema: PluginSettingsSchema): PluginSettingValues {
   const values: PluginSettingValues = {};

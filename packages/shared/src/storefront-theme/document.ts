@@ -29,6 +29,7 @@ import { storefrontProductSourceSchema, storefrontSectionListSchemaOf } from "./
 import { storefrontSettingBindingsSchema } from "./bindings";
 import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefrontPageTemplateSchemaOf, storefrontPageTemplatesSchemaOf } from "./pages";
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
+import { storefrontThemeTranslationsSchema } from "./text";
 
 export const STOREFRONT_THEME_DOCUMENT_VERSION = 10 as const;
 
@@ -151,6 +152,12 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
       landing: storefrontLandingPagesSchemaOf(landingPage),
       templates: storefrontPageTemplatesSchemaOf(pageTemplate),
     }).strict(),
+    /**
+     * The words of sections, skins, the announcement, the footer and landing
+     * pages in the store's other languages, keyed by the source words
+     * (text.ts). Absent: the theme shows its words in every language.
+     */
+    translations: storefrontThemeTranslationsSchema.optional(),
   }).strict().superRefine((value, context) => {
     for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(value)) {
       context.addIssue({

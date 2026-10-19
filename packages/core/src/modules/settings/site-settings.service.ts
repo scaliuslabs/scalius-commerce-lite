@@ -40,6 +40,7 @@ import {
   compareThemeDocuments,
   parseStoredStorefrontThemeDocument,
   storefrontThemeDocumentSchema,
+  storefrontThemeTranslationProblems,
   storefrontThemeMediaIds,
   storefrontThemeMediaReferences,
   storefrontThemeWithoutMedia,
@@ -299,6 +300,11 @@ function serializeThemeSettings(theme: StorefrontThemeDocument): {
         message: issue.message,
       })),
     );
+  }
+  // A translation must fit every place its words appear, so a read never falls back to the source words.
+  const translationProblems = storefrontThemeTranslationProblems(result.data);
+  if (translationProblems.length > 0) {
+    throw new ValidationError(translationProblems[0]!.message, translationProblems);
   }
   const serialized = JSON.stringify(result.data);
   if (new TextEncoder().encode(serialized).byteLength > THEME_DOCUMENT_MAX_BYTES) {

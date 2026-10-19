@@ -3350,6 +3350,37 @@
               "templates"
             ],
             "additionalProperties": false
+          },
+          "translations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "locale": {
+                  "type": "string",
+                  "pattern": "^[a-z]{2}$"
+                },
+                "marketId": {
+                  "type": "string",
+                  "nullable": true,
+                  "pattern": "^[A-Za-z0-9_-]{1,64}$"
+                },
+                "fields": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string",
+                    "maxLength": 8000
+                  }
+                }
+              },
+              "required": [
+                "locale",
+                "marketId",
+                "fields"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 40
           }
         },
         "required": [
@@ -12235,7 +12266,8 @@
                         "productCard",
                         "listing",
                         "productPage",
-                        "homeMode"
+                        "homeMode",
+                        "translations"
                       ]
                     }
                   },

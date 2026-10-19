@@ -244,6 +244,21 @@ export interface StorefrontExtension {
   connect: string[];
 }
 
+/**
+ * The settings schema of each active app surface (a component section, a
+ * skin, a product block) by its `<plugin id>/<id>` theme key: what the theme's
+ * translated text reads to know which values are words (`text`, `textarea`).
+ */
+export function storefrontExtensionSettingSchemas(extensions: readonly StorefrontExtension[]): (kind: "section" | "skin" | "block", key: string) => PluginSettingsSchema | null {
+  const schemas = new Map<string, PluginSettingsSchema>();
+  for (const extension of extensions) {
+    for (const [type, schema] of Object.entries(extension.sectionSettings)) schemas.set(`section:${extension.pluginId}/${type}`, schema);
+    for (const skin of extension.skins) schemas.set(`skin:${extension.pluginId}/${skin.id}`, skin.settings);
+    for (const block of extension.blocks) schemas.set(`block:${extension.pluginId}/${block.type}`, block.settings);
+  }
+  return (kind, key) => schemas.get(`${kind}:${key}`) ?? null;
+}
+
 const RELEASE = /^[0-9a-f]{64}$/;
 const HOST = PLUGIN_HOST_PATTERN;
 

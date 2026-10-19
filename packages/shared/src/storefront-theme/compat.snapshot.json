@@ -4,6 +4,13 @@
  "sections": {
   "hero": {
    "version": 1,
+   "text": [
+    "slides.*.alt",
+    "slides.*.heading",
+    "slides.*.text",
+    "slides.*.buttonLabel",
+    "sideBanners.*.alt"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -201,6 +208,10 @@
   },
   "usp-strip": {
    "version": 1,
+   "text": [
+    "source.items.*.title",
+    "source.items.*.detail"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -310,6 +321,9 @@
   },
   "category-tiles": {
    "version": 1,
+   "text": [
+    "title"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -356,6 +370,9 @@
   },
   "collections": {
    "version": 1,
+   "text": [
+    "title"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -395,6 +412,9 @@
   },
   "product-rail": {
    "version": 1,
+   "text": [
+    "title"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -503,6 +523,9 @@
   },
   "product-grid": {
    "version": 1,
+   "text": [
+    "title"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -617,6 +640,9 @@
   },
   "deal-block": {
    "version": 1,
+   "text": [
+    "title"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -739,6 +765,10 @@
   },
   "product-tabs": {
    "version": 1,
+   "text": [
+    "title",
+    "tabs.*.label"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -897,6 +927,11 @@
   },
   "shop-by": {
    "version": 1,
+   "text": [
+    "title",
+    "cards.*.title",
+    "cards.*.subtitle"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -982,6 +1017,9 @@
   },
   "banner-mosaic": {
    "version": 1,
+   "text": [
+    "tiles.*.alt"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1064,6 +1102,9 @@
   },
   "lookbook": {
    "version": 1,
+   "text": [
+    "title"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1185,6 +1226,11 @@
   },
   "banner": {
    "version": 1,
+   "text": [
+    "heading",
+    "text",
+    "cta.label"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1257,6 +1303,9 @@
   },
   "brand-wall": {
    "version": 1,
+   "text": [
+    "title"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1282,6 +1331,14 @@
   },
   "editorial": {
    "version": 1,
+   "text": [
+    "heading",
+    "body",
+    "columns.*.title",
+    "columns.*.text",
+    "quotes.*.quote",
+    "quotes.*.author"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "oneOf": [
@@ -1486,6 +1543,11 @@
   },
   "specifications": {
    "version": 1,
+   "text": [
+    "heading",
+    "rows.*.label",
+    "rows.*.value"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1563,6 +1625,11 @@
   },
   "faq": {
    "version": 1,
+   "text": [
+    "heading",
+    "items.*.question",
+    "items.*.answer"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1638,6 +1705,10 @@
   },
   "utility-cards": {
    "version": 1,
+   "text": [
+    "cards.*.title",
+    "cards.*.text"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1713,6 +1784,9 @@
   },
   "endless-grid": {
    "version": 1,
+   "text": [
+    "title"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1747,6 +1821,10 @@
   },
   "seo-text": {
    "version": 1,
+   "text": [
+    "heading",
+    "body"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1769,6 +1847,9 @@
   },
   "recently-viewed": {
    "version": 1,
+   "text": [
+    "title"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1786,6 +1867,9 @@
   },
   "objects": {
    "version": 1,
+   "text": [
+    "heading"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1823,6 +1907,11 @@
   },
   "newsletter": {
    "version": 1,
+   "text": [
+    "heading",
+    "text",
+    "buttonLabel"
+   ],
    "settings": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1871,6 +1960,22 @@
    }
   }
  },
+ "text": {
+  "blocks": {
+   "topBar": [
+    "text"
+   ],
+   "footer": [
+    "tagline",
+    "about",
+    "copyright"
+   ]
+  },
+  "landing": [
+   "title",
+   "description"
+  ]
+ },
  "document": {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
@@ -1895,6 +2000,9 @@
    },
    "pages": {
     "$ref": "#/$defs/__schema42"
+   },
+   "translations": {
+    "$ref": "#/$defs/__schema71"
    }
   },
   "required": [
@@ -5884,6 +5992,57 @@
     "type": "integer",
     "minimum": 0,
     "maximum": 24
+   },
+   "__schema71": {
+    "maxItems": 40,
+    "type": "array",
+    "items": {
+     "$ref": "#/$defs/__schema72"
+    }
+   },
+   "__schema72": {
+    "type": "object",
+    "properties": {
+     "locale": {
+      "type": "string",
+      "pattern": "^[a-z]{2}$"
+     },
+     "marketId": {
+      "anyOf": [
+       {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "fields": {
+      "type": "object",
+      "propertyNames": {
+       "$ref": "#/$defs/__schema73"
+      },
+      "additionalProperties": {
+       "$ref": "#/$defs/__schema74"
+      }
+     }
+    },
+    "required": [
+     "locale",
+     "marketId",
+     "fields"
+    ],
+    "additionalProperties": false
+   },
+   "__schema73": {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 8000
+   },
+   "__schema74": {
+    "type": "string",
+    "maxLength": 8000
    }
   }
  }

@@ -777,6 +777,13 @@ export type StorefrontThemeDocument = {
             page: StorefrontPageTemplate;
         };
     };
+    translations?: Array<{
+        locale: string;
+        marketId: string | null;
+        fields: {
+            [key: string]: string;
+        };
+    }>;
 };
 
 export type StorefrontSettingBindings = {
@@ -2597,7 +2604,7 @@ export type ThemeVersionSummary = {
         page: string;
     } | {
         kind: 'settings-changed';
-        area: 'template' | 'colors' | 'typography' | 'style' | 'brand' | 'header' | 'navigation' | 'footer' | 'productCard' | 'listing' | 'productPage' | 'homeMode';
+        area: 'template' | 'colors' | 'typography' | 'style' | 'brand' | 'header' | 'navigation' | 'footer' | 'productCard' | 'listing' | 'productPage' | 'homeMode' | 'translations';
     }>;
     moreChanges: number;
     note: string | null;
