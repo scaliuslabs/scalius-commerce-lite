@@ -9,17 +9,6 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Textarea } from "~/components/ui/textarea";
-import { SearchableSelect } from "~/components/ui/searchable-select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { hasAppPaymentMethod, useAppPaymentMethodNames, useOrderPaymentProvider } from "~/hooks/use-app-payment-method-names";
 import { BANGLADESH_PACK_ID } from "~/lib/bangladesh-pack";
@@ -33,21 +22,15 @@ import {
   paymentMethodLabel,
   paymentStatusLabel,
 } from "~/i18n/orders";
-import { resourceMessages } from "~/i18n/resource";
 import {
   orderCodQueryOptions,
   orderPaymentsQueryOptions,
   type OrderPaymentsPayload,
 } from "~/lib/api-query-options/orders";
 import {
-  isOrderConflict,
-  orderErrorMessage,
   useIssueOrderPaymentRecoveryLink,
   useReconcileRefundAttempt,
-  useUpdateOrderCod,
 } from "~/lib/api-mutations/orders";
-import type { postApiV1AdminOrdersByIdCod } from "@scalius/api-client/sdk";
-import type { ApiBody } from "~/lib/api";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { resolveOrderOperationalReadState } from "~/lib/order-operational-read-state";
 import {
@@ -57,23 +40,22 @@ import {
 import { buildOrderPaymentPresentation } from "~/lib/order-payment-presentation";
 import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
+import type { CodAction } from "./CodDialogs";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
 import { isPartSent, type OrderActionRequest } from "./primary-action";
 import { GiftCardTenderRows, giftCardTenderLines } from "./GiftCardTenderRows";
 import { OrderSummaryRows } from "./OrderItemsCard";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
-import { Field } from "~/components/ui/field";
 
 // The refund form loads the first time it opens.
 const RefundDialog = lazy(() => import("./RefundDialog"));
+// So do the cash-on-delivery dialogs (collected, failed, returned).
+const CodDialogs = lazy(() => import("./CodDialogs").then((module) => ({ default: module.CodDialogs })));
 
-type CodAction = "collected" | "failed" | "returned";
-type CodFailureReason = Extract<ApiBody<typeof postApiV1AdminOrdersByIdCod>, { action: "failed" }>["reason"];
 type Payment = OrderPaymentsPayload["payments"][number];
 type SessionAttempt = OrderPaymentsPayload["paymentSessionAttempts"][number];
 
-const COD_FAILURE_REASONS: CodFailureReason[] = ["not_home", "refused", "no_cash", "wrong_address", "other"];
 const MANUAL_REFUND_CHECK_STATUSES = new Set(["processing", "provider_unknown", "reconcile_required", "pending"]);
 /** A hosted gateway the buyer can be sent back to: any app's (apps are hosted only). */
 function isRecoveryLinkGateway(value: string | null | undefined): boolean {
@@ -114,7 +96,6 @@ function time(value: unknown): string | null {
 export function PaymentCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
-  const r = useMessages(resourceMessages);
   const { fmt } = useCurrency();
   const isHydrated = useHydrated();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -133,10 +114,10 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const [refundSession, setRefundSession] = useState(0);
   const refundLoaded = useOpenedOnce(refundOpen);
   const [codAction, setCodAction] = useState<CodAction | null>(null);
-  const [collectedBy, setCollectedBy] = useState("");
-  const [collectorError, setCollectorError] = useState<string | null>(null);
-  const [failReason, setFailReason] = useState<CodFailureReason>("not_home");
-  const [failNotes, setFailNotes] = useState("");
+  // Each opening mounts fresh cash dialogs (their own fields), loaded the first time one opens.
+  const [codSession, setCodSession] = useState(0);
+  const [codCollector, setCodCollector] = useState("");
+  const codLoaded = useOpenedOnce(codAction !== null);
 
   // Payment history is optional: a failed read stays inside this card.
   const paymentsQuery = useQuery({
@@ -237,19 +218,15 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const codOpen = !codTracking || !["collected", "returned"].includes(codTracking.codStatus);
   const canOpenCollect = codRead.status === "ready" && codOpen && canRecordCodCollection && !isRefundLocked;
 
-  const codMutation = useUpdateOrderCod();
   const refundCheckMutation = useReconcileRefundAttempt();
   const recoveryLinkMutation = useIssueOrderPaymentRecoveryLink();
   const presentation = buildOrderPaymentPresentation({ orderStatus: order.status, balanceDue: order.balanceDue });
   const showBadge = orderBadgeVisibility(order).payment;
 
   const openCod = (action: CodAction) => {
-    codMutation.reset();
     // Usually the rider who took the parcel collected the cash (R3-ORD-08); still editable.
-    setCollectedBy(latestCourierName(order));
-    setCollectorError(null);
-    setFailReason("not_home");
-    setFailNotes("");
+    setCodCollector(latestCourierName(order));
+    setCodSession((session) => session + 1);
     setCodAction(action);
   };
   const openRefund = () => {
@@ -266,33 +243,6 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     // Only a new request should open a dialog.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request?.id]);
-
-  function submitCodAction() {
-    if (!codAction) return;
-    let body: { orderId: string } & ApiBody<typeof postApiV1AdminOrdersByIdCod>;
-    if (codAction === "collected") {
-      if (!collectedBy.trim()) {
-        setCollectorError(t("cod.collectorRequired"));
-        document.getElementById("collectedBy")?.focus();
-        return;
-      }
-      body = { orderId: order.id, action: "collected", collectedBy: collectedBy.trim(), collectedAmount: cashCollectionAmount };
-    } else if (codAction === "failed") {
-      body = {
-        orderId: order.id,
-        action: "failed",
-        reason: failReason,
-        ...(failNotes.trim() ? { notes: failNotes.trim() } : {}),
-      };
-    } else {
-      body = { orderId: order.id, action: "returned" };
-    }
-    // Already recorded in another tab: close; the page banner says by whom and shows the latest.
-    codMutation.mutate(body, {
-      onSuccess: () => setCodAction(null),
-      onError: (error) => { if (isOrderConflict(error)) setCodAction(null); },
-    });
-  }
 
   async function handleCopyRecoveryLink() {
     let link: Awaited<ReturnType<typeof recoveryLinkMutation.mutateAsync>>;
@@ -577,91 +527,26 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         ) : null}
       </CardContent>
 
-      <Dialog open={codAction === "collected"} onOpenChange={(open) => !open && !codMutation.isPending && setCodAction(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{collectTitle}</DialogTitle>
-            <DialogDescription>{t(hasCashBalanceDueOnDelivery ? "cod.balanceHelp" : "cod.collectHelp")}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {codMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(codMutation.error)}</AlertDescription></Alert> : null}
-            <div className="flex items-baseline justify-between gap-4">
-              <p className="text-muted-foreground">{t("cod.amountToCollect")}</p>
-              <p className="text-heading-md font-semibold tabular-nums">{money(cashCollectionAmount)}</p>
-            </div>
-            <Field id="collectedBy" label={t("cod.collectedBy")} error={collectorError ? collectorError : undefined}>
-              <Input
-                id="collectedBy"
-                placeholder={t("cod.collectorPlaceholder")}
-                value={collectedBy}
-                required
-                maxLength={120}
-                aria-invalid={Boolean(collectorError) || undefined}
-                aria-describedby={collectorError ? "collectedBy-error" : undefined}
-                onChange={(e) => setCollectedBy(e.target.value)}
-                onBlur={() => setCollectorError(collectedBy.trim() ? null : t("cod.collectorRequired"))}
-              />
-            </Field>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCodAction(null)} disabled={codMutation.isPending}>{r("cancel")}</Button>
-            <Button onClick={submitCodAction} loading={codMutation.isPending} disabled={!canRecordCodCollection}>
-              {t("cod.collectAmount", { amount: money(cashCollectionAmount) })}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={codAction === "failed"} onOpenChange={(open) => !open && !codMutation.isPending && setCodAction(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("cod.recordFailure")}</DialogTitle>
-            <DialogDescription>{t("cod.failureHelp")}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {codMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(codMutation.error)}</AlertDescription></Alert> : null}
-            <Field id="failReason" label={t("cod.failureReason")}>
-              <SearchableSelect
-                triggerClassName="w-full"
-                id="failReason"
-                value={failReason}
-                onValueChange={(value) => setFailReason(value as CodFailureReason)}
-                options={COD_FAILURE_REASONS.map((reason) => ({ value: reason, label: orderDetailLabel(t, "cod.reason.", reason) }))}
-              />
-            </Field>
-            <Field id="failNotes" label={t("cod.notes")}>
-              <Textarea id="failNotes" value={failNotes} maxLength={500} onChange={(e) => setFailNotes(e.target.value)} />
-            </Field>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCodAction(null)} disabled={codMutation.isPending}>{r("cancel")}</Button>
-            <Button variant="destructive" onClick={submitCodAction} loading={codMutation.isPending} disabled={!canRecordCodFailure}>
-              {t("cod.recordFailure")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={codAction === "returned"} onOpenChange={(open) => !open && !codMutation.isPending && setCodAction(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{sentUnits === 1 ? t("cod.returnTitleOne") : t("cod.returnTitle", { count: sentUnits })}</DialogTitle>
-            <DialogDescription>
-              {[
-                presentation.amountDue > 0 ? t("cod.returnBalance", { amount: money(presentation.amountDue) }) : null,
-                t("cod.returnHelp"),
-              ].filter(Boolean).join(" ")}
-            </DialogDescription>
-          </DialogHeader>
-          {codMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(codMutation.error)}</AlertDescription></Alert> : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCodAction(null)} disabled={codMutation.isPending}>{r("cancel")}</Button>
-            <Button variant="destructive" onClick={submitCodAction} loading={codMutation.isPending} disabled={!canRecordCodReturn}>
-              {t("cod.markReturned")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {codLoaded ? (
+        <Suspense fallback={null}>
+          <CodDialogs
+            key={codSession}
+            orderId={order.id}
+            action={codAction}
+            onClose={() => setCodAction(null)}
+            initialCollector={codCollector}
+            hasBalanceDue={hasCashBalanceDueOnDelivery}
+            collectTitle={collectTitle}
+            cashAmount={cashCollectionAmount}
+            amountDue={presentation.amountDue}
+            sentUnits={sentUnits}
+            money={money}
+            canCollect={canRecordCodCollection}
+            canFail={canRecordCodFailure}
+            canReturn={canRecordCodReturn}
+          />
+        </Suspense>
+      ) : null}
 
       {refundLoaded ? (
         <Suspense fallback={null}>

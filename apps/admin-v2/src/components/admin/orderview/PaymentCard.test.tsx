@@ -109,6 +109,12 @@ describe("PaymentCard", () => {
   const button = (label: string) =>
     [...document.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === label);
 
+  // The cash dialogs load the first time one opens.
+  const openCollectDialog = async () => {
+    await act(async () => button(en["cod.markCollected"])!.click());
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull());
+  };
+
   describe("payment attempts", () => {
     it.each([
       { gateway: "stripe", providerSessionId: null, lastError: "Gateway configuration is unavailable." },
@@ -420,7 +426,7 @@ describe("PaymentCard", () => {
       mocks.permissions.canUpdateOrderCod = true;
       mocks.cod.mockResolvedValue({ tracking: null });
       await render({ ...codOrder, status: "shipped", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800 });
-      await act(async () => button(en["cod.markCollected"])!.click());
+      await openCollectDialog();
       expect(document.querySelector("#collectedAmount")).toBeNull();
       const submit = button(en["cod.collectAmount"].replace("{amount}", "৳1800"))!;
       await act(async () => submit.click());
@@ -452,7 +458,7 @@ describe("PaymentCard", () => {
         ...codOrder, status: "shipped", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800,
         shipments: [riderParcel("s1", "R3 Rider Jamal", 1_783_000_000), riderParcel("s2", "R3 Rider Kamal", 1_783_000_500)],
       });
-      await act(async () => button(en["cod.markCollected"])!.click());
+      await openCollectDialog();
       const input = document.querySelector<HTMLInputElement>("#collectedBy")!;
       expect(input.value).toBe("R3 Rider Kamal");
       expect(input.disabled).toBe(false);
@@ -473,7 +479,7 @@ describe("PaymentCard", () => {
         ...codOrder, status: "shipped", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800,
         shipments: [riderParcel("s1", "R3 Rider Kamal", 1_783_000_000)],
       });
-      await act(async () => button(en["cod.markCollected"])!.click());
+      await openCollectDialog();
       expect(document.querySelector('[role="dialog"]')).not.toBeNull();
       await act(async () => button(en["cod.collectAmount"].replace("{amount}", "৳1800"))!.click());
       expect(document.querySelector('[role="dialog"]')).toBeNull();

@@ -49,7 +49,9 @@ export const BUNDLE_BUDGETS = {
     // Wave B: gift-card tenders, digital and gift-card line cards, refund to a gift card.
     // +1 (catalogue dashboard): the Brands link and its search words in the shell.
     // The status card's cancel confirmation loads when first asked for (list UX).
-    "admin/orders/$orderId/index.tsx": 288,
+    // -3.5: the Messages card (thread, reply box, copy) and the cash-on-delivery
+    // dialogs load after the page; measured 284.1.
+    "admin/orders/$orderId/index.tsx": 284.5,
     "admin/products/index.tsx": 290,
     // +1 (catalogue dashboard): the brand field and the lazy merchandising cards' loaders.
     // +1 (catalogue dashboard): categories named by their tree path, and saving the
