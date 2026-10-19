@@ -19,7 +19,7 @@ export interface ShopCopy {
     showAllPhotos: (count: number) => string;
     zoomPhoto: string;
     /** One photo of a gallery list: "Zoom photo 2 of 4". */
-    zoomPhotoOf: (position: number, total: number) => string;
+    zoomPhotoOf: (position: number | string, total: number | string) => string;
     previousPhoto: string;
     nextPhoto: string;
     /** Where the phone gallery is, read out as it changes: "Photo 2 of 5" (placeholders allowed). */

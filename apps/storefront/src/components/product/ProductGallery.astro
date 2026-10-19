@@ -13,6 +13,8 @@ import {
 import { featuredGalleryItem, productGalleryItems } from "./lib/gallery-media";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import VideoFacade from "./VideoFacade.astro";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { formatPageNumber } from "@/lib/store-time-zone";
 
 interface Props {
   product: Product;
@@ -29,7 +31,7 @@ interface Props {
   /** The words of the computer zoom button, and of the stacked list's "show all" control. */
   zoomLabel?: string;
   /** One photo's zoom button in the stacked and grid lists ("Zoom photo 2 of 4"). */
-  zoomOfLabel?: (position: number, total: number) => string;
+  zoomOfLabel?: (position: number | string, total: number | string) => string;
   showAllLabel?: (count: number) => string;
   /** The computer's previous and next photo buttons. */
   stepLabels?: { previous: string; next: string };
@@ -44,11 +46,14 @@ const {
   initialProductMediaId = null,
   playVideoLabel = "Play video: {title}",
   zoomLabel = "Zoom photo",
-  zoomOfLabel = (position: number, total: number) => `Zoom photo ${position} of ${total}`,
+  zoomOfLabel = (position: number | string, total: number | string) => `Zoom photo ${position} of ${total}`,
   showAllLabel = (count: number) => `Show all photos (${count})`,
   stepLabels = { previous: "Previous photo", next: "Next photo" },
   positionLabel = (position: number | string, total: number | string) => `Photo ${position} of ${total}`,
 } = Astro.props;
+const { language } = await currentRequestTheme(Astro.locals);
+// Positions in the page's digits (Bangla digits on a Bangla page).
+const count = (value: number) => formatPageNumber(value, language);
 const thumbnails = layout.thumbnails;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
@@ -286,9 +291,9 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
                   ))}
                 </div>
               ) : (
-                <span data-gallery-position-count class="rounded-full bg-background/85 px-2 py-1 text-xs font-medium text-foreground shadow-sm" aria-hidden="true">{initialImageIndex + 1} / {galleryImages.length}</span>
+                <span data-gallery-position-count class="rounded-full bg-background/85 px-2 py-1 text-xs font-medium text-foreground shadow-sm" aria-hidden="true">{count(initialImageIndex + 1)} / {count(galleryImages.length)}</span>
               )}
-              <span data-gallery-position-label data-template={positionLabel("{position}", "{total}")} class="sr-only" role="status" aria-live="polite">{positionLabel(initialImageIndex + 1, galleryImages.length)}</span>
+              <span data-gallery-position-label data-template={positionLabel("{position}", "{total}")} class="sr-only" role="status" aria-live="polite">{positionLabel(count(initialImageIndex + 1), count(galleryImages.length))}</span>
             </div>
           )}
         </div>
@@ -553,7 +558,7 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
                 data-zoom-url={mediaImageUrl(entry.url, GALLERY_IMAGE_WIDTHS.zoom) || entry.url}
                 data-zoom-alt={entry.altText}
                 class="gallery-zoom-trigger absolute inset-e-3 bottom-3 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm ring-1 ring-border backdrop-blur transition-colors hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground motion-reduce:transition-none"
-                aria-label={zoomOfLabel(listImages.indexOf(entry) + 1, listImages.length)}
+                aria-label={zoomOfLabel(count(listImages.indexOf(entry) + 1), count(listImages.length))}
               >
                 <Icon name="maximize-2" class="h-4 w-4" aria-hidden="true" />
               </button>

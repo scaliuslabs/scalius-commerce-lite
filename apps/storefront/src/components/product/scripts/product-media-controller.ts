@@ -6,6 +6,7 @@ import {
 import { GALLERY_IMAGE_WIDTHS } from "../lib/gallery-images";
 import { loadVariantsFromDOM } from "../lib/variant-state-machine";
 import { playVideoFacade, stopVideoFacade } from "./video-facade";
+import { formatPageNumber } from "@/lib/store-time-zone";
 
 export type ProductMediaSelectionSource = "initial" | "gallery" | "variant";
 
@@ -348,13 +349,15 @@ function updateMobilePosition(root: HTMLElement, item: GalleryItem): void {
   position.hidden = index < 0;
   const label = position.querySelector<HTMLElement>("[data-gallery-position-label]");
   // The store's words, rendered with placeholders (`data-template`).
+  // In the page's digits (Bangla digits on a Bangla page).
+  const number = (value: number) => formatPageNumber(value, root.ownerDocument.documentElement.lang);
   if (label && index >= 0) {
     label.textContent = (label.dataset.template ?? "Image {position} of {total}")
-      .replace("{position}", String(index + 1))
-      .replace("{total}", String(images.length));
+      .replace("{position}", number(index + 1))
+      .replace("{total}", number(images.length));
   }
   const count = position.querySelector<HTMLElement>("[data-gallery-position-count]");
-  if (count && index >= 0) count.textContent = `${index + 1} / ${images.length}`;
+  if (count && index >= 0) count.textContent = `${number(index + 1)} / ${number(images.length)}`;
   position.querySelectorAll<HTMLElement>("[data-gallery-dot]").forEach((dot, dotIndex) => {
     dot.classList.toggle("bg-foreground", dotIndex === index);
     dot.classList.toggle("bg-muted-foreground/40", dotIndex !== index);

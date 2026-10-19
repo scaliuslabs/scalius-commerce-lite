@@ -43,6 +43,14 @@ export function formatCount(value: number): string {
   return formatNumber(value, numberLocale("en", storeRegion()));
 }
 
+/**
+ * A number in the page's own words: Bangla digits on a Bangla page in
+ * Bangladesh ("২ / ৫"), Latin elsewhere, grouped as the store's country does.
+ */
+export function formatPageNumber(value: number, language: string): string {
+  return formatNumber(value, numberLocale(language || "en", storeRegion()));
+}
+
 /** A buyer-facing instant in store time, in the page's language ("Oct 7, 2026, 3:42 PM"; Bangla on the 24-hour clock). */
 export function formatStoreDateTime(
   value: Date | number,

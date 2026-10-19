@@ -272,6 +272,19 @@ describe("product gallery photo switching", () => {
     expect(root.dataset.activeMediaKey).toBe("video:pmed_video");
   });
 
+  it("reads the position out in the page's digits", () => {
+    const root = renderGallery("pmed_front", { mobileSwipe: true });
+    document.documentElement.lang = "bn";
+    document.documentElement.dataset.storeRegion = "BD";
+    root.querySelector("[data-gallery-position-label]")!.setAttribute("data-template", "{total}টির মধ্যে {position} নম্বর ছবি");
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+    button(root, "pmed_side", "mobile").click();
+    expect(root.querySelector("[data-gallery-position-label]")?.textContent).toBe("৪টির মধ্যে ২ নম্বর ছবি");
+    document.documentElement.lang = "";
+    delete document.documentElement.dataset.storeRegion;
+  });
+
   it("leaves vertical scrolling and merchant gallery overrides alone", () => {
     const root = renderGallery("pmed_front", { mobileSwipe: true });
     renderSsrImage(root, "front");
