@@ -59,9 +59,10 @@ export function isDigitalSku(rules: ProductKindRules, sku: { fulfillmentKind?: s
  * tracking on (the server does it with the pool). `hasKeyPool` is undefined
  * while the pools load: a saved SKU keeps what it has, a new one tracks none.
  */
-export function digitalSkuTracks(saved: { trackInventory: boolean } | null, hasKeyPool: boolean | undefined): boolean {
+export function digitalSkuTracks(saved: { trackInventory?: boolean } | null, hasKeyPool: boolean | undefined): boolean {
   if (hasKeyPool !== undefined) return hasKeyPool;
-  return saved?.trackInventory ?? false;
+  // A saved SKU without the flag tracked (the API's default).
+  return saved ? saved.trackInventory !== false : false;
 }
 
 type ConstrainableSku = {
