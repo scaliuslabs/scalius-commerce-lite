@@ -588,6 +588,7 @@
 /* The menu */
 .noor-nav-list { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 0.25rem; min-inline-size: 0; max-inline-size: 100%; margin: 0; padding: 0; list-style: none; }
 .noor-nav-item { display: flex; flex: 0 1 auto; min-inline-size: 0; }
+.noor-nav-item[hidden] { display: none; }
 .noor-nav-link {
   position: relative;
   display: inline-flex;
@@ -643,6 +644,39 @@
 .noor-drop .noor-menu-heading, .noor-mega-col li > .noor-menu-heading { color: var(--n-ink); font-size: 0.875rem; font-weight: 600; }
 .noor-drop a:hover { background: var(--n-soft); }
 .noor-drop ul ul { margin-inline-start: 0.75rem; border-inline-start: 1px solid var(--n-line); }
+/* "More": the roots past the row over their links. A row item the store's
+   script moves in reads the same: its name, then its links in place (its
+   toggle and panel chrome stand down while its panel keeps hidden for the row). */
+.noor-more { inline-size: max-content; min-inline-size: 15rem; }
+.noor-more-list > li + li { margin-block-start: 0.25rem; }
+.noor-drop .noor-more-root { color: var(--n-ink); font-weight: 600; }
+.noor-more-list > .noor-nav-item { display: block; }
+.noor-more-list > .noor-nav-item > .noor-nav-toggle { display: none; }
+.noor-more-list > .noor-nav-item > .noor-nav-link { display: flex; padding: 0.5rem 0.75rem; color: var(--n-ink); font-weight: 600; white-space: normal; }
+.noor-more-list > .noor-nav-item > .noor-nav-link::after { content: none; }
+.noor-more-list > .noor-nav-item > button.noor-nav-link { pointer-events: none; }
+.noor-more-list > .noor-nav-item > button.noor-nav-link > .noor-icon { display: none; }
+.noor-more-list > .noor-nav-item > :is(.noor-mega, .noor-drop) {
+  display: block;
+  position: static;
+  min-inline-size: 0;
+  max-inline-size: none;
+  max-block-size: none;
+  margin-inline-start: 0.75rem;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-inline-start: 1px solid var(--n-line);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  animation: none;
+}
+.noor-more-list .noor-mega-inner { display: grid; gap: 0; max-inline-size: none; padding: 0; }
+.noor-more-list .noor-mega-col :is(a, .noor-menu-heading) { display: block; padding: 0.5rem 0.75rem; border-radius: var(--n-radius); }
+.noor-more-list .noor-mega-head { margin: 0; letter-spacing: normal; text-transform: none; font-size: 0.875rem; }
+.noor-more-list .noor-mega-col ul { gap: 0; margin-inline-start: 0.75rem; }
+.noor-more-list .noor-mega-all { display: block; padding: 0.5rem 0.75rem; }
 .noor-header-shell .noor-nav, .noor-header-shell .noor-nav-list { block-size: 100%; }
 .noor-header-shell .noor-nav-item.has-menu:has(.noor-mega) { display: flex; }
 

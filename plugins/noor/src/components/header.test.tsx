@@ -29,31 +29,44 @@ function render(items: StorefrontMenuItem[], layout: "center" | "start", languag
 
 describe("Noor bounded desktop navigation", () => {
   for (const layout of ["center", "start"] as const) {
-    it.each([0, 1, 4, 6, 7, 50])(`${layout} layout keeps the first roots and a native route to the rest (%i roots)`, (count) => {
+    it.each([0, 1, 4, 6, 7, 50])(`${layout} layout keeps the first roots and a More dropdown of only the rest (%i roots)`, (count) => {
       const items = menu(count);
       const limit = layout === "center" ? 6 : 4;
       const fragment = render(items, layout);
       const links = [...fragment.querySelectorAll<HTMLAnchorElement>(".noor-nav-list > li > a")];
       expect(links.map((link) => link.getAttribute("href"))).toEqual(items.slice(0, limit).map((item) => item.url));
       expect(Boolean(fragment.querySelector(".noor-nav"))).toBe(count > 0);
-      const more = fragment.querySelector<HTMLButtonElement>(".noor-nav-more");
-      expect(Boolean(more)).toBe(count > limit);
-      if (more) {
+      const moreItem = fragment.querySelector<HTMLElement>(".noor-nav-list > li[data-nav-more]");
+      expect(Boolean(moreItem)).toBe(count > 0);
+      if (moreItem) {
+        // Shown only with roots past the row (the store's script also shows it for a row that does not fit).
+        expect(moreItem.hidden).toBe(count <= limit);
+        expect(moreItem.hasAttribute("data-disclosure-item")).toBe(true);
+        const more = moreItem.querySelector<HTMLButtonElement>(":scope > button.noor-nav-more")!;
         expect(more.getAttribute("type")).toBe("button");
-        expect(more.getAttribute("popovertarget")).toBe("noor-drawer");
-        expect(fragment.querySelector("#noor-drawer")?.getAttribute("popover")).toBe("auto");
+        // A dropdown on computers, not the phone drawer.
+        expect(more.hasAttribute("popovertarget")).toBe(false);
+        expect(more.getAttribute("data-disclosure")).toBe("popup");
+        expect(more.getAttribute("aria-expanded")).toBe("false");
+        const panel = fragment.getElementById(more.getAttribute("aria-controls")!)!;
+        expect(panel.hidden).toBe(true);
+        expect(moreItem.contains(panel)).toBe(true);
+        // Only the rest of the menu, every level of it, each link once.
+        expect(panel.querySelector("[data-nav-more-list]")).not.toBeNull();
+        expect([...panel.querySelectorAll("a")].map((link) => link.getAttribute("href"))).toEqual(urls(items.slice(limit)));
       }
+      expect(fragment.querySelector("#noor-drawer")?.getAttribute("popover")).toBe("auto");
       expect([...fragment.querySelectorAll(".noor-drawer-list a")].map((link) => link.getAttribute("href"))).toEqual(urls(items));
       expect(fragment.querySelectorAll(".noor-drawer-list details")).toHaveLength(count * 2);
     });
   }
 
-  it.each(["mega", "simple"])("keeps nested desktop links reachable with %s menus", (style) => {
+  it.each(["mega", "simple"])("keeps every nested desktop link reachable once, in the row or More, with %s menus", (style) => {
     const items = menu(50);
     const fragment = render(items, "center", "en", style);
-    const desktopUrls = [...fragment.querySelectorAll(".noor-nav-list a")].map((link) => link.getAttribute("href"));
-    for (const url of urls(items.slice(0, 6))) expect(desktopUrls).toContain(url);
-    expect(desktopUrls).not.toContain(items[6]!.url);
+    // (A mega panel's closing "All" link repeats its own root.)
+    const desktopUrls = [...fragment.querySelectorAll(".noor-nav-list a:not(.noor-mega-all)")].map((link) => link.getAttribute("href"));
+    expect([...desktopUrls].sort()).toEqual([...urls(items)].sort());
   });
 
   it.each(["mega", "simple"])("draws a heading-only item as a heading over its links (%s menus)", (style) => {
@@ -81,8 +94,10 @@ describe("Noor bounded desktop navigation", () => {
     const items: StorefrontMenuItem[] = [{ title: "Heading", url: "#", children: menu(1)[0]!.children }, ...menu(3)];
     const fragment = render(items, "center", "en", style);
     const row = fragment.querySelector<HTMLElement>(".noor-nav-list[data-nav-overflow]")!;
-    const buttons = [...row.querySelectorAll<HTMLButtonElement>('button[data-disclosure="popup"]')];
+    const buttons = [...row.querySelectorAll<HTMLButtonElement>('[data-nav-index] > button[data-disclosure="popup"]')];
     expect(buttons).toHaveLength(4);
+    // More follows the same pattern (hidden here: nothing is past the row).
+    expect(row.querySelectorAll('[data-nav-more] > button[data-disclosure="popup"]')).toHaveLength(1);
     for (const button of buttons) {
       expect(button.getAttribute("aria-expanded")).toBe("false");
       const panel = fragment.getElementById(button.getAttribute("aria-controls")!)!;

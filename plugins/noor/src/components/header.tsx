@@ -1,6 +1,7 @@
 // The Noor header: rotating announcements, then one bar with the menu, the
 // logo and the actions (logo centred between them, or first), mega menus on
-// computers and a drawer on phones. On a landing page it can turn into a
+// computers (the roots past the row in a "More" dropdown) and a drawer on
+// phones. On a landing page it can turn into a
 // campaign header: the logo and one "Order now" button, nothing that leads
 // away from the order. Menus follow the store's disclosure pattern (a button
 // with `aria-expanded` per menu; click, Enter, Escape, arrow keys and hover
@@ -80,6 +81,7 @@ function ItemLink({ item, class: className }: { item: StorefrontMenuItem; class?
 }
 
 function Menu({ items, style, limit, context }: { items: StorefrontMenuItem[]; style: string; limit: number; context: Context }) {
+  const extras = items.slice(limit);
   return (
     <ul class="noor-nav-list" data-nav-overflow>
       {items.slice(0, limit).map((item, index) => {
@@ -128,14 +130,24 @@ function Menu({ items, style, limit, context }: { items: StorefrontMenuItem[]; s
           </li>
         );
       })}
-      {items.length > limit ? (
-        <li class="noor-nav-item noor-nav-more-item">
-          <button type="button" class="noor-nav-link noor-nav-more" popovertarget="noor-drawer"
-            aria-label={t(context, { en: "More menu items", bn: "আরও মেনু আইটেম" })}>
-            {t(context, { en: "More", bn: "আরও" })}
-          </button>
-        </li>
-      ) : null}
+      {/* The roots past the row, with every level of their links, and any row
+          item that does not fit (the store's script moves it in, as it is). */}
+      <li class="noor-nav-item noor-nav-more-item" data-nav-more data-disclosure-item hidden={extras.length === 0}>
+        <button type="button" class="noor-nav-link noor-nav-more" data-nav-link data-disclosure="popup" aria-expanded="false" aria-controls="noor-nav-more"
+          aria-label={t(context, { en: "More menu items", bn: "আরও মেনু আইটেম" })}>
+          <span>{t(context, { en: "More", bn: "আরও" })}</span><Icon name="down" size={14} />
+        </button>
+        <div class="noor-drop noor-more" id="noor-nav-more" hidden>
+          <ul class="noor-more-list" data-nav-more-list>
+            {extras.map((item) => (
+              <li class="noor-more-extra">
+                <ItemLink item={item} class="noor-more-root" />
+                {item.children.length > 0 ? <MenuLinks items={item.children} /> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </li>
     </ul>
   );
 }
@@ -220,7 +232,7 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
               ) : null}
             </div>
             {logo}
-            {/* Keep the desktop row bounded; More opens the complete native drawer. */}
+            {/* Keep the desktop row bounded; More lists the rest. The drawer is the phone navigation. */}
             {data.menu.length > 0 ? (
               <nav class="noor-nav noor-desk-only" aria-label={t(context, { en: "Main", bn: "প্রধান" })}>
                 <Menu items={data.menu} style={choice(settings.menu_style, ["mega", "simple"] as const, "mega")} limit={layout === "center" ? 6 : 4} context={context} />
