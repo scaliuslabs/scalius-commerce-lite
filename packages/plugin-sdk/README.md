@@ -2,7 +2,7 @@
 
 The SDK for Scalius apps (plugins), for plugin authors. An app declares what it may do (the manifest) and writes the handlers the platform calls. Workspace imports use source; the package build emits portable JavaScript and declarations for publishing.
 
-Real apps in `plugins/`: `bkash` and `nagad` (payment providers) and `bangladesh` (SMS, fraud, courier and payment providers, place seeding). Worked examples that no store bundles are test fixtures in `apps/api/src/plugins/testing/apps/`: `hello` (events, routes, cron, Objects, admin pages), `bulk-discount` (checkout functions), `loyalty` (atomic Objects and order commits), `wishlist` (storefront blocks), `order-tagger` (timeline entries) and `notes` (declarative checkout and account Buyer UI). The versioned contract is `packages/shared/src/plugins`, the host is `apps/api/src/plugins`, and installed-app state is `packages/core/src/modules/plugins`.
+Real apps in `plugins/`: `bangladesh` (bKash, Nagad and SSLCommerz payments, SMS, fraud, couriers and place seeding, one feature per service) and `noor` (a theme of skins). Worked examples that no store bundles are test fixtures in `apps/api/src/plugins/testing/apps/`: `hello` (events, routes, cron, Objects, admin pages), `bulk-discount` (checkout functions), `loyalty` (atomic Objects and order commits), `wishlist` (storefront blocks), `order-tagger` (timeline entries) and `notes` (declarative checkout and account Buyer UI). The versioned contract is `packages/shared/src/plugins`, the host is `apps/api/src/plugins`, and installed-app state is `packages/core/src/modules/plugins`.
 
 ## Extension points
 
@@ -393,3 +393,7 @@ This package, the manifest (`packages/shared/src/plugins`), the event catalogue 
 ## Contract checks
 
 `packages/shared/src/plugins/abi.snapshot.test.ts` seals the manifest JSON Schema, emitted SDK declarations, protocol constants, events, function/provider/UI schemas and scopes. Stable HTTP operation schemas have their own compatibility gate in `apps/api/src/openapi/stable-operations.test.ts`. Update snapshots only after reviewing an additive change; a breaking change needs a version decision. Runtime validation tests still cover refinements JSON Schema cannot express.
+
+## License
+
+AGPL-3.0-only with the [Scalius Plugin Exception](PLUGIN-EXCEPTION): an app, theme or client that uses this package only through its exported entry points may be licensed and distributed on any terms, including bundled into a store. The SDK itself, and changes to it, stay under the AGPL.

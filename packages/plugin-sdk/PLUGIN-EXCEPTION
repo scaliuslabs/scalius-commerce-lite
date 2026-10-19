@@ -1,0 +1,50 @@
+Scalius Plugin Exception, version 1.0
+
+This package ("the Library"), including the copies of other Scalius Commerce
+code that its build includes in it, is licensed under the GNU Affero General Public
+License, version 3 only ("AGPL"), in the file LICENSE, with the following
+additional permission granted under section 7 of the AGPL by the copyright
+holders of Scalius Commerce.
+
+0. Definitions
+
+"Public Interface" means the entry points this package declares in the
+"exports" field of its package.json, and the types, functions and values
+reachable through them.
+
+"Independent Work" means a Scalius app, plugin, theme, integration or client
+that uses the Library only through its Public Interface and that is not
+otherwise based on Scalius Commerce source code. Files generated for you by
+Scalius scaffolding or build tools are part of your Independent Work.
+
+"Combined Work" means an Independent Work together with the Library, however
+combined: imported, bundled, compiled, packed, or installed into a Scalius
+Commerce store.
+
+1. Permission
+
+You may copy, modify, convey, and run an Independent Work, and convey or run a
+Combined Work (including to provide a service over a network), under terms of
+your choice for the Independent Work, without that Independent Work becoming
+subject to the AGPL, provided that:
+
+  a) the Library itself, including any copy of it inside a Combined Work and
+     any modification you make to it, remains under the AGPL together with
+     this exception; and
+
+  b) you keep this notice and the LICENSE file with every copy of the Library
+     you convey, including copies bundled into a Combined Work.
+
+2. Scope
+
+This exception covers only the Library. It grants no additional permission
+for any other part of Scalius Commerce, such as its API, dashboard, core
+packages or database packages, which remain under their own licenses. Running
+a modified Scalius Commerce server remains subject to section 13 of the AGPL
+for that server's own code.
+
+3. Modified versions
+
+If you modify the Library, you may extend this exception to your version, but
+you are not obligated to. If you do not wish to do so, delete this exception
+statement from your version.

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Build Scalius Commerce plugins: one format for sandboxed (Workers Paid) and bundled (Workers Free) installs",
   "type": "module",
-  "license": "AGPL-3.0-only",
+  "license": "SEE LICENSE IN PLUGIN-EXCEPTION",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
@@ -36,7 +36,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "PLUGIN-EXCEPTION"
   ],
   "publishConfig": {
     "access": "public",

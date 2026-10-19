@@ -5,7 +5,7 @@ Scalius Commerce Lite is a self-hosted commerce platform: a merchant dashboard, 
 - Website: <https://scalius.com>
 - Help and questions: [Discord](https://scalius.com/discord)
 - Bugs and proposals: [GitHub issues](https://github.com/scaliuslabs/scalius-commerce-lite/issues)
-- License: [AGPL v3](LICENSE). The storefront in `apps/storefront/` is MIT-licensed.
+- License: [AGPL v3](LICENSE). The storefront in `apps/storefront/` is MIT-licensed. The plugin SDK (`packages/plugin-sdk`) and API client (`packages/api-client`) carry the [Scalius Plugin Exception](packages/plugin-sdk/PLUGIN-EXCEPTION): apps, themes and clients built on them may use any license.
 
 ## Stack
 
