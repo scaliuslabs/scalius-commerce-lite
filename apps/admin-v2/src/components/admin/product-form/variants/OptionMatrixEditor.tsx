@@ -334,6 +334,9 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   // The fields edit the default location: they can't go below zero there, and a simple
   // product's units at other locations can't be split into options (the server refuses).
   const simpleElsewhere = elsewhereOf(defaultSku?.id);
+  // Every variant tracks a quantity and none has any: buyers see the product as Sold out.
+  const soldOutEverywhere = options.length > 0 && shownVariants.length > 0
+    && shownVariants.every((variant) => variant.trackInventory && !isDigitalSku(kindRules, variant) && variant.stock === 0);
   const locationIssue: DraftIssue | null = !homeLocation ? null
     : simpleMode
       ? shownSimpleSku.trackInventory && shownSimpleSku.stock - simpleElsewhere < 0
@@ -756,7 +759,12 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
       ) : null}
       <FieldRow>
         {shownSimpleSku.trackInventory && !digitalSimple ? (
-          <Field label={quantityLabel ?? t("quantity")} error={issueFor(undefined, "stock")}>
+          <Field
+            label={quantityLabel ?? t("quantity")}
+            // An active product with nothing to sell shows Sold out to buyers: said here, quietly, before it is saved.
+            help={requirePositivePrice && simpleSku.stock === 0 ? t("soldOutWhenActive") : undefined}
+            error={issueFor(undefined, "stock")}
+          >
               <InventoryQuantityInput
                 readOnly={readOnly || !canAdjustStock}
                 ariaLabel={quantityLabel ?? t("quantity")}
@@ -893,6 +901,9 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
         <p className="text-body text-destructive" role="alert">
           {lineFor(shownIssue)}
         </p>
+      ) : null}
+      {requirePositivePrice && soldOutEverywhere ? (
+        <p className="text-body text-muted-foreground" data-sold-out-note>{t("soldOutWhenActiveVariants")}</p>
       ) : null}
       {variants.length ? (
         <VariantTable
