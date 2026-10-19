@@ -23,7 +23,7 @@ describe("discount panel: which discount applies", () => {
 
     const notes = [...root.querySelectorAll("#appliedCodes li.basis-full")].map((note) => note.textContent);
     expect(notes).toEqual(["SAVE10 gives a bigger discount than Eid 5%, so SAVE10 is applied."]);
-    expect(root.querySelector("#discountLines")?.textContent).toContain("Save 10 (SAVE10)");
+    expect(root.querySelector("#discountLines")?.textContent).toContain("Discount · SAVE10");
     expect(root.querySelector("#discountLines")?.textContent).not.toContain("Eid 5%");
   });
 

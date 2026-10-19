@@ -991,7 +991,7 @@ describe("initCartFunctionality", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     const lines = Array.from(document.querySelectorAll("#discountLines > div")).map((row) => row.textContent);
-    expect(lines).toEqual(["Discount · Free delivery-৳60", "Discount · Eid 10% (SAVE10)-৳10"]);
+    expect(lines).toEqual(["Discount · Free delivery-৳60", "Discount · SAVE10-৳10"]);
     expect(document.getElementById("total")?.textContent).toBe("৳90");
     const applied = document.getElementById("appliedCodes")!;
     expect(applied.textContent).toContain("Add Cap to get it free.");
@@ -1277,7 +1277,7 @@ describe("initCartFunctionality", () => {
     expect(shipping.querySelector("s")?.textContent).toBe("৳60");
     expect(shipping.textContent).toBe("৳60Free(SHIPFREE)");
     expect(Array.from(document.querySelectorAll("#discountLines > div")).map((row) => row.textContent))
-      .toEqual(["Discount · Eid 10% (SAVE10)-৳10"]);
+      .toEqual(["Discount · SAVE10-৳10"]);
     expect(document.getElementById("total")?.textContent).toBe("৳90");
   });
 

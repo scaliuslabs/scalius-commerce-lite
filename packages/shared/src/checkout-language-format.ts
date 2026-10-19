@@ -9,22 +9,40 @@ export function formatCheckoutLanguageText(
 }
 
 /**
- * One applied discount as receipts, order emails and the cart name it:
- * "Discount · Eid sale (EID10)", "Discount · EID10" when the title is the code,
- * "Discount · Eid sale" for an automatic discount.
+ * One applied discount as the buyer sees it in the cart, at checkout, on the
+ * receipt, the account order page and order emails: "Discount · EID10".
  */
 export function formatDiscountLineLabel(
   discountText: string,
-  line: { title: string | null; code: string | null },
+  line: BuyerDiscountLine,
 ): string {
-  const name = discountDisplayName(line);
+  const name = buyerDiscountName(line);
   return name ? `${discountText} · ${name}` : discountText;
 }
 
+/** An applied discount line: a store app's (`appId` set) or the store's own. */
+export interface BuyerDiscountLine {
+  title: string | null;
+  code: string | null;
+  appId?: string | null;
+}
+
 /**
- * An applied discount's name everywhere it is listed: "Eid sale (EID10)", just
- * "EID10" when the title is the code (in any letter case), "Eid sale" for an
- * automatic discount.
+ * An applied discount's name for buyers (Shopify's rule): the store's code
+ * discount by its code ("EID10"), an automatic discount by its title ("Eid
+ * sale"). The name staff gave a code discount stays in the dashboard. A store
+ * app names its own discounts for buyers, so its title stays (with its code).
+ */
+export function buyerDiscountName(line: BuyerDiscountLine): string {
+  const code = line.code?.trim() ?? "";
+  if (code && !line.appId) return code;
+  return discountDisplayName(line);
+}
+
+/**
+ * An applied discount's name for staff (the dashboard): "Eid sale (EID10)",
+ * just "EID10" when the title is the code (in any letter case), "Eid sale"
+ * for an automatic discount.
  */
 export function discountDisplayName(line: { title: string | null; code: string | null }): string {
   const title = line.title?.trim() ?? "";
