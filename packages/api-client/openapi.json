@@ -13875,6 +13875,35 @@
           }
         }
       },
+      "AppProviderConnection": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "untested",
+              "passed",
+              "failed"
+            ],
+            "description": "none: it offers no test; untested: not tested with its current settings."
+          },
+          "testedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "nullable": true,
+            "description": "The provider's answer when the last test failed."
+          }
+        },
+        "required": [
+          "status",
+          "testedAt",
+          "message"
+        ]
+      },
       "WarrantyClaim": {
         "type": "object",
         "properties": {
@@ -15990,12 +16019,30 @@
                             "type": "string"
                           },
                           "description": "The keys its readiness needs set: its declared settings, else the app's required ones."
+                        },
+                        "connection": {
+                          "$ref": "#/components/schemas/AppProviderConnection"
+                        },
+                        "use": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "offered",
+                            "hidden",
+                            "currency",
+                            "chosen",
+                            "not_chosen",
+                            null
+                          ],
+                          "description": "Whether the store uses it: a payment method checkout lists (offered), one hidden in Settings, Payments (hidden) or one that cannot charge the store currency (currency); the notification SMS service (chosen) or another one (not_chosen). Null for other kinds."
                         }
                       },
                       "required": [
                         "settings",
                         "own",
-                        "required"
+                        "required",
+                        "connection",
+                        "use"
                       ]
                     }
                   ]
@@ -159961,6 +160008,9 @@
                                   "live",
                                   "unknown"
                                 ]
+                              },
+                              "connection": {
+                                "$ref": "#/components/schemas/AppProviderConnection"
                               }
                             },
                             "required": [
@@ -159974,7 +160024,8 @@
                               "operations",
                               "canTestConnection",
                               "readiness",
-                              "environment"
+                              "environment",
+                              "connection"
                             ]
                           }
                         }

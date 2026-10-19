@@ -29,8 +29,11 @@ import {
   navigationMenusQueryOptions,
   navigationPlacementsQueryOptions,
 } from "~/lib/api-query-options/online-store";
+import { useHasPermission } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { HeaderMenuNotice, useHeaderMenuReach, type HeaderMenuReach } from "./header-menu-reach";
 import { actionErrorText, failSave, Field, OnlineStorePage, SectionCard, useDocumentDraft } from "./shared";
 
 /** Storefront slots a menu can fill: the header menu and four footer columns. */
@@ -57,6 +60,19 @@ function useSlotLabel() {
   return (slot: Slot) => slot.surface === "header"
     ? t("headerMenu")
     : t("footerColumn", { number: slot.position + 1 });
+}
+
+/** Where a menu in a slot is drawn, in a menu's row: the header slot says when the theme does not draw it. */
+function useSlotPlace() {
+  const t = useMessages(onlineStoreMessages);
+  const slotLabel = useSlotLabel();
+  return (slot: Slot, reach: HeaderMenuReach) => {
+    const label = slotLabel(slot);
+    if (slot.surface !== "header") return label;
+    return reach === "notDrawn" || reach === "crowdedOut" ? t("placeNotDrawn", { place: label })
+      : reach === "afterCategories" ? t("placeAfterCategories", { place: label })
+        : label;
+  };
 }
 
 function AddMenuDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -134,16 +150,16 @@ function AddMenuDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   );
 }
 
-function MenusCard() {
+function MenusCard({ reach }: { reach: HeaderMenuReach }) {
   const t = useMessages(onlineStoreMessages);
-  const slotLabel = useSlotLabel();
+  const slotPlace = useSlotPlace();
   const { data: menus } = useSuspenseQuery(navigationMenusQueryOptions());
   const { data: placements } = useSuspenseQuery(navigationPlacementsQueryOptions());
   const locationsByMenu = new Map<string, string[]>();
   for (const slot of SLOTS) {
     const placement = findPlacement(placements, slot)?.placement;
     if (!placement?.isEnabled) continue;
-    locationsByMenu.set(placement.menuId, [...(locationsByMenu.get(placement.menuId) ?? []), slotLabel(slot)]);
+    locationsByMenu.set(placement.menuId, [...(locationsByMenu.get(placement.menuId) ?? []), slotPlace(slot, reach)]);
   }
 
   return (
@@ -182,8 +198,9 @@ function MenusCard() {
   );
 }
 
-function LocationsCard() {
+function LocationsCard({ reach }: { reach: HeaderMenuReach }) {
   const t = useMessages(onlineStoreMessages);
+  const canEditTheme = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const slotLabel = useSlotLabel();
   const queryClient = useQueryClient();
   const { data: menus } = useSuspenseQuery(navigationMenusQueryOptions());
@@ -239,19 +256,24 @@ function LocationsCard() {
       <div className="grid gap-4 sm:grid-cols-2">
         {SLOTS.map((slot) => {
           const key = slotKey(slot);
+          // The live header menu (saved, not a pending choice) and whether the theme draws it.
+          const headerNote = slot.surface === "header" && saved[key] && draft[key] === saved[key];
           return (
-            <Field key={key} id={`menu-location-${key}`} label={slotLabel(slot)}>
-              <SearchableSelect
-                id={`menu-location-${key}`}
-                value={draft[key] || "none"}
-                onValueChange={(menuId) => setDraft((current) => ({
-                  ...current,
-                  [key]: menuId === "none" ? "" : menuId,
-                }))}
-                options={menuOptions}
-                triggerClassName="w-full"
-              />
-            </Field>
+            <div key={key} className="flex flex-col gap-2">
+              <Field id={`menu-location-${key}`} label={slotLabel(slot)}>
+                <SearchableSelect
+                  id={`menu-location-${key}`}
+                  value={draft[key] || "none"}
+                  onValueChange={(menuId) => setDraft((current) => ({
+                    ...current,
+                    [key]: menuId === "none" ? "" : menuId,
+                  }))}
+                  options={menuOptions}
+                  triggerClassName="w-full"
+                />
+              </Field>
+              {headerNote ? <HeaderMenuNotice reach={reach} canSwitch={canEditTheme} /> : null}
+            </div>
           );
         })}
       </div>
@@ -262,6 +284,7 @@ function LocationsCard() {
 export function NavigationPage() {
   const t = useMessages(onlineStoreMessages);
   const [adding, setAdding] = useState(false);
+  const reach = useHeaderMenuReach();
   return (
     <SaveBarProvider savedMessage={t("navigationSaved")}>
       <OnlineStorePage
@@ -272,8 +295,8 @@ export function NavigationPage() {
           </Button>
         }
       >
-        <MenusCard />
-        <LocationsCard />
+        <MenusCard reach={reach} />
+        <LocationsCard reach={reach} />
       </OnlineStorePage>
       <AddMenuDialog open={adding} onOpenChange={setAdding} />
     </SaveBarProvider>

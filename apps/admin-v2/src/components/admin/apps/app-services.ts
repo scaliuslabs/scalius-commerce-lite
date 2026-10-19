@@ -84,16 +84,62 @@ export function serviceSettingKeys(app: Pick<AppDetail, "features" | "providers"
   return new Set([...app.features.flatMap((feature) => feature.settings), ...app.providers.flatMap(ownKeys)]);
 }
 
+/**
+ * How a running service is doing. "Ready" means it works: a payment method
+ * checkout offers, the SMS service notifications send through, and, for a
+ * provider with a connection test, one that passed with its current keys
+ * ("Set up (not tested)" until then). Set up but not used says why: hidden in
+ * Settings, Payments, a currency it cannot charge, or another SMS service.
+ */
 export type ServiceHealth =
   | { status: "ready" }
   | { status: "setup"; missing: number }
   | { status: "error"; error: string; at: string | null }
+  | { status: "testFailed"; error: string; at: string | null }
+  | { status: "hidden" }
+  | { status: "currency" }
+  | { status: "notChosen" }
+  | { status: "untested" }
   | null;
+
+export type ServiceHealthStatus = NonNullable<ServiceHealth>["status"];
+
+/** Each status's badge, and how urgent it is (lower first): not working, needs setup, set up but unused or untested, ready. */
+export const SERVICE_HEALTH: Readonly<Record<ServiceHealthStatus, { variant: "success" | "warning" | "attention" | "destructive" | "secondary"; rank: number }>> = {
+  error: { variant: "destructive", rank: 0 },
+  testFailed: { variant: "destructive", rank: 0 },
+  setup: { variant: "warning", rank: 1 },
+  currency: { variant: "warning", rank: 1 },
+  untested: { variant: "attention", rank: 2 },
+  hidden: { variant: "secondary", rank: 2 },
+  notChosen: { variant: "secondary", rank: 2 },
+  ready: { variant: "success", rank: 3 },
+};
+
+/** Whether the store uses a set-up provider, in `ServiceHealth` terms (null: it does). */
+export function unusedHealth(provider: Pick<Provider, "use">): ServiceHealth {
+  switch (provider.use) {
+    case "hidden": return { status: "hidden" };
+    case "currency": return { status: "currency" };
+    case "not_chosen": return { status: "notChosen" };
+    default: return null;
+  }
+}
+
+/** A set-up provider's connection test, in `ServiceHealth` terms (null: passed, or it offers none). */
+function connectionHealth(provider: Partial<Pick<Provider, "connection">>): ServiceHealth {
+  const { connection } = provider;
+  if (!connection) return null;
+  if (connection.status === "failed") return { status: "testFailed", error: connection.message ?? "", at: connection.testedAt };
+  return connection.status === "untested" ? { status: "untested" } : null;
+}
 
 /**
  * How a running row is doing, from what the app reports: a scheduled job of
  * its own that failed last time, else whether its providers have every
- * required setting. Null while off, and for a feature with nothing to check.
+ * required setting, a failed connection test, whether the store uses them
+ * (`use`), and whether a test passed. Null while off, and for a feature with
+ * nothing to check. Nothing here calls a provider: tests run on request.
  */
 export function serviceHealth(app: Pick<AppDetail, "providers" | "cron" | "settings">, item: ServiceItem): ServiceHealth {
   const on = item.kind === "provider" || item.feature.enabled;
@@ -104,7 +150,12 @@ export function serviceHealth(app: Pick<AppDetail, "providers" | "cron" | "setti
   const providers = item.kind === "feature" ? featureProviders(app, item.feature) : [item.provider];
   if (providers.length === 0) return null;
   const missing = providers.flatMap((provider) => provider.required).filter((key) => !providerConfigured(app, { required: [key] })).length;
-  return missing === 0 ? { status: "ready" } : { status: "setup", missing };
+  if (missing > 0) return { status: "setup", missing };
+  const connections = providers.map(connectionHealth);
+  return connections.find((health) => health?.status === "testFailed")
+    ?? providers.map(unusedHealth).find(Boolean)
+    ?? connections.find(Boolean)
+    ?? { status: "ready" };
 }
 
 /** The newest finished run of a feature's own jobs, for its "Last ran" line. */

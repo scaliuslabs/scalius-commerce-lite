@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CsvParseError, createCsvParser, csvCell, parseCsv, readCsvBlob, spreadsheetSafeText, toCsv } from "./csv";
-import { cleanImportCell, parseImportDecimal, parseImportInteger, splitImportList } from "./values";
+import { cleanImportCell, importNumberProblem, parseImportDecimal, parseImportInteger, splitImportList } from "./values";
 import { ImportFileError, parseImportText, readImportFile } from "./detect";
 import { readFixture } from "./fixtures/fixture";
 
@@ -116,6 +116,16 @@ describe("import cell values", () => {
     expect(parseImportDecimal("call us")).toEqual({ ok: false });
     expect(parseImportInteger("3.5")).toEqual({ ok: false });
     expect(parseImportInteger("১২")).toEqual({ ok: true, value: 12 });
+  });
+
+  it("tells a number below 0 from text that is not a number", () => {
+    expect(parseImportDecimal("-5")).toEqual({ ok: false, negative: true });
+    expect(parseImportDecimal("−1,250.50")).toEqual({ ok: false, negative: true });
+    expect(parseImportDecimal("-৳ 450")).toEqual({ ok: false, negative: true });
+    expect(parseImportDecimal("-0")).toEqual({ ok: true, value: 0 });
+    expect(parseImportDecimal("-call")).toEqual({ ok: false });
+    expect(importNumberProblem("Price", "-5", { ok: false, negative: true })).toBe('Price "-5" must be 0 or more.');
+    expect(importNumberProblem("Price", "call us", { ok: false })).toBe('Price "call us" is not a number.');
   });
 
   it("splits WooCommerce lists with escaped commas", () => {

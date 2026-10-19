@@ -10,9 +10,10 @@
 
 import { handleFromText } from "../handle";
 import { normalizeProductOptionIdentity } from "../product-options";
-import type { CsvTable } from "./values";
+import type { CsvTable, ParsedNumber } from "./values";
 import {
   ColumnIndex,
+  importNumberProblem,
   isScientificNotation,
   parseImportBoolean,
   parseImportDecimal,
@@ -88,11 +89,11 @@ function readAttributes(columns: ColumnIndex, row: Row): WooAttribute[] {
   return attributes;
 }
 
-function weightGrams(columns: ColumnIndex, row: Row): { ok: boolean; value: number | null } {
+function weightGrams(columns: ColumnIndex, row: Row): ParsedNumber {
   for (const [column, factor] of WEIGHT_COLUMNS) {
     if (!columns.has(column)) continue;
     const parsed = parseImportDecimal(columns.get(row.cells, column));
-    if (!parsed.ok) return { ok: false, value: null };
+    if (!parsed.ok) return parsed;
     if (parsed.value !== null) return { ok: true, value: Math.round(parsed.value * factor * 100) / 100 };
   }
   return { ok: true, value: null };
@@ -228,7 +229,8 @@ export function mapWooCommerceProducts(table: CsvTable, options: ProductMappingO
       const regular = parseImportDecimal(get("Regular price", at));
       const sale = parseImportDecimal(get("Sale price", at));
       if (!regular.ok || !sale.ok) {
-        context.error(at.line, "price_invalid", `Price "${get(regular.ok ? "Sale price" : "Regular price", at)}" is not a number.`, { subject: get("SKU", at) || ref, column: regular.ok ? "Sale price" : "Regular price" });
+        const column = regular.ok ? "Sale price" : "Regular price";
+        context.error(at.line, "price_invalid", importNumberProblem("Price", get(column, at), regular.ok ? sale : regular), { subject: get("SKU", at) || ref, column });
         return null;
       }
       if (regular.value === null && sale.value === null) {
@@ -272,7 +274,7 @@ export function mapWooCommerceProducts(table: CsvTable, options: ProductMappingO
       const stock = readStock(row);
       const weight = weightGrams(columns, row);
       const barcode = readBarcode(row);
-      if (!weight.ok) context.error(row.line, "weight_invalid", "Weight is not a number.", { subject: ref });
+      if (!weight.ok) context.error(row.line, "weight_invalid", !weight.ok && weight.negative ? "Weight must be 0 or more." : "Weight is not a number.", { subject: ref });
       if (sku.failed || !pricing || !stock || !weight.ok || barcode.failed) {
         context.failedProducts += 1;
         continue;
@@ -345,7 +347,7 @@ export function mapWooCommerceProducts(table: CsvTable, options: ProductMappingO
       const ownWeight = weightGrams(columns, variation);
       const weight = ownWeight.ok && ownWeight.value === null ? weightGrams(columns, row) : ownWeight;
       const barcode = readBarcode(variation);
-      if (!weight.ok) context.error(variation.line, "weight_invalid", "Weight is not a number.", { subject: get("SKU", variation) || ref });
+      if (!weight.ok) context.error(variation.line, "weight_invalid", !weight.ok && weight.negative ? "Weight must be 0 or more." : "Weight is not a number.", { subject: get("SKU", variation) || ref });
       if (sku.failed || !pricing || !stock || !weight.ok || barcode.failed) {
         failed = true;
         continue;

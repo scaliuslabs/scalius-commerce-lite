@@ -7,9 +7,13 @@
 // back with it); turning one off says what stops. Everything comes from the
 // API's description of the app; no app code runs here.
 import { useEffect, useState, type ReactNode } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { postApiV1AdminSettingsProvidersByIdTest } from "@scalius/api-client/sdk";
 import { Link } from "@tanstack/react-router";
 import { formatList } from "@scalius/shared/locale-words";
+import { apiData } from "~/lib/api";
+import { useProviderPortAccess } from "~/lib/provider-port-access";
+import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
 import { ListDate } from "~/components/admin/data-table/ListDate";
 import {
@@ -40,8 +44,10 @@ import {
   featureProviders,
   itemSettingKeys,
   lastJobRun,
+  SERVICE_HEALTH,
   serviceGroups,
   serviceHealth,
+  unusedHealth,
   type ServiceHealth,
   type ServiceItem,
 } from "./app-services";
@@ -50,7 +56,8 @@ import { AppIcon } from "./AppIcon";
 import { AppSettingControl, settingFieldId, type AppSettingsDraftApi } from "./AppSettingsForm";
 import { appPagePath } from "./ui/surfaces";
 
-const HEALTH_VARIANT = { ready: "success", setup: "warning", error: "destructive" } as const;
+/** Provider kinds the store uses as soon as they are on (`apps/api/src/plugins/provider-adoption.ts`). */
+const USED_WHEN_ON: ReadonlySet<string> = new Set(["payment", "sms"]);
 
 function isFunctionPoint(point: string): point is (typeof APP_FUNCTION_POINTS)[number] {
   return (APP_FUNCTION_POINTS as readonly string[]).includes(point);
@@ -214,7 +221,7 @@ export function DisableFeatureDialog({ app, feature, open, onOpenChange }: Featu
 export function HealthBadge({ health }: { health: ServiceHealth }) {
   const t = useMessages(appFeaturesMessages);
   if (!health) return null;
-  return <Badge variant={HEALTH_VARIANT[health.status]}>{t(`status_${health.status}`)}</Badge>;
+  return <Badge variant={SERVICE_HEALTH[health.status].variant}>{t(`status_${health.status}`)}</Badge>;
 }
 
 /**
@@ -235,13 +242,24 @@ export function RunningDetail({ app, item, form, canManage, health, inRow = true
   const keys = itemSettingKeys(app, item);
   const fields = app.settings.fields.filter((field) => keys.includes(field.key));
   const providers = item.kind === "feature" ? featureProviders(app, item.feature) : [item.provider];
-  const capabilities = [...new Map(providers.flatMap((provider) => (isAppProviderKind(provider.kind) ? [[provider.kind, PROVIDER_CAPABILITY[provider.kind]] as const] : []))).values()];
+  // Payment and SMS providers are used once they are on (checkout offers them; the
+  // first ready SMS service is chosen), so they link to Settings only when they are not.
+  const kinds = [...new Set(providers.map((provider) => provider.kind))].filter(isAppProviderKind).filter((kind) => !USED_WHEN_ON.has(kind));
   const pages = item.kind === "feature" ? app.admin.pages.filter((page) => item.feature.pages.includes(page.id)) : [];
   const lastRun = item.kind === "feature" ? lastJobRun(app, item.feature) : null;
   const active = app.status === "active";
+  // Set up but not used: why, and (for a hidden payment or another SMS service) where to change it.
+  const unusedStatus = health && health.status !== "setup" ? providers.map(unusedHealth).find(Boolean)?.status : undefined;
+  const unused = unusedStatus === "hidden" || unusedStatus === "currency" || unusedStatus === "notChosen" ? unusedStatus : null;
+  const tested = health && health.status !== "setup" ? providers.filter((provider) => provider.connection && provider.connection.status !== "none") : [];
+  const settingsLink = (kind: "payment" | "sms", text: string) => (
+    <Link key={`use:${kind}`} to={PROVIDER_CAPABILITY[kind].to} className="text-link hover:underline">{text}</Link>
+  );
   const links = [
-    ...capabilities.map((capability) => (
-      <Link key={capability.to} to={capability.to} className="text-link hover:underline">{t("chooseIn", { page: settingsPage(capability.page) })}</Link>
+    ...(unused === "hidden" ? [settingsLink("payment", t("showAtCheckout"))] : []),
+    ...(unused === "notChosen" ? [settingsLink("sms", t("chooseIn", { page: settingsPage(PROVIDER_CAPABILITY.sms.page) }))] : []),
+    ...kinds.map((kind) => (
+      <Link key={kind} to={PROVIDER_CAPABILITY[kind].to} className="text-link hover:underline">{t("chooseIn", { page: settingsPage(PROVIDER_CAPABILITY[kind].page) })}</Link>
     )),
     ...(active ? pages.map((page) => (
       <Link key={page.id} to={appPagePath(app.id, page.id)} className="text-link hover:underline">{t("openPage", { title: page.title })}</Link>
@@ -254,7 +272,9 @@ export function RunningDetail({ app, item, form, canManage, health, inRow = true
             {fields.map((field) => <AppSettingControl key={field.key} app={app} field={field} form={form} canManage={canManage} />)}
           </FieldGroup>
         ) : links.length === 0 ? <p className="text-body text-muted-foreground">{t("noSettings")}</p> : null}
+        {unused ? <p className="text-body text-muted-foreground">{t(`unusedHelp_${unused}`)}</p> : null}
         {links.length > 0 ? <div className="flex flex-col items-start gap-1 text-body">{links}</div> : null}
+        {tested.map((provider) => <ConnectionCheck key={provider.id} app={app} provider={provider} named={tested.length > 1} />)}
         {health?.status === "error" ? (
           <p className="text-body text-destructive wrap-anywhere">
             {t("failedRun")} <ListDate value={health.at} className="text-destructive" />{health.error ? `: ${health.error}` : null}
@@ -265,6 +285,50 @@ export function RunningDetail({ app, item, form, canManage, health, inRow = true
       </div>
   );
   return inRow ? <Inset className="mt-3 sm:ms-11">{body}</Inset> : body;
+}
+
+type AppProvider = AppDetail["providers"][number];
+
+/**
+ * A set-up provider's connection test: its last outcome with these settings
+ * and Test connection. It runs only when asked, never on page load; the
+ * outcome is kept (a saved key resets it), so the status reads it.
+ */
+function ConnectionCheck({ app, provider, named }: { app: AppDetail; provider: AppProvider; named: boolean }) {
+  const t = useMessages(appFeaturesMessages);
+  const queryClient = useQueryClient();
+  // Tested with whatever tests the port's built-in providers.
+  const { canManage } = useProviderPortAccess(provider.kind);
+  const test = useMutation({
+    mutationFn: () => apiData(postApiV1AdminSettingsProvidersByIdTest({ path: { id: provider.id } })),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.apps.detail(app.id) });
+    },
+  });
+  const { connection } = provider;
+  const prefix = named ? `${provider.name}: ` : "";
+  return (
+    <div className="flex flex-col items-start gap-2">
+      {connection.status === "passed" ? (
+        <p className="text-body text-muted-foreground">{prefix}{t("connectionPassed")} <ListDate value={connection.testedAt} /></p>
+      ) : connection.status === "failed" ? (
+        <p className="text-body text-destructive wrap-anywhere">
+          {prefix}{t("connectionFailed")} <ListDate value={connection.testedAt} className="text-destructive" />{connection.message ? `: ${connection.message}` : null}
+        </p>
+      ) : (
+        <p className="text-body text-muted-foreground">{prefix}{t("connectionUntested")}</p>
+      )}
+      {canManage ? (
+        <Button type="button" variant="outline" size="sm" loading={test.isPending} onClick={() => test.mutate()}>
+          {t(connection.status === "untested" ? "testConnection" : "testAgain")}
+        </Button>
+      ) : null}
+      <span role="status" className="sr-only">
+        {test.data ? test.data.message : test.isError ? t("testError") : ""}
+      </span>
+      {test.isError ? <p className="text-body text-destructive">{t("testError")}</p> : null}
+    </div>
+  );
 }
 
 function ServiceRow({ app, item, form, canManage, canTurnOn, focus, onToggle }: {

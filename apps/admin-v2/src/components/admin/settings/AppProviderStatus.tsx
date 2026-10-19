@@ -2,7 +2,7 @@
 // ones: its mark and "by <app>", the same readiness every send or lookup
 // checks, the link to its setup on its feature's page in the app (its own fields, kept
 // encrypted with the app), and the app's connection test.
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { postApiV1AdminSettingsProvidersByIdTest } from "@scalius/api-client/sdk";
 import { AppIcon } from "~/components/admin/apps/AppIcon";
 import { ProvidedByChip } from "~/components/admin/apps/ProvidedByChip";
@@ -19,6 +19,7 @@ import type { AppProvider } from "~/lib/api-query-options/settings-screens";
 import { useMessages } from "~/i18n";
 import { appProvidersMessages } from "~/i18n/settings-app-providers";
 import { providerLabel, providerSetupReason } from "~/i18n/provider-copy";
+import { queryKeys } from "~/lib/query-keys";
 
 export { ProvidedByChip };
 
@@ -46,14 +47,32 @@ export function AppProviderSetupButton({ provider, size = "default" }: { provide
   );
 }
 
+/**
+ * A provider's status in one word: "Ready" only when it can be used and, for
+ * one that offers a connection test, a test passed with its current keys.
+ * The outcome is stored when the merchant tests; nothing here calls it.
+ */
+export function appProviderState(provider: Pick<AppProvider, "readiness" | "connection">): "ready" | "untested" | "testFailed" | "notReady" {
+  if (!provider.readiness.usable) return "notReady";
+  if (provider.connection.status === "failed") return "testFailed";
+  return provider.connection.status === "untested" ? "untested" : "ready";
+}
+
+const STATE_VARIANT = { ready: "success", untested: "attention", testFailed: "destructive", notReady: "warning" } as const;
+const STATE_LABEL = { ready: "ready", untested: "untested", testFailed: "connectionFailed", notReady: "notReady" } as const;
+
 export function AppProviderStatus({ provider }: { provider: AppProvider }) {
   const t = useMessages(appProvidersMessages);
+  const queryClient = useQueryClient();
   // Tested with whatever tests the port's built-in providers.
   const { canManage } = useProviderPortAccess(provider.kind);
   const test = useMutation({
     mutationFn: () => apiData(postApiV1AdminSettingsProvidersByIdTest({ path: { id: provider.id } })),
+    // The outcome is kept: the list reads it back for the status.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.settings.appProviders(provider.kind) }),
   });
   const usable = provider.readiness.usable;
+  const state = appProviderState(provider);
   return (
     <div className="space-y-3">
       <div className="flex items-start gap-3">
@@ -61,7 +80,7 @@ export function AppProviderStatus({ provider }: { provider: AppProvider }) {
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-body font-medium">{providerLabel(provider.name)}</p>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={usable ? "success" : "warning"}>{usable ? t("ready") : t("notReady")}</Badge>
+            <Badge variant={STATE_VARIANT[state]}>{t(STATE_LABEL[state])}</Badge>
             <ProvidedByChip pluginId={provider.pluginId} appName={provider.appName} />
           </div>
         </div>
@@ -79,6 +98,10 @@ export function AppProviderStatus({ provider }: { provider: AppProvider }) {
         <p role="status" className={test.data.ok ? "text-body text-success" : "text-body text-destructive"}>{test.data.message}</p>
       ) : test.isError ? (
         <p role="status" className="text-body text-destructive">{t("testFailed")}</p>
+      ) : state === "untested" && provider.canTestConnection ? (
+        <p className="text-body text-muted-foreground">{t("untestedHelp")}</p>
+      ) : state === "testFailed" && provider.connection.message ? (
+        <p className="text-body text-destructive wrap-anywhere">{provider.connection.message}</p>
       ) : null}
     </div>
   );

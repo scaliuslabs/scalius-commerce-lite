@@ -177,7 +177,8 @@ export interface PresenceSlotProps {
 export function PresenceSlot(props: PresenceSlotProps) {
   if (!props.presenceKey) return null;
   return (
-    <div data-slot="presence-avatars" className="flex h-7 w-24 shrink-0 items-center">
+    // From sm the slot keeps its width, so arrivals never move the title; on phones it adds no box (PageHeader).
+    <div data-slot="presence-avatars" className="flex h-7 w-24 shrink-0 items-center max-sm:contents">
       <Suspense fallback={null}>
         <EditorPresenceView {...props} presenceKey={props.presenceKey} />
       </Suspense>

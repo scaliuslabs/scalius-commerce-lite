@@ -90,4 +90,23 @@ describe("tag input", () => {
     expect(latest).toEqual(["one"]);
     expect(container.textContent).toContain(t("tagLimit", { count: 1 }));
   });
+
+  it("keeps a tag too long to save in the field, and says its length and the saved form while typing", async () => {
+    await render([]);
+    const long = "Wholesale buyers from the Chittagong port area 2026 list"; // 56 characters
+    await type(long);
+    // Before it is added: how long it is against the limit.
+    expect(container.textContent).toContain(t("tagTooLongNow", { length: 56, count: 40 }));
+    expect(field().getAttribute("aria-invalid")).toBe("true");
+    await press("Enter");
+    // Not dropped: it stays to be shortened, with the reason.
+    expect(latest).toEqual([]);
+    expect(field().value).toBe(long);
+    expect(container.textContent).toContain(t("tagTooLong", { count: 40 }));
+
+    await type("VIP  Customers");
+    expect(container.textContent).toContain(t("tagSavedAs", { tag: "vip customers" }));
+    await press("Enter");
+    expect(latest).toEqual(["vip customers"]);
+  });
 });

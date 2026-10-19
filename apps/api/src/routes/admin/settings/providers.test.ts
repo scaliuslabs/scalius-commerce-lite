@@ -11,7 +11,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { activatePlugin, installPlugin, writePluginSettings } from "@scalius/core/modules/plugins";
+import { activatePlugin, installPlugin, requirePluginInstallation, writePluginSettings } from "@scalius/core/modules/plugins";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { errorResponseFromError } from "../../../utils/api-response";
 import { PLUGIN_TEST_CREDENTIAL_KEY, pluginTestCtx, pluginTestEnv } from "../../../plugins/testing/fixtures";
@@ -116,9 +116,22 @@ describe("app provider settings", () => {
       credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY,
     });
     await activatePlugin(db, WALLET_FIXTURE_ID, { actorUserId: "owner", expectedRevision: configured.revision });
-    expect((await list("payment"))[0]).toMatchObject({ readiness: { configured: true, enabled: true, usable: true } });
+    // Usable, but "Ready" waits for a passing test: listing never calls the provider.
+    expect((await list("payment"))[0]).toMatchObject({
+      readiness: { configured: true, enabled: true, usable: true },
+      connection: { status: "untested", testedAt: null, message: null },
+    });
     expect(await test()).toEqual({ ok: true, message: "Secret saved." });
+    expect((await list("payment"))[0]).toMatchObject({ connection: { status: "passed", testedAt: expect.any(String), message: null } });
     expect(await list("courier")).toEqual([]);
+
+    // New keys are not vouched for by a test of the old ones.
+    const installation = await requirePluginInstallation(db, WALLET_FIXTURE_ID);
+    await writePluginSettings(db, WALLET_FIXTURE_ID, { secret: `${WALLET_FIXTURE_SECRET}-2` }, {
+      expectedRevision: installation.revision,
+      credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY,
+    });
+    expect((await list("payment"))[0]).toMatchObject({ connection: { status: "untested" } });
   });
 
   it("answers to the port's built-in permissions, not to any settings permission", async () => {

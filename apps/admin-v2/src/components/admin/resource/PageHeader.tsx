@@ -54,8 +54,10 @@ export function PageHeader({ title, backTo, backLabel, backOnlyWithoutPanel = fa
         <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-2">
           <h1 data-slot="page-title" className="min-w-0 break-words text-heading-lg">{title}</h1>
           {status}
-          {/* Avatars are 28px on a 36px line: arrivals never change the header's height (W1). */}
-          {presence ? <div data-slot="presence" className="flex h-7 items-center empty:hidden">{presence}</div> : null}
+          {/* Avatars are 28px on a 36px line: arrivals never change the header's height (W1).
+              Phones reserve no box: a long title fills the line, and an empty reserved box
+              wrapped onto a line of its own, a gap between the title and the actions. */}
+          {presence ? <div data-slot="presence" className="flex h-7 items-center empty:hidden max-sm:contents">{presence}</div> : null}
         </div>
         {meta ? <p className="text-body text-muted-foreground">{meta}</p> : null}
       </div>

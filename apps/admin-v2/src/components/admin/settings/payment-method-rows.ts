@@ -38,6 +38,8 @@ export interface AppPaymentProvider {
     blockedReason?: string;
   };
   environment: "test" | "live" | "unknown";
+  /** Its last connection test with the current keys (none: it offers no test). */
+  connection?: { status: "none" | "untested" | "passed" | "failed"; testedAt: string | null; message: string | null };
 }
 
 export interface PaymentMethodRow {
@@ -51,6 +53,8 @@ export interface PaymentMethodRow {
   /** The provider's mark (else its app's icon), shown as the method's mark. */
   appIcon: string | null;
   canTestConnection: boolean;
+  /** An app provider's last connection test with the current keys; absent when unknown or not an app. */
+  connection?: AppPaymentProvider["connection"];
   chargeCurrencies: ChargeCurrencies;
   status: GatewayStatus | undefined;
 }
@@ -134,6 +138,7 @@ export function paymentMethodRows(input: {
       appName: provider?.appName ?? null,
       appIcon: provider?.icon ?? provider?.appIcon ?? null,
       canTestConnection: provider?.canTestConnection ?? false,
+      ...(provider?.connection ? { connection: provider.connection } : {}),
       chargeCurrencies: gateway?.chargeCurrencies ?? "any",
       // The checkout's own verdict (currency included) when the app is active.
       status: input.gatewayStatus[id] ?? (provider ? appProviderStatus(provider) : undefined),

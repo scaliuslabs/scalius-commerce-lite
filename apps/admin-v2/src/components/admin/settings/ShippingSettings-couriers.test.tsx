@@ -43,6 +43,7 @@ function appCourier(readiness: Record<string, unknown> = {}) {
     canTestConnection: true,
     readiness: { configured: true, enabled: true, usable: true, missingFields: [], credentialErrors: [], ...readiness },
     environment: "live",
+    connection: { status: "passed", testedAt: "2026-10-19T08:00:00.000Z", message: null },
   };
 }
 

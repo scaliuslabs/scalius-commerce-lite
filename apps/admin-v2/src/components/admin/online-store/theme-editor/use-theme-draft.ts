@@ -16,7 +16,7 @@ import {
   postApiV1AdminSettingsThemeRestore,
   postApiV1AdminSettingsThemeRestorePoint,
 } from "@scalius/api-client/sdk";
-import type { StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
+import { compareThemeDocuments, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 import { toast } from "~/lib/toast";
 import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
@@ -38,6 +38,33 @@ export const THEME_PRESENCE_KEY = presenceKey("theme", "draft");
 export const AUTOSAVE_DELAY_MS = 800;
 
 const same = (left: unknown, right: unknown) => left === right || JSON.stringify(left) === JSON.stringify(right);
+
+/**
+ * Edits autosave cannot send yet (a setting to fix holds its part back) are
+ * kept in this browser, so a reload does not lose them: they come back when
+ * the shared draft is still the revision they were made on. Anything else
+ * (another save, a discard, a restore) wins and the copy is dropped.
+ */
+const HELD_EDITS_KEY = "scalius.theme-editor.held-edits";
+
+function readHeldEdits(revision: number): Theme | null {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(HELD_EDITS_KEY) ?? "null") as { revision?: unknown; theme?: unknown } | null;
+    if (!stored || stored.revision !== revision || typeof stored.theme !== "object" || stored.theme === null) return null;
+    return stored.theme as Theme;
+  } catch {
+    return null;
+  }
+}
+
+function writeHeldEdits(value: { revision: number; theme: Theme } | null) {
+  try {
+    if (value) window.localStorage.setItem(HELD_EDITS_KEY, JSON.stringify(value));
+    else window.localStorage.removeItem(HELD_EDITS_KEY);
+  } catch {
+    // A private window or full storage: the edits stay in this tab only.
+  }
+}
 
 export interface SavedDraft {
   theme: Theme;
@@ -146,6 +173,22 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
     return () => window.clearTimeout(timer);
   }, [pending, canEdit, dirty, saving, conflict, failedHere, busy, urgent, save]);
 
+  // Edits a setting to fix held back before a reload come back, as one undoable edit.
+  const restoredHeld = useRef(false);
+  useEffect(() => {
+    if (restoredHeld.current || !canEdit) return;
+    restoredHeld.current = true;
+    const kept = readHeldEdits(workspace.draft.revision);
+    if (!kept || same(kept, workspace.draft.theme)) return;
+    dispatchHistory({ type: "edit", update: () => kept, at: Date.now() });
+    toast.info(t("heldRestored"));
+  }, [canEdit, workspace.draft.revision, workspace.draft.theme, t]);
+  // Keep the edits held back (not the ones autosave is about to send) until they can be saved.
+  useEffect(() => {
+    if (!canEdit || !restoredHeld.current) return;
+    writeHeldEdits(held.length > 0 && unsavedEdits ? { revision: saved.revision, theme: working } : null);
+  }, [canEdit, held.length, unsavedEdits, saved.revision, working]);
+
   // A store without a draft gets one, so the preview has a draft to render.
   useEffect(() => {
     if (canEdit && saved.revision === 0 && !saving && !conflict && !failure) void save();
@@ -237,8 +280,16 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
             : dirty ? "unsaved"
               : held.length > 0 ? "held"
                 : "saved";
-  /** The draft differs from what is live (saved or not). */
-  const differsFromLive = useMemo(() => unsavedEdits || (saved.revision > 0 && !same(saved.theme, published.theme)), [unsavedEdits, saved, published.theme]);
+  /**
+   * The draft differs from what is live (saved or not), by the same comparison
+   * the server and the publish summary use: the documents' meaning, never
+   * their key order (a store that never published reads the built-in default,
+   * whose keys are not in the order a saved draft reads back).
+   */
+  const differsFromLive = useMemo(
+    () => unsavedEdits || (saved.revision > 0 && compareThemeDocuments(published.theme, saved.theme).length > 0),
+    [unsavedEdits, saved, published.theme],
+  );
 
   return {
     history,

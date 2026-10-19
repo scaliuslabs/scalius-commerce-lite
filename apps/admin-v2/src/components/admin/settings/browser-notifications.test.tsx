@@ -69,6 +69,7 @@ function pushApp(configured: boolean) {
     canTestConnection: false,
     readiness: { configured, enabled: true, usable: configured, missingFields: configured ? [] : ["key"], credentialErrors: [] },
     environment: "unknown",
+    connection: { status: "none", testedAt: null, message: null },
   };
 }
 

@@ -27,7 +27,9 @@ function harness(settings: Record<string, string | number>, reply: (call: Call) 
 
 const json = (body: unknown, status = 200): Reply => ({ status, body: JSON.stringify(body) });
 
+// A live merchant: the API address starts on Pathao's sandbox, so live is set on purpose.
 const PATHAO = {
+  pathao_base_url: "https://api-hermes.pathao.com",
   pathao_client_id: "pathao-client-4821",
   pathao_client_secret: "pathao-secret-9417",
   pathao_username: "merchant@shop.test",

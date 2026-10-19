@@ -24,6 +24,17 @@ export async function getSystemKv(db: Database, key: string): Promise<string | n
   return row?.value ?? null;
 }
 
+/** Live rows for up to 90 keys in one read (D1 binds at most 100 values); a missing key is absent. */
+export async function getSystemKvMany(db: Database, keys: readonly string[]): Promise<Map<string, string>> {
+  const wanted = [...new Set(keys)];
+  if (wanted.length === 0) return new Map();
+  if (wanted.length > 90) throw new Error("getSystemKvMany reads at most 90 keys at a time.");
+  const rows = await db.select({ key: systemKv.key, value: systemKv.value }).from(systemKv)
+    .where(and(inArray(systemKv.key, wanted), live(nowSeconds())))
+    .all();
+  return new Map(rows.map((row) => [row.key, row.value]));
+}
+
 /** Writes the row; `expiresAt` is unix seconds (null: never). */
 export async function putSystemKv(
   db: Database,

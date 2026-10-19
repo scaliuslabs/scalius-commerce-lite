@@ -338,6 +338,7 @@ export function PaymentMethodsCard() {
   const common = useMessages(settingsMessages);
   const keyList = useKeyList();
   const canEdit = useCanEditPayments();
+  const queryClient = useQueryClient();
   // Flipping on a gateway that still needs keys opens its setup to finish it.
   const [turningOn, setTurningOn] = useState<MethodKey | null>(null);
   const pendingTurnOn = useRef<MethodKey | null>(null);
@@ -353,6 +354,8 @@ export function PaymentMethodsCard() {
     mutationFn: (id: string) => apiData(postApiV1AdminSettingsProvidersByIdTest({ path: { id } })),
     onSuccess: (result, id) => setTestResults((current) => ({ ...current, [id]: result })),
     onError: (error, id) => setTestResults((current) => ({ ...current, [id]: { ok: false, message: getServerFnError(error) } })),
+    // The outcome is kept: the providers list reads it back for each row.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: appPaymentProvidersQuery.queryKey }),
   });
   // The form validates its empty defaults before the first read too.
   const rowsFor = (draft: PaymentMethods) =>
@@ -466,6 +469,9 @@ export function PaymentMethodsCard() {
           : [
               needsKeys ? t("needsKeys", { fields: keyList(missingKeys) }) : t(outcome.state),
               method !== "cod" && environment === "test" ? t("testMode") : null,
+              // "Ready" needs a passing connection test where the app offers one; it never runs on load.
+              outcome.state === "visible" && row.connection?.status === "untested" ? t("notTested") : null,
+              outcome.state === "visible" && row.connection?.status === "failed" ? t("testFailed") : null,
               method !== "cod" && environment === "mixed" ? t("keyMismatch") : null,
             ].filter(Boolean).join(" · ");
     const position = values.enabledMethods.indexOf(method);

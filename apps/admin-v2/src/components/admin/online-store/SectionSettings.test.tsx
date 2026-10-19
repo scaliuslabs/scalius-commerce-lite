@@ -224,10 +224,15 @@ describe("section settings (generated from the registry)", () => {
     choose(field<HTMLButtonElement>("theme-section-hero-layout"), "Full screen banner");
     // Leaving the phone height unset is most of the first screen (70%).
     expect(field<HTMLButtonElement>("theme-section-hero-phoneHeight").textContent).toContain("Most of the first screen");
+    // The tiles hint belongs to its own choice: never beside "Same order as desktop".
+    const hint = "Needs a category tiles section on this page.";
+    expect(container.textContent).not.toContain(hint);
     choose(field<HTMLButtonElement>("theme-section-hero-phonePlacement"), "After category tiles");
     expect(settings()).toEqual({ layout: "full-screen", slides: [], phonePlacement: "after-categories" });
+    expect(container.textContent).toContain(hint);
     choose(field<HTMLButtonElement>("theme-section-hero-phonePlacement"), "Same order as desktop");
     expect(settings()).toEqual({ layout: "full-screen", slides: [] });
+    expect(container.textContent).not.toContain(hint);
     // Side promotions are blocks of the contained layout, never fields of the section's form.
     choose(field<HTMLButtonElement>("theme-section-hero-layout"), "Contained banner with side promos");
     expect(container.textContent).not.toContain("Add side promotion");

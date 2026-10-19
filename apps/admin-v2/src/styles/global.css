@@ -862,6 +862,13 @@ body.editor-fullscreen-active [data-slot="dialog-content"] {
   outline-offset: -2px;
 }
 
+/* Focus code moved to the page region (lib/page-focus.ts) draws no ring around
+   it: the rule above is unlayered, so the region's `outline-none` utility can't
+   win. Tab or Skip to content still ring the page. */
+[data-quiet-focus]:focus-visible {
+  outline: none;
+}
+
 /* A table control needs a hit area even when it contains only one short word.
    Utilities can still clamp names or lay out a phone card as a flex column. */
 @layer components {
