@@ -28,11 +28,16 @@ const ADMIN_BUSINESS_SETTINGS_PATH = "/api/v1/admin/settings/business";
 const INVALID_ADMIN_SESSION_COOKIE = "better-auth.session_token=release-check-invalid";
 const ADMIN_API_READ_TIMEOUT_CODE = "ADMIN_API_READ_TIMEOUT";
 
+/** The UCP release the storefront implements (apps/storefront/src/lib/ucp/catalog.ts). */
+export const UCP_EXPECTED_VERSION = "2026-08-25";
 const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
+/** The UCP MCP binding's tools: exactly these, all read-only. */
+const UCP_MCP_TOOLS = ["search_catalog", "lookup_catalog", "get_product"];
 const UCP_CATALOG_SEARCH_CAPABILITY = "dev.ucp.shopping.catalog.search";
 const UCP_CATALOG_LOOKUP_CAPABILITY = "dev.ucp.shopping.catalog.lookup";
 const UCP_FORBIDDEN_CAPABILITY_PATTERN = /\b(?:checkout|carts?|orders?|payments?|payment_handlers)\b/i;
-const UCP_AGENT_HEADER = 'profile="https://release-check.scalius.com/.well-known/ucp"';
+const UCP_AGENT_PROFILE = "https://release-check.scalius.com/.well-known/ucp";
+const UCP_AGENT_HEADER = `profile="${UCP_AGENT_PROFILE}"`;
 // The storefront always emits every section; only the static one must be non-empty.
 const SITEMAP_SECTION_ENDPOINTS = [
   { endpoint: "/sitemap-static.xml", label: "static pages sitemap", requireLoc: true },
@@ -1339,16 +1344,34 @@ function collectUcpCapabilityNames(profile) {
   return Object.keys(capabilities);
 }
 
-function readUcpShoppingService(profile) {
+function readUcpShoppingService(profile, transport = "rest") {
   const services = isRecord(profile?.ucp?.services) ? profile.ucp.services : null;
   const shoppingServices = Array.isArray(services?.[UCP_SHOPPING_SERVICE])
     ? services[UCP_SHOPPING_SERVICE]
     : [];
   return shoppingServices.find((service) =>
     isRecord(service) &&
-    service.transport === "rest" &&
+    service.transport === transport &&
     typeof service.endpoint === "string"
   ) ?? null;
+}
+
+function validateUcpEndpoint(endpoint, { label, storefrontOrigin, errors }) {
+  if (!endpoint) {
+    errors.push(`UCP profile must advertise a ${label} ${UCP_SHOPPING_SERVICE} service endpoint.`);
+  } else if (!isHttpUrl(endpoint)) {
+    errors.push(`UCP ${label} endpoint is not absolute http(s): ${endpoint}`);
+  } else if (storefrontOrigin && !isSameOrigin(endpoint, storefrontOrigin)) {
+    errors.push(`UCP ${label} endpoint is not on storefront origin: ${endpoint}`);
+  } else {
+    const endpointUrl = new URL(endpoint);
+    if (endpointUrl.pathname !== "/ucp" && !endpointUrl.pathname.startsWith("/ucp/")) {
+      errors.push(`UCP ${label} endpoint must be under /ucp: ${endpoint}`);
+    }
+    if (endpointUrl.pathname.endsWith("/") && endpointUrl.pathname !== "/") {
+      errors.push(`UCP ${label} endpoint should not have a trailing slash.`);
+    }
+  }
 }
 
 function firstUcpCapabilityDescriptor(profile, capability) {
@@ -1387,8 +1410,10 @@ function validateUcpDescriptor(
 export function evaluateUcpProfile(profile, { storefrontOrigin } = {}) {
   const errors = [];
   const version = typeof profile?.ucp?.version === "string" ? profile.ucp.version : null;
-  const service = readUcpShoppingService(profile);
+  const service = readUcpShoppingService(profile, "rest");
+  const mcpService = readUcpShoppingService(profile, "mcp");
   const endpoint = typeof service?.endpoint === "string" ? service.endpoint : null;
+  const mcpEndpoint = typeof mcpService?.endpoint === "string" ? mcpService.endpoint : null;
   const capabilities = collectUcpCapabilityNames(profile);
   const forbiddenCapabilities = capabilities.filter((name) =>
     UCP_FORBIDDEN_CAPABILITY_PATTERN.test(name)
@@ -1402,27 +1427,26 @@ export function evaluateUcpProfile(profile, { storefrontOrigin } = {}) {
   if (!isRecord(profile?.ucp)) {
     errors.push("UCP profile must include a ucp object.");
   }
-  if (hasOwnField(profile, "payment_handlers") || hasOwnField(profile?.ucp, "payment_handlers")) {
+  if (hasOwnField(profile, "payment_handlers")) {
     errors.push("UCP profile must not include a top-level payment_handlers field.");
+  }
+  // The 2026-08-25 business schema requires the registry; a catalog-only store keeps it empty.
+  const paymentHandlers = profile?.ucp?.payment_handlers;
+  if (!isRecord(paymentHandlers)) {
+    errors.push("UCP profile must include ucp.payment_handlers (an empty registry).");
+  } else if (Object.keys(paymentHandlers).length > 0) {
+    errors.push(`UCP profile must not advertise payment handlers: ${Object.keys(paymentHandlers).join(", ")}`);
+  }
+  if (hasOwnField(profile, "keys")) {
+    errors.push("UCP profile must not publish signing keys before signed requests exist.");
   }
   if (!version) {
     errors.push("UCP profile must include ucp.version.");
+  } else if (version !== UCP_EXPECTED_VERSION) {
+    errors.push(`UCP profile version must be ${UCP_EXPECTED_VERSION}: ${version}`);
   }
-  if (!endpoint) {
-    errors.push(`UCP profile must advertise a REST ${UCP_SHOPPING_SERVICE} service endpoint.`);
-  } else if (!isHttpUrl(endpoint)) {
-    errors.push(`UCP service endpoint is not absolute http(s): ${endpoint}`);
-  } else if (storefrontOrigin && !isSameOrigin(endpoint, storefrontOrigin)) {
-    errors.push(`UCP service endpoint is not on storefront origin: ${endpoint}`);
-  } else {
-    const endpointUrl = new URL(endpoint);
-    if (endpointUrl.pathname !== "/ucp" && !endpointUrl.pathname.startsWith("/ucp/")) {
-      errors.push(`UCP service endpoint must be under /ucp: ${endpoint}`);
-    }
-    if (endpointUrl.pathname.endsWith("/") && endpointUrl.pathname !== "/") {
-      errors.push("UCP service endpoint should not have a trailing slash.");
-    }
-  }
+  validateUcpEndpoint(endpoint, { label: "REST", storefrontOrigin, errors });
+  validateUcpEndpoint(mcpEndpoint, { label: "MCP", storefrontOrigin, errors });
 
   if (version && service) {
     validateUcpDescriptor(service, {
@@ -1430,6 +1454,15 @@ export function evaluateUcpProfile(profile, { storefrontOrigin } = {}) {
       version,
       spec: `https://ucp.dev/${version}/specification/overview`,
       schema: `https://ucp.dev/${version}/services/shopping/rest.openapi.json`,
+      errors,
+    });
+  }
+  if (version && mcpService) {
+    validateUcpDescriptor(mcpService, {
+      label: "UCP shopping MCP service",
+      version,
+      spec: `https://ucp.dev/${version}/specification/overview`,
+      schema: `https://ucp.dev/${version}/services/shopping/mcp.openrpc.json`,
       errors,
     });
   }
@@ -1442,8 +1475,8 @@ export function evaluateUcpProfile(profile, { storefrontOrigin } = {}) {
 
     if (version) {
       const suffix = capability === UCP_CATALOG_SEARCH_CAPABILITY
-        ? { spec: "catalog/search", schema: "catalog_search" }
-        : { spec: "catalog/lookup", schema: "catalog_lookup" };
+        ? { spec: "shopping/catalog/search", schema: "catalog_search" }
+        : { spec: "shopping/catalog/lookup", schema: "catalog_lookup" };
       validateUcpDescriptor(firstUcpCapabilityDescriptor(profile, capability), {
         label: capability,
         version,
@@ -1469,15 +1502,18 @@ export function evaluateUcpProfile(profile, { storefrontOrigin } = {}) {
     errors.push(`UCP profile must not advertise checkout/cart/order/payment capabilities: ${forbiddenCapabilities.join(", ")}`);
   }
 
+  // supported_versions maps older versions to their own leaf profiles, never the current one.
   const supportedVersions = isRecord(profile?.ucp?.supported_versions)
     ? profile.ucp.supported_versions
     : {};
-  const supportedProfileUrl = version ? supportedVersions[version] : null;
-  if (version && typeof supportedProfileUrl === "string") {
-    if (!isHttpUrl(supportedProfileUrl)) {
-      errors.push(`UCP supported version URL is not absolute http(s): ${supportedProfileUrl}`);
+  if (version && hasOwnField(supportedVersions, version)) {
+    errors.push(`UCP supported_versions must list only older versions, not ${version}.`);
+  }
+  for (const [supportedVersion, supportedProfileUrl] of Object.entries(supportedVersions)) {
+    if (typeof supportedProfileUrl !== "string" || !isHttpUrl(supportedProfileUrl)) {
+      errors.push(`UCP supported version ${supportedVersion} URL is not absolute http(s): ${supportedProfileUrl}`);
     } else if (storefrontOrigin && !isSameOrigin(supportedProfileUrl, storefrontOrigin)) {
-      errors.push(`UCP supported version URL is not on storefront origin: ${supportedProfileUrl}`);
+      errors.push(`UCP supported version ${supportedVersion} URL is not on storefront origin: ${supportedProfileUrl}`);
     }
   }
 
@@ -1486,8 +1522,39 @@ export function evaluateUcpProfile(profile, { storefrontOrigin } = {}) {
     errors,
     version,
     endpoint,
+    mcpEndpoint,
     capabilities,
   };
+}
+
+/**
+ * The UCP MCP binding's tools/list: exactly the three catalog tools, each
+ * read-only, taking the UCP meta and catalog arguments.
+ */
+export function evaluateUcpMcpTools(payload) {
+  const errors = [];
+  const tools = Array.isArray(payload?.result?.tools) ? payload.result.tools : null;
+  if (!tools) {
+    errors.push(payload?.error
+      ? `UCP MCP tools/list failed: ${payload.error.code} ${payload.error.message}`
+      : "UCP MCP tools/list must return result.tools.");
+    return { ok: false, errors, tools: [] };
+  }
+  const names = tools.map((tool) => (isRecord(tool) ? tool.name : null));
+  if (JSON.stringify(names) !== JSON.stringify(UCP_MCP_TOOLS)) {
+    errors.push(`UCP MCP tools must be exactly ${UCP_MCP_TOOLS.join(", ")}: ${names.join(", ")}`);
+  }
+  for (const tool of tools) {
+    if (!isRecord(tool)) continue;
+    if (tool.annotations?.readOnlyHint !== true || tool.annotations?.destructiveHint !== false) {
+      errors.push(`UCP MCP tool ${tool.name} must be annotated read-only and non-destructive.`);
+    }
+    const required = Array.isArray(tool.inputSchema?.required) ? tool.inputSchema.required : [];
+    if (!required.includes("meta") || !required.includes("catalog")) {
+      errors.push(`UCP MCP tool ${tool.name} must take the UCP meta and catalog arguments.`);
+    }
+  }
+  return { ok: errors.length === 0, errors, tools: names };
 }
 
 function productSearchQueryFromUrl(productUrl, storefrontOrigin) {
@@ -2242,6 +2309,7 @@ export async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger
   }
   const requiredLlmsFacts = [
     profileUrl,
+    profileEvaluation.mcpEndpoint,
     UCP_CATALOG_SEARCH_CAPABILITY,
     UCP_CATALOG_LOOKUP_CAPABILITY,
     "UCP-Agent:",
@@ -2268,8 +2336,35 @@ export async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger
       cacheControl: profileCache.cacheControl,
       version: profileEvaluation.version,
       endpoint: profileEvaluation.endpoint,
+      mcpEndpoint: profileEvaluation.mcpEndpoint,
       capabilities: profileEvaluation.capabilities,
     },
+  };
+
+  // The MCP binding: exactly the three read-only catalog tools.
+  const mcpRequest = (id, method, params) => fetchJson(profileEvaluation.mcpEndpoint, {
+    fetchImpl,
+    timeoutMs: options.timeoutMs,
+    method: "POST",
+    headers: {
+      Accept: "application/json, text/event-stream",
+      "MCP-Protocol-Version": "2025-11-25",
+      "Mcp-Method": method,
+      ...(params?.name ? { "Mcp-Name": params.name } : {}),
+    },
+    body: { jsonrpc: "2.0", id, method, ...(params ? { params } : {}) },
+  });
+  const toolsResponse = await mcpRequest(1, "tools/list");
+  requireStatus(toolsResponse, "UCP MCP tools/list", (status) => status >= 200 && status < 300);
+  const toolsEvaluation = evaluateUcpMcpTools(requireJsonResponse(toolsResponse, "UCP MCP tools/list"));
+  if (!toolsEvaluation.ok) {
+    throw new Error(`UCP MCP binding failed: ${toolsEvaluation.errors.join("; ")}`);
+  }
+  result.mcp = {
+    url: redactUrl(profileEvaluation.mcpEndpoint),
+    statusCode: toolsResponse.statusCode,
+    durationMs: toolsResponse.durationMs,
+    tools: toolsEvaluation.tools,
   };
 
   const searchQuery = productSearchQueryFromUrl(productUrl, storefrontOrigin);
@@ -2279,11 +2374,16 @@ export async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger
       status: "skipped",
       reason: "No safe product candidate from discovery for read-only UCP catalog search/lookup.",
     };
-    logger?.log("PASS UCP discovery: HTTPS profile advertises catalog search/lookup only.");
+    logger?.log("PASS UCP discovery: HTTPS profile advertises catalog search/lookup only, over REST and MCP.");
     return result;
   }
 
   const serviceEndpoint = profileEvaluation.endpoint.replace(/\/+$/, "");
+  const searchBody = {
+    ...(profileEvaluation.version ? { ucp: { version: profileEvaluation.version } } : {}),
+    query: searchQuery,
+    pagination: { limit: 5 },
+  };
   const searchResponse = await fetchJson(`${serviceEndpoint}/catalog/search`, {
     fetchImpl,
     timeoutMs: options.timeoutMs,
@@ -2291,16 +2391,30 @@ export async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger
     headers: {
       "UCP-Agent": UCP_AGENT_HEADER,
     },
-    body: {
-      ...(profileEvaluation.version ? { ucp: { version: profileEvaluation.version } } : {}),
-      query: searchQuery,
-      pagination: { limit: 5 },
-    },
+    body: searchBody,
   });
   requireStatus(searchResponse, "UCP catalog search", (status) => status >= 200 && status < 300);
   const searchPayload = requireJsonResponse(searchResponse, "UCP catalog search");
   const searchedProducts = Array.isArray(searchPayload?.products) ? searchPayload.products.length : 0;
   const searchCandidate = firstUcpSearchCandidate(searchPayload);
+
+  // search_catalog answers with the REST products, byte for byte.
+  const mcpSearchResponse = await mcpRequest(2, "tools/call", {
+    name: "search_catalog",
+    arguments: { meta: { "ucp-agent": { profile: UCP_AGENT_PROFILE } }, catalog: searchBody },
+  });
+  requireStatus(mcpSearchResponse, "UCP MCP search_catalog", (status) => status >= 200 && status < 300);
+  const mcpSearchPayload = requireJsonResponse(mcpSearchResponse, "UCP MCP search_catalog");
+  const mcpProducts = mcpSearchPayload?.result?.structuredContent?.products;
+  if (!Array.isArray(mcpProducts) || JSON.stringify(mcpProducts) !== JSON.stringify(searchPayload?.products ?? [])) {
+    throw new Error("UCP MCP search_catalog products differ from the REST catalog search products.");
+  }
+  result.mcp.search = {
+    statusCode: mcpSearchResponse.statusCode,
+    durationMs: mcpSearchResponse.durationMs,
+    productCount: mcpProducts.length,
+    matchesRest: true,
+  };
 
   result.catalog = {
     search: {
@@ -2317,7 +2431,7 @@ export async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger
     result.catalog.lookup = { status: "skipped", reason };
     result.catalog.product = { status: "skipped", reason };
     logger?.warn(`WARN UCP catalog: lookup/product skipped because ${reason.toLowerCase()}`);
-    logger?.log("PASS UCP discovery: HTTPS profile plus catalog search; catalog is empty for this candidate.");
+    logger?.log("PASS UCP discovery: HTTPS profile plus catalog search (REST and MCP); catalog is empty for this candidate.");
     return result;
   }
 
@@ -2379,7 +2493,7 @@ export async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger
   };
 
   logger?.log(
-    `PASS UCP discovery: HTTPS profile plus catalog search/lookup/product for ${candidate.id}.`,
+    `PASS UCP discovery: HTTPS profile plus catalog search/lookup/product for ${candidate.id}; MCP search_catalog matches REST.`,
   );
   return result;
 }
