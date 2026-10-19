@@ -177,26 +177,6 @@ export function storefrontThemeDocumentJsonSchema(): Record<string, unknown> {
   return z.toJSONSchema(storefrontThemeDocumentSchema, { unrepresentable: "any" }) as Record<string, unknown>;
 }
 
-/**
- * Parses a stored document strictly. Returns null for invalid documents (any
- * other version included); callers decide what that means (the dashboard
- * fails closed, the storefront renders the default theme).
- */
-export function parseStoredStorefrontThemeDocument(value: string | null | undefined): StorefrontThemeDocument | null {
-  if (!value) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    return null;
-  }
-  try {
-    return storefrontThemeDocumentSchema.parse(parsed);
-  } catch {
-    return null;
-  }
-}
-
 /** CSS custom properties for a document: only constants and validated hex colours. */
 export function buildStorefrontThemeTokens(document: Pick<StorefrontThemeDocument, "tokens">): Record<string, string> {
   return buildStorefrontTokenCss(document.tokens);

@@ -93,7 +93,7 @@ The page reads every image, product list and picked product its component sectio
 
 A section, block value, skin or app placement may store `bindings` beside its literal settings. Each setting path maps to `{ source }`, for example `heading: { source: "resource.title" }` or `subtitle: { source: "object.custom.testimonials.featured.quote" }`. Sources cover resource title/description/image/URL, `resource.cf.<namespace>.<key>`, a published object field, or an object list. The literal value remains the fallback when a source is absent or incompatible. The builder's Connect picker writes this same contract.
 
-Theme writes validate target paths and source types; stored documents parse only the current version. Objects resolve in the API's existing section read wave, with a bounded number of distinct types and `obj:<typeId>` dependency proofs. Public object rows must be published in a storefront-visible type. Unused sources add no database reads.
+Theme writes validate target paths and source types; stored documents of an older version read through the upgrade chain (`packages/shared/src/storefront-theme.md`, Compatibility). Objects resolve in the API's existing section read wave, with a bounded number of distinct types and `obj:<typeId>` dependency proofs. Public object rows must be published in a storefront-visible type. Unused sources add no database reads.
 
 A component section may declare `reads: [{ object, where?, limit }]`. The host validates the declared type, visibility and indexed filter, resolves any setting-backed filter from the placement, and supplies the result as `objects` in its section props. An app cannot use this declaration to read private records or another app's namespace. Noor's testimonials exercise the Objects path.
 
@@ -344,7 +344,7 @@ The merchant owns their apps (private or uploaded). The platform makes what an a
 
 ## Stored themes
 
-The document keeps skins under `apps.skins` (`header`, `footer`, `product-card`, `product-main`, `listing-main`) and a core section's own `skin`. The old `apps.header`, `apps.footer` and `apps.productCard` keys no longer parse: a stored theme that still has them reads as invalid (the storefront draws the default theme, the dashboard fails closed) until a data migration moves or resets them.
+The document keeps skins under `apps.skins` (`header`, `footer`, `product-card`, `product-main`, `listing-main`) and a core section's own `skin`. Stored themes are never reset: a shape change ships an upgrade step (`packages/shared/src/storefront-theme.md`, Compatibility).
 
 ## Versioning
 
