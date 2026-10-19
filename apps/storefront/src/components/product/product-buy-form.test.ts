@@ -61,7 +61,11 @@ describe("product page purchase aids", () => {
 
   it("mounts the buy bars and anchor bars only from the product's resolved sticky choices", () => {
     expect(page).toContain("const sticky = resolvedTheme.blocks.product.sticky;");
-    expect(page).toContain('<StickyBuyBar productName={product.name} phone={sticky.phoneBottom === "buy-bar"} desktop={sticky.desktop === "product-bar"} />');
+    expect(page).toContain('phone={sticky.phoneBottom === "buy-bar"}');
+    expect(page).toContain('desktop={sticky.desktop === "product-bar"}');
+    // The bar's words and price are the page's own (the store's language), before any script.
+    expect(page).toContain("{ label: productPageCopy.addToCartText, disabled: false }");
+    expect(page).toContain("price={formatMoney(buyerDisplayedPrice, { code: currencyCode, symbol: currencySymbol })}");
     expect(page).toContain('phone={sticky.phoneTop === "anchor-bar"}');
     expect(page).toContain('desktop={sticky.desktop === "anchor-bar"}');
     expect(page).not.toMatch(/^\s*<StickyBuyBar productName=\{product\.name\} \/>/m);

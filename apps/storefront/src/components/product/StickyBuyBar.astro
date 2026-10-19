@@ -7,13 +7,17 @@
 // rules stay in one place. One bar serves both screens.
 interface Props {
   productName: string;
+  /** The buy button's words and state as the page renders them (the store's language), kept current by the script. */
+  action: { label: string; disabled: boolean };
+  /** The price as the page shows it. */
+  price: string;
   /** Pinned to the bottom on phones and tablets (below 64rem). */
   phone?: boolean;
   /** Pinned under the header on computers (from 64rem). */
   desktop?: boolean;
 }
 
-const { productName, phone = true, desktop = false } = Astro.props;
+const { productName, action, price, phone = true, desktop = false } = Astro.props;
 const screens = phone && desktop ? "all" : desktop ? "desktop" : "phone";
 ---
 
@@ -36,14 +40,15 @@ const screens = phone && desktop ? "all" : desktop ? "desktop" : "phone";
     <div class="mx-auto flex max-w-7xl items-center gap-3">
       <div class="min-w-0 flex-1">
         <p class:list={["truncate text-sm text-muted-foreground", desktop && "lg:text-base lg:font-semibold lg:text-foreground"]}>{productName}</p>
-        <p data-sticky-buy-price class="text-base font-semibold text-foreground"></p>
+        <p data-sticky-buy-price class="text-base font-semibold text-foreground">{price}</p>
       </div>
       <button
         type="button"
         data-sticky-buy-action
         class="flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
+        disabled={action.disabled}
       >
-        Add to cart
+        {action.label}
       </button>
     </div>
   </div>

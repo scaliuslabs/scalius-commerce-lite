@@ -849,7 +849,15 @@ const productCategoryAnalytics = productCategory
       </Fragment>
     )}
 
-    <StickyBuyBar productName={product.name} phone={sticky.phoneBottom === "buy-bar"} desktop={sticky.desktop === "product-bar"} />
+    <StickyBuyBar
+      productName={product.name}
+      action={buyerStockSummary.canPurchaseAny && product.customizationUnavailable !== true
+        ? { label: productPageCopy.addToCartText, disabled: false }
+        : { label: productPageCopy.unavailableText, disabled: true }}
+      price={formatMoney(buyerDisplayedPrice, { code: currencyCode, symbol: currencySymbol })}
+      phone={sticky.phoneBottom === "buy-bar"}
+      desktop={sticky.desktop === "product-bar"}
+    />
 
     <ProductSectionNav
       detailsId={detailAnchorId}
