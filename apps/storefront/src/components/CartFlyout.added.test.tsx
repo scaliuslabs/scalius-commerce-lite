@@ -77,6 +77,36 @@ describe("cart drawer after an add", () => {
     expect(dialog().textContent).toContain("Subtotal");
   });
 
+  it("adds only what is left when the buyer asked for more, and says so instead of an error", async () => {
+    const mug = { id: "mug", slug: "mug", name: "Mug", price: 499, variantId: "var_mug", quantity: 41 };
+    await addToCart(mug);
+    const mugKey = await cartLineKeyFor(mug);
+    vi.mocked(fetch).mockImplementation(async (_input, init) => {
+      const lines = JSON.parse(String(init?.body)).items as Array<{ cartKey: string; quantity: number }>;
+      const asked = lines.find((line) => line.cartKey === mugKey)?.quantity ?? 0;
+      return new Response(JSON.stringify({
+        data: {
+          issues: asked > 40
+            ? [{ index: 0, cartKey: mugKey, productId: "mug", variantId: "var_mug", code: "QUANTITY_UNAVAILABLE", action: "reduce_quantity",
+                message: "Only 40 left for Mug.", productName: "Mug", variantLabel: null, requestedQuantity: asked, availableQuantity: 40 }]
+            : [],
+        },
+      }), { status: 200 });
+    });
+    await act(async () => root.render(<CartFlyout />));
+    await dispatchOpenCart({ addedLineKey: mugKey });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+
+    const { cartStore } = await import("@/store/cart");
+    expect(cartStore.get().items[mugKey]?.quantity).toBe(40);
+    expect(dialog().querySelector("[data-cart-added-text]")?.textContent).toBe("Added 40 (all that's left)");
+    expect(dialog().textContent).not.toContain("Added to your cart");
+    // The capped line is buyable: no error stays on it.
+    expect(dialog().textContent).not.toContain("Only 40 left");
+  });
+
   it("shows the plain cart, with no confirmation, for a bare open-cart", async () => {
     await mount();
     await dispatchOpenCart();
