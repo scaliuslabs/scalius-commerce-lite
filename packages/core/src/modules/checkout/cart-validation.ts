@@ -4,6 +4,7 @@ import { products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
+import { isLineAmountInRange } from "@scalius/shared/order-limits";
 import { mapCustomizationPrices, NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
 import { isForeignPresentment, presentShopMinor, shopPresentment, type PresentmentMoney } from "@scalius/shared/presentment";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
@@ -779,6 +780,18 @@ export function resolveStorefrontCartValidationFromRows(
                 variantLabel: requestedVariantLabel,
                 submittedPrice: item.price,
                 currentPrice: fromMinor(unitPriceMinor, decimalPlaces),
+            });
+            return;
+        }
+
+        // A line's amount must stay exact money (a wholesale quantity of an expensive item).
+        if (!isLineAmountInRange(unitPriceMinor, item.quantity)) {
+            addIssue(issues, item, index, {
+                code: "QUANTITY_UNAVAILABLE",
+                action: "reduce_quantity",
+                message: `That many of ${displayName} is more than one order can hold.`,
+                productName: product.name,
+                variantLabel: requestedVariantLabel,
             });
             return;
         }

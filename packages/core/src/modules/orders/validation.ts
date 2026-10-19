@@ -9,8 +9,10 @@ import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
 import { ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import { ADDRESS_FIELD_MAX_LENGTH, usesDeliveryHierarchy } from "@scalius/shared/address";
+import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 
-export const MAX_ORDER_LINE_ITEMS = 99;
+/** The one order line limit (`@scalius/shared/order-limits`). */
+export const MAX_ORDER_LINE_ITEMS = MAX_ORDER_LINES;
 
 const addressText = (max: number) => z.string().trim().max(max).nullable().optional();
 
@@ -107,7 +109,7 @@ const sellableOrderItemSchema = z.object({
         .number()
         .int("Quantity must be a whole number")
         .min(1, "Quantity must be at least 1")
-        .max(99, "Quantity must be at most 99"),
+        .max(MAX_LINE_QUANTITY, `Quantity must be at most ${MAX_LINE_QUANTITY}`),
     /** Buyer inputs the product asks for; priced from its schema. */
     properties: orderLinePropertiesInputSchema.optional(),
 });

@@ -6,6 +6,7 @@
 // order and stop early before a page passes the response budget, so a sync
 // walks every change once without offsets or counts.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Context, MiddlewareHandler } from "hono";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import { customerTagLinks, customers, orders, productVariants, products } from "@scalius/database/schema";
@@ -248,8 +249,8 @@ const fulfillmentCreateBody = z.object({
   }),
   lines: z.array(z.object({
     orderItemId: z.string().min(1).max(180),
-    quantity: z.number().int().min(1).max(99),
-  })).min(1).max(99).optional().openapi({ description: "Which units to hand over; part of a line is fine. Omit for every unit of this kind not handed over yet." }),
+    quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
+  })).min(1).max(MAX_ORDER_LINES).optional().openapi({ description: "Which units to hand over; part of a line is fine. Omit for every unit of this kind not handed over yet." }),
   tracking: z.object({
     courierName: z.string().trim().max(120).optional(),
     trackingId: z.string().trim().max(180).optional(),

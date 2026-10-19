@@ -15,7 +15,8 @@
 import currency from "currency.js";
 import { currencyExponent, isWholeUnitIncrement } from "./currency-policy";
 
-const MAX_MINOR_AMOUNT = 9_000_000_000_000;
+/** The largest amount (minor units) money is stored and computed in. */
+export const MAX_MINOR_AMOUNT = 9_000_000_000_000;
 
 function assertDecimalPlaces(decimalPlaces: number): void {
   if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 3) {

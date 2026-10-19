@@ -5904,7 +5904,7 @@
                 "quantity": {
                   "type": "integer",
                   "minimum": 1,
-                  "maximum": 99
+                  "maximum": 1000000
                 }
               },
               "required": [
@@ -29063,7 +29063,7 @@
                   "quantity": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 99
+                    "maximum": 1000000
                   }
                 },
                 "required": [
@@ -29227,7 +29227,7 @@
                   "quantity": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 99
+                    "maximum": 1000000
                   }
                 },
                 "required": [
@@ -30372,7 +30372,7 @@
                               "quantity": {
                                 "type": "integer",
                                 "minimum": 1,
-                                "maximum": 99
+                                "maximum": 1000000
                               },
                               "unitPrice": {
                                 "type": "number",
@@ -66235,7 +66235,7 @@
                         "quantity": {
                           "type": "integer",
                           "minimum": 1,
-                          "maximum": 99
+                          "maximum": 1000000
                         },
                         "price": {
                           "type": "number",
@@ -67435,7 +67435,7 @@
                         "quantity": {
                           "type": "integer",
                           "minimum": 1,
-                          "maximum": 99
+                          "maximum": 1000000
                         },
                         "productName": {
                           "type": "string",
@@ -69095,7 +69095,7 @@
                         "quantity": {
                           "type": "integer",
                           "minimum": 1,
-                          "maximum": 99
+                          "maximum": 1000000
                         },
                         "price": {
                           "type": "number",
@@ -69140,7 +69140,8 @@
                         "price"
                       ]
                     },
-                    "minItems": 1
+                    "minItems": 1,
+                    "maxItems": 99
                   },
                   "discountCodes": {
                     "type": "array",
@@ -75829,7 +75830,7 @@
                         "quantity": {
                           "type": "integer",
                           "minimum": 1,
-                          "maximum": 99
+                          "maximum": 1000000
                         }
                       },
                       "required": [
@@ -168000,7 +168001,7 @@
                         "quantity": {
                           "type": "integer",
                           "minimum": 1,
-                          "maximum": 99
+                          "maximum": 1000000
                         },
                         "properties": {
                           "type": "array",
@@ -169769,7 +169770,7 @@
                         "quantity": {
                           "type": "integer",
                           "minimum": 1,
-                          "maximum": 99
+                          "maximum": 1000000
                         },
                         "properties": {
                           "type": "array",
@@ -170276,7 +170277,7 @@
                         "quantity": {
                           "type": "integer",
                           "minimum": 1,
-                          "maximum": 99
+                          "maximum": 1000000
                         },
                         "properties": {
                           "type": "array",
@@ -170802,7 +170803,7 @@
                         "quantity": {
                           "type": "integer",
                           "minimum": 1,
-                          "maximum": 99
+                          "maximum": 1000000
                         },
                         "properties": {
                           "type": "array",
@@ -177702,7 +177703,7 @@
                         "quantity": {
                           "type": "integer",
                           "minimum": 1,
-                          "maximum": 99
+                          "maximum": 1000000
                         }
                       },
                       "required": [
@@ -208807,7 +208808,7 @@
                   "quantity": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 99,
+                    "maximum": 1000000,
                     "default": 1
                   },
                   "taxClassId": {

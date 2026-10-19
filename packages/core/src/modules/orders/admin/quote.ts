@@ -19,6 +19,7 @@ import {
     serializeOrderLineProperties,
 } from "@scalius/shared/line-properties";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
+import { isLineAmountInRange } from "@scalius/shared/order-limits";
 import type { QuoteManualOrderInput } from "../validation";
 import {
     checkoutListPricesSql,
@@ -466,6 +467,12 @@ export async function prepareManualOrderQuote(
         ...lineProperties[index]!,
         fulfillmentType: plan.lineTypes[index]!,
     }));
+    const outOfRange = trackedItems.findIndex((item) => !isLineAmountInRange(item.unitPriceMinor, item.quantity));
+    if (outOfRange >= 0) {
+        throw new ValidationError("That line comes to more than one order can hold. Lower its quantity.", {
+            issues: [{ index: outOfRange, code: "QUANTITY_UNAVAILABLE" }],
+        });
+    }
     const money = calculateManualOrderMoney(
         trackedItems,
         toStoreMinor(data.shippingCharge, currency),

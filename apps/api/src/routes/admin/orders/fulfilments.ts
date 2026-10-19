@@ -3,6 +3,7 @@
 // done, void a fulfilment whose parcel came back, and mark a pickup order
 // ready to collect. Courier bookings stay on POST /{id}/shipments.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Context } from "hono";
 import { MANUAL_FULFILLMENT_TYPES } from "@scalius/shared/fulfilment";
 import {
@@ -39,8 +40,8 @@ const requestKeySchema = z.string().uuid().openapi({
 
 const fulfilmentLinesInputSchema = z.array(z.object({
     itemId: z.string().min(1).max(180),
-    quantity: z.number().int().min(1).max(99),
-})).min(1).max(99).optional().openapi({
+    quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
+})).min(1).max(MAX_ORDER_LINES).optional().openapi({
     description: "Which units to hand over; part of a line is fine. Omit for every unit of this kind not handed over yet.",
 });
 

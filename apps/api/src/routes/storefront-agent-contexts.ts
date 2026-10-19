@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import {
   closeAgentStorefrontContext,
   createAgentStorefrontContinuation,
@@ -61,7 +62,7 @@ const contextIdSchema = z.string().regex(/^asc_[A-Za-z0-9_-]{20}$/);
 const continuationIdSchema = z.string().regex(/^acn_[A-Za-z0-9_-]{20}$/);
 const variantIdSchema = z.string().trim().min(1).max(180).refine((value) => value !== "default");
 const revisionSchema = z.number().int().min(1);
-const quantitySchema = z.number().int().min(1).max(99);
+const quantitySchema = z.number().int().min(1).max(MAX_LINE_QUANTITY);
 const checkoutIdempotencyKeySchema = z.string()
   .trim()
   .min(16)
@@ -82,7 +83,7 @@ const contextSchema = z.object({
   id: contextIdSchema,
   status: z.enum(["active", "closed", "expired", "revoked"]),
   revision: revisionSchema,
-  cart: z.array(cartLineSchema).max(99),
+  cart: z.array(cartLineSchema).max(MAX_ORDER_LINES),
   discountCode: z.string().nullable(),
   delivery: z.object({
     countryCode: z.string().length(2).openapi({ description: "The delivery country (BD unless another was set)." }),
@@ -197,7 +198,7 @@ const checkoutQuoteSchema = z.object({
     unitPrice: z.number().nonnegative(),
     productName: z.string(),
     variantLabel: z.string().nullable(),
-  })).max(99),
+  })).max(MAX_ORDER_LINES),
   appDiscounts: z.array(z.object({
     appId: z.string(),
     title: z.string(),

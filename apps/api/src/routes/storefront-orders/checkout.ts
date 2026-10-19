@@ -1,4 +1,5 @@
 import { checkoutAttributesSchema, readCheckoutAttributes } from "@scalius/shared/plugins";
+import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 // Checkout: the idempotent storefront order commit.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
@@ -278,14 +279,14 @@ const createOrderSchema = z.object({
       cartKey: z.string().min(1).max(256).optional().nullable(),
       productId: z.string().min(1, "Product is required"),
       variantId: persistedStorefrontVariantIdSchema,
-      quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(99, "Quantity must be at most 99"),
+      quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(MAX_LINE_QUANTITY, `Quantity must be at most ${MAX_LINE_QUANTITY}`),
       /** The unit price the buyer saw: base plus the surcharges of its buyer inputs. */
       price: z.number().min(0, "Price must be greater than or equal to 0"),
       productName: z.string().optional().nullable(),
       variantLabel: z.string().optional().nullable(),
       properties: linePropertiesInputSchema,
     }),
-  ).min(1, "At least one item is required"),
+  ).min(1, "At least one item is required").max(MAX_ORDER_LINES, `Checkout supports at most ${MAX_ORDER_LINES} line items.`),
   discountCodes: discountCodesSchema,
   shippingCharge: z
     .number()
