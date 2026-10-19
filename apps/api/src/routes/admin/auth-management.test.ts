@@ -234,6 +234,10 @@ function createTwoFactorMethodChallengeDbMock(options: {
         where: vi.fn(() => ({
           get: vi.fn(async () => {
             if ("value" in selection) return challengeRows.shift() ?? null;
+            // The account's stored two-step state (the handlers never trust the cached session copy).
+            if ("twoFactorMethod" in selection) {
+              return { twoFactorEnabled: true, twoFactorMethod: null, mustEnrollTwoFactor: false };
+            }
             if ("token" in selection) {
               return {
                 id: "session_1",
