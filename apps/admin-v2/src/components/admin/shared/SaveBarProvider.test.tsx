@@ -57,6 +57,31 @@ describe("page save bar", () => {
     });
   }
 
+  it("leaves focus alone on a page's first render, and returns it to the page quietly after a save", async () => {
+    const page = document.createElement("main");
+    page.id = "admin-main-scroll";
+    page.tabIndex = 0;
+    document.body.append(page);
+    const frame = () => act(async () => new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))));
+    // A direct load: nothing moved focus, so the page must not take it (and draw its ring).
+    render({ dirty: false, save: vi.fn(), discard: vi.fn() });
+    await frame();
+    expect(document.activeElement).toBe(document.body);
+
+    // Edited, then saved from the bar: focus comes back to the page, marked as code's doing.
+    render({ dirty: true, save: vi.fn(async () => undefined), discard: vi.fn() });
+    await pressBarSave();
+    render({ dirty: false, save: vi.fn(), discard: vi.fn() });
+    (document.activeElement as HTMLElement | null)?.blur();
+    await frame();
+    expect(document.activeElement).toBe(page);
+    expect(page.hasAttribute("data-quiet-focus")).toBe(true);
+    // Once it leaves, a later Tab back draws the ring as usual.
+    page.blur();
+    expect(page.hasAttribute("data-quiet-focus")).toBe(false);
+    page.remove();
+  });
+
   it("says an unreachable server can be retried, and Retry in the banner saves again", async () => {
     const save = vi.fn()
       .mockRejectedValueOnce(Object.assign(new Error("Failed to fetch"), { name: "TypeError" }))

@@ -29,6 +29,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { ariaKeys, matchesShortcut } from "../layout/shortcuts";
 import { ADMIN_SESSION_LOST_EVENT } from "~/lib/admin-session-lost";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import { focusPageQuietly } from "~/lib/page-focus";
 
 /**
  * A save that failed after the editor already showed the merchant why.
@@ -670,11 +671,19 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
   // The bar takes over the whole top bar (the page itself when there is none, as in tests).
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   useEffect(() => setSlot(document.getElementById("admin-top-bar") ?? document.body), []);
-  // Saved or discarded: focus goes back to the page, never to nowhere.
+  // Saved or discarded: focus goes back to the page, never to nowhere. Only after the
+  // bar was up (its buttons held focus): on a page's first render nothing has moved
+  // focus, and focusing the page then drew the ring around it on every direct load.
+  const wasDirty = useRef(false);
   useEffect(() => {
-    if (dirty) return;
+    if (dirty) {
+      wasDirty.current = true;
+      return;
+    }
+    if (!wasDirty.current) return;
+    wasDirty.current = false;
     const frame = requestAnimationFrame(() => {
-      if (document.activeElement === document.body) document.getElementById("admin-main-scroll")?.focus({ preventScroll: true });
+      if (document.activeElement === document.body) focusPageQuietly();
     });
     return () => cancelAnimationFrame(frame);
   }, [dirty]);
