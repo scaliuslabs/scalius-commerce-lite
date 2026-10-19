@@ -1,80 +1,91 @@
 # Scalius CLI
 
-`scalius` discovers and runs the operations that a Scalius Commerce store publishes. It never accepts arbitrary routes, methods, request headers, or database commands.
-
-The CLI reads the operation catalog, schemas, permissions, risk, revisions, idempotency, byte limits, artifacts, uploads, and browser continuations from the store's live OpenAPI contract (`GET /api/v1/openapi.json`). A new reviewed store operation becomes discoverable without a second hard-coded command catalog.
-
-Requires Node.js 22.12 or newer.
+Run a Scalius Commerce store from the terminal or from any agent (Claude Code, Codex, Cursor, OpenCode, Pi). One command connects everything:
 
 ```sh
-npm install --global scalius
-
-scalius auth login --server https://api.example.com
-scalius auth login --server https://api.example.com --resource storefront --profile-name my-store-storefront
-scalius --output json workflow read "How is my store doing today?" --surface dashboard
-scalius --output json workflow resolve "Create a product with size/color variants and exact images" --surface dashboard
-scalius operations search "what are today's sales?" --surface dashboard
-scalius operations describe dashboard.products.create
-scalius operations run dashboard.products.create --input @product.json --yes
-scalius media upload hero.jpg orange.jpg blue.jpg --yes
-scalius setup --harness codex --server https://api.example.com
+npx scalius@latest init --server https://api.yourstore.com
 ```
 
-You can also run it without a global install:
+`init` asks for one approval in the browser, installs the Scalius skills and the `scalius` MCP server into every agent it finds, and checks the result with `scalius doctor`. Restart the agent and ask it: "How did my store do today?"
 
-```sh
-npx scalius --help
-```
+Requires Node.js 22.12 or newer. The CLI never accepts arbitrary routes, methods, headers or database commands: it runs only the reviewed operations the store publishes.
 
-For CI, set `SCALIUS_SERVER` and `SCALIUS_TOKEN`. The CLI does not write the environment credential to disk. It stores profiles and interactive or imported credentials in the platform config directory (`SCALIUS_CONFIG_HOME` overrides it), with `0700` directory and `0600` file permissions.
+## What init does
+
+1. **Pairs once.** It opens `/connect` on the store, the merchant approves the shown code, and the credential is saved in the Scalius config directory (`0700` directory, `0600` file; `SCALIUS_CONFIG_HOME` overrides the location). This is the only login.
+2. **Connects each agent** (`--harness auto` by default):
+
+   | Agent | Installed as |
+   |---|---|
+   | Claude Code | the `scalius` plugin in `~/.claude/skills/scalius` (skills and MCP server, `scalius@skills-dir`); older versions get the skills plus `claude mcp add --scope user` |
+   | Codex | the `scalius@scalius-local` plugin from a local marketplace (`codex plugin add`); older versions get the skills plus `codex mcp add` |
+   | Cursor | skills in `~/.cursor/skills`, server in `~/.cursor/mcp.json` |
+   | OpenCode | skills in `~/.config/opencode/skills`, server in `opencode.json` |
+   | Pi, other Agent Skills clients | skills; init prints the MCP entry to add |
+
+   The MCP server is local: the agent starts `scalius mcp`, a stdio server that forwards each MCP message to `https://<store>/api/v1/mcp/dashboard` with the paired credential. The credential never enters the agent's configuration, and the agent and the CLI share one login.
+3. **Verifies** with `scalius doctor`.
+
+Running `init` again updates skills and registrations in place. Options: `--harness claude,codex`, `--storefront` (also connect the buyer tools; a second approval), `--no-open` (print the link instead of opening a browser), `--no-auth`, `--profile-name <name>`.
 
 ## Commands
 
 ```text
-scalius [--profile <name>] [--output human|json] <command>
-scalius auth login --server <api-origin> [--resource dashboard|storefront] [--profile-name <name>] [--no-open]
-scalius auth token import --server <api-origin> [--profile-name <name>]
-scalius auth status
-scalius auth logout
-scalius auth revoke
-scalius profile list
-scalius profile use <name>
-scalius profile show [name]
-scalius workflow read <request> [--surface dashboard|storefront]
-scalius workflow resolve <request> [--surface dashboard|storefront]
-scalius operations search [query] [--surface dashboard|storefront] [--limit <1-100>]
-scalius operations describe <operationId> [--full]
-scalius operations refresh [--surface dashboard|storefront]
-scalius operations run <operationId> [--input <json|@file|->] [--file <path|field=@path>]
-    [--idempotency-key <key>] [--yes] [--save <path> [--overwrite]]
-scalius operations batch --input <json|@file|-> [--yes]
-scalius media upload <files...> [--folder-id <id>] --yes
-scalius setup --harness <agents|codex|claude|opencode|pi> [--server <origin>] [--force]
+scalius init [--server <origin>] [--harness auto|claude,codex,cursor,opencode,pi,agents] [--storefront] [--no-auth] [--no-open]
+scalius doctor [--harness ...] [--surface dashboard|storefront]
+scalius mcp [--surface dashboard|storefront]            stdio MCP server (agents launch this)
+
+scalius ask "<question>"                                 = scalius_answer
+scalius search "<goal>" [--limit 1-10]                   = scalius_search
+scalius describe <operationId...> [--full|--examples]    = scalius_describe
+scalius read <operationId> [--input j|@f|-] [--limit n] [--cursor c] [--all] [--ndjson] [--max-bytes n]
+scalius write <operationId> [--input ...] [--dry-run] [--yes] [--confirm-token t] [--idempotency-key auto|<key>]
+scalius batch --input '{"steps":[...]}' [--dry-run] [--yes]
+scalius bulk <prices|stock|tags|status|publish> (--ids a,b | --filter <json>) --set <json> [--dry-run] [--yes] [--wait]
+scalius export <orders|customers|products|inventory|report> --out <file> [--since YYYY-MM-DD] [--until YYYY-MM-DD]
+scalius media upload <files...> --yes
+
+scalius auth login|status|logout|revoke|token import
+scalius profile list|use|show
 scalius skill install [--harness <name>] [--force]
+
+Global: --profile <name>  --output human|json  --select <pointers>  --jq <expression>
 ```
 
-`ops` is an alias for `operations`.
+`ask`, `search`, `describe`, `read`, `write` and `batch` call the store's MCP tools (`scalius_answer`, `scalius_search`, `scalius_describe`, `scalius_read`, `scalius_write`), so the CLI and an agent get the same dry runs, approvals, response budgets and error hints. Compatibility commands from 0.2 remain: `setup`, `workflow resolve|read`, and `operations search|describe|run|batch|refresh` (the REST lane for raw file uploads, artifacts and browser continuations).
 
-Run `scalius setup` to install the bundled Agent Skills suite and print MCP instructions. The suite has one setup/router skill plus the focused insights, catalog, content, sales, settings, and storefront skills. The skills go to the native user location of Codex, Claude, OpenCode, or Pi, or to the cross-client `~/.agents/skills` directory. `--force` stages and replaces the whole suite, so no stale guide stays behind. Setup prints exact credential-free instructions for the two audience-specific MCP servers (`/api/v1/mcp/dashboard` and `/api/v1/mcp/storefront`). It never writes tokens into harness configuration. Pi loads the skills and the full CLI natively, but its core has no MCP client. For Pi, setup prints the separately installed `pi-mcp-adapter` package and a shared MCP configuration. It never installs that package.
+## Output
 
-The workflow is harness-neutral. Use `workflow read` for a supported data question. Otherwise resolve a natural-language goal, describe only the selected operations, request `--full` only while you build an exact input, run the operation, and verify with a bounded read. The resolver uses the versioned workflow catalog embedded in the live contract. It returns one reviewed plan, at most three choices, a safety control, or an explicit unsupported result. It never sends the full catalog to the model. The live contract, not a model-specific prompt, is authoritative for fields, RBAC, risk, revisions, idempotency, byte limits, artifacts, uploads, and continuations.
+- JSON when stdout is not a terminal, text on a terminal; `--output` forces either.
+- One envelope on stdout: `{ok, data, meta:{operationId, requestId, nextCursor, hasMore, total, truncated, replayed, idempotencyKey}}`.
+- Errors on stderr: `{ok:false, error:{code, message, status, retryable, hint, current, field, requestId}}`.
+- `--select /items/*/id,/total` keeps only those JSON pointers (sent to the server for reads).
+- `--jq '<expr>'` filters `data` with a built-in jq subset (paths, `[]`, pipes, `select`, `map`, `length`, `keys`, `sort_by`, `group_by`, object and array construction, `@csv`, `@tsv` and more); strings print raw.
+- `read --all` follows `nextCursor` to the end and prints one record per line (NDJSON). A page cut to the byte budget is fetched again with fewer rows, so no row is skipped; `429` waits for `retryAfterMs`.
+- `--help --json` prints the command tree, flags and exit codes.
 
-`workflow resolve` can read the public contract before pairing, so local planning works with `SCALIUS_SERVER=<origin>` and no credential. `workflow read`, `operations search`, `operations describe`, and every execution need a profile authenticated for the matching dashboard or storefront audience.
+## Changes and approval
 
-`workflow resolve` accepts normal merchant phrasing such as "today's sales", "orders needing fulfillment", "low stock issues", or "is my store healthy?". `operations search` is the low-level escape hatch for an exact operation ID or contract keyword. It does not rebuild multi-step goals. Without `--profile` or `--surface`, it searches the dashboard. An operation ID selects the authenticated dashboard or storefront profile for the active store origin. It never crosses to another store.
+- `--dry-run` validates and previews a change and writes nothing (exit 11).
+- A destructive or financial change (and any operation the registry marks `confirmation: required`, plus security changes) needs the merchant's approval: `--yes`, `--confirm-token` from a dry run, or a yes at the interactive prompt. Without one, a non-interactive run prints the summary, sends nothing and exits 10.
+- Every write that takes an idempotency key gets one automatically (`sck_...`), reused for every retry within the invocation and printed in `meta.idempotencyKey`; pass `--idempotency-key <key>` to replay an earlier attempt.
 
-Dashboard MCP, storefront MCP, and the CLI give equivalent outcomes over the same contract. MCP needs no shell. It imports public media by URL and returns one-use authenticated artifact links. Local file reads and direct saves are optional host capabilities, not missing commerce features.
+## Exit codes
 
-The CLI caches the contract locally for 30 minutes, so one workflow does not download and index hundreds of operations repeatedly. The server still re-authorizes the live credential, grant, permission, revision, and risk ceiling on every request. `operations describe` flattens only top-level input fields. `--full` returns the exact nested request schema and the responses.
+`0` ok, `2` usage, `3` authentication, `4` authorization, `5` validation, `6` conflict, `7` temporary (retry), `8` server or contract, `10` needs the merchant's approval (nothing written), `11` dry run only (nothing written), `130` interrupted.
 
-Skill metadata routes a request to one focused skill. The setup/router skill is not loaded for routine domain work. Every focused skill starts with a projected read or workflow resolution and treats the returned operation IDs and live schemas as authority. `media upload` takes 1 to 50 files. It checks signature, extension, and size, reuses one live contract in-process, runs the resumable initiate, part, and complete sequence, aborts an incomplete session on failure, and returns the committed media IDs. Images (JPEG, PNG, GIF, WebP, AVIF) are limited to 20 MiB. Video (MP4, WebM) is limited to 100 MiB. No server renders images: for JPEG, PNG, WebP and AVIF the CLI also encodes the WebP rendition ladder on your machine (with the optional `sharp` dependency, the same widths and quality as the dashboard) and saves it after the upload completes; each result reports `renditions` as `saved`, `pending` or `none`. If `sharp` is not installed on your platform or an image cannot be encoded, the upload still succeeds and the image stays `pending`: shoppers get the original until an open dashboard renders it.
+## Skills and plugins
 
-`operations run` input has three fields: `path`, `query`, and `body`. The CLI measures a JSON body as serialized UTF-8 and rejects it when it exceeds the operation's reviewed request limit. The same check applies to each batch step. Multipart operations take repeatable `--file field=@path` arguments for the binary fields that OpenAPI declares. A raw upload operation takes exactly one `--file path`. The CLI streams it as `application/octet-stream` with an exact `Content-Length` and enforces the schema and operation byte bounds. Raw file input never reads stdin and never runs in a batch. `--save path` works only for an operation that declares artifact output, and that operation requires it. The CLI checks the media type, disposition, filename, declared length, and actual byte count before it atomically publishes the file. `--overwrite` replaces an existing destination. An operation with `write`, `destructive`, `financial`, or `security` risk requires `--yes`. An operation that requires idempotency also requires `--idempotency-key`.
+The package is itself a Claude Code plugin and a Codex plugin: `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `.codex-plugin/plugin.json`, `.mcp.json` (runs `npx scalius@<version> mcp`) and `skills/`. The eight skills are a `scalius` router plus `scalius-insights`, `scalius-catalog`, `scalius-sales`, `scalius-content`, `scalius-settings`, `scalius-marketing` and `scalius-storefront`. Each focused skill carries `references/recipes.md` (common merchant tasks, step by step) and `references/workflows.md` (the reviewed workflow routes). Both are generated from the operation manifest by `pnpm --filter scalius generate:recipes`; a test fails when they are stale or reference an operation or route that no longer exists.
 
-An agent without a shell or local files can use `dashboard.media.import_url` through MCP or the CLI. It commits a credential-free public HTTPS image or video. It validates redirects, Content-Type, exact length, signature, and the same media limits as a local upload. Its images stay pending until an open dashboard tab renders their WebP renditions in the background. A capable MCP client can use the reviewed direct-upload action instead, without sending base64 media through the model context.
+## Files, artifacts and continuations
 
-A hosted continuation opens a one-time page that the CLI serves from `127.0.0.1` on a random port and path. The page opens the continuation's HTTPS target and passes the one-time fields to it with `postMessage`. The fields never appear in a URL, a command argument, stdout, stderr, the OpenAPI cache, or the credentials file. Device operations and excluded operations are not available through `operations run`.
+`media upload` takes 1 to 50 files, checks signature, extension and size, runs the resumable upload and returns the committed media ids. Images (JPEG, PNG, GIF, WebP, AVIF) are limited to 20 MiB and video (MP4, WebM) to 100 MiB. For JPEG, PNG, WebP and AVIF the CLI also encodes the WebP rendition ladder locally with the optional `sharp` dependency; without it the upload still succeeds and renditions stay `pending`.
 
-`--output json` writes one compact JSON document to stdout. A JSON error is one document on stderr. Diagnostics and progress also use stderr. Exit codes are `0` success, `2` usage error or missing `--yes`, `3` authentication, `4` authorization, `5` validation, `6` conflict, `7` temporary failure, `8` server or contract failure, and `130` interruption.
+`export` saves a reviewed CSV export atomically (`--overwrite` replaces a file); product and inventory exports join their pages into one file with one header.
 
-Run `scalius --help` for the complete command reference.
+`operations run` is the REST lane for what MCP cannot carry: `--file field=@path` for multipart fields, `--file <path>` for raw uploads (streamed with an exact `Content-Length`), and `--save <path>` for artifact responses (media type, disposition, filename and length are checked before the file is published). A hosted continuation opens a one-time page served from `127.0.0.1` that passes its fields to the target with `postMessage`; the fields never appear in a URL, argument, output, cache or credential file.
+
+## CI
+
+Set `SCALIUS_SERVER` and `SCALIUS_TOKEN` (a personal access token); nothing is written to disk. JSON output and exit codes make every command scriptable.

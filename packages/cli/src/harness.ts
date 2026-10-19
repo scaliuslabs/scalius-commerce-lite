@@ -67,8 +67,8 @@ function codexHome(runtime: Runtime): string {
   return runtime.env.CODEX_HOME?.trim() || join(runtime.homedir(), ".codex");
 }
 
-/** Harnesses installed on this machine, by their command or their config directory. */
-export async function detectHarnesses(runtime: Runtime): Promise<InitHarness[]> {
+/** Harnesses installed on this machine, by their command or their config directory; `agents` when none is found (unless `fallback` is false). */
+export async function detectHarnesses(runtime: Runtime, fallback = true): Promise<InitHarness[]> {
   const home = runtime.homedir();
   const found: InitHarness[] = [];
   if (await which(runtime, "claude") || await exists(join(home, ".claude"))) found.push("claude");
@@ -76,7 +76,7 @@ export async function detectHarnesses(runtime: Runtime): Promise<InitHarness[]> 
   if (await which(runtime, "cursor-agent") || await exists(join(home, ".cursor"))) found.push("cursor");
   if (await which(runtime, "opencode") || await exists(join(home, ".config", "opencode"))) found.push("opencode");
   if (await which(runtime, "pi") || await exists(join(home, ".pi"))) found.push("pi");
-  return found.length > 0 ? found : ["agents"];
+  return found.length > 0 || !fallback ? found : ["agents"];
 }
 
 export function parseHarnesses(value: string): InitHarness[] | "auto" {
@@ -373,7 +373,7 @@ export async function checkHarness(runtime: Runtime, harness: InitHarness, serve
     case "opencode": return checkConfigHarness(runtime, harness, servers);
     case "pi":
     case "agents": {
-      const check = await skillsCheck(runtime, harness, "Skills installed (MCP is configured by hand here)");
+      const check = await skillsCheck(runtime, harness, `${harness === "pi" ? "Pi" : "Agent Skills client"}: MCP is added by hand`);
       return check.status === "ok" ? { ...check, status: "warn", fix: "Add the scalius stdio MCP server shown by 'scalius init' to this agent." } : check;
     }
   }

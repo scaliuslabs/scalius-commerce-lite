@@ -164,7 +164,10 @@ export async function runDoctor(runtime: Runtime, options: DoctorOptions = {}): 
     }
   }
   if (!options.skipHarnesses) {
-    const harnesses = options.harnesses ?? await detectHarnesses(runtime);
+    const harnesses = options.harnesses ?? await detectHarnesses(runtime, false);
+    if (harnesses.length === 0) {
+      checks.push({ id: "harness", status: "warn", detail: "No agent (Claude Code, Codex, Cursor, OpenCode, Pi) was found on this machine.", fix: "Install one, then run scalius init." });
+    }
     const servers: McpServerEntry[] = [{ audience, name: MCP_SERVER_NAMES[audience], launch: launchCommand(runtime, audience, profile?.name) }];
     for (const harness of harnesses) {
       const check = await checkHarness(runtime, harness, servers);

@@ -485,6 +485,7 @@ export async function write(runtime: Runtime, output: OutputOptions, operationId
     const preview = await tool(runtime, profile, audience, "scalius_write", dryRunArgs, true);
     const confirmation = isRecord(preview.value.confirmation) ? preview.value.confirmation : undefined;
     confirmToken = typeof confirmation?.confirmToken === "string" ? confirmation.confirmToken : undefined;
+    writeDiagnostic(runtime, `Approved with --yes: ${typeof confirmation?.summary === "string" ? confirmation.summary : localSummary(operation, options.input)}`);
   }
 
   const freshToken = async () => {
