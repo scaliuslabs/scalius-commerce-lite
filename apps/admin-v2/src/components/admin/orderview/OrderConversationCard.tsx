@@ -21,7 +21,6 @@ import { resolutionsFor } from "./request-resolutions";
 import { orderThreadQueryOptions } from "~/lib/api-query-options/inbox";
 import type { ConversationFollowRequest } from "../inbox/ConversationMessages";
 import { useMarkRead } from "../inbox/inbox-api";
-import { useStoreOwnerName } from "../states/store-owner";
 
 export { resolutionsFor } from "./request-resolutions";
 
@@ -55,8 +54,6 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
   const requests = order.supportRequests ?? [];
   const thread = useQuery({ ...orderThreadQueryOptions(order.id), enabled: canRead });
   const markRead = useMarkRead();
-  // Staff who see the buyer's words in a request but can't open the thread are told why.
-  const ownerName = useStoreOwnerName(!canRead || !canReply);
 
   const [followRequest, setFollowRequest] = useState<ConversationFollowRequest>();
   const onReadFrontier = useCallback((seq: number) => {
@@ -150,11 +147,11 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
         ) : null}
         {!canRead ? (
           <p className="text-body text-muted-foreground">
-            {tr("card.noAccess")} {ownerName ? tr("card.askNamed", { name: ownerName }) : tr("card.askOwner")}
+            {tr("card.noAccess")} {tr("card.askOwner")}
           </p>
         ) : !canReply ? (
           <p className="border-t pt-4 text-body text-muted-foreground">
-            {tr("card.readOnly")} {ownerName ? tr("card.askNamed", { name: ownerName }) : tr("card.askOwner")}
+            {tr("card.readOnly")} {tr("card.askOwner")}
           </p>
         ) : null}
         {canRead && canReply ? (

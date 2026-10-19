@@ -10,7 +10,6 @@ export const orderConversationMessages = defineMessages({
     "card.openInInbox": "Open in inbox",
     "card.noAccess": "The customer's messages about this order are in the inbox, which your role can't open.",
     "card.readOnly": "You can read these messages but not reply.",
-    "card.askNamed": "Ask {name} for access.",
     "card.askOwner": "Ask the store owner for access.",
   },
   bn: {
@@ -21,7 +20,6 @@ export const orderConversationMessages = defineMessages({
     "card.openInInbox": "ইনবক্সে খুলুন",
     "card.noAccess": "এই অর্ডার নিয়ে কাস্টমারের মেসেজ ইনবক্সে আছে, যা আপনার রোল খুলতে পারে না।",
     "card.readOnly": "আপনি এই মেসেজগুলো পড়তে পারবেন, উত্তর দিতে পারবেন না।",
-    "card.askNamed": "অ্যাক্সেসের জন্য {name}-কে বলুন।",
     "card.askOwner": "অ্যাক্সেসের জন্য স্টোরের মালিককে বলুন।",
   },
 });
