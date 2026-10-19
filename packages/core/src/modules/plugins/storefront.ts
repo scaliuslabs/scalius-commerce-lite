@@ -89,7 +89,7 @@ export function activePluginStorefrontExtensions(installations: Iterable<PluginI
     const storefront = installation.manifest.storefront;
     const ships = pluginHasStorefrontModule(storefront) || storefront.islands.length > 0 || storefront.stylesheet;
     if (!ships || installation.grant?.storefrontCode !== true) continue;
-    const granted = new Set(installation.grant.storefrontConnect ?? []);
+    const granted = new Set(installation.grant.storefrontConnect);
     extensions.push({
       pluginId: installation.pluginId,
       version: installation.version,

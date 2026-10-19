@@ -813,7 +813,10 @@ export function pluginCompatibility(value: unknown):
 /**
  * Everything a manifest asks for, grouped for the consent screen. A grant
  * records exactly this; an update whose `grantKey` differs needs approval
- * again.
+ * again. Every dimension is always present; a dimension added later has a
+ * default (an empty list or `false`) that a stored grant without it reads as,
+ * and `pluginGrantKey` leaves defaults out, so adding one never changes an
+ * existing grant's key.
  */
 export interface PluginGrantRequest {
   /** Access scopes (`PLUGIN_SCOPES`). */
@@ -828,20 +831,29 @@ export interface PluginGrantRequest {
   storefrontScripts: string[];
   storefrontSurfaces: boolean;
   customFieldOwners: string[];
-  /**
-   * Runs code on the storefront: a storefront module (component sections and
-   * product blocks, skins), client islands or a stylesheet. Present only when true, so the
-   * grants of apps without components keep their key.
-   */
-  storefrontCode?: true;
-  /** Hosts the app's islands reach from the buyer's browser. Present only when not empty. */
-  storefrontConnect?: string[];
-  /**
-   * The features turned on (`manifest.features`), sorted. Present only when
-   * the app declares features, so the grants of apps without keep their key.
-   * Everything else in the request already includes these features' parts.
-   */
-  features?: string[];
+  /** Runs code on the storefront: a storefront module (component sections and product blocks, skins), client islands or a stylesheet. */
+  storefrontCode: boolean;
+  /** Hosts the app's islands reach from the buyer's browser. */
+  storefrontConnect: string[];
+  /** The features turned on (`manifest.features`), sorted. Everything else already includes these features' parts. */
+  features: string[];
+}
+
+/** The list dimensions of a grant request, in key order. */
+export const PLUGIN_GRANT_LIST_DIMENSIONS = [
+  "allowedHosts", "blockingFunctions", "customFieldOwners", "events", "features", "functions",
+  "providers", "scopes", "storefrontConnect", "storefrontScripts",
+] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
+/** The flag dimensions of a grant request, in key order. */
+export const PLUGIN_GRANT_FLAG_DIMENSIONS = ["publicRoutes", "storefrontCode", "storefrontSurfaces"] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
+
+/** A grant request with every dimension at its default (asks for nothing). */
+export function emptyPluginGrantRequest(): PluginGrantRequest {
+  return {
+    scopes: [], allowedHosts: [], events: [], functions: [], blockingFunctions: [], providers: [],
+    publicRoutes: false, storefrontScripts: [], storefrontSurfaces: false, customFieldOwners: [],
+    storefrontCode: false, storefrontConnect: [], features: [],
+  };
 }
 
 /**
@@ -866,35 +878,42 @@ export function pluginGrantRequest(declared: PluginManifest, features: Iterable<
     storefrontSurfaces: manifest.storefront.sections.length > 0 || manifest.storefront.productBlocks.length > 0
       || manifest.storefront.head || manifest.storefront.skins.length > 0,
     customFieldOwners: sorted(manifest.customFields.map((field) => field.ownerType)),
-    ...(pluginHasStorefrontModule(manifest.storefront) || manifest.storefront.islands.length > 0 || manifest.storefront.stylesheet
-      ? { storefrontCode: true as const }
-      : {}),
-    ...(manifest.storefront.connect.length > 0 ? { storefrontConnect: sorted(manifest.storefront.connect) } : {}),
-    ...(declared.features.length > 0 ? { features: enabled } : {}),
+    storefrontCode: pluginHasStorefrontModule(manifest.storefront) || manifest.storefront.islands.length > 0
+      || Boolean(manifest.storefront.stylesheet),
+    storefrontConnect: sorted(manifest.storefront.connect),
+    features: enabled,
   };
 }
 
-/** A stable key of a grant request: equal keys need no new approval. */
+/** The version prefix of `pluginGrantKey`: bumped only when the canonical form itself changes. */
+export const PLUGIN_GRANT_KEY_VERSION = "g1";
+
+/**
+ * A stable key of a grant request: equal keys need no new approval.
+ * `g1:` + canonical JSON: dimensions in name order, lists sorted and
+ * de-duplicated, and every dimension at its default left out. A new
+ * dimension therefore leaves every existing key as it was.
+ */
 export function pluginGrantKey(request: PluginGrantRequest): string {
-  return JSON.stringify(request);
+  const canonical: Record<string, unknown> = {};
+  const dimensions = [...PLUGIN_GRANT_LIST_DIMENSIONS, ...PLUGIN_GRANT_FLAG_DIMENSIONS].sort();
+  for (const dimension of dimensions) {
+    const value = (request as unknown as Record<string, unknown>)[dimension];
+    if (Array.isArray(value)) {
+      const list = [...new Set(value.map(String))].sort();
+      if (list.length > 0) canonical[dimension] = list;
+    } else if (value === true) {
+      canonical[dimension] = true;
+    }
+  }
+  return `${PLUGIN_GRANT_KEY_VERSION}:${JSON.stringify(canonical)}`;
 }
 
 /** Whether `next` asks for anything `granted` did not (a narrower update needs no approval). */
 export function pluginGrantExpands(granted: PluginGrantRequest, next: PluginGrantRequest): boolean {
-  const grows = (before: readonly string[], after: readonly string[]) => after.some((value) => !before.includes(value));
-  return grows(granted.scopes, next.scopes)
-    || grows(granted.allowedHosts, next.allowedHosts)
-    || next.events.some((filter) => !eventFilterCovered(filter, granted.events))
-    || grows(granted.functions, next.functions)
-    || grows(granted.blockingFunctions, next.blockingFunctions)
-    || grows(granted.providers, next.providers)
-    || (!granted.publicRoutes && next.publicRoutes)
-    || grows(granted.storefrontScripts, next.storefrontScripts)
-    || (!granted.storefrontSurfaces && next.storefrontSurfaces)
-    || grows(granted.customFieldOwners, next.customFieldOwners)
-    || (!granted.storefrontCode && next.storefrontCode === true)
-    || grows(granted.storefrontConnect ?? [], next.storefrontConnect ?? [])
-    || grows(granted.features ?? [], next.features ?? []);
+  const additions = pluginGrantAdditions(granted, next);
+  return PLUGIN_GRANT_LIST_DIMENSIONS.some((dimension) => additions[dimension].length > 0)
+    || PLUGIN_GRANT_FLAG_DIMENSIONS.some((dimension) => additions[dimension]);
 }
 
 /**
@@ -916,11 +935,9 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
     storefrontScripts: added(granted.storefrontScripts, next.storefrontScripts),
     storefrontSurfaces: next.storefrontSurfaces && !granted.storefrontSurfaces,
     customFieldOwners: added(granted.customFieldOwners, next.customFieldOwners),
-    ...(next.storefrontCode && !granted.storefrontCode ? { storefrontCode: true as const } : {}),
-    ...(added(granted.storefrontConnect ?? [], next.storefrontConnect ?? []).length > 0
-      ? { storefrontConnect: added(granted.storefrontConnect ?? [], next.storefrontConnect ?? []) }
-      : {}),
-    ...(next.features !== undefined ? { features: added(granted.features ?? [], next.features) } : {}),
+    storefrontCode: next.storefrontCode && !granted.storefrontCode,
+    storefrontConnect: added(granted.storefrontConnect, next.storefrontConnect),
+    features: added(granted.features, next.features),
   };
 }
 

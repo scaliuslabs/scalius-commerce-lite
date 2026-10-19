@@ -125,9 +125,10 @@ describe("app features", () => {
     expect(pluginGrantAdditions(base, payments)).toMatchObject({ features: ["payments"], allowedHosts: ["pay.example"], providers: ["payment"] });
     // The running manifest gives the same request for the same features.
     expect(pluginGrantKey(pluginGrantRequest(pluginManifestWithFeatures(declared, ["payments"]), ["payments"]))).toBe(pluginGrantKey(payments));
-    // An app without features keeps its grant key (no `features` key).
+    // An app without features keeps its grant key (an empty dimension is left out of it).
     const plain = parse({ ...PACK, features: [], translations: undefined });
-    expect("features" in pluginGrantRequest(plain)).toBe(false);
+    expect(pluginGrantRequest(plain).features).toEqual([]);
+    expect(pluginGrantKey(pluginGrantRequest(plain))).not.toContain("features");
   });
 
   it("describes what one feature asks for, without the base", () => {

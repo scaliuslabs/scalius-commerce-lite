@@ -136,20 +136,19 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
   }
   if (!parsed.scopes!.every(isPluginScope)) return null;
   if (typeof raw.publicRoutes !== "boolean" || typeof raw.storefrontSurfaces !== "boolean") return null;
-  // Storefront components (added later): absent on grants that never asked.
-  if (raw.storefrontCode !== undefined && raw.storefrontCode !== true) return null;
-  const connect = raw.storefrontConnect === undefined ? undefined : stringList(raw.storefrontConnect);
+  // Dimensions added later read as their default when a stored grant predates them.
+  if (raw.storefrontCode !== undefined && typeof raw.storefrontCode !== "boolean") return null;
+  const connect = raw.storefrontConnect === undefined ? [] : stringList(raw.storefrontConnect);
   if (connect === null) return null;
-  // Features (added later): absent on grants of apps that declare none.
-  const features = raw.features === undefined ? undefined : stringList(raw.features);
+  const features = raw.features === undefined ? [] : stringList(raw.features);
   if (features === null) return null;
   return {
     ...(parsed as Record<(typeof lists)[number], string[]>),
     publicRoutes: raw.publicRoutes,
     storefrontSurfaces: raw.storefrontSurfaces,
-    ...(raw.storefrontCode === true ? { storefrontCode: true as const } : {}),
-    ...(connect && connect.length > 0 ? { storefrontConnect: connect } : {}),
-    ...(features ? { features } : {}),
+    storefrontCode: raw.storefrontCode === true,
+    storefrontConnect: connect,
+    features,
   } as PluginGrantRequest;
 }
 

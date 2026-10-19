@@ -7,6 +7,9 @@ import {
   PLUGIN_FUNCTION_SCHEMAS,
   parsePluginManifest,
   pluginCompatibility,
+  PLUGIN_GRANT_FLAG_DIMENSIONS,
+  PLUGIN_GRANT_LIST_DIMENSIONS,
+  emptyPluginGrantRequest,
   pluginGrantExpands,
   pluginGrantKey,
   pluginGrantRequest,
@@ -257,6 +260,22 @@ describe("plugin manifest", () => {
     // The key is order-independent.
     expect(pluginGrantKey(parse({ ...FULL, scopes: ["read_customers", "read_orders"] })))
       .toBe(pluginGrantKey(parse({ ...FULL, scopes: ["read_orders", "read_customers"] })));
+  });
+
+  it("keys a grant canonically, versioned, with defaults left out so new dimensions are additive", () => {
+    const request = { ...emptyPluginGrantRequest(), scopes: ["read_orders" as const], publicRoutes: true, allowedHosts: ["b.example", "a.example", "a.example"] };
+    expect(pluginGrantKey(request)).toBe('g1:{"allowedHosts":["a.example","b.example"],"publicRoutes":true,"scopes":["read_orders"]}');
+    // Key order of the object never matters.
+    const reordered = Object.fromEntries(Object.entries(request).reverse()) as typeof request;
+    expect(pluginGrantKey(reordered)).toBe(pluginGrantKey(request));
+    // A dimension added later at its default (an unknown key here) changes nothing.
+    expect(pluginGrantKey({ ...request, storefrontConnect: [], features: [], storefrontCode: false })).toBe(pluginGrantKey(request));
+    expect(pluginGrantKey(emptyPluginGrantRequest())).toBe("g1:{}");
+    // Every dimension the request carries is keyed (none is silently ignored).
+    for (const dimension of [...PLUGIN_GRANT_LIST_DIMENSIONS, ...PLUGIN_GRANT_FLAG_DIMENSIONS]) {
+      expect(Object.keys(emptyPluginGrantRequest())).toContain(dimension);
+    }
+    expect(Object.keys(emptyPluginGrantRequest()).sort()).toEqual([...PLUGIN_GRANT_LIST_DIMENSIONS, ...PLUGIN_GRANT_FLAG_DIMENSIONS].sort());
   });
 });
 

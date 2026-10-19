@@ -101,7 +101,8 @@ describe("storefront manifest", () => {
       return pluginGrantRequest(parsed.manifest);
     };
     const before = parse({ sections: [] });
-    // Grants of apps without components keep their key.
+    // Grants of apps without components keep their key (a default dimension is left out).
+    expect(before.storefrontCode).toBe(false);
     expect(pluginGrantKey(before)).not.toContain("storefrontCode");
     const after = parse({ sections: [{ type: "a", name: "A" }], connect: ["api.acme.test"] });
     expect(pluginGrantExpands(before, after)).toBe(true);

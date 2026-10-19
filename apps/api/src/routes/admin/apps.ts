@@ -121,9 +121,9 @@ const grantSchema = z.object({
   storefrontScripts: z.array(z.string()),
   storefrontSurfaces: z.boolean(),
   customFieldOwners: z.array(z.string()),
-  storefrontCode: z.literal(true).optional().openapi({ description: "Draws on the storefront with its own code: components, client islands or a stylesheet." }),
-  storefrontConnect: z.array(z.string()).optional().openapi({ description: "Hosts the app's storefront islands reach from the buyer's browser." }),
-  features: z.array(z.string()).optional().openapi({ description: "The app's features that are on (apps that declare features)." }),
+  storefrontCode: z.boolean().openapi({ description: "Draws on the storefront with its own code: components, client islands or a stylesheet." }),
+  storefrontConnect: z.array(z.string()).openapi({ description: "Hosts the app's storefront islands reach from the buyer's browser." }),
+  features: z.array(z.string()).openapi({ description: "The app's features that are on (empty for apps that declare none)." }),
 }).openapi("AppGrant", { description: "What an app may do; the consent screen lists it in plain words." });
 
 /** The manifest's text in other languages (BCP 47 tag → text); the dashboard picks its own. */
