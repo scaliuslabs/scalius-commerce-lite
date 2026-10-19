@@ -2239,6 +2239,56 @@ export type PriceListSku = {
     }>;
 };
 
+export type BulkRun = {
+    /**
+     * The run's id; null for a dry run (nothing was started).
+     */
+    id: string | null;
+    kind: 'variants.set_prices' | 'variants.set_stock' | 'customers.tag' | 'products.set_status' | 'products.publish';
+    /**
+     * preview: a dry run (nothing written). running: still going (read bulk_runs.get). done or failed: final.
+     */
+    status: 'preview' | 'running' | 'done' | 'failed';
+    dryRun: boolean;
+    /**
+     * Items the selection held when the run started.
+     */
+    total: number;
+    processed: number;
+    changed: number;
+    /**
+     * Items already as asked (no write).
+     */
+    unchanged: number;
+    /**
+     * Items refused; the first 50 are in failures with a code.
+     */
+    failed: number;
+    /**
+     * The store currency of every *Minor amount in sample (price runs); null otherwise.
+     */
+    currency: string | null;
+    /**
+     * Before and after of the first 50 changes: prices (variantId, sku, beforeMinor, afterMinor), stock (variantId, locationId, beforeOnHand, afterOnHand), tags (customerId), status and publishing (productId).
+     */
+    sample: Array<{
+        [key: string]: string | number | boolean | unknown;
+    }>;
+    failures: Array<{
+        id: string;
+        /**
+         * price_changed, price_not_positive, stock_changed, below_reserved, not_found, retired, digital_stock, not_physical, revision_changed or needs_price.
+         */
+        code: string;
+    }>;
+    /**
+     * Why a failed run stopped.
+     */
+    errorCode: string | null;
+    createdAt: string | null;
+    finishedAt: string | null;
+};
+
 export type PriceList = {
     id: string;
     name: string;
@@ -22571,6 +22621,616 @@ export type PutApiV1AdminResourcesPriceListsByIdPricesResponses = {
 
 export type PutApiV1AdminResourcesPriceListsByIdPricesResponse = PutApiV1AdminResourcesPriceListsByIdPricesResponses[keyof PutApiV1AdminResourcesPriceListsByIdPricesResponses];
 
+export type PostApiV1AdminResourcesVariantsBulkSetPricesData = {
+    body: {
+        /**
+         * SKUs by id (send this or filter).
+         */
+        variants?: Array<{
+            id: string;
+            /**
+             * The price you read; a SKU whose price changed since is left alone (a failure).
+             */
+            expectedPriceMinor?: number;
+        }>;
+        /**
+         * Every live SKU of the products this filter matches (send this or variants).
+         */
+        filter?: {
+            /**
+             * Product name or SKU words.
+             */
+            search?: string;
+            /**
+             * Products directly in this category id.
+             */
+            category?: string;
+            status?: 'active' | 'draft';
+            /**
+             * Products published to this sales channel.
+             */
+            salesChannel?: string;
+        };
+        change: {
+            mode: 'set';
+            amountMinor: number;
+        } | {
+            mode: 'percent';
+            percent: number;
+        } | {
+            mode: 'amount';
+            amountMinor: number;
+        };
+        /**
+         * true checks and previews everything (before/after for the first 50 items, totals) and writes nothing.
+         */
+        dryRun?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/variants/bulk-set-prices';
+};
+
+export type PostApiV1AdminResourcesVariantsBulkSetPricesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Validation error
+     */
+    422: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesVariantsBulkSetPricesError = PostApiV1AdminResourcesVariantsBulkSetPricesErrors[keyof PostApiV1AdminResourcesVariantsBulkSetPricesErrors];
+
+export type PostApiV1AdminResourcesVariantsBulkSetPricesResponses = {
+    /**
+     * The dry run's preview, or the finished run
+     */
+    200: {
+        success: true;
+        data: BulkRun;
+    };
+    /**
+     * The run started; read bulk_runs.get until it is done
+     */
+    202: {
+        success: true;
+        data: BulkRun;
+    };
+};
+
+export type PostApiV1AdminResourcesVariantsBulkSetPricesResponse = PostApiV1AdminResourcesVariantsBulkSetPricesResponses[keyof PostApiV1AdminResourcesVariantsBulkSetPricesResponses];
+
+export type PostApiV1AdminResourcesVariantsBulkSetStockData = {
+    body: {
+        /**
+         * The location counted (the default location when omitted).
+         */
+        locationId?: string;
+        items: Array<{
+            variantId: string;
+            /**
+             * Units on hand at the location after the run (not a change).
+             */
+            quantity: number;
+            /**
+             * The SKU's stockVersion you read; a SKU whose stock changed since is left alone (a failure).
+             */
+            expectedStockVersion?: number;
+        }>;
+        /**
+         * Shown on each stock movement (default: Bulk stock count).
+         */
+        reason?: string;
+        /**
+         * true checks and previews everything (before/after for the first 50 items, totals) and writes nothing.
+         */
+        dryRun?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/variants/bulk-set-stock';
+};
+
+export type PostApiV1AdminResourcesVariantsBulkSetStockErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Validation error
+     */
+    422: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesVariantsBulkSetStockError = PostApiV1AdminResourcesVariantsBulkSetStockErrors[keyof PostApiV1AdminResourcesVariantsBulkSetStockErrors];
+
+export type PostApiV1AdminResourcesVariantsBulkSetStockResponses = {
+    /**
+     * The dry run's preview, or the finished run
+     */
+    200: {
+        success: true;
+        data: BulkRun;
+    };
+    /**
+     * The run started; read bulk_runs.get until it is done
+     */
+    202: {
+        success: true;
+        data: BulkRun;
+    };
+};
+
+export type PostApiV1AdminResourcesVariantsBulkSetStockResponse = PostApiV1AdminResourcesVariantsBulkSetStockResponses[keyof PostApiV1AdminResourcesVariantsBulkSetStockResponses];
+
+export type PostApiV1AdminResourcesCustomersBulkTagData = {
+    body: {
+        /**
+         * Customers by id (send this or filter).
+         */
+        customerIds?: Array<string>;
+        /**
+         * Every live customer the filter matches (send this or customerIds).
+         */
+        filter?: {
+            /**
+             * Customers who carry this tag.
+             */
+            tag?: string;
+            /**
+             * Customers with at least this many orders ('more than 3 orders' is 4).
+             */
+            minOrders?: number;
+            /**
+             * Customers with at most this many orders.
+             */
+            maxOrders?: number;
+        };
+        add?: Array<string>;
+        remove?: Array<string>;
+        /**
+         * true checks and previews everything (before/after for the first 50 items, totals) and writes nothing.
+         */
+        dryRun?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/customers/bulk-tag';
+};
+
+export type PostApiV1AdminResourcesCustomersBulkTagErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Validation error
+     */
+    422: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesCustomersBulkTagError = PostApiV1AdminResourcesCustomersBulkTagErrors[keyof PostApiV1AdminResourcesCustomersBulkTagErrors];
+
+export type PostApiV1AdminResourcesCustomersBulkTagResponses = {
+    /**
+     * The dry run's preview, or the finished run
+     */
+    200: {
+        success: true;
+        data: BulkRun;
+    };
+    /**
+     * The run started; read bulk_runs.get until it is done
+     */
+    202: {
+        success: true;
+        data: BulkRun;
+    };
+};
+
+export type PostApiV1AdminResourcesCustomersBulkTagResponse = PostApiV1AdminResourcesCustomersBulkTagResponses[keyof PostApiV1AdminResourcesCustomersBulkTagResponses];
+
+export type PostApiV1AdminResourcesProductsBulkSetStatusData = {
+    body: {
+        /**
+         * Products by id (send this or filter).
+         */
+        products?: Array<{
+            id: string;
+            /**
+             * The product revision you read; a product changed since is left alone (a failure).
+             */
+            expectedAggregateRevision?: number;
+        }>;
+        filter?: {
+            /**
+             * Product name or SKU words.
+             */
+            search?: string;
+            /**
+             * Products directly in this category id.
+             */
+            category?: string;
+            status?: 'active' | 'draft';
+            /**
+             * Products published to this sales channel.
+             */
+            salesChannel?: string;
+        };
+        /**
+         * active sells the product; draft hides it. Activating skips a product without a price above 0.
+         */
+        status: 'active' | 'draft';
+        /**
+         * true checks and previews everything (before/after for the first 50 items, totals) and writes nothing.
+         */
+        dryRun?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/products/bulk-set-status';
+};
+
+export type PostApiV1AdminResourcesProductsBulkSetStatusErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Validation error
+     */
+    422: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesProductsBulkSetStatusError = PostApiV1AdminResourcesProductsBulkSetStatusErrors[keyof PostApiV1AdminResourcesProductsBulkSetStatusErrors];
+
+export type PostApiV1AdminResourcesProductsBulkSetStatusResponses = {
+    /**
+     * The dry run's preview, or the finished run
+     */
+    200: {
+        success: true;
+        data: BulkRun;
+    };
+    /**
+     * The run started; read bulk_runs.get until it is done
+     */
+    202: {
+        success: true;
+        data: BulkRun;
+    };
+};
+
+export type PostApiV1AdminResourcesProductsBulkSetStatusResponse = PostApiV1AdminResourcesProductsBulkSetStatusResponses[keyof PostApiV1AdminResourcesProductsBulkSetStatusResponses];
+
+export type PostApiV1AdminResourcesProductsBulkPublishData = {
+    body: {
+        /**
+         * Products by id (send this or filter).
+         */
+        productIds?: Array<string>;
+        filter?: {
+            /**
+             * Product name or SKU words.
+             */
+            search?: string;
+            /**
+             * Products directly in this category id.
+             */
+            category?: string;
+            status?: 'active' | 'draft';
+            /**
+             * Products published to this sales channel.
+             */
+            salesChannel?: string;
+        };
+        channelIds: Array<string>;
+        action: 'publish' | 'unpublish';
+        /**
+         * true checks and previews everything (before/after for the first 50 items, totals) and writes nothing.
+         */
+        dryRun?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/products/bulk-publish';
+};
+
+export type PostApiV1AdminResourcesProductsBulkPublishErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Validation error
+     */
+    422: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesProductsBulkPublishError = PostApiV1AdminResourcesProductsBulkPublishErrors[keyof PostApiV1AdminResourcesProductsBulkPublishErrors];
+
+export type PostApiV1AdminResourcesProductsBulkPublishResponses = {
+    /**
+     * The dry run's preview, or the finished run
+     */
+    200: {
+        success: true;
+        data: BulkRun;
+    };
+    /**
+     * The run started; read bulk_runs.get until it is done
+     */
+    202: {
+        success: true;
+        data: BulkRun;
+    };
+};
+
+export type PostApiV1AdminResourcesProductsBulkPublishResponse = PostApiV1AdminResourcesProductsBulkPublishResponses[keyof PostApiV1AdminResourcesProductsBulkPublishResponses];
+
+export type GetApiV1AdminResourcesBulkRunsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/bulk-runs/{id}';
+};
+
+export type GetApiV1AdminResourcesBulkRunsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesBulkRunsByIdError = GetApiV1AdminResourcesBulkRunsByIdErrors[keyof GetApiV1AdminResourcesBulkRunsByIdErrors];
+
+export type GetApiV1AdminResourcesBulkRunsByIdResponses = {
+    /**
+     * The run
+     */
+    200: {
+        success: true;
+        data: BulkRun;
+    };
+};
+
+export type GetApiV1AdminResourcesBulkRunsByIdResponse = GetApiV1AdminResourcesBulkRunsByIdResponses[keyof GetApiV1AdminResourcesBulkRunsByIdResponses];
+
+export type GetApiV1AdminResourcesBulkRunsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: 'running' | 'done' | 'failed';
+        /**
+         * The `nextCursor` of the page before.
+         */
+        cursor?: string;
+    };
+    url: '/api/v1/admin/resources/bulk-runs';
+};
+
+export type GetApiV1AdminResourcesBulkRunsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesBulkRunsError = GetApiV1AdminResourcesBulkRunsErrors[keyof GetApiV1AdminResourcesBulkRunsErrors];
+
+export type GetApiV1AdminResourcesBulkRunsResponses = {
+    /**
+     * One page of runs
+     */
+    200: {
+        success: true;
+        data: {
+            runs: Array<BulkRun>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesBulkRunsResponse = GetApiV1AdminResourcesBulkRunsResponses[keyof GetApiV1AdminResourcesBulkRunsResponses];
+
 export type GetApiV1AdminCategoriesFormOptionsData = {
     body?: never;
     path?: never;
@@ -37450,6 +38110,57 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
 };
 
 export type GetApiV1AdminDashboardSetupGuideResponse = GetApiV1AdminDashboardSetupGuideResponses[keyof GetApiV1AdminDashboardSetupGuideResponses];
+
+export type GetApiV1AdminDashboardSetupChecklistData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/dashboard/setup-checklist';
+};
+
+export type GetApiV1AdminDashboardSetupChecklistResponses = {
+    /**
+     * Setup checklist
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * The store's country (ZZ: none chosen yet).
+             */
+            countryCode: string;
+            /**
+             * The new-store setup step (name, country, currency, time zone) still applies.
+             */
+            setupNeeded: boolean;
+            /**
+             * Steps finished.
+             */
+            done: number;
+            /**
+             * Steps in the checklist.
+             */
+            total: number;
+            steps: Array<{
+                id: 'details' | 'product' | 'payments' | 'shipping' | 'theme' | 'domain' | 'order';
+                title: string;
+                done: boolean;
+                /**
+                 * The operation that finishes this step.
+                 */
+                operationId: string;
+            }>;
+            /**
+             * The Bangladesh pack, for a Bangladesh store whose deployment includes it; null otherwise.
+             */
+            bangladeshPack: {
+                active: boolean;
+            } | null;
+        };
+    };
+};
+
+export type GetApiV1AdminDashboardSetupChecklistResponse = GetApiV1AdminDashboardSetupChecklistResponses[keyof GetApiV1AdminDashboardSetupChecklistResponses];
 
 export type PostApiV1AdminDashboardSetupGuideDismissData = {
     body?: never;

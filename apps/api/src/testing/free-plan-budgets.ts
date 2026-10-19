@@ -27,6 +27,9 @@
  * their capacity checks add three scans of the at-most-100-row type catalogue.
  * INSERT RETURNING avoids rereading each created type. Measured worst calls are
  * 23 Free / 62 Paid; steady-state writes remain zero on both profiles.
+ * Bulk runs (2026-10-19): every tick's drain looks for a due bulk run (one
+ * indexed read of bulk_runs, no rows on an idle store): +1 call per tick,
+ * 24 Free / 63 Paid idle.
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -72,9 +75,9 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-status-change": { d1Calls: 50, d1Statements: 42, externalFetches: 0, rowsWritten: 35, rowsRead: 1286, fullScans: 5 },
     "order-refund": { d1Calls: 50, d1Statements: 53, externalFetches: 0, rowsWritten: 73, rowsRead: 1292, fullScans: 6 },
     "sku-stock-change": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 53, rowsRead: 21, fullScans: 7 },
-    "cron-idle": { d1Calls: 23, d1Statements: 23, externalFetches: 0, rowsWritten: 110, rowsRead: 7548, fullScans: 11, meanRowsWritten: 0, meanRowsRead: 14.63 },
+    "cron-idle": { d1Calls: 24, d1Statements: 24, externalFetches: 0, rowsWritten: 110, rowsRead: 7548, fullScans: 11, meanRowsWritten: 0, meanRowsRead: 14.63 },
     "cron-nightly": { d1Calls: 22, d1Statements: 29, externalFetches: 0, rowsWritten: 432, rowsRead: 24972, fullScans: 54 },
-    "drain-busy": { d1Calls: 11, d1Statements: 18, externalFetches: 0, rowsWritten: 103, rowsRead: 218, fullScans: 10 },
+    "drain-busy": { d1Calls: 12, d1Statements: 19, externalFetches: 0, rowsWritten: 103, rowsRead: 218, fullScans: 10 },
     "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 106, rowsRead: 73, fullScans: 26 },
     "order-lifecycle": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 106, rowsRead: 73, fullScans: 26 },
   },
@@ -101,9 +104,9 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-status-change": { d1Calls: 50, d1Statements: 42, externalFetches: 0, rowsWritten: 35, rowsRead: 1286, fullScans: 5 },
     "order-refund": { d1Calls: 50, d1Statements: 53, externalFetches: 0, rowsWritten: 73, rowsRead: 1292, fullScans: 6 },
     "sku-stock-change": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 53, rowsRead: 21, fullScans: 7 },
-    "cron-idle": { d1Calls: 62, d1Statements: 65, externalFetches: 0, rowsWritten: 175, rowsRead: 7976, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 28.77 },
+    "cron-idle": { d1Calls: 63, d1Statements: 66, externalFetches: 0, rowsWritten: 175, rowsRead: 7976, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 28.77 },
     "cron-nightly": { d1Calls: 210, d1Statements: 311, externalFetches: 0, rowsWritten: 432, rowsRead: 27538, fullScans: 430 },
-    "drain-busy": { d1Calls: 12, d1Statements: 24, externalFetches: 0, rowsWritten: 118, rowsRead: 236, fullScans: 17 },
+    "drain-busy": { d1Calls: 13, d1Statements: 25, externalFetches: 0, rowsWritten: 118, rowsRead: 236, fullScans: 17 },
     "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 106, rowsRead: 73, fullScans: 26 },
     "order-lifecycle": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 106, rowsRead: 73, fullScans: 26 },
   },

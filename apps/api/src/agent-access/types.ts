@@ -108,6 +108,8 @@ export interface AgentManifestAuthorizationInput {
   surface: AgentResource | "system";
   exposure: "execute" | "continuation" | "device" | "excluded";
   principals: Array<"admin" | "visitor" | "customer" | "internal">;
+  /** An opt-in grant scope (`x-scalius-agent.grantScope`): only a Custom grant reaches it. */
+  grantScope?: string | null;
 }
 
 export interface AgentAuditInput {

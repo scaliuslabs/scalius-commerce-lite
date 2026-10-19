@@ -50,6 +50,9 @@ import { STOREFRONT_DIGITAL_OPERATIONS } from "./storefront-digital";
 import { STOREFRONT_WARRANTY_OPERATIONS } from "./storefront-warranty";
 import { DASHBOARD_RESOURCE_OPERATIONS } from "./dashboard-resources";
 import type { OperationRegistryEntry } from "./entry";
+import { DASHBOARD_WHEN_A } from "./when-dashboard-a";
+import { DASHBOARD_WHEN_B } from "./when-dashboard-b";
+import { STOREFRONT_WHEN } from "./when-storefront";
 
 export type { OperationRegistryEntry } from "./entry";
 
@@ -232,7 +235,23 @@ export function operationMetadata(
     ...(entry.artifact ? { artifactOutput: entry.artifact } : {}),
     ...(entry.continuation ? { continuationOutput: entry.continuation } : {}),
     ...(exposure === "excluded" && entry.reason ? { exclusionReason: entry.reason } : {}),
+    ...(exposure !== "excluded" && OPERATION_WHEN[operationId] ? { when: OPERATION_WHEN[operationId] } : {}),
+    dryRun: entry.dryRun ?? "none",
+    confirmation: entry.confirmation ?? (risk === "destructive" || risk === "financial" ? "required" : "none"),
+    ...(entry.grantScope ? { grantScope: entry.grantScope } : {}),
   };
+}
+
+/** Every operation's "Use when ..." routing line, merged from the surface files. */
+const OPERATION_WHEN: Readonly<Record<string, string>> = {
+  ...DASHBOARD_WHEN_A,
+  ...DASHBOARD_WHEN_B,
+  ...STOREFRONT_WHEN,
+};
+
+/** The routing line of an operation, or undefined (contract tests require one for every executable operation). */
+export function operationWhen(operationId: string): string | undefined {
+  return Object.hasOwn(OPERATION_WHEN, operationId) ? OPERATION_WHEN[operationId] : undefined;
 }
 
 function operationIdsWhere(

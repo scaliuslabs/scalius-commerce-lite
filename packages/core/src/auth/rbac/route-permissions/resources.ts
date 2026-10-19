@@ -27,4 +27,12 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/price-lists": { GET: products, POST: productsEdit },
   "/api/v1/admin/resources/price-lists/*": { GET: products, PATCH: productsEdit, DELETE: productsEdit },
   "/api/v1/admin/resources/price-lists/*/prices": { GET: products, PUT: productsEdit },
+  // Bulk runs need the permission of the single write they repeat.
+  "/api/v1/admin/resources/variants/bulk-set-prices": { POST: productsEdit },
+  "/api/v1/admin/resources/variants/bulk-set-stock": { POST: { permission: PERMISSIONS.PRODUCTS_ADJUST_STOCK } },
+  "/api/v1/admin/resources/customers/bulk-tag": { POST: { permission: PERMISSIONS.CUSTOMERS_EDIT } },
+  "/api/v1/admin/resources/products/bulk-set-status": { POST: productsEdit },
+  "/api/v1/admin/resources/products/bulk-publish": { POST: productsEdit },
+  "/api/v1/admin/resources/bulk-runs": { GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.CUSTOMERS_VIEW] } },
+  "/api/v1/admin/resources/bulk-runs/*": { GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.CUSTOMERS_VIEW] } },
 };

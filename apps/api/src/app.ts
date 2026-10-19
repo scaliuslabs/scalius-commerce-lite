@@ -56,6 +56,7 @@ import { webhookBodyLimitMiddleware } from "./middleware/webhook-body-limit";
 import { adminLocationRoutes } from "./routes/admin/settings/delivery-locations";
 import { adminCategoryRoutes } from "./routes/admin/categories";
 import { adminResourceRoutes } from "./routes/admin/resources";
+import { adminResourceBulkRoutes } from "./routes/admin/resources-bulk";
 import { idempotentReplay } from "./routes/admin/idempotency";
 import { adminBrandRoutes } from "./routes/admin/brands";
 import { adminPriceListRoutes } from "./routes/admin/price-lists";
@@ -221,6 +222,7 @@ app.use("/admin/*", idempotentReplay);
 
 // Register Admin routes
 app.route("/admin/resources", adminResourceRoutes);
+app.route("/admin/resources", adminResourceBulkRoutes);
 app.route("/admin/categories", adminCategoryRoutes);
 app.route("/admin/brands", adminBrandRoutes);
 app.route("/admin/price-lists", adminPriceListRoutes);

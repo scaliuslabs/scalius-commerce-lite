@@ -1,25 +1,25 @@
 // Agent operation registry rows for the dashboard review routes (Wave B).
-// Moderation, replies and reviewer threads are staff judgements over buyer
-// text, so the review routes stay a staff browser surface until a reviewed
-// agent intent exists.
+//
+// Moderation and replies are staff judgements over buyer text, so they sit
+// behind the opt-in grant scope `review_moderation`: no preset grant reaches
+// them; a Custom grant whose permission snapshot holds reviews.view /
+// reviews.moderate does. Opening a private reviewer thread also needs the
+// inbox scope's permission (conversations.reply).
 import type { OperationRegistryEntry } from "./entry";
 
-const STAFF_MODERATION_ONLY =
-  "Review moderation, replies and reviewer threads are staff judgements over buyer text; they stay a staff browser surface until a reviewed agent intent exists.";
-
-const staffOnly = (overrides: Partial<OperationRegistryEntry> = {}): OperationRegistryEntry => ({
-  exposure: "excluded",
-  reason: STAFF_MODERATION_ONLY,
+const moderation = (overrides: Partial<OperationRegistryEntry> = {}): OperationRegistryEntry => ({
+  grantScope: "review_moderation",
+  uncurated: true,
   ...overrides,
 });
 
 export const DASHBOARD_REVIEW_OPERATIONS = {
-  "dashboard.reviews.conversation": staffOnly(),
-  "dashboard.reviews.get": staffOnly(),
-  "dashboard.reviews.list": staffOnly(),
-  "dashboard.reviews.moderate": staffOnly({ idempotency: "required" }),
-  "dashboard.reviews.reply": staffOnly({ revision: "required" }),
-  "dashboard.reviews.settings_get": staffOnly(),
-  "dashboard.reviews.settings_update": staffOnly({ revision: "required" }),
-  "dashboard.reviews.summary": staffOnly(),
+  "dashboard.reviews.conversation": moderation(),
+  "dashboard.reviews.get": moderation(),
+  "dashboard.reviews.list": moderation(),
+  "dashboard.reviews.moderate": moderation({ idempotency: "required" }),
+  "dashboard.reviews.reply": moderation({ revision: "required" }),
+  "dashboard.reviews.settings_get": moderation(),
+  "dashboard.reviews.settings_update": moderation({ revision: "required" }),
+  "dashboard.reviews.summary": moderation(),
 } satisfies Record<string, OperationRegistryEntry>;

@@ -64,6 +64,32 @@ export interface AgentAccessBackend {
   writeAudit(event: AgentAuditInput, env: Env): Promise<void>;
 }
 
+/**
+ * The permissions of the opt-in grant scopes (`x-scalius-agent.grantScope`):
+ * `customer_conversations` (the inbox) and `review_moderation`. A grant made
+ * from a preset never reaches an operation that requires one of them, even
+ * when its snapshot (taken before the scopes existed) lists it.
+ */
+export const OPT_IN_GRANT_SCOPE_PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
+  customer_conversations: ["conversations.view", "conversations.reply"],
+  review_moderation: ["reviews.view", "reviews.moderate"],
+};
+const OPT_IN_PERMISSIONS = new Set(Object.values(OPT_IN_GRANT_SCOPE_PERMISSIONS).flat());
+
+/** True when the route cannot be reached without an opt-in scope permission. */
+export function requiresOptInGrantScope(rbac: AgentManifestAuthorizationInput["rbac"]): boolean {
+  switch (rbac.type) {
+    case "permission":
+      return OPT_IN_PERMISSIONS.has(rbac.permission);
+    case "allOf":
+      return rbac.permissions.some((permission) => OPT_IN_PERMISSIONS.has(permission));
+    case "anyOf":
+      return rbac.permissions.every((permission) => OPT_IN_PERMISSIONS.has(permission));
+    default:
+      return false;
+  }
+}
+
 function getCanonicalMcpResource(env: Env, resource: AgentPrincipal["resource"]): string {
   const configuredOrigin = env.PUBLIC_API_BASE_URL?.trim();
   if (!configuredOrigin) throw new Error("PUBLIC_API_BASE_URL is required for agent access");
@@ -134,6 +160,12 @@ const backend: AgentAccessBackend = {
       operation.surface === "storefront" && !operation.principals.some((value) => value === "visitor" || value === "customer")
     ) return false;
     if (!isAgentRiskAllowed(principal.riskCeiling, operation.risk)) return false;
+    // Opt-in grant scopes (inbox, review moderation): no preset reaches them,
+    // only a Custom grant that selected their permissions.
+    if (
+      (operation.grantScope || requiresOptInGrantScope(operation.rbac)) &&
+      principal.preset !== "custom"
+    ) return false;
     switch (operation.rbac.type) {
       case "public":
       case "agentGrant":

@@ -1270,8 +1270,15 @@ export const AGENT_INTENT_OPERATION_CASES: readonly AgentIntentOperationCase[] =
   {
     id: "cancel-order",
     prompt: "Cancel an order",
-    expectedDisposition: "ask",
-    forbiddenOperationIds: ["dashboard.orders.return_cancel", "dashboard.orders.fulfillment_create"],
+    // The reviewed customer-order cancel route (a plan that still needs the order's facts).
+    expectedDisposition: "execute",
+    expectedOperationIds: ["dashboard.orders.list", "dashboard.orders.get", "dashboard.orders.update_status"],
+    forbiddenOperationIds: [
+      "dashboard.orders.return_cancel",
+      "dashboard.orders.fulfillment_create",
+      "dashboard.purchase_orders.cancel",
+      "dashboard.inventory_transfers.cancel",
+    ],
   },
   {
     id: "fulfill-order",

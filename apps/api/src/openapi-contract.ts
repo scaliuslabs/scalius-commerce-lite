@@ -262,6 +262,8 @@ function excludedMetadata(path: string, method: string): AgentOperationMetadata 
     exclusionReason: internalStorefrontContinuation
       ? "Internal service-JWT browser continuation bridge; use the protected context continuation operations."
       : "Pending operation-specific parity, authority, and output review.",
+    dryRun: "none",
+    confirmation: "none",
   };
 }
 

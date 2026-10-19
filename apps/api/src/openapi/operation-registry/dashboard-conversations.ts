@@ -1,33 +1,39 @@
 // Agent operation registry rows for the dashboard conversation routes.
+//
+// The inbox is buyer text, so it sits behind the opt-in grant scope
+// `customer_conversations`: no preset grant (Read only, Operator, Full
+// automation) reaches it; a Custom grant whose permission snapshot holds
+// conversations.view / conversations.reply does. Replies follow the same
+// reply-reach rules as the dashboard (the route decides the channel).
 import type { OperationRegistryEntry } from "./entry";
 
-const STAFF_INBOX_ONLY =
-  "Buyer conversation text, internal notes and images are private customer content; the inbox stays a staff browser surface until a reviewed agent intent exists.";
+const INBOX_IMAGES =
+  "Conversation images are buyer media served as re-encoded files; they stay in the dashboard while agents read and answer the conversation text.";
 
-const excluded = (overrides: Partial<OperationRegistryEntry> = {}): OperationRegistryEntry => ({
-  exposure: "excluded",
-  sensitive: true,
-  reason: STAFF_INBOX_ONLY,
+const inbox = (overrides: Partial<OperationRegistryEntry> = {}): OperationRegistryEntry => ({
+  grantScope: "customer_conversations",
+  uncurated: true,
   ...overrides,
 });
 
 export const DASHBOARD_CONVERSATION_OPERATIONS = {
-  "dashboard.conversations.query": excluded(),
-  "dashboard.conversations.assignees": excluded(),
-  "dashboard.conversations.search": excluded(),
-  "dashboard.conversations.context": excluded(),
-  "dashboard.conversations.saved_replies.list": excluded(),
-  "dashboard.conversations.saved_replies.get": excluded(),
-  "dashboard.conversations.saved_replies.create": excluded({ idempotency: "required" }),
-  "dashboard.conversations.saved_replies.update": excluded({ revision: "required" }),
-  "dashboard.conversations.attachment_get": excluded(),
-  "dashboard.conversations.attachment_upload": excluded(),
-  "dashboard.conversations.get": excluded(),
-  "dashboard.conversations.list": excluded(),
-  "dashboard.conversations.order_get": excluded(),
-  "dashboard.conversations.order_post": excluded({ idempotency: "required" }),
-  "dashboard.conversations.post": excluded({ idempotency: "required" }),
-  "dashboard.conversations.read": excluded(),
-  "dashboard.conversations.summary": excluded(),
-  "dashboard.conversations.update": excluded({ revision: "required" }),
+  // POST reads: a search body keeps private text out of the URL.
+  "dashboard.conversations.query": inbox({ risk: "read" }),
+  "dashboard.conversations.assignees": inbox(),
+  "dashboard.conversations.search": inbox({ risk: "read" }),
+  "dashboard.conversations.context": inbox(),
+  "dashboard.conversations.saved_replies.list": inbox(),
+  "dashboard.conversations.saved_replies.get": inbox(),
+  "dashboard.conversations.saved_replies.create": inbox({ idempotency: "required" }),
+  "dashboard.conversations.saved_replies.update": inbox({ revision: "required" }),
+  "dashboard.conversations.attachment_get": { exposure: "excluded", sensitive: true, reason: INBOX_IMAGES },
+  "dashboard.conversations.attachment_upload": { exposure: "excluded", sensitive: true, reason: INBOX_IMAGES },
+  "dashboard.conversations.get": inbox(),
+  "dashboard.conversations.list": inbox(),
+  "dashboard.conversations.order_get": inbox(),
+  "dashboard.conversations.order_post": inbox({ idempotency: "required" }),
+  "dashboard.conversations.post": inbox({ idempotency: "required" }),
+  "dashboard.conversations.read": inbox(),
+  "dashboard.conversations.summary": inbox(),
+  "dashboard.conversations.update": inbox({ revision: "required" }),
 } satisfies Record<string, OperationRegistryEntry>;

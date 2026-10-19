@@ -220,13 +220,13 @@ const setupGuideRoute = createRoute({
     },
 });
 
-app.openapi(setupGuideRoute, async (c) => {
+/** The store's own first-step facts: Home's guide and the store-wide checklist read the same. */
+async function readSetupSteps(c: Context<{ Bindings: Env }>) {
     const db = c.get("db");
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const [facts, setup, dismissed, platform, currency, providers, pack] = await Promise.all([
+    const [facts, setup, platform, currency, providers, pack] = await Promise.all([
         getSetupGuideFacts(db),
         getStoreSetupStatus(db),
-        readSetupGuideDismissed(db, c.get("user").id),
         getPlatformSettings(db),
         getCurrencySettings(db),
         requestPaymentProviders(c),
@@ -238,9 +238,7 @@ app.openapi(setupGuideRoute, async (c) => {
     const offered = providers
         .filterForCurrency(snapshot.activePaymentMethods.enabledMethods, currency.currencyCode)
         .filter((method) => providers.countryIssue(method, setup.current.countryCode) === null);
-    c.header("Cache-Control", "private, no-store");
-    return ok(c, {
-        dismissed,
+    return {
         countryCode,
         setupNeeded: setup.needed,
         steps: {
@@ -255,6 +253,72 @@ app.openapi(setupGuideRoute, async (c) => {
         bangladeshPack: countryCode !== "BD" || (!pack && !(BANGLADESH_PACK_ID in BUNDLED_PLUGINS) && !PLUGIN_CATALOG.some((entry) => entry.id === BANGLADESH_PACK_ID))
             ? null
             : { active: pack?.status === "active" && !pluginNeedsApproval(pack) },
+    };
+}
+
+app.openapi(setupGuideRoute, async (c) => {
+    const [facts, dismissed] = await Promise.all([
+        readSetupSteps(c),
+        readSetupGuideDismissed(c.get("db"), c.get("user").id),
+    ]);
+    c.header("Cache-Control", "private, no-store");
+    return ok(c, { dismissed, ...facts });
+});
+
+// ── Store setup checklist (agents) ──
+//
+// The same facts as Home's guide, store-wide (no staff member's dismissal),
+// as an ordered list: each open step names the operation that finishes it.
+
+const SETUP_CHECKLIST_STEPS = [
+    { id: "details", title: "Name the store and choose its country and currency", operationId: "dashboard.settings.store_setup_apply" },
+    { id: "product", title: "Add a product", operationId: "dashboard.products.create" },
+    { id: "payments", title: "Offer a payment method buyers in the store's country can use", operationId: "dashboard.payments.methods_update" },
+    { id: "shipping", title: "Set delivery rates or local pickup", operationId: "dashboard.shipping_zones.create" },
+    { id: "theme", title: "Publish the theme", operationId: "dashboard.theme.publish" },
+    { id: "domain", title: "Set the storefront web address", operationId: "dashboard.settings.platform_update" },
+    { id: "order", title: "Take a first order", operationId: "dashboard.resources.orders.create" },
+] as const;
+
+const setupChecklistSchema = z.object({
+    countryCode: z.string().length(2).openapi({ description: "The store's country (ZZ: none chosen yet)." }),
+    setupNeeded: z.boolean().openapi({ description: "The new-store setup step (name, country, currency, time zone) still applies." }),
+    done: z.number().int().openapi({ description: "Steps finished." }),
+    total: z.number().int().openapi({ description: "Steps in the checklist." }),
+    steps: z.array(z.object({
+        id: z.enum(["details", "product", "payments", "shipping", "theme", "domain", "order"]),
+        title: z.string(),
+        done: z.boolean(),
+        operationId: z.string().openapi({ description: "The operation that finishes this step." }),
+    })),
+    bangladeshPack: z.object({ active: z.boolean() }).nullable().openapi({
+        description: "The Bangladesh pack, for a Bangladesh store whose deployment includes it; null otherwise.",
+    }),
+});
+
+const setupChecklistRoute = createRoute({
+    method: "get",
+    path: "/setup-checklist",
+    tags: ["Admin - Dashboard"],
+    summary: "What is left to set up before launch",
+    description: "The store's launch steps in order, each read from the store's own data, with the operation that finishes each open one. Store-wide: no staff member's dismissal applies.",
+    operationId: "dashboard.setup.checklist",
+    responses: {
+        200: { description: "Setup checklist", content: { "application/json": { schema: successEnvelope(setupChecklistSchema) } } },
+    },
+});
+
+app.openapi(setupChecklistRoute, async (c) => {
+    const facts = await readSetupSteps(c);
+    const steps = SETUP_CHECKLIST_STEPS.map((step) => ({ ...step, done: facts.steps[step.id] }));
+    c.header("Cache-Control", "private, no-store");
+    return ok(c, {
+        countryCode: facts.countryCode,
+        setupNeeded: facts.setupNeeded,
+        done: steps.filter((step) => step.done).length,
+        total: steps.length,
+        steps,
+        bangladeshPack: facts.bangladeshPack,
     });
 });
 

@@ -13,6 +13,10 @@ export type WorkflowResolverOperation = {
   openWorld?: boolean;
   summary: string;
   description?: string;
+  /** The registry's one-line routing hint ("Use when ..."), indexed beside the summary. */
+  when?: string;
+  /** The app-API tier; search hits carry it so a caller can prefer stable operations. */
+  stability?: string;
   tags: string[];
   inputSchema: unknown;
 };
@@ -323,7 +327,7 @@ const STOP_WORDS = new Set([
 const VOCABULARY_GROUPS: readonly (readonly string[])[] = [
   ["buyer", "buyers", "customer", "customers", "shopper", "shoppers"],
   ["address", "addresses"],
-  ["sale", "sales", "sold", "revenue", "gmv", "gross", "turnover", "booking", "bookings"],
+  ["sale", "sales", "sold", "sell", "selling", "revenue", "gmv", "gross", "turnover", "booking", "bookings"],
   ["delivery", "deliveries", "ship", "shipping", "shipment", "shipments", "courier", "couriers"],
   ["payment", "payments", "gateway", "gateways"],
   ["order", "orders", "purchase", "purchases"],
@@ -859,7 +863,12 @@ function buildCandidate(
   };
 }
 
-function buildIndex(sources: WorkflowResolverSources): SearchIndex {
+/**
+ * The scored candidates. `routingLines` adds each operation's "Use when" line
+ * (search ranks with it); the resolver keeps its reviewed index without it.
+ */
+function buildIndex(sources: WorkflowResolverSources, options: { routingLines?: boolean } = {}): SearchIndex {
+  const when = (operation: WorkflowResolverOperation) => options.routingLines ? operation.when : undefined;
   const operationsById = new Map(
     sources.operations.map((operation) => [operation.operationId, operation] as const),
   );
@@ -871,6 +880,7 @@ function buildIndex(sources: WorkflowResolverSources): SearchIndex {
     });
     const operationText = routeOperations.flatMap((operation) => [
       operation.summary,
+      when(operation) ?? "",
       operation.description ?? "",
       operation.tags.join(" "),
     ]).join(" ");
@@ -913,6 +923,7 @@ function buildIndex(sources: WorkflowResolverSources): SearchIndex {
     }, [
       { value: operation.operationId, weight: 8 },
       { value: operation.summary, weight: 9 },
+      { value: when(operation), weight: 4 },
       { value: operation.description, weight: 3 },
       { value: operation.tags.join(" "), weight: 2 },
     ], [operation.operationId, operation.summary], [
@@ -922,6 +933,7 @@ function buildIndex(sources: WorkflowResolverSources): SearchIndex {
     ], [
       operation.operationId,
       operation.summary,
+      when(operation) ?? "",
       operation.description ?? "",
       operation.tags.join(" "),
     ]));
@@ -2586,6 +2598,174 @@ export function createWorkflowResolver(
         reason: "No reviewed workflow route or registered operation confidently matches this request.",
       },
       safetyNotes: [],
+    };
+  };
+}
+
+// ─── Ranked search (scalius_search) ─────────────────────────────────────────
+//
+// The resolver above commits to one plan; search instead returns the top
+// scored workflow routes and operations so the model picks with the
+// merchant's words in view. One index ranks both (routes, then every
+// executable operation with its "Use when" line). A control (refuse/ask)
+// still passes through first, and its forbidden operations never appear as
+// hits.
+
+export type WorkflowSearchHit = {
+  id: string;
+  kind: "workflow" | "operation";
+  title: string;
+  /** At most 160 characters. */
+  summary: string;
+  operationIds: string[];
+  /** The highest risk among the hit's operations. */
+  risk: string;
+  /** The least stable tier among the hit's operations. */
+  stability: string;
+  score: number;
+  confidence: number;
+};
+
+export type WorkflowSearchResult = {
+  version: string;
+  hits: WorkflowSearchHit[];
+  control?: {
+    id: string;
+    disposition: "ask" | "unsupported" | "refuse";
+    code: string;
+    reason: string;
+    safeOperationIds: string[];
+    forbiddenOperationIds: string[];
+  };
+};
+
+export type WorkflowSearchInput = {
+  query: string;
+  surface: WorkflowResolverSurface;
+  /** 1 to 10; default 6. */
+  limit?: number;
+};
+
+const SEARCH_DEFAULT_LIMIT = 6;
+const SEARCH_MAX_LIMIT = 10;
+const SEARCH_SUMMARY_CHARS = 160;
+const RISK_ORDER = ["read", "write", "destructive", "financial", "security"];
+const STABILITY_ORDER = ["internal", "beta", "stable"];
+/** A question about state ("how many ...", "which ...", "... ?") prefers reads. */
+const READ_QUESTION = /^\s*(?:how\s+(?:much|many|did|is|are)|which|what|whats|who|where|is|are|does|did|list|show|find|tell)\b|\?\s*$/i;
+
+function boundedSummary(value: string): string {
+  const text = value.replace(/\s+/g, " ").trim();
+  return text.length <= SEARCH_SUMMARY_CHARS
+    ? text
+    : `${text.slice(0, SEARCH_SUMMARY_CHARS - 1).trimEnd()}…`;
+}
+
+/** Merchant verbs that change state, beyond the resolver's action lemmas. */
+const SEARCH_MUTATION_VERBS = new Set([
+  ...MUTATION_ACTION_LEMMAS,
+  "accept", "book", "charge", "decrease", "discount", "increase", "invite", "issue", "link",
+  "lower", "moderate", "raise", "reduce", "reply", "respond", "restock", "tag", "transfer", "zero",
+]);
+
+function searchVerb(word: string): boolean {
+  if (SEARCH_MUTATION_VERBS.has(word)) return true;
+  const stems = [
+    word.endsWith("s") ? word.slice(0, -1) : "",
+    word.endsWith("ed") ? word.slice(0, -2) : "",
+    word.endsWith("ed") ? word.slice(0, -1) : "",
+    word.endsWith("ing") ? word.slice(0, -3) : "",
+    word.endsWith("ing") ? `${word.slice(0, -3)}e` : "",
+  ];
+  return stems.some((stem) => stem.length > 2 && SEARCH_MUTATION_VERBS.has(stem));
+}
+
+function requestedMutation(prompt: string): boolean {
+  const words = rawWords(prompt);
+  return words.some((word, index) => searchVerb(word) && !controlPrefixIsNegated(words, index));
+}
+
+export function createWorkflowSearch(
+  sources: WorkflowResolverSources,
+): (input: WorkflowSearchInput) => WorkflowSearchResult {
+  const index = buildIndex(sources, { routingLines: true });
+  const controls = [...sources.catalog.controls].sort((left, right) =>
+    right.trigger.allOf.length - left.trigger.allOf.length || left.id.localeCompare(right.id)
+  );
+  const hitOf = (match: ScoredCandidate): WorkflowSearchHit => {
+    const operations = match.candidate.operationIds.flatMap((operationId) => {
+      const operation = index.operationsById.get(operationId);
+      return operation ? [operation] : [];
+    });
+    const risk = operations.reduce((highest, operation) =>
+      RISK_ORDER.indexOf(operation.risk) > RISK_ORDER.indexOf(highest) ? operation.risk : highest, "read");
+    const stability = operations.reduce((lowest, operation) => {
+      const tier = operation.stability ?? "beta";
+      return STABILITY_ORDER.indexOf(tier) < STABILITY_ORDER.indexOf(lowest) ? tier : lowest;
+    }, "stable");
+    const route = match.candidate.source === "route";
+    return {
+      id: route ? match.candidate.id : match.candidate.operationIds[0]!,
+      kind: route ? "workflow" : "operation",
+      title: match.candidate.title,
+      summary: boundedSummary(route ? match.candidate.summary : operations[0]?.when ?? match.candidate.summary),
+      operationIds: [...match.candidate.operationIds],
+      risk,
+      stability,
+      score: match.score,
+      confidence: match.confidence,
+    };
+  };
+  return ({ query, surface, limit }) => {
+    const size = Math.max(1, Math.min(SEARCH_MAX_LIMIT, Math.trunc(limit ?? SEARCH_DEFAULT_LIMIT)));
+    const prompt = query.trim().slice(0, MAX_PROMPT_CHARS);
+    const version = sources.catalog.version;
+    if (!prompt) return { version, hits: [] };
+    const control = matchControl(prompt, surface, controls);
+    const forbidden = new Set(control?.forbiddenOperationIds ?? []);
+    const exact = index.candidates.find((candidate) =>
+      allowedForSurface(surface, candidate, index.operationsById) &&
+      (candidate.id === prompt || candidate.id === `operation.${prompt}`)
+    );
+    // A question ("What is left to set up?") reads even when it names a verb.
+    const question = READ_QUESTION.test(prompt);
+    const mutation = !question && requestedMutation(prompt);
+    const ranked = scoreCandidates(prompt, surface, index)
+      .map((match) => {
+        // The request's own verb breaks ties between a read and a write over
+        // the same nouns: "raise prices" is not "list prices".
+        const kind = match.candidate.route?.kind ??
+          (index.operationsById.get(match.candidate.operationIds[0]!)?.risk === "read" ? "read" : "write");
+        const factor = mutation
+          ? kind === "read" ? 0.7 : 1
+          : question && kind === "write" ? 0.75 : 1;
+        return factor === 1 ? match : { ...match, score: round(match.score * factor) };
+      })
+      .filter((match) => !match.candidate.operationIds.some((operationId) => forbidden.has(operationId)))
+      .sort((left, right) =>
+        right.score - left.score || left.candidate.id.localeCompare(right.candidate.id)
+      );
+    const ordered: ScoredCandidate[] = exact
+      ? [
+          { candidate: exact, score: 100, confidence: 1, matchedTerms: 1, queryTerms: 1, exactPhrase: true },
+          ...ranked.filter((match) => match.candidate !== exact),
+        ]
+      : ranked;
+    return {
+      version,
+      hits: ordered.slice(0, size).map(hitOf),
+      ...(control
+        ? {
+            control: {
+              id: control.id,
+              disposition: control.disposition,
+              code: control.reasonCode,
+              reason: control.summary,
+              safeOperationIds: [...control.safeOperationIds],
+              forbiddenOperationIds: [...control.forbiddenOperationIds],
+            },
+          }
+        : {}),
     };
   };
 }

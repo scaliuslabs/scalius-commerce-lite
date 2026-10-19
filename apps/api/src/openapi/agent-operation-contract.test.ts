@@ -24,6 +24,15 @@ import {
     registryEntry,
     type OperationRegistryEntry,
 } from "./operation-registry";
+import { DASHBOARD_WHEN_A } from "./operation-registry/when-dashboard-a";
+import { DASHBOARD_WHEN_B } from "./operation-registry/when-dashboard-b";
+import { STOREFRONT_WHEN } from "./operation-registry/when-storefront";
+
+const WHEN_OPERATION_IDS = new Set([
+  ...Object.keys(DASHBOARD_WHEN_A),
+  ...Object.keys(DASHBOARD_WHEN_B),
+  ...Object.keys(STOREFRONT_WHEN),
+]);
 import {
   AGENT_STOREFRONT_INTENT_ROUTES,
   DASHBOARD_AGENT_WORKFLOW_ROUTES,
@@ -639,6 +648,31 @@ describe("agent operation contract", () => {
   it("keeps the dependency-free CLI workflow resolver byte-for-byte generated", () => {
     expect(() => assertCliWorkflowResolverCoreFresh()).not.toThrow();
     expect(() => assertCliMediaVariantsFresh()).not.toThrow();
+  });
+
+  it("describes every executable operation with one short \"Use when ...\" line", () => {
+    const undescribed = manifest
+      .filter((operation) => operation.exposure === "execute" || operation.exposure === "continuation")
+      .filter((operation) =>
+        typeof operation.when !== "string" ||
+        !operation.when.startsWith("Use when ") ||
+        operation.when.length > 240
+      )
+      .map((operation) => operation.operationId);
+    expect(undescribed).toEqual([]);
+    const stale = [...WHEN_OPERATION_IDS].filter((operationId) => registryEntry(operationId) === undefined);
+    expect(stale).toEqual([]);
+  });
+
+  it("gates every destructive and financial operation and previews only writes", () => {
+    const ungated = manifest
+      .filter((operation) => ["destructive", "financial"].includes(operation.risk) && operation.confirmation !== "required")
+      .map((operation) => operation.operationId);
+    expect(ungated).toEqual([]);
+    const readPreviews = manifest
+      .filter((operation) => operation.risk === "read" && operation.dryRun !== "none")
+      .map((operation) => operation.operationId);
+    expect(readPreviews).toEqual([]);
   });
 
   it("registers every documented route in the single operation registry", () => {

@@ -33,10 +33,14 @@ export {
 } from "./catalog";
 export {
   createWorkflowResolver,
+  createWorkflowSearch,
   type ResolvedWorkflowPlan,
   type WorkflowResolution,
   type WorkflowResolverChoice,
   type WorkflowResolverInput,
   type WorkflowResolverSources,
+  type WorkflowSearchHit,
+  type WorkflowSearchInput,
+  type WorkflowSearchResult,
 } from "./resolver-core";
-export { resolveAgentWorkflow } from "./resolver";
+export { resolveAgentWorkflow, searchAgentWorkflows } from "./resolver";

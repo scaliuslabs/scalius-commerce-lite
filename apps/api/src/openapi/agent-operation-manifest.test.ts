@@ -25,6 +25,9 @@ const reviewedRead: AgentOperationMetadata = {
   maxRequestBytes: 1024 * 1024,
   sensitiveOutput: false,
   oneTimeSecretOutput: false,
+  when: "Use when testing.",
+  dryRun: "none",
+  confirmation: "none",
 };
 
 function manifestOperation(
@@ -213,6 +216,9 @@ describe("device operation metadata", () => {
         exposure: "device",
         sensitiveOutput: true,
         oneTimeSecretOutput: false,
+        when: "Use when testing.",
+        dryRun: "none",
+        confirmation: "none",
       },
       "dashboard.scanner_device.create_link",
     )).toMatchObject({ exposure: "device", risk: "security" });
@@ -223,6 +229,9 @@ describe("device operation metadata", () => {
         exposure: "device",
         sensitiveOutput: false,
         oneTimeSecretOutput: false,
+        when: "Use when testing.",
+        dryRun: "none",
+        confirmation: "none",
       },
       "dashboard.arbitrary.device",
     )).toThrowError(/device operation policy/);
@@ -244,6 +253,9 @@ const reviewedOneTimeSecret: AgentOperationMetadata = {
   maxRequestBytes: 1024 * 1024,
   sensitiveOutput: true,
   oneTimeSecretOutput: true,
+  when: "Use when testing.",
+  dryRun: "none",
+  confirmation: "none",
 };
 
 describe("one-time secret operation metadata", () => {
@@ -257,6 +269,9 @@ describe("one-time secret operation metadata", () => {
       ).toMatchObject({
         sensitiveOutput: true,
         oneTimeSecretOutput: true,
+        when: "Use when testing.",
+        dryRun: "none",
+        confirmation: "none",
       });
     }
 
@@ -299,6 +314,9 @@ describe("one-time secret operation metadata", () => {
     ).toMatchObject({
       sensitiveOutput: true,
       oneTimeSecretOutput: false,
+      when: "Use when testing.",
+      dryRun: "none",
+      confirmation: "none",
     });
   });
 });
@@ -326,6 +344,9 @@ describe("artifact operation metadata", () => {
               risk: "read",
               sensitiveOutput: false,
               oneTimeSecretOutput: false,
+              when: "Use when testing.",
+              dryRun: "none",
+              confirmation: "none",
               batch: "forbidden",
               artifactOutput,
             },
@@ -351,6 +372,9 @@ describe("artifact operation metadata", () => {
           ...reviewedOneTimeSecret,
           sensitiveOutput: false,
           oneTimeSecretOutput: false,
+          when: "Use when testing.",
+          dryRun: "none",
+          confirmation: "none",
           artifactOutput,
           ...override,
         },
@@ -375,6 +399,9 @@ describe("artifact operation metadata", () => {
             ...reviewedOneTimeSecret,
             sensitiveOutput: false,
             oneTimeSecretOutput: false,
+            when: "Use when testing.",
+            dryRun: "none",
+            confirmation: "none",
             artifactOutput: invalidArtifact,
           },
           "dashboard.inventory_labels.generate_artifact",
@@ -388,6 +415,9 @@ describe("artifact operation metadata", () => {
           ...reviewedOneTimeSecret,
           sensitiveOutput: false,
           oneTimeSecretOutput: false,
+          when: "Use when testing.",
+          dryRun: "none",
+          confirmation: "none",
           transport: "octet-stream",
           batch: "sequential",
           requiredClientAction: "direct-upload",
@@ -401,6 +431,9 @@ describe("artifact operation metadata", () => {
         {
           ...reviewedOneTimeSecret,
           oneTimeSecretOutput: false,
+          when: "Use when testing.",
+          dryRun: "none",
+          confirmation: "none",
           transport: "octet-stream",
           batch: "forbidden",
         },
@@ -414,6 +447,9 @@ describe("artifact operation metadata", () => {
           ...reviewedOneTimeSecret,
           sensitiveOutput: false,
           oneTimeSecretOutput: false,
+          when: "Use when testing.",
+          dryRun: "none",
+          confirmation: "none",
           transport: "stream",
           artifactOutput,
         },
@@ -429,6 +465,9 @@ describe("artifact operation metadata", () => {
           ...reviewedOneTimeSecret,
           sensitiveOutput: false,
           oneTimeSecretOutput: false,
+          when: "Use when testing.",
+          dryRun: "none",
+          confirmation: "none",
           transport: "octet-stream",
           batch: "forbidden",
           maxRequestBytes: 5 * 1024 * 1024,
@@ -455,6 +494,9 @@ describe("batch risk policy", () => {
           batch: "parallel",
           sensitiveOutput: false,
           oneTimeSecretOutput: false,
+          when: "Use when testing.",
+          dryRun: "none",
+          confirmation: "none",
         },
         `dashboard.batch.${risk}`,
       )).toThrowError(/cannot use parallel batching/);
@@ -469,6 +511,9 @@ describe("batch risk policy", () => {
         batch: "parallel",
         sensitiveOutput: false,
         oneTimeSecretOutput: false,
+        when: "Use when testing.",
+        dryRun: "none",
+        confirmation: "none",
       },
       "dashboard.batch.read",
     )).toMatchObject({ risk: "read", batch: "parallel" });
@@ -552,6 +597,9 @@ describe("sensitive continuation operation metadata", () => {
     transport: "continuation",
     maximumResponseBytes: 8_192,
     oneTimeSecretOutput: false,
+    when: "Use when testing.",
+    dryRun: "none",
+    confirmation: "none",
     continuationOutput,
   };
 

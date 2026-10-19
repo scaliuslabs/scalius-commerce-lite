@@ -94,6 +94,50 @@ export const CURATED_ACTIONS: readonly CuratedAction[] = [
     },
   },
   {
+    // A bulk price run (routes/admin/resources-bulk.ts): field-level SKU
+    // prices, the products' derived price and buyer state in one chunk batch.
+    name: "bulk-set-prices",
+    weight: 3,
+    async run({ sqlite, db, rng }) {
+      const variants = ids(sqlite, "SELECT id FROM product_variants WHERE deleted_at IS NULL");
+      if (variants.length === 0) return null;
+      const chosen = rng.sample(variants, rng.int(1, Math.min(4, variants.length)));
+      const change = rng.chance(0.5)
+        ? { mode: "percent" as const, percent: rng.pick([-20, -5, 5, 10, 25]) }
+        : { mode: "amount" as const, amountMinor: rng.pick([-1_000, -100, 100, 500, 2_000]) };
+      const { createBulkRun, advanceBulkRun } = await import("../../bulk-runs/engine");
+      const { row } = await createBulkRun(db, { kind: "variants.set_prices", input: { variants: chosen.map((id) => ({ id })), change } }, {
+        operationKey: `dvc-bulk-price-${String(rng.int(0, 2 ** 30)).padStart(10, "0")}`,
+        createdBy: null,
+        lease: true,
+      });
+      const after = await advanceBulkRun(db, row.id, 2);
+      return `bulkSetPrices ${chosen.join(",")} ${JSON.stringify(change)} -> ${after?.status} changed=${after?.changed}`;
+    },
+  },
+  {
+    // A bulk stock run: counted quantities as ledger-v2 `adjusted` movements
+    // in one stock command, across availability bands.
+    name: "bulk-set-stock",
+    weight: 3,
+    async run({ sqlite, db, rng }) {
+      const variants = sqlite.prepare(
+        "SELECT id, reserved_stock AS reserved FROM product_variants WHERE deleted_at IS NULL AND track_inventory = 1 AND fulfillment_kind = 'physical'",
+      ).all() as Array<{ id: string; reserved: number }>;
+      if (variants.length === 0) return null;
+      const chosen = rng.sample(variants, rng.int(1, Math.min(4, variants.length)));
+      const items = chosen.map((variant) => ({ variantId: variant.id, quantity: variant.reserved + rng.pick([0, 1, 2, 3, 5, 12, 40]) }));
+      const { createBulkRun, advanceBulkRun } = await import("../../bulk-runs/engine");
+      const { row } = await createBulkRun(db, { kind: "variants.set_stock", input: { items } }, {
+        operationKey: `dvc-bulk-stock-${String(rng.int(0, 2 ** 30)).padStart(10, "0")}`,
+        createdBy: null,
+        lease: true,
+      });
+      const after = await advanceBulkRun(db, row.id, 2);
+      return `bulkSetStock ${items.map((item) => `${item.variantId}=${item.quantity}`).join(",")} -> ${after?.status} changed=${after?.changed}`;
+    },
+  },
+  {
     name: "publish-toggle",
     weight: 2,
     async run({ sqlite, db, rng }) {

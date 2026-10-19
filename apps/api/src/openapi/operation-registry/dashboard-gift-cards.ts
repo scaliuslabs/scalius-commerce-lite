@@ -1,17 +1,24 @@
 // Agent operation registry rows for the dashboard gift-card routes (Wave B §7.2).
-// Reads are executable for staff agents; every write issues or moves stored
-// value, or returns a bearer code, so it stays in the dashboard with a person.
+// Every write issues or moves stored value, or sends a bearer code, so each
+// is financial risk (Full automation or a Custom grant with financial risk)
+// and confirmation-gated. Issue returns the full code once: the agent result
+// redacts it (staff and the recipient receive it), and the card is verified
+// through gift_cards.list / get, which show the last four characters.
 import type { OperationRegistryEntry } from "./entry";
 
-const MONEY_WRITE_REASON =
-  "Gift cards are stored value: issuing, adjusting, disabling or re-sending one is a staff decision made in the dashboard, and issue returns a bearer code once.";
+const storedValue = (overrides: Partial<OperationRegistryEntry> = {}): OperationRegistryEntry => ({
+  risk: "financial",
+  confirmation: "required",
+  batch: "forbidden",
+  ...overrides,
+});
 
 export const DASHBOARD_GIFT_CARD_OPERATIONS = {
-  "dashboard.gift_cards.adjust": { exposure: "excluded", reason: MONEY_WRITE_REASON },
-  "dashboard.gift_cards.create": { exposure: "excluded", sensitive: true, reason: MONEY_WRITE_REASON },
+  "dashboard.gift_cards.adjust": storedValue(),
+  "dashboard.gift_cards.create": storedValue({ sensitive: true }),
   "dashboard.gift_cards.get": {},
   "dashboard.gift_cards.list": {},
-  "dashboard.gift_cards.resend": { exposure: "excluded", reason: MONEY_WRITE_REASON },
+  "dashboard.gift_cards.resend": storedValue(),
   "dashboard.gift_cards.summary": {},
-  "dashboard.gift_cards.update": { exposure: "excluded", reason: MONEY_WRITE_REASON },
+  "dashboard.gift_cards.update": storedValue(),
 } satisfies Record<string, OperationRegistryEntry>;

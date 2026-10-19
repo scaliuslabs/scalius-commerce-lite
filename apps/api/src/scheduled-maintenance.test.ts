@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
     drainNotificationOutbox: vi.fn(),
     drainPaymentEvents: vi.fn(),
     drainCatalogProjectionRebuild: vi.fn(),
+    drainBulkRuns: vi.fn(),
     rotateRecommendations: vi.fn(),
     cursorSave: vi.fn(async () => true),
     flushPendingMetaPurchaseOutbox: vi.fn(),
@@ -64,6 +65,7 @@ vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
 }));
 vi.mock("./background/notifications", () => ({ drainNotificationOutbox: mocks.drainNotificationOutbox }));
 vi.mock("./background/payment-events", () => ({ drainPaymentEvents: mocks.drainPaymentEvents }));
+vi.mock("./bulk-runs/engine", () => ({ drainBulkRuns: mocks.drainBulkRuns }));
 vi.mock("./background/catalog", () => ({
   drainCatalogProjectionRebuild: mocks.drainCatalogProjectionRebuild,
   rotateRecommendations: mocks.rotateRecommendations,
@@ -224,6 +226,7 @@ describe("runScheduledMaintenance", () => {
     mocks.drainNotificationOutbox.mockResolvedValue({ scanned: 0 });
     mocks.drainPaymentEvents.mockResolvedValue({ scanned: 0, processed: 0 });
     mocks.drainCatalogProjectionRebuild.mockResolvedValue(0);
+    mocks.drainBulkRuns.mockResolvedValue(0);
     mocks.rotateRecommendations.mockResolvedValue(0);
     mocks.runScheduledEventMaintenance.mockResolvedValue({
       events: { scanned: 0, dispatched: 0, failed: 0, skipped: 0, deliveries: [] },
@@ -633,6 +636,7 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.runScheduledEventMaintenance).toHaveBeenCalledWith(mocks.db, env, ctx);
     expect(mocks.drainPaymentEvents).toHaveBeenCalledWith(mocks.db, env, ctx);
     expect(mocks.drainCatalogProjectionRebuild).toHaveBeenCalledWith(mocks.db);
+    expect(mocks.drainBulkRuns).toHaveBeenCalledWith(mocks.db, expect.any(Number));
     // The drains go first: a sweep that keeps failing never delays them.
     expect(mocks.drainCatalogProjectionRebuild.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.releaseExpiredReservations.mock.invocationCallOrder[0]!);

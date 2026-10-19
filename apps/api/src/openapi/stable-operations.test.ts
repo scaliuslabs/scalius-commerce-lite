@@ -285,6 +285,9 @@ describe("the stable app API", () => {
       "dashboard.customers.tags_set",
       "dashboard.delivery_locations.import",
       "dashboard.products.publications_set",
+      // Bulk runs of tags and publications: neither has a revision to compare.
+      "dashboard.resources.customers.bulk_tag",
+      "dashboard.resources.products.bulk_publish",
     ]);
     const creates = /\.(create|import_url|comment_add)$/u;
     const unguarded = stable

@@ -3,6 +3,8 @@ import type {
   AgentArtifactOutput,
   AgentContinuationOutput,
   AgentOperationBatch,
+  AgentOperationDryRun,
+  AgentOperationGrantScope,
   AgentOperationExposure,
   AgentOperationIdempotency,
   AgentOperationPrincipal,
@@ -81,4 +83,22 @@ export type OperationRegistryEntry = {
    * curated agent intents in `agent-access/workflows/routes-dashboard.ts`.
    */
   uncurated?: true;
+  /**
+   * Default `"none"`. `"native"`: the route takes `dryRun: true` (JSON body,
+   * or query for a body-less method), checks everything and writes nothing.
+   * `"preview:<operationId>"`: a reviewed read on the same surface previews
+   * this write (discounts, taxes, order amendments).
+   */
+  dryRun?: AgentOperationDryRun;
+  /**
+   * Default: `"required"` for `destructive` and `financial` risk, else
+   * `"none"`. A row may only add the gate (stored value, bearer codes).
+   */
+  confirmation?: "required";
+  /**
+   * An opt-in grant scope: no preset grant (Read only, Operator, Full
+   * automation) reaches the operation; a Custom grant whose permission
+   * snapshot holds the route permission does (AGENT-ACCESS.md).
+   */
+  grantScope?: AgentOperationGrantScope;
 };

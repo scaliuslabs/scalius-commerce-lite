@@ -12967,6 +12967,247 @@
     ]
    }
   },
+  "dashboard.resources.bulk_runs.get": {
+   "method": "GET",
+   "path": "/api/v1/admin/resources/bulk-runs/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products",
+    "read_inventory",
+    "write_inventory",
+    "read_customers",
+    "write_customers"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 64
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "$ref": "#/components/schemas/BulkRun"
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.bulk_runs.list": {
+   "method": "GET",
+   "path": "/api/v1/admin/resources/bulk-runs",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products",
+    "read_inventory",
+    "write_inventory",
+    "read_customers",
+    "write_customers"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "running",
+        "done",
+        "failed"
+       ]
+      },
+      "required": false,
+      "name": "status",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^bulk_[a-f0-9]{32}$/u",
+       "description": "The `nextCursor` of the page before."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before.",
+      "name": "cursor",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "runs": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/BulkRun"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "runs",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.customers.bulk_tag": {
+   "method": "POST",
+   "path": "/api/v1/admin/resources/customers/bulk-tag",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_customers"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "customerIds": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 180
+          },
+          "minItems": 1,
+          "maxItems": 5000,
+          "description": "Customers by id (send this or filter)."
+         },
+         "filter": {
+          "type": "object",
+          "properties": {
+           "tag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "Customers who carry this tag."
+           },
+           "minOrders": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000,
+            "description": "Customers with at least this many orders ('more than 3 orders' is 4)."
+           },
+           "maxOrders": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000,
+            "description": "Customers with at most this many orders."
+           }
+          },
+          "additionalProperties": false,
+          "description": "Every live customer the filter matches (send this or customerIds)."
+         },
+         "add": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 40
+          },
+          "minItems": 1,
+          "maxItems": 10
+         },
+         "remove": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 40
+          },
+          "minItems": 1,
+          "maxItems": 10
+         },
+         "dryRun": {
+          "type": "boolean",
+          "description": "true checks and previews everything (before/after for the first 50 items, totals) and writes nothing."
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "$ref": "#/components/schemas/BulkRun"
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "dashboard.resources.customers.get": {
    "method": "GET",
    "path": "/api/v1/admin/resources/customers/{id}",
@@ -14681,6 +14922,256 @@
     ]
    }
   },
+  "dashboard.resources.products.bulk_publish": {
+   "method": "POST",
+   "path": "/api/v1/admin/resources/products/bulk-publish",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "productIds": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 180
+          },
+          "minItems": 1,
+          "maxItems": 5000,
+          "description": "Products by id (send this or filter)."
+         },
+         "filter": {
+          "type": "object",
+          "properties": {
+           "search": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Product name or SKU words."
+           },
+           "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 180,
+            "description": "Products directly in this category id."
+           },
+           "status": {
+            "type": "string",
+            "enum": [
+             "active",
+             "draft"
+            ]
+           },
+           "salesChannel": {
+            "type": "string",
+            "maxLength": 160,
+            "description": "Products published to this sales channel.",
+            "example": "sc_online_store"
+           }
+          },
+          "additionalProperties": false
+         },
+         "channelIds": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "maxLength": 160,
+           "description": "A sales channel id: `sc_online_store`, `sc_google`, `sc_meta`, `sc_agents`, or an app's `<plugin id>:<id>`.",
+           "example": "sc_online_store"
+          },
+          "minItems": 1,
+          "maxItems": 10
+         },
+         "action": {
+          "type": "string",
+          "enum": [
+           "publish",
+           "unpublish"
+          ]
+         },
+         "dryRun": {
+          "type": "boolean",
+          "description": "true checks and previews everything (before/after for the first 50 items, totals) and writes nothing."
+         }
+        },
+        "required": [
+         "channelIds",
+         "action"
+        ]
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "$ref": "#/components/schemas/BulkRun"
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.products.bulk_set_status": {
+   "method": "POST",
+   "path": "/api/v1/admin/resources/products/bulk-set-status",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "optional",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "products": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "id": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 180
+            },
+            "expectedAggregateRevision": {
+             "type": "integer",
+             "minimum": 1,
+             "description": "The product revision you read; a product changed since is left alone (a failure)."
+            }
+           },
+           "required": [
+            "id"
+           ]
+          },
+          "minItems": 1,
+          "maxItems": 5000,
+          "description": "Products by id (send this or filter)."
+         },
+         "filter": {
+          "type": "object",
+          "properties": {
+           "search": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Product name or SKU words."
+           },
+           "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 180,
+            "description": "Products directly in this category id."
+           },
+           "status": {
+            "type": "string",
+            "enum": [
+             "active",
+             "draft"
+            ]
+           },
+           "salesChannel": {
+            "type": "string",
+            "maxLength": 160,
+            "description": "Products published to this sales channel.",
+            "example": "sc_online_store"
+           }
+          },
+          "additionalProperties": false
+         },
+         "status": {
+          "type": "string",
+          "enum": [
+           "active",
+           "draft"
+          ],
+          "description": "active sells the product; draft hides it. Activating skips a product without a price above 0."
+         },
+         "dryRun": {
+          "type": "boolean",
+          "description": "true checks and previews everything (before/after for the first 50 items, totals) and writes nothing."
+         }
+        },
+        "required": [
+         "status"
+        ]
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "$ref": "#/components/schemas/BulkRun"
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "dashboard.resources.products.get": {
    "method": "GET",
    "path": "/api/v1/admin/resources/products/{id}",
@@ -15068,6 +15559,298 @@
       "required": [
        "shipments"
       ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.variants.bulk_set_prices": {
+   "method": "POST",
+   "path": "/api/v1/admin/resources/variants/bulk-set-prices",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "optional",
+   "scopes": [
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "variants": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "id": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 180
+            },
+            "expectedPriceMinor": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 9007199254740991,
+             "description": "The price you read; a SKU whose price changed since is left alone (a failure)."
+            }
+           },
+           "required": [
+            "id"
+           ]
+          },
+          "minItems": 1,
+          "maxItems": 5000,
+          "description": "SKUs by id (send this or filter)."
+         },
+         "filter": {
+          "type": "object",
+          "properties": {
+           "search": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Product name or SKU words."
+           },
+           "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 180,
+            "description": "Products directly in this category id."
+           },
+           "status": {
+            "type": "string",
+            "enum": [
+             "active",
+             "draft"
+            ]
+           },
+           "salesChannel": {
+            "type": "string",
+            "maxLength": 160,
+            "description": "Products published to this sales channel.",
+            "example": "sc_online_store"
+           }
+          },
+          "additionalProperties": false,
+          "description": "Every live SKU of the products this filter matches (send this or variants)."
+         },
+         "change": {
+          "oneOf": [
+           {
+            "type": "object",
+            "properties": {
+             "mode": {
+              "type": "string",
+              "enum": [
+               "set"
+              ]
+             },
+             "amountMinor": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+             }
+            },
+            "required": [
+             "mode",
+             "amountMinor"
+            ],
+            "description": "Set every price to this amount (on the store's price increment)."
+           },
+           {
+            "type": "object",
+            "properties": {
+             "mode": {
+              "type": "string",
+              "enum": [
+               "percent"
+              ]
+             },
+             "percent": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 1000
+             }
+            },
+            "required": [
+             "mode",
+             "percent"
+            ],
+            "description": "Change every price by this percent (5 raises 5%, -10 lowers 10%), rounded half up to the price increment."
+           },
+           {
+            "type": "object",
+            "properties": {
+             "mode": {
+              "type": "string",
+              "enum": [
+               "amount"
+              ]
+             },
+             "amountMinor": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+             }
+            },
+            "required": [
+             "mode",
+             "amountMinor"
+            ],
+            "description": "Add (or, negative, take off) this many minor units, rounded to the price increment."
+           }
+          ]
+         },
+         "dryRun": {
+          "type": "boolean",
+          "description": "true checks and previews everything (before/after for the first 50 items, totals) and writes nothing."
+         }
+        },
+        "required": [
+         "change"
+        ]
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "$ref": "#/components/schemas/BulkRun"
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "dashboard.resources.variants.bulk_set_stock": {
+   "method": "POST",
+   "path": "/api/v1/admin/resources/variants/bulk-set-stock",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "optional",
+   "scopes": [
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "locationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "The location counted (the default location when omitted)."
+         },
+         "items": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "variantId": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 180
+            },
+            "quantity": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 1000000000,
+             "description": "Units on hand at the location after the run (not a change)."
+            },
+            "expectedStockVersion": {
+             "type": "integer",
+             "minimum": 0,
+             "description": "The SKU's stockVersion you read; a SKU whose stock changed since is left alone (a failure)."
+            }
+           },
+           "required": [
+            "variantId",
+            "quantity"
+           ]
+          },
+          "minItems": 1,
+          "maxItems": 5000
+         },
+         "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Shown on each stock movement (default: Bulk stock count)."
+         },
+         "dryRun": {
+          "type": "boolean",
+          "description": "true checks and previews everything (before/after for the first 50 items, totals) and writes nothing."
+         }
+        },
+        "required": [
+         "items"
+        ]
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "$ref": "#/components/schemas/BulkRun"
      }
     },
     "required": [
@@ -16556,6 +17339,132 @@
     "revision",
     "createdAt",
     "updatedAt"
+   ]
+  },
+  "BulkRun": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "nullable": true,
+     "description": "The run's id; null for a dry run (nothing was started)."
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "variants.set_prices",
+      "variants.set_stock",
+      "customers.tag",
+      "products.set_status",
+      "products.publish"
+     ]
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "preview",
+      "running",
+      "done",
+      "failed"
+     ],
+     "description": "preview: a dry run (nothing written). running: still going (read bulk_runs.get). done or failed: final."
+    },
+    "dryRun": {
+     "type": "boolean"
+    },
+    "total": {
+     "type": "integer",
+     "description": "Items the selection held when the run started."
+    },
+    "processed": {
+     "type": "integer"
+    },
+    "changed": {
+     "type": "integer"
+    },
+    "unchanged": {
+     "type": "integer",
+     "description": "Items already as asked (no write)."
+    },
+    "failed": {
+     "type": "integer",
+     "description": "Items refused; the first 50 are in failures with a code."
+    },
+    "currency": {
+     "type": "string",
+     "nullable": true,
+     "description": "The store currency of every *Minor amount in sample (price runs); null otherwise."
+    },
+    "sample": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "additionalProperties": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "number"
+        },
+        {
+         "type": "boolean"
+        },
+        {}
+       ]
+      }
+     },
+     "description": "Before and after of the first 50 changes: prices (variantId, sku, beforeMinor, afterMinor), stock (variantId, locationId, beforeOnHand, afterOnHand), tags (customerId), status and publishing (productId)."
+    },
+    "failures": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "code": {
+        "type": "string",
+        "description": "price_changed, price_not_positive, stock_changed, below_reserved, not_found, retired, digital_stock, not_physical, revision_changed or needs_price."
+       }
+      },
+      "required": [
+       "id",
+       "code"
+      ]
+     }
+    },
+    "errorCode": {
+     "type": "string",
+     "nullable": true,
+     "description": "Why a failed run stopped."
+    },
+    "createdAt": {
+     "type": "string",
+     "nullable": true
+    },
+    "finishedAt": {
+     "type": "string",
+     "nullable": true
+    }
+   },
+   "required": [
+    "id",
+    "kind",
+    "status",
+    "dryRun",
+    "total",
+    "processed",
+    "changed",
+    "unchanged",
+    "failed",
+    "currency",
+    "sample",
+    "failures",
+    "errorCode",
+    "createdAt",
+    "finishedAt"
    ]
   },
   "CustomerResource": {

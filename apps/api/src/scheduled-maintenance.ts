@@ -650,6 +650,14 @@ export const BACKGROUND_DRAINS: ReadonlyArray<{ name: string; run(context: Sweep
     run: ({ db }) => drainCatalogProjectionRebuild(db),
   },
   {
+    // Bulk runs larger than one request (routes/admin/resources-bulk.ts).
+    name: "bulk_run_drain",
+    async run({ db }) {
+      const { drainBulkRuns } = await import("./bulk-runs/engine");
+      return drainBulkRuns(db, planLimits().background.bulkRunChunksPerDrain);
+    },
+  },
+  {
     // PostgreSQL's dependency change log keeps each key's newest row (no query on D1 or Turso).
     name: "cache_dep_compaction",
     run: ({ db }) => compactCacheDeps(db),

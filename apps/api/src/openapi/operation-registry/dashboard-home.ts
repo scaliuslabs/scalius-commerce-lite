@@ -31,11 +31,11 @@ export const DASHBOARD_HOME_OPERATIONS = {
     reason:
       "Placeholder returns ‘Reindex initiated’ without scheduling or performing reindex work; execution would report a false side effect.",
   },
-  "dashboard.search.global": {
-    exposure: "excluded",
-    reason:
-      "The dashboard's command palette: a handful of mixed records for typed navigation. Agents search each kind through its bounded list operation, which carries filters, paging and the full record.",
-  },
+  // The command palette's bounded, permission-filtered cross-resource find: an
+  // agent resolves "order 1042" or "Rahim" in one read, then reads the record.
+  "dashboard.search.global": { limits: { request: 16_384 } },
+  // Store-wide launch steps (Home's guide without the staff dismissal).
+  "dashboard.setup.checklist": { limits: { request: 16_384 } },
   "dashboard.search.get_search": {
     exposure: "excluded",
     reason:
