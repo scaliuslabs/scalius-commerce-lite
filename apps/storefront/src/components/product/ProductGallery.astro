@@ -9,6 +9,7 @@ import {
   boundedStageRatio,
   productGalleryMainSlot,
   productGalleryThumbnailSlot,
+  GALLERY_EAGER_THUMBNAILS,
   type ProductGalleryLayout,
 } from "./lib/gallery-images";
 import { featuredGalleryItem, productGalleryItems } from "./lib/gallery-media";
@@ -63,10 +64,9 @@ const galleryMedia = productGalleryItems(product, media);
 const featuredMedia = featuredGalleryItem(galleryMedia, initialProductMediaId);
 const hasMultipleMedia = galleryMedia.length > 1;
 const mainSlot = productGalleryMainSlot(layout, hasMultipleMedia);
-const thumbnailSlots = {
-  mobile: productGalleryThumbnailSlot(layout, "mobile"),
-  desktop: productGalleryThumbnailSlot(layout, "desktop"),
-};
+// Both rails share one slot, so the hidden rail's thumbnail names the
+// visible one's file (an eager thumbnail downloads once).
+const thumbnailSlot = productGalleryThumbnailSlot(layout);
 // Client switches rebuild src/srcset/sizes from these URLs with the same
 // helper (responsiveImageSources) and the same slot.
 const productFallbackUrl = resolveProductImageUrl(product.imageUrl);
@@ -81,12 +81,7 @@ const galleryItems = galleryMedia.map((item) => {
     url: item.url,
     /** Video: the poster's CDN URL; the main slot sizes it like a photo. */
     posterUrl: item.posterUrl,
-    thumbs: thumbSource
-      ? {
-          mobile: productImageSources(thumbSource, thumbnailSlots.mobile),
-          desktop: productImageSources(thumbSource, thumbnailSlots.desktop),
-        }
-      : null,
+    thumbs: thumbSource ? productImageSources(thumbSource, thumbnailSlot) : null,
   };
 });
 const galleryImages = galleryItems.filter(({ item }) => item.kind === "image");
@@ -347,14 +342,14 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
                     >
                       {itemData.thumbs ? (
                         <img
-                          src={itemData.thumbs.mobile.src}
-                          srcset={itemData.thumbs.mobile.srcset}
-                          sizes={itemData.thumbs.mobile.sizes}
+                          src={itemData.thumbs.src}
+                          srcset={itemData.thumbs.srcset}
+                          sizes={itemData.thumbs.sizes}
                           alt=""
                           width={mobileThumb.imageSize}
                           height={mobileThumb.imageSize}
                           class="h-full w-full object-contain object-center"
-                          loading="lazy"
+                          loading={index < GALLERY_EAGER_THUMBNAILS ? "eager" : "lazy"}
                           decoding="async"
                           fetchpriority="low"
                         />
@@ -457,14 +452,14 @@ const listHidden = Math.max(0, listMedia.length - LIST_VISIBLE);
               >
                 {itemData.thumbs ? (
                   <img
-                    src={itemData.thumbs.desktop.src}
-                    srcset={itemData.thumbs.desktop.srcset}
-                    sizes={itemData.thumbs.desktop.sizes}
+                    src={itemData.thumbs.src}
+                    srcset={itemData.thumbs.srcset}
+                    sizes={itemData.thumbs.sizes}
                     alt=""
                     width={desktopThumb.imageSize}
                     height={desktopThumb.imageSize}
                     class="h-full w-full object-contain object-center transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                    loading="lazy"
+                    loading={index < GALLERY_EAGER_THUMBNAILS ? "eager" : "lazy"}
                     decoding="async"
                     fetchpriority="low"
                   />

@@ -96,16 +96,23 @@ export function productGalleryMainSlot(
   };
 }
 
-/** Thumbnails of the mobile or desktop rail. */
-export function productGalleryThumbnailSlot(
-  layout: ProductGalleryLayout,
-  rail: "mobile" | "desktop",
-): ImageSlot {
-  const below = layout.thumbnails === "below";
-  const sizes = rail === "mobile"
-    ? layout.phoneSideThumbnails ? "48px" : "68px"
-    : layout.thumbnailSize !== null
-      ? `${layout.thumbnailSize}px`
-      : below ? "88px" : "(min-width: 1280px) 96px, 76px";
-  return { width: GALLERY_IMAGE_WIDTHS.thumbnail, sizes, maxWidth: THUMBNAIL_MAX_WIDTH };
+/**
+ * The first thumbnails sit in the first viewport (a phone strip shows about
+ * five 68px thumbnails, a computer rail about five): they load eagerly at low
+ * priority, so they never paint blank after the photo. The rest stay lazy.
+ */
+export const GALLERY_EAGER_THUMBNAILS = 5;
+
+/**
+ * The thumbnail slot of both rails. One `sizes` covers every breakpoint (the
+ * phone strip below 1024px, the computer rail from it), so the rail hidden at
+ * a breakpoint names the same file as the visible one and an eager thumbnail
+ * is fetched once, whichever rail shows it.
+ */
+export function productGalleryThumbnailSlot(layout: ProductGalleryLayout): ImageSlot {
+  const phone = layout.phoneSideThumbnails ? "48px" : "68px";
+  const computer = layout.thumbnailSize !== null
+    ? `${layout.thumbnailSize}px`
+    : layout.thumbnails === "below" ? "88px" : "(min-width: 1280px) 96px, 76px";
+  return { width: GALLERY_IMAGE_WIDTHS.thumbnail, sizes: `(max-width: 1023px) ${phone}, ${computer}`, maxWidth: THUMBNAIL_MAX_WIDTH };
 }
