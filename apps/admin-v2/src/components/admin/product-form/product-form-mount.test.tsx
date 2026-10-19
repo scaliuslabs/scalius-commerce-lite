@@ -216,6 +216,8 @@ describe("a product page nobody has edited", () => {
 
   it("keeps the digital delivery disclosure usable for a view-only product", async () => {
     const probe = await mount(true, savedValues, true);
+    // The card loads right after the page: wait for it rather than assume it drew with the first render.
+    await vi.waitFor(() => expect(container.querySelector("#product-digital")).not.toBeNull());
     const card = container.querySelector("#product-digital")!;
     const toggle = card.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
     expect(toggle.matches(":disabled")).toBe(false);

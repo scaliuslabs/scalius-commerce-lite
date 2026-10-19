@@ -66,7 +66,8 @@ describe("OrganizationCard category create", () => {
       </QueryClientProvider>,
     ));
     await act(async () => (document.querySelector('[role="combobox"]') as HTMLButtonElement).click());
-    await settle();
+    // The list loads after the page: wait for it instead of assuming it drew with the popover.
+    await vi.waitFor(() => expect(document.querySelector("[cmdk-input]")).not.toBeNull());
     const input = document.querySelector("[cmdk-input]") as HTMLInputElement;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, text);

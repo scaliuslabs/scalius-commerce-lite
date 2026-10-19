@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { Pencil } from "lucide-react";
-import { handleFromText, type HandleResource } from "@scalius/shared/handle";
+import { autoHandleFor } from "./auto-handle";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -59,10 +59,7 @@ export interface SearchListingCardProps {
   disabled?: boolean;
 }
 
-/** The handle the server makes from a new item's name; empty until there is a name. */
-export function autoHandleFor(name: string, resource: HandleResource): string {
-  return name.trim() ? handleFromText(name, resource) : "";
-}
+export { autoHandleFor };
 
 /** Google-style result: address, title, description. */
 export function SearchListingPreview({
