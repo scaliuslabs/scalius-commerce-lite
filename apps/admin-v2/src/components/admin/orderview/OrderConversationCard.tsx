@@ -36,6 +36,7 @@ const ConversationMessages = lazy(() =>
   loadConversationMessages().then((module) => ({ default: module.ConversationMessages })),
 );
 const ResolveDialog = lazy(() => import("./OrderRequestResolveDialog").then((module) => ({ default: module.ResolveDialog })));
+const ReplyReachNote = lazy(() => import("./ReplyReachNote").then((module) => ({ default: module.ReplyReachNote })));
 const ConversationComposer = lazy(() =>
   loadConversationComposer().then((module) => ({ default: module.ConversationComposer })),
 );
@@ -158,6 +159,7 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
           <Suspense fallback={null}>
             <div className="border-t pt-4">
               <ConversationComposer key={order.id} onPosted={(posted) => setFollowRequest({ conversationId: posted.id, seq: posted.messages.at(-1)?.seq ?? 0 })} primary={false} allowInternalNotes={!actions.canEditOrders} conversationId={conversation?.id ?? null} orderId={order.id} />
+              <ReplyReachNote order={order} />
             </div>
           </Suspense>
         ) : null}

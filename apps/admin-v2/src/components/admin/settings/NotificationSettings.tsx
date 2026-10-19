@@ -89,6 +89,7 @@ function RulesTable({
   onToggle,
   disabled,
   linkEvents = false,
+  rowIdPrefix,
 }: {
   groups: readonly NotificationEventGroup[];
   columns: ReadonlyArray<{ key: string; label: string; ready: boolean }>;
@@ -99,6 +100,8 @@ function RulesTable({
   disabled: boolean;
   /** Templated message names (order events, digital, gift card, review request) open that message's editor. */
   linkEvents?: boolean;
+  /** Gives each row an anchor (`#<prefix>-<event>`) other screens can link to. */
+  rowIdPrefix?: string;
 }) {
   const events = useMessages(notificationEventMessages);
   const t = useMessages(notificationsMessages);
@@ -123,7 +126,7 @@ function RulesTable({
             </th>
           </tr>
           {group.events.map((event) => (
-            <tr key={event} className="h-[calc(2lh+12px)] border-t border-border">
+            <tr key={event} id={rowIdPrefix ? `${rowIdPrefix}-${event}` : undefined} className="h-[calc(2lh+12px)] scroll-mt-20 border-t border-border">
               <td className="py-1.5 pe-2">
                 {linkEvents && isTemplatedNotificationType(event) ? (
                   <Link
@@ -200,6 +203,7 @@ export function CustomerNotificationsCard() {
         columns={columns}
         disabled={!canEdit}
         linkEvents
+        rowIdPrefix="customer-rule"
         allowed={customerChannelAllowed}
         isOn={(event, channel) => config[event][channel as keyof (typeof config)[typeof event]]}
         onToggle={(event, channel) =>
