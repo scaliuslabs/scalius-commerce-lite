@@ -8,6 +8,7 @@ import {
   evaluateRequiredDocs,
   evaluateRobotsTxt,
   evaluateSitemapIndexSections,
+  evaluateUcpMcpTools,
   evaluateUcpProfile,
   firstUcpSearchCandidate,
   normalizeHttpBaseUrl,
@@ -17,40 +18,56 @@ import {
 } from "./release-check.mjs";
 
 function catalogOnlyUcpProfile() {
-  const version = "2026-01";
+  const version = "2026-08-25";
+  const service = (transport, endpoint, schema) => ({
+    version,
+    transport,
+    endpoint,
+    spec: `https://ucp.dev/${version}/specification/overview`,
+    schema: `https://ucp.dev/${version}/services/shopping/${schema}`,
+  });
   return {
     ucp: {
       version,
       services: {
         "dev.ucp.shopping": [
-          {
-            version,
-            transport: "rest",
-            endpoint: "https://storefront.example.test/ucp",
-            spec: `https://ucp.dev/${version}/specification/overview`,
-            schema: `https://ucp.dev/${version}/services/shopping/rest.openapi.json`,
-          },
+          service("rest", "https://storefront.example.test/ucp", "rest.openapi.json"),
+          service("mcp", "https://storefront.example.test/ucp/mcp", "mcp.openrpc.json"),
         ],
       },
       capabilities: {
         "dev.ucp.shopping.catalog.search": [
           {
             version,
-            spec: `https://ucp.dev/${version}/specification/catalog/search`,
+            spec: `https://ucp.dev/${version}/specification/shopping/catalog/search`,
             schema: `https://ucp.dev/${version}/schemas/shopping/catalog_search.json`,
           },
         ],
         "dev.ucp.shopping.catalog.lookup": [
           {
             version,
-            spec: `https://ucp.dev/${version}/specification/catalog/lookup`,
+            spec: `https://ucp.dev/${version}/specification/shopping/catalog/lookup`,
             schema: `https://ucp.dev/${version}/schemas/shopping/catalog_lookup.json`,
           },
         ],
       },
-      supported_versions: {
-        [version]: "https://storefront.example.test/.well-known/ucp",
-      },
+      payment_handlers: {},
+    },
+  };
+}
+
+const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
+
+function mcpTools(names = ["search_catalog", "lookup_catalog", "get_product"]) {
+  return {
+    jsonrpc: "2.0",
+    id: 1,
+    result: {
+      tools: names.map((name) => ({
+        name,
+        inputSchema: { type: "object", required: ["meta", "catalog"] },
+        annotations: READ_ONLY,
+      })),
     },
   };
 }
@@ -253,6 +270,50 @@ describe("release discovery policy", () => {
     expect(unsafe.ok).toBe(false);
     expect(unsafe.errors.join(" ")).toMatch(/only catalog search\/lookup|checkout\/cart\/order\/payment/);
   });
+
+  it("requires the 2026-08-25 profile shape: version, MCP binding, empty payment handler registry", () => {
+    const origin = { storefrontOrigin: "https://storefront.example.test" };
+    expect(evaluateUcpProfile(catalogOnlyUcpProfile(), origin)).toMatchObject({
+      ok: true,
+      version: "2026-08-25",
+      mcpEndpoint: "https://storefront.example.test/ucp/mcp",
+    });
+
+    const withoutRegistry = catalogOnlyUcpProfile();
+    delete withoutRegistry.ucp.payment_handlers;
+    expect(evaluateUcpProfile(withoutRegistry, origin).errors.join(" ")).toContain("ucp.payment_handlers");
+
+    const withHandler = catalogOnlyUcpProfile();
+    withHandler.ucp.payment_handlers = { "com.example.pay": [{ id: "pay", version: "2026-08-25" }] };
+    expect(evaluateUcpProfile(withHandler, origin).errors.join(" ")).toContain("must not advertise payment handlers");
+
+    const withoutMcp = catalogOnlyUcpProfile();
+    withoutMcp.ucp.services["dev.ucp.shopping"].pop();
+    expect(evaluateUcpProfile(withoutMcp, origin).errors.join(" ")).toContain("MCP");
+
+    const oldVersion = catalogOnlyUcpProfile();
+    oldVersion.ucp.version = "2026-04-08";
+    expect(evaluateUcpProfile(oldVersion, origin).errors.join(" ")).toContain("must be 2026-08-25");
+
+    const selfListed = catalogOnlyUcpProfile();
+    selfListed.ucp.supported_versions = { "2026-08-25": "https://storefront.example.test/.well-known/ucp" };
+    expect(evaluateUcpProfile(selfListed, origin).errors.join(" ")).toContain("only older versions");
+
+    const oldSpecPath = catalogOnlyUcpProfile();
+    oldSpecPath.ucp.capabilities["dev.ucp.shopping.catalog.search"][0].spec = "https://ucp.dev/2026-08-25/specification/catalog/search";
+    expect(evaluateUcpProfile(oldSpecPath, origin).ok).toBe(false);
+  });
+
+  it("accepts exactly the three read-only UCP MCP tools", () => {
+    expect(evaluateUcpMcpTools(mcpTools())).toMatchObject({ ok: true, tools: ["search_catalog", "lookup_catalog", "get_product"] });
+    expect(evaluateUcpMcpTools(mcpTools(["search_catalog", "lookup_catalog", "get_product", "create_checkout"])).ok).toBe(false);
+    expect(evaluateUcpMcpTools(mcpTools(["search_catalog", "lookup_catalog"])).ok).toBe(false);
+
+    const writable = mcpTools();
+    writable.result.tools[1].annotations = { readOnlyHint: false, destructiveHint: true };
+    expect(evaluateUcpMcpTools(writable).errors.join(" ")).toContain("lookup_catalog");
+    expect(evaluateUcpMcpTools({ jsonrpc: "2.0", id: 1, error: { code: -32601, message: "Method not found" } }).ok).toBe(false);
+  });
 });
 
 describe("release feed continuation", () => {
@@ -339,6 +400,7 @@ describe("release UCP catalog candidate", () => {
   function llmsResponse() {
     return new Response([
       "https://storefront.example.test/.well-known/ucp",
+      "https://storefront.example.test/ucp/mcp",
       "dev.ucp.shopping.catalog.search",
       "dev.ucp.shopping.catalog.lookup",
       "UCP-Agent:",
@@ -357,13 +419,26 @@ describe("release UCP catalog candidate", () => {
     timeoutMs: 1_000,
   };
 
+  /** The MCP endpoint: tools/list, and search_catalog answering with `searchPayload` (the REST body). */
+  function mcpResponse(init, searchPayload) {
+    const message = JSON.parse(init.body);
+    if (message.method === "tools/list") return jsonResponse(mcpTools());
+    expect(message).toMatchObject({
+      method: "tools/call",
+      params: { name: "search_catalog", arguments: { meta: { "ucp-agent": { profile: expect.stringMatching(/^https:/) } } } },
+    });
+    expect(init.headers["Mcp-Name"]).toBe("search_catalog");
+    return jsonResponse({ jsonrpc: "2.0", id: message.id, result: { structuredContent: searchPayload } });
+  }
+
   it("skips lookup and product reads when search has no eligible candidate", async () => {
     const urls = [];
-    const fetchImpl = async (url) => {
+    const fetchImpl = async (url, init) => {
       urls.push(url);
       if (url.endsWith("/.well-known/ucp")) return jsonResponse(catalogOnlyUcpProfile());
       if (url.endsWith("/llms.txt")) return llmsResponse();
       if (url.endsWith("/catalog/search")) return jsonResponse({ products: [] });
+      if (url.endsWith("/ucp/mcp")) return mcpResponse(init, { products: [] });
       throw new Error(`Unexpected UCP request: ${url}`);
     };
 
@@ -376,8 +451,11 @@ describe("release UCP catalog candidate", () => {
     expect(urls).toEqual([
       "https://storefront.example.test/.well-known/ucp",
       "https://storefront.example.test/llms.txt",
+      "https://storefront.example.test/ucp/mcp",
       "https://storefront.example.test/ucp/catalog/search",
+      "https://storefront.example.test/ucp/mcp",
     ]);
+    expect(result.mcp).toMatchObject({ tools: ["search_catalog", "lookup_catalog", "get_product"], search: { matchesRest: true } });
     expect(result.catalog).toMatchObject({
       search: { productCount: 0 },
       lookup: { status: "skipped" },
@@ -387,16 +465,16 @@ describe("release UCP catalog candidate", () => {
 
   it("keeps lookup correlation and product validation for a real search candidate", async () => {
     const variantId = "gid://scalius/ProductVariant/variant-1";
+    const searchPayload = {
+      products: [{ id: "gid://scalius/Product/product-1", variants: [{ id: variantId }] }],
+    };
     const urls = [];
-    const fetchImpl = async (url) => {
+    const fetchImpl = async (url, init) => {
       urls.push(url);
       if (url.endsWith("/.well-known/ucp")) return jsonResponse(catalogOnlyUcpProfile());
       if (url.endsWith("/llms.txt")) return llmsResponse();
-      if (url.endsWith("/catalog/search")) {
-        return jsonResponse({
-          products: [{ id: "gid://scalius/Product/product-1", variants: [{ id: variantId }] }],
-        });
-      }
+      if (url.endsWith("/ucp/mcp")) return mcpResponse(init, searchPayload);
+      if (url.endsWith("/catalog/search")) return jsonResponse(searchPayload);
       if (url.endsWith("/catalog/lookup")) {
         return jsonResponse({
           products: [{ variants: [{ inputs: [{ id: variantId }] }] }],
@@ -423,7 +501,9 @@ describe("release UCP catalog candidate", () => {
     expect(urls).toEqual([
       "https://storefront.example.test/.well-known/ucp",
       "https://storefront.example.test/llms.txt",
+      "https://storefront.example.test/ucp/mcp",
       "https://storefront.example.test/ucp/catalog/search",
+      "https://storefront.example.test/ucp/mcp",
       "https://storefront.example.test/ucp/catalog/lookup",
       "https://storefront.example.test/ucp/catalog/product",
     ]);
@@ -432,6 +512,39 @@ describe("release UCP catalog candidate", () => {
       lookup: { inputId: variantId, productCount: 1 },
       product: { inputId: variantId, firstVariantId: variantId, variantCount: 1 },
     });
+  });
+});
+
+describe("release UCP MCP parity", () => {
+  it("fails when MCP search_catalog does not answer with the REST products", async () => {
+    const restPayload = { products: [{ id: "gid://scalius/product/p1", variants: [{ id: "gid://scalius/product-variant/v1" }] }] };
+    const fetchImpl = async (url, init) => {
+      const json = (payload) => new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Cache-Control": "public, max-age=60", "Content-Type": "application/json" },
+      });
+      if (url.endsWith("/.well-known/ucp")) return json(catalogOnlyUcpProfile());
+      if (url.endsWith("/llms.txt")) {
+        return new Response("https://storefront.example.test/.well-known/ucp https://storefront.example.test/ucp/mcp dev.ucp.shopping.catalog.search dev.ucp.shopping.catalog.lookup UCP-Agent: not advertised", {
+          status: 200,
+          headers: { "Cache-Control": "public, max-age=60", "Content-Type": "text/plain" },
+        });
+      }
+      if (url.endsWith("/catalog/search")) return json(restPayload);
+      if (url.endsWith("/ucp/mcp")) {
+        const message = JSON.parse(init.body);
+        return json(message.method === "tools/list"
+          ? mcpTools()
+          : { jsonrpc: "2.0", id: message.id, result: { structuredContent: { products: [] } } });
+      }
+      throw new Error(`Unexpected UCP request: ${url}`);
+    };
+
+    await expect(checkUcpDiscovery({ storefrontUrl: "https://storefront.example.test", timeoutMs: 1_000 }, {
+      fetchImpl,
+      productUrl: "https://storefront.example.test/products/p1",
+      logger: null,
+    })).rejects.toThrow("differ from the REST catalog search");
   });
 });
 

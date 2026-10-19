@@ -291,6 +291,8 @@ export interface StorefrontFeedProduct {
     /** The product's published brand record; null omits `<g:brand>` (never a placeholder). */
     brand: { id: string; name: string; slug: string } | null;
     attributes: StorefrontFeedProductAttribute[];
+    /** The published-review average and count; null without one or while the store's reviews are off. */
+    rating: { average: number; count: number } | null;
     variants: StorefrontFeedProductVariant[];
     updatedAt: string | null;
 }

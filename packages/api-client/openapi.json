@@ -56820,6 +56820,22 @@
                                   ]
                                 }
                               },
+                              "rating": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "average": {
+                                    "type": "number"
+                                  },
+                                  "count": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "average",
+                                  "count"
+                                ]
+                              },
                               "variants": {
                                 "type": "array",
                                 "items": {
@@ -57003,6 +57019,7 @@
                               "category",
                               "brand",
                               "attributes",
+                              "rating",
                               "variants",
                               "updatedAt"
                             ]

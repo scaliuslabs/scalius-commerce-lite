@@ -1,6 +1,7 @@
 import {
   UCP_CATALOG_LOOKUP_CAPABILITY,
   UCP_CATALOG_SEARCH_CAPABILITY,
+  UCP_MCP_PATH,
   UCP_VERSION,
 } from "@/lib/ucp/catalog";
 
@@ -18,12 +19,13 @@ export function buildLlmsTxt(baseUrl: string): string {
 
 ## UCP catalog quick start
 
-1. GET ${baseUrl}/.well-known/ucp and resolve the advertised REST endpoint, protocol version, and capabilities from the profile.
+1. GET ${baseUrl}/.well-known/ucp and resolve the advertised REST and MCP endpoints, protocol version, and capabilities from the profile.
 2. This storefront currently advertises only ${UCP_CATALOG_SEARCH_CAPABILITY} and ${UCP_CATALOG_LOOKUP_CAPABILITY} for UCP ${UCP_VERSION}.
 3. Send catalog requests with Content-Type: application/json and UCP-Agent: profile="https://your-agent.example/.well-known/ucp". The profile URL must identify the calling platform over HTTPS.
-4. Search with POST ${baseUrl}/ucp/catalog/search and a body such as {"ucp":{"version":"${UCP_VERSION}"},"query":"shoes"}.
-5. Resolve product, variant, SKU, handle, or same-store product URL identifiers with POST ${baseUrl}/ucp/catalog/lookup and a body such as {"ucp":{"version":"${UCP_VERSION}"},"ids":["product-or-sku"]}.
-6. Follow response pagination and messages. Treat catalog price and availability as advisory buyer-visible facts.
+4. Search with POST ${baseUrl}/ucp/catalog/search and a body such as {"query":"shoes","context":{"address_country":"US","currency":"USD","language":"en"}}. The context picks the market whose prices, currency, and language you get; prices are integer minor units.
+5. Resolve product, variant, SKU, handle, or same-store product URL identifiers with POST ${baseUrl}/ucp/catalog/lookup and a body such as {"ids":["product-or-sku"]}; get one product's full detail with POST ${baseUrl}/ucp/catalog/product and {"id":"product-or-sku"}.
+6. MCP clients call the same catalog at POST ${baseUrl}${UCP_MCP_PATH} (tools search_catalog, lookup_catalog, get_product) with arguments such as {"meta":{"ucp-agent":{"profile":"https://your-agent.example/.well-known/ucp"}},"catalog":{"query":"shoes"}}.
+7. Follow response pagination, messages, and policies. Treat catalog price and availability as advisory buyer-visible facts.
 
 ## Scope
 

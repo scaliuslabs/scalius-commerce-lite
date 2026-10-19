@@ -241,6 +241,8 @@ const storefrontFeedProductSchema = z.object({
   /** The published brand record; null means no brand (feeds omit `<g:brand>`, never a placeholder). */
   brand: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   attributes: z.array(storefrontFeedAttributeSchema),
+  /** The published-review average (1-5) and count; null without a review or while the store's reviews are off. */
+  rating: z.object({ average: z.number(), count: z.number().int() }).nullable(),
   variants: z.array(storefrontFeedVariantSchema),
   updatedAt: z.string().nullable(),
 });
