@@ -544,6 +544,28 @@ describe("cart discount checkout handoff", () => {
     document.cookie = "cs_auth=; Max-Age=0; path=/";
   });
 
+  it("names the items a cash-only store can't take, and why, instead of blaming the total", async () => {
+    document.getElementById("checkout-meta")!.setAttribute("data-cod-only", "true");
+    const line = { index: 0, cartKey: CART_LINE_KEY, productId: "prod_1", variantId: "var_1", quantity: 1, unitPrice: 100,
+      variantLabel: null, freeDelivery: false, inventoryTracked: false, availableQuantity: null, fulfillmentKind: "digital" };
+    vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        valid: true, issues: [], subtotal: 100, hasFreeDeliveryProduct: false, requiresDeliveryMethod: false, allowedPaymentMethods: [],
+        items: [{ ...line, productName: "Licence key", fulfillmentType: "digital" }],
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockImplementation(async () => ({ ...taxQuote(), allowedPaymentMethods: [] }));
+    await startCartPage();
+    await settleCheckout();
+
+    const message = document.getElementById("cartValidationMessage")!;
+    expect(message.classList.contains("hidden")).toBe(false);
+    expect(message.textContent).toBe(formatCheckoutLanguageText(ENGLISH_CHECKOUT_LANGUAGE_DATA.cartOnlinePaymentRequiredText, { items: "Licence key" }));
+    expect(message.textContent).not.toContain("order total");
+    expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("holds COD submit while Apply is pending, then permits the normal submit", async () => {
     document.getElementById("checkout-meta")!.setAttribute("data-cod-only", "true");
     await startCartPage();

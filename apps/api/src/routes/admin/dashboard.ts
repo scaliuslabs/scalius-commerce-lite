@@ -14,6 +14,7 @@ import {
     getDailyActivityData,
 } from "@scalius/core/modules/analytics";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { getCheckoutConfig } from "@scalius/core/modules/checkout";
 import { getSetupGuideFacts, getStoreSetupStatus } from "@scalius/core/modules/onboarding";
 import { getPaymentGatewaySettingsSnapshot } from "@scalius/core/modules/payments";
 import { getPluginInstallation, pluginNeedsApproval } from "@scalius/core/modules/plugins";
@@ -23,6 +24,7 @@ import { dismissSetupGuide, getCurrencySettings, readSetupGuideDismissed } from 
 import { BUNDLED_PLUGINS } from "../../plugins/bundled.gen";
 import { PLUGIN_CATALOG } from "../../plugins/catalog.gen";
 import { requestPaymentProviders } from "../../plugins/providers/payment";
+import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { ok } from "../../utils/api-response";
 import { successEnvelope } from "../../schemas/responses";
@@ -206,6 +208,14 @@ const setupGuideSchema = z.object({
     bangladeshPack: z.object({ active: z.boolean() }).nullable().openapi({
         description: "The Bangladesh pack, for a Bangladesh store whose deployment includes it; null otherwise.",
     }),
+    onlinePayment: z.object({
+        ready: z.boolean().nullable().openapi({
+            description: "Checkout offers a card or hosted payment method right now. False when it offers only cash on delivery; null when checkout is unavailable for another reason.",
+        }),
+        blockedProducts: z.number().int().min(0).openapi({
+            description: "Active gift cards and all-digital products, which only an online payment can pay for (counted up to 1,000).",
+        }),
+    }).openapi({ description: "Whether buyers can pay for the products cash on delivery can't take." }),
 });
 
 const setupGuideRoute = createRoute({
@@ -234,7 +244,16 @@ app.openapi(setupGuideRoute, async (c) => {
     ]);
     // A store whose primary market names no country sells everywhere: it gets no country's own steps.
     const countryCode = setup.countryConfigured ? setup.current.countryCode : "ZZ";
-    const snapshot = await getPaymentGatewaySettingsSnapshot(db, encryptionKey, providers);
+    const [snapshot, checkout] = await Promise.all([
+        getPaymentGatewaySettingsSnapshot(db, encryptionKey, providers),
+        // The root market's checkout exactly as buyers get it: digital items
+        // and gift cards need one of its methods to be online.
+        getCheckoutConfig(db, encryptionKey, c.env as unknown as Record<string, unknown>, providers, requestAppProviders(c))
+            .catch(() => null),
+    ]);
+    const onlinePaymentReady = checkout === null || checkout.unavailable
+        ? null
+        : checkout.gateways.some((gateway) => gateway.id !== "cod" && gateway.flow !== "cod");
     const offered = providers
         .filterForCurrency(snapshot.activePaymentMethods.enabledMethods, currency.currencyCode)
         .filter((method) => providers.countryIssue(method, setup.current.countryCode) === null);
@@ -255,6 +274,7 @@ app.openapi(setupGuideRoute, async (c) => {
         bangladeshPack: countryCode !== "BD" || (!pack && !(BANGLADESH_PACK_ID in BUNDLED_PLUGINS) && !PLUGIN_CATALOG.some((entry) => entry.id === BANGLADESH_PACK_ID))
             ? null
             : { active: pack?.status === "active" && !pluginNeedsApproval(pack) },
+        onlinePayment: { ready: onlinePaymentReady, blockedProducts: onlinePaymentReady === false ? facts.onlinePaidProducts : 0 },
     });
 });
 

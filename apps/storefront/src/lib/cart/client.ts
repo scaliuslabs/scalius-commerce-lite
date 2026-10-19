@@ -26,6 +26,7 @@ import { renderCartLineProperties } from "./line-properties-view";
 import type {
   CartRuleError,
   CartValidationIssue,
+  CartValidationItem,
   CartValidationResult,
 } from "@/lib/api/orders";
 import type { CheckoutLanguageData } from "@/lib/api/types";
@@ -36,6 +37,9 @@ import {
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+import { numberLocale } from "@scalius/shared/locale-format";
+import { formatList } from "@scalius/shared/locale-words";
+import { storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
 import { applyCheckoutButtonState } from "./checkout-button-state";
@@ -186,6 +190,11 @@ let latestDiscountFacts: CheckoutDiscountFacts | null = null;
  * something is shipped, collected or performed); null until it has answered.
  */
 let latestAllowedPaymentMethods: string[] | null = null;
+/**
+ * The names of the validated lines paid only online (digital items, gift
+ * cards), and whether every line is one: the cash-on-delivery refusal names them.
+ */
+let latestOnlineOnlyLines: { names: string[]; all: boolean } = { names: [], all: false };
 let latestCheckoutLocation: {
   cityId: string;
   cityName: string;
@@ -264,6 +273,7 @@ function resetCartRuntimeListeners(): AbortSignal {
   pendingDiscountValidation = null;
   latestDiscountFacts = null;
   latestAllowedPaymentMethods = null;
+  latestOnlineOnlyLines = { names: [], all: false };
   latestCheckoutLocation = null;
   cartQuantityLimits = {};
   validationRuleErrors = [];
@@ -885,6 +895,31 @@ function codRefusedForCart(): boolean {
   return codOnly && latestAllowedPaymentMethods !== null && !latestAllowedPaymentMethods.includes("cod");
 }
 
+/** The lines nothing but an online payment can pay for (digital items and gift cards). */
+function onlineOnlyLines(items: readonly CartValidationItem[]): { names: string[]; all: boolean } {
+  const online = items.filter((item) => item.fulfillmentType === "digital" || item.fulfillmentType === "gift_card");
+  return {
+    names: [...new Set(online.map((item) => item.productName.trim()).filter(Boolean))],
+    all: items.length > 0 && online.length === items.length,
+  };
+}
+
+/**
+ * Why a cash-on-delivery-only store refuses this cart, in words that name the
+ * reason: its digital items and gift cards are paid only online. Any other
+ * refusal (a delivery country cash on delivery doesn't serve) keeps the
+ * general wording.
+ */
+function codRefusedMessage(): string {
+  const copy = activeCheckoutCopy();
+  const { names, all } = latestOnlineOnlyLines;
+  if (!all || names.length === 0) return copy.noPaymentMethodsText;
+  const language = pageCheckoutLanguage().code;
+  return formatCheckoutLanguageText(copy.cartOnlinePaymentRequiredText, {
+    items: formatList(names, numberLocale(language || "en", storeRegion())),
+  });
+}
+
 function cartRuleErrors(): CartRuleError[] {
   return mergeCartRuleErrors(validationRuleErrors, quoteRuleErrors);
 }
@@ -913,7 +948,7 @@ function renderCartRuleBanner(): boolean {
 function cartBlockedMessage(): string {
   if (cartValidationGlobalError) return cartValidationGlobalError;
   if (cartIssueCount() === 0 && hasCartRuleErrors()) return activeCheckoutCopy().cartRulesBlockedText;
-  if (cartIssueCount() === 0 && codRefusedForCart()) return activeCheckoutCopy().noPaymentMethodsText;
+  if (cartIssueCount() === 0 && codRefusedForCart()) return codRefusedMessage();
   const count = Object.keys(cartValidationIssues).length;
   if (count <= 0) return "";
   if (cartValidationSummaryMessage) return cartValidationSummaryMessage;
@@ -1079,6 +1114,7 @@ export async function validateCartSnapshot(
       if (Array.isArray(json.data.allowedPaymentMethods)) {
         latestAllowedPaymentMethods = json.data.allowedPaymentMethods;
       }
+      latestOnlineOnlyLines = onlineOnlyLines(json.data.items);
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
       renderBuyerUi(json.data.buyerUi, { onChange: refreshBuyerUi });
     }

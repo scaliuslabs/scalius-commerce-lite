@@ -60,8 +60,12 @@ const state = {
   buyerInputs: null as BuyerInputsController | null,
   /** A cart line being edited ("Edit" in the cart): the add button updates it. */
   edit: null as CartLineEdit | null,
-  /** The store product is not buyable: its buyer-input setup is broken. */
-  customizationUnavailable: false,
+  /**
+   * The product can't be bought, and a note on the page says why: its
+   * buyer-input setup is broken, or it is paid only online and checkout
+   * takes no online payment.
+   */
+  purchaseBlocked: false,
   adding: false,
 };
 
@@ -158,8 +162,8 @@ export function init() {
     createInitialSelection(state.options, state.variants);
   hideExpiredOffers();
 
-  state.customizationUnavailable = Boolean(
-    document.getElementById("product-customization-unavailable"),
+  state.purchaseBlocked = Boolean(
+    document.querySelector("[data-product-summary] [data-purchase-blocked]"),
   );
   state.buyerInputs = initBuyerInputs(document, refresh);
   state.edit = null;
@@ -487,7 +491,7 @@ function updateStockAndActions() {
   );
   // Like Shopify, a sold-out product shows one "Sold out" button, not two.
   if (cache.buyButton) cache.buyButton.hidden = actions.buyNow.disabled;
-  if (state.customizationUnavailable) {
+  if (state.purchaseBlocked) {
     if (cache.addButton) cache.addButton.disabled = true;
     if (cache.buyButton) {
       cache.buyButton.disabled = true;
@@ -606,7 +610,7 @@ function showMissingOption(definitionId: string, message: string) {
 }
 
 async function add(redirect: boolean) {
-  if (state.adding || state.customizationUnavailable) return;
+  if (state.adding || state.purchaseBlocked) return;
   state.adding = true;
   // Busy while the line is added, so a slow phone shows the press took.
   const button = redirect ? cache.buyButton : cache.addButton;

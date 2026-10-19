@@ -145,6 +145,26 @@ describe("Home setup guide", () => {
         });
     });
 
+    it("counts the digital products and gift cards a cash-only checkout can't take", async () => {
+        // Checkout itself works (a delivery rate and a place to deliver to); it offers cash on delivery only.
+        database.sqlite.exec(`
+          INSERT INTO places (id, name, country_code, level, parent_id, external_ids, metadata, is_active)
+          VALUES ('city_1', 'Rajshahi', 'BD', 1, NULL, '{}', '{}', 1), ('zone_1', 'Bagmara', 'BD', 2, 'city_1', '{}', '{}', 1);
+          INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd');
+          INSERT INTO shipping_methods (id, name, fee_minor, kind, zone_id) VALUES ('m_std', 'Standard', 6000, 'delivery', 'dz_bd');
+        `);
+        expect((await guide()).data.onlinePayment).toEqual({ ready: false, blockedProducts: 0 });
+        database.sqlite.exec(`
+          INSERT INTO products (id, name, slug, is_gift_card) VALUES ('p_key', 'Licence key', 'licence-key', 0), ('p_card', 'Gift card', 'gift-card', 1);
+          INSERT INTO product_variants (id, product_id, sku, price_minor, is_default, fulfillment_kind) VALUES
+            ('v_key', 'p_key', 'KEY-1', 50000, 1, 'digital'), ('v_card', 'p_card', 'CARD-1', 100000, 1, 'physical');
+        `);
+        expect((await guide()).data.onlinePayment).toEqual({ ready: false, blockedProducts: 2 });
+        // A checkout that is unavailable for another reason says nothing about online payment.
+        database.sqlite.exec("UPDATE shipping_methods SET is_active = 0");
+        expect((await guide()).data.onlinePayment).toEqual({ ready: null, blockedProducts: 0 });
+    });
+
     it("gives a store that sells everywhere no country's own steps", async () => {
         // The primary market names no country: the setup form's Bangladesh starting point is not the store's country.
         database.sqlite.prepare("DELETE FROM market_countries WHERE market_id = 'mkt_backup'").run();

@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, ImageOff, Inbox, Menu, Package, TriangleAlert } from "lucide-react";
+import { ChevronRight, CreditCard, ImageOff, Inbox, Menu, Package, TriangleAlert } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
@@ -33,6 +33,9 @@ import { countFeedGaps, feedDiagnosticsQueryOptions, navigationPlacementsQueryOp
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { homeMessages } from "~/i18n/home";
 import { pageHead } from "~/i18n/page-titles";
+
+/** The API counts products only online payment can pay for up to here ("1,000+"). */
+const ONLINE_PAID_PRODUCT_COUNT_CAP = 1000;
 
 export const Route = createFileRoute("/admin/")({
   // Every Home read starts here, in one round trip, rather than after the
@@ -124,7 +127,9 @@ function HomePage() {
   const needsHeaderMenu = placements.data !== undefined && !placements.data.some(({ placement, menuDeletedAt, publicationItemCount }) =>
     placement.surface === "header" && placement.isEnabled && !menuDeletedAt && (publicationItemCount ?? 0) > 0);
   const smsBlocked = Boolean(sms.data?.activeProvider) && sms.data?.activeProviderConfigured === false;
-  const caughtUp = openCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked;
+  // Active digital products and gift cards a cash-on-delivery-only checkout can't take.
+  const onlinePaymentBlocked = setupGuide.data?.onlinePayment?.blockedProducts ?? 0;
+  const caughtUp = openCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0;
 
   return (
     <div className="space-y-4 pb-8">
@@ -223,6 +228,13 @@ function HomePage() {
             {needsHeaderMenu ? (
               <TodoLink to="/admin/online-store/navigation" icon={<Menu className="h-4 w-4" />}>
                 {t("addHeaderMenu")}
+              </TodoLink>
+            ) : null}
+            {onlinePaymentBlocked > 0 ? (
+              <TodoLink to="/admin/settings/payments" icon={<CreditCard className="h-4 w-4" />}>
+                {onlinePaymentBlocked >= ONLINE_PAID_PRODUCT_COUNT_CAP
+                  ? t("onlinePaymentNeededMany", { count: `${formatNumber(ONLINE_PAID_PRODUCT_COUNT_CAP)}+` })
+                  : t("onlinePaymentNeeded", { count: onlinePaymentBlocked })}
               </TodoLink>
             ) : null}
             {smsBlocked ? (

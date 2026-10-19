@@ -20,6 +20,7 @@ describe("setup guide facts", () => {
       themePublished: false,
       shippingReady: false,
       hasOrders: false,
+      onlinePaidProducts: 0,
     });
   });
 
@@ -53,5 +54,30 @@ describe("setup guide facts", () => {
     expect((await getSetupGuideFacts(db)).shippingReady).toBe(true);
     sqlite.prepare("UPDATE shipping_methods SET deleted_at = unixepoch() WHERE id = 'm2'").run();
     expect((await getSetupGuideFacts(db)).shippingReady).toBe(false);
+  });
+
+  it("counts active products only an online payment can pay for", async () => {
+    sqlite.exec(`
+      INSERT INTO products (id, name, slug, is_gift_card) VALUES
+        ('p_key', 'Licence key', 'licence-key', 0),
+        ('p_mixed', 'Course and book', 'course-and-book', 0),
+        ('p_shirt', 'Shirt', 'shirt', 0),
+        ('p_card', 'Gift card', 'gift-card', 1);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, is_default, fulfillment_kind, option_combination_key) VALUES
+        ('v_key', 'p_key', 'KEY-1', 50000, 1, 'digital', NULL),
+        ('v_course', 'p_mixed', 'COURSE-1', 50000, 0, 'digital', 'format=course'),
+        ('v_book', 'p_mixed', 'BOOK-1', 50000, 0, 'physical', 'format=book'),
+        ('v_shirt', 'p_shirt', 'SHIRT-1', 50000, 1, 'physical', NULL),
+        ('v_card', 'p_card', 'CARD-1', 100000, 1, 'physical', NULL);
+    `);
+    // The key and the gift card; a product with a book in it can be paid in cash.
+    expect((await getSetupGuideFacts(db)).onlinePaidProducts).toBe(2);
+    // With the book retired, the course is paid only online.
+    sqlite.prepare("UPDATE product_variants SET deleted_at = unixepoch() WHERE id = 'v_book'").run();
+    expect((await getSetupGuideFacts(db)).onlinePaidProducts).toBe(3);
+    // Drafts and trashed products are not for sale.
+    sqlite.prepare("UPDATE products SET is_active = 0 WHERE id = 'p_key'").run();
+    sqlite.prepare("UPDATE products SET deleted_at = unixepoch() WHERE id = 'p_card'").run();
+    expect((await getSetupGuideFacts(db)).onlinePaidProducts).toBe(1);
   });
 });

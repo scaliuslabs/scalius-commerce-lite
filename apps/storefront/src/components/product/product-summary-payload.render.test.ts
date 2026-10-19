@@ -166,6 +166,28 @@ describe("product summary browser payload", () => {
       .querySelector("[data-product-summary]")?.getAttribute("data-cta-layout")).toBe("stack");
   });
 
+  it("says a product paid only online can't be bought on a cash-only store, with both buttons off", async () => {
+    const product = { id: "prod_1", slug: "game-key", name: "Game key", price: 300 } as Product;
+    const digital = variants.map((variant) => ({ ...variant, fulfillmentKind: "digital" as const }));
+    const render = async (onlinePaymentUnavailable: boolean) => html(await container.renderToString(ProductSummary, {
+      props: { product, category: null, variants: digital, options, details: false, onlinePaymentUnavailable },
+      request: request("game-key"),
+    }));
+    const blocked = await render(true);
+    const note = blocked.querySelector("#product-online-payment-unavailable");
+    expect(note?.textContent).toBe("This item can only be paid for online, and this store doesn't take online payments yet.");
+    // The product controller keeps any purchase-blocking note's buttons off.
+    expect(note?.hasAttribute("data-purchase-blocked")).toBe(true);
+    expect((blocked.querySelector("[data-action=add-to-cart]") as HTMLButtonElement).disabled).toBe(true);
+    expect((blocked.querySelector("[data-action=buy-now]") as HTMLButtonElement).disabled).toBe(true);
+    // The note comes before the buttons it explains.
+    expect(note!.compareDocumentPosition(blocked.querySelector(".buy-box-ctas")!) & 4).toBe(4);
+
+    const buyable = await render(false);
+    expect(buyable.querySelector("[data-purchase-blocked]")).toBeNull();
+    expect((buyable.querySelector("[data-action=add-to-cart]") as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("shows a price of 24px/700 and no look-specific type sizes", async () => {
     const product = { id: "prod_1", slug: "sample", name: "Sample", price: 300 } as Product;
     const markup = await container.renderToString(ProductSummary, { props: { product, category: null, variants, options, details: false }, request: request("sample") });

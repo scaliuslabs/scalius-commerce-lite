@@ -6954,6 +6954,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 customizationOptionalText: string;
                 customizationChoosePlaceholderText: string;
                 customizationUnavailableText: string;
+                onlinePaymentRequiredText: string;
                 customizationNeededText: string;
                 customizationInvalidText: string;
                 updateCartItemText: string;
@@ -37462,6 +37463,19 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
             bangladeshPack: {
                 active: boolean;
             } | null;
+            /**
+             * Whether buyers can pay for the products cash on delivery can't take.
+             */
+            onlinePayment: {
+                /**
+                 * Checkout offers a card or hosted payment method right now. False when it offers only cash on delivery; null when checkout is unavailable for another reason.
+                 */
+                ready: boolean | null;
+                /**
+                 * Active gift cards and all-digital products, which only an online payment can pay for (counted up to 1,000).
+                 */
+                blockedProducts: number;
+            };
         };
     };
 };

@@ -27158,6 +27158,9 @@
                             "customizationUnavailableText": {
                               "type": "string"
                             },
+                            "onlinePaymentRequiredText": {
+                              "type": "string"
+                            },
                             "customizationNeededText": {
                               "type": "string"
                             },
@@ -27208,6 +27211,7 @@
                             "customizationOptionalText",
                             "customizationChoosePlaceholderText",
                             "customizationUnavailableText",
+                            "onlinePaymentRequiredText",
                             "customizationNeededText",
                             "customizationInvalidText",
                             "updateCartItemText",
@@ -128877,6 +128881,26 @@
                             "active"
                           ],
                           "description": "The Bangladesh pack, for a Bangladesh store whose deployment includes it; null otherwise."
+                        },
+                        "onlinePayment": {
+                          "type": "object",
+                          "properties": {
+                            "ready": {
+                              "type": "boolean",
+                              "nullable": true,
+                              "description": "Checkout offers a card or hosted payment method right now. False when it offers only cash on delivery; null when checkout is unavailable for another reason."
+                            },
+                            "blockedProducts": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Active gift cards and all-digital products, which only an online payment can pay for (counted up to 1,000)."
+                            }
+                          },
+                          "required": [
+                            "ready",
+                            "blockedProducts"
+                          ],
+                          "description": "Whether buyers can pay for the products cash on delivery can't take."
                         }
                       },
                       "required": [
@@ -128884,7 +128908,8 @@
                         "countryCode",
                         "setupNeeded",
                         "steps",
-                        "bangladeshPack"
+                        "bangladeshPack",
+                        "onlinePayment"
                       ]
                     }
                   },

@@ -48,6 +48,11 @@ interface Props {
   initialVariant?: ProductVariant | null;
   initialUnavailableVariant?: ProductVariant | null;
   quickBuyNotice?: string | null;
+  /**
+   * What the page sells is paid only online (digital items, gift cards) and
+   * checkout takes no online payment: the buttons are off and a note says why.
+   */
+  onlinePaymentUnavailable?: boolean;
   /** Product-page copy from the active checkout language (buttons, buyer inputs). */
   actionCopy?: Partial<ProductActionCopy & CheckoutLanguageData>;
   /** A fulfilment badge beside the stock badge ("No delivery needed" for services). */
@@ -79,6 +84,7 @@ const {
   initialVariant = null,
   initialUnavailableVariant = null,
   quickBuyNotice = null,
+  onlinePaymentUnavailable = false,
   actionCopy: providedCopy = {},
   fulfilmentBadge = null,
   look = CLASSIC_LOOK,
@@ -122,7 +128,9 @@ const stockActionPresentation = getProductActionsPresentation({
 });
 // A broken buyer-input setup means the product can't be bought at all.
 const customizationUnavailable = product.customizationUnavailable === true;
-const actionPresentation = customizationUnavailable
+// Nothing here can be bought: a note says why, and the buttons stay off.
+const purchaseBlocked = customizationUnavailable || onlinePaymentUnavailable;
+const actionPresentation = purchaseBlocked
   ? {
       addToCart: { ...stockActionPresentation.addToCart, disabled: true },
       buyNow: { ...stockActionPresentation.buyNow, disabled: true },
@@ -404,7 +412,9 @@ function optionAriaLabel(
       )}
 
       {customizationUnavailable ? (
-        <p id="product-customization-unavailable" class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>
+        <p id="product-customization-unavailable" data-purchase-blocked class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>
+      ) : onlinePaymentUnavailable ? (
+        <p id="product-online-payment-unavailable" data-purchase-blocked class="rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground" role="status">{pageCopy.onlinePaymentRequiredText}</p>
       ) : null}
 
       {hasBuyerInputs ? (
