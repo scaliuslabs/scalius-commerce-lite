@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, useState } from "react";
+import { act, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
@@ -101,6 +101,65 @@ describe("inline validation", () => {
     expect(container.querySelector("#rate-fee-note")?.textContent).toBe("Enter 0 or more.");
     act(() => again.unmount());
     container.remove();
+  });
+});
+
+describe("what Save names when it can't save", () => {
+  function render(children: ReactNode) {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    let scope: SaveScopeState | null = null;
+    act(() => {
+      root.render(
+        <SaveScope render={(next) => { scope = next; return null; }}>
+          <SaveErrorBanner />
+          {children}
+        </SaveScope>,
+      );
+    });
+    return {
+      container,
+      save: async () => { await act(async () => { await scope!.saveAll(); }); },
+      done: () => { act(() => root.unmount()); container.remove(); },
+    };
+  }
+
+  it("lists each marked field by its label and message", async () => {
+    const page = render(<FeeForm />);
+    await page.save();
+    const banner = page.container.querySelector("[role=alert]")!;
+    expect(banner.textContent).toContain("To save, fix 1 problem");
+    expect(banner.textContent).toContain("Charge: Enter 0 or more.");
+    page.done();
+  });
+
+  it("names a card that is invalid with no marked field, and a card's own problem with a link to its control", async () => {
+    function Locked() {
+      useSaveBar({ dirty: true, invalid: true, label: "Payment methods", save: async () => {}, discard: () => {} });
+      return null;
+    }
+    const silent = render(<Locked />);
+    await silent.save();
+    expect(silent.container.querySelector("[role=alert]")?.textContent).toContain("Payment methods can't be saved yet. Check its settings.");
+    silent.done();
+
+    function DefaultMethod() {
+      useSaveBar({
+        dirty: true,
+        label: "Payment methods",
+        problems: [{ message: "Choose a default.", target: "default-method" }],
+        save: async () => {},
+        discard: () => {},
+      });
+      return <button type="button" id="default-method">Cash</button>;
+    }
+    const named = render(<DefaultMethod />);
+    await named.save();
+    const link = [...named.container.querySelectorAll("[role=alert] button")].find((button) => button.textContent === "Payment methods: Choose a default.");
+    expect(link).toBeDefined();
+    expect(document.activeElement?.id).toBe("default-method");
+    named.done();
   });
 });
 

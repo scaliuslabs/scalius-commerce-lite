@@ -3,7 +3,7 @@ import { announceSave } from "~/lib/realtime/store";
 import { PresenceScopeContext } from "~/lib/realtime/store";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
-import { useSaveBar, type SaveBarEntry } from "~/components/admin/shared/SaveBar";
+import { useSaveBar, type SaveBarEntry, type SaveProblem } from "~/components/admin/shared/SaveBar";
 import { readSettingsRevisionConflict } from "~/lib/admin-api-error";
 import { translate } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
@@ -31,6 +31,12 @@ interface UseSettingsFormOptions<T extends object, SaveResult, R extends Setting
   invalidateQueryKeys?: readonly (readonly unknown[])[];
   /** Inside a page save bar: false blocks saving (the card shows why). */
   isValid?: (values: T) => boolean;
+  /**
+   * Inside a page save bar: what blocks saving when no field on screen shows
+   * it (a default that no longer fits). Save lists each in the banner and
+   * moves to its `target`. Any problem blocks saving, like `isValid`.
+   */
+  problems?: (values: T) => SaveProblem[];
   /** Inside a page save bar: false blocks saving for this role. */
   canEdit?: boolean;
   /** Names this card in the page's "couldn't save" banner. */
@@ -108,6 +114,7 @@ export function useSettingsForm<
   errorMessage = translate(saveBarMessages, "notSavedOne"),
   invalidateQueryKeys = [],
   isValid,
+  problems,
   canEdit = true,
   label,
   fields,
@@ -283,6 +290,7 @@ export function useSettingsForm<
     dirty: isDirty,
     saving: mutation.isPending,
     invalid: !canEdit || !hasLoaded || (isValid ? !isValid(values) : false),
+    problems: canEdit && hasLoaded && problems ? problems(values) : undefined,
     label,
     fields,
     save: () => mutation.mutateAsync(values).then(({ result }) => result),

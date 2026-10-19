@@ -377,9 +377,12 @@ export function PaymentMethodsCard() {
       flowAllowed,
       eligibilityIssue: (method) => (currencyIssue(draft, method) ? "currency" : null),
     });
-  // A saved method whose app was removed can't be saved again: the server refuses it.
-  const keepsRemovedApp = (draft: PaymentMethods) =>
-    rowsFor(draft).some((row) => !row.installed && draft.enabledMethods.includes(row.id));
+  // What Save names when the methods can't be saved (the default select is marked too).
+  const problems = (draft: PaymentMethods) => {
+    const options = defaults(draft);
+    if (options.length === 0) return [{ message: t("needOneMethod") }];
+    return options.includes(draft.defaultMethod) ? [] : [{ message: t("chooseDefault"), target: "default-payment-method" }];
+  };
   const { values, savedValues, setValues, isLoadError, refetch } = useSettingsForm<PaymentMethods>({
     label: t("methodsTitle"),
     queryKey: paymentMethodsQuery.queryKey,
@@ -393,9 +396,8 @@ export function PaymentMethodsCard() {
     errorMessage: common("saveFailed"),
     canEdit,
     // Fail closed: without the saved flow and currency, visibility is unknown.
-    isValid: (draft) => Boolean(flow.data && currency.data)
-      && defaults(draft).includes(draft.defaultMethod)
-      && !keepsRemovedApp(draft),
+    isValid: () => Boolean(flow.data && currency.data),
+    problems: (draft) => (flow.data && currency.data ? problems(draft) : []),
   });
   if (isLoadError || flow.isError || currency.isError) {
     return <SettingsLoadFailure title={t("loadMethods")} onRetry={() => Promise.all([refetch(), flow.refetch(), currency.refetch()])} />;
@@ -456,19 +458,17 @@ export function PaymentMethodsCard() {
     // Only the built-in key forms name missing keys; an app explains itself (blockedReason).
     const needsKeys = keyForm !== null && outcome.state === "needs_setup" && missingKeys.length > 0;
     const unusable = outcome.state === "needs_setup" || outcome.state === "provider_off" || outcome.state === "blocked";
-    const detail = row.kind === "app" && !row.installed
-      ? t("appRemoved")
-      : neededCurrencies
-        ? currencyText(neededCurrencies)
-        : exclusion
-          ? t(exclusion)
-          : row.kind === "app" && unusable && status?.blockedReason
-            ? providerSetupReason(status.blockedReason)
-            : [
-                needsKeys ? t("needsKeys", { fields: keyList(missingKeys) }) : t(outcome.state),
-                method !== "cod" && environment === "test" ? t("testMode") : null,
-                method !== "cod" && environment === "mixed" ? t("keyMismatch") : null,
-              ].filter(Boolean).join(" · ");
+    const detail = neededCurrencies
+      ? currencyText(neededCurrencies)
+      : exclusion
+        ? t(exclusion)
+        : row.kind === "app" && unusable && status?.blockedReason
+          ? providerSetupReason(status.blockedReason)
+          : [
+              needsKeys ? t("needsKeys", { fields: keyList(missingKeys) }) : t(outcome.state),
+              method !== "cod" && environment === "test" ? t("testMode") : null,
+              method !== "cod" && environment === "mixed" ? t("keyMismatch") : null,
+            ].filter(Boolean).join(" · ");
     const position = values.enabledMethods.indexOf(method);
     const reorderable = selected && values.enabledMethods.length > 1;
     // Flipping on a built-in gateway that still needs keys opens its setup.
@@ -490,7 +490,7 @@ export function PaymentMethodsCard() {
           </Button>
         ) : null}
         {/* The provider's own keys open in its setup sheet, here; the app page holds its activation. */}
-        {canViewApps && row.installed && row.pluginId ? (
+        {canViewApps && row.pluginId ? (
           openProvider ? (
             <Button type="button" variant="outline" size="sm" onClick={() => openProvider(method)}>
               {outcome.state === "needs_setup" ? t("set_up") : t("manage")}
@@ -503,7 +503,7 @@ export function PaymentMethodsCard() {
         ) : null}
       </>
     ) : null;
-    const hasActions = reorderable || keyForm !== null || (row.kind === "app" && ((row.canTestConnection && status?.usable) || (canViewApps && row.installed && row.pluginId)));
+    const hasActions = reorderable || keyForm !== null || (row.kind === "app" && ((row.canTestConnection && status?.usable) || (canViewApps && row.pluginId)));
     return (
       <li key={method} data-method={method} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <MethodMark row={row} />
@@ -610,7 +610,11 @@ export function PaymentMethodsCard() {
           <ul className="divide-y divide-border">{rows}</ul>
           <div className="border-t border-border px-4 py-4">
             {eligibleDefaults.length > 0 ? (
-              <SettingsField id="default-payment-method" label={t("defaultMethod")}>
+              <SettingsField
+                id="default-payment-method"
+                label={t("defaultMethod")}
+                error={eligibleDefaults.includes(values.defaultMethod) ? undefined : t("chooseDefault")}
+              >
                 <SearchableSelect
                   id="default-payment-method"
                   triggerClassName="max-w-xs"

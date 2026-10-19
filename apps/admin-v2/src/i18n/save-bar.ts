@@ -34,6 +34,10 @@ export const saveBarMessages = defineMessages({
   en: {
     unsavedChanges: "Unsaved changes",
     fixErrors: "Fix the highlighted fields to save",
+    fixProblems: "Fix the problems listed to save",
+    checkCard: "{card} can't be saved yet. Check its settings.",
+    checkPage: "Something on this page can't be saved yet.",
+    unnamedField: "A highlighted field",
     discard: "Discard",
     save: "Save",
     saving: "Saving…",
@@ -66,6 +70,10 @@ export const saveBarMessages = defineMessages({
   bn: {
     unsavedChanges: "সেভ করা হয়নি",
     fixErrors: "সেভ করতে চিহ্নিত ঘরগুলো ঠিক করুন",
+    fixProblems: "সেভ করতে তালিকার সমস্যাগুলো ঠিক করুন",
+    checkCard: "{card} এখনো সেভ করা যাচ্ছে না। এর সেটিংস দেখে নিন।",
+    checkPage: "এই পেজের কিছু এখনো সেভ করা যাচ্ছে না।",
+    unnamedField: "একটি চিহ্নিত ঘর",
     discard: "বাতিল",
     save: "সেভ",
     saving: "সেভ হচ্ছে…",
