@@ -91,11 +91,16 @@ const link = (item: NavigationItem) => ({
         <div class="cnav-panel cnav-panel--end" data-menu-panel>
           {/* Row items that don't fit are moved in here first (nav-disclosure.ts). */}
           <ul class="cnav-more-list" data-menu-list data-nav-more-list>
-            {extras.map((item) => (
-              <li class="cnav-more-entry">
-                <a class="cnav-more-link" {...link(item)}>{item.title}</a>
-              </li>
-            ))}
+            {extras.map((item) => {
+              const children = navigationChildren(item);
+              return (
+                <li class="cnav-more-entry">
+                  {item.href ? <a class="cnav-more-link" {...link(item)}>{item.title}</a> : <span class="cnav-more-link">{item.title}</span>}
+                  {/* Its own links, indented under it: a heading is never left without them. */}
+                  {children.length > 0 && <FlyoutList items={children} mode="indent" depth={2} />}
+                </li>
+              );
+            })}
             {allCategories && (
               <li class="cnav-more-entry cnav-more-all">
                 <a class="cnav-more-link" href="/categories">{copy.nav.allCategories}</a>
@@ -465,13 +470,6 @@ const link = (item: NavigationItem) => ({
     color: var(--popover-foreground);
     font-size: 0.875rem;
     font-weight: 600;
-  }
-
-  .cnav-more-sublist .cnav-more-link {
-    min-height: 2rem;
-    padding-inline-start: 1.25rem;
-    color: var(--muted-foreground);
-    font-weight: 400;
   }
 
   a.cnav-more-link:hover,

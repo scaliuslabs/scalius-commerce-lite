@@ -24,12 +24,12 @@ const paddingLeft = depth > 0 ? `${depth * 12}px` : "0";
       links.map((link) => (
         <li>
           {link.href ? (
-          <a href={link.href} data-astro-prefetch={getStorefrontPrefetchAttribute(link.href, Astro.url)} target={link.openInNewTab ? "_blank" : undefined} rel={link.openInNewTab ? "noopener noreferrer" : undefined} class="footer-link font-medium" style={depth > 0 ? `padding-left: ${paddingLeft}` : undefined}>
+          <a href={link.href} data-astro-prefetch={getStorefrontPrefetchAttribute(link.href, Astro.url)} target={link.openInNewTab ? "_blank" : undefined} rel={link.openInNewTab ? "noopener noreferrer" : undefined} class="footer-link font-medium" style={depth > 0 ? `padding-inline-start: ${paddingLeft}` : undefined}>
             {depth > 0 && <span class="footer-link-dot" />}
             <span class="footer-link-label">{link.title}</span>
           </a>
           ) : (
-          <span class="inline-flex items-center gap-2 text-base font-medium" style={`padding-left: ${paddingLeft}`}>
+          <span class="inline-flex items-center gap-2 text-base font-medium" style={`padding-inline-start: ${paddingLeft}`}>
             {depth > 0 && (
               <span class="w-1.5 h-1.5 bg-current rounded-full shrink-0" />
             )}

@@ -362,7 +362,11 @@ export interface HeaderNavigationPlan {
   desktop: NavigationItem[];
   /** The same roots with the drawer's share of their children. */
   drawer: NavigationItem[];
-  /** Roots past `maxTopItems`, childless, for a row's "More" list. */
+  /**
+   * Roots past `maxTopItems` for a row's "More" list, with their share of
+   * the desktop's links: a heading (no link of its own) keeps its first
+   * links, or is left out when none fit, so "More" never names an empty heading.
+   */
   extras: NavigationItem[];
   /** Desktop surfaces end with "All categories" (/categories): some of the tree is not in them. */
   allCategories: boolean;
@@ -388,22 +392,25 @@ export function planHeaderNavigation(
   const roots = tree.slice(0, top);
   // Without an index, a drawer lists every top item and "More" every extra.
   const drawerRoots = indexed ? roots : tree;
-  const extras = surfaces.desktop && surfaces.desktopRow
-    ? tree.slice(roots.length, indexed ? roots.length + NAVIGATION_MORE_EXTRAS : undefined).map(bare)
+  const extraTree = surfaces.desktop && surfaces.desktopRow
+    ? tree.slice(roots.length, indexed ? roots.length + NAVIGATION_MORE_EXTRAS : undefined)
     : [];
+  const extraLinks = countNavigationLinks(extraTree.map(bare));
   const allCategories = options.index === "always" || (options.index === "overflow" && tree.length > roots.length);
   const index = allCategories ? 1 : 0;
   const drawerIndex = indexed ? 1 : 0;
   const desktopLinks = countNavigationLinks(roots.map(bare));
   const drawerLinks = countNavigationLinks(drawerRoots.map(bare));
   // A desktop row also carries its extras, "All categories" in "More" and its no-script twin.
-  const desktopRoots = surfaces.desktop ? desktopLinks + extras.length + index * (surfaces.desktopRow ? 2 : 1) : 0;
+  const desktopRoots = surfaces.desktop ? desktopLinks + extraLinks + index * (surfaces.desktopRow ? 2 : 1) : 0;
   const free = Math.max(0, options.linkBudget - surfaces.reserved - (drawerLinks + drawerIndex) - desktopRoots);
   const desktopFree = surfaces.desktop ? Math.floor(free * surfaces.desktopWeight) : 0;
+  // "More" lists its extras' children nested under them, from the desktop's share, by count.
+  const extraFree = extraTree.length > 0 ? Math.floor((desktopFree * extraTree.length) / (roots.length + extraTree.length)) : 0;
   return {
-    desktop: surfaces.desktop ? pruneNavigation(roots, desktopLinks + desktopFree, { allLinks: surfaces.desktopAllLinks }) : [],
+    desktop: surfaces.desktop ? pruneNavigation(roots, desktopLinks + desktopFree - extraFree, { allLinks: surfaces.desktopAllLinks }) : [],
     drawer: pruneNavigation(drawerRoots, drawerLinks + free - desktopFree, { allLinks: surfaces.drawerAllLinks }),
-    extras,
+    extras: pruneNavigation(extraTree, extraLinks + extraFree),
     allCategories,
     drawerAllCategories: indexed,
   };

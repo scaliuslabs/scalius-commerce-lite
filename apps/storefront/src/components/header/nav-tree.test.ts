@@ -204,12 +204,26 @@ describe("header link plan", () => {
     expect(plan.allCategories).toBe(true);
     const links =
       surfaces.reserved +
-      countNavigationLinks(plan.desktop, { allLinks: true }) + plan.extras.length + 2 +
+      countNavigationLinks(plan.desktop, { allLinks: true }) + countNavigationLinks(plan.extras) + 2 +
       countNavigationLinks(plan.drawer, { allLinks: true }) + 1;
     expect(links).toBeLessThanOrEqual(150);
     // Both surfaces keep children for their departments.
     expect(plan.desktop.filter((item) => item.subMenu).length).toBeGreaterThan(0);
     expect(plan.drawer.filter((item) => item.subMenu).length).toBeGreaterThan(0);
+  });
+
+  it("keeps a heading's links when it lands in More, and leaves out a heading with none", () => {
+    const menu = [
+      ...Array.from({ length: 4 }, (_, index) => ({ title: `Item ${index}`, href: `/pages/${index}` })),
+      { title: "Something", subMenu: [{ title: "dfghdfhhf", href: "/pages/x" }, { title: "Footwear", href: "/categories/footwear" }] },
+    ];
+    const plan = planHeaderNavigation(menu, { maxTopItems: 4, linkBudget: 150, index: "overflow" }, surfaces);
+    expect(plan.extras).toEqual([
+      { title: "Something", subMenu: [{ title: "dfghdfhhf", href: "/pages/x" }, { title: "Footwear", href: "/categories/footwear" }] },
+    ]);
+    // With no links to spare, a heading has nothing to show and is left out.
+    const tight = planHeaderNavigation(menu, { maxTopItems: 4, linkBudget: 0, index: "overflow" }, surfaces);
+    expect(tight.extras).toEqual([]);
   });
 
   it("never hides top items when there is no index to send buyers to", () => {
