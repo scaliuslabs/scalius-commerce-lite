@@ -1,6 +1,9 @@
 // The Noor header: rotating announcements, then one bar with the menu, the
 // logo and the actions (logo centred between them, or first), mega menus on
-// computers and a drawer on phones. On a landing page it can turn into a
+// computers (the roots past the row in a "More" dropdown) and a drawer on
+// phones. Links to the page itself carry `aria-current="page"` and the
+// links of the section it is in `aria-current="true"`, as the store's own
+// menus mark them. On a landing page it can turn into a
 // campaign header: the logo and one "Order now" button, nothing that leads
 // away from the order. Menus follow the store's disclosure pattern (a button
 // with `aria-expanded` per menu; click, Enter, Escape, arrow keys and hover
@@ -72,14 +75,51 @@ export function linked(item: StorefrontMenuItem): boolean {
   return item.url !== "" && item.url !== "#";
 }
 
+/** Where the page sits in the menu: an item's `aria-current` (the page itself, or the section it is in). */
+export type MenuCurrent = (item: StorefrontMenuItem) => "page" | "true" | undefined;
+
+const NO_CURRENT: MenuCurrent = () => undefined;
+
+/** The same-store path a link points at, without a trailing slash; null for headings and other sites. */
+function storePath(url: string, base: URL): string | null {
+  const value = url.trim();
+  if (!value || value.startsWith("#")) return null;
+  try {
+    const target = new URL(value, base);
+    if (target.origin !== base.origin) return null;
+    return target.pathname.length > 1 ? target.pathname.replace(/\/+$/, "") : target.pathname;
+  } catch {
+    return null;
+  }
+}
+
+/** The page's place in the menu, by the store's rule (navigation-state.ts): the same path, query aside. */
+export function menuCurrent(pagePath: string, storeUrl: string): MenuCurrent {
+  let base: URL;
+  try {
+    base = new URL(storeUrl || "/", "https://store.invalid/");
+  } catch {
+    return NO_CURRENT;
+  }
+  const here = storePath(pagePath, base);
+  if (here === null) return NO_CURRENT;
+  const isPage = (item: StorefrontMenuItem) => linked(item) && storePath(item.url, base) === here;
+  const inSection = (item: StorefrontMenuItem): boolean => item.children.some((child) => isPage(child) || inSection(child));
+  return (item) => (isPage(item) ? "page" : inSection(item) ? "true" : undefined);
+}
+
+/** `aria-current` for a link that names its item's own page ("All X"): only the page itself. */
+const pageOnly = (current: MenuCurrent, item: StorefrontMenuItem) => (current(item) === "page" ? "page" : undefined);
+
 /** An item's link, or its name when it is a heading. */
-function ItemLink({ item, class: className }: { item: StorefrontMenuItem; class?: string }) {
+function ItemLink({ item, class: className, current = NO_CURRENT }: { item: StorefrontMenuItem; class?: string; current?: MenuCurrent }) {
   return linked(item)
-    ? <a class={className} href={item.url}>{item.title}</a>
+    ? <a class={className} href={item.url} aria-current={current(item)}>{item.title}</a>
     : <span class={cx(className, "noor-menu-heading")}>{item.title}</span>;
 }
 
-function Menu({ items, style, limit, context }: { items: StorefrontMenuItem[]; style: string; limit: number; context: Context }) {
+function Menu({ items, style, limit, context, current }: { items: StorefrontMenuItem[]; style: string; limit: number; context: Context; current: MenuCurrent }) {
+  const extras = items.slice(limit);
   return (
     <ul class="noor-nav-list" data-nav-overflow>
       {items.slice(0, limit).map((item, index) => {
@@ -93,7 +133,7 @@ function Menu({ items, style, limit, context }: { items: StorefrontMenuItem[]; s
           <li class={cx("noor-nav-item", children.length > 0 && "has-menu")} data-nav-index={String(index)}
             data-disclosure-item={children.length > 0 ? "" : undefined}>
             {linked(item) ? (
-              <a class="noor-nav-link" href={item.url} title={item.title} data-nav-link><span>{item.title}</span></a>
+              <a class="noor-nav-link" href={item.url} title={item.title} data-nav-link aria-current={current(item)}><span>{item.title}</span></a>
             ) : (
               // A heading is the button that opens its links; it goes nowhere itself.
               <button type="button" class="noor-nav-link noor-nav-heading" title={item.title} data-nav-link {...disclosure}>
@@ -112,43 +152,53 @@ function Menu({ items, style, limit, context }: { items: StorefrontMenuItem[]; s
                   <div class="noor-mega-inner">
                     {children.map((child) => (
                       <div class="noor-mega-col">
-                        <ItemLink item={child} class="noor-mega-head" />
-                        {child.children.length > 0 ? <MenuLinks items={child.children} /> : null}
+                        <ItemLink item={child} class="noor-mega-head" current={current} />
+                        {child.children.length > 0 ? <MenuLinks items={child.children} current={current} /> : null}
                       </div>
                     ))}
-                    {linked(item) ? <a class="noor-mega-all" href={item.url}>{item.title}<Icon name="arrow" size={14} /></a> : null}
+                    {linked(item) ? <a class="noor-mega-all" href={item.url} aria-current={pageOnly(current, item)}>{item.title}<Icon name="arrow" size={14} /></a> : null}
                   </div>
                 </div>
               ) : (
                 <div class="noor-drop" id={panel} hidden>
-                  <MenuLinks items={children} />
+                  <MenuLinks items={children} current={current} />
                 </div>
               )
             ) : null}
           </li>
         );
       })}
-      {items.length > limit ? (
-        <li class="noor-nav-item noor-nav-more-item">
-          <button type="button" class="noor-nav-link noor-nav-more" popovertarget="noor-drawer"
-            aria-label={t(context, { en: "More menu items", bn: "আরও মেনু আইটেম" })}>
-            {t(context, { en: "More", bn: "আরও" })}
-          </button>
-        </li>
-      ) : null}
+      {/* The roots past the row, with every level of their links, and any row
+          item that does not fit (the store's script moves it in, as it is). */}
+      <li class="noor-nav-item noor-nav-more-item" data-nav-more data-disclosure-item hidden={extras.length === 0}>
+        <button type="button" class="noor-nav-link noor-nav-more" data-nav-link data-disclosure="popup" aria-expanded="false" aria-controls="noor-nav-more"
+          aria-label={t(context, { en: "More menu items", bn: "আরও মেনু আইটেম" })}>
+          <span>{t(context, { en: "More", bn: "আরও" })}</span><Icon name="down" size={14} />
+        </button>
+        <div class="noor-drop noor-more" id="noor-nav-more" hidden>
+          <ul class="noor-more-list" data-nav-more-list>
+            {extras.map((item) => (
+              <li class="noor-more-extra">
+                <ItemLink item={item} class="noor-more-root" current={current} />
+                {item.children.length > 0 ? <MenuLinks items={item.children} current={current} /> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </li>
     </ul>
   );
 }
 
 /** Keep every merchant menu level reachable, including compact desktop menus. */
-export function MenuLinks({ items }: { items: StorefrontMenuItem[] }) {
+export function MenuLinks({ items, current = NO_CURRENT }: { items: StorefrontMenuItem[]; current?: MenuCurrent }) {
   return <ul>{items.map((item) => <li>
-    <ItemLink item={item} />
-    {item.children.length > 0 ? <MenuLinks items={item.children} /> : null}
+    <ItemLink item={item} current={current} />
+    {item.children.length > 0 ? <MenuLinks items={item.children} current={current} /> : null}
   </li>)}</ul>;
 }
 
-function DrawerMenu({ items, context, nested = false }: { items: StorefrontMenuItem[]; context: Context; nested?: boolean }) {
+function DrawerMenu({ items, context, current, nested = false }: { items: StorefrontMenuItem[]; context: Context; current: MenuCurrent; nested?: boolean }) {
   return (
     <ul class={nested ? undefined : "noor-drawer-list"}>
       {items.map((item) => (
@@ -161,10 +211,10 @@ function DrawerMenu({ items, context, nested = false }: { items: StorefrontMenuI
                 <span>{item.title}</span>
                 <Icon name="down" size={16} />
               </summary>
-              {linked(item) ? <ul><li><a href={item.url}>{t(context, { en: `All ${item.title}`, bn: `সব ${item.title}` })}</a></li></ul> : null}
-              <DrawerMenu items={item.children} context={context} nested />
+              {linked(item) ? <ul><li><a href={item.url} aria-current={pageOnly(current, item)}>{t(context, { en: `All ${item.title}`, bn: `সব ${item.title}` })}</a></li></ul> : null}
+              <DrawerMenu items={item.children} context={context} current={current} nested />
             </details>
-          ) : <ItemLink item={item} />}
+          ) : <ItemLink item={item} current={current} />}
         </li>
       ))}
     </ul>
@@ -203,6 +253,10 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
     );
   }
   const searchLabel = t(context, { en: "Search", bn: "খুঁজুন" });
+  const current = menuCurrent(context.page.path, data.store.url);
+  // Phones get one search: the header's button when it shows one (with or
+  // without the store's tab bar, which never repeats Search), else the drawer's field.
+  const drawerSearch = !settings.show_search;
   return (
     <div class={cx("noor-header-shell", settings.sticky && "is-sticky", transparent && "is-transparent")} {...(settings.sticky ? stickyHeader() : {})} style={{ "--noor-logo-width": `${data.store.logoWidth}px` }}>
       <Island name="header" hydrate="idle" class="noor-header-island">
@@ -220,10 +274,10 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
               ) : null}
             </div>
             {logo}
-            {/* Keep the desktop row bounded; More opens the complete native drawer. */}
+            {/* Keep the desktop row bounded; More lists the rest. The drawer is the phone navigation. */}
             {data.menu.length > 0 ? (
               <nav class="noor-nav noor-desk-only" aria-label={t(context, { en: "Main", bn: "প্রধান" })}>
-                <Menu items={data.menu} style={choice(settings.menu_style, ["mega", "simple"] as const, "mega")} limit={layout === "center" ? 6 : 4} context={context} />
+                <Menu items={data.menu} style={choice(settings.menu_style, ["mega", "simple"] as const, "mega")} limit={layout === "center" ? 6 : 4} context={context} current={current} />
               </nav>
             ) : null}
             <div class="noor-header-end">
@@ -253,11 +307,13 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
             <Icon name="close" size={22} />
           </button>
         </div>
-        <form class="noor-field is-search" action={data.routes.search} method="get" role="search">
-          <Icon name="search" size={18} />
-          <input type="search" name={data.searchParam} placeholder={t(context, { en: "Search products", bn: "পণ্য খুঁজুন" })} aria-label={searchLabel} />
-        </form>
-        <nav class="noor-drawer-nav" aria-label={t(context, { en: "Main", bn: "প্রধান" })}><DrawerMenu items={data.menu} context={context} /></nav>
+        {drawerSearch ? (
+          <form class="noor-field is-search" action={data.routes.search} method="get" role="search">
+            <Icon name="search" size={18} />
+            <input type="search" name={data.searchParam} placeholder={t(context, { en: "Search products", bn: "পণ্য খুঁজুন" })} aria-label={searchLabel} />
+          </form>
+        ) : null}
+        <nav class="noor-drawer-nav" aria-label={t(context, { en: "Main", bn: "প্রধান" })}><DrawerMenu items={data.menu} context={context} current={current} /></nav>
         <div class="noor-drawer-foot">
           <a href={data.routes.account} {...accountLink()}><Icon name="user" size={18} />{t(context, { en: "My account", bn: "আমার অ্যাকাউন্ট" })}</a>
         </div>

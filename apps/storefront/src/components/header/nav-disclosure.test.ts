@@ -301,6 +301,45 @@ describe("menu row keys", () => {
     expect(document.documentElement.hasAttribute("data-nav-disclosure")).toBe(true);
   });
 
+  it("runs an app header's More as a dropdown of the rest of its menu", () => {
+    // Noor's row: its first roots, then More with the roots past the row (and their links).
+    document.body.innerHTML = `
+      <ul class="noor-nav-list" data-nav-overflow>
+        <li data-nav-index="0"><a class="noor-nav-link" data-nav-link href="/shoes">Shoes</a></li>
+        <li class="noor-nav-more-item" data-nav-more data-disclosure-item>
+          <button type="button" class="noor-nav-link noor-nav-more" data-nav-link data-disclosure="popup" aria-expanded="false" aria-controls="noor-nav-more">More</button>
+          <div class="noor-drop noor-more" id="noor-nav-more" hidden>
+            <ul data-nav-more-list>
+              <li><a href="/bags">Bags</a><ul><li><a href="/totes">Totes</a></li></ul></li>
+            </ul>
+          </div>
+        </li>
+      </ul>
+      <a id="outside" href="/sale">Sale</a>`;
+    const more = button("noor-nav-more");
+    // A hover never opens More (its rows may be moved items); a press does.
+    vi.useFakeTimers();
+    pointer("pointerover", more);
+    vi.advanceTimersByTime(500);
+    expect(panel("noor-nav-more").hidden).toBe(true);
+    document.querySelector<HTMLAnchorElement>('a[href="/shoes"]')!.focus();
+    key("ArrowRight");
+    expect(document.activeElement).toBe(more);
+    key("ArrowDown");
+    expect(panel("noor-nav-more").hidden).toBe(false);
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement!.getAttribute("href")).toBe("/bags");
+    key("ArrowDown");
+    expect(document.activeElement!.getAttribute("href")).toBe("/totes");
+    key("Escape");
+    expect(panel("noor-nav-more").hidden).toBe(true);
+    expect(document.activeElement).toBe(more);
+    more.click();
+    expect(panel("noor-nav-more").hidden).toBe(false);
+    document.getElementById("outside")!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    expect(panel("noor-nav-more").hidden).toBe(true);
+  });
+
   it("moves the menu itself into the condensed bar and back", () => {
     document.body.insertAdjacentHTML("afterbegin", '<div id="main-header"><div data-nav-compact-home="desktop-nav"></div></div>');
     const header = document.getElementById("main-header")!;

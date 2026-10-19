@@ -39,6 +39,12 @@ export interface ImageProps {
   sizes?: string;
   /** `eager` (and `fetchpriority="high"`) for the page's largest above-the-fold image only. */
   loading?: "lazy" | "eager";
+  /**
+   * Overrides the fetch priority: `auto` for the rest of an eager first row
+   * (only the likely largest photos keep `high`), `low` for small eager
+   * images. Default: `high` when eager, none when lazy.
+   */
+  fetchpriority?: "high" | "auto" | "low";
   class?: string;
   /** Overrides the image's own alt text ("" for a decorative image). */
   alt?: string;
@@ -57,8 +63,8 @@ export function Image(props: ImageProps): Html {
     height: image.height ?? undefined,
     alt: props.alt ?? image.alt,
     loading: eager ? "eager" : "lazy",
-    fetchpriority: eager ? "high" : undefined,
-    decoding: eager ? "sync" : "async",
+    fetchpriority: props.fetchpriority === "auto" ? undefined : props.fetchpriority ?? (eager ? "high" : undefined),
+    decoding: eager && props.fetchpriority !== "auto" && props.fetchpriority !== "low" ? "sync" : "async",
     class: props.class,
   })}>`);
 }

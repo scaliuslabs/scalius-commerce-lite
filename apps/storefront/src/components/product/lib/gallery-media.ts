@@ -24,6 +24,14 @@ export interface PageGalleryItem {
   /** Video: "0:32"; null when unknown. */
   duration: string | null;
   isPrimary: boolean;
+  /** Width / height from the stored media dimensions; null when unknown. */
+  aspectRatio: number | null;
+}
+
+/** A stored file's width / height, or null when either side is unknown. */
+export function mediaAspectRatio(media: { width?: number | null; height?: number | null }): number | null {
+  const { width, height } = media;
+  return typeof width === "number" && typeof height === "number" && width > 0 && height > 0 ? width / height : null;
 }
 
 export function formatVideoDuration(durationMs: number | null): string | null {
@@ -51,6 +59,7 @@ export function productGalleryItems(
       altText: item.altText?.trim() || fallbackAlt,
       duration: item.kind === "video" ? formatVideoDuration(item.durationMs) : null,
       isPrimary: item.isPrimary,
+      aspectRatio: mediaAspectRatio(item),
     }));
 }
 

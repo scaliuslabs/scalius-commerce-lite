@@ -4,6 +4,8 @@ import { STOREFRONT_GALLERY_VARIANTS } from "@scalius/shared/storefront-theme";
 
 import {
   GALLERY_IMAGE_WIDTHS,
+  GALLERY_STAGE_RATIO_BOUNDS,
+  boundedStageRatio,
   productGalleryMainSlot,
   galleryStageRatio,
   productGalleryThumbnailSlot,
@@ -116,26 +118,39 @@ describe("product gallery image slots", () => {
     expect(evaluateSizes(sizes, 1440)).toBeGreaterThan(404);
   });
 
-  it("takes the stage ratio from the theme's photo ratio unless the variant states its own", () => {
+  it("adapts the stage to the first photo's stored ratio, within bounds, unless the variant states its own", () => {
+    // A square photo in a portrait-ratio theme (Noor) gets a square stage: no bands.
+    expect(galleryStageRatio(GALLERY.classic, "portrait", 1)).toBe(1);
+    expect(galleryStageRatio(GALLERY.stacked, "portrait", 1)).toBe(1);
+    expect(galleryStageRatio(GALLERY.classic, "square", 0.8)).toBe(0.8);
+    expect(galleryStageRatio(GALLERY.classic, "square", 1.5)).toBe(1.5);
+    // A very tall or very wide photo sits in the nearest bound, uncropped.
+    expect(galleryStageRatio(GALLERY.classic, "square", 0.3)).toBe(boundedStageRatio(GALLERY_STAGE_RATIO_BOUNDS.min));
+    expect(galleryStageRatio(GALLERY.classic, "square", 4)).toBe(boundedStageRatio(GALLERY_STAGE_RATIO_BOUNDS.max));
+    expect(boundedStageRatio(4 / 3)).toBe(1.3333);
+    // The portrait gallery is an explicit stage.
+    expect(galleryStageRatio(GALLERY.portrait, "square", 1)).toBe(0.75);
+  });
+
+  it("falls back to the theme's photo ratio only for a photo of unknown size", () => {
     expect(galleryStageRatio(GALLERY.classic, "portrait")).toBe(0.75);
-    expect(galleryStageRatio(GALLERY.classic, "landscape")).toBeCloseTo(4 / 3);
-    expect(galleryStageRatio(GALLERY.classic, "square")).toBe(1);
+    expect(galleryStageRatio(GALLERY.classic, "landscape", null)).toBeCloseTo(4 / 3);
+    expect(galleryStageRatio(GALLERY.classic, "square", Number.NaN)).toBe(1);
     expect(galleryStageRatio(GALLERY.portrait, "square")).toBe(0.75);
   });
 
-  it("sizes thumbnails to their rail and caps their srcset at 296w", () => {
-    const beside = GALLERY.classic;
-    const below = GALLERY["thumbs-below"];
+  it("gives both rails one thumbnail slot sized to the visible rail, capped at 296w", () => {
+    const beside = productGalleryThumbnailSlot(GALLERY.classic);
+    const below = productGalleryThumbnailSlot(GALLERY["thumbs-below"]);
     // Phones and tablets: a strip of 68px thumbnails in every layout.
-    const mobile = productGalleryThumbnailSlot(beside, "mobile");
-    expect(evaluateSizes(mobile.sizes, 390)).toBe(68);
-    expect(evaluateSizes(mobile.sizes, 800)).toBe(68);
-    const desktop = productGalleryThumbnailSlot(beside, "desktop");
-    expect(evaluateSizes(desktop.sizes, 1100)).toBe(76);
-    expect(evaluateSizes(desktop.sizes, 1440)).toBe(96);
-    expect(evaluateSizes(productGalleryThumbnailSlot(below, "mobile").sizes, 390)).toBe(68);
-    expect(evaluateSizes(productGalleryThumbnailSlot(below, "desktop").sizes, 1440)).toBe(88);
-    for (const slot of [mobile, desktop]) {
+    expect(evaluateSizes(beside.sizes, 390)).toBe(68);
+    expect(evaluateSizes(beside.sizes, 800)).toBe(68);
+    // Computers: the rail beside the photo, or the strip below it.
+    expect(evaluateSizes(beside.sizes, 1100)).toBe(76);
+    expect(evaluateSizes(beside.sizes, 1440)).toBe(96);
+    expect(evaluateSizes(below.sizes, 390)).toBe(68);
+    expect(evaluateSizes(below.sizes, 1440)).toBe(88);
+    for (const slot of [beside, below]) {
       expect(slot.width).toBe(144);
       expect(slot.maxWidth).toBe(296);
     }
@@ -145,8 +160,8 @@ describe("product gallery image slots", () => {
     const side = STOREFRONT_GALLERY_VARIANTS["thumbs-left"].renders({ phoneSideThumbnails: true });
     const marketplace = GALLERY["thumbs-left"];
     expect(evaluateSizes(productGalleryMainSlot(side, true).sizes, 390)).toBe(310);
-    expect(evaluateSizes(productGalleryThumbnailSlot(side, "mobile").sizes, 390)).toBe(48);
+    expect(evaluateSizes(productGalleryThumbnailSlot(side).sizes, 390)).toBe(48);
     expect(evaluateSizes(productGalleryMainSlot(marketplace, true).sizes, 390)).toBe(366);
-    expect(evaluateSizes(productGalleryThumbnailSlot(marketplace, "mobile").sizes, 390)).toBe(68);
+    expect(evaluateSizes(productGalleryThumbnailSlot(marketplace).sizes, 390)).toBe(68);
   });
 });

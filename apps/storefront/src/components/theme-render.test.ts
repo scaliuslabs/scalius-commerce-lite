@@ -40,6 +40,7 @@ import { heroImageCandidate } from "@/lib/homepage-hero";
 import {
   productGalleryMainSlot,
   productGalleryThumbnailSlot,
+  GALLERY_EAGER_THUMBNAILS,
 } from "@/components/product/lib/gallery-images";
 import { headerCondense, headerSpec } from "@/components/header/header-variants";
 import { fitNavOverflow } from "@/components/header/nav-disclosure";
@@ -639,9 +640,12 @@ describe("storefront theme render matrix", () => {
     for (const rail of ["mobile", "desktop"] as const) {
       const thumbs = productPage.querySelectorAll(`[data-thumbnail-rail="${rail}"] [data-gallery-thumbnail] img`);
       expect(thumbs).toHaveLength(GALLERY_MEDIA.length);
-      for (const thumb of thumbs) {
-        expect(thumb.getAttribute("loading")).toBe("lazy");
-        expect(thumb.getAttribute("sizes")).toBe(productGalleryThumbnailSlot(layout.productPage, rail).sizes);
+      for (const [index, thumb] of [...thumbs].entries()) {
+        // The first thumbnails sit in the first viewport: eager at low priority.
+        expect(thumb.getAttribute("loading")).toBe(index < GALLERY_EAGER_THUMBNAILS ? "eager" : "lazy");
+        expect(thumb.getAttribute("fetchpriority")).toBe("low");
+        // Both rails name one file per thumbnail, so an eager one downloads once.
+        expect(thumb.getAttribute("sizes")).toBe(productGalleryThumbnailSlot(layout.productPage).sizes);
         expect(thumb.getAttribute("srcset")).toMatch(/\/144\.webp 144w, (?:\S+\/\d+\.webp \d+w, )*\S+\/\d+\.webp \d+w$/);
       }
     }

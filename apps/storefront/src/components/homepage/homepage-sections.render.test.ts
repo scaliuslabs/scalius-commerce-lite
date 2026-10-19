@@ -1052,6 +1052,27 @@ describe("app sections", () => {
     }
   }
 
+  it("tells a core section's skin whether it is the page's lead, so it loads its first row of photos eagerly", async () => {
+    const skinned = (id: string) => ({ ...section("product-rail", id, { source: { kind: "newest" } }), skin: { app: "acme.skin/rail", values: {} } }) as StorefrontSection;
+    const sections = [skinned("first"), skinned("second")];
+    const content = store("large");
+    const jobs: Array<{ instanceId?: string; data?: { aboveFold?: boolean } }> = [];
+    const draw = vi.spyOn(ExtensionHost.prototype, "render").mockImplementation(async (_extension, job) => {
+      jobs.push(job as never);
+      return '<section class="acme-rail">Rail</section>';
+    });
+    try {
+      await requestRuntime.run({ layout: Promise.resolve({ currency: { code: "BDT", symbol: "৳" }, appExtensions: [{
+        pluginId: "acme.skin", version: "1.0.0", source: "bundled", release: "b".repeat(64),
+        sections: [], sectionSettings: {}, skins: [{ id: "rail", target: "section:product-rail", settings: [] }], blocks: [], islands: [], stylesheet: false, connect: [],
+      }] } as unknown as import("@/lib/api/storefront").LayoutData) }, () => renderWith(sections, content, {}));
+    } finally {
+      draw.mockRestore();
+    }
+    expect(homepageLeadSection(sections, content)?.id).toBe("first");
+    expect(jobs.map((job) => [job.instanceId, job.data?.aboveFold])).toEqual([["first", true], ["second", false]]);
+  });
+
   it("renders what the app's module drew in page order, and nothing (no box) for a section it was not given", async () => {
     const sections = [app("greeting"), section("product-rail", "rail", { source: { kind: "newest" } }), app("gone", "acme.gone/banner")];
     const content = given(store("large"), ["greeting"]);

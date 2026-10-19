@@ -392,6 +392,12 @@ export interface StorefrontSectionSkinData<Settings = Record<string, unknown>> {
   tiles: StorefrontTile[];
   /** A collections section's newest products when no collection has any; an endless grid's first page. */
   cards: StorefrontProductCard[];
+  /**
+   * The section holds the first photos buyers see before scrolling (the
+   * homepage's lead section): load its first row of photos eagerly, as the
+   * core section does. Absent or false everywhere else.
+   */
+  aboveFold?: boolean;
 }
 
 /** A section's settings as its component gets them: every image, product source, link and list resolved. */

@@ -123,7 +123,19 @@ describe("primitives", () => {
     const out = Image({ image: fixtureProductCard().image, loading: "eager" }).value;
     expect(out).toContain(`loading="eager"`);
     expect(out).toContain(`fetchpriority="high"`);
+    expect(out).toContain(`decoding="sync"`);
     expect(Image({ image: null }).value).toBe("");
+  });
+
+  it("lets an eager image load at normal or low priority", () => {
+    const image = fixtureProductCard().image;
+    const normal = Image({ image, loading: "eager", fetchpriority: "auto" }).value;
+    expect(normal).toContain(`loading="eager"`);
+    expect(normal).not.toContain("fetchpriority");
+    expect(normal).toContain(`decoding="async"`);
+    const low = Image({ image, loading: "eager", fetchpriority: "low" }).value;
+    expect(low).toContain(`fetchpriority="low"`);
+    expect(Image({ image }).value).not.toContain("fetchpriority");
   });
 
   it("prices in Bangla with a from-price and no struck price when not discounted", () => {

@@ -110,7 +110,7 @@ interface ProductsSkinSettings extends Shell {
   columns: number;
 }
 
-function Showcase({ settings, heading, tabs, link, layout, context, instanceId }: {
+function Showcase({ settings, heading, tabs, link, layout, context, instanceId, eager }: {
   settings: ProductsSkinSettings;
   heading: string;
   tabs: Array<{ label: string | null; products: StorefrontProductCard[] }>;
@@ -118,6 +118,7 @@ function Showcase({ settings, heading, tabs, link, layout, context, instanceId }
   layout: string;
   context: StorefrontRenderContext;
   instanceId: string;
+  eager: boolean;
 }) {
   return (
     <ProductShowcase objects={{}} instanceId={instanceId} context={context} settings={{
@@ -131,6 +132,7 @@ function Showcase({ settings, heading, tabs, link, layout, context, instanceId }
       columns: settings.columns,
       tone: settings.tone,
       spacing: settings.spacing,
+      eager,
     }} />
   );
 }
@@ -140,7 +142,7 @@ export function ProductTabsSkin({ settings, data, context, instanceId }: Section
   const tabs = listOf(data.settings.tabs);
   const { title, limit = 8 } = data.settings;
   return (
-    <Showcase settings={settings} heading={title} context={context} instanceId={instanceId} layout={settings.layout}
+    <Showcase settings={settings} heading={title} context={context} instanceId={instanceId} layout={settings.layout} eager={data.aboveFold === true}
       link={listLink(settings.link, settings.link_label, tabs[0]?.source)}
       tabs={tabs.map((tab) => ({ label: tab.label, products: cardsOf(tab.source, limit) }))} />
   );
@@ -161,6 +163,7 @@ export function ProductGridSkin({ settings, data, context, instanceId }: Section
       columns,
       tone: settings.tone,
       spacing: settings.spacing,
+      eager: data.aboveFold === true,
     }} />
   );
 }
@@ -169,7 +172,7 @@ export function ProductGridSkin({ settings, data, context, instanceId }: Section
 export function ProductRailSkin({ settings, data, context, instanceId }: SectionSkinProps<"product-rail", ProductsSkinSettings>) {
   const { title, source, limit = 12 } = data.settings;
   return (
-    <Showcase settings={settings} heading={title} context={context} instanceId={instanceId} layout="row"
+    <Showcase settings={settings} heading={title} context={context} instanceId={instanceId} layout="row" eager={data.aboveFold === true}
       link={listLink(settings.link, settings.link_label, source)}
       tabs={[{ label: null, products: cardsOf(source, limit) }]} />
   );

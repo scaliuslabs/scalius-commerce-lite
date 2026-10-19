@@ -170,7 +170,7 @@ const root = only
     const headingId = `home-${section.id}-title`;
     return (
       <div {...wrapper} data-home-section={section.type} data-section-id={section.id} data-theme-section-id={marks ? section.id : undefined}>
-        <SectionSkin section={section} content={content} {...money}>
+        <SectionSkin section={section} content={content} aboveFold={lead} {...money}>
         {section.type === "hero" && (
           <section class:list={["w-full", section.settings.layout === "wide-editorial" && "md:mb-5"]}>
             <Hero

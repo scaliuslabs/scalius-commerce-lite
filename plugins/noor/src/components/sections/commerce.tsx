@@ -33,6 +33,8 @@ export interface ShowcaseSettings {
   columns: number;
   tone: string;
   spacing: string;
+  /** The page's lead section (a skin of a core section passes the host's `aboveFold`): the first tab's first row loads eagerly. */
+  eager?: boolean;
 }
 
 export function ProductShowcase({ settings, context, instanceId }: SectionProps<ShowcaseSettings>) {
@@ -43,8 +45,10 @@ export function ProductShowcase({ settings, context, instanceId }: SectionProps<
   const layout = choice(settings.layout, ["grid", "row"] as const, "grid");
   const name = `noor-tab-${instanceId}`;
   const heading = text(settings.heading);
-  const list = (products: StorefrontProductCard[]) => (
-    <Products products={products} context={context} layout={layout} columns={settings.columns} label={heading} />
+  // Only the first tab shows before a choice; the other tabs stay lazy.
+  const list = (products: StorefrontProductCard[], first: boolean) => (
+    <Products products={products} context={context} layout={layout} columns={settings.columns} label={heading}
+      card={settings.eager === true && first ? { eager: true } : undefined} />
   );
   return (
     <Section name="showcase" tone={settings.tone} space={settings.spacing}>
@@ -60,9 +64,9 @@ export function ProductShowcase({ settings, context, instanceId }: SectionProps<
               </label>
             ))}
           </div>
-          {tabs.map((tab, index) => <div class="noor-tabpanel" data-panel={String(index)}>{list(tab.products)}</div>)}
+          {tabs.map((tab, index) => <div class="noor-tabpanel" data-panel={String(index)}>{list(tab.products, index === 0)}</div>)}
         </div>
-      ) : list(tabs[0]!.products)}
+      ) : list(tabs[0]!.products, true)}
     </Section>
   );
 }

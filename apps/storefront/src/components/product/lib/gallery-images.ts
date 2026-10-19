@@ -31,12 +31,31 @@ export const GALLERY_IMAGE_WIDTHS = {
 const THUMBNAIL_MAX_WIDTH = 296;
 
 /**
- * The stage's width / height: the gallery variant's own ratio, or, for the
- * square stage, the theme's photo ratio, so a tall photo never sits in a
- * square box with bars at its sides.
+ * The adapted stage's bounds (width / height): 2:3 portrait to 16:9
+ * landscape. A photo outside them sits in the nearest bound, uncropped.
  */
-export function galleryStageRatio(layout: ProductGalleryLayout, imageRatio: "square" | "portrait" | "landscape"): number {
+export const GALLERY_STAGE_RATIO_BOUNDS = { min: 2 / 3, max: 16 / 9 } as const;
+
+/** A ratio inside the adapted stage's bounds, rounded so the inline style stays short. */
+export function boundedStageRatio(ratio: number): number {
+  const bounded = Math.min(GALLERY_STAGE_RATIO_BOUNDS.max, Math.max(GALLERY_STAGE_RATIO_BOUNDS.min, ratio));
+  return Math.round(bounded * 10_000) / 10_000;
+}
+
+/**
+ * The stage's width / height ("adapt to image", as Dawn and Horizon do): a
+ * variant's own ratio when it states one (the portrait gallery), else the
+ * first photo's stored ratio within bounds, so a photo fills its stage with
+ * no bands. Only a photo of unknown size falls back to the theme's photo
+ * ratio. The ratio comes from stored dimensions, so the stage never moves.
+ */
+export function galleryStageRatio(
+  layout: ProductGalleryLayout,
+  imageRatio: "square" | "portrait" | "landscape",
+  firstPhotoRatio: number | null = null,
+): number {
   if (layout.stageRatio !== 1) return layout.stageRatio;
+  if (firstPhotoRatio !== null && Number.isFinite(firstPhotoRatio) && firstPhotoRatio > 0) return boundedStageRatio(firstPhotoRatio);
   return imageRatio === "portrait" ? 0.75 : imageRatio === "landscape" ? 4 / 3 : 1;
 }
 
@@ -77,16 +96,23 @@ export function productGalleryMainSlot(
   };
 }
 
-/** Thumbnails of the mobile or desktop rail. */
-export function productGalleryThumbnailSlot(
-  layout: ProductGalleryLayout,
-  rail: "mobile" | "desktop",
-): ImageSlot {
-  const below = layout.thumbnails === "below";
-  const sizes = rail === "mobile"
-    ? layout.phoneSideThumbnails ? "48px" : "68px"
-    : layout.thumbnailSize !== null
-      ? `${layout.thumbnailSize}px`
-      : below ? "88px" : "(min-width: 1280px) 96px, 76px";
-  return { width: GALLERY_IMAGE_WIDTHS.thumbnail, sizes, maxWidth: THUMBNAIL_MAX_WIDTH };
+/**
+ * The first thumbnails sit in the first viewport (a phone strip shows about
+ * five 68px thumbnails, a computer rail about five): they load eagerly at low
+ * priority, so they never paint blank after the photo. The rest stay lazy.
+ */
+export const GALLERY_EAGER_THUMBNAILS = 5;
+
+/**
+ * The thumbnail slot of both rails. One `sizes` covers every breakpoint (the
+ * phone strip below 1024px, the computer rail from it), so the rail hidden at
+ * a breakpoint names the same file as the visible one and an eager thumbnail
+ * is fetched once, whichever rail shows it.
+ */
+export function productGalleryThumbnailSlot(layout: ProductGalleryLayout): ImageSlot {
+  const phone = layout.phoneSideThumbnails ? "48px" : "68px";
+  const computer = layout.thumbnailSize !== null
+    ? `${layout.thumbnailSize}px`
+    : layout.thumbnails === "below" ? "88px" : "(min-width: 1280px) 96px, 76px";
+  return { width: GALLERY_IMAGE_WIDTHS.thumbnail, sizes: `(max-width: 1023px) ${phone}, ${computer}`, maxWidth: THUMBNAIL_MAX_WIDTH };
 }
