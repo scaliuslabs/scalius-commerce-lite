@@ -16,7 +16,7 @@ import { enableAppFeature, type AppDetail } from "~/lib/api-query-options/apps";
 import { queryKeys } from "~/lib/query-keys";
 import { serviceGroups } from "./app-services";
 import { useAppMutationResult } from "./AppDialogs";
-import { FeatureAccess } from "./AppFeatures";
+import { FeatureAccess, hasFeatureAccess } from "./AppFeatures";
 
 export function FeatureChecklist({ app, canTurnOn }: { app: AppDetail; canTurnOn: boolean }) {
   const t = useMessages(appFeaturesMessages);
@@ -25,6 +25,8 @@ export function FeatureChecklist({ app, canTurnOn }: { app: AppDetail; canTurnOn
   const [picked, setPicked] = useState(() => new Set(app.features.filter((feature) => feature.recommended && !feature.enabled).map((feature) => feature.id)));
   const [reviewing, setReviewing] = useState(false);
   const chosen = app.features.filter((feature) => picked.has(feature.id) && !feature.enabled);
+  // The review agrees to a list only when one is there.
+  const asks = chosen.some(hasFeatureAccess);
   const groups = serviceGroups({ features: app.features, providers: [] });
   const turnOn = useMutation({
     mutationFn: async () => {
@@ -99,7 +101,7 @@ export function FeatureChecklist({ app, canTurnOn }: { app: AppDetail; canTurnOn
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("reviewTitle", { count: chosen.length })}</DialogTitle>
-            <DialogDescription>{t("reviewIntro", { app: app.name })}</DialogDescription>
+            <DialogDescription>{t(asks ? "reviewIntro" : "reviewNoAccess", { app: app.name })}</DialogDescription>
           </DialogHeader>
           <div className="flex max-h-96 flex-col gap-4 overflow-y-auto">
             {chosen.map((feature) => (
@@ -109,7 +111,7 @@ export function FeatureChecklist({ app, canTurnOn }: { app: AppDetail; canTurnOn
               </section>
             ))}
           </div>
-          <p className="text-body text-muted-foreground">{t("reviewConsent", { app: app.name })}</p>
+          <p className="text-body text-muted-foreground">{t(asks ? "reviewConsent" : "reviewTurnOffLater", { app: app.name })}</p>
           <DialogFooter>
             <Button type="button" variant="outline" disabled={turnOn.isPending} onClick={() => setReviewing(false)}>{t("cancel")}</Button>
             <Button type="button" loading={turnOn.isPending} onClick={() => turnOn.mutate()}>{t("enable")}</Button>

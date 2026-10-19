@@ -642,6 +642,16 @@ describe("App page", () => {
     expect(toasts.warning).toHaveBeenCalledWith("Loyalty points reported a problem", expect.objectContaining({ description: "Couldn't reach the points service." }));
   });
 
+  it("agrees to nothing when the app asks for no access: no 'what is listed' sentence under an empty list", async () => {
+    const none = grant({ scopes: [], allowedHosts: [], events: [], functions: [], publicRoutes: false, customFieldOwners: [] });
+    await renderApp(detail({ request: none, added: none, scopes: [] }), [], true);
+    await click(button("Review and activate"));
+
+    expect(dialog().textContent).toContain("This app doesn't ask for access to your store.");
+    expect(dialog().textContent).not.toContain("what is listed");
+    expect(dialog().textContent).not.toContain("recorded as yours");
+  });
+
   it("refetches and asks to review again when the request changed meanwhile", async () => {
     sdk.postApiV1AdminAppsByIdActivate.mockImplementation(() => refused(409, { code: "installation.grant_changed" }));
     await renderApp(detail(), [], true);
@@ -842,16 +852,49 @@ describe("App page: sections", () => {
     expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe("Overview");
     // The health summary.
     expect(text()).toContain("1 of 2 on");
-    const services = [...document.querySelectorAll<HTMLAnchorElement>('main a[href^="/admin/apps/acme.loyalty/"], a[href^="/admin/apps/acme.loyalty/"]')]
-      .filter((link) => !nav.contains(link))
+    const phoneOff = document.querySelector('[data-slot="services-off"]')!;
+    const services = [...document.querySelectorAll<HTMLAnchorElement>('a[href^="/admin/apps/acme.loyalty/"]')]
+      .filter((link) => !nav.contains(link) && !phoneOff.contains(link))
       .map((link) => link.getAttribute("href"));
     // The ones that are on; the rest stay in the column, counted here.
     expect(services).toEqual(["/admin/apps/acme.loyalty/bkash"]);
-    expect(text()).toContain("1 more service is off.");
+    expect(text()).toContain("1 more service is off. Choose it from the list to set it up.");
+    // Below 1024px the column is a picker, so the card lists the off ones too (hidden from lg).
+    expect(phoneOff.className).toContain("lg:hidden");
+    expect([...phoneOff.querySelectorAll("a")].map((link) => link.getAttribute("href"))).toEqual(["/admin/apps/acme.loyalty/places"]);
     // No switch on the overview: each feature turns on on its own page.
     expect(document.querySelectorAll('button[role="switch"]')).toHaveLength(0);
     expect(text()).toContain("About");
     expect(text()).toContain("Turn off or uninstall");
+  });
+
+  it("summarises a pack with nothing on instead of repeating the column, and lists running services problems first", async () => {
+    await renderApp(detail({ status: "active", features: [feature(), placesFeature()] }), MANAGER, true);
+    const nav = document.querySelector('nav[aria-label="Sections of Loyalty points"]')!;
+    const phoneOff = document.querySelector('[data-slot="services-off"]')!;
+    const outside = () => [...document.querySelectorAll<HTMLAnchorElement>('a[href^="/admin/apps/acme.loyalty/"]')]
+      .filter((link) => !nav.contains(link) && !phoneOff.contains(link));
+    expect(text()).toContain("0 of 2 on");
+    expect(text()).toContain("All 2 services are off. Choose one from the list to set it up.");
+    expect(outside()).toHaveLength(0);
+
+    act(() => root.unmount());
+    queryClient.clear();
+    root = createRoot(host);
+    // bKash is on but misses a required setting; places is on and ready.
+    const bkash = feature({ enabled: true, grantKey: null });
+    const places = placesFeature();
+    await renderApp(detail({
+      status: "active",
+      features: [{ ...places, enabled: true, grantKey: null }, bkash],
+      providers: [{ id: "acme.loyalty:bkash", providerId: "bkash", kind: "payment", name: "bKash", icon: null, settings: ["bkash_app_key"], own: true, required: ["bkash_app_key"] }],
+      settings: { ...detail().settings, fields: [...detail().settings.fields, field({ key: "bkash_app_key", label: "App key", type: "text" })] },
+    }), MANAGER, true);
+    expect(text()).toContain("1 service needs attention.");
+    const rows = [...document.querySelectorAll<HTMLAnchorElement>('a[href^="/admin/apps/acme.loyalty/"]')]
+      .filter((link) => !document.querySelector("nav")!.contains(link));
+    expect(rows[0]?.textContent).toContain("bKash");
+    expect(rows[0]?.textContent).toContain("Needs setup");
   });
 
   it("keeps an app without features on one page, with no section column", async () => {
@@ -884,6 +927,18 @@ describe("App page: sections", () => {
       body: { expectedRevision: 3, grantKey: "feature-key-bkash" },
     });
     await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith("bKash is on."));
+  });
+
+  it("says in one sentence that a feature needs nothing more, without a 'can:' list or a consent to nothing", async () => {
+    const quiet = feature({
+      request: { scopes: [], allowedHosts: [], providers: [], events: [], functions: [], publicRoutes: false, storefront: false, admin: false, cron: [] },
+    });
+    await renderApp(detail({ status: "active", features: [quiet, placesFeature()] }), MANAGER, true, "bkash");
+    await click(document.querySelector<HTMLButtonElement>('button[role="switch"]')!);
+
+    expect(dialog().textContent).toContain("bKash needs no access beyond what Loyalty points already has.");
+    expect(dialog().textContent).not.toContain("can:");
+    expect(dialog().textContent).not.toContain("recorded as yours");
   });
 
   it("lets a manager turn a feature off but not on, and says why", async () => {

@@ -193,6 +193,31 @@ describe("changing the two-step method", () => {
     expect(stale.status).toBeGreaterThanOrEqual(400);
   });
 
+  it("never offers or accepts an authenticator key an email-code account still holds from before the method fix", async () => {
+    const env = makeEnv();
+    // ownerWithEmailCodes leaves exactly that data: a verified key row, and email codes as the method.
+    const { userId, cookie, secret } = await ownerWithEmailCodes(env);
+    const keyRow = database.sqlite.prepare("SELECT verified FROM two_factor WHERE user_id = ?").get(userId) as { verified: number | null };
+    expect(keyRow.verified).not.toBe(0);
+
+    const signInAnswer = await signIn(env, "owner@shop.test");
+    expect(await signInAnswer.clone().json()).toMatchObject({ twoFactorRedirect: true, twoFactorMethods: ["otp"] });
+    const pending = cookieNamed(signInAnswer, "two_factor");
+    const refused = await postAuth(env, "/api/auth/two-factor/verify-totp", { code: totp(secret) }, pending);
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ code: "AUTHENTICATOR_NOT_IN_USE" });
+    // The refusal used nothing up: the emailed code still signs in on the same pending sign-in.
+    expect((await postAuth(env, "/api/auth/two-factor/send-otp", {}, pending)).status).toBe(200);
+    const mailed = outbox.at(-1)!;
+    const code = (mailed.text ?? mailed.html).match(/\b\d{6}\b/)![0];
+    const signedIn = await postAuth(env, "/api/auth/two-factor/verify-otp", { code }, pending);
+    expect(signedIn.status).toBe(200);
+
+    // The admin API's step-up refuses the key too.
+    const stepUp = await adminApi(env)(cookie, "/2fa/verify", { code: totp(secret), type: "totp" });
+    expect(stepUp.status).toBe(400);
+  });
+
   it("answers a wrong authenticator code with a specific 4xx and keeps the old method", async () => {
     const env = makeEnv();
     const { userId, cookie } = await ownerWithEmailCodes(env);

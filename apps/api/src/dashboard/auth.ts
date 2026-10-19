@@ -7,7 +7,7 @@
  * `GET /api/auth/dashboard-session`.
  */
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
-import { createAuth } from "@scalius/core/auth";
+import { createAuth, twoFactorMethodsForAccount } from "@scalius/core/auth";
 import { adminPrincipalExists } from "@scalius/core/auth/admin-setup";
 import { RESET_TOKEN_MARKER_TTL_MS, resetTokenMarkerIdentifier } from "@scalius/core/auth/reset-token-markers";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
@@ -321,7 +321,7 @@ async function resetPasswordFromSession(
   await rememberUsedResetToken(env, token, account.userId);
 
   const signInRequest = authRequest("sign-in/email", { email: account.email, password: newPassword, rememberMe: true });
-  const signIn = await preferConfiguredTwoFactorMethod(env, signInRequest, await auth.handler(signInRequest.clone() as Request));
+  const signIn = await offerAccountTwoFactorMethods(env, signInRequest, await auth.handler(signInRequest.clone() as Request));
   const headers = new Headers({ "Cache-Control": NO_STORE });
   headers.append("Set-Cookie", clearCookie);
   if (!signIn.ok) {
@@ -425,8 +425,12 @@ async function runWithRetry(
   throw lastError;
 }
 
-/** Offer the administrator's saved 2FA method first after a password step. */
-async function preferConfiguredTwoFactorMethod(
+/**
+ * After a password step, offer the account's own second-step methods, its
+ * saved one first: the authenticator only while it is that method (an unused
+ * key left from an earlier email enrolment is never offered).
+ */
+async function offerAccountTwoFactorMethods(
   env: Env,
   request: Request,
   response: Response,
@@ -443,14 +447,14 @@ async function preferConfiguredTwoFactorMethod(
       .from(userTable)
       .where(eq(userTable.email, email.trim().toLowerCase()))
       .get();
-    const preferred = preference?.method === "email" ? "otp" : preference?.method === "totp" ? "totp" : null;
     const methods = body.twoFactorMethods as unknown[];
-    if (!preferred || methods.indexOf(preferred) <= 0) return response;
+    const offered = twoFactorMethodsForAccount(methods, preference?.method);
+    if (offered.length === methods.length && offered.every((entry, index) => entry === methods[index])) return response;
 
     const headers = new Headers(response.headers);
     headers.delete("content-length");
     return Response.json(
-      { ...body, twoFactorMethods: [preferred, ...methods.filter((method) => method !== preferred)] },
+      { ...body, twoFactorMethods: offered },
       { status: response.status, headers },
     );
   } catch {
@@ -531,7 +535,7 @@ export async function handleDashboardAuthRequest(
 
   const isSignIn = method === "POST" && route === SIGN_IN_EMAIL_PATH;
   let response = await runWithRetry((attempt) => auth.handler(attempt), request, isSignIn);
-  if (isSignIn) response = await preferConfiguredTwoFactorMethod(authEnv, request, response);
+  if (isSignIn) response = await offerAccountTwoFactorMethods(authEnv, request, response);
   if (verifiesSecondFactor) await markTwoFactorVerified(authEnv, response);
   return withNoStore(response);
 }

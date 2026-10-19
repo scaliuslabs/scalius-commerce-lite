@@ -14,6 +14,7 @@ import {
 import type { AppProviders } from "../integrations/provider-port";
 import { identityHandoff } from "./identity-handoff";
 import { createTwoFactorRecoveryCodeStorage, generateRecoveryCodes } from "./two-factor-method-challenge";
+import { onlyTheAuthenticatorInUse } from "./authenticator-in-use";
 import {
   PASSWORD_RESET_TTL_SECONDS,
   STAFF_INVITE_TTL_SECONDS,
@@ -297,6 +298,8 @@ export function createAuth(env: Env, options: CreateAuthOptions = {}) {
         "/get-session": false,
       },
     },
+    // An authenticator code signs in only while the authenticator is the account's method.
+    hooks: { before: onlyTheAuthenticatorInUse(db) },
     // Advanced configuration for Cloudflare
     advanced: {
       ipAddress: {

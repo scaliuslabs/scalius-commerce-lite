@@ -3,8 +3,9 @@
 #
 # 1. Ordering: the API Worker must be ready before the dashboard (Vite,
 #    proxying to the API port) and the storefront start.
-# 2. Zombie processes: Node/workerd children survive Ctrl+C.
-#    Cleanup terminates only processes started and tracked by this wrapper.
+# 2. Zombie processes: Node/workerd children survive Ctrl+C and SIGTERM.
+#    On SIGINT, SIGTERM or exit, cleanup stops each process this wrapper
+#    started together with every process below it, and nothing else.
 # 3. Ports: --api-port, --storefront-port and --admin-port (default 8787,
 #    4322, 4323) export SCALIUS_DEV_API_PORT, SCALIUS_DEV_STOREFRONT_PORT and
 #    SCALIUS_DEV_ADMIN_PORT, the one dev-only port source every app reads
@@ -148,6 +149,29 @@ assert_dev_ports_available() {
   fi
 }
 
+# A started PID and every process below it (pnpm -> sh -> node -> workerd),
+# from one process-table snapshot taken before any signal: once a parent dies
+# its children are reparented and can no longer be found from it.
+owned_process_tree() {
+  local root="$1"
+  ps -A -o pid= -o ppid= 2>/dev/null | awk -v root="$root" '
+    { parent[$1] = $2; pids[NR] = $1 }
+    END {
+      keep[root] = 1
+      changed = 1
+      while (changed) {
+        changed = 0
+        for (i in pids) {
+          pid = pids[i]
+          if (!(pid in keep) && (parent[pid] in keep)) { keep[pid] = 1; changed = 1 }
+        }
+      }
+      for (pid in keep) print pid
+    }'
+}
+
+# Signals the tree started as $1: pnpm does not pass SIGTERM on to wrangler,
+# vite or astro, so stopping only the PID the wrapper holds leaves them running.
 terminate_owned_process() {
   local pid="$1"
   local label="$2"
@@ -155,15 +179,24 @@ terminate_owned_process() {
     return
   fi
 
-  kill -TERM "$pid" 2>/dev/null || true
-  local attempts=0
-  while kill -0 "$pid" 2>/dev/null && [ "$attempts" -lt 30 ]; do
+  local tree
+  tree="$(owned_process_tree "$pid")"
+  # shellcheck disable=SC2086 # one PID per word
+  kill -TERM $tree 2>/dev/null || true
+  local attempts=0 alive member
+  while [ "$attempts" -lt 30 ]; do
+    alive=""
+    for member in $tree; do
+      kill -0 "$member" 2>/dev/null && alive="$alive $member"
+    done
+    [ -z "$alive" ] && break
     sleep 0.1
     attempts=$((attempts + 1))
   done
-  if kill -0 "$pid" 2>/dev/null; then
-    echo "$label did not stop after SIGTERM; stopping the same owned PID." >&2
-    kill -KILL "$pid" 2>/dev/null || true
+  if [ -n "$alive" ]; then
+    echo "$label did not stop after SIGTERM; stopping the processes it started." >&2
+    # shellcheck disable=SC2086
+    kill -KILL $alive 2>/dev/null || true
   fi
   wait "$pid" 2>/dev/null || true
 }
@@ -255,6 +288,10 @@ sync_local_platform() {
 }
 
 run_dev_preflight() {
+  if [ "${SCALIUS_SKIP_DEV_PREFLIGHT:-0}" = "1" ]; then
+    echo "Skipping local development readiness checks (SCALIUS_SKIP_DEV_PREFLIGHT=1)."
+    return
+  fi
   echo "Checking local development readiness..."
   if [ "$DRY_RUN" = "1" ]; then
     echo "[dry-run] node scripts/dev-doctor.mjs --profile api"

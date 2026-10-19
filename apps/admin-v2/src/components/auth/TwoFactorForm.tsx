@@ -37,6 +37,8 @@ function codeFailure({ code, status }: AuthFailure, method: VerifyTwoFactorMetho
   if (code === "BANNED_USER") return "suspended";
   if (code === "OTP_HAS_EXPIRED") return "codeExpired";
   if (code === "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE") return "codeTooManyAttempts";
+  // The account's method is email codes: an authenticator key it never used does not sign in.
+  if (code === "AUTHENTICATOR_NOT_IN_USE") return "authenticatorNotInUse";
   if (code.startsWith("INVALID") || status === 400 || status === 401) {
     return method === "backup" ? "backupInvalid" : "codeInvalid";
   }

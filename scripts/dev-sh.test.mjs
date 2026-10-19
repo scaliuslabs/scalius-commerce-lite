@@ -1,6 +1,8 @@
 import { spawn, spawnSync } from "child_process";
 import { once } from "events";
-import { dirname, resolve } from "path";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
 
@@ -156,4 +158,66 @@ describe("dev.sh startup planning", () => {
       listener?.kill("SIGTERM");
     }
   });
+});
+
+describe("dev.sh shutdown", () => {
+  /** A stand-in pnpm whose `exec turbo run dev` is a process tree like pnpm -> sh -> node -> workerd, none of which passes signals on. */
+  function fakePnpm(dir, log) {
+    const bin = join(dir, "pnpm");
+    writeFileSync(bin, [
+      "#!/bin/bash",
+      `echo $$ >> "${log}"`,
+      `bash -c 'echo $$ >> "${log}"; sleep 300 & echo $! >> "${log}"; bash -c "sleep 300 & echo \\$! >> \\"${log}\\"; wait" & echo $! >> "${log}"; wait'`,
+      "",
+    ].join("\n"));
+    chmodSync(bin, 0o755);
+    return bin;
+  }
+
+  const alive = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  it.each(["SIGTERM", "SIGINT"])("stops every process tree it started on %s", async (signal) => {
+    const dir = mkdtempSync(join(tmpdir(), "scalius-dev-sh-"));
+    const log = join(dir, "pids");
+    writeFileSync(log, "");
+    let pids = [];
+    let wrapper;
+    try {
+      wrapper = spawn("bash", [
+        "scripts/dev.sh", "--filter=@scalius/admin-v2",
+        "--api-port", "18787", "--storefront-port", "18788", "--admin-port", "18789",
+      ], {
+        cwd: root,
+        env: { ...process.env, SCALIUS_PNPM_BIN: fakePnpm(dir, log), SCALIUS_SKIP_DEV_PREFLIGHT: "1" },
+        stdio: "ignore",
+      });
+      const exited = once(wrapper, "exit");
+      // pnpm, the two shells under it and their two sleeps.
+      for (let waited = 0; pids.length < 5 && waited < 100; waited += 1) {
+        await new Promise((done) => setTimeout(done, 50));
+        pids = readFileSync(log, "utf8").split(/\s+/).filter(Boolean).map(Number);
+      }
+      expect(pids).toHaveLength(5);
+      expect(pids.every(alive)).toBe(true);
+
+      wrapper.kill(signal);
+      const [code] = await exited;
+      expect(code).toBe(signal === "SIGTERM" ? 143 : 130);
+      for (let waited = 0; pids.some(alive) && waited < 40; waited += 1) {
+        await new Promise((done) => setTimeout(done, 50));
+      }
+      expect(pids.filter(alive)).toEqual([]);
+    } finally {
+      if (wrapper && wrapper.exitCode === null && wrapper.signalCode === null) wrapper.kill("SIGKILL");
+      for (const pid of pids) if (alive(pid)) process.kill(pid, "SIGKILL");
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15_000);
 });

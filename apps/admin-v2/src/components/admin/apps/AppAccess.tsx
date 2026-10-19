@@ -31,7 +31,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function AppAccess({ app }: { app: AppDetail }) {
+/**
+ * `consent` is the sentence that agrees to the list ("… can read and change what
+ * is listed"): it shows under the list, and only when something is listed.
+ */
+export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNode }) {
   const t = useMessages(installedAppsMessages);
   const scopeText = useMessages(appScopeMessages);
   const fieldOwner = useMessages(customFieldMessages);
@@ -138,5 +142,10 @@ export function AppAccess({ app }: { app: AppDetail }) {
   }
 
   if (sections.length === 0) return <p className="text-body text-muted-foreground">{t("noAccess")}</p>;
-  return <div className="space-y-4">{sections}</div>;
+  return (
+    <>
+      <div className="space-y-4">{sections}</div>
+      {consent}
+    </>
+  );
 }

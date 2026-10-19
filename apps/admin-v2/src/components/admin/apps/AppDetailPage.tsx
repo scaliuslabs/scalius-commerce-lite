@@ -203,54 +203,82 @@ function TurnOffCard({ app, onDialog }: { app: AppDetail; onDialog: (name: Dialo
   );
 }
 
+type FeatureSection = Extract<AppSection, { kind: "feature" }>;
+
+/** How urgent a running service's state is: not working, then needs setup, then the rest. */
+const HEALTH_RANK = { error: 0, setup: 1, ready: 2 } as const;
+const healthRank = (section: FeatureSection) => (section.health ? HEALTH_RANK[section.health.status] : 2);
+
+/** One service as a link to its own page, with how it is doing (or that it is off). */
+function ServiceRow({ app, section }: { app: AppDetail; section: FeatureSection }) {
+  const t = useMessages(appFeaturesMessages);
+  const { feature } = section;
+  return (
+    <li>
+      <Link
+        to={appSectionPath(app.id, section.key)}
+        className="flex min-h-12 items-center gap-3 px-4 py-2 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      >
+        <AppIcon src={feature.request.providers[0]?.icon ?? app.icon} size="sm" />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-body font-medium" title={feature.name}>{feature.name}</span>
+          <span className="truncate text-body text-muted-foreground">{t(`group_${section.group}`)}</span>
+        </span>
+        {feature.enabled ? <HealthBadge health={section.health} /> : <span className="shrink-0 text-body text-muted-foreground">{t("off")}</span>}
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+    </li>
+  );
+}
+
 /**
- * Overview's first card, the health summary: the services that are on, by
- * kind, each a link to its page with how it is doing. The ones that are off
- * stay in the section column (one line here counts them), so a pack with
- * fourteen services doesn't list them twice; with none on, all are listed.
+ * Overview's first card, the health summary: how many services are on and
+ * how they are doing, then the ones that are on, problems first, each a link
+ * to its page. The ones that are off live in the section column, so one line
+ * here counts them instead of listing them twice. Below 1024px the column is
+ * a picker, so the card lists them there too, under "Off".
  */
 function ServicesSummary({ app }: { app: AppDetail }) {
   const t = useMessages(appFeaturesMessages);
-  const all = appSectionNav(app).filter((entry) => entry.group !== null);
-  const features = all.flatMap((entry) => entry.sections);
-  const on = features.filter((section) => section.kind === "feature" && section.feature.enabled).length;
-  const isOn = (section: AppSection) => section.kind === "feature" && section.feature.enabled;
-  const groups = on === 0 ? all : all
-    .map((entry) => ({ ...entry, sections: entry.sections.filter(isOn) }))
-    .filter((entry) => entry.sections.length > 0);
-  const off = features.length - on;
+  const features = appSectionNav(app)
+    .flatMap((entry) => entry.sections)
+    .filter((section): section is FeatureSection => section.kind === "feature");
+  const on = features
+    .filter((section) => section.feature.enabled)
+    .map((section, index) => ({ section, index }))
+    .sort((a, b) => healthRank(a.section) - healthRank(b.section) || a.index - b.index)
+    .map(({ section }) => section);
+  const off = features.filter((section) => !section.feature.enabled);
+  const problems = on.filter((section) => healthRank(section) < 2).length;
+  const summary = on.length === 0 ? t("servicesNoneOn")
+    : problems > 0 ? t("servicesProblems", { count: problems })
+      : t("servicesWorking");
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle>{t("servicesTitle")}</CardTitle>
-          <Badge variant="secondary">{t("servicesCount", { on, total: features.length })}</Badge>
+          <Badge variant="secondary">{t("servicesCount", { on: on.length, total: features.length })}</Badge>
         </div>
-        <CardDescription>{t("servicesHelp")}</CardDescription>
+        <CardDescription>{summary}</CardDescription>
       </CardHeader>
-      {groups.map(({ group, sections }) => (
-        <section key={group} aria-labelledby={`services-${group}`} className="border-t border-border">
-          <h3 id={`services-${group}`} className="px-4 pb-1 pt-3 text-body font-medium text-muted-foreground">{group ? t(`group_${group}`) : null}</h3>
-          <ul className="pb-2">
-            {sections.map((section) => section.kind === "feature" ? (
-              <li key={section.key}>
-                <Link
-                  to={appSectionPath(app.id, section.key)}
-                  className="flex min-h-12 items-center gap-3 px-4 py-2 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                >
-                  <AppIcon src={section.feature.request.providers[0]?.icon ?? app.icon} size="sm" />
-                  <span className="min-w-0 flex-1 truncate text-body font-medium" title={section.feature.name}>{section.feature.name}</span>
-                  {section.feature.enabled ? <HealthBadge health={section.health} /> : null}
-                  <Badge variant={section.feature.enabled ? "success" : "secondary"}>{t(section.feature.enabled ? "on" : "off")}</Badge>
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                </Link>
-              </li>
-            ) : null)}
-          </ul>
-        </section>
-      ))}
-      {on > 0 && off > 0 ? (
-        <p className="border-t border-border px-4 py-3 text-body text-muted-foreground">{t("servicesOff", { count: off })}</p>
+      {on.length > 0 ? (
+        <ul className="border-t border-border py-2">
+          {on.map((section) => <ServiceRow key={section.key} app={app} section={section} />)}
+        </ul>
+      ) : null}
+      {off.length > 0 ? (
+        <>
+          <p className="border-t border-border px-4 py-3 text-body text-muted-foreground">
+            {t(on.length === 0 ? "servicesAllOff" : "servicesOff", { count: off.length })}
+          </p>
+          <section aria-labelledby="services-off" data-slot="services-off" className="border-t border-border lg:hidden">
+            <h3 id="services-off" className="px-4 pb-1 pt-3 text-body font-medium text-muted-foreground">{t("servicesOffTitle")}</h3>
+            <ul className="pb-2">
+              {off.map((section) => <ServiceRow key={section.key} app={app} section={section} />)}
+            </ul>
+          </section>
+        </>
       ) : null}
     </Card>
   );

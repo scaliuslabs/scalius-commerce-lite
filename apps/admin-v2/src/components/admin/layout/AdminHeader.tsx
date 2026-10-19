@@ -41,8 +41,8 @@ function HelpButton({ label, onShortcuts }: { label: string; onShortcuts: () => 
 /**
  * Shopify's top bar on the near-black frame: Menu on phones, one centred
  * search pill with its ⌘K caps, then help, notifications and the store menu.
- * While a form is dirty the contextual save bar takes the pill's exact place
- * and shape (`SaveBar` portals into `#admin-top-bar-pill`).
+ * While a form is dirty the contextual save bar covers the whole bar (`SaveBar`
+ * portals into `#admin-top-bar`; global.css hides what is under it).
  */
 export function AdminHeader({ user }: { user: UserMenuUser }) {
   const t = useMessages(shellMessages);
@@ -51,6 +51,7 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
   const storeLabel = store.name || store.host;
   return (
     <header
+      id="admin-top-bar"
       data-slot="topbar"
       className="relative flex h-14 shrink-0 items-center gap-1 px-2 text-topbar-foreground md:grid md:grid-cols-[1fr_minmax(0,40rem)_1fr] md:gap-2 nav:ps-0 print:hidden"
     >
@@ -66,8 +67,7 @@ export function AdminHeader({ user }: { user: UserMenuUser }) {
           <Menu aria-hidden />
         </button>
       </div>
-      {/* The pill's box: the save bar covers it exactly (phones: the bar's full height). */}
-      <div id="admin-top-bar-pill" className="flex min-w-0 flex-1 md:relative">
+      <div className="flex min-w-0 flex-1">
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
