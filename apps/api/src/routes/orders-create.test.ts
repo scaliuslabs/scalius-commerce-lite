@@ -1,4 +1,5 @@
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
+import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { checkoutAttempts, orders } from "@scalius/database/schema";
@@ -2726,7 +2727,7 @@ describe("create order commit ordering", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...validOrderBody,
-          items: [{ ...validOrderBody.items[0], quantity: 100 }],
+          items: [{ ...validOrderBody.items[0], quantity: MAX_LINE_QUANTITY + 1 }],
         }),
       },
       {} as never,

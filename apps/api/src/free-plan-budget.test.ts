@@ -354,7 +354,8 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     const m = await run("sku-stock-change", "Admin SKU stock change (+1 received)", 4, async () => {
       const response = await store.admin("/api/v1/admin/inventory/v_cotton/adjust", {
         method: "POST",
-        body: JSON.stringify({ delta: 1, reason: "received", operationKey: crypto.randomUUID() }),
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({ delta: 1, reason: "received" }),
       });
       expect(response.status, await response.clone().text()).toBe(200);
     });
