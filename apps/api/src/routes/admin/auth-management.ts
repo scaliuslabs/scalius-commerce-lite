@@ -49,6 +49,7 @@ import {
     markAdminSetupClaimFailed,
     prepareCredentialIdentity,
     createPendingEmailMethodChallenge,
+    authenticatorAllowed,
     createPendingTotpMethodChallenge,
     getTwoFactorMethodChallengeIdentifier,
     readPendingTwoFactorMethodChallenge,
@@ -1896,6 +1897,10 @@ app.openapi(verify2faRoute, async (c) => {
 
     if (trustDevice === true) {
         throw new ValidationError("Trusted-device 2FA verification is not enabled");
+    }
+    // An authenticator code counts only while the authenticator is the account's method.
+    if (type === "totp" && !authenticatorAllowed((await currentTwoFactorUser(db, sessionUser)).twoFactorMethod)) {
+        throw new ValidationError("This account signs in with emailed codes, not an authenticator app");
     }
 
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });

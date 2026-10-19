@@ -63,6 +63,8 @@ vi.mock("@scalius/core/auth", () => ({
   createPendingEmailMethodChallenge: mocks.createPendingEmailMethodChallenge,
   createPendingTotpMethodChallenge: mocks.createPendingTotpMethodChallenge,
   createAuth: mocks.createAuth,
+  // The real rule (a pure function): "totp" or none saved lets the authenticator in.
+  authenticatorAllowed: (method: string | null | undefined) => method === null || method === undefined || method === "totp",
   enforceAdminSetupRateLimit: mocks.enforceAdminSetupRateLimit,
   isCredentialIdentityConflictError: mocks.isCredentialIdentityConflictError,
   markAdminSetupClaimCompleted: mocks.markAdminSetupClaimCompleted,

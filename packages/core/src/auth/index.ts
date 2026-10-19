@@ -1,4 +1,5 @@
 export { createAuth, getAuth } from "./auth";
+export { AUTHENTICATOR_NOT_IN_USE, authenticatorAllowed, twoFactorMethodsForAccount } from "./authenticator-in-use";
 export type { Auth } from "./auth";
 export {
   IDENTITY_HANDOFF_ACCOUNT_PROVIDER,
