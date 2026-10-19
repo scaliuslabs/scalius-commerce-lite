@@ -4,7 +4,7 @@
 // replacing a file moves `current_r2_key`, so buyers who already own it get
 // the new file, as in Shopify Digital Downloads.
 import type { Database } from "@scalius/database/client";
-import { safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
     digitalAssets,
     digitalAssetUploads,
@@ -28,6 +28,9 @@ import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 export type DigitalAssetStatus = "draft" | "ready" | "archived";
+
+/** Batch guard marker: the SKU a first key pool starts tracking still tracks at commit. */
+const KEY_POOL_TRACKING_MARKER = "KEY_POOL_TRACKING";
 
 export interface DigitalAssetView {
     id: string;
@@ -209,8 +212,8 @@ async function requireDigitalVariant(db: Database, productId: string, variantId:
 
 /**
  * Adds a file (with its first upload session) or a licence-key pool to a
- * product. A key pool belongs to one variant, whose quantity must be tracked:
- * the pool is that variant's stock.
+ * product. A key pool belongs to one variant, whose quantity it tracks
+ * (a file-only variant tracks none; its first pool turns tracking on): the pool is that variant's stock.
  */
 export async function createDigitalAsset(
     db: Database,
@@ -221,11 +224,12 @@ export async function createDigitalAsset(
     const product = await db.select({ id: products.id, deletedAt: products.deletedAt }).from(products).where(eq(products.id, productId)).get();
     if (!product || product.deletedAt) throw new NotFoundError("Product not found");
     const variantId = input.variantId ?? null;
+    // A file-only digital SKU tracks no quantity (downloads are unlimited); its
+    // first key pool turns tracking on, since its keys become its stock.
+    let startsTracking = false;
     if (variantId) {
         const variant = await requireDigitalVariant(db, productId, variantId);
-        if (input.kind === "licence_keys" && !variant.trackInventory) {
-            throw new ValidationError("Turn on quantity tracking for this variant: its licence keys are its stock.");
-        }
+        startsTracking = input.kind === "licence_keys" && !variant.trackInventory;
     } else if (input.kind === "licence_keys") {
         throw new ValidationError("Choose the variant these licence keys belong to.");
     }
@@ -240,7 +244,7 @@ export async function createDigitalAsset(
 
     if (input.kind === "licence_keys") {
         if (Number(counted?.pools ?? 0) >= 1) throw new ConflictError("This variant already has a licence-key pool. Import more keys into it.");
-        await db.insert(digitalAssets).values({
+        const pool = db.insert(digitalAssets).values({
             id: assetId,
             productId,
             variantId,
@@ -248,7 +252,37 @@ export async function createDigitalAsset(
             status: "ready",
             displayName: displayNameOf(input.displayName, "Licence key"),
             downloadLimit: null,
-        }).run();
+        });
+        if (!startsTracking) {
+            await pool.run();
+        } else {
+            // Tracking starts at no stock: the keys imported next are all of it.
+            try {
+                await safeBatch(db, [
+                    db.update(productVariants)
+                        .set({ trackInventory: true, updatedAt: sql`unixepoch()` })
+                        .where(and(
+                            eq(productVariants.id, variantId!),
+                            eq(productVariants.fulfillmentKind, "digital"),
+                            eq(productVariants.trackInventory, false),
+                            eq(productVariants.stock, 0),
+                            eq(productVariants.reservedStock, 0),
+                        )),
+                    buildBatchGuard(db, sql`EXISTS (
+                        SELECT 1 FROM ${productVariants}
+                        WHERE ${productVariants.id} = ${variantId}
+                          AND ${productVariants.fulfillmentKind} = 'digital'
+                          AND ${productVariants.trackInventory} = 1
+                    )`, KEY_POOL_TRACKING_MARKER),
+                    pool,
+                ]);
+            } catch (error) {
+                if (isBatchGuardError(error, KEY_POOL_TRACKING_MARKER)) {
+                    throw new ValidationError("Turn on quantity tracking for this variant: its licence keys are its stock.");
+                }
+                throw error;
+            }
+        }
         return { asset: await getDigitalAsset(db, assetId), upload: null };
     }
 

@@ -706,7 +706,7 @@ export default function CartFlyout({ onReady }: Props) {
             ))}
             {discounts.offers.map((offer) => (
               <div key={offer.promotionId} className="flex items-center justify-between gap-2 text-foreground">
-                <span className="min-w-0">
+                <span className="line-clamp-2 min-w-0 break-words">
                   <span className="font-medium">{offer.title}:</span>{" "}
                   {offer.products.map(({ name }) => name).join(" / ")} {offer.percentOff >= 100 ? "free" : `${offer.percentOff}% off`}
                 </span>

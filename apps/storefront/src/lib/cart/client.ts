@@ -16,6 +16,7 @@ import {
   getEffectiveCartShippingFee,
   cartItemsSubtotal,
   cartLinePropertyInputs,
+  cartNeedsDeliveryMethod,
   type CartItem,
   type VariantCartItem,
 } from "@/store/cart";
@@ -1282,6 +1283,8 @@ function renderCartLine(
   item: VariantCartItem,
   position: number,
   ruleErrors: CartRuleError[],
+  /** Some lines ship and some don't: the ones that don't say so. */
+  mixed = false,
 ): string {
   const rawName = item.name || "";
   const safeName = escapeHtml(rawName);
@@ -1316,7 +1319,9 @@ function renderCartLine(
       editText: copy.editLineText,
       editLabelText: copy.editLineLabelText,
       jsCartKey,
-    });
+    }) + (mixed && (item.fulfillmentKind === "digital" || item.fulfillmentKind === "service")
+      ? `<span class="block" data-cart-line-fulfilment>${escapeHtml(item.fulfillmentKind === "digital" ? copy.cartLineDigitalText : copy.cartLineServiceText)}</span>`
+      : "");
   const stepperButton =
     "flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-9";
 
@@ -1348,8 +1353,11 @@ function paintCartLines(): void {
   if (!container || Object.keys(items).length === 0) return;
   const lineRules = groupCartRuleErrors(cartRuleErrors(), items).lines;
   paintedLineRuleErrors = JSON.stringify(lineRules);
+  // A cart that ships some lines says which ones don't (the receipt groups them the same way).
+  const mixed = cartNeedsDeliveryMethod(items)
+    && Object.values(items).some((item) => item.fulfillmentKind === "digital" || item.fulfillmentKind === "service");
   container.innerHTML = `<ul class="divide-y divide-border">${Object.entries(items)
-    .map(([cartKey, item], position) => renderCartLine(cartKey, item, position, lineRules[cartKey] ?? []))
+    .map(([cartKey, item], position) => renderCartLine(cartKey, item, position, lineRules[cartKey] ?? [], mixed))
     .join("")}</ul>`;
 }
 

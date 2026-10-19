@@ -146,12 +146,17 @@ let canPersistToStorage = false;
 
 export const cartStore = map<CartStore>({ ...EMPTY_CART_STATE });
 
-type ShippingFeeCartItem = Pick<CartItem, "freeDelivery"> & Partial<Pick<CartItem, "price" | "quantity">>;
+type ShippingFeeCartItem = Pick<CartItem, "freeDelivery"> & Partial<Pick<CartItem, "price" | "quantity" | "fulfillmentKind">>;
 
+/**
+ * A line that ships and waives delivery (the checkout's rule): a digital or
+ * service product marked "free delivery" ships nothing, so it waives nothing.
+ */
 export function cartHasFreeDeliveryItem(
   items: Record<string, ShippingFeeCartItem>,
 ): boolean {
-  return Object.values(items).some((item) => item.freeDelivery === true);
+  return Object.values(items).some((item) =>
+    item.freeDelivery === true && (item.fulfillmentKind === undefined || item.fulfillmentKind === "physical"));
 }
 
 /** The items subtotal before discounts, which a rate's free-over threshold is measured against. */

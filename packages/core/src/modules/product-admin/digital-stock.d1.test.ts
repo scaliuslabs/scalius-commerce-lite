@@ -14,6 +14,7 @@ import { createVariant, updateVariant } from "./variants";
 import { saveProductOptionMatrix } from "./option-matrix";
 import {
     DIGITAL_KEY_POOL_NEEDS_TRACKING_MESSAGE,
+    DIGITAL_KEYS_KEEP_KIND_MESSAGE,
     DIGITAL_KIND_NEEDS_ZERO_STOCK_MESSAGE,
     DIGITAL_STOCK_CANT_SPLIT_MESSAGE,
     DIGITAL_STOCK_IS_KEYS_MESSAGE,
@@ -164,13 +165,34 @@ describe("digital stock rules on product writes", () => {
         await updateProduct(db, empty.id, updateInput(empty.id, 1, "ebook", { fulfillmentKind: "digital" }));
         expect(sku(sqlite, "EBOOK-1")).toMatchObject({ stock: 0, fulfillment_kind: "digital" });
 
-        // Digital → physical is fine whatever the stock.
-        await importKeys(db, empty.id, sku(sqlite, "EBOOK-1").id, 2);
-        await updateProduct(db, empty.id, updateInput(empty.id, 2, "ebook", { fulfillmentKind: "physical" }));
-        expect(sku(sqlite, "EBOOK-1")).toMatchObject({ stock: 2, fulfillment_kind: "physical" });
-        // Back to digital: its stock is exactly its unused keys, so it may.
-        await updateProduct(db, empty.id, updateInput(empty.id, 3, "ebook", { fulfillmentKind: "digital" }));
+        // Keys never become physical units: digital → physical waits until its unused keys are revoked.
+        const assetId = await importKeys(db, empty.id, sku(sqlite, "EBOOK-1").id, 2);
+        for (const kind of ["physical", "service"] as const) {
+            await expectDigitalError(
+                updateProduct(db, empty.id, updateInput(empty.id, 2, "ebook", { fulfillmentKind: kind })),
+                DIGITAL_KEYS_KEEP_KIND_MESSAGE,
+                "fulfillmentKind",
+            );
+        }
         expect(sku(sqlite, "EBOOK-1")).toMatchObject({ stock: 2, fulfillment_kind: "digital" });
+        expect(revision(sqlite, empty.id)).toBe(2);
+        // A key imported while the kind change is in flight aborts it (batch guard).
+        const keys = await listLicenceKeys(db, { assetId, status: "available" });
+        await revokeLicenceKeys(db, { assetId, keyIds: keys.items.map((key) => key.id), requestKey: crypto.randomUUID() });
+        expect(sku(sqlite, "EBOOK-1")).toMatchObject({ stock: 0, fulfillment_kind: "digital" });
+        race((connection) => {
+            connection.prepare(`INSERT INTO digital_licence_keys (id, asset_id, key_ciphertext, key_hash, key_last4, status, import_id)
+                VALUES ('raced_key', ?, 'x', 'raced-hash', 'ABCD', 'available', 'raced_import')`).run(assetId);
+        });
+        await expectDigitalError(
+            updateProduct(db, empty.id, updateInput(empty.id, 2, "ebook", { fulfillmentKind: "physical" })),
+            DIGITAL_KEYS_KEEP_KIND_MESSAGE,
+        );
+        expect(sku(sqlite, "EBOOK-1")).toMatchObject({ fulfillment_kind: "digital" });
+        sqlite.prepare("UPDATE digital_licence_keys SET status = 'revoked', revoked_at = unixepoch() WHERE id = 'raced_key'").run();
+        // Revoked: it holds no keys and no stock, so it may stop being digital.
+        await updateProduct(db, empty.id, updateInput(empty.id, 2, "ebook", { fulfillmentKind: "physical" }));
+        expect(sku(sqlite, "EBOOK-1")).toMatchObject({ stock: 0, fulfillment_kind: "physical" });
 
         // A unit counted in between the read and the commit aborts the kind change (batch guard).
         const raced = await simpleProduct(db, "pen", "PEN-1", { stock: 0 });
@@ -196,7 +218,7 @@ describe("digital stock rules on product writes", () => {
         const { db, sqlite } = setup();
         const product = await simpleProduct(db, "app", "APP-1", { fulfillmentKind: "digital" });
         const variantId = sku(sqlite, "APP-1").id;
-        await importKeys(db, product.id, variantId, 3);
+        const poolId = await importKeys(db, product.id, variantId, 3);
         const current = sku(sqlite, "APP-1");
         const base = { selectedOptionValueIds: [], imageId: null, weight: null, sku: "APP-1", price: 900, trackInventory: true };
 
@@ -217,9 +239,20 @@ describe("digital stock rules on product writes", () => {
         }), DIGITAL_KEY_POOL_NEEDS_TRACKING_MESSAGE, "trackInventory");
         expect(sku(sqlite, "APP-1B")).toMatchObject({ track_inventory: 1 });
 
-        // Digital → physical, then a quantity edit as a physical SKU, is fine.
-        await updateVariant(db, product.id, variantId, {
+        // Turning physical with 3 keys left would make them 3 typed-in units beside
+        // 3 undelivered keys (the editor then showed both): refused until they are revoked.
+        await expectDigitalError(updateVariant(db, product.id, variantId, {
             ...base, sku: "APP-1B", fulfillmentKind: "physical", expectedAggregateRevision: revision(sqlite, product.id),
+        }), DIGITAL_KEYS_KEEP_KIND_MESSAGE, "fulfillmentKind");
+        expect(sku(sqlite, "APP-1B")).toMatchObject({ stock: 3, fulfillment_kind: "digital" });
+        const unused = await listLicenceKeys(db, { assetId: poolId, status: "available" });
+        await revokeLicenceKeys(db, { assetId: poolId, keyIds: unused.items.map((key) => key.id), requestKey: crypto.randomUUID() });
+        expect(sku(sqlite, "APP-1B")).toMatchObject({ stock: 0 });
+
+        // Then digital → physical, and a quantity edit as a physical SKU, is fine.
+        await updateVariant(db, product.id, variantId, {
+            ...base, sku: "APP-1B", fulfillmentKind: "physical", stock: 0,
+            expectedStockVersion: sku(sqlite, "APP-1B").stock_version, expectedAggregateRevision: revision(sqlite, product.id),
         });
         await updateVariant(db, product.id, variantId, {
             ...base, sku: "APP-1B", fulfillmentKind: "physical", stock: 7,

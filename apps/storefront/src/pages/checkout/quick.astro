@@ -52,9 +52,17 @@ import {
   type QuickCheckoutFieldError,
 } from "@/lib/checkout/quick-checkout";
 import {
+  fetchQuickCheckoutAddressRules,
   fetchQuickCheckoutQuote,
   fetchQuickCheckoutRates,
 } from "@/lib/checkout/quick-checkout-server";
+import type { BillingAddressField } from "@/lib/checkout/billing-address";
+import {
+  billingAddressAsked,
+  billingAddressProblems,
+  billingProblemMessage,
+  billingRequiredFields,
+} from "@/lib/checkout/billing-validation";
 import { hasPendingShippingRate, overlayQuotedRates } from "@/lib/checkout/shipping-methods";
 import { phoneHintCopy, phoneHints } from "@/lib/checkout/phone-hint";
 import { phoneCountryMeta } from "@scalius/shared/phone-example";
@@ -196,6 +204,30 @@ const contactFields = checkoutContactFields(checkoutConfig.customerIdentity ?? D
 // Settings → Customers: the marketing consent box (unchecked, never required;
 // a ticked box stays ticked across this form's steps).
 const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
+// The billing address checkout asks for, checked by its country's rules
+// before the order is placed (billing-validation.ts; the API checks it too).
+const billingLabels: Record<BillingAddressField, string> = {
+  billingName: copy.billingNameLabel,
+  billingCompany: copy.billingCompanyLabel,
+  billingAddress: copy.billingAddressLabel,
+  billingAddressLine2: copy.shippingAddressLine2Label,
+  billingDependentLocality: copy.shippingDependentLocalityLabel,
+  billingLocality: copy.shippingLocalityLabel,
+  billingAdminArea: copy.shippingAdminAreaLabel,
+  billingPostalCode: copy.shippingPostalCodeLabel,
+};
+const billingCountry = shippingCountries.length === 1
+  ? shippingCountries[0]!
+  : form.billing.billingCountryCode || form.shippingCountryCode;
+const billingAsk = billingAddressAsked({
+  path: mode,
+  requireFullBillingAddress: checkoutConfig.requireFullBillingAddress === true,
+  sameAsShipping: form.billingSameAsShipping,
+});
+const billingRules = billingAsk.asked ? await fetchQuickCheckoutAddressRules(billingCountry) : null;
+const billingRequired = billingAsk.asked && billingRules ? billingRequiredFields(billingRules, billingAsk.mode) : [];
+const billingErrors: Partial<Record<BillingAddressField, string>> = {};
+
 let errorMessage = "";
 /** A store app's own words for what blocks the order, listed under the message. */
 let ruleMessages: string[] = [];
@@ -222,12 +254,18 @@ if (!codAvailable) {
   ruleMessages = [];
 } else if (form.intent === "place" && !errorMessage) {
   fieldErrors = quickCheckoutFieldErrors(form, mode, MIN_SHIPPING_ADDRESS_LENGTH, contactFields.email);
+  if (billingAsk.asked && billingRules) {
+    for (const { field, problem } of billingAddressProblems(billingRules, billingAsk.mode, form.billing)) {
+      billingErrors[field] = billingProblemMessage(field, problem, billingLabels[field], copy);
+    }
+  }
   if (checkoutConfig.guestCheckoutEnabled === false && !customerSessionToken) {
     errorMessage = copy.signInToCheckoutText;
-  } else if (fieldErrors.length > 0) {
+  } else if (fieldErrors.length > 0 || Object.keys(billingErrors).length > 0) {
     errorMessage = "";
   } else if (!quote) {
-    errorMessage = mode === "delivery" ? copy.cityZoneRequiredText : copy.deliveryRequiredText;
+    // Options that couldn't be read are said once, at the options; never as the buyer's mistake.
+    errorMessage = ratesFailed ? "" : mode === "delivery" ? copy.cityZoneRequiredText : copy.deliveryRequiredText;
   } else if (quote.quoteFingerprint !== form.expectedQuoteFingerprint) {
     // The buyer places only the total they were shown.
     errorMessage = copy.totalChangedReviewText;
@@ -467,7 +505,7 @@ const secondaryButtonClass =
                   {mode === "pickup" ? copy.pickupLocationLabel : copy.shippingMethodLabel}
                 </legend>
                 {ratesFailed ? (
-                  <p class="text-sm font-medium text-destructive" role="alert">{copy.deliveryOptionsFailedText}</p>
+                  <p class="text-sm font-medium text-destructive" role="alert">{copy.deliveryOptionsUnavailableText}</p>
                 ) : rates.length === 0 ? (
                   <p class="text-sm text-muted-foreground" role="status">{abroad && !offersDelivery
                     ? formatCheckoutLanguageText(copy.deliveryCountryUnavailableText, { country: countryName })
@@ -513,17 +551,13 @@ const secondaryButtonClass =
             sameAsShipping: copy.billingSameAsShippingText,
             help: copy.billingHelpText,
             country: copy.shippingCountryLabel,
-            billingName: copy.billingNameLabel,
-            billingCompany: copy.billingCompanyLabel,
-            billingAddress: copy.billingAddressLabel,
-            billingAddressLine2: copy.shippingAddressLine2Label,
-            billingDependentLocality: copy.shippingDependentLocalityLabel,
-            billingLocality: copy.shippingLocalityLabel,
-            billingAdminArea: copy.shippingAdminAreaLabel,
-            billingPostalCode: copy.shippingPostalCodeLabel,
+            ...billingLabels,
           }}
           labelClass={labelClass}
           fieldClass={fieldClass}
+          requiredFields={billingRequired}
+          errors={billingErrors}
+          focusFirstError={fieldErrors.length === 0}
         >
           {/* An order with nothing to ship is taxed there: its total comes with the next step. */}
           {mode === "none" && <div class="sm:col-span-2"><button type="submit" name="intent" value="review" class={secondaryButtonClass}>{copy.continueText}</button></div>}

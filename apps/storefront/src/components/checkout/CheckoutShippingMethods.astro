@@ -18,7 +18,10 @@ interface Props {
   pickupHoursText: string;
   chooseAddressText: string;
   noDeliveryText: string;
+  /** The options couldn't be read while the browser is offline. */
   failedText: string;
+  /** The options couldn't be read from the store (the buyer is online). */
+  unavailableText: string;
   retryText: string;
   loadingText: string;
   feeChangedText: string;
@@ -43,6 +46,7 @@ const { shippingMethods, shippingMethodLabel, pickupLocationLabel, modeSwitch, .
   data-choose-address-text={copy.chooseAddressText}
   data-no-delivery-text={copy.noDeliveryText}
   data-failed-text={copy.failedText}
+  data-unavailable-text={copy.unavailableText}
   data-retry-text={copy.retryText}
   data-loading-text={copy.loadingText}
   data-fee-changed-text={copy.feeChangedText}

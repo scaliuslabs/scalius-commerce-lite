@@ -15,6 +15,9 @@ import {
   type CheckoutRequiredField,
 } from "./delivery-mode";
 import { LOCATION_COUNTRY, isLocationCountry } from "./shipping-country";
+import type { AddressRules } from "@scalius/shared/address";
+import type { BillingAddressField } from "./billing-address";
+import { billingAddressAsked, billingAddressProblems, billingProblemMessage } from "./billing-validation";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -55,6 +58,8 @@ export function checkoutInformationFields(
   root: ParentNode,
   copy: CheckoutLanguageData,
   readMode: () => CheckoutDeliveryMode = () => "delivery",
+  /** The billing country's rules once loaded (`enhanceBillingAddress`). */
+  readBillingRules: () => AddressRules | null = () => null,
 ): CheckoutField[] {
   const fields: CheckoutField[] = [];
   const add = (controlId: string, errorId: string, check: () => string) => {
@@ -107,6 +112,9 @@ export function checkoutInformationFields(
       check: () => {
         const mode = readMode();
         if (!required("shippingMethod")) return "";
+        // The options couldn't be read: their note says so and offers to try again
+        // (the buyer has nothing to choose yet, so nothing is their mistake).
+        if (methods.closest<HTMLElement>("[data-shipping-methods]")?.dataset.ratesFailed === "true") return "";
         if (root.querySelector<HTMLInputElement>('[name="shippingLocation"]:checked')?.value) return "";
         if (mode === "pickup") return copy.pickupLocationRequiredText;
         // Another country: its shipping zone's options, or none (the options say why).
@@ -120,7 +128,50 @@ export function checkoutInformationFields(
       },
     });
   }
+  fields.push(...billingFields(root, copy, readMode, readBillingRules));
   return fields;
+}
+
+/**
+ * The billing address fields, when checkout asks for one (billing-
+ * validation.ts): each checked by the billing country's rules once they
+ * are loaded; before that the API checks them when the order is placed.
+ */
+function billingFields(
+  root: ParentNode,
+  copy: CheckoutLanguageData,
+  readMode: () => CheckoutDeliveryMode,
+  readRules: () => AddressRules | null,
+): CheckoutField[] {
+  const section = root.querySelector<HTMLElement>("[data-billing-section]");
+  if (!section) return [];
+  const inputs = [...section.querySelectorAll<HTMLInputElement>("input[data-billing-field]")];
+  const problems = () => {
+    const asked = billingAddressAsked({
+      path: readMode(),
+      requireFullBillingAddress: section.dataset.billingFull === "true",
+      sameAsShipping: section.querySelector<HTMLInputElement>("[data-billing-same]")?.checked === true,
+    });
+    const rules = readRules();
+    if (!asked.asked || !rules) return [];
+    const values = Object.fromEntries(inputs.map((input) => [input.name, input.value]));
+    return billingAddressProblems(rules, asked.mode, values);
+  };
+  return inputs.flatMap((input) => {
+    const error = root.querySelector<HTMLElement>(`#${input.id}-error`);
+    if (!error) return [];
+    const field = input.dataset.billingField as BillingAddressField;
+    const label = () => root.querySelector(`label[for="${input.id}"]`)?.firstChild?.textContent?.trim() ?? "";
+    return [{
+      control: input,
+      error,
+      check: () => {
+        if (input.closest<HTMLElement>("[data-address-rule]")?.hidden) return "";
+        const problem = problems().find((entry) => entry.field === field)?.problem;
+        return problem ? billingProblemMessage(field, problem, label(), copy) : "";
+      },
+    }];
+  });
 }
 
 /**
@@ -134,6 +185,8 @@ export function enhanceCheckoutFields(
   validateAll(): HTMLElement | null;
   /** Checks typed fields that arrived without a blur (a restored draft), leaving empty ones quiet. */
   checkFilled(): void;
+  /** Checks again only the fields already marked (e.g. the delivery options were read again). */
+  recheckMarked(): void;
 } {
   for (const field of fields) {
     const listenTo = field.control.matches("fieldset")
@@ -157,6 +210,11 @@ export function enhanceCheckoutFields(
         const control = field.control;
         const typed = (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) && control.value.trim();
         if (typed) setFieldError(field, field.check());
+      }
+    },
+    recheckMarked() {
+      for (const field of fields) {
+        if (field.control.getAttribute("aria-invalid") === "true") setFieldError(field, field.check());
       }
     },
     validateAll() {

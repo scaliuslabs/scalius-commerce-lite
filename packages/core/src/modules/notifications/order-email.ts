@@ -152,12 +152,12 @@ async function readOrderFacts(db: Database, orderId: string) {
     order,
     items: orderRows.flatMap((row) => row.item ? [row.item] : []),
     discounts: [
-      ...discountRows.map((row) => ({ ...row, amountMinor: Number(row.amountMinor) || 0 })),
+      ...discountRows.map((row) => ({ ...row, appId: null as string | null, amountMinor: Number(row.amountMinor) || 0 })),
       ...resolveOrderAppFacts(appRows).discounts.flatMap((fact, position) => {
         const id = `app:${fact.pluginId}:${position}`;
         return [
-          ...(fact.amountMinor > 0 ? [{ promotionId: id, name: fact.title, code: fact.code, target: "line" as const, amountMinor: fact.amountMinor }] : []),
-          ...(fact.shippingAmountMinor > 0 ? [{ promotionId: id, name: fact.title, code: fact.code, target: "shipping" as const, amountMinor: fact.shippingAmountMinor }] : []),
+          ...(fact.amountMinor > 0 ? [{ promotionId: id, appId: fact.pluginId, name: fact.title, code: fact.code, target: "line" as const, amountMinor: fact.amountMinor }] : []),
+          ...(fact.shippingAmountMinor > 0 ? [{ promotionId: id, appId: fact.pluginId, name: fact.title, code: fact.code, target: "shipping" as const, amountMinor: fact.shippingAmountMinor }] : []),
         ];
       }),
     ],
@@ -201,18 +201,18 @@ function linePropertiesText(stored: string | null, money: ((minor: number) => st
 function discountAndDelivery({ order, discounts }: OrderFacts, money: (minor: number) => string) {
   const shippingDiscountMinor = discounts.filter((row) => row.target === "shipping")
     .reduce((sum, row) => sum + row.amountMinor, 0);
-  const promotions = new Map<string, { name: string; code: string | null; minor: number }>();
+  const promotions = new Map<string, { name: string; code: string | null; appId: string | null; minor: number }>();
   for (const row of discounts) {
     if (row.target === "shipping") continue;
     const promotion = promotions.get(row.promotionId);
     if (promotion) promotion.minor += row.amountMinor;
-    else promotions.set(row.promotionId, { name: row.name, code: row.code, minor: row.amountMinor });
+    else promotions.set(row.promotionId, { name: row.name, code: row.code, appId: row.appId, minor: row.amountMinor });
   }
   const allocatedMinor = [...promotions.values()].reduce((sum, row) => sum + row.minor, 0) + shippingDiscountMinor;
   const fits = allocatedMinor <= order.discountAmountMinor && shippingDiscountMinor <= order.shippingAmountMinor;
-  const lines: Array<{ name: string | null; code: string | null; amount: string }> = fits
+  const lines: Array<{ name: string | null; code: string | null; appId?: string | null; amount: string }> = fits
     ? [...promotions.values()].filter((row) => row.minor > 0)
-      .map((row) => ({ name: row.name, code: row.code, amount: money(row.minor) }))
+      .map((row) => ({ name: row.name, code: row.code, appId: row.appId, amount: money(row.minor) }))
     : [];
   const otherMinor = order.discountAmountMinor - (fits ? allocatedMinor : 0);
   if (otherMinor > 0) lines.push({ name: null, code: null, amount: money(otherMinor) });

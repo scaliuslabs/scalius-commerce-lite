@@ -48,7 +48,7 @@ function setup(options: {
     <div data-shipping-methods data-mode-switch="${options.modeSwitch ? "true" : "false"}" data-delivery-legend-text="Choose delivery option" data-pickup-legend-text="Choose a pickup location" data-pickup-hours-text="Open {hours}" data-free-text="Free" data-free-over-text="Free over {amount}"
       data-waived-text="Normally {fee}; waived." data-pickup-from-text="Pick up from {address}"
       data-choose-address-text="Choose your city and zone." data-no-delivery-text="We don't deliver here yet."
-      data-failed-text="Couldn't load." data-retry-text="Retry" data-loading-text="Loading…"
+      data-failed-text="Couldn't load. Check your connection." data-unavailable-text="Couldn't load right now." data-retry-text="Retry" data-loading-text="Loading…"
       data-fee-changed-text="Delivery fee changed from {old} to {new}." data-replaced-text="{old} is gone, so {new} is selected. Delivery was {oldFee}, now {newFee}."
       data-replaced-same-fee-text="{old} is gone, so {new} ({fee}) is selected."
       data-gone-text="{old} is gone.">
@@ -211,10 +211,25 @@ describe("delivery options follow the address", () => {
       loadRates: async () => (fail ? null : [standard]),
     });
     await methods.setAddress(DHAKA);
-    expect(document.querySelector("[data-shipping-note]")!.textContent).toContain("Couldn't load.");
+    // Online: the store's side, never the buyer's connection.
+    expect(document.querySelector("[data-shipping-note]")!.textContent).toContain("Couldn't load right now.");
+    expect(document.querySelector("[data-shipping-note]")!.textContent).not.toContain("connection");
+    expect(document.querySelector<HTMLElement>("[data-shipping-methods]")!.dataset.ratesFailed).toBe("true");
     fail = false;
     document.querySelector<HTMLButtonElement>("[data-shipping-note] button")!.click();
     await vi.waitFor(() => expect(options()[0]).toMatchObject({ id: "standard", checked: true }));
+    expect(document.querySelector<HTMLElement>("[data-shipping-methods]")!.dataset.ratesFailed).toBeUndefined();
+  });
+
+  it("names the connection only when the browser is offline", async () => {
+    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    try {
+      const { methods } = setup({ loadRates: async () => null });
+      await methods.setAddress(DHAKA);
+      expect(document.querySelector("[data-shipping-note]")!.textContent).toContain("Check your connection.");
+    } finally {
+      online.mockRestore();
+    }
   });
 
   it("drops a rate the checkout refused and chooses again", async () => {
@@ -469,6 +484,16 @@ describe("fetchDeliveryRates", () => {
     );
     expect(rates).toEqual([ctg]);
     const failing = vi.fn(async () => new Response("{}", { status: 500 }));
-    await expect(fetchDeliveryRates("https://api.example/api/v1", CTG, failing)).resolves.toBeNull();
+    await expect(fetchDeliveryRates("https://api.example/api/v1", CTG, failing, [])).resolves.toBeNull();
+  });
+
+  it("reads again after a failure in transit before giving up, but never repeats a refusal", async () => {
+    const answers = [new Response("{}", { status: 503 }), new Response("{}", { status: 429 }), new Response(JSON.stringify({ success: true, data: { shippingMethods: [ctg] } }))];
+    const flaky = vi.fn(async () => answers.shift()!);
+    await expect(fetchDeliveryRates("https://api.example/api/v1", CTG, flaky, [0, 0])).resolves.toEqual([ctg]);
+    expect(flaky).toHaveBeenCalledTimes(3);
+    const refused = vi.fn(async () => new Response("{}", { status: 400 }));
+    await expect(fetchDeliveryRates("https://api.example/api/v1", CTG, refused, [0, 0])).resolves.toBeNull();
+    expect(refused).toHaveBeenCalledTimes(1);
   });
 });

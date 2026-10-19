@@ -135,6 +135,17 @@ export function groupOrderLines<T extends OrderLineGroupLine>(
 }
 
 /**
+ * A checkout's lines in the receipt's groups ("Delivery", "Digital items"…),
+ * before the order exists: no status, nothing is on its way yet.
+ */
+export function checkoutLineGroups<T extends OrderLineGroupLine>(
+  items: readonly T[],
+  copy: CheckoutLanguageData,
+): OrderLineGroup<T>[] {
+  return groupOrderLines(items, { status: "incomplete" }, copy);
+}
+
+/**
  * One group that ships reads like today's receipt: no heading. Any other
  * single group (pickup, services…) or a mixed order gets headings.
  */

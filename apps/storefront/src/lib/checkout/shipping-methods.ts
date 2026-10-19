@@ -22,6 +22,7 @@ import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-fo
 import type { ShippingMethod } from "@/lib/api";
 import type { CheckoutDeliveryMode } from "./delivery-mode";
 import type { QuotedShippingRate } from "./tax-quote-contract";
+import { fetchWithTransientRetry } from "../transient-fetch";
 
 export type DeliveryRate = Pick<ShippingMethod, "id" | "name" | "fee" | "description" | "rateSource"> & {
   freeOver: number | null;
@@ -100,7 +101,10 @@ export interface ShippingMethodsCopy {
   pickupFromText: string;
   chooseAddressText: string;
   noDeliveryText: string;
+  /** The options couldn't be read while the browser is offline: check the connection. */
   failedText: string;
+  /** The options couldn't be read from the store (the buyer is online). */
+  unavailableText: string;
   retryText: string;
   loadingText: string;
   feeChangedText: string;
@@ -127,11 +131,20 @@ export function toDeliveryRate(method: ShippingMethod): DeliveryRate {
   };
 }
 
-/** The rates offered for an address, or null when they couldn't be read. */
+/** Waits before repeating a rates read that failed in transit (no connection, a timeout, a 5xx or a 429). */
+export const DELIVERY_RATES_RETRY_DELAYS_MS = [400, 1200] as const;
+const DELIVERY_RATES_TIMEOUT_MS = 8_000;
+
+/**
+ * The rates offered for an address, or null when they couldn't be read. A
+ * read that fails in transit is repeated (as the city and thana lists are)
+ * before the buyer is told; a refusal (4xx) or an unreadable answer is not.
+ */
 export async function fetchDeliveryRates(
   apiBaseUrl: string,
   address: DeliveryAddress,
   fetchImpl: typeof fetch = fetch,
+  delays: readonly number[] = DELIVERY_RATES_RETRY_DELAYS_MS,
 ): Promise<DeliveryRate[] | null> {
   const query = new URLSearchParams();
   if (isForeign(address)) {
@@ -144,9 +157,13 @@ export async function fetchDeliveryRates(
     if (address.areaId) query.set("areaId", address.areaId);
   }
   try {
-    const response = await fetchImpl(`${apiBaseUrl}/shipping-methods?${query}`, {
-      headers: { Accept: "application/json" },
-    });
+    const response = await fetchWithTransientRetry(
+      fetchImpl,
+      `${apiBaseUrl}/shipping-methods?${query}`,
+      { headers: { Accept: "application/json" } },
+      delays,
+      { timeoutMs: DELIVERY_RATES_TIMEOUT_MS },
+    );
     if (!response.ok) return null;
     const body = (await response.json()) as {
       success?: unknown;
@@ -162,6 +179,18 @@ export async function fetchDeliveryRates(
   } catch {
     return null;
   }
+}
+
+/**
+ * Why the options couldn't be read, in words that are true: the buyer's
+ * connection only when the browser says it is offline; otherwise the store's
+ * side, never the buyer's.
+ */
+export function deliveryRatesFailedText(
+  copy: Pick<ShippingMethodsCopy, "failedText" | "unavailableText">,
+  online: boolean = typeof navigator === "undefined" || navigator.onLine !== false,
+): string {
+  return online ? copy.unavailableText : copy.failedText;
 }
 
 /** One delivery option's height; its loading and empty stand-ins match it. */
@@ -225,6 +254,7 @@ export function enhanceShippingMethods(
     chooseAddressText: data.chooseAddressText || "",
     noDeliveryText: data.noDeliveryText || "",
     failedText: data.failedText || "",
+    unavailableText: data.unavailableText || data.failedText || "",
     retryText: data.retryText || "",
     loadingText: data.loadingText || "",
     feeChangedText: data.feeChangedText || "",
@@ -490,6 +520,8 @@ export function enhanceShippingMethods(
     const hasAddress = hasDeliveryDestination(address);
     const current = ++sequence;
     renderLegend();
+    // The options are being read again: a failure belongs to the earlier read.
+    delete container.dataset.ratesFailed;
     if (mode === "none") {
       // Nothing physical: no method, no fee.
       rates = [];
@@ -526,7 +558,10 @@ export function enhanceShippingMethods(
       delete list.dataset.addressKey;
       if (!shown().some((rate) => rate.id === selectedId)) selectedId = null;
       render();
-      setNote(copy.failedText, true);
+      setNote(deliveryRatesFailedText(copy), true);
+      container.dataset.ratesFailed = "true";
+      // Said even when nothing was chosen before: the form re-checks the options it marked.
+      announced = undefined;
       emit();
       return;
     }

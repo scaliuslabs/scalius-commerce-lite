@@ -137,7 +137,9 @@ describe("digital SKUs in the variant editor", () => {
     expect(quantityInput()).toBeNull();
     expect(slot("inventory-slot").textContent).toContain(d("stockSaveFirst"));
     expect(slot("shipping-slot").textContent).toBe("");
-    expect(onDraftChange).toHaveBeenLastCalledWith({ defaultSku: { trackInventory: true, stock: 0 } });
+    // A file-only SKU tracks no quantity; its first imported keys turn tracking on.
+    expect(slot("inventory-slot").querySelector('button[role="checkbox"]')).toBeNull();
+    expect(onDraftChange).toHaveBeenLastCalledWith({ defaultSku: { trackInventory: false, stock: 0 } });
   });
 
   it("shows a key pool's keys with Import keys, never a quantity, and saves without stock", async () => {
@@ -153,9 +155,9 @@ describe("digital SKUs in the variant editor", () => {
     const inventory = slot("inventory-slot");
     expect(quantityInput()).toBeNull();
     expect(inventory.textContent).toContain(d("stockKeys", { count: "12" }));
-    // The pool is the stock: tracking can't be turned off under it.
+    // The pool is the stock: tracking follows it, with no switch to turn it off under it.
     expect(inventory.textContent).toContain(d("stockPoolKeepsTracking"));
-    expect(inventory.querySelector<HTMLButtonElement>('button[role="checkbox"]')!.disabled).toBe(true);
+    expect(inventory.querySelector('button[role="checkbox"]')).toBeNull();
     expect(inventory.textContent).not.toContain(d("stockNotSellable"));
     const importKeys = [...inventory.querySelectorAll("button")].find((button) => button.textContent === d("importKeys"))!;
     await act(async () => importKeys.click());

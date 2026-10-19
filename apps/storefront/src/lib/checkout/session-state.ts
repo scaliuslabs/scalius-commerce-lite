@@ -266,8 +266,9 @@ export function readCheckoutPaymentSelection(): string | null {
   }
 }
 
+/** Updates an existing checkout transfer: a string sets the field, null removes it. */
 export function syncCheckoutTransferSession(
-  values: Record<string, string>,
+  values: Record<string, string | null>,
 ): boolean {
   try {
     const raw = sessionStorage.getItem("scalius_checkout_data");
@@ -280,6 +281,7 @@ export function syncCheckoutTransferSession(
     for (const field of CHECKOUT_TRANSFER_SYNC_FIELDS) {
       const value = values[field];
       if (typeof value === "string") next[field] = value.slice(0, 50_000);
+      else if (value === null) delete next[field];
     }
     sessionStorage.setItem("scalius_checkout_data", JSON.stringify(next));
     return true;

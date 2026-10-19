@@ -598,6 +598,26 @@ export type ReservationVariantState = {
   lowStockThreshold?: number | null;
 };
 
+/**
+ * A regular reservation of a SKU that delivers licence keys (digital, with a
+ * ready key pool) leaves no more units reserved than unused keys: checkout
+ * never sells a key that doesn't exist, even where an old typed-in quantity
+ * outgrew the keys (its stock is its keys otherwise). Every other SKU passes.
+ * Part of the reservation's own availability check: no extra statement.
+ */
+function licenceKeysCoverSql(variantId: SQL, fulfillmentKind: SQL, reservedStock: SQL, quantity: number): SQL {
+  return sql`(${fulfillmentKind} <> 'digital'
+    OR NOT EXISTS (
+      SELECT 1 FROM digital_assets rka
+      WHERE rka.variant_id = ${variantId} AND rka.kind = 'licence_keys' AND rka.status = 'ready'
+    )
+    OR ${reservedStock} + ${quantity} <= (
+      SELECT count(*) FROM digital_licence_keys rkk
+      JOIN digital_assets rka ON rka.id = rkk.asset_id
+      WHERE rka.variant_id = ${variantId} AND rka.kind = 'licence_keys' AND rkk.status = 'available'
+    ))`;
+}
+
 /** Units a regular reservation may not take: the SKU's on-hand at locations its channel does not sell. */
 function channelGapSql(variantId: SQL, salesChannelId: string | undefined): SQL {
   return salesChannelId ? sql` - ${channelUnlinkedOnHandSql(variantId, salesChannelId)}` : sql``;
@@ -619,7 +639,8 @@ function buildReservationBatchGuard(
             ${productVariants.backorderLimit} = 0
             OR ${productVariants.reservedStock} + ${entry.quantity} <= ${productVariants.backorderLimit}
           )`
-      : sql`${productVariants.stock} - ${productVariants.reservedStock}${channelGapSql(sql.raw('"product_variants"."id"'), salesChannelId)} >= ${entry.quantity}`;
+      : sql`${productVariants.stock} - ${productVariants.reservedStock}${channelGapSql(sql.raw('"product_variants"."id"'), salesChannelId)} >= ${entry.quantity}
+          AND ${licenceKeysCoverSql(sql.raw('"product_variants"."id"'), sql.raw('"product_variants"."fulfillment_kind"'), sql.raw('"product_variants"."reserved_stock"'), entry.quantity)}`;
 
   return buildBatchGuard(db, sql`EXISTS (
     SELECT 1
@@ -864,7 +885,8 @@ function buildFreshReservationMovementInsert(
             ${variant.backorderLimit} = 0
             OR ${variant.reservedStock} + ${claim.quantity} <= ${variant.backorderLimit}
           )`
-      : sql`${variant.stock} - ${variant.reservedStock}${channelGapSql(variant.id, salesChannelId)} >= ${claim.quantity}`;
+      : sql`${variant.stock} - ${variant.reservedStock}${channelGapSql(variant.id, salesChannelId)} >= ${claim.quantity}
+          AND ${licenceKeysCoverSql(variant.id, sql.raw('"product_variants"."fulfillment_kind"'), variant.reservedStock, claim.quantity)}`;
   const nextPreorderStock = pool === "preorder"
     ? sql`${variant.preorderStock} - ${claim.quantity}`
     : sql`${variant.preorderStock}`;

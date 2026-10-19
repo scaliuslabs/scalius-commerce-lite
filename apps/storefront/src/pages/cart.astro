@@ -771,6 +771,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 chooseAddressText={copy.chooseAddressForDeliveryText}
                 noDeliveryText={copy.noDeliveryToAddressText}
                 failedText={copy.deliveryOptionsFailedText}
+                unavailableText={copy.deliveryOptionsUnavailableText}
                 retryText={copy.retryText}
                 loadingText={copy.loadingText}
                 feeChangedText={copy.deliveryFeeChangedText}
@@ -1087,7 +1088,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   import { enhanceShippingMethods, fetchDeliveryRates } from "@/lib/checkout/shipping-methods";
   import {
     applyCheckoutDeliveryMode,
-    checkoutAddressForMode,
+    checkoutTransferPath,
     readCheckoutDeliveryMode,
   } from "@/lib/checkout/delivery-mode";
   import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "@/lib/checkout/billing-address";
@@ -1301,7 +1302,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   document.addEventListener("cart-updated", syncDeliveryPath, { signal: cartPageSignal });
   // The billing country's rules (full, or the minimal region and postal code)
   // follow the country and the path.
-  enhanceBillingAddress(document, {
+  const billingAddress = enhanceBillingAddress(document, {
     readMode: () => (requireFullBillingAddress ? "full" : "minimal"),
     signal: cartPageSignal,
   });
@@ -1536,6 +1537,11 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     const expectedQuoteFingerprint = (
       document.getElementById("expectedQuoteFingerprint") as HTMLInputElement | null
     )?.value;
+    // The path the page shows decides what the transfer carries, as on
+    // submit: a cart with nothing physical keeps no address and no rate,
+    // whatever a hidden Delivery radio or a saved draft still holds.
+    const mode = readCheckoutDeliveryMode();
+    const path = checkoutTransferPath(mode, { ...values, shippingCountryCode: chosenShippingCountry() });
     const shippingMethodId = window.lastShippingEventDetail?.id;
     const shippingMethodName = window.lastShippingEventDetail?.name;
     let shippingCharge = "";
@@ -1555,13 +1561,18 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     }
     syncCheckoutTransferSession({
       ...values,
+      ...path,
       ...(cartItems ? { cartItems } : {}),
       ...(checkoutId ? { checkoutId } : {}),
       ...(discountCodes !== undefined ? { discountCodes } : {}),
       ...(expectedQuoteFingerprint ? { expectedQuoteFingerprint } : {}),
-      ...(shippingMethodId ? { shippingMethodId } : {}),
-      ...(shippingMethodName ? { shippingMethodName } : {}),
-      ...(shippingCharge ? { shippingCharge } : {}),
+      ...(mode === "none"
+        ? { shippingMethodId: null, shippingMethodName: null, shippingLocation: null, shippingCharge: "0" }
+        : {
+          ...(shippingMethodId ? { shippingMethodId } : {}),
+          ...(shippingMethodName ? { shippingMethodName } : {}),
+          ...(shippingCharge ? { shippingCharge } : {}),
+        }),
     });
   };
 
@@ -1886,11 +1897,14 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     );
 
     const fields = enhanceCheckoutFields(
-      checkoutInformationFields(form, checkoutCopy, () => readCheckoutDeliveryMode()),
+      checkoutInformationFields(form, checkoutCopy, () => readCheckoutDeliveryMode(), () => billingAddress?.readRules() ?? null),
       cartPageSignal,
     );
     // A restored draft never blurred: say now if a typed value (an email) is wrong.
     fields.checkFilled();
+    // New delivery options (or none read): a "Choose a delivery option." from an
+    // earlier attempt follows them instead of standing beside a load failure.
+    window.addEventListener("shippingLocationChange", () => fields.recheckMarked(), { signal: cartPageSignal });
 
     /**
      * Marks every problem under its field at once, then moves to the first
@@ -1919,6 +1933,11 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       // Visual order: name, phone, then the rest.
       let first: HTMLElement | null = firstField;
       if (phoneMessage && phoneInput && (!first || first !== nameInput)) first = phoneInput;
+      // Delivery options that couldn't be read leave nothing to choose: their
+      // note says so; the order waits on its Try again.
+      if (!first && readCheckoutDeliveryMode() !== "none") {
+        first = document.querySelector<HTMLElement>('[data-shipping-methods][data-rates-failed="true"] [data-shipping-note] button');
+      }
       if (!first) return true;
       first.scrollIntoView?.({ behavior: "smooth", block: "center" });
       const focusable = first.matches("fieldset")
@@ -2122,9 +2141,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           // service order carries none (the disabled address fieldset is not
           // in the form data; the location controls are read here).
           const deliveryMode = readCheckoutDeliveryMode();
-          checkoutData.deliveryMode = deliveryMode;
           const locationValue = (name: string) => findNamedCheckoutControl(document, name)?.value;
-          Object.assign(checkoutData, checkoutAddressForMode(deliveryMode, {
+          Object.assign(checkoutData, checkoutTransferPath(deliveryMode, {
             shippingCountryCode: chosenShippingCountry(),
             shippingAddressLine2: locationValue("shippingAddressLine2"),
             shippingDependentLocality: locationValue("shippingDependentLocality"),

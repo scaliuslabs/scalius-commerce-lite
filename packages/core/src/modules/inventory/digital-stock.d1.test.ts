@@ -13,6 +13,8 @@ import { adjustInventory } from "./inventory.service";
 import { adjustStock, setStock } from "./stock-adjustment";
 import { createPurchaseOrder, markPurchaseOrderOrdered, receivePurchaseOrder } from "./purchase-orders";
 import { createTransfer, shipTransfer } from "./transfers";
+import { reserveStockBatch } from "./reserve";
+import { validateStorefrontCartItems } from "../checkout/cart-validation";
 import { createDigitalAsset } from "../digital/assets";
 import { importLicenceKeys, listLicenceKeys, revokeLicenceKeys } from "../digital/licence-keys";
 import { DIGITAL_STOCK_IS_KEYS_MESSAGE, DIGITAL_STOCK_IS_KEYS_REASON } from "../products/digital-stock-rules";
@@ -85,6 +87,42 @@ describe("digital stock rules on inventory paths", () => {
         await importLicenceKeys(db, { assetId, keys: ["APP-KEY-NEW"], requestKey: crypto.randomUUID(), credentialKey: CREDENTIAL_KEY });
         expect(stock("var_app")).toBe(3);
         expect(one("SELECT count(*) AS n FROM inventory_operations WHERE operation_type = 'licence_keys'")).toEqual({ n: 3 });
+    });
+
+    it("starts tracking a file-only SKU at its first key pool: its keys become its stock", async () => {
+        sqlite.prepare("UPDATE product_variants SET track_inventory = 0 WHERE id = 'var_app'").run();
+        const assetId = await poolWithKeys(2);
+        expect(one("SELECT track_inventory AS t, stock FROM product_variants WHERE id = 'var_app'")).toEqual({ t: 1, stock: 2 });
+        expect(one<{ status: string }>("SELECT status FROM digital_assets WHERE id = ?", assetId).status).toBe("ready");
+
+        // An untracked SKU that still shows an old quantity is not tracked behind the merchant's back.
+        seedSku("var_old", 4, "digital");
+        sqlite.prepare("UPDATE product_variants SET track_inventory = 0 WHERE id = 'var_old'").run();
+        const refused = await createDigitalAsset(db, undefined, "prod_var_old", { kind: "licence_keys", variantId: "var_old" })
+            .then(() => null, (error: unknown) => error);
+        expect(refused).toBeInstanceOf(ValidationError);
+        expect(one("SELECT count(*) AS n FROM digital_assets WHERE variant_id = 'var_old'")).toEqual({ n: 0 });
+    });
+
+    it("never sells more of a key-delivered SKU than its unused keys, even when an old typed quantity outgrew them", async () => {
+        await poolWithKeys(2);
+        // A quantity typed in before stock became the keys (stock 5, 2 keys).
+        sqlite.prepare("UPDATE product_variants SET stock = 5 WHERE id = 'var_app'").run();
+        const line = (quantity: number) => [{ productId: "prod_var_app", variantId: "var_app", quantity }];
+
+        const over = await validateStorefrontCartItems(db, line(3));
+        expect(over.issues).toEqual([expect.objectContaining({ code: "QUANTITY_UNAVAILABLE", availableQuantity: 2 })]);
+        expect((await validateStorefrontCartItems(db, line(2))).valid).toBe(true);
+
+        // The reservation itself refuses a third key (the batch guard), and takes two.
+        const before = movements();
+        expect(await reserveStockBatch(db, [{ variantId: "var_app", quantity: 3, orderId: "order_over" }]))
+            .toMatchObject({ success: false });
+        expect(one("SELECT reserved_stock AS r FROM product_variants WHERE id = 'var_app'")).toEqual({ r: 0 });
+        expect(movements()).toBe(before);
+        expect(await reserveStockBatch(db, [{ variantId: "var_app", quantity: 2, orderId: "order_ok" }]))
+            .toMatchObject({ success: true });
+        expect(one("SELECT reserved_stock AS r FROM product_variants WHERE id = 'var_app'")).toEqual({ r: 2 });
     });
 
     it("refuses manual adjustments, scanner adjustments and counts that change a digital SKU", async () => {

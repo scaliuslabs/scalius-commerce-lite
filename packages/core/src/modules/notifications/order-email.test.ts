@@ -405,8 +405,8 @@ describe("customer order email composition and delivery", () => {
         ('oda_r3', 'order_email', 'item', 'promo_r3', 'eff_r3', 1, 1, 'code', 'r3-order10', 'R3-ORDER10', 'percentage_off', 'line', 'BDT', 20000, 1000, 2);`);
     await send("order_created");
     const email = message();
-    expect(email.text).toContain("Discount · r3-order10: −৳10");
-    expect(email.text).not.toContain("(R3-ORDER10)");
+    expect(email.text).toContain("Discount · R3-ORDER10: −৳10");
+    expect(email.text).not.toContain("r3-order10");
   });
 
   it("lists each discount by name and code and shows free delivery on the delivery line, for buyers and staff", async () => {
@@ -430,7 +430,7 @@ describe("customer order email composition and delivery", () => {
 
     const [buyer, staff] = transport.sendEmail.mock.calls.map((call) => call[0] as SendEmailOptions);
     for (const email of [buyer!, staff!]) {
-      expect(email.text).toContain("Discount · Eid sale (EID10): −৳10\nDiscount · Weekend deal: −৳4\nDelivery: Free (was ৳60)");
+      expect(email.text).toContain("Discount · EID10: −৳10\nDiscount · Weekend deal: −৳4\nDelivery: Free (was ৳60)");
       expect(email.text).toContain("Total: ৳204");
       expect(email.text).not.toMatch(/Free delivery|SHIPFREE|Delivery: ৳60/);
       expect(email.html).toContain('<s style="color:#5f6368;">৳60</s> Free');

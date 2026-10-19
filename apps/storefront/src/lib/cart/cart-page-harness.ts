@@ -39,7 +39,7 @@ import { enhanceBillingAddress } from "../checkout/billing-address-rules";
 import { enhanceShippingMethods, fetchDeliveryRates } from "../checkout/shipping-methods";
 import {
   applyCheckoutDeliveryMode,
-  checkoutAddressForMode,
+  checkoutTransferPath,
   readCheckoutDeliveryMode,
 } from "../checkout/delivery-mode";
 import {
@@ -92,7 +92,7 @@ const realImports: Record<string, unknown> = {
   cartItemsSubtotal,
   cartNeedsDeliveryMethod,
   cartStore,
-  checkoutAddressForMode,
+  checkoutTransferPath,
   checkoutBillingFields,
   checkoutContactNeeds,
   checkoutInformationFields,

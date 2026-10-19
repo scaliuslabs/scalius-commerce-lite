@@ -28,9 +28,15 @@ export function billingRules(rules: AddressRules, mode: BillingAddressMode): Add
 export function enhanceBillingAddress(
   root: ParentNode,
   options: { readMode: () => BillingAddressMode; signal?: AbortSignal },
-): { refresh(): void; readCountry(): string | null } | null {
+): {
+  refresh(): void;
+  readCountry(): string | null;
+  /** The chosen country's rules, once loaded (null until then): the fields are checked with them. */
+  readRules(): AddressRules | null;
+} | null {
   const block = root.querySelector<HTMLElement>("[data-billing-fields]");
   if (!block) return null;
+  let applied: AddressRules | null = null;
   const readCountry = () => {
     const control = root.querySelector<HTMLInputElement | HTMLSelectElement>('[name="billingCountryCode"]');
     const value = control?.value.trim().toUpperCase() ?? "";
@@ -42,11 +48,18 @@ export function enhanceBillingAddress(
     const mode = options.readMode();
     void loadAddressRules(country).then((rules) => {
       // The buyer may have moved on while the rules loaded.
-      if (rules && readCountry() === country && options.readMode() === mode) applyAddressRules(block, billingRules(rules, mode));
+      if (rules && readCountry() === country && options.readMode() === mode) {
+        applied = rules;
+        applyAddressRules(block, billingRules(rules, mode));
+      }
     });
   };
   root.querySelector<HTMLSelectElement>("select[data-billing-country]")
     ?.addEventListener("change", refresh, { signal: options.signal });
   refresh();
-  return { refresh, readCountry };
+  return {
+    refresh,
+    readCountry,
+    readRules: () => (applied && applied.countryCode === readCountry() ? applied : null),
+  };
 }

@@ -138,6 +138,45 @@ export function checkoutAddressForMode(
   };
 }
 
+/** The path and address fields a checkout transfer (the cart page → payment step) carries. */
+export const CHECKOUT_PATH_FIELDS = [
+  "deliveryMode",
+  "shippingCountryCode",
+  "shippingAddress",
+  "shippingAddressLine2",
+  "shippingDependentLocality",
+  "shippingLocality",
+  "shippingAdminArea",
+  "shippingPostalCode",
+  "city",
+  "zone",
+  "area",
+  "cityName",
+  "zoneName",
+  "areaName",
+] as const;
+export type CheckoutPathField = (typeof CHECKOUT_PATH_FIELDS)[number];
+
+/**
+ * Every path field of a checkout transfer for the path the page shows: the
+ * path itself and the address it sends (`checkoutAddressForMode`), null for a
+ * field the path does not send. The cart page writes the transfer with it
+ * and keeps an existing transfer in step with it, so a form value the path
+ * does not use (a hidden Delivery radio, a saved draft's city) never reaches
+ * the payment step.
+ */
+export function checkoutTransferPath(
+  mode: CheckoutDeliveryMode,
+  values: Partial<Record<keyof CheckoutAddressFields, unknown>>,
+): Record<CheckoutPathField, string | null> {
+  const path = Object.fromEntries(CHECKOUT_PATH_FIELDS.map((field) => [field, null])) as Record<CheckoutPathField, string | null>;
+  path.deliveryMode = mode;
+  for (const [field, value] of Object.entries(checkoutAddressForMode(mode, values))) {
+    if (field in path && typeof value === "string") path[field as CheckoutPathField] = value;
+  }
+  return path;
+}
+
 /** The cash payment's name for the path: "Cash on delivery", "Pay at pickup", "Pay on service". */
 export function cashOnDeliveryLabel(
   mode: CheckoutDeliveryMode,

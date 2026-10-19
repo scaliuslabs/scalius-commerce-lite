@@ -490,7 +490,8 @@ export interface OrderEmailFacts {
   amounts: {
     subtotal: string;
     /** Each applied discount; `name` null is a discount without a saved promotion. */
-    discounts: Array<{ name: string | null; code: string | null; amount: string }>;
+    /** `appId`: a store app's discount (it keeps its own title); the store's own code discounts show their code. */
+    discounts: Array<{ name: string | null; code: string | null; appId?: string | null; amount: string }>;
     /** What the buyer pays for delivery (null: free) and, when it was waived or discounted, the fee before that. */
     delivery: { amount: string | null; original: string | null };
     tax: { label: string | null; amount: string; included: boolean } | null;
@@ -570,7 +571,7 @@ export function renderOrderEmail(input: {
   if (amounts) {
     summary.push({ label: copy.subtotal, value: amounts.subtotal });
     for (const discount of amounts.discounts) {
-      summary.push({ label: formatDiscountLineLabel(copy.discount, { title: discount.name, code: discount.code }), value: `−${discount.amount}` });
+      summary.push({ label: formatDiscountLineLabel(copy.discount, { title: discount.name, code: discount.code, appId: discount.appId }), value: `−${discount.amount}` });
     }
     summary.push({ label: copy.shipping, value: amounts.delivery.amount ?? copy.free, was: amounts.delivery.original });
     if (amounts.tax) {

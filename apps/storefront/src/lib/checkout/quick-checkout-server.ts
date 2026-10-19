@@ -3,6 +3,7 @@
  * delivery rates for an address and the authoritative quote, fetched by the
  * storefront server exactly as the browser asks for them through its proxies.
  */
+import type { AddressRules } from "@scalius/shared/address";
 import { apiFetch } from "@/lib/api/transport";
 import type { CartRuleError } from "@/lib/api/orders";
 import type { ShippingMethod } from "@/lib/api/types";
@@ -40,6 +41,18 @@ export async function fetchQuickCheckoutRates(
     const body = (await response.json()) as { data?: { shippingMethods?: unknown } };
     const rates = body.data?.shippingMethods;
     return Array.isArray(rates) ? (rates as ShippingMethod[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One country's address rules (the billing address is checked with them); null when they could not be read. */
+export async function fetchQuickCheckoutAddressRules(countryCode: string): Promise<AddressRules | null> {
+  try {
+    const response = await apiFetch(`/address-rules/${encodeURIComponent(countryCode)}`, {}, { auth: false, retries: 1 });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { success?: unknown; data?: AddressRules };
+    return body.success === true && body.data?.countryCode === countryCode ? body.data : null;
   } catch {
     return null;
   }

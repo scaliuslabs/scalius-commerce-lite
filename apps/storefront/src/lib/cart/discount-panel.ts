@@ -103,28 +103,53 @@ function element<K extends keyof HTMLElementTagNameMap>(
 }
 
 const ACTION_CLASS =
-  "inline-flex min-h-9 items-center rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  "inline-flex min-h-11 items-center rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-9";
 
+/**
+ * The items that complete an offer, one row each: the name (one line, cut
+ * with an ellipsis, the full name on hover and to assistive technology) and
+ * a short action that never wraps: Add for a simple product, Choose options
+ * (its page) for one with options.
+ */
 function offerActions(
   offer: CheckoutDiscountOffer,
   copy: CheckoutLanguageData,
   actions: DiscountPanelActions,
 ): HTMLElement | null {
   if (offer.products.length === 0) return null;
-  const row = element("div", "mt-1 flex flex-wrap gap-2");
+  const list = element("ul", "mt-2 divide-y divide-primary/15");
   offer.products.forEach((product, index) => {
+    const row = element("li", "flex min-w-0 items-center gap-2 py-1.5 first:pt-0 last:pb-0");
+    const name = element("span", "min-w-0 flex-1 truncate", product.name);
+    name.title = product.name;
+    row.append(name);
     if (product.variantId) {
-      const button = element("button", ACTION_CLASS, `${copy.offerAddItemText} ${product.name}`);
+      const button = element("button", `${ACTION_CLASS} shrink-0 whitespace-nowrap`, copy.offerAddItemText);
       button.type = "button";
+      button.setAttribute("aria-label", `${copy.offerAddItemText} ${product.name}`);
       button.addEventListener("click", () => actions.addOfferProduct(offer, index));
       row.append(button);
     } else {
-      const link = element("a", ACTION_CLASS, `${copy.offerChooseOptionsText}: ${product.name}`);
+      const link = element("a", `${ACTION_CLASS} shrink-0 whitespace-nowrap`, copy.offerChooseOptionsText);
+      link.setAttribute("aria-label", `${copy.offerChooseOptionsText}: ${product.name}`);
       link.href = pagePath(`/products/${encodeURIComponent(product.slug)}`);
       row.append(link);
     }
+    list.append(row);
   });
-  return row;
+  return list;
+}
+
+/** What an offer gives, as its headline: "Choose your free gift", "Choose an item at 20% off". */
+function offerHeadline(offer: CheckoutDiscountOffer, copy: CheckoutLanguageData): string {
+  const free = offer.percentOff >= 100;
+  if (offer.quantity > 1) {
+    return formatCheckoutLanguageText(free ? copy.offerFreeManyHeadingText : copy.offerPercentManyHeadingText, {
+      count: offer.quantity,
+      percent: offer.percentOff,
+    });
+  }
+  return free ? copy.offerFreeHeadingText : formatCheckoutLanguageText(copy.offerPercentHeadingText, { percent: offer.percentOff });
 }
 
 /** Renders the discount lines, applied codes and offers into their containers. */
@@ -190,16 +215,17 @@ export function renderDiscountPanel(
   applied?.replaceChildren(...chips, ...notes);
   applied?.classList.toggle("hidden", state.codes.length === 0);
 
+  // An earned offer: what it gives, the discount's title, then the items to choose from.
   offers?.replaceChildren(...(facts?.offers ?? []).map((offer) => {
-    const item = element("li", "rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-foreground");
-    item.append(element("p", "font-medium", offer.title));
-    const detail = describeRejectedCode(
-      { code: "", reason: "get_items", message: offer.title, offer },
-      copy,
-    );
-    item.append(element("p", "text-muted-foreground", detail));
-    const row = offerActions(offer, copy, actions);
-    if (row) item.append(row);
+    const item = element("li", "min-w-0 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 text-sm text-foreground");
+    item.append(element("p", "font-medium", offerHeadline(offer, copy)));
+    if (offer.title.trim()) {
+      const title = element("p", "line-clamp-2 break-words text-muted-foreground", offer.title);
+      title.title = offer.title;
+      item.append(title);
+    }
+    const list = offerActions(offer, copy, actions);
+    if (list) item.append(list);
     return item;
   }));
   offers?.classList.toggle("hidden", (facts?.offers.length ?? 0) === 0);

@@ -22,7 +22,7 @@ describe("order discount summary", () => {
 
     expect(summary.lines).toEqual([
       { label: "Discount · R2SJPROD", amount: 200 },
-      { label: "Discount · Eid sale (R2SJORD10)", amount: 230 },
+      { label: "Discount · R2SJORD10", amount: 230 },
     ]);
     expect(summary.delivery).toEqual({ fee: 80, charged: 0, codes: "R2SJSHIP" });
   });
@@ -47,7 +47,7 @@ describe("order discount summary", () => {
       shipping: 0,
       discount: 150.3,
       discountText: "Discount",
-    }).lines).toEqual([{ label: "Discount · Eid (EID10)", amount: 100.1 }, { label: "Discount", amount: 50.2 }]);
+    }).lines).toEqual([{ label: "Discount · EID10", amount: 100.1 }, { label: "Discount", amount: 50.2 }]);
   });
 
   it("lists a store app's discount (no promotion) on the receipt like any other", () => {

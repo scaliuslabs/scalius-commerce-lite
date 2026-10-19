@@ -53,27 +53,33 @@ export function DigitalStockStatus({ productId, variantId, tracked }: {
   const problem = !stock || stock.sellable
     ? null
     : tracked && stock.keys === 0 ? t("stockOutOfKeys") : t("stockNotSellable");
-  const importsKeys = tracked && Boolean(variantId);
+  // Keys can always be imported (the first ones start tracking: they are the stock);
+  // a SKU without keys can also deliver files.
+  const actionClass = "rounded-sm text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   return (
     <div className="space-y-1" data-testid="digital-stock">
       <p className="flex flex-wrap items-center gap-x-1 text-body">
         <span className="tabular-nums">{facts}</span>
-        {canEdit ? (
+        {canEdit && variantId ? (
           <>
             <span aria-hidden="true" className="text-muted-foreground">·</span>
             <button
               type="button"
-              className="rounded-sm text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={actionClass}
               onClick={() => {
-                if (!importsKeys) {
-                  revealCard(DIGITAL_CARD_ID);
-                  return;
-                }
                 setDialogLoaded(true);
                 setImporting(true);
               }}
             >
-              {t(tracked ? "importKeys" : "addFile")}
+              {t("importKeys")}
+            </button>
+          </>
+        ) : null}
+        {canEdit && !tracked ? (
+          <>
+            <span aria-hidden="true" className="text-muted-foreground">·</span>
+            <button type="button" className={actionClass} onClick={() => revealCard(DIGITAL_CARD_ID)}>
+              {t("addFile")}
             </button>
           </>
         ) : null}

@@ -203,7 +203,7 @@ describe("the sample email the dashboard previews", () => {
     expect(email.html).toContain('href="https://shop.example.test/track-order?order=1001"');
     expect(email.html).toContain("<s style=\"color:#5f6368;\">৳60</s> ফ্রি");
     for (const text of ["অর্ডার ট্র্যাক করুন", "অর্ডারের বিবরণ", "ডেলিভারি ঠিকানা", "ক্যাশ অন ডেলিভারি।",
-      "ছাড় · Eid sale (EID10): −৳100", "ডেলিভারি চার্জ: ফ্রি (আগে ছিল ৳60)"]) {
+      "ছাড় · EID10: −৳100", "ডেলিভারি চার্জ: ফ্রি (আগে ছিল ৳60)"]) {
       expect(email.text).toContain(text);
     }
   });

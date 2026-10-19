@@ -154,7 +154,7 @@ describe("account order detail", () => {
       ] },
     ), null);
     expect(text("orderSummary")).toBe(
-      "Subtotal ৳1,000 Delivery · Inside Dhaka ৳80 Free (R2SJSHIP) Discount · R2SJPROD −৳200 Discount · Eid sale (R2SJORD10) −৳230 Total ৳570",
+      "Subtotal ৳1,000 Delivery · Inside Dhaka ৳80 Free (R2SJSHIP) Discount · R2SJPROD −৳200 Discount · R2SJORD10 −৳230 Total ৳570",
     );
     expect(document.querySelector("#orderSummary s")?.textContent).toBe("৳80");
     expect(text("orderNote")).toBe("Your note দয়া করে ফোন করুন 🙏");
@@ -169,7 +169,7 @@ describe("account order detail", () => {
     order.items = [{ ...order.items[0]!, discountAmountMinor: 10_000, taxableAmountMinor: 90_000 }];
     renderOrderDetail(order, null);
     expect(text("orderItems")).toBe("BB Tee Qty 2 × ৳500 ৳1,000");
-    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Delivery · Inside Dhaka ৳80 Discount · Eid sale (EID10) −৳100 Total ৳980");
+    expect(text("orderSummary")).toBe("Subtotal ৳1,000 Delivery · Inside Dhaka ৳80 Discount · EID10 −৳100 Total ৳980");
   });
 
   it("keeps an item-level saving on its item", () => {

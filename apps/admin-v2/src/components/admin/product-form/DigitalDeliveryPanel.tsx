@@ -352,7 +352,8 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
           <ul className="divide-y">
             {digitalVariants.map((variant) => {
               const pool = assets.find((asset) => asset.kind === "licence_keys" && asset.variantId === variant.id) ?? null;
-              const tracked = variant.trackInventory !== false;
+              // Its first key pool turns tracking on (the keys are its stock), before the product is read again.
+              const tracked = variant.trackInventory !== false || pool?.status === "ready";
               const label = variantLabel(variant);
               return (
                 <li key={variant.id} className="flex flex-wrap items-start justify-between gap-2 py-3 text-body first:pt-0 last:pb-0">
@@ -361,12 +362,12 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
                     <p className="text-muted-foreground tabular-nums">
                       {pool ? t("keysCounts", { available: pool.keys.available, assigned: pool.keys.assigned }) : t("keysNone")}
                     </p>
-                    {tracked ? null : <p className="text-warning">{t("keysNotTracked")}</p>}
+                    {tracked ? null : <p className="text-muted-foreground">{t("keysStartTracking")}</p>}
                     {tracked && pool && pool.status !== "archived" && pool.keys.available === 0 ? (
                       <p className="text-warning">{t("outOfKeys")}</p>
                     ) : null}
                   </div>
-                  {readOnly || !tracked ? null : (
+                  {readOnly ? null : (
                     <div className="flex flex-wrap gap-2">
                       {pool && pool.keys.available > 0 ? (
                         <Button type="button" variant="ghost" size="sm" onClick={() => setRevokeFor(pool)}>{t("revokeUnused")}</Button>

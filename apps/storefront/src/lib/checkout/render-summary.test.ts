@@ -450,6 +450,32 @@ describe("renderOrderSummaryDetails", () => {
     expect(details.textContent).not.toContain("var_1");
   });
 
+  it("groups a mixed order's lines as the receipt does: what ships and what arrives digitally", () => {
+    const details = document.createElement("div");
+    const line = taxQuote().items[0]!;
+    renderOrderSummaryDetails(details, { customerName: "Buyer" }, baseConfig, taxQuote({
+      subtotalMinor: 30_000,
+      subtotalAmount: 300,
+      totalMinor: 30_000,
+      totalAmount: 300,
+      items: [
+        { ...line, cartKey: "key", productName: "App licence", unitPrice: 200, fulfillmentType: "digital" },
+        { ...line, cartKey: "mug", productName: "Mug", fulfillmentType: "ship" },
+      ],
+    }));
+    const headings = Array.from(details.querySelectorAll("p.font-semibold")).map((heading) => heading.textContent);
+    expect(headings).toEqual(["Delivery", "Digital items"]);
+    const lists = Array.from(details.querySelectorAll("ul"));
+    expect(lists[0]!.textContent).toContain("Mug");
+    expect(lists[1]!.textContent).toContain("App licence");
+
+    // One shipped group reads as before: no heading.
+    const shipped = document.createElement("div");
+    renderOrderSummaryDetails(shipped, { customerName: "Buyer" }, baseConfig, taxQuote());
+    expect(shipped.textContent).not.toContain("Digital items");
+    expect(Array.from(shipped.querySelectorAll("p.font-semibold")).map((heading) => heading.textContent)).not.toContain("Delivery");
+  });
+
   it("shows the configured delivery fee when an item waives it", () => {
     const details = document.createElement("div");
 
