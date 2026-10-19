@@ -18,7 +18,7 @@ export interface ReviewStore {
   fulfil(orderId: string, itemId: string, quantity?: number, createdAt?: number): void;
   deliver(orderId: string): void;
   /** order + fulfil every line + deliver. */
-  deliveredOrder(id: string, lines: Array<{ item: string; product: string; type?: string }>, owner?: { account?: string | null; customer?: string | null; name?: string }): void;
+  deliveredOrder(id: string, lines: Array<{ item: string; product: string; type?: string; quantity?: number; label?: string | null }>, owner?: { account?: string | null; customer?: string | null; name?: string }): void;
   scalar(sql: string, ...params: SQLInputValue[]): unknown;
   rows(sql: string, ...params: SQLInputValue[]): Array<Record<string, unknown>>;
   /** Σ published reviews per product, computed from the reviews themselves. */
@@ -114,7 +114,7 @@ export function createReviewStore(): ReviewStore {
     },
     deliveredOrder(id, lines, owner) {
       store.order(id, lines, owner);
-      for (const line of lines) store.fulfil(id, line.item);
+      for (const line of lines) store.fulfil(id, line.item, line.quantity ?? 1);
       store.deliver(id);
     },
     scalar(sql, ...params) {
