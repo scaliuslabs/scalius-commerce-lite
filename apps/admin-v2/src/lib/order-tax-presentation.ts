@@ -133,6 +133,15 @@ export function resolveSavedOrderLineMoney(
   };
 }
 
+/**
+ * A line its own discount pays in full: a free gift, the "get" item of a
+ * buy-one-get-one. It reads ৳0 with its price struck, never at full price
+ * beside a payment that shows it free.
+ */
+export function isFreeOrderLine(line: SavedOrderLineMoneyPresentation | null): boolean {
+  return line !== null && line.grossSubtotalMinor > 0 && line.discountMinor >= line.grossSubtotalMinor;
+}
+
 export function formatSavedMinorAmount(
   amountMinor: number,
   summary: Pick<SavedOrderMoneySummary, "currencyCode" | "decimalPlaces">,

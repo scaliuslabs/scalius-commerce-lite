@@ -40,6 +40,7 @@ import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-present
 import {
   formatSavedMajorAmount,
   formatSavedMinorAmount,
+  isFreeOrderLine,
   resolveSavedOrderLineMoney,
   resolveSavedOrderMoneySummary,
 } from "~/lib/order-tax-presentation";
@@ -171,6 +172,8 @@ function LineRow({ line, money, order, returned }: {
   const lineMoney = resolveSavedOrderLineMoney(item, saved);
   const unit = lineMoney ? money.minor(lineMoney.unitPriceMinor) : money.major(item.price);
   const total = lineMoney ? money.minor(lineMoney.unitPriceMinor * quantity) : money.major(item.price * quantity);
+  // A free gift reads free, its price struck, as the payment counts it.
+  const free = isFreeOrderLine(lineMoney);
   return (
     <li className="flex items-start gap-3 py-3 text-body first:pt-0 last:pb-0">
       <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
@@ -186,10 +189,14 @@ function LineRow({ line, money, order, returned }: {
         </Link>
         {item.variantLabel ? <p className="text-muted-foreground">{item.variantLabel}</p> : null}
         <LineProperties item={item} money={money.major} />
-        <p className="text-muted-foreground tabular-nums">{unit} × {formatNumber(quantity)}</p>
+        <p className="text-muted-foreground tabular-nums">
+          {free ? <><s>{unit}</s> {money.minor(0)}</> : unit} × {formatNumber(quantity)}
+        </p>
         {returned ? <p className="text-muted-foreground">{t("items.returned", { count: returned })}</p> : null}
       </div>
-      <p className="shrink-0 font-medium tabular-nums">{total}</p>
+      <p className="shrink-0 font-medium tabular-nums" data-line-total>
+        {free ? <><s className="font-normal text-muted-foreground">{total}</s> {money.minor(0)}</> : total}
+      </p>
     </li>
   );
 }

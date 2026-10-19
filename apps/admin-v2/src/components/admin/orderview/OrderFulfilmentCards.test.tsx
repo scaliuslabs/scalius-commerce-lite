@@ -168,6 +168,26 @@ describe("OrderFulfilmentCards", () => {
     expect(mocks.dialogs).toContain("ship");
   });
 
+  it("shows a free gift at ৳0 with its price struck, as the payment counts it", async () => {
+    const money = (unitPriceMinor: number, discountAmountMinor: number) => ({
+      unitPriceMinor, lineSubtotalMinor: unitPriceMinor, discountAmountMinor,
+      taxableAmountMinor: unitPriceMinor - discountAmountMinor, taxAmountMinor: 0,
+    });
+    await render(order({
+      currencyDecimalPlaces: 2, subtotalAmountMinor: 170_000, shippingAmountMinor: 0, discountAmountMinor: 120_000,
+      taxAmountMinor: 0, totalAmountMinor: 50_000, taxLabel: "VAT", pricesIncludeTax: false,
+      items: [
+        line("k1", "Mug", money(50_000, 0)),
+        line("k2", "Gift lamp", { price: 1200, ...money(120_000, 120_000) }),
+      ],
+    } as Partial<Order>));
+    const ship = card("unfulfilled-ship")!;
+    const totals = [...ship.querySelectorAll("[data-line-total]")].map((cell) => cell.textContent?.replace(/\s+/g, " ").trim());
+    expect(totals).toEqual(["৳500.00", "৳1,200.00 ৳0.00"]);
+    expect(ship.querySelectorAll("[data-line-total] s")).toHaveLength(1);
+    expect([...ship.querySelectorAll("[data-line-total] s")][0]!.textContent).toBe("৳1,200.00");
+  });
+
   it("shows a returned unit once, on the oldest parcel that held it, when a line went out in two parcels", async () => {
     // Two units, sent as two one-unit parcels; one unit came back (the return names the line, not the parcel).
     client.setQueryData(["returns", "ord_1"], {
