@@ -29,6 +29,7 @@ import {
   readProductRepresentations,
   readShipmentRepresentation,
   readVariantRepresentation,
+  readVariantRepresentations,
 } from "../../events/representations";
 import {
   createPriceList,
@@ -616,6 +617,28 @@ app.openapi(createRoute({
   if (!variant) throw new NotFoundError("Variant not found");
   return ok(c, variant);
 });
+
+/** SKUs one lookup reads: one bound list within D1's 100 parameters. */
+const VARIANT_LOOKUP_MAX = 90;
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.variants.lookup",
+  method: "post",
+  path: "/variants/lookup",
+  tags: ["App API - Products"],
+  summary: "Find SKUs by their codes",
+  description: "Up to 90 SKU codes (any case) in one read: each found SKU's stock in total and per location with its stockVersion, in the order asked; codes that match nothing are left out. A read: nothing changes.",
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: z.object({ skus: z.array(z.string().trim().min(1).max(100)).min(1).max(VARIANT_LOOKUP_MAX) }).strict() } },
+    },
+  },
+  responses: {
+    200: { description: "The SKUs found", content: { "application/json": { schema: successEnvelope(z.object({ variants: z.array(VariantResource) })) } } },
+    ...readResponses,
+  },
+}), async (c) => ok(c, { variants: await readVariantRepresentations(c.get("db"), { skus: c.req.valid("json").skus }) }));
 
 // ─── Customers ───────────────────────────────────────────────────────────────
 

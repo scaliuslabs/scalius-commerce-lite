@@ -21875,6 +21875,58 @@ export type GetApiV1AdminResourcesVariantsByIdResponses = {
 
 export type GetApiV1AdminResourcesVariantsByIdResponse = GetApiV1AdminResourcesVariantsByIdResponses[keyof GetApiV1AdminResourcesVariantsByIdResponses];
 
+export type PostApiV1AdminResourcesVariantsLookupData = {
+    body: {
+        skus: Array<string>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/variants/lookup';
+};
+
+export type PostApiV1AdminResourcesVariantsLookupErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesVariantsLookupError = PostApiV1AdminResourcesVariantsLookupErrors[keyof PostApiV1AdminResourcesVariantsLookupErrors];
+
+export type PostApiV1AdminResourcesVariantsLookupResponses = {
+    /**
+     * The SKUs found
+     */
+    200: {
+        success: true;
+        data: {
+            variants: Array<VariantResource>;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesVariantsLookupResponse = PostApiV1AdminResourcesVariantsLookupResponses[keyof PostApiV1AdminResourcesVariantsLookupResponses];
+
 export type GetApiV1AdminResourcesCustomersData = {
     body?: never;
     path?: never;

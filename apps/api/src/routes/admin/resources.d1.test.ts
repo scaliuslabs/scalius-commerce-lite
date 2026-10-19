@@ -149,6 +149,9 @@ describe("the stable app API's resources", () => {
     expect(product.body.data).toMatchObject({ id: "p_tea", status: "active", currency: "BDT", priceMinor: 50000, imageUrl: null, variants: [{ id: "v_tea", sku: "TEA-1", priceMinor: 50000 }] });
     expect((await call("GET", "/resources/products?sku=tea-1")).body.data.products.map((entry: { id: string }) => entry.id)).toEqual(["p_tea"]);
     expect((await call("GET", "/resources/variants/v_tea")).body.data).toMatchObject({ id: "v_tea", productId: "p_tea", onHand: 100 });
+    const lookup = await call("POST", "/resources/variants/lookup", { body: { skus: ["nope-1", " tea-1 "] } });
+    expect(lookup.body.data.variants).toEqual([expect.objectContaining({ id: "v_tea", sku: "TEA-1", stockVersion: expect.any(Number) })]);
+    expect((await call("POST", "/resources/variants/lookup", { body: { skus: Array.from({ length: 91 }, (_, index) => `SKU-${index}`) } })).status).toBe(400);
   });
 
   it("sets price list prices in minor units of the list's currency", async () => {

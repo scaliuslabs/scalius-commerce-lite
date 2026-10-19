@@ -19,6 +19,7 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/shipments/*": { GET: orders },
   "/api/v1/admin/resources/products": { GET: products },
   "/api/v1/admin/resources/products/*": { GET: products },
+  "/api/v1/admin/resources/variants/lookup": { POST: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW] } },
   "/api/v1/admin/resources/variants/*": { GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW] } },
   "/api/v1/admin/resources/customers": { GET: customers },
   "/api/v1/admin/resources/customers/*": { GET: customers },

@@ -28,6 +28,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.products.list": { stability: "stable", uncurated: true },
   "dashboard.resources.products.get": { stability: "stable", uncurated: true },
   "dashboard.resources.variants.get": { stability: "stable", uncurated: true },
+  "dashboard.resources.variants.lookup": { stability: "stable", risk: "read", uncurated: true },
   "dashboard.resources.customers.list": { stability: "stable", uncurated: true },
   "dashboard.resources.customers.get": { stability: "stable", uncurated: true },
   // Price lists (MARKETS-DESIGN D5), in minor units of the list's currency.

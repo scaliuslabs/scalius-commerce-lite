@@ -15121,6 +15121,76 @@
     ]
    }
   },
+  "dashboard.resources.variants.lookup": {
+   "method": "POST",
+   "path": "/api/v1/admin/resources/variants/lookup",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products",
+    "read_inventory",
+    "write_inventory"
+   ],
+   "input": {
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "skus": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 100
+          },
+          "minItems": 1,
+          "maxItems": 90
+         }
+        },
+        "required": [
+         "skus"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "variants": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/VariantResource"
+        }
+       }
+      },
+      "required": [
+       "variants"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "dashboard.sales_channels.products": {
    "method": "GET",
    "path": "/api/v1/admin/settings/sales-channels/{id}/products",

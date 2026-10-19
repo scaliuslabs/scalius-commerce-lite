@@ -34,7 +34,7 @@ import {
   purchaseOrderLines,
   purchaseOrders,
 } from "@scalius/database/schema";
-import { and, asc, count, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getObjectEventRepresentation } from "@scalius/core/modules/objects";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { loadProductMediaProjections, resolveProductImageRepresentation } from "@scalius/core/modules/products";
@@ -299,8 +299,15 @@ async function productRepresentation(db: Database, productId: string) {
   return (await readProductRepresentations(db, [productId]))[0] ?? null;
 }
 
-export async function readVariantRepresentation(db: Database, variantId: string) {
-  const variant = await db.select({
+/**
+ * SKUs' sealed representations (their stock in total and per location), by
+ * id or by SKU code (`lower(trim(sku))`, the identity index): two reads for
+ * at most 90 SKUs.
+ */
+export async function readVariantRepresentations(db: Database, where: { ids: readonly string[] } | { skus: readonly string[] }) {
+  const keys = "ids" in where ? where.ids : where.skus.map((sku) => sku.trim().toLowerCase());
+  if (keys.length === 0) return [];
+  const rows = await db.select({
     id: productVariants.id,
     productId: productVariants.productId,
     sku: productVariants.sku,
@@ -308,20 +315,31 @@ export async function readVariantRepresentation(db: Database, variantId: string)
     stock: productVariants.stock,
     stockVersion: productVariants.stockVersion,
     updatedAt: productVariants.updatedAt,
-  }).from(productVariants).where(eq(productVariants.id, variantId)).get();
-  if (!variant) return null;
-  const levels = await db.select({ locationId: inventoryLevels.locationId, onHand: inventoryLevels.onHand })
-    .from(inventoryLevels).where(eq(inventoryLevels.variantId, variantId)).orderBy(asc(inventoryLevels.locationId)).all();
-  return sealed("variant", {
+  }).from(productVariants)
+    .where("ids" in where
+      ? inArray(productVariants.id, [...keys])
+      : inArray(sql`lower(trim(${productVariants.sku}))`, [...keys]))
+    .all();
+  if (rows.length === 0) return [];
+  const levelRows = await db.select({ variantId: inventoryLevels.variantId, locationId: inventoryLevels.locationId, onHand: inventoryLevels.onHand })
+    .from(inventoryLevels).where(inArray(inventoryLevels.variantId, rows.map((row) => row.id)))
+    .orderBy(asc(inventoryLevels.variantId), asc(inventoryLevels.locationId)).all();
+  const levels = groupBy(levelRows, (level) => level.variantId);
+  const byKey = new Map(rows.map((variant) => ["ids" in where ? variant.id : variant.sku.trim().toLowerCase(), sealed("variant", {
     id: variant.id,
     productId: variant.productId,
     sku: variant.sku,
     trackInventory: variant.trackInventory,
     onHand: variant.stock,
     stockVersion: variant.stockVersion,
-    levels,
+    levels: (levels.get(variant.id) ?? []).map(({ variantId: _variantId, ...level }) => level),
     updatedAt: isoRequired(variant.updatedAt),
-  });
+  })]));
+  return inIdOrder([...new Set(keys)], byKey);
+}
+
+export async function readVariantRepresentation(db: Database, variantId: string) {
+  return (await readVariantRepresentations(db, { ids: [variantId] }))[0] ?? null;
 }
 
 /**
