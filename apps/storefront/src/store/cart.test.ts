@@ -96,6 +96,22 @@ describe("cart store", () => {
     expect(hydrateCartFromStorage()).toBe(hydrated);
   });
 
+  it("follows another tab's cart without writing it back", async () => {
+    const listeners = new Map<string, (event: { key: string }) => void>();
+    Object.assign(window, { addEventListener: (type: string, listener: (event: { key: string }) => void) => listeners.set(type, listener) });
+    const { cartStore, hydrateCartFromStorage } = await importFreshCartModule();
+    hydrateCartFromStorage();
+    // Another tab's add, in the field order its add wrote: a reordered echo
+    // from this tab could land after that tab's next write and undo it.
+    const written = '{"items":{"line:v3:p1:variant:v25:p:none":{"id":"p1","name":"A","price":25,"variantId":"v25","slug":"a","options":[{"name":"Variant","label":"25$"}],"freeDelivery":false,"propertiesHash":"none","quantity":1}},"totalItems":1,"totalAmount":25,"discountCodes":[]}';
+    localStorage.setItem("cart:v3", written);
+    const setItem = vi.spyOn(localStorage, "setItem");
+    listeners.get("storage")?.({ key: "cart:v3" });
+    expect(cartStore.get().totalItems).toBe(1);
+    expect(setItem).not.toHaveBeenCalled();
+    expect(localStorage.getItem("cart:v3")).toBe(written);
+  });
+
   it("reconciles a BFCache-restored cart with current browser storage", async () => {
     localStorage.setItem("cart:v3", JSON.stringify(persistedCart));
     const { cartStore, hydrateCartFromStorage, syncCartFromStorage } =
