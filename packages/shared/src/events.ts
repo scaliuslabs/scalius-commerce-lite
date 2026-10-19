@@ -7,10 +7,12 @@
 // write (packages/database/scripts/event-outbox-triggers.ts), so every topic's
 // `facts` are thin, PII-free facts the trigger can read from the row: ids,
 // from/to states, quantities. Money and contact details never appear here; a
-// webhook body carries the resource's current admin representation in `data`.
+// webhook body carries the resource's sealed representation in `data`
+// (./events-representations.ts), versioned with the facts.
 
 import { z } from "zod";
 import { hmacSha256Hex } from "./hash";
+import type { EventDataTruncation, EventRepresentation } from "./events-representations";
 
 /** The payload version every delivery and plugin event declares. */
 export const EVENTS_API_VERSION = "2026-10" as const;
@@ -439,11 +441,16 @@ export interface EventEnvelope<T extends EventTopic = EventTopic> {
   /** Thin facts written with the event (the transition it reports). */
   facts: EventFacts<T>;
   /**
-   * The resource's current admin API representation at delivery time, or
-   * null when it no longer exists (a permanently deleted product).
+   * The resource's sealed representation at delivery time
+   * (`EVENT_REPRESENTATION_SCHEMAS[resource.type]`); the truncation shape when
+   * the body would pass 512 KiB (`{ truncated: true, id, fetch }`); null only
+   * when the resource no longer exists (a permanently deleted product).
    */
-  data: unknown;
+  data: EventRepresentation | EventDataTruncation | null;
 }
+
+// Sealed representations of each resource type (the delivery `data`).
+export * from "./events-representations";
 
 /** The synthetic topic of a dashboard "Send test" delivery; not subscribable. */
 export const WEBHOOK_TEST_TOPIC = "webhook.test" as const;

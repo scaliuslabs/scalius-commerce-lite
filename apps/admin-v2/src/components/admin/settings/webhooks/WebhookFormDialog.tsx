@@ -2,10 +2,13 @@
 // `SettingsDialog` does, but opened from the list's menu. An edit is guarded by
 // the version it opened with: a stale save offers "Reload and keep my edits".
 // A new subscription's signing secret goes straight to `onCreated` (component
-// state), never into a query or mutation cache.
+// state), never into a query or mutation cache. Buyer contact data is off
+// until a category is ticked (COMMERCE-HOOKS H5): deliveries read it as null.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { OUTBOUND_URL_MAX_LENGTH, checkOutboundUrl } from "@scalius/shared/outbound-url";
+import { PROTECTED_CUSTOMER_DATA, type ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
+import { Checkbox } from "~/components/ui/checkbox";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import {
   SaveConflict,
@@ -36,12 +39,13 @@ import { WebhookTopicPicker, normalizeTopics } from "./WebhookTopicPicker";
 
 export const WEBHOOK_DESCRIPTION_MAX = 200;
 
-const FIELD_IDS = { url: "webhook-url", topics: "webhook-topics", description: "webhook-description" } as const;
+const FIELD_IDS = { url: "webhook-url", topics: "webhook-topics", description: "webhook-description", customerData: "webhook-customer-data" } as const;
 
 interface Draft {
   url: string;
   topics: Set<string>;
   description: string;
+  customerData: Set<ProtectedCustomerData>;
 }
 
 function draftOf(subscription: WebhookSubscription | null): Draft {
@@ -49,19 +53,33 @@ function draftOf(subscription: WebhookSubscription | null): Draft {
     url: subscription?.url ?? "",
     topics: new Set(subscription?.topics ?? []),
     description: subscription?.description ?? "",
+    customerData: new Set(subscription?.customerData ?? []),
   };
 }
 
 /** What the API would store for a draft. */
-function inputOf(draft: Draft): WebhookInput {
+function inputOf(draft: Draft): WebhookInput & { customerData: ProtectedCustomerData[] } {
   const description = draft.description.trim();
-  return { url: draft.url.trim(), topics: normalizeTopics(draft.topics), description: description || null };
+  return {
+    url: draft.url.trim(),
+    topics: normalizeTopics(draft.topics),
+    description: description || null,
+    customerData: PROTECTED_CUSTOMER_DATA.filter((category) => draft.customerData.has(category)),
+  };
 }
 
-const sameInput = (left: WebhookInput, right: WebhookInput) =>
+const sameInput = (left: ReturnType<typeof inputOf>, right: ReturnType<typeof inputOf>) =>
   left.url === right.url &&
   left.description === right.description &&
-  left.topics.join("\n") === right.topics.join("\n");
+  left.topics.join("\n") === right.topics.join("\n") &&
+  left.customerData.join("\n") === right.customerData.join("\n");
+
+const CUSTOMER_DATA_LABEL = {
+  name: "customerDataName",
+  email: "customerDataEmail",
+  phone: "customerDataPhone",
+  address: "customerDataAddress",
+} as const satisfies Record<ProtectedCustomerData, string>;
 
 function WebhookForm({
   subscription,
@@ -106,6 +124,7 @@ function WebhookForm({
       if (input.url !== saved.url) changes.url = input.url;
       if (input.topics.join("\n") !== saved.topics.join("\n")) changes.topics = input.topics;
       if (input.description !== saved.description) changes.description = input.description;
+      if (input.customerData.join("\n") !== saved.customerData.join("\n")) changes.customerData = input.customerData;
       try {
         setBase(await updateWebhook(base.id, { ...changes, expectedVersion: base.version }));
       } catch (error) {
@@ -125,6 +144,7 @@ function WebhookForm({
             url: current.url !== before.url ? current.url : theirs.url,
             topics: normalizeTopics(current.topics).join("\n") !== normalizeTopics(before.topics).join("\n") ? current.topics : theirs.topics,
             description: current.description !== before.description ? current.description : theirs.description,
+            customerData: [...current.customerData].sort().join("\n") !== [...before.customerData].sort().join("\n") ? current.customerData : theirs.customerData,
           }));
           setBase(latest);
           void refresh();
@@ -177,6 +197,26 @@ function WebhookForm({
           onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
         />
       </SettingsField>
+      <fieldset id={FIELD_IDS.customerData} className="space-y-1.5" aria-describedby={`${FIELD_IDS.customerData}-note`}>
+        <legend className="mb-1.5 text-body font-medium">{t("customerData")}</legend>
+        <p id={`${FIELD_IDS.customerData}-note`} className="text-body text-muted-foreground">{t("customerDataHelp")}</p>
+        {PROTECTED_CUSTOMER_DATA.map((category) => (
+          <label key={category} className="flex min-h-9 items-start gap-3 py-1.5 text-body">
+            <span className="flex h-lh items-center">
+              <Checkbox
+                checked={draft.customerData.has(category)}
+                onCheckedChange={(value) => setDraft((current) => {
+                  const next = new Set(current.customerData);
+                  if (value === true) next.add(category);
+                  else next.delete(category);
+                  return { ...current, customerData: next };
+                })}
+              />
+            </span>
+            {t(CUSTOMER_DATA_LABEL[category])}
+          </label>
+        ))}
+      </fieldset>
     </>
   );
 }
