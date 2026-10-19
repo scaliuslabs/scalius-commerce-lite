@@ -62,11 +62,12 @@ A **skin** is app markup for a core-owned unit. It gets the unit's public projec
 | --- | --- | --- | --- |
 | `header`, `footer` | `StorefrontHeaderData`, `StorefrontFooterData` | none (search, cart and account are attributes) | empty → core |
 | `product-card` | `StorefrontProductCardData` (`{ product, position, aboveFold }`) | none (`quickAdd`) | empty → core |
-| `product-main` | `StorefrontProductPage` | **`buy-form` (required, one)**, `reviews`, `recommendations` | no buy form → core |
+| `product-main` | `StorefrontProductPage` | **`buy-form` (required, one)**, `gallery`, `reviews`, `recommendations` | no buy form → core |
 | `listing-main` | `StorefrontListingPage` | `filters`, `toolbar`, `pagination` (appended when left out) | empty → core |
 | `section:<type>` | `StorefrontSectionSkinData<CoreSectionSettings<type>>` | none (`quickAdd`) | empty → the core section |
 
-- `product-main` draws the product page's breadcrumbs, gallery and buy box. The buy form is `ProductBuyBox.astro`, the same component the core page draws: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app blocks, kept current as the buyer chooses. The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
+- `product-main` draws the product page's breadcrumbs, gallery and buy box. The buy form is `ProductBuyBox.astro`, the same component the core page draws: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app blocks, kept current as the buyer chooses. The gallery (`<Gallery />`) is `ProductGallery.astro` with the theme's gallery setting: one main photo with thumbnails, previous/next and zoom on computers, a swipeable photo with its position on phones, and the chosen SKU's own photo when a variant is picked (exact SKU image, else the product photo); its first photo is preloaded as the LCP image. Prefer it to drawing `product.media` yourself, which stacks every photo above the buy form on phones. The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
+- A buy column that should stay in view beside the gallery marks itself `data-sticky-column` and writes its top as `calc(<offset> + var(--sticky-column-shift, 0px))`; the store's product script shifts a column taller than the window so it scrolls until its end is in view and back (`sticky-column.ts`). Core's stacked and grid galleries use the same.
 - `listing-main` draws the listing between the collection template's sections. The page links are numbered links on every listing, so crawlers reach every product.
 - A core section's projection is its settings at its `version` with references resolved by fixed rules (`resolveCoreSectionSettings`): `image`/`phoneImage`/`mediaId` → `StorefrontImage | null`; a product source → `StorefrontProductList` (`{ title, url, cards }`, as many cards as the core section shows); `categoryIds`/`collectionIds` → `StorefrontTile[]`; `promotionId` → `{ endsAt } | null`; a delivery-facts source → the store's facts; hidden blocks left out. A brand wall's brands arrive in `tiles`, a collections section's fallback products in `cards`. `recently-viewed`, `endless-grid` and `objects` have no skin.
 - JSON-LD stays core's on product and listing pages: the host strips app JSON-LD from `product-main`, `listing-main` and product blocks.
@@ -151,7 +152,7 @@ The SDK's primitives:
 - `asset(context, "public/font.woff2")`: a public file's URL.
 - `t(context, { en, bn, … })`: words in the page's language (exact BCP 47 tag, then its language, then English).
 - `formatNumber`, `plural(context, count, { en: { one: "# review", other: "# reviews" } })`, `formatMoney`, `formatDate`, `storeTime`: numbers, plurals, money and dates as the store writes them (`@scalius/shared/locale-format`); `context.store` carries the page's `language`, `locale` (language and the store's country), `currency` and `timeZone`, never a default.
-- `BuyForm`, `Reviews`, `Recommendations`, `Filters`, `Toolbar`, `Pagination`, `OrderForm`: core embeds (below).
+- `BuyForm`, `Gallery`, `Reviews`, `Recommendations`, `Filters`, `Toolbar`, `Pagination`, `OrderForm`: core embeds (below).
 
 JSX escapes every string. `raw(...)` passes HTML through; the output check still runs. Event handler attributes and functions as attributes are refused at render time.
 
@@ -230,6 +231,7 @@ on removal or mount failure; your other resources still need that cleanup.
 | Kind (SDK) | Where | Renders |
 | --- | --- | --- |
 | `buy-form` (`<BuyForm title={false} />`) | `product-main` (required, one) | `ProductBuyBox.astro`: the real buy form posting to `/buy/<slug>` |
+| `gallery` (`<Gallery />`) | `product-main` (one) | `ProductGallery.astro`: the theme's gallery, kept in step with the buy form's variant |
 | `reviews` (`<Reviews />`), `recommendations` (`<Recommendations />`) | `product-main` | the product's reviews and related products |
 | `filters`, `toolbar`, `pagination` | `listing-main` | `CatalogEmbed.astro`: the GET filter form, sort and page size, page links |
 | `order-form` (`<OrderForm product={…} />`) | component sections (two) | `OrderForm.astro`: the single-page order (below) |

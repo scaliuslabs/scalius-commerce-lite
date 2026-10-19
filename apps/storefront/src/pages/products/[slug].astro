@@ -596,12 +596,25 @@ const buyBox = {
   canPurchaseAny: buyerStockSummary.canPurchaseAny,
 };
 // What a product-main skin's embeds render: the store's own buy box (the
-// skin owns the description), reviews and related products.
+// skin owns the description), gallery, reviews and related products.
+const productGalleryProps = {
+  product,
+  media,
+  layout: galleryLayout,
+  initialProductMediaId: initialGalleryProductMediaId,
+  playVideoLabel: productPageCopy.productPlayVideoText,
+  zoomLabel: shop.product.zoomPhoto,
+  zoomOfLabel: shop.product.zoomPhotoOf,
+  showAllLabel: shop.product.showAllPhotos,
+  stepLabels: { previous: shop.product.previousPhoto, next: shop.product.nextPhoto },
+  positionLabel: shop.product.photoOf,
+};
 const productEmbeds: EmbedRenderers = {
   "buy-form": ({ data }) => ({
     component: ProductBuyBox as EmbedRender["component"],
     props: { ...buyBox, summary: { ...buyBox.summary, details: false, title: data.title !== "false" } },
   }),
+  gallery: () => ({ component: ProductGallery as EmbedRender["component"], props: productGalleryProps }),
   reviews: () => ({
     component: ProductReviews as EmbedRender["component"],
     props: { product, copy: reviewCopy, formCopy: reviewFormCopy, language: reviewLanguage, storeName: sellerSchemaName },
@@ -763,7 +776,7 @@ const productCategoryAnalytics = productCategory
 
   <Fragment slot="preload">
     {
-      initialGalleryPreload && !productMainMarkup && (
+      initialGalleryPreload && (!productMainMarkup || skinEmbeds.has("gallery")) && (
         <link
           rel="preload"
           as="image"
@@ -829,16 +842,7 @@ const productCategoryAnalytics = productCategory
           data-theme-section-id={editorMarks ? THEME_EDITOR_MARKS.productMain : undefined}
         >
           <ProductPageLayout gallery={productPageLayout.gallery} factsColumn={factsColumn}>
-            <ProductGallery
-              product={product}
-              media={media}
-              layout={galleryLayout}
-              initialProductMediaId={initialGalleryProductMediaId}
-              playVideoLabel={productPageCopy.productPlayVideoText}
-              zoomLabel={shop.product.zoomPhoto}
-              zoomOfLabel={shop.product.zoomPhotoOf}
-              showAllLabel={shop.product.showAllPhotos}
-            />
+            <ProductGallery {...productGalleryProps} />
             <ProductBuyBox {...buyBox} />
           </ProductPageLayout>
         </Container>
@@ -966,10 +970,13 @@ const productCategoryAnalytics = productCategory
 
 <script>
   import { init } from "@/components/product/scripts/product-controller";
+  import { installStickyColumns } from "@/components/product/scripts/sticky-column";
 
   // Astro's bundled module scripts are deferred, so the product DOM is ready
   // without leaving visible option controls temporarily inert.
   init();
+  // The buy column beside a long gallery (core stacked/grid, or a skin's own).
+  installStickyColumns();
 </script>
 <script>
   import type { Product, Category, ProductVariant } from "@/lib/api";

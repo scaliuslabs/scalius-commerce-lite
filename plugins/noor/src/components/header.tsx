@@ -61,37 +61,49 @@ function Announcements({ items, context }: { items: Array<{ text: string; link: 
   );
 }
 
+/** A menu heading ("No link (heading only)") reaches the skin as "#": it names its links, it is not one. */
+export function linked(item: StorefrontMenuItem): boolean {
+  return item.url !== "" && item.url !== "#";
+}
+
+/** An item's link, or its name when it is a heading. */
+function ItemLink({ item, class: className }: { item: StorefrontMenuItem; class?: string }) {
+  return linked(item)
+    ? <a class={className} href={item.url}>{item.title}</a>
+    : <span class={cx(className, "noor-menu-heading")}>{item.title}</span>;
+}
+
 function Menu({ items, style, limit, context }: { items: StorefrontMenuItem[]; style: string; limit: number; context: Context }) {
   return (
     <ul class="noor-nav-list">
       {items.slice(0, limit).map((item) => {
         const children = item.children;
         const deep = children.some((child) => child.children.length > 0);
+        const label = <><span>{item.title}</span>{children.length > 0 ? <Icon name="down" size={14} /> : null}</>;
         return (
           <li class={cx("noor-nav-item", children.length > 0 && "has-menu")}>
-            <a class="noor-nav-link" href={item.url} title={item.title} aria-haspopup={children.length > 0 ? "true" : undefined}>
-              <span>{item.title}</span>
-              {children.length > 0 ? <Icon name="down" size={14} /> : null}
-            </a>
+            {linked(item) ? (
+              <a class="noor-nav-link" href={item.url} title={item.title} aria-haspopup={children.length > 0 ? "true" : undefined}>{label}</a>
+            ) : (
+              // A heading opens its links on hover and focus like a linked item, without going anywhere.
+              <button type="button" class="noor-nav-link noor-nav-heading" title={item.title} aria-haspopup={children.length > 0 ? "true" : undefined}>{label}</button>
+            )}
             {children.length > 0 ? (
               style === "mega" && deep ? (
                 <div class="noor-mega">
                   <div class="noor-mega-inner">
                     {children.map((child) => (
                       <div class="noor-mega-col">
-                        <a class="noor-mega-head" href={child.url}>{child.title}</a>
+                        <ItemLink item={child} class="noor-mega-head" />
                         {child.children.length > 0 ? <MenuLinks items={child.children} /> : null}
                       </div>
                     ))}
-                    <a class="noor-mega-all" href={item.url}>{item.title}<Icon name="arrow" size={14} /></a>
+                    {linked(item) ? <a class="noor-mega-all" href={item.url}>{item.title}<Icon name="arrow" size={14} /></a> : null}
                   </div>
                 </div>
               ) : (
                 <div class="noor-drop">
-                  <ul>{children.map((child) => <li>
-                    <a href={child.url}>{child.title}</a>
-                    {child.children.length > 0 ? <MenuLinks items={child.children} /> : null}
-                  </li>)}</ul>
+                  <MenuLinks items={children} />
                 </div>
               )
             ) : null}
@@ -111,9 +123,9 @@ function Menu({ items, style, limit, context }: { items: StorefrontMenuItem[]; s
 }
 
 /** Keep every merchant menu level reachable, including compact desktop menus. */
-function MenuLinks({ items }: { items: StorefrontMenuItem[] }) {
+export function MenuLinks({ items }: { items: StorefrontMenuItem[] }) {
   return <ul>{items.map((item) => <li>
-    <a href={item.url}>{item.title}</a>
+    <ItemLink item={item} />
     {item.children.length > 0 ? <MenuLinks items={item.children} /> : null}
   </li>)}</ul>;
 }
@@ -126,10 +138,10 @@ function DrawerMenu({ items, context, nested = false }: { items: StorefrontMenuI
           {item.children.length > 0 ? (
             <details>
               <summary><span>{item.title}</span><Icon name="down" size={16} /></summary>
-              <ul><li><a href={item.url}>{t(context, { en: `All ${item.title}`, bn: `সব ${item.title}` })}</a></li></ul>
+              {linked(item) ? <ul><li><a href={item.url}>{t(context, { en: `All ${item.title}`, bn: `সব ${item.title}` })}</a></li></ul> : null}
               <DrawerMenu items={item.children} context={context} nested />
             </details>
-          ) : <a href={item.url}>{item.title}</a>}
+          ) : <ItemLink item={item} />}
         </li>
       ))}
     </ul>

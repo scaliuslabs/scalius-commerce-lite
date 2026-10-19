@@ -251,6 +251,27 @@ describe("product gallery photo switching", () => {
     expect(position.hidden).toBe(true);
   });
 
+  it("steps to the previous and next item from the main photo, wrapping, in the store's words", () => {
+    const root = renderGallery("pmed_front", { mobileSwipe: true });
+    root.querySelector("[data-gallery-position-label]")!.setAttribute("data-template", "Photo {position} of {total}");
+    root.querySelector("[data-desktop-image-zoom]")!.insertAdjacentHTML("beforeend",
+      '<button type="button" data-gallery-step="-1">Previous photo</button><button type="button" data-gallery-step="1">Next photo</button>');
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+    const [previous, next] = Array.from(root.querySelectorAll<HTMLButtonElement>("[data-gallery-step]"));
+    next!.click();
+    expect(button(root, "pmed_side").getAttribute("aria-current")).toBe("true");
+    expect(root.querySelector("[data-gallery-position-label]")?.textContent).toBe("Photo 2 of 4");
+    previous!.click();
+    previous!.click();
+    // Before the first photo comes the video, then the last item.
+    expect(root.dataset.activeMediaKey).toBe("video:pmed_video");
+    previous!.click();
+    expect(button(root, "pmed_legacy").getAttribute("aria-current")).toBe("true");
+    next!.click();
+    expect(root.dataset.activeMediaKey).toBe("video:pmed_video");
+  });
+
   it("leaves vertical scrolling and merchant gallery overrides alone", () => {
     const root = renderGallery("pmed_front", { mobileSwipe: true });
     renderSsrImage(root, "front");

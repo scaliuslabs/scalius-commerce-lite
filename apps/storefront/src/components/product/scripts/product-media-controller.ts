@@ -347,7 +347,12 @@ function updateMobilePosition(root: HTMLElement, item: GalleryItem): void {
     : -1;
   position.hidden = index < 0;
   const label = position.querySelector<HTMLElement>("[data-gallery-position-label]");
-  if (label && index >= 0) label.textContent = `Image ${index + 1} of ${images.length}`;
+  // The store's words, rendered with placeholders (`data-template`).
+  if (label && index >= 0) {
+    label.textContent = (label.dataset.template ?? "Image {position} of {total}")
+      .replace("{position}", String(index + 1))
+      .replace("{total}", String(images.length));
+  }
   const count = position.querySelector<HTMLElement>("[data-gallery-position-count]");
   if (count && index >= 0) count.textContent = `${index + 1} / ${images.length}`;
   position.querySelectorAll<HTMLElement>("[data-gallery-dot]").forEach((dot, dotIndex) => {
@@ -561,6 +566,32 @@ function bindThumbnailRail(
         { signal },
       );
     }
+  });
+}
+
+/**
+ * Previous and next on the computer's main photo: the neighbouring item of
+ * the desktop rail (wrapping), as its thumbnail would choose it.
+ */
+function bindStageSteps(
+  root: HTMLElement,
+  signal: AbortSignal,
+  select: (button: HTMLButtonElement, source: ProductMediaSelectionSource) => void,
+): void {
+  const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-thumbnail-rail="desktop"] [data-gallery-thumbnail]'));
+  if (buttons.length < 2) return;
+  root.querySelectorAll<HTMLButtonElement>("[data-gallery-step]").forEach((step) => {
+    step.addEventListener("click", () => {
+      const current = buttons.findIndex((button) => {
+        const item = itemFromButton(button);
+        return item !== null && mediaKey(item) === root.dataset.activeMediaKey;
+      });
+      const direction = Number(step.dataset.galleryStep) < 0 ? -1 : 1;
+      const target = buttons[(Math.max(0, current) + direction + buttons.length) % buttons.length];
+      if (!target) return;
+      select(target, "gallery");
+      target.scrollIntoView({ behavior: scrollBehavior(), block: "nearest", inline: "nearest" });
+    }, { signal });
   });
 }
 
@@ -924,6 +955,7 @@ export function initProductMediaGallery(
       bindThumbnailRail(rail, signal, selectButton, warmButton);
     });
   bindMobileSwipe(root, signal, selectButton);
+  bindStageSteps(root, signal, selectButton);
   for (const rail of ["desktop", "mobile"] as const) {
     bindScrollIndicator(root, rail, "up", signal);
     bindScrollIndicator(root, rail, "down", signal);

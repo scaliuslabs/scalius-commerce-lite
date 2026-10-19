@@ -12409,7 +12409,8 @@
    "filters",
    "toolbar",
    "pagination",
-   "order-form"
+   "order-form",
+   "gallery"
   ],
   "STOREFRONT_EMBED_TAG": "scalius-embed",
   "STOREFRONT_ISLAND_HYDRATION": [

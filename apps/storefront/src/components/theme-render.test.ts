@@ -1258,6 +1258,20 @@ describe("navigation", () => {
     }
   });
 
+  it.each(["dropdown", "mega-panel", "cascading"])("names a heading past the row in More with its own links (%s)", async (variant) => {
+    const theme = navigationTheme({ desktop: choice("desktopNav", variant), header: choice("header", "inline-nav"), phone: PHONE_MENUS[0]! });
+    theme.blocks.navigation = { ...theme.blocks.navigation, maxTopItems: 2 };
+    // Women, Sale on the row; "Men" (a heading over Panjabi) past maxTopItems.
+    const page = await renderNavigationPage(theme, {}, CURRENT_PAGE, [NAVIGATION[0], NAVIGATION[2], NAVIGATION[1]]);
+    const more = page.querySelector("#site-header [data-nav-more-list]")!;
+    const entry = Array.from(more.children).find((li) => li.textContent?.includes("Men"))!;
+    expect(entry, more.innerHTML).toBeDefined();
+    expect(entry.querySelector(":scope > a")).toBeNull();
+    expect(entry.querySelector('a[href="/categories/panjabi"]')).not.toBeNull();
+    // Once in the menu: the browser moves row items here, the server never copies them.
+    expect(more.closest("nav")!.querySelectorAll('a[href="/categories/panjabi"]').length).toBe(1);
+  });
+
   it("shows the Compare tab only where the product page can start a comparison", async () => {
     const phone = choice("mobileNav", "bottom-tabs", { tabs: ["home", "categories", "compare", "account"], drawer: "accordion" });
     const theme = navigationTheme({ desktop: DESKTOP_MENUS[0]!, phone, header: HEADERS[2]! });

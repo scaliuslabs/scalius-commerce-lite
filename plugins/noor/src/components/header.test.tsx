@@ -56,6 +56,27 @@ describe("Noor bounded desktop navigation", () => {
     expect(desktopUrls).not.toContain(items[6]!.url);
   });
 
+  it.each(["mega", "simple"])("draws a heading-only item as a heading over its links (%s menus)", (style) => {
+    const items: StorefrontMenuItem[] = [
+      { title: "Something", url: "#", children: [
+        { title: "dfghdfhhf", url: "/pages/x", children: [] },
+        { title: "Footwear", url: "/categories/footwear", children: [{ title: "Sandals", url: "/categories/sandals", children: [] }] },
+      ] },
+      ...menu(8),
+    ];
+    const fragment = render(items, "center", "en", style);
+    // No link to "#" anywhere: the heading is a button on the row and plain text in the drawer.
+    expect(fragment.querySelectorAll('a[href="#"]')).toHaveLength(0);
+    const heading = fragment.querySelector<HTMLButtonElement>(".noor-nav-list > li > button.noor-nav-heading")!;
+    expect(heading.getAttribute("type")).toBe("button");
+    const desktop = [...heading.parentElement!.querySelectorAll("a")].map((link) => link.getAttribute("href"));
+    expect(desktop).toEqual(["/pages/x", "/categories/footwear", "/categories/sandals"]);
+    const drawer = fragment.querySelector(".noor-drawer-list > li > details")!;
+    expect(drawer.querySelector("summary")?.textContent).toBe("Something");
+    expect([...drawer.querySelectorAll("a")].map((link) => link.getAttribute("href")))
+      .toEqual(["/pages/x", "/categories/footwear", "/categories/sandals"]);
+  });
+
   it("keeps full long labels and translated More text available before hydration", () => {
     const items = menu(50);
     items[0]!.title = "Collection".repeat(10);

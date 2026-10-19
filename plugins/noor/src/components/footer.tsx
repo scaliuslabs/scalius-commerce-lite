@@ -4,6 +4,7 @@
 // only the legal line.
 
 import { Image, editable, t, type FooterProps } from "@scalius/plugin-sdk/storefront";
+import { MenuLinks } from "./header";
 import { Icon, SocialIcon } from "./icons";
 import { choice, cx, text } from "./ui";
 
@@ -74,7 +75,7 @@ export function Footer({ data, settings, context }: FooterProps<FooterSettings>)
           {data.menus.map((menu) => (
             <nav class="noor-footer-menu" aria-label={menu.title}>
               <h2>{menu.title}</h2>
-              <ul>{menu.items.map((item) => <li><a href={item.url}>{item.title}</a></li>)}</ul>
+              <MenuLinks items={menu.items} />
             </nav>
           ))}
         </div>

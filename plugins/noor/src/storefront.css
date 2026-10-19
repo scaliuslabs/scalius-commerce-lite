@@ -600,7 +600,8 @@
 }
 .noor-nav-link > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
 .noor-nav-more-item, .noor-nav-more-item > .noor-nav-link { flex: none; }
-.noor-nav-more { border: 0; background: transparent; font-family: inherit; line-height: inherit; cursor: pointer; }
+.noor-nav-more, .noor-nav-heading { border: 0; background: transparent; font-family: inherit; line-height: inherit; cursor: pointer; }
+.noor-nav-heading { cursor: default; }
 .noor-nav-link::after { content: ""; position: absolute; inset-inline: 0.75rem; inset-block-end: 0.25rem; block-size: 1px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform var(--n-base) var(--n-ease); }
 .noor-nav-item:is(:hover, :focus-within) > .noor-nav-link::after { transform: scaleX(1); }
 .noor-nav-link .noor-icon { opacity: 0.6; transition: transform var(--n-fast); }
@@ -631,7 +632,8 @@
 .noor-drop { inset-block-start: calc(100% - 0.25rem); inset-inline-start: 0; min-inline-size: 13rem; max-inline-size: min(22rem, calc(100vw - 2rem)); padding: 0.5rem; border: 1px solid var(--n-line); border-radius: var(--n-radius-lg); background: var(--n-surface); color: var(--n-ink); box-shadow: var(--n-shadow); }
 .noor-nav-item:nth-child(n+3):nth-last-child(-n+2) > .noor-drop { inset-inline: auto 0; }
 .noor-drop ul { display: grid; margin: 0; padding: 0; list-style: none; }
-.noor-drop a { display: block; padding: 0.5rem 0.75rem; border-radius: var(--n-radius); }
+.noor-drop :is(a, .noor-menu-heading) { display: block; padding: 0.5rem 0.75rem; border-radius: var(--n-radius); }
+.noor-drop .noor-menu-heading, .noor-mega-col li > .noor-menu-heading { color: var(--n-ink); font-size: 0.875rem; font-weight: 600; }
 .noor-drop a:hover { background: var(--n-soft); }
 .noor-drop ul ul { margin-inline-start: 0.75rem; border-inline-start: 1px solid var(--n-line); }
 .noor-header-shell .noor-nav, .noor-header-shell .noor-nav-list { block-size: 100%; }
@@ -756,7 +758,9 @@
 .noor-social a:hover { border-color: currentColor; }
 .noor-footer-menu h2 { margin-block-end: 0.875rem; font-family: var(--n-sans); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
 .noor-footer-menu ul { display: grid; gap: 0.25rem; }
-.noor-footer-menu a { display: inline-flex; min-block-size: 2rem; align-items: center; color: var(--n-muted); transition: color var(--n-fast); }
+.noor-footer-menu :is(a, .noor-menu-heading) { display: inline-flex; min-block-size: 2rem; align-items: center; color: var(--n-muted); transition: color var(--n-fast); }
+.noor-footer-menu .noor-menu-heading { color: inherit; font-weight: 600; }
+.noor-footer-menu ul ul { margin-block-end: 0.25rem; padding-inline-start: 0.75rem; border-inline-start: 1px solid var(--n-line); }
 .noor-footer-menu a:hover { color: var(--n-ink); }
 .noor-footer-legal { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem 1.5rem; padding-block: 1.25rem 1.5rem; border-block-start: 1px solid var(--n-line); color: var(--n-muted); font-size: 0.8125rem; }
 .noor-footer.is-campaign .noor-footer-legal { border: 0; }
@@ -1095,16 +1099,13 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 .noor-crumbs li { display: inline-flex; align-items: center; gap: 0.25rem; }
 .noor-crumbs a:hover { color: var(--n-ink); text-decoration: underline; }
 .noor-pdp { display: grid; gap: clamp(1.25rem, 1rem + 2vw, 3rem); align-items: start; }
-.noor-pdp-media { display: grid; gap: var(--n-gap); }
-.noor-pdp-media .noor-cover { block-size: auto; aspect-ratio: 4 / 5; border-radius: var(--n-radius); background: var(--n-soft); }
+.noor-pdp-media { min-inline-size: 0; }
 .noor-pdp-buy { display: grid; gap: 0.75rem; align-content: start; }
 .noor-pdp-description { margin-block-start: clamp(2rem, 1.5rem + 3vw, 4rem); }
 @media (min-width: 48rem) {
   .noor-pdp { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
   .noor-pdp.is-flipped .noor-pdp-media { order: 2; }
-  .noor-pdp-media { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .noor-pdp-media > :first-child { grid-column: 1 / -1; }
-  .noor-pdp-buy { position: sticky; inset-block-start: var(--noor-sticky); }
+  .noor-pdp-buy { position: sticky; inset-block-start: calc(var(--noor-sticky) + var(--sticky-column-shift, 0px)); }
 }
 
 /* ── Landing kit ────────────────────────────────────────────────────────── */

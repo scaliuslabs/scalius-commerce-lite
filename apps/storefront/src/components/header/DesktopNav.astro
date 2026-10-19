@@ -126,11 +126,16 @@ const link = (item: NavigationItem) => ({
       <div id={moreId} class="desktop-nav-dropdown" hidden>
         {/* Row items that don't fit are moved in here first (nav-disclosure.ts). */}
         <ul class="nav-dropdown-list nav-more-list" data-nav-more-list>
-          {extras.map((item) => (
-            <li class="nav-more-extra">
-              <a class="nav-dropdown-link" {...link(item)}>{item.title}</a>
-            </li>
-          ))}
+          {extras.map((item) => {
+            const children = navigationChildren(item);
+            const linkClass = ["nav-dropdown-link", children.length > 0 && "nav-dropdown-link--parent"];
+            return (
+              <li class="nav-more-extra">
+                {item.href ? <a class:list={linkClass} {...link(item)}>{item.title}</a> : <span class:list={linkClass}>{item.title}</span>}
+                {children.length > 0 && <RecursiveDesktopNav items={children} depth={1} />}
+              </li>
+            );
+          })}
           {allCategories && (
             <li class="nav-more-extra nav-more-all">
               <a class="nav-dropdown-link" href="/categories">{copy.nav.allCategories}</a>
@@ -340,15 +345,14 @@ const link = (item: NavigationItem) => ({
   }
 
   /* A row item moved into "More" is a plain row there: its link (or, for a
-     parent without one, its name over its own links); its own panel and
-     toggle stay out of the way. */
+     parent without one, its name) over its own links, indented like a
+     dropdown's levels, so every level of the menu stays reachable. Its
+     toggle stays out of the way; a mega panel reads as the same list. */
   .nav-more-list > .desktop-nav-item {
     display: block;
   }
 
-  .nav-more-list > .desktop-nav-item > button.desktop-nav-toggle:not(.desktop-nav-link),
-  .nav-more-list > .desktop-nav-item > .mega-panel,
-  .nav-more-list > .desktop-nav-item:has(> a) > .desktop-nav-dropdown {
+  .nav-more-list > .desktop-nav-item > button.desktop-nav-toggle:not(.desktop-nav-link) {
     display: none !important;
   }
 
@@ -375,15 +379,83 @@ const link = (item: NavigationItem) => ({
     display: none;
   }
 
-  .nav-more-list > .desktop-nav-item:not(:has(> a)) > .desktop-nav-dropdown {
+  .nav-more-list > .desktop-nav-item > .desktop-nav-dropdown,
+  .nav-more-list > .desktop-nav-item > .mega-panel {
     display: block !important;
     position: static;
+    width: auto;
     min-width: 0;
     max-width: none;
-    padding: 0 0 0 0.75rem;
+    max-height: none;
+    overflow: visible;
+    translate: none;
+    margin: 0.125rem 0 0.375rem;
+    margin-inline-start: 0.75rem;
+    padding: 0;
+    padding-inline-start: 0.5rem;
     border: 0;
+    border-inline-start: 1px solid var(--border);
+    border-radius: 0;
+    background: none;
     box-shadow: none;
     animation: none;
+  }
+
+  .nav-more-list .mega-body,
+  .nav-more-list .mega-columns,
+  .nav-more-list .mega-promo {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+
+  .nav-more-list .mega-column-heading,
+  .nav-more-list .mega-promo-tile,
+  .nav-more-list .mega-shop-all {
+    display: flex;
+    min-height: 2.25rem;
+    align-items: center;
+    margin: 0;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius);
+    color: inherit;
+    font-size: 0.875rem;
+  }
+
+  .nav-more-list .mega-column-title {
+    font-size: inherit;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  .nav-more-list .mega-links {
+    margin-inline-start: 0.75rem;
+  }
+
+  .nav-more-list .mega-link {
+    min-height: 2rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius);
+    color: var(--muted-foreground);
+  }
+
+  .nav-more-list .mega-promo-photo,
+  .nav-more-list .mega-shop-all svg {
+    display: none;
+  }
+
+  .nav-more-list .mega-foot {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  .nav-more-list .mega-panel a:hover,
+  .nav-more-list .mega-panel a:focus-visible {
+    background: var(--accent);
+    color: var(--accent-foreground);
+    text-decoration: none;
   }
 
   .nav-more-list > .desktop-nav-item > a.desktop-nav-link:hover,

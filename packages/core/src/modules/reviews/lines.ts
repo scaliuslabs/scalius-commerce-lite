@@ -13,6 +13,7 @@ import {
 } from "@scalius/database/schema";
 import { LIVE_REVIEW_STATUSES } from "@scalius/shared/reviews";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatList } from "@scalius/shared/locale-words";
 import { publishedMediaObjectKey } from "../media-references";
 import type { LineExtrasInput } from "../../utils/line-extras";
 import type { LineReviewExtra, ReviewStatus } from "./browser";
@@ -25,6 +26,17 @@ import {
   reviewableLineConditions,
   type ReviewBuyer,
 } from "./shared";
+
+/**
+ * What a review says was bought: every variant of the product on that order
+ * ("25$, 50$"), as Amazon's "Style:" names the purchase, never just the first
+ * line's. Distinct labels in line order; null when no line has one. The SKU
+ * labels are the merchant's words, listed without a conjunction.
+ */
+export function purchasedVariantLabel(labels: ReadonlyArray<string | null | undefined>): string | null {
+  const distinct = [...new Set(labels.map((label) => label?.trim() ?? "").filter((label) => label.length > 0))];
+  return distinct.length > 0 ? formatList(distinct, "und", "unit") : null;
+}
 
 /** The account's "to review" list shows at most this many lines. */
 export const REVIEWABLE_LINES_MAX = 50;
@@ -182,7 +194,13 @@ export async function listReviewableLines(db: Database, buyer: ReviewBuyer): Pro
     .orderBy(desc(orders.createdAt), orderItems.id)
     .limit(REVIEWABLE_LINES_MAX)
     .all();
-  // One line per product: a repeat purchase is one review.
+  // One line per product: a repeat purchase is one review, naming every
+  // variant of it on that order.
+  const labels = new Map<string, Array<string | null>>();
+  for (const row of rows) {
+    const key = `${row.orderId}\u0000${row.productId}`;
+    labels.set(key, [...(labels.get(key) ?? []), row.variantLabel]);
+  }
   const seen = new Set<string>();
   const lines: ReviewableLine[] = [];
   for (const row of rows) {
@@ -191,6 +209,7 @@ export async function listReviewableLines(db: Database, buyer: ReviewBuyer): Pro
     lines.push({
       ...row,
       orderNumber: formatOrderNumber(row.orderNumber, row.orderId),
+      variantLabel: purchasedVariantLabel(labels.get(`${row.orderId}\u0000${row.productId}`) ?? [row.variantLabel]),
       fulfilledAt: isoFromSeconds(row.fulfilledAt),
     });
   }
@@ -236,6 +255,17 @@ export async function countWrittenReviewsForCustomer(db: Database, customerId: s
     ))
     .get();
   return Number(row?.count ?? 0);
+}
+
+/** Every variant of the product on the order, in line order (`purchasedVariantLabel`). */
+export async function readOrderVariantLabel(db: Database, orderId: string, productId: string): Promise<string | null> {
+  const rows = await db
+    .select({ variantLabel: orderItems.variantLabel })
+    .from(orderItems)
+    .where(and(eq(orderItems.orderId, orderId), eq(orderItems.productId, productId)))
+    .orderBy(orderItems.id)
+    .all();
+  return purchasedVariantLabel(rows.map((row) => row.variantLabel));
 }
 
 /** The line a buyer is reviewing, if it belongs to the buyer (else nothing: 404). */

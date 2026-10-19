@@ -13,7 +13,7 @@ export interface ReviewStore {
   db: Database;
   insert(table: string, row: Row): void;
   /** An order with one line per product id (type `ship` unless given). */
-  order(id: string, lines: Array<{ item: string; product: string; type?: string; quantity?: number }>, owner?: { account?: string | null; customer?: string | null; name?: string }): void;
+  order(id: string, lines: Array<{ item: string; product: string; type?: string; quantity?: number; label?: string | null }>, owner?: { account?: string | null; customer?: string | null; name?: string }): void;
   /** Hands `quantity` of the line over (an active fulfilment of the line's type). */
   fulfil(orderId: string, itemId: string, quantity?: number, createdAt?: number): void;
   deliver(orderId: string): void;
@@ -82,7 +82,7 @@ export function createReviewStore(): ReviewStore {
           product_id: line.product,
           variant_id: variantOf[line.product] ?? null,
           product_name: nameOf[line.product] ?? line.product,
-          variant_label: line.product === "prod_shirt" ? "Size M" : null,
+          variant_label: line.label !== undefined ? line.label : line.product === "prod_shirt" ? "Size M" : null,
           quantity: line.quantity ?? 1,
           unit_price_minor: 100000,
           fulfillment_type: type,

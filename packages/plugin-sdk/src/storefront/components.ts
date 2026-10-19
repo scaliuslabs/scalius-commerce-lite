@@ -210,6 +210,16 @@ export function Recommendations(): Html {
   return embed("recommendations");
 }
 
+/**
+ * The store's product gallery (product-main skins, at most one): the theme's
+ * gallery with thumbnails, a swipeable stage and position on phones, zoom,
+ * and the chosen variant's own photo, kept in step with the buy form. Its
+ * first photo is the page's LCP image (preloaded by the store).
+ */
+export function Gallery(): Html {
+  return embed("gallery");
+}
+
 /** The listing's filters, a GET form that works without JavaScript (listing-main skins). */
 export function Filters(): Html {
   return embed("filters");

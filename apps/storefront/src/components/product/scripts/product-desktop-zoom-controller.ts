@@ -93,6 +93,12 @@ export function bindDesktopZoom(root: HTMLElement, signal: AbortSignal): void {
     });
   };
   const move = (event: MouseEvent) => {
+    // Over the photo's own buttons (previous, next, zoom) the photo reads whole.
+    if (event.target instanceof Element && event.target.closest("button")) {
+      if (active) close();
+      return;
+    }
+    if (!active) open();
     if (!active) return;
     const bounds = container.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) return;

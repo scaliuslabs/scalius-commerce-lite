@@ -582,6 +582,7 @@ export interface BuyFormProps {
 export declare function BuyForm(props?: BuyFormProps): Html;
 export declare function Reviews(): Html;
 export declare function Recommendations(): Html;
+export declare function Gallery(): Html;
 export declare function Filters(): Html;
 export declare function Toolbar(): Html;
 export declare function Pagination(): Html;
@@ -667,7 +668,7 @@ export { defineStorefront, storefrontDefinitionOf } from "./define";
 export type { BlockComponent, BlockProps, FooterComponent, FooterProps, HeaderComponent, HeaderProps, ListingMainComponent, ListingMainProps, ProductCardComponent, ProductCardProps, ProductMainComponent, ProductMainProps, SectionComponent, SectionProps, SectionSkinComponent, SectionSkinProps, SkinComponent, SkinProps, StorefrontDefinition, StorefrontModuleDefinition, } from "./define";
 export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
-export { BuyForm, CartCount, Filters, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Toolbar, accountLink, asset, editable, openCart, quickAdd, searchOpener, stickyHeader, } from "./components";
+export { BuyForm, CartCount, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Toolbar, accountLink, asset, editable, openCart, quickAdd, searchOpener, stickyHeader, } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
 export type { BuyFormProps, ImageProps, IslandProps, OrderFormProps, PriceProps } from "./components";
 export type { StorefrontBlockTarget, StorefrontFooterData, StorefrontHeaderData, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontMenuItem, StorefrontMoney, StorefrontProductCard, StorefrontProductCardData, StorefrontProductList, StorefrontProductPage, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSkinTarget, StorefrontStoreInfo, StorefrontTile, } from "@scalius/shared/plugins/storefront-protocol";
@@ -2038,7 +2039,7 @@ export declare const STOREFRONT_SECTION_SKIN_PREFIX = "section:";
 export type StorefrontSkinTarget = StorefrontSkinUnit | `section:${string}`;
 export declare const STOREFRONT_BLOCK_TARGETS: readonly ["product.buy-box", "product.below"];
 export type StorefrontBlockTarget = (typeof STOREFRONT_BLOCK_TARGETS)[number];
-export declare const STOREFRONT_EMBED_KINDS: readonly ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form"];
+export declare const STOREFRONT_EMBED_KINDS: readonly ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery"];
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export declare const STOREFRONT_EMBED_TAG = "scalius-embed";
 export interface StorefrontEmbedRule {

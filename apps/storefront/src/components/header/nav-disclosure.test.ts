@@ -256,6 +256,24 @@ describe("menu row keys", () => {
     expect(document.activeElement).toBe(button("desktop-nav-more"));
   });
 
+  it("walks a moved parent's own links in More, which lists them in place", () => {
+    const list = document.querySelector<HTMLElement>("[data-nav-overflow]")!;
+    const more = list.querySelector<HTMLElement>("[data-nav-more]")!;
+    more.hidden = false;
+    const moreList = more.querySelector("[data-nav-more-list]")!;
+    moreList.append(list.querySelector('[data-nav-index="0"]')!, list.querySelector('[data-nav-index="1"]')!);
+    button("desktop-nav-more").focus();
+    key("ArrowDown");
+    expect(document.activeElement!.getAttribute("href")).toBe("/women");
+    key("ArrowDown");
+    expect(document.activeElement!.getAttribute("href")).toBe("/sarees");
+    key("ArrowDown");
+    expect(document.activeElement!.getAttribute("href")).toBe("/kurtis");
+    key("ArrowDown");
+    // "Men" has no link of its own: its links follow.
+    expect(document.activeElement!.getAttribute("href")).toBe("/panjabi");
+  });
+
   it("moves the menu itself into the condensed bar and back", () => {
     document.body.insertAdjacentHTML("afterbegin", '<div id="main-header"><div data-nav-compact-home="desktop-nav"></div></div>');
     const header = document.getElementById("main-header")!;

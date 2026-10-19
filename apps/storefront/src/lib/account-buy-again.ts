@@ -1,7 +1,8 @@
 // "Buy again" on an account order: the lines that can still be bought go back
-// in the cart at today's price, through the same add-to-cart event product
-// pages use. The store's cart check decides what is still sellable.
-import type { AddToCartEventDetail } from "@/components/CartFlyout";
+// in the cart at today's price, as one cart change, and the drawer opens once.
+// The store's cart check decides what is still sellable.
+import type { OpenCartEventDetail } from "@/components/CartFlyout";
+import { addLinesToCart } from "@/store/cart";
 import type { CustomerOrderItem } from "@/lib/api/customer-auth";
 import type { OrderLineFulfilmentFacts } from "@/lib/api/types";
 import type { CartValidationResult } from "@/lib/api/orders";
@@ -46,11 +47,11 @@ export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineF
   if (!result) return null;
 
   const gone = new Set(result.issues.filter((issue) => GONE.has(issue.code)).map((issue) => issue.index));
-  let added = 0;
+  const cartLines: Parameters<typeof addLinesToCart>[0][number][] = [];
   for (const line of result.items) {
     const quantity = Math.min(line.quantity, line.availableQuantity ?? line.quantity);
     if (gone.has(line.index) || quantity < 1) continue;
-    const detail: AddToCartEventDetail = {
+    cartLines.push({
       id: line.productId,
       variantId: line.variantId,
       name: line.productName,
@@ -69,9 +70,14 @@ export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineF
             })),
           }
         : {}),
-    };
-    document.dispatchEvent(new CustomEvent("add-to-cart", { detail }));
-    added += 1;
+    });
   }
+  // One cart change for every line: a line-per-event add left later lines to
+  // race the first one's drawer load and reported lines as added that weren't.
+  const addedKeys = cartLines.length > 0 ? await addLinesToCart(cartLines) : [];
+  if (addedKeys.length > 0) {
+    document.dispatchEvent(new CustomEvent<OpenCartEventDetail>("open-cart", { detail: { addedLineKey: addedKeys[0] } }));
+  }
+  const added = addedKeys.length;
   return { added, missing: items.length - added };
 }

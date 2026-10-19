@@ -185,10 +185,13 @@ function rowControls(list: Element): HTMLElement[] {
     .filter((control): control is HTMLElement => control !== null && control.tagName !== "SPAN");
 }
 
+/** A moved row item's own panel: "More" lists it in place (shown by CSS while its `hidden` stays for the row). */
+const MOVED_PANEL = "[data-nav-more-list] > [data-nav-index] > [hidden]";
+
 function panelLinks(panel: HTMLElement): HTMLElement[] {
   return Array.from(panel.querySelectorAll<HTMLElement>("a[href]")).filter((link) => {
     const hidden = link.parentElement?.closest("[hidden]");
-    return !hidden || hidden === panel;
+    return !hidden || hidden === panel || (hidden.matches(MOVED_PANEL) && panel.contains(hidden));
   });
 }
 

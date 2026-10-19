@@ -203,12 +203,37 @@ export function cartNeedsDeliveryMethod(
   );
 }
 
+/** JSON with sorted keys: the same cart reads the same whatever order its fields were written in. */
+function sortedJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => sortedJson(item ?? null)).join(",")}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value).filter((key) => value[key] !== undefined).sort()
+      .map((key) => `${JSON.stringify(key)}:${sortedJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/**
+ * Whether storage already holds this cart. Field order is not a change: a tab
+ * that writes back a cart it just read from storage (only reordered) races the
+ * tab that wrote it and can put back an older cart over a newer one.
+ */
+function storageHolds(stored: string | null, state: unknown): boolean {
+  if (stored === null) return false;
+  try {
+    return sortedJson(JSON.parse(stored)) === sortedJson(JSON.parse(JSON.stringify(state)));
+  } catch {
+    return false;
+  }
+}
+
 if (typeof window !== "undefined") {
   cartStore.subscribe((state) => {
     if (!canPersistToStorage) return;
     try {
       const json = JSON.stringify(state);
-      if (localStorage.getItem(CART_STORAGE_KEY) !== json) {
+      const stored = localStorage.getItem(CART_STORAGE_KEY);
+      if (stored !== json && !storageHolds(stored, state)) {
         localStorage.setItem(CART_STORAGE_KEY, json);
       }
     } catch (error) {
@@ -444,7 +469,9 @@ function readCartFromStorage(resetWhenMissing: boolean): CartStore {
       const normalized = normalizeStoredCart(JSON.parse(storedCart));
       if (JSON.stringify(normalized) !== JSON.stringify(cartStore.get())) cartStore.set(normalized);
       const normalizedJson = JSON.stringify(normalized);
-      if (normalizedJson !== storedCart) {
+      // Only a real migration writes back; a reordered copy of what another
+      // tab just wrote must never be written over its newer cart.
+      if (normalizedJson !== storedCart && !storageHolds(storedCart, normalized)) {
         try {
           localStorage.setItem(CART_STORAGE_KEY, normalizedJson);
         } catch (error) {
@@ -599,6 +626,42 @@ export async function addToCart(
       : result.code === "storage_unavailable" ? "storage_unavailable" : "invalid_item");
   }
   return result.ok;
+}
+
+/**
+ * Adds several lines as one cart change (buy again, a bundle of lines): every
+ * line's key is computed first, then one patch applies them all against the
+ * same cart, so no line can be lost to another line's await. Lines with the
+ * same SKU and inputs merge; quantities stop at the cart's per-line limit.
+ * Returns the keys of the lines it added to, in the order given; a line that
+ * can't be a cart line or is already at the limit is left out.
+ */
+export async function addLinesToCart(items: readonly NewCartLine[]): Promise<string[]> {
+  ensureCartHydrated();
+  const prepared = (await Promise.all(items.map((item) => prepareNewLine(item))))
+    .filter((line): line is NonNullable<typeof line> => line !== null);
+  if (prepared.length === 0) return [];
+  const current = cartStore.get();
+  const merged = new Map<string, { line: Omit<CartItem, "quantity">; quantity: number }>();
+  for (const { key, line, quantity } of prepared) {
+    const seen = merged.get(key);
+    merged.set(key, { line: seen?.line ?? line, quantity: (seen?.quantity ?? 0) + quantity });
+  }
+  const patches: CartAbsoluteQuantityPatch[] = [];
+  for (const [lineKey, { line, quantity }] of merged) {
+    const existing = current.items[lineKey];
+    const next = Math.min(MAX_CART_QUANTITY, (existing?.quantity ?? 0) + quantity);
+    if (existing && next <= existing.quantity) continue;
+    patches.push({
+      lineKey,
+      productId: line.id,
+      variantId: line.variantId!,
+      quantity: next,
+      ...(!existing ? { item: line } : {}),
+    });
+  }
+  if (patches.length === 0 || !applyLocalLinePatch(patches).ok) return [];
+  return patches.map((patch) => patch.lineKey);
 }
 
 /**

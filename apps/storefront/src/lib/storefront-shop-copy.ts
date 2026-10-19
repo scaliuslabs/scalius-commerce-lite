@@ -20,6 +20,10 @@ export interface ShopCopy {
     zoomPhoto: string;
     /** One photo of a gallery list: "Zoom photo 2 of 4". */
     zoomPhotoOf: (position: number, total: number) => string;
+    previousPhoto: string;
+    nextPhoto: string;
+    /** Where the phone gallery is, read out as it changes: "Photo 2 of 5" (placeholders allowed). */
+    photoOf: (position: number | string, total: number | string) => string;
   };
   compare: {
     title: string;
@@ -48,6 +52,9 @@ const EN: ShopCopy = {
     showAllPhotos: (count) => `Show all photos (${count})`,
     zoomPhoto: "Zoom photo",
     zoomPhotoOf: (position, total) => `Zoom photo ${position} of ${total}`,
+    previousPhoto: "Previous photo",
+    nextPhoto: "Next photo",
+    photoOf: (position, total) => `Photo ${position} of ${total}`,
   },
   compare: {
     title: "Compare products",
@@ -74,6 +81,9 @@ const BN: ShopCopy = {
     showAllPhotos: (count) => `সব ছবি দেখুন (${count})`,
     zoomPhoto: "ছবি বড় করুন",
     zoomPhotoOf: (position, total) => `${total}টির মধ্যে ${position} নম্বর ছবি বড় করুন`,
+    previousPhoto: "আগের ছবি",
+    nextPhoto: "পরের ছবি",
+    photoOf: (position, total) => `${total}টির মধ্যে ${position} নম্বর ছবি`,
   },
   compare: {
     title: "পণ্য তুলনা",

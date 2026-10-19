@@ -37,12 +37,15 @@ export type StorefrontBlockTarget = (typeof STOREFRONT_BLOCK_TARGETS)[number];
  *   buttons (a real form; works before hydration). `data-title="false"`
  *   leaves out its heading when the skin draws the product title itself.
  * - `reviews`, `recommendations`: the product's reviews and related products.
+ * - `gallery`: the product's photos and videos as the theme's gallery draws
+ *   them (one main image with thumbnails, a swipeable stage on phones,
+ *   zoom, and the chosen SKU's photo when a variant is picked).
  * - `filters`, `toolbar` (sort and page size), `pagination`: the listing's.
  * - `order-form`: the single-page order form of a landing page, for a
  *   product the section was given (`data-product`, `data-max-quantity`,
  *   `data-submit-label`).
  */
-export const STOREFRONT_EMBED_KINDS = ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form"] as const;
+export const STOREFRONT_EMBED_KINDS = ["buy-form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order-form", "gallery"] as const;
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export const STOREFRONT_EMBED_TAG = "scalius-embed";
 
@@ -67,7 +70,7 @@ export function storefrontEmbedRule(unit: "section" | "block" | StorefrontSkinTa
     case "section":
       return { allowed: { "order-form": 2 }, required: [], appended: [] };
     case "product-main":
-      return { allowed: { "buy-form": 1, reviews: 1, recommendations: 1 }, required: ["buy-form"], appended: [] };
+      return { allowed: { "buy-form": 1, reviews: 1, recommendations: 1, gallery: 1 }, required: ["buy-form"], appended: [] };
     case "listing-main":
       return { allowed: { filters: 1, toolbar: 1, pagination: 1 }, required: [], appended: ["pagination"] };
     default:
