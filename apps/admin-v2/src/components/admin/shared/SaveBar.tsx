@@ -26,7 +26,7 @@ import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
 import { translate, useMessages } from "~/i18n";
 import { saveBarMessages } from "~/i18n/save-bar";
 import { resourceMessages } from "~/i18n/resource";
-import { matchesShortcut } from "../layout/shortcuts";
+import { ariaKeys, matchesShortcut } from "../layout/shortcuts";
 import { ADMIN_SESSION_LOST_EVENT } from "~/lib/admin-session-lost";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 
@@ -597,8 +597,8 @@ export function SaveErrorBanner() {
 }
 
 /**
- * Shopify's contextual save bar for a whole page: a dark pill over the centre
- * of the top bar on desktop, a full-width strip over it on phones. Discard and
+ * Shopify's contextual save bar for a whole page: the whole top bar turns into
+ * a light bar, the message first, then Discard and Save. Discard and
  * leaving the page with unsaved changes both ask first. A new record names
  * itself in the bar ("Unsaved product") and in the success toast.
  */
@@ -619,16 +619,14 @@ export function SaveBarProvider({
 }
 
 /**
- * Shopify's save bar is the search pill itself (12px corners, 1px lighter
- * edge on the frame), so its buttons sit 4px inside its outer edge (1px
- * border + 3px) with 8px corners, concentric, 28px from md. On phones the bar
- * is a 52px pill over the top bar with 44px buttons (C6).
- * Discard is dark, Save white, in both themes.
+ * The bar's buttons: 44px on phones (C6), 32px from md inside the 44px bar
+ * (6px around them, so their 8px corners sit concentric in its 12px corners).
+ * Discard is the neutral secondary, Save the near-black primary, in both themes.
  */
 const DISCARD_BUTTON =
-  "relative inline-flex h-11 items-center rounded-lg bg-topbar-hover px-3 text-body font-medium text-topbar-foreground hover:bg-topbar-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:pointer-events-none disabled:opacity-50 md:h-7";
+  "relative inline-flex h-11 shrink-0 items-center rounded-lg bg-save-bar-secondary px-3 text-body font-medium text-save-bar-foreground hover:bg-save-bar-secondary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-save-bar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-save-bar disabled:pointer-events-none disabled:opacity-50 md:h-8";
 const SAVE_BUTTON =
-  "relative inline-flex h-11 items-center rounded-lg bg-topbar-primary px-3 text-body font-medium text-topbar-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:pointer-events-none disabled:opacity-50 md:h-7";
+  "relative inline-flex h-11 shrink-0 items-center rounded-lg bg-save-bar-primary px-3 text-body font-medium text-save-bar-primary-foreground hover:bg-save-bar-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-save-bar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-save-bar disabled:pointer-events-none disabled:opacity-50 md:h-8";
 
 function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?: string }) {
   const t = useMessages(saveBarMessages);
@@ -669,9 +667,9 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
     window.addEventListener(ADMIN_SESSION_LOST_EVENT, onSessionLost);
     return () => window.removeEventListener(ADMIN_SESSION_LOST_EVENT, onSessionLost);
   }, [dirty, t]);
-  // The bar takes the top bar's search pill (the page itself when there is none, as in tests).
+  // The bar takes over the whole top bar (the page itself when there is none, as in tests).
   const [slot, setSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => setSlot(document.getElementById("admin-top-bar-pill") ?? document.body), []);
+  useEffect(() => setSlot(document.getElementById("admin-top-bar") ?? document.body), []);
   // Saved or discarded: focus goes back to the page, never to nowhere.
   useEffect(() => {
     if (dirty) return;
@@ -695,23 +693,24 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
           setConfirmDiscard(false);
         }}
       />
+      {/* Always mounted, so screen readers hear the bar appear and its message change. */}
+      <p role="status" className="sr-only">{shown ? message : ""}</p>
       {shown && slot
         ? createPortal(
-            // Shopify's contextual save bar: the search pill turns into it, same
-            // place, size and shape (on phones the pill's row between Menu and
-            // the store), snapping in with a flash so it can't be missed
-            // (global.css `[data-save-bar]`).
+            // The contextual save bar: the whole top bar turns light (a light bar
+            // on the black frame in both themes), the message first, then Discard
+            // and Save. It snaps in with a flash (global.css `[data-save-bar]`).
             <div
               role="region"
               data-save-bar=""
               aria-label={unsavedLabel ?? t("unsavedChanges")}
-              className="absolute inset-x-2 top-0.5 z-30 flex h-13 items-center justify-between gap-2 rounded-xl border border-topbar-border bg-topbar-subdued p-0.75 ps-3 text-topbar-foreground md:inset-0 md:h-9"
+              className="absolute inset-0 z-30 flex items-center justify-between gap-2 bg-save-bar ps-3 pe-2 text-save-bar-foreground md:inset-x-2 md:inset-y-1.5 md:rounded-xl md:p-1.5 md:ps-4 nav:inset-s-0"
             >
-              <p className="flex min-w-0 items-center gap-2 text-body" aria-live="polite">
+              <p className="flex min-w-0 items-center gap-2 text-body font-medium" title={message}>
                 <MessageCircleWarning className="size-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{message}</span>
+                <span className="line-clamp-2 md:truncate">{message}</span>
               </p>
-              <div className="flex shrink-0 gap-1.5">
+              <div className="flex shrink-0 gap-2">
                 <button
                   type="button"
                   className={DISCARD_BUTTON}
@@ -725,6 +724,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
                   className={SAVE_BUTTON}
                   disabled={busy}
                   aria-busy={busy || undefined}
+                  aria-keyshortcuts={ariaKeys("save")}
                   onClick={() => void save()}
                 >
                   <span className={busy ? "invisible" : undefined}>{t("save")}</span>

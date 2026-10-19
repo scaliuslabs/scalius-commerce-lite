@@ -156,6 +156,37 @@ describe("page save bar", () => {
     expect(entry.save).toHaveBeenCalledTimes(1);
   });
 
+  it("takes over the whole top bar and announces itself through a status line mounted before it appears", async () => {
+    const topBar = document.createElement("header");
+    topBar.id = "admin-top-bar";
+    document.body.append(topBar);
+    const status = () => container.querySelector("[role=status]");
+    const draw = (dirty: boolean) =>
+      act(() => {
+        root.render(
+          <SaveBarProvider savedMessage="Customer saved">
+            <Card dirty={dirty} save={vi.fn(async () => undefined)} discard={vi.fn()} />
+          </SaveBarProvider>,
+        );
+      });
+    try {
+      draw(false);
+      const line = status();
+      expect(line?.textContent).toBe("");
+      draw(true);
+      expect(topBar.querySelector(":scope > [data-save-bar]")).not.toBeNull();
+      expect(status()).toBe(line);
+      expect(line?.textContent).toBe("Unsaved changes");
+      const labels = [...topBar.querySelectorAll("[data-save-bar] button")].map((button) => button.textContent);
+      expect(labels).toEqual(["Discard", "Save"]);
+      draw(false);
+      expect(topBar.querySelector("[data-save-bar]")).toBeNull();
+      expect(line?.textContent).toBe("");
+    } finally {
+      topBar.remove();
+    }
+  });
+
   it("ignores Ctrl/⌘+S when nothing changed on a saved record", async () => {
     const entry = { dirty: false, save: vi.fn(async () => undefined), discard: vi.fn() };
     act(() => {

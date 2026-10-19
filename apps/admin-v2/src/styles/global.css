@@ -99,12 +99,23 @@
   --topbar-foreground: #dcdcdc;
   --topbar-subdued: #282828;
   --topbar-hover: #333333;
-  /* The search pill's (and save bar's) 1px edge, and the save bar's white Save. */
+  /* The search pill's 1px edge, and the theme editor's white Save. */
   --topbar-border: #3d3d3d;
   --topbar-primary: #ffffff;
   --topbar-primary-foreground: #303030;
   /* The page-loading bar: the accent, bright enough on the black top bar in both themes. */
   --topbar-progress: #4b9bff;
+  /* The contextual save bar: while a page has unsaved changes the whole top
+     bar turns light, so it reads as a different state at a glance, with a
+     near-black Save. Light on the black frame in both themes. */
+  --save-bar: #ffffff;
+  --save-bar-foreground: #303030;
+  --save-bar-secondary: #ebebeb;
+  --save-bar-secondary-hover: #dcdcdc;
+  --save-bar-primary: #303030;
+  --save-bar-primary-hover: #1a1a1a;
+  --save-bar-primary-foreground: #ffffff;
+  --save-bar-ring: #005bd3;
   /* The page scrollbar (#admin-main-scroll): a dark grey thumb on the light frame. */
   --scrollbar-thumb: #8a8a8a;
   --scrollbar-thumb-hover: #616161;
@@ -196,6 +207,14 @@
 
   --scrollbar-thumb-hover: #b5b5b5;
 
+  /* A step dimmer than white, so the bar does not glare on the dark canvas. */
+  --save-bar: #e3e3e3;
+  --save-bar-foreground: #1a1a1a;
+  --save-bar-secondary: #cccccc;
+  --save-bar-secondary-hover: #bdbdbd;
+  --save-bar-primary: #1a1a1a;
+  --save-bar-primary-hover: #000000;
+
   /* The frame goes a step darker than the dark canvas, so the canvas still reads as a sheet. */
   --sidebar: #0d0d0d;
   --sidebar-hover: #1f1f1f;
@@ -251,6 +270,14 @@
   --color-topbar-primary: var(--topbar-primary);
   --color-topbar-primary-foreground: var(--topbar-primary-foreground);
   --color-topbar-progress: var(--topbar-progress);
+  --color-save-bar: var(--save-bar);
+  --color-save-bar-foreground: var(--save-bar-foreground);
+  --color-save-bar-secondary: var(--save-bar-secondary);
+  --color-save-bar-secondary-hover: var(--save-bar-secondary-hover);
+  --color-save-bar-primary: var(--save-bar-primary);
+  --color-save-bar-primary-hover: var(--save-bar-primary-hover);
+  --color-save-bar-primary-foreground: var(--save-bar-primary-foreground);
+  --color-save-bar-ring: var(--save-bar-ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
@@ -487,21 +514,14 @@ html:lang(bn) {
 }
 
 /*
- * Shopify's contextual save bar: the top bar's search pill turns into it in
- * place (SaveBar portals into #admin-top-bar-pill and covers the pill; the
- * search button under it leaves the tab order). It snaps in and flashes once
- * so no merchant misses it; while the "Leave page?" dialog shows it shakes
- * and flashes again. With reduced motion only the flash plays.
+ * The contextual save bar: while a page has unsaved changes the whole top bar
+ * turns into it (SaveBar portals into the top bar and covers it; the search,
+ * help, notifications and store menu under it leave the tab order). It snaps
+ * in and flashes once so no merchant misses it; while the "Leave page?" dialog
+ * shows it shakes and flashes again. With reduced motion only the flash plays.
  */
-#admin-top-bar-pill:has(> [data-save-bar]) > :not([data-save-bar]) {
+[data-slot="topbar"]:has(> [data-save-bar]) > :not([data-save-bar]) {
   visibility: hidden;
-}
-
-/* Phones: the bar spans the top bar, so Menu and the store step aside too. */
-@media (max-width: 767px) {
-  [data-slot="topbar"]:has([data-save-bar]) > :not(#admin-top-bar-pill) {
-    visibility: hidden;
-  }
 }
 
 [data-save-bar] {
