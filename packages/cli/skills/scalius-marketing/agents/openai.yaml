@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scalius Marketing"
+  short_description: "Connect pixels, conversions, analytics and feeds"
+  default_prompt: "Use $scalius-marketing to set up tracking for my Scalius store."
