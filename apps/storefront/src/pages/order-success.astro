@@ -820,26 +820,13 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                         })}
                       </p>
                     )}
-                    {savedLine && savedMoneySummary && savedLine.taxMinor > 0 && (
-                      <p class="mt-1 text-xs text-muted-foreground">
-                        {formatCheckoutLanguageText(
-                          savedMoneySummary.pricesIncludeTax
-                            ? copy.orderReceiptTaxIncludedText
-                            : copy.orderReceiptTaxAddedText,
-                          {
-                            label: savedMoneySummary.taxLabel,
-                            amount: formatReceiptMinor(savedLine.taxMinor),
-                          },
-                        )}
-                      </p>
-                    )}
                     </div>
                   </div>
                   <div class="shrink-0 text-end">
                     {savedLine && savedMoneySummary && <p class="text-xs text-muted-foreground">{copy.orderReceiptLineTotalText}</p>}
                     <p class="font-medium">
                       {savedLine && savedMoneySummary
-                        ? formatReceiptMinor(presentedLineTotalMinor(savedLine, showsLineDiscounts, savedMoneySummary.pricesIncludeTax))
+                        ? formatReceiptMinor(presentedLineTotalMinor(savedLine, showsLineDiscounts))
                         : formatReceiptAmount(item.quantity * item.price)}
                     </p>
                   </div>

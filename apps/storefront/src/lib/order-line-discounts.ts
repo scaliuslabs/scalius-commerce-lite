@@ -20,16 +20,18 @@ export function orderShowsLineDiscounts(discounts: readonly OrderDiscountKind[] 
 export interface SavedLineAmounts {
   grossSubtotalMinor: number;
   discountMinor: number;
-  taxMinor: number;
 }
 
-/** The line total a buyer reads: after its own saving, or at full price when the saving is the order's. */
+/**
+ * The line total a buyer reads: quantity × the unit price shown beside it,
+ * after its own saving (at full price when the saving is the order's). Tax
+ * is never folded into a line: the line is in the market's prices (tax
+ * included when its prices include tax), and the tax is its own row in the
+ * totals, on the receipt and the account order alike (Shopify's order page).
+ */
 export function presentedLineTotalMinor(
   line: SavedLineAmounts,
   showsLineDiscount: boolean,
-  pricesIncludeTax: boolean,
 ): number {
-  return line.grossSubtotalMinor
-    - (showsLineDiscount ? line.discountMinor : 0)
-    + (pricesIncludeTax ? 0 : line.taxMinor);
+  return line.grossSubtotalMinor - (showsLineDiscount ? line.discountMinor : 0);
 }
