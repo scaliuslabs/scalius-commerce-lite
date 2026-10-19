@@ -330,6 +330,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   paymentStepText: "Payment",
   confirmationStepText: "Confirmation",
   estimatedTotalText: "Estimated total",
+  // A sold-out or unavailable line is left out of the estimate until the buyer fixes it.
+  estimateLeavesOutText: "The estimate leaves out {items}, which can't be bought right now.",
   taxText: "Tax",
   freeText: "Free",
   calculatingText: "Calculating…",
@@ -1069,6 +1071,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   paymentStepText: "পেমেন্ট",
   confirmationStepText: "নিশ্চিতকরণ",
   estimatedTotalText: "আনুমানিক সর্বমোট",
+  estimateLeavesOutText: "{items} এখন কেনা যাচ্ছে না, তাই আনুমানিক হিসাবে ধরা হয়নি।",
   taxText: "কর",
   freeText: "ফ্রি",
   calculatingText: "হিসাব করা হচ্ছে…",

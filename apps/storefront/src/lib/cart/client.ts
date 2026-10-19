@@ -844,8 +844,12 @@ function setCartValidationIssues(
     if (!key) continue;
     grouped[key] = [...(grouped[key] ?? []), issue];
   }
+  // The estimate counts only buyable units: a line that sold out (or came
+  // back) changes the totals, so they are drawn again.
+  const estimateBefore = JSON.stringify(estimableCartLines(items, cartValidationIssues).items);
   cartValidationIssues = grouped;
   updateCartValidationMessage();
+  if (JSON.stringify(estimableCartLines(items, grouped).items) !== estimateBefore) void updateTotals();
 }
 
 function updateCartQuantityLimits(
@@ -1197,6 +1201,59 @@ function renderCartItemIssues(cartKey: string): string {
       </div>`;
 }
 
+/** Codes that leave a line with nothing a buyer can buy now (sold out, gone, unavailable). */
+const UNBUYABLE_ISSUE_CODES = new Set<CartValidationIssue["code"]>([
+  "PRODUCT_UNAVAILABLE",
+  "VARIANT_UNAVAILABLE",
+  "VARIANT_REQUIRED",
+  "VARIANT_MISMATCH",
+  "FULFILMENT_UNAVAILABLE",
+]);
+
+/**
+ * The lines an estimate can count: a line the server says can't be bought
+ * now (sold out, unavailable) is left out, and a line with fewer units left
+ * counts only those. Its offers (a buy-one-get-one) go with it. Checkout
+ * still takes nothing until the buyer fixes the line.
+ */
+export function estimableCartLines(
+  items: Record<string, CartItem>,
+  issues: Record<string, CartValidationIssue[]>,
+): { items: Record<string, CartItem>; leftOut: string[] } {
+  const counted: Record<string, CartItem> = {};
+  const leftOut: string[] = [];
+  for (const [cartKey, item] of Object.entries(items)) {
+    const lineIssues = issues[cartKey] ?? [];
+    const available = lineIssues.reduce<number | null>((limit, issue) => {
+      if (UNBUYABLE_ISSUE_CODES.has(issue.code)) return 0;
+      if (issue.code === "QUANTITY_UNAVAILABLE" && typeof issue.availableQuantity === "number") {
+        const units = Math.max(0, Math.floor(issue.availableQuantity));
+        return limit === null ? units : Math.min(limit, units);
+      }
+      return limit;
+    }, null);
+    if (available === 0) {
+      leftOut.push(item.name);
+      continue;
+    }
+    counted[cartKey] = available !== null && available < item.quantity ? { ...item, quantity: available } : item;
+  }
+  return { items: counted, leftOut };
+}
+
+/** Says which lines the estimate leaves out, or nothing when it counts them all. */
+function renderEstimateNote(leftOut: readonly string[]): void {
+  const note = document.getElementById("estimateNote");
+  if (!note) return;
+  const names = [...new Set(leftOut.map((name) => name.trim()).filter(Boolean))];
+  note.textContent = names.length > 0
+    ? formatCheckoutLanguageText(activeCheckoutCopy().estimateLeavesOutText, {
+        items: formatList(names, numberLocale(pageCheckoutLanguage().code || "en", storeRegion())),
+      })
+    : "";
+  note.classList.toggle("hidden", names.length === 0);
+}
+
 /**
  * Totals are always the server's: the authoritative tax quote once a
  * destination is chosen, otherwise the discount preview for the chosen
@@ -1204,7 +1261,11 @@ function renderCartItemIssues(cartKey: string): string {
  */
 export async function updateTotals() {
   const quoteSequence = ++cartTaxQuoteSequence;
-  const { items, totalAmount, discountCodes } = cartStore.get();
+  const { items: cartItems, discountCodes } = cartStore.get();
+  // The estimate counts only what can be bought now (the quote refuses the rest).
+  const estimable = estimableCartLines(cartItems, cartValidationIssues);
+  const items = estimable.items;
+  const totalAmount = cartItemsSubtotal(items);
   const selectedMethod = window.lastShippingEventDetail;
   const pendingShipping = selectedMethod ? hasPendingShippingRate(selectedMethod) : false;
   const shippingFee = selectedMethod
@@ -1234,15 +1295,20 @@ export async function updateTotals() {
   };
 
   subtotalEl.textContent = formatMoney(totalAmount);
+  renderEstimateNote(estimable.leftOut);
   // Before a delivery option applies to the address, shipping isn't known yet.
   const estimateShipping = (discounts: CheckoutDiscountFacts["discounts"]) =>
     renderShippingLine(shippingEl, selectedMethod && !pendingShipping
       ? { baseFee: selectedMethod.fee, charged: shippingFee, discounts }
       : null);
   estimateShipping(latestDiscountFacts?.discounts ?? []);
-  renderFreeDeliveryProgress(selectedMethod ? shippingFee : 0);
+  renderFreeDeliveryProgress(selectedMethod ? shippingFee : 0, totalAmount);
   elements.taxRow?.classList.add("hidden");
-  if (Object.keys(items).length === 0) return;
+  if (Object.keys(items).length === 0) {
+    // Nothing left to buy: the total says so instead of keeping a stale amount.
+    if (Object.keys(cartItems).length > 0) totalEl.textContent = formatMoney(0);
+    return;
+  }
 
   const renderEstimate = async (failure: string) => {
     const preview = await previewCartDiscounts(
