@@ -17,8 +17,6 @@ export * from "./storefront-theme/document";
 export * from "./storefront-theme/upgrade";
 export * from "./storefront-theme/text";
 export * from "./storefront-theme/translate";
-export * from "./storefront-theme/text";
-export * from "./storefront-theme/translate";
 export * from "./storefront-theme/pages";
 export * from "./storefront-theme/templates";
 export * from "./storefront-theme/resolve";
