@@ -34,7 +34,7 @@ import {
   previewCartDiscounts,
   saveAbandonedCheckoutFromBrowser as saveAbandonedCheckout,
 } from "./browser-api";
-import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
+import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { numberLocale } from "@scalius/shared/locale-format";

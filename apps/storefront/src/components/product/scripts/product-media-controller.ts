@@ -814,9 +814,10 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
     if (!detailUrl) return;
     const alt = ownUrl ? clicked?.dataset.zoomAlt : current?.alt;
     image.src = detailUrl;
+    // The words the page wrote in its language (ProductGallery.astro).
     image.alt = alt
-      ? `${alt} — zoomed view`
-      : "Zoomed product image";
+      ? (image.dataset.zoomedView || "{name} — zoomed view").replace("{name}", alt)
+      : image.dataset.zoomedImage || "Zoomed product image";
     reset();
     bodyOverflowBeforeMobileZoom = document.body.style.overflow;
     setMobileZoomBackgroundInert(modal, true);

@@ -1,4 +1,7 @@
 ---
+import { catalogCopy } from "@/lib/catalog-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { formatCount } from "@/lib/store-time-zone";
 import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
@@ -8,6 +11,7 @@ interface Props {
 }
 
 const { page, totalPages, getPageUrl } = Astro.props;
+const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).paging;
 
 function paginationItems(currentPage: number, pageCount: number): (number | "…")[] {
   if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1);
@@ -20,12 +24,12 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
 ---
 
 {totalPages > 1 && (
-  <nav class="my-8 flex items-center justify-center" aria-label="Pagination">
+  <nav class="my-8 flex items-center justify-center" aria-label={copy.label} data-catalog-pagination>
     <div class="flex items-center gap-1">
       {page > 1 ? (
         <a
           href={getPageUrl(page - 1)}
-          aria-label="Previous page"
+          aria-label={copy.previous}
           class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border text-foreground transition-colors hover:bg-muted"
         >
           <Icon name="chevron-left" class="h-4 w-4" aria-hidden="true" />
@@ -34,7 +38,7 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
         <button
           type="button"
           disabled
-          aria-label="Previous page"
+          aria-label={copy.previous}
           class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/60 text-muted-foreground/40"
         >
           <Icon name="chevron-left" class="h-4 w-4" aria-hidden="true" />
@@ -45,7 +49,7 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
         typeof item === "number" ? (
           <a
             href={getPageUrl(item)}
-            aria-label={`Page ${item}`}
+            aria-label={copy.page(formatCount(item))}
             aria-current={page === item ? "page" : undefined}
             class:list={[
               "inline-flex h-10 min-w-10 items-center justify-center rounded-md border text-sm font-medium transition-colors",
@@ -54,19 +58,20 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
                 : "border-border text-foreground hover:bg-muted max-[389px]:hidden",
             ]}
           >
-            {item}
+            {formatCount(item)}
           </a>
         ) : (
           <span aria-hidden="true" class="inline-flex h-10 w-10 items-center justify-center text-sm text-muted-foreground max-[389px]:hidden">{item}</span>
         ),
       )}
       {/* Narrow phones (320-389px) cannot fit seven page links: they show "3 of 33" between the arrows. */}
-      <span class="hidden items-center px-1 text-sm text-muted-foreground max-[389px]:inline-flex">of {totalPages}</span>
+      <span class="hidden items-center px-1 text-sm text-muted-foreground max-[389px]:inline-flex">{copy.of(formatCount(totalPages))}</span>
 
       {page < totalPages ? (
         <a
           href={getPageUrl(page + 1)}
-          aria-label="Next page"
+          data-catalog-next
+          aria-label={copy.next}
           class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border text-foreground transition-colors hover:bg-muted"
         >
           <Icon name="chevron-right" class="h-4 w-4" aria-hidden="true" />
@@ -75,7 +80,7 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
         <button
           type="button"
           disabled
-          aria-label="Next page"
+          aria-label={copy.next}
           class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/60 text-muted-foreground/40"
         >
           <Icon name="chevron-right" class="h-4 w-4" aria-hidden="true" />

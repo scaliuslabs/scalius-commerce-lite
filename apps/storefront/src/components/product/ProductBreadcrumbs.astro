@@ -1,6 +1,8 @@
 ---
 import Icon from "@/components/icons/Icon.astro";
 import type { Product } from "@/lib/api";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 
 interface Props {
   product: Product;
@@ -8,11 +10,12 @@ interface Props {
 }
 
 const { product, category } = Astro.props;
+const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).breadcrumb;
 ---
 
 <nav
   class="mx-auto max-w-7xl px-3 py-1 sm:px-6 sm:py-1.5 lg:px-8 lg:py-2"
-  aria-label="Breadcrumb"
+  aria-label={copy.label}
 >
   <ol
     class="flex items-center space-x-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] sm:text-xs lg:space-x-1.5"
@@ -21,7 +24,7 @@ const { product, category } = Astro.props;
       <a
         href="/"
         class="text-muted-foreground hover:text-primary transition-colors duration-200 font-medium"
-        >Home</a
+        >{copy.home}</a
       >
     </li>
     <li class="flex items-center">

@@ -11,7 +11,7 @@
 //   idle, load or first interaction) and mounts it on the element.
 
 import type { StorefrontIslandContext, StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
-import { formatMoney, getCurrencyCode } from "@scalius/shared/currency";
+import { formatMoney, getCurrencyCode } from "@/lib/currency";
 import { initQuickAddCards } from "@/components/cards/scripts/quick-add-card";
 
 type CartSummary = { count: number; total: number };

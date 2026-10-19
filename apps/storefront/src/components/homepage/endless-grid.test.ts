@@ -15,7 +15,7 @@ function home(ids = range(0, 24), href = "/search?page=2") {
 
 // The actual CatalogPaging/CatalogPagination shapes, inside CatalogListing's root.
 function listing(ids: number[], next: string | null, mode: "numbered" | "load-more" | "infinite" = "numbered") {
-  const numbered = `<nav aria-label="Pagination">${next ? `<a aria-label="Next page" href="${next}">Next</a>` : '<button aria-label="Next page" disabled>Next</button>'}</nav>`;
+  const numbered = `<nav aria-label="Pagination" data-catalog-pagination>${next ? `<a aria-label="Next page" data-catalog-next href="${next}">Next</a>` : '<button aria-label="Next page" disabled>Next</button>'}</nav>`;
   const paging = mode === "numbered" ? numbered : `<div data-catalog-paging="${mode}">${mode === "infinite" ? numbered : ""}${next ? `<a data-catalog-load-more href="${next}">Load more</a>` : ""}</div>`;
   return `<html><body><div data-catalog-layout="sidebar">${ids.length ? `<div class="product-grid">${ids.map(card).join("")}</div>${paging}` : '<div data-catalog-empty-state>No products found</div>'}</div><aside class="product-grid">${card(9999)}</aside></body></html>`;
 }

@@ -25,7 +25,7 @@ export function setupEndlessGrids(): void {
         if (!cards.length && !results.querySelector("[data-catalog-empty-state]")) throw new Error("Missing listing results");
         // Both paging presentations derive this link from the response's own page/totalPages.
         // A full final page has no next link; its card count alone cannot prove exhaustion.
-        const next = results.querySelector<HTMLAnchorElement>("[data-catalog-paging] a[data-catalog-load-more], nav[aria-label='Pagination'] a[aria-label='Next page']")?.getAttribute("href");
+        const next = results.querySelector<HTMLAnchorElement>("[data-catalog-paging] a[data-catalog-load-more], nav[data-catalog-pagination] a[data-catalog-next]")?.getAttribute("href");
         let nextUrl: URL | null = null;
         if (next) {
           const currentUrl = new URL(href);

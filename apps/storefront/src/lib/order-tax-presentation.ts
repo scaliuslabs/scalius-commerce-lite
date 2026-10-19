@@ -1,4 +1,4 @@
-import { formatMoney } from "@scalius/shared/currency";
+import { formatMoney } from "@/lib/currency";
 export interface SavedOrderMoneyFields {
   currencyCode?: string | null;
   currencyDecimalPlaces?: number | null;

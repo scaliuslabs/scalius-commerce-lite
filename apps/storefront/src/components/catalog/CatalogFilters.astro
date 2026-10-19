@@ -45,6 +45,8 @@ import {
 import { formatMoney } from "@/lib/currency";
 import { PRODUCT_LIST_MIN_RATING_PARAM } from "@/lib/product-list-query";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { formatCount } from "@/lib/store-time-zone";
 import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
@@ -97,9 +99,12 @@ const placement = presentation.placement;
 const drawer = placement === "drawer";
 const bar = placement === "bar";
 const dense = presentation.style === "sidebar-dense";
-const { resolved } = await currentRequestTheme(Astro.locals);
+const { resolved, language } = await currentRequestTheme(Astro.locals);
+const copy = catalogCopy(language).filters;
 const money = (amount: number) => formatMoney(amount, { symbol: currencySymbol, code: currencyCode });
-const applyButton = catalogApplyButton(total, totalIsCapped);
+// The apply button's words, written on it for the live count (lib/catalog-filters).
+const applyWords = { one: copy.showProducts("{count}", true), many: copy.showProducts("{count}", false), none: copy.noMatchingProducts };
+const applyButton = catalogApplyButton(total, totalIsCapped, applyWords);
 const showPrice = showsCatalogPriceFilter(priceRange, currentFilters);
 const single = (key: string) => {
   const value = currentFilters[key];
@@ -109,9 +114,9 @@ const single = (key: string) => {
 const hasActiveFilters = Object.keys(currentFilters).some((key) => !["page", "sortBy", "limit", "q", PRODUCT_LIST_SHOW_ALL_PARAM].includes(key));
 const pageSize = single("limit");
 const availability = [
-  { name: "inStock", label: "Exclude out of stock" },
-  { name: "hasDiscount", label: "On sale" },
-  { name: "freeDelivery", label: "Free delivery" },
+  { name: "inStock", label: copy.inStockOnly },
+  { name: "hasDiscount", label: copy.onSale },
+  { name: "freeDelivery", label: copy.freeDelivery },
 ];
 const availabilitySelected = availability.filter(({ name }) => single(name) === "true").length;
 // The in-listing search is a comfortable, drawer and phone-sheet field; the
@@ -126,13 +131,13 @@ type Section =
 const facetSections: Section[] = groups
   .filter((group) => !(withoutCategories && group.kind === "category"))
   .map((group) => ({ kind: "group", key: group.key, name: group.name, selectedCount: group.selectedCount, group }));
-const availabilitySection: Section = { kind: "availability", key: "availability", name: "Availability", selectedCount: availabilitySelected };
+const availabilitySection: Section = { kind: "availability", key: "availability", name: copy.availability, selectedCount: availabilitySelected };
 const ratingSelected = ratingRows.some((row) => row.selected);
 const rating: Section[] = ratingRows.length > 0
-  ? [{ kind: "rating", key: "rating", name: "Customer rating", selectedCount: ratingSelected ? 1 : 0 }]
+  ? [{ kind: "rating", key: "rating", name: copy.customerRating, selectedCount: ratingSelected ? 1 : 0 }]
   : [];
 const priceSection: Section | null = showPrice
-  ? { kind: "price", key: "price", name: "Price", selectedCount: single("minPrice") || single("maxPrice") ? 1 : 0 }
+  ? { kind: "price", key: "price", name: copy.price, selectedCount: single("minPrice") || single("maxPrice") ? 1 : 0 }
   : null;
 // The style's reference arrangement (an `order` reorders whole groups):
 // - dense column (Amazon, Daraz): availability, rating, brand and the first
@@ -173,8 +178,8 @@ const barOpen = bar && sections.some((section, index) => index >= presentation.b
 
 const anchorOf = (section: Section) => section.kind === "group" ? catalogFacetAnchor(section.key) : `catalog-facet-${section.key}`;
 const rangeBounds = [
-  { bound: "min", label: "From" },
-  { bound: "max", label: "To" },
+  { bound: "min", label: copy.from },
+  { bound: "max", label: copy.to },
 ] as const;
 const showAllHref = (key: string | null) => `${buildProductListHref({
   pathname,
@@ -245,8 +250,8 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
             <span class="min-w-0 truncate">{section.name}</span>
             {section.selectedCount > 0 && (
               <span class="catalog-facet-selected tabular-nums">
-                <span aria-hidden="true">({section.selectedCount})</span>
-                <span class="sr-only">, {section.selectedCount} selected</span>
+                <span aria-hidden="true">({formatCount(section.selectedCount)})</span>
+                <span class="sr-only">{copy.selected(formatCount(section.selectedCount))}</span>
               </span>
             )}
             <svg class="catalog-facet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -255,7 +260,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
 
           {section.kind === "availability" ? (
             <fieldset class="catalog-facet-body">
-              <legend class="sr-only">Availability</legend>
+              <legend class="sr-only">{copy.availability}</legend>
               {availability.map(({ name, label }) => (
                 <label class="catalog-facet-row">
                   <input type="checkbox" name={name} value="true" checked={single(name) === "true"} class="catalog-facet-check" />
@@ -265,7 +270,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
             </fieldset>
           ) : section.kind === "rating" ? (
             <fieldset class="catalog-facet-body" data-catalog-rating-group>
-              <legend class="sr-only">Customer rating</legend>
+              <legend class="sr-only">{copy.customerRating}</legend>
               {ratingRows.map(({ min, count, selected }) => (
                 <label class="catalog-facet-row catalog-rating-row">
                   <input
@@ -279,37 +284,37 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                   />
                   <span class="catalog-facet-label catalog-rating-label">
                     <span class="sc-stars catalog-rating-stars" style={`--sc-fill:${min * 20}%`} aria-hidden="true"></span>
-                    <span aria-hidden="true">&amp; up</span>
-                    <span class="sr-only">{min} stars and up</span>
+                    <span aria-hidden="true">{copy.andUp}</span>
+                    <span class="sr-only">{copy.starsAndUp(formatCount(min))}</span>
                   </span>
-                  <span class="catalog-facet-count">{count}</span>
+                  <span class="catalog-facet-count">{formatCount(count)}</span>
                 </label>
               ))}
               {ratingSelected && (
                 // "Any rating" undoes the choice, in the form and without JavaScript.
                 <label class="catalog-facet-row">
                   <input type="radio" name={PRODUCT_LIST_MIN_RATING_PARAM} value="" data-catalog-rating class="catalog-facet-check" />
-                  <span class="catalog-facet-label">Any rating</span>
+                  <span class="catalog-facet-label">{copy.anyRating}</span>
                 </label>
               )}
             </fieldset>
           ) : section.kind === "price" ? (
             <fieldset class="catalog-facet-body" data-catalog-price>
-              <legend class="sr-only">Price</legend>
+              <legend class="sr-only">{copy.price}</legend>
               {priceSlider && (
                 // Shown by JavaScript: two thumbs over one track, written into the fields below.
                 <div class="catalog-price-slider" data-catalog-price-slider hidden>
-                  <input type="range" aria-label="Minimum price" min={priceSlider.min} max={priceSlider.max} step={priceStep} value={single("minPrice") ?? priceSlider.min} data-catalog-price-thumb="min" />
-                  <input type="range" aria-label="Maximum price" min={priceSlider.min} max={priceSlider.max} step={priceStep} value={single("maxPrice") ?? priceSlider.max} data-catalog-price-thumb="max" />
+                  <input type="range" aria-label={copy.minimumPrice} min={priceSlider.min} max={priceSlider.max} step={priceStep} value={single("minPrice") ?? priceSlider.min} data-catalog-price-thumb="min" />
+                  <input type="range" aria-label={copy.maximumPrice} min={priceSlider.min} max={priceSlider.max} step={priceStep} value={single("maxPrice") ?? priceSlider.max} data-catalog-price-thumb="max" />
                 </div>
               )}
               <div class="catalog-price-fields">
                 {[
-                  { name: "minPrice", label: "Min", placeholder: priceRange ? String(Math.floor(priceRange.min)) : "0" },
-                  { name: "maxPrice", label: "Max", placeholder: priceRange ? String(Math.ceil(priceRange.max)) : "" },
+                  { name: "minPrice", label: copy.minPrice, placeholder: priceRange ? String(Math.floor(priceRange.min)) : "0" },
+                  { name: "maxPrice", label: copy.maxPrice, placeholder: priceRange ? String(Math.ceil(priceRange.max)) : "" },
                 ].map(({ name, label, placeholder }) => (
                   <div class="relative min-w-0">
-                    <label for={`catalog-${name}`} class="sr-only">{label} price</label>
+                    <label for={`catalog-${name}`} class="sr-only">{label}</label>
                     <span class="pointer-events-none absolute inset-s-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground" aria-hidden="true">{currencySymbol}</span>
                     {/* Plain text with a decimal keypad: Bangla digits are read as Latin. */}
                     <input
@@ -324,11 +329,11 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                   </div>
                 ))}
                 {!drawer && (
-                  <button type="submit" class="catalog-filter-go">Go<span class="sr-only"> (apply price)</span></button>
+                  <button type="submit" class="catalog-filter-go">{copy.go}<span class="sr-only"> {copy.applyPrice}</span></button>
                 )}
               </div>
               {priceRange && priceRange.max > 0 && (
-                <p class="catalog-facet-note">Up to {money(priceRange.max)}</p>
+                <p class="catalog-facet-note">{copy.upTo(money(priceRange.max))}</p>
               )}
             </fieldset>
           ) : rangeFacet ? (
@@ -354,7 +359,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                   );
                 })}
                 {!drawer && (
-                  <button type="submit" class="catalog-filter-go">Go<span class="sr-only"> (apply {rangeFacet.name})</span></button>
+                  <button type="submit" class="catalog-filter-go">{copy.go}<span class="sr-only"> {copy.apply(rangeFacet.name)}</span></button>
                 )}
               </div>
               {rangeFacet.unit && <p class="catalog-facet-note">{rangeFacet.unit}</p>}
@@ -368,12 +373,12 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                     {link.href ? (
                       <a href={link.href} class="catalog-facet-row catalog-facet-link">
                         <span class="catalog-facet-label">{link.label}</span>
-                        <span class="catalog-facet-count">{link.count}</span>
+                        <span class="catalog-facet-count">{formatCount(link.count)}</span>
                       </a>
                     ) : (
                       <span class="catalog-facet-row catalog-facet-link opacity-50">
                         <span class="catalog-facet-label">{link.label}</span>
-                        <span class="catalog-facet-count">0</span>
+                        <span class="catalog-facet-count">{formatCount(0)}</span>
                       </span>
                     )}
                   </li>
@@ -384,11 +389,11 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                   href={showAllHref(group.expanded ? null : group.key)}
                   class="catalog-facet-more"
                   data-catalog-facet-more
-                  data-more-label={`See more (${group.more})`}
-                  data-less-label="See less"
+                  data-more-label={copy.seeMore(formatCount(group.more))}
+                  data-less-label={copy.seeLess}
                   aria-expanded={group.expanded ? "true" : "false"}
                 >
-                  {group.expanded ? "See less" : `See more (${group.more})`}
+                  {group.expanded ? copy.seeLess : copy.seeMore(formatCount(group.more))}
                 </a>
               )}
             </fieldset>
@@ -409,12 +414,12 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                   {/* No name: it narrows the list and is never submitted. */}
                   <input
                     type="search"
-                    aria-label={`Search ${group.name}`}
-                    placeholder={`Search ${group.name}`}
+                    aria-label={copy.searchIn(group.name)}
+                    placeholder={copy.searchIn(group.name)}
                     data-catalog-facet-query
                     class="catalog-filter-input catalog-filter-input--icon"
                   />
-                  <p class="catalog-facet-note" data-catalog-facet-search-empty hidden>No matches</p>
+                  <p class="catalog-facet-note" data-catalog-facet-search-empty hidden>{copy.noMatches}</p>
                 </div>
               )}
               <div class:list={["catalog-facet-values", display.display === "swatch" && "catalog-facet-values--swatch"]}>
@@ -439,7 +444,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                       ></span>
                     )}
                     <span class="catalog-facet-label">{label}</span>
-                    <span class="catalog-facet-count">{count}</span>
+                    <span class="catalog-facet-count">{formatCount(count)}</span>
                   </label>
                 ))}
               </div>
@@ -448,11 +453,11 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                   href={showAllHref(group.expanded ? null : group.key)}
                   class="catalog-facet-more"
                   data-catalog-facet-more
-                  data-more-label={`See more (${group.more})`}
-                  data-less-label="See less"
+                  data-more-label={copy.seeMore(formatCount(group.more))}
+                  data-less-label={copy.seeLess}
                   aria-expanded={group.expanded ? "true" : "false"}
                 >
-                  {group.expanded ? "See less" : `See more (${group.more})`}
+                  {group.expanded ? copy.seeLess : copy.seeMore(formatCount(group.more))}
                 </a>
               )}
             </fieldset>
@@ -463,16 +468,16 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
 
     {bar && barMore > 0 && (
       <button type="button" class="catalog-bar-more" data-catalog-bar-more aria-expanded={barOpen ? "true" : "false"}>
-        More filters{barMoreApplied > 0 && <span class="tabular-nums"> ({barMoreApplied})</span>}
+        {copy.moreFilters}{barMoreApplied > 0 && <span class="tabular-nums"> ({formatCount(barMoreApplied)})</span>}
       </button>
     )}
 
     {hasActiveFilters && !drawer && (
-      <a href={resetPath} class="catalog-filter-clear">Clear all</a>
+      <a href={resetPath} class="catalog-filter-clear">{copy.clearAll}</a>
     )}
     {!drawer && (
       <noscript>
-        <button type="submit" class="catalog-filter-clear">Apply filters</button>
+        <button type="submit" class="catalog-filter-clear">{copy.applyFilters}</button>
       </noscript>
     )}
   </div>
@@ -489,12 +494,16 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
           href={resetPath}
           class="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground"
         >
-          Clear all
+          {copy.clearAll}
         </a>
       )}
       <button
         type="submit"
         data-catalog-filter-apply
+        data-show-one={applyWords.one}
+        data-show-many={applyWords.many}
+        data-show-none={applyWords.none}
+        data-show-plain={copy.showProductsPlain}
         aria-live="polite"
         disabled={applyButton.disabled}
         class="inline-flex h-12 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"

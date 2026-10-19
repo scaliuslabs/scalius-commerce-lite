@@ -4,7 +4,7 @@
 // where the card was sent (a masked contact from the API). The code reaches the
 // recipient by email or SMS, and the owner can show it under Account → Gift cards.
 import { escapeHtml } from "@scalius/shared/html-escape";
-import { formatMoney } from "@scalius/shared/currency";
+import { formatMoney } from "@/lib/currency";
 import type { LineExtrasContext, OrderLine } from "@/lib/order-line-extras";
 
 /** One issued card, as `extras.giftCards[]` carries it. */

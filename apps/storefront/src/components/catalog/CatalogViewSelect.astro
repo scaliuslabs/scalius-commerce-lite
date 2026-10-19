@@ -3,6 +3,9 @@
 // listing on page one with the buyer's filters (lib/catalog-sort.ts).
 // `compact` fills its cell in the phone bar with a hidden label; `labelled`
 // sits in a toolbar with a visible label ("Sort by:").
+import { catalogCopy } from "@/lib/catalog-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { formatCount } from "@/lib/store-time-zone";
 import {
   PRODUCT_LIST_PAGE_SIZES,
   type ProductListFilterState,
@@ -25,9 +28,10 @@ interface Props {
 
 const { id, name, variant, options: sortOptions, selected, pathname, defaultSort, currentFilters, bare = false } = Astro.props;
 const sort = name === "sortBy";
+const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).sort;
 const options = sort
   ? sortOptions ?? []
-  : PRODUCT_LIST_PAGE_SIZES.map((size) => ({ value: String(size), label: String(size) }));
+  : PRODUCT_LIST_PAGE_SIZES.map((size) => ({ value: String(size), label: formatCount(size) }));
 const selectClass =
   "rounded-lg border-border bg-background text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary";
 const attributes = {
@@ -41,7 +45,7 @@ const attributes = {
 
 {variant === "compact" ? (
   <label class="relative block">
-    <span class="sr-only">{sort ? "Sort products" : "Products per page"}</span>
+    <span class="sr-only">{sort ? copy.sortProducts : copy.perPage}</span>
     <select
       id={id}
       {...attributes}
@@ -52,14 +56,14 @@ const attributes = {
   </label>
 ) : bare ? (
   <Fragment>
-    <label for={id} class="whitespace-nowrap text-sm font-medium text-foreground">{sort ? "Sort by:" : "Show:"}</label>
+    <label for={id} class="whitespace-nowrap text-sm font-medium text-foreground">{sort ? copy.sortBy : copy.show}</label>
     <select id={id} {...attributes} class:list={[selectClass, sort && "min-w-[160px]"]}>
       {options.map(({ value, label }) => <option value={value} selected={selected === value}>{label}</option>)}
     </select>
   </Fragment>
 ) : (
   <div class="flex items-center gap-3">
-    <label for={id} class="whitespace-nowrap text-sm font-medium text-foreground">{sort ? "Sort by:" : "Show:"}</label>
+    <label for={id} class="whitespace-nowrap text-sm font-medium text-foreground">{sort ? copy.sortBy : copy.show}</label>
     <select id={id} {...attributes} class:list={[selectClass, sort && "min-w-[160px]"]}>
       {options.map(({ value, label }) => <option value={value} selected={selected === value}>{label}</option>)}
     </select>

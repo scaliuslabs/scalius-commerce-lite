@@ -1,4 +1,6 @@
 import { normalizeSearchQuery } from "./search-query";
+import { catalogCopy, type CatalogCopy } from "./catalog-copy";
+import { formatCount } from "./store-time-zone";
 
 export interface SearchWordingInput {
   /** What the buyer typed. */
@@ -10,6 +12,8 @@ export interface SearchWordingInput {
   /** Products on this page. */
   productCount: number;
   page: number;
+  /** The words, in the store's language (English by default). */
+  copy?: CatalogCopy["search"];
 }
 
 export interface SearchWording {
@@ -36,12 +40,13 @@ export function searchWording(input: SearchWordingInput): SearchWording {
       ? { shownQuery: corrected, originalQuery: original }
       : null;
   const shown = correction?.shownQuery ?? original;
-  const pageSuffix = input.page > 1 ? ` – Page ${input.page}` : "";
-  const title = `${shown ? `Search results for “${shown}”` : "All products"}${pageSuffix}`;
+  const copy = input.copy ?? catalogCopy("en").search;
+  const pageSuffix = input.page > 1 ? copy.page(formatCount(input.page)) : "";
+  const title = `${shown ? copy.resultsFor(shown) : copy.allProducts}${pageSuffix}`;
   const description = shown
-    ? `${input.resultCountLabel} for “${shown}”.${correction ? ` No exact results for “${correction.originalQuery}”.` : ""}`
-    : "Explore our full collection of products.";
+    ? `${copy.countFor(input.resultCountLabel, shown)}.${correction ? ` ${copy.noExact(correction.originalQuery)}` : ""}`
+    : copy.describeAll;
   const countLabel =
-    input.productCount === 0 ? null : shown ? `${input.resultCountLabel} for “${shown}”` : input.resultCountLabel;
+    input.productCount === 0 ? null : shown ? copy.countFor(input.resultCountLabel, shown) : input.resultCountLabel;
   return { title, description, countLabel, correction };
 }

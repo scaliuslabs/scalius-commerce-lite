@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
-import { formatMoney } from "@scalius/shared/currency";
+import { formatMoney } from "@/lib/currency";
 import { getCustomerSession } from "../api/customer-auth";
 import { browserApiUrl } from "../api/browser-url";
 import { readBuyerAttributes } from "../buyer-ui";

@@ -4,6 +4,8 @@
 // variant; CatalogResults applies it before the grid paints. It is in the
 // initial markup, and a `<noscript>`
 // style removes it where it could not work.
+import { catalogCopy } from "@/lib/catalog-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
@@ -12,24 +14,25 @@ interface Props {
 }
 
 const { defaultView, mobile = false } = Astro.props;
+const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).view;
 const button =
   `inline-flex ${mobile ? "h-11 w-11" : "h-9 w-9"} items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground`;
 ---
 
 <div
   role="group"
-  aria-label="Show products as"
+  aria-label={copy.showAs}
   data-catalog-view-toggle
   data-catalog-view-mobile={mobile ? "" : undefined}
   class:list={["items-center gap-0.5 rounded-lg border border-border bg-background p-0.5", mobile ? "inline-flex lg:hidden" : "hidden lg:inline-flex"]}
 >
   <button type="button" data-view="grid" aria-pressed={defaultView === "grid" ? "true" : "false"} class={button}>
     <Icon name="layout-grid" class="h-4 w-4" aria-hidden="true" />
-    <span class="sr-only">Grid</span>
+    <span class="sr-only">{copy.grid}</span>
   </button>
   <button type="button" data-view="list" aria-pressed={defaultView === "list" ? "true" : "false"} class={button}>
     <Icon name="list" class="h-4 w-4" aria-hidden="true" />
-    <span class="sr-only">List</span>
+    <span class="sr-only">{copy.list}</span>
   </button>
 </div>
 <noscript><style>[data-catalog-view-toggle] { display: none !important; }</style></noscript>

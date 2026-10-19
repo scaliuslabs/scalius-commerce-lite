@@ -12,6 +12,7 @@ import {
   type SupportedCurrencyCode,
 } from "./currency-policy";
 import { currencySymbol, formatAmount, moneyLocale } from "./money-format";
+import { baseLanguage } from "./locale-format";
 
 // Declare window for environments without DOM types (e.g. Cloudflare Workers).
 // Uses a plain object type so it compiles without the DOM lib.
@@ -107,13 +108,14 @@ export function getPriceIncrementMinor(code: string = getCurrencyCode()): number
  */
 export function formatPrice(
   price: number | string,
-  opts?: { symbol?: string; code?: string; precision?: number },
+  opts?: { symbol?: string; code?: string; precision?: number; language?: string },
 ): string {
   const symbol = opts?.symbol ?? getCurrencySymbol();
   const code = opts?.code ?? getCurrencyCode();
   const precision = opts?.precision ?? getDecimalPlaces(code);
   const value = Currency(price, { precision }).value;
-  return `${value < 0 ? "-" : ""}${symbol}${formatAmount(Math.abs(value), "en", precision)}`;
+  const locale = opts?.language && baseLanguage(opts.language) !== "en" ? moneyLocale(code, opts.language) : "en";
+  return `${value < 0 ? "-" : ""}${symbol}${formatAmount(Math.abs(value), locale, precision)}`;
 }
 
 /**
@@ -124,11 +126,12 @@ export function formatPrice(
  */
 export function formatMoney(
   amount: number | string,
-  opts?: { symbol?: string; code?: string },
+  /** `language`: the reader's ("bn" writes Bangla digits); English by default. */
+  opts?: { symbol?: string; code?: string; language?: string },
 ): string {
   const code = (opts?.code ?? getCurrencyCode()).toUpperCase();
   const value = Currency(amount, { precision: getDecimalPlaces(code) });
-  const grouped = formatAmount(Math.abs(value.value), moneyLocale(code), getDecimalPlaces(code), true);
+  const grouped = formatAmount(Math.abs(value.value), moneyLocale(code, opts?.language), getDecimalPlaces(code), true);
   return `${value.value < 0 ? "-" : ""}${opts?.symbol ?? currencySymbolFor(code)}${grouped}`;
 }
 

@@ -52,6 +52,14 @@ export const policies = [
     sample: 'const total = new Intl.NumberFormat("en-IN").format(amount);',
   },
   {
+    rule: "storefront money is formatted through @/lib/currency, never the shared formatters directly",
+    why: "the storefront wrapper writes amounts in the page's digits (৳১,৭৫০ on a Bangla page); the shared formatters default to Latin digits, so a direct import mixes digit systems on one page",
+    paths: [storefront],
+    allow: { "apps/storefront/src/lib/currency.ts": "the wrapper itself" },
+    forbid: [/import\s*\{[^}]*\bformat(?:Money|Price)\b[^}]*\}\s*from\s*["']@scalius\/shared\/currency["']/],
+    sample: 'import { formatMoney } from "@scalius/shared/currency";',
+  },
+  {
     rule: "a count handed to a dashboard message is the number, never formatNumber(count)",
     why: "t() writes a number in the store's format and picks the plural word from it; a pre-formatted string ('1,200') has no plural category and the dashboard once printed the raw plural text (apps/admin-v2/src/i18n/index.ts)",
     paths: ["apps/admin-v2/src"],

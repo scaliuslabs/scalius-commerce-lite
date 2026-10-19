@@ -53,6 +53,8 @@ import {
 } from "@/lib/catalog-listing";
 import { STOREFRONT_FILTER_VALUES_IN_HTML } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { formatCount } from "@/lib/store-time-zone";
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import Icon from "@/components/icons/Icon.astro";
 
@@ -107,18 +109,20 @@ const {
   pathname,
   resetPath,
   searchLabel,
-  newestLabel = "Latest",
+  newestLabel,
   countEndpoint,
   currencySymbol,
   currencyCode,
-  listingName = "this listing",
+  listingName,
   subListings = [],
   pills = [],
   listingTemplate = null,
   band,
 } = Astro.props;
 const { currentFilters, sortBy, defaultSort, query, limit } = queryState;
-const { resolved, preview } = await currentRequestTheme(Astro.locals);
+const { resolved, preview, language } = await currentRequestTheme(Astro.locals);
+// The listing's own words, in the store's language.
+const copy = catalogCopy(language);
 const listingPresentation = catalogListingPresentation(resolved, listingTemplate);
 // The listing's page chrome (blocks.listing): band, phone bar, link style.
 const { band: bandStyle, phoneBar, links } = resolved.blocks.listing;
@@ -169,7 +173,7 @@ const ruledRail = showFilters && placement === "sidebar" && presentation.filters
 const specRail = bandStyle === "beside-filters" && (placement === "sidebar" || specSearch);
 // Amazon and Daraz: the phone's chip row, the facets in a split sheet.
 const marketplacePhoneFilters = phoneBar === "split-sheet" && showFilters;
-const sortOptions = catalogSortOptions({ defaultSort, sortBy, newestLabel, hasReviews });
+const sortOptions = catalogSortOptions({ defaultSort, sortBy, newestLabel: newestLabel ?? copy.sort.latest, hasReviews, copy: copy.sort });
 const viewSelect = { pathname, defaultSort, currentFilters };
 // More than one page, or a size the buyer chose: the page size helps.
 const showPageSize = piece("per-page") && (pagination.total > limit || limit !== DEFAULT_PRODUCT_LIST_PAGE_SIZE);
@@ -193,9 +197,9 @@ const searchPills = specRail && kind === "search" && categoryFacet
   : [];
 const rawPillLinks = showcaseTabs && !piece("subcategory-pills") ? [] : pills.length > 0 ? pills : childPills.length > 1 ? childPills : searchPills;
 const pillLinks = showcaseTabs && rawPillLinks.length > 1
-  ? [{ id: "all", label: "All", href: pathname, active: true }, ...rawPillLinks]
+  ? [{ id: "all", label: copy.listing.all, href: pathname, active: true }, ...rawPillLinks]
   : rawPillLinks;
-const pillLabel = pills.length > 0 || searchPills.length > 0 ? "Categories" : "Sub-categories";
+const pillLabel = pills.length > 0 || searchPills.length > 0 ? copy.listing.categories : copy.listing.subCategories;
 
 const groups = catalogFacetGroups(shownFacets, {
   valuesInHtml: STOREFRONT_FILTER_VALUES_IN_HTML,
@@ -205,7 +209,7 @@ const aspectChips = piece("aspect-chips") && showFilters
   ? catalogAspectChips(filterFacets, {
       shown: showsPrice,
       applied: Boolean(currentFilters.minPrice || currentFilters.maxPrice),
-    })
+    }, copy.filters.price)
   : [];
 const popularFilters = piece("popular-filter-chips") && products.length > 0
   ? catalogPopularFilters({ facets: filterFacets, currentFilters, pathname, defaultSort, total: pagination.total })
@@ -215,7 +219,7 @@ const facetValueChips = piece("facet-value-chips")
   : null;
 // Aspect chips share the phone bar's line when there is one.
 const phoneChips = aspectChips.length > 0 && showFilters;
-const quickFilters = (drawer || marketplacePhoneFilters || massRetailPhoneBar) && showFilters ? catalogQuickFilters({ currentFilters, pathname, defaultSort }) : [];
+const quickFilters = (drawer || marketplacePhoneFilters || massRetailPhoneBar) && showFilters ? catalogQuickFilters({ currentFilters, pathname, defaultSort, copy: copy.filters }) : [];
 
 // Shelves are a browse landing: the plain first page, never a filtered,
 // sorted or later page (those list products in the grid).
@@ -225,7 +229,7 @@ const shelves = presentation.shelves && landing
       groups: subListings,
       items: shelfProducts.length > 0 ? shelfProducts : products,
       maxShelves: presentation.maxShelves,
-      restTitle: `More from ${listingName}`,
+      restTitle: copy.listing.moreFrom(listingName ?? copy.listing.thisListing),
     })
   : [];
 const showViewToggle = piece("grid-list-toggle") && (products.length > 1 || (shelves.length > 0 && shelfProducts.length > 1));
@@ -298,10 +302,10 @@ const bandTools = {
             class="catalog-marketplace-filter-toggle relative flex min-h-11 shrink-0 items-center justify-center rounded-full border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm"
           >
             <Icon name="sliders-horizontal" class="h-4 w-4" />
-            <span class="sr-only">Filters</span>
+            <span class="sr-only">{copy.listing.filters}</span>
             {refinementCount > 0 && (
               <span class="absolute -inset-e-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-                {refinementCount}
+                {formatCount(refinementCount)}
               </span>
             )}
           </button>
@@ -328,17 +332,17 @@ const bandTools = {
             class="relative inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 text-sm font-semibold text-foreground"
           >
             <Icon name="sliders-horizontal" class="h-4 w-4" />
-            <span>Filter</span>
+            <span>{copy.listing.filter}</span>
             {refinementCount > 0 && (
               <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-                {refinementCount}<span class="sr-only"> applied</span>
+                {formatCount(refinementCount)}<span class="sr-only"> {copy.listing.applied}</span>
               </span>
             )}
           </button>
         )}
         {showSort && <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />}
         {showViewToggle && <CatalogViewToggle defaultView={phoneDefaultView} mobile />}
-        <CatalogChipLinks label="Product filters" links={[...quickFilters, ...popularFilters]} inline />
+        <CatalogChipLinks label={copy.listing.productFilters} links={[...quickFilters, ...popularFilters]} inline />
       </Fragment>
     ) : (
       <Fragment>
@@ -355,10 +359,10 @@ const bandTools = {
             ]}
           >
             <Icon name="sliders-horizontal" class="h-4 w-4" />
-            <span>Filters</span>
+            <span>{copy.listing.filters}</span>
             {refinementCount > 0 && (
               <span class="absolute -inset-e-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-                {refinementCount}
+                {formatCount(refinementCount)}
               </span>
             )}
           </button>
@@ -375,7 +379,7 @@ const bandTools = {
 {!specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class={showcaseTabs && pillLinks.length > 1 ? "catalog-showcase-tabs mb-3" : "mb-3 pb-1"} />}
 {!phoneChips && <CatalogAspectChips chips={aspectChips} />}
 {/* One chip row on phones: the sub-categories. Popular filters are in the Filters sheet (Target's own phone bar carries them). */}
-<CatalogChipLinks label="Popular filters" links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1 max-lg:hidden"} />
+<CatalogChipLinks label={copy.listing.popularFilters} links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1 max-lg:hidden"} />
 
 <div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={kind} data-catalog-rail={ruledRail ? "fashion" : undefined} data-catalog-boutique={boutiqueBar ? "" : undefined}>
   {showFilters && (
@@ -402,11 +406,11 @@ const bandTools = {
       >
         <div class:list={["flex items-center justify-between border-b border-border bg-background p-4", !drawer && "lg:hidden"]}>
           {/* A label, not a heading: on some layouts the filters come before the page title in the source. */}
-          <p id="mobile-filter-title" class="text-lg font-semibold">Filters</p>
+          <p id="mobile-filter-title" class="text-lg font-semibold">{copy.listing.filters}</p>
           <button
             type="button"
             id="mobile-filter-close"
-            aria-label="Close filters"
+            aria-label={copy.listing.closeFilters}
             class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted"
           >
             <Icon name="x" class="h-5 w-5" />
@@ -449,7 +453,7 @@ const bandTools = {
         <div class="catalog-band-tools">
           {drawer && showFilters && (
             <button type="button" data-catalog-filter-toggle aria-controls="filter-section" aria-expanded="false" class="inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground hover:bg-muted">
-              <Icon name="sliders-horizontal" class="h-4 w-4" /> Filters
+              <Icon name="sliders-horizontal" class="h-4 w-4" /> {copy.listing.filters}
             </button>
           )}
           {showPageSize && <CatalogViewSelect id="pageSizeDesktop" name="limit" variant="labelled" selected={String(limit)} {...viewSelect} />}
@@ -474,7 +478,7 @@ const bandTools = {
     {facetValueChips && (
       <div class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 max-lg:hidden lg:flex-wrap">
         <span class="shrink-0 text-sm font-medium text-muted-foreground">{facetValueChips.label}</span>
-        <CatalogChipLinks label={`${facetValueChips.label} choices`} links={facetValueChips.links} inline />
+        <CatalogChipLinks label={copy.listing.choices(facetValueChips.label)} links={facetValueChips.links} inline />
       </div>
     )}
 
@@ -493,7 +497,7 @@ const bandTools = {
         {paging !== "numbered" && pagination.page > 1 && (
           <p class="mb-4">
             <a href={pageUrl(pagination.page - 1)} class="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline">
-              Show previous products
+              {copy.listing.showPrevious}
             </a>
           </p>
         )}

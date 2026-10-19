@@ -27,6 +27,7 @@ import {
 } from "@scalius/shared/platform-config";
 import { isValidTimeZone } from "@scalius/shared/commerce-time";
 import { presenceCountry } from "@scalius/shared/markets";
+import { baseLanguage } from "@scalius/shared/locale-format";
 import {
   deriveRuntimeSecret,
   readMasterSecret,
@@ -73,6 +74,11 @@ export interface StorefrontRuntime {
    * IN), else the backup market's. Numbers and dates are written as there.
    */
   STORE_REGION?: string;
+  /**
+   * The language the store's own words are in on this page (`bn`, `en`),
+   * from the layout payload: numbers and prices are written in its digits.
+   */
+  STORE_LANGUAGE?: string;
   /**
    * The subfolder presence this render is in (`en-in`), from the header only
    * the gateway sets; absent for the root (the backup market).
@@ -257,7 +263,7 @@ function optional(value: string | null | undefined): string | undefined {
  * empty storefront setting keeps the request origin.
  */
 export function applyPlatformOrigins(
-  layout: Pick<LayoutData, "platform" | "cspAllowedDomains" | "timeZone" | "markets"> | null | undefined,
+  layout: Pick<LayoutData, "platform" | "cspAllowedDomains" | "timeZone" | "markets" | "storefrontCopy"> | null | undefined,
 ): void {
   const store = getRuntime();
   if (!store) return;
@@ -285,6 +291,13 @@ export function applyPlatformOrigins(
   const country = presenceCountry(presence)
     ?? layout?.markets?.markets.find((market) => market.isBackup)?.countries[0];
   store.STORE_REGION = country && /^[A-Z]{2}$/.test(country) ? country : undefined;
+  const language = layout?.storefrontCopy?.languageCode;
+  store.STORE_LANGUAGE = typeof language === "string" && language ? baseLanguage(language) : undefined;
+}
+
+/** The language of this page's store words, seeded from this request's layout payload, if any. */
+export function getRuntimeStoreLanguage(): string | undefined {
+  return getRuntime()?.STORE_LANGUAGE;
 }
 
 /** The page's country seeded from this request's layout payload, if any. */

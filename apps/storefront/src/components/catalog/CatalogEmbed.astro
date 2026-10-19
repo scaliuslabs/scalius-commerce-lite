@@ -20,6 +20,8 @@ import {
 import { catalogFacetGroups, catalogFacetValueCounts, catalogRatingRows, showsCatalogPriceFilter, visibleCatalogFacets } from "@/lib/catalog-filters";
 import { catalogListingControls, catalogListingPresentation, catalogSortOptions } from "@/lib/catalog-listing";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { pageLanguage } from "@/lib/store-time-zone";
 
 type ListingProps = ComponentProps<typeof CatalogListing>;
 
@@ -29,7 +31,7 @@ interface Props {
 }
 
 const { kind, listing } = Astro.props;
-const { products, pagination, facets, ratingFacet = [], priceRange, queryState, pathname, resetPath, searchLabel, newestLabel = "Latest", countEndpoint, currencySymbol, currencyCode, listingTemplate = null } = listing;
+const { products, pagination, facets, ratingFacet = [], priceRange, queryState, pathname, resetPath, searchLabel, newestLabel = catalogCopy(pageLanguage()).sort.latest, countEndpoint, currencySymbol, currencyCode, listingTemplate = null } = listing;
 const { currentFilters, sortBy, defaultSort, query, limit } = queryState;
 const { resolved } = await currentRequestTheme(Astro.locals);
 const hasReviews = resolved.facts.hasReviews;
