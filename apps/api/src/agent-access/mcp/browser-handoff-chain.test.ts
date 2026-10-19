@@ -129,7 +129,7 @@ describe("MCP secure browser handoff chain", () => {
       env,
       ctx: { waitUntil: vi.fn() } as unknown as ExecutionContext,
     });
-    const read = Reflect.get(server, "_registeredTools")?.["operations.read"]
+    const read = Reflect.get(server, "_registeredTools")?.["scalius_read"]
       ?.handler as ((input: unknown) => Promise<Record<string, unknown>>) | undefined;
     expect(read).toBeTypeOf("function");
 

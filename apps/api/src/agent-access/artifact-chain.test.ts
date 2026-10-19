@@ -272,7 +272,7 @@ describe("continuous MCP artifact execution and one-use download", () => {
     // this pre-freeze test can use the live finalized contract instead of the
     // intentionally stale checked-in generated snapshot.
     const server = createAgentMcpServer({ surface: "dashboard", env, ctx });
-    const read = Reflect.get(server, "_registeredTools")?.["operations.read"]
+    const read = Reflect.get(server, "_registeredTools")?.["scalius_read"]
       ?.handler as ((input: unknown) => Promise<Record<string, unknown>>) | undefined;
     expect(read).toBeTypeOf("function");
     const toolResult = await read!({
