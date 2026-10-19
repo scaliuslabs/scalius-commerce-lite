@@ -113,6 +113,7 @@
   letter-spacing: var(--theme-heading-tracking, -0.01em);
   text-transform: var(--theme-heading-transform, none);
   text-wrap: balance;
+  overflow-wrap: break-word;
 }
 .noor-display { font-size: clamp(2.25rem, 1.35rem + 3.6vw, 4.5rem); line-height: 1.02; }
 .noor-h1 { font-size: clamp(1.875rem, 1.35rem + 2.1vw, 3.25rem); line-height: 1.06; }
@@ -164,7 +165,8 @@
 .noor-more:hover { text-decoration-color: currentColor; }
 .noor-more .noor-icon { transition: transform var(--n-fast) var(--n-ease); }
 .noor-more:hover .noor-icon { transform: translateX(3px); }
-[dir="rtl"] .noor-more .noor-icon, [dir="rtl"] .noor-btn .noor-icon { transform: scaleX(-1); }
+/* Arrows and chevrons point the way the text reads (`scale` composes with any hover `transform`). */
+[dir="rtl"] .noor-icon.is-dir { scale: -1 1; }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
 
@@ -372,7 +374,7 @@
 .noor-card-body { display: grid; gap: 0.25rem; padding-inline: 0.125rem; }
 .noor-card.is-center .noor-card-body { justify-items: center; text-align: center; }
 .noor-card-title { font-family: var(--n-sans); font-size: 0.875rem; font-weight: 500; line-height: 1.35; letter-spacing: 0; }
-.noor-card-title a { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: inherit; text-decoration: none; }
+.noor-card-title a { display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: inherit; text-decoration: none; }
 .noor-card-title a::after { content: ""; position: absolute; inset: 0; z-index: 1; }
 .noor-card-title a:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 .noor-card-meta { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 0.5rem; font-size: 0.875rem; }
@@ -495,7 +497,8 @@
 .noor-header-shell[data-scrolled] .noor-header { box-shadow: 0 6px 20px -14px rgb(20 16 12 / 0.4); }
 .noor-header-bar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  /* The icons always fit; a long text logo gives way (ellipsis), never the icons. */
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   grid-template-areas: "start logo end";
   align-items: center;
   column-gap: 0.75rem;
@@ -511,7 +514,7 @@
 .noor-header-start, .noor-header-end { display: flex; align-items: center; gap: 0.25rem; min-inline-size: 0; }
 .noor-header-end { justify-content: flex-end; }
 /* Logo first: logo, menu and icons in one row; the menu takes the room left and never runs into them. */
-.noor-header.is-start .noor-header-bar { grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-areas: "start logo nav end"; }
+.noor-header.is-start .noor-header-bar { grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto; grid-template-areas: "start logo nav end"; }
 .noor-header.is-start .noor-header-bar > .noor-logo { justify-self: start; }
 @media (min-width: 64rem) {
   .noor-header-bar { min-block-size: 4.25rem; padding-inline: var(--n-gutter); column-gap: 1.5rem; }
@@ -529,7 +532,8 @@
   align-items: center;
   gap: 0.5rem;
   min-block-size: 2.5rem;
-  padding: 0 0.875rem 0 0.75rem;
+  padding-block: 0;
+  padding-inline: 0.75rem 0.875rem;
   border: 1px solid var(--n-line);
   border-radius: 999px;
   background: transparent;
@@ -542,9 +546,9 @@
 .noor-search-trigger:hover { border-color: currentColor; color: inherit; }
 @media (min-width: 64rem) { button.noor-search-trigger.noor-desk-only { display: inline-flex; } }
 
-.noor-logo { display: inline-flex; align-items: center; justify-self: center; min-inline-size: 0; color: inherit; text-decoration: none; }
+.noor-logo { display: inline-flex; align-items: center; justify-self: center; min-inline-size: 0; max-inline-size: 100%; color: inherit; text-decoration: none; }
 .noor-logo-img { display: block; inline-size: auto; max-inline-size: min(var(--noor-logo-width, 140px), 44vw); max-block-size: 2.25rem; object-fit: contain; }
-.noor-logo-text { font-family: var(--n-serif); font-size: 1.5rem; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; }
+.noor-logo-text { min-inline-size: 0; overflow: hidden; font-family: var(--n-serif); font-size: 1.5rem; line-height: 1.1; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
 @media (min-width: 64rem) { .noor-logo-img { max-block-size: 2.75rem; } .noor-logo-text { font-size: 1.875rem; } }
 
 .noor-icon-btn {
@@ -686,7 +690,7 @@
 .noor-drawer:popover-open { transform: none; }
 @starting-style { .noor-drawer:popover-open { transform: translateX(-100%); } }
 .noor-drawer::backdrop { background: rgb(20 16 12 / 0.45); }
-.noor-drawer-top { position: sticky; inset-block-start: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.5rem 0.5rem 1.25rem; background: var(--n-surface); border-block-end: 1px solid var(--n-line); }
+.noor-drawer-top { position: sticky; inset-block-start: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding-block: 0.5rem; padding-inline: 1.25rem 0.5rem; background: var(--n-surface); border-block-end: 1px solid var(--n-line); }
 .noor-drawer-title { font-family: var(--n-serif); font-size: 1.375rem; }
 .noor-drawer .noor-field { margin: 1rem 1.25rem; }
 .noor-drawer-list { margin: 0; padding: 0 1.25rem; list-style: none; }
@@ -704,7 +708,6 @@
 .noor-drawer.is-drill .noor-drawer-list details[open] > summary { justify-content: flex-start; gap: 0.5rem; font-weight: 600; border-block-end: 1px solid var(--n-line); }
 .noor-drawer.is-drill .noor-drawer-list details[open] > summary > .noor-drawer-back { display: inline-flex; }
 .noor-drawer.is-drill .noor-drawer-list details[open] > summary > .noor-icon:last-child { display: none; }
-[dir="rtl"] .noor-drawer-back .noor-icon { transform: scaleX(-1); }
 .noor-drawer.is-drill .noor-drawer-list details ul { margin: 0; padding-inline-start: 0; border: 0; }
 .noor-drawer.is-drill .noor-drawer-list details li { border-block-end: 1px solid var(--n-line); }
 .noor-drawer.is-drill .noor-drawer-list details a { min-block-size: 3rem; color: inherit; font-size: 1rem; }
@@ -869,7 +872,7 @@
 .noor-marquee.speed-fast { --m-speed: 24s; }
 .noor-marquee:hover .noor-marquee-track { animation-play-state: paused; }
 .noor-marquee-run { display: flex; margin: 0; padding: 0; list-style: none; }
-.noor-marquee-run li { display: flex; align-items: center; gap: 1.75rem; padding: 0.75rem 0 0.75rem 1.75rem; font-size: 0.875rem; font-weight: 500; letter-spacing: 0.04em; white-space: nowrap; }
+.noor-marquee-run li { display: flex; align-items: center; gap: 1.75rem; padding-block: 0.75rem; padding-inline: 1.75rem 0; font-size: 0.875rem; font-weight: 500; letter-spacing: 0.04em; white-space: nowrap; }
 .noor-marquee-sep { opacity: 0.55; }
 .noor-marquee.style-outline { color: var(--n-ink); background: transparent; }
 .noor-marquee.style-outline li { padding-block: 1rem; font-family: var(--n-serif); font-size: clamp(2rem, 1.4rem + 2.4vw, 3.5rem); letter-spacing: -0.01em; color: transparent; -webkit-text-stroke: 1px var(--n-ink); }
@@ -910,6 +913,7 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 .noor-spot summary::-webkit-details-marker { display: none; }
 .noor-spot[open] summary { animation: none; background: var(--n-ink); color: var(--n-bg); }
 .noor-spot-card { position: absolute; inset-block-start: calc(100% + 0.5rem); inset-inline-start: 50%; z-index: 3; display: grid; gap: 0.25rem; inline-size: max-content; max-inline-size: 14rem; padding: 0.75rem 0.875rem; border-radius: var(--n-radius-lg); background: var(--n-surface); color: var(--n-ink); font-size: 0.8125rem; box-shadow: var(--n-shadow); transform: translateX(-50%); }
+[dir="rtl"] .noor-spot-card { transform: translateX(50%); }
 .noor-spot-card p { color: var(--n-muted); }
 .noor-spot-card .noor-more { min-block-size: 1.75rem; }
 @keyframes noor-pulse { 50% { box-shadow: 0 0 0 10px rgb(255 255 255 / 0.12); } }

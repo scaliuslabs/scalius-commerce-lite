@@ -228,7 +228,8 @@ export function PromoTiles({ settings }: SectionProps<PromosSettings>) {
           const link = text(item.link);
           const body = (
             <>
-              <Image image={item.image} alt="" class="noor-cover" sizes={items.length === 1 ? "100vw" : "(min-width: 768px) 50vw, 100vw"} />
+              {/* The words name the tile; a photo-only link is named by its photo's alt text. */}
+              <Image image={item.image} alt={text(item.heading) || text(item.label) ? "" : item.image?.alt ?? ""} class="noor-cover" sizes={items.length === 1 ? "100vw" : "(min-width: 768px) 50vw, 100vw"} />
               <span class="noor-promo-copy">
                 {text(item.eyebrow) ? <span class="noor-eyebrow">{item.eyebrow}</span> : null}
                 {text(item.heading) ? <span class="noor-promo-title">{item.heading}</span> : null}

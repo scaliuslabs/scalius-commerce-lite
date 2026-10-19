@@ -115,7 +115,8 @@ describe("Noor skins draw what Noor's own sections drew", () => {
 
   it.each(cases)("%s as %s", (name, component, legacyType, settings, data) => {
     const html = draw(component, legacyType, settings, data);
-    expect(html).toBe(before[name]);
+    // Since the move, arrows and chevrons carry `is-dir` (they mirror on RTL pages); the markup is otherwise the same.
+    expect(html.replaceAll('class="noor-icon is-dir"', 'class="noor-icon"')).toBe(before[name]);
     expect(storefrontShown(html, "scalius.noor").dropped).toBe(0);
   });
 });

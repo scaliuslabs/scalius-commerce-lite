@@ -38,9 +38,12 @@ const PATHS = {
 export type IconName = keyof typeof PATHS;
 export const ICON_NAMES = Object.keys(PATHS) as IconName[];
 
+/** Icons that point along the line of text: they mirror on a right-to-left page (storefront.css). */
+const DIRECTIONAL = new Set<IconName>(["chevron", "arrow", "back"]);
+
 export function Icon({ name, size = 20, label }: { name: IconName; size?: number; label?: string }): Html {
   const a11y = label ? `role="img" aria-label="${label.replace(/[<>&"]/g, "")}"` : 'aria-hidden="true" focusable="false"';
-  return raw(`<svg class="noor-icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" ${a11y}>${PATHS[name]}</svg>`);
+  return raw(`<svg class="noor-icon${DIRECTIONAL.has(name) ? " is-dir" : ""}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" ${a11y}>${PATHS[name]}</svg>`);
 }
 
 const SOCIAL: Record<string, string> = {
