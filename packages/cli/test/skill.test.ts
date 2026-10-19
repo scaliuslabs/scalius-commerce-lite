@@ -15,6 +15,7 @@ describe("portable Scalius skill and MCP setup", () => {
     ["agents", [".agents", "skills"]],
     ["codex", ["codex-home", "skills"]],
     ["claude", [".claude", "skills"]],
+    ["cursor", [".cursor", "skills"]],
     ["opencode", [".config", "opencode", "skills"]],
     ["pi", [".pi", "agent", "skills"]],
   ] as const)("installs the focused suite for %s without changing its sources", async (harness, segments) => {
@@ -26,10 +27,10 @@ describe("portable Scalius skill and MCP setup", () => {
       harness,
       skills: SCALIUS_SKILL_NAMES.map((name) => expect.objectContaining({ name })),
     });
-    await expect(stat(join(directory, ...segments, "scalius-commerce", "SKILL.md"))).resolves.toBeTruthy();
+    await expect(stat(join(directory, ...segments, "scalius", "SKILL.md"))).resolves.toBeTruthy();
     await expect(installSkill(runtime, harness, false)).rejects.toMatchObject({ errorCode: "skill_exists" });
 
-    const stale = join(directory, ...segments, "scalius-commerce", "stale.md");
+    const stale = join(directory, ...segments, "scalius", "stale.md");
     await writeFile(stale, "must be removed", "utf8");
     await expect(installSkill(runtime, harness, true)).resolves.toMatchObject({ status: "updated" });
     await expect(stat(stale)).rejects.toMatchObject({ code: "ENOENT" });
@@ -80,7 +81,7 @@ describe("portable Scalius skill and MCP setup", () => {
   });
 
   it("supports the complete declared harness set and rejects unsafe server origins", async () => {
-    expect(AGENT_HARNESSES).toEqual(["agents", "codex", "claude", "opencode", "pi"]);
+    expect(AGENT_HARNESSES).toEqual(["agents", "codex", "claude", "cursor", "opencode", "pi"]);
     const directory = await mkdtemp(join(tmpdir(), "scalius-origin-test-"));
     await expect(setupHarness(createTestRuntime({ directory }), {
       harness: "agents",

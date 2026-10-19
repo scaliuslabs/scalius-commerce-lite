@@ -1,22 +1,34 @@
-import { Command, CommanderError, Option } from "commander";
-import { readFileSync } from "node:fs";
+import { Argument, Command, CommanderError, Option } from "commander";
+import { ask, batch, describe, read, search, write, type OutputOptions } from "./agent.js";
 import { login, importToken, authStatus, logout, revoke } from "./auth.js";
+import { serveMcpBridge } from "./bridge.js";
+import { BULK_KINDS, bulk, type BulkKind } from "./bulk.js";
 import { ConfigStore } from "./config.js";
+import { doctorExitCode, renderDoctor, runDoctor } from "./doctor.js";
 import { asCliError, CliError } from "./errors.js";
+import { EXPORT_KINDS, exportArtifact, type ExportKind } from "./export.js";
+import { parseHarnesses } from "./harness.js";
+import { commandTree } from "./help-json.js";
+import { renderInit, runInit } from "./init.js";
 import { collectFile, readBatchInput, readInput } from "./input.js";
+import type { Audience } from "./mcp-client.js";
 import { uploadMediaFiles } from "./media.js";
 import { isObjectOperationId, loadOpenApi } from "./openapi.js";
 import { operationsBatch, operationsDescribe, operationsRefresh, operationsRun, operationsSearch } from "./operations.js";
-import { writeError, writeResult } from "./output.js";
+import { resolveOutputMode, writeError, writeResult } from "./output.js";
 import { listProfiles, showProfile, useProfile } from "./profiles.js";
+import { parseSelect } from "./select.js";
 import { AGENT_HARNESSES, installSkill, setupHarness, type AgentHarness } from "./skill.js";
 import type { OutputMode, Runtime, StructuredInput } from "./types.js";
+import { packageVersion } from "./version.js";
 import { readWorkflow } from "./workflow-read.js";
 import { resolveWorkflow } from "./workflows.js";
 
 interface GlobalOptions {
-  output: OutputMode;
+  output?: string;
   profile?: string;
+  select?: string;
+  jq?: string;
 }
 
 interface RunOptions {
@@ -28,18 +40,11 @@ interface RunOptions {
   overwrite: boolean;
 }
 
-function packageVersion(): string {
-  const manifest = JSON.parse(
-    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
-  ) as { version?: unknown };
-  if (typeof manifest.version !== "string" || !/^\d+\.\d+\.\d+$/.test(manifest.version)) {
-    throw new CliError(8, "invalid_package", "The installed Scalius package version is invalid.");
+/** Set by a command that finishes with a non-zero exit code it already reported (10, 11, doctor). */
+class ExitSignal extends Error {
+  constructor(readonly code: number) {
+    super(`exit ${code}`);
   }
-  return manifest.version;
-}
-
-function globalOptions(command: Command): GlobalOptions {
-  return command.optsWithGlobals() as GlobalOptions;
 }
 
 function humanSummary(value: unknown): string | undefined {
@@ -69,11 +74,6 @@ function operationResultSummary(value: Record<string, unknown>): string {
   return `${heading}\n${JSON.stringify(value.data, null, 2)}`;
 }
 
-async function resolve(runtime: Runtime, command: Command, requireToken = true) {
-  const store = new ConfigStore(runtime);
-  return store.resolveProfile(globalOptions(command).profile, requireToken);
-}
-
 function resourceForOperationId(operationId: string): "dashboard" | "storefront" {
   if (operationId.startsWith("dashboard.") || isObjectOperationId(operationId)) return "dashboard";
   if (operationId.startsWith("storefront.")) return "storefront";
@@ -94,52 +94,227 @@ function resourceForBatch(input: StructuredInput): "dashboard" | "storefront" {
   return [...resources][0] as "dashboard" | "storefront";
 }
 
-async function resolveForResource(
-  runtime: Runtime,
-  command: Command,
-  resource: "dashboard" | "storefront",
-  requireToken = true,
-) {
-  return new ConfigStore(runtime).resolveProfileForResource(
-    resource,
-    globalOptions(command).profile,
-    requireToken,
-  );
+function positiveInteger(name: string, value: string | undefined, maximum: number): number | undefined {
+  if (value === undefined) return undefined;
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 1 || number > maximum) {
+    throw new CliError(2, `invalid_${name.replace(/-/g, "_")}`, `--${name} must be an integer from 1 to ${maximum}.`);
+  }
+  return number;
 }
+
+const surfaceOption = () => new Option("--surface <audience>", "dashboard (merchant) or storefront (buyer) tools").choices(["dashboard", "storefront"]).default("dashboard");
 
 export function createProgram(runtime: Runtime): Command {
   const program = new Command();
+  const globals = (command: Command): GlobalOptions => command.optsWithGlobals() as GlobalOptions;
+  const mode = (command: Command): OutputMode => resolveOutputMode(runtime, globals(command).output);
+  const output = (command: Command): OutputOptions => {
+    const options = globals(command);
+    return {
+      mode: mode(command),
+      ...(options.select ? { select: parseSelect(options.select) } : {}),
+      ...(options.jq ? { jq: options.jq } : {}),
+      ...(options.profile ? { profile: options.profile } : {}),
+    };
+  };
+  const resolve = (command: Command, requireToken = true) =>
+    new ConfigStore(runtime).resolveProfile(globals(command).profile, requireToken);
+  const resolveForResource = (command: Command, resource: "dashboard" | "storefront", requireToken = true) =>
+    new ConfigStore(runtime).resolveProfileForResource(resource, globals(command).profile, requireToken);
+  const finish = (code: number) => {
+    if (code !== 0) throw new ExitSignal(code);
+  };
+
   program.configureOutput({
     writeOut: (text) => runtime.stdout.write(text),
     writeErr: () => undefined,
   });
   program
     .name("scalius")
-    .description("Discover and execute Scalius Commerce operations")
+    .description("Run a Scalius Commerce store from the terminal or any agent")
     .version(packageVersion())
     .option("--profile <name>", "configuration profile")
-    .addOption(new Option("--output <format>", "output format").choices(["human", "json"]).default("human"))
+    .addOption(new Option("--output <format>", "output format (default: human on a terminal, json when piped)").choices(["human", "json"]))
+    .option("--select <pointers>", "keep only these JSON pointers of data, comma-separated (/items/*/id,/total)")
+    .option("--jq <expression>", "filter data with a built-in jq expression; strings print raw")
     .showHelpAfterError()
     .showSuggestionAfterError()
     .exitOverride();
 
-  program.command("setup")
-    .description("install the portable agent skill and print exact MCP setup")
-    .requiredOption("--harness <name>", `agent harness (${AGENT_HARNESSES.join("|")})`)
-    .option("--server <origin>", "Scalius API origin; otherwise use the selected profile")
-    .option("--force", "replace an existing Scalius skill", false)
-    .action(async (options: { harness: string; server?: string; force: boolean }, command) => {
-      if (!AGENT_HARNESSES.includes(options.harness as AgentHarness)) {
-        throw new CliError(2, "invalid_harness", `Harness must be one of: ${AGENT_HARNESSES.join(", ")}.`);
-      }
-      const profile = options.server ? undefined : await resolve(runtime, command, false).catch(() => undefined);
-      const result = await setupHarness(runtime, {
-        harness: options.harness as AgentHarness,
-        force: options.force,
-        server: options.server ?? profile?.server,
-      });
-      writeResult(runtime, globalOptions(command).output, result, JSON.stringify(result, null, 2));
+  // ─── Connect ──────────────────────────────────────────────────────────────
+
+  program.command("init")
+    .description("connect this machine's agents to a store in one step: pair once, install skills, register MCP, verify")
+    .option("--server <origin>", "store API origin (https://api.yourstore.com)")
+    .option("--harness <names>", "auto, or comma-separated: claude, codex, cursor, opencode, pi, agents", "auto")
+    .option("--storefront", "also connect the buyer (storefront) tools; needs a second approval", false)
+    .option("--no-auth", "skip pairing (install skills and MCP only)")
+    .option("--no-open", "print the approval link instead of opening the browser")
+    .option("--profile-name <name>", "name for the new profile")
+    .action(async (options: { server?: string; harness: string; storefront: boolean; auth: boolean; open: boolean; profileName?: string }, command) => {
+      parseHarnesses(options.harness);
+      const { result, exitCode } = await runInit(runtime, options);
+      writeResult(runtime, mode(command), result, renderInit(result));
+      finish(exitCode);
     });
+
+  program.command("doctor")
+    .description("check every link from this machine to the store, with the fix for each problem")
+    .option("--harness <names>", "auto, or comma-separated harness names", "auto")
+    .addOption(surfaceOption())
+    .action(async (options: { harness: string; surface: Audience }, command) => {
+      const harnesses = parseHarnesses(options.harness);
+      const report = await runDoctor(runtime, {
+        profile: globals(command).profile,
+        audience: options.surface,
+        ...(harnesses === "auto" ? {} : { harnesses }),
+      });
+      writeResult(runtime, mode(command), report, renderDoctor(report));
+      finish(doctorExitCode(report));
+    });
+
+  program.command("mcp")
+    .description("serve the store's MCP tools over stdio with the paired credential (agent harnesses launch this)")
+    .addOption(surfaceOption())
+    .action(async (options: { surface: Audience }, command) => {
+      await serveMcpBridge(runtime, { audience: options.surface, profile: globals(command).profile });
+    });
+
+  // ─── Agent commands ───────────────────────────────────────────────────────
+
+  program.command("ask")
+    .description("answer a store-data question in one bounded call (= scalius_answer)")
+    .argument("<question...>")
+    .addOption(surfaceOption())
+    .action(async (words: string[], options: { surface: Audience }, command) => {
+      await ask(runtime, output(command), words.join(" "), options.surface);
+    });
+
+  program.command("search")
+    .description("find the workflows and operations for a goal, ranked (= scalius_search)")
+    .argument("<goal...>")
+    .option("--limit <count>", "hits to return (1-10)")
+    .addOption(surfaceOption())
+    .action(async (words: string[], options: { limit?: string; surface: Audience }, command) => {
+      await search(runtime, output(command), words.join(" "), options.surface, positiveInteger("limit", options.limit, 10));
+    });
+
+  program.command("describe")
+    .description("how to call 1-5 operations: inputs, rules, one example (= scalius_describe)")
+    .argument("<operationIds...>")
+    .option("--full", "exact schemas", false)
+    .option("--examples", "examples with optional fields", false)
+    .action(async (ids: string[], options: { full: boolean; examples: boolean }, command) => {
+      await describe(runtime, output(command), ids, options.full ? "full" : options.examples ? "examples" : "compact");
+    });
+
+  program.command("read")
+    .description("run one read operation (= scalius_read); --all follows every page as NDJSON")
+    .argument("<operationId>")
+    .option("--input <json|@file|->", "{path, query, body} input")
+    .option("--limit <count>", "rows per page (1-250)")
+    .option("--cursor <cursor>", "meta.nextCursor from the previous page")
+    .option("--all", "read every page, one record per line", false)
+    .option("--ndjson", "print rows one JSON record per line", false)
+    .option("--max-bytes <bytes>", "result budget per page (1024-65536)")
+    .action(async (operationId: string, options: { input?: string; limit?: string; cursor?: string; all: boolean; ndjson: boolean; maxBytes?: string }, command) => {
+      const maxBytes = positiveInteger("max-bytes", options.maxBytes, 65_536);
+      if (maxBytes !== undefined && maxBytes < 1024) throw new CliError(2, "invalid_max_bytes", "--max-bytes must be from 1024 to 65536.");
+      const out = output(command);
+      const { select, ...rest } = out;
+      await read(runtime, rest, operationId, {
+        input: await readInput(runtime, options.input),
+        ...(select ? { select } : {}),
+        limit: positiveInteger("limit", options.limit, 250),
+        cursor: options.cursor,
+        maxBytes,
+        all: options.all,
+        ndjson: options.ndjson || options.all,
+      });
+    });
+
+  program.command("write")
+    .description("run one change (= scalius_write): --dry-run previews; gated changes need the merchant's approval")
+    .argument("<operationId>")
+    .option("--input <json|@file|->", "{path, query, body} input")
+    .option("--dry-run", "validate and preview; writes nothing (exit 11)", false)
+    .option("--yes", "the merchant approved this change", false)
+    .option("--confirm-token <token>", "approval token from a dry run of exactly this input")
+    .option("--idempotency-key <key>", "auto (default) or a key to reuse when retrying", "auto")
+    .action(async (operationId: string, options: { input?: string; dryRun: boolean; yes: boolean; confirmToken?: string; idempotencyKey: string }, command) => {
+      const outcome = await write(runtime, output(command), operationId, {
+        input: await readInput(runtime, options.input),
+        dryRun: options.dryRun,
+        yes: options.yes,
+        confirmToken: options.confirmToken,
+        idempotencyKey: options.idempotencyKey,
+      });
+      finish(outcome.code);
+    });
+
+  program.command("batch")
+    .description("run up to 20 reads, or up to 20 changes in order, in one call")
+    .requiredOption("--input <json|@file|->", "{\"steps\": [{\"id\", \"operationId\", \"input\"}]}")
+    .option("--dry-run", "preview the changes; writes nothing (exit 11)", false)
+    .option("--yes", "the merchant approved these changes", false)
+    .option("--confirm-token <token>", "approval token from a dry run of exactly these steps")
+    .action(async (options: { input: string; dryRun: boolean; yes: boolean; confirmToken?: string }, command) => {
+      const input = await readBatchInput(runtime, options.input);
+      finish(await batch(runtime, output(command), input.body, options));
+    });
+
+  program.command("bulk")
+    .description(`change many records at once: ${Object.keys(BULK_KINDS).join(", ")}`)
+    .addArgument(new Argument("<kind>", "what to change").choices(Object.keys(BULK_KINDS)))
+    .option("--ids <ids>", "comma-separated record ids")
+    .option("--filter <json>", "which records, as the operation's filter")
+    .option("--set <json>", "what to change (see scalius describe)")
+    .option("--input <json|@file|->", "the exact {body} instead of --ids/--filter/--set")
+    .option("--dry-run", "preview before and after; writes nothing (exit 11)", false)
+    .option("--yes", "the merchant approved this change", false)
+    .option("--confirm-token <token>", "approval token from the dry run")
+    .option("--wait", "follow a large run until it finishes", false)
+    .action(async (kind: string, options: { ids?: string; filter?: string; set?: string; input?: string; dryRun: boolean; yes: boolean; confirmToken?: string; wait: boolean }, command) => {
+      if (!(kind in BULK_KINDS)) throw new CliError(2, "invalid_bulk_kind", `Bulk kind must be one of: ${Object.keys(BULK_KINDS).join(", ")}.`);
+      finish(await bulk(runtime, output(command), kind as BulkKind, {
+        ...options,
+        input: options.input ? await readInput(runtime, options.input) : undefined,
+      }));
+    });
+
+  program.command("export")
+    .description(`save a CSV export: ${Object.keys(EXPORT_KINDS).join(", ")}`)
+    .argument("<kind>")
+    .requiredOption("--out <file>", "destination file")
+    .option("--since <date>", "first day, YYYY-MM-DD (store calendar)")
+    .option("--until <date>", "last day, YYYY-MM-DD")
+    .option("--report <id>", "report id (report exports)")
+    .option("--query <json>", "more filters, as the export operation's query")
+    .option("--max-rows <count>", "row cap")
+    .option("--overwrite", "replace an existing file", false)
+    .action(async (kind: string, options: { out: string; since?: string; until?: string; report?: string; query?: string; maxRows?: string; overwrite: boolean }, command) => {
+      if (!(kind in EXPORT_KINDS)) throw new CliError(2, "invalid_export_kind", `Export kind must be one of: ${Object.keys(EXPORT_KINDS).join(", ")}.`);
+      let query: Record<string, unknown> | undefined;
+      if (options.query) {
+        try {
+          query = JSON.parse(options.query) as Record<string, unknown>;
+        } catch {
+          throw new CliError(2, "invalid_json", "--query must be a JSON object.");
+        }
+      }
+      await exportArtifact(runtime, output(command), kind as ExportKind, {
+        out: options.out,
+        since: options.since,
+        until: options.until,
+        report: options.report,
+        query,
+        maxRows: positiveInteger("max-rows", options.maxRows, 100_000),
+        overwrite: options.overwrite,
+      });
+    });
+
+  // ─── Accounts and profiles ────────────────────────────────────────────────
 
   const auth = program.command("auth").description("authenticate the CLI");
   auth.command("login")
@@ -149,9 +324,9 @@ export function createProgram(runtime: Runtime): Command {
     .addOption(new Option("--resource <audience>", "credential audience").choices(["dashboard", "storefront"]).default("dashboard"))
     .option("--no-open", "do not open the browser")
     .action(async (options: { server: string; profileName?: string; open: boolean; resource: "dashboard" | "storefront" }, command) => {
-      const profileName = options.profileName ?? globalOptions(command).profile ?? "default";
+      const profileName = options.profileName ?? globals(command).profile ?? "default";
       const result = await login(runtime, { server: options.server, profileName, openBrowser: options.open, resource: options.resource });
-      writeResult(runtime, globalOptions(command).output, result, `Authenticated profile '${profileName}'.`);
+      writeResult(runtime, mode(command), result, `Authenticated profile '${profileName}'.`);
     });
 
   const token = auth.command("token").description("manage static credentials");
@@ -160,92 +335,132 @@ export function createProgram(runtime: Runtime): Command {
     .requiredOption("--server <origin>", "Scalius API origin")
     .option("--profile-name <name>", "profile to create")
     .action(async (options: { server: string; profileName?: string }, command) => {
-      const profileName = options.profileName ?? globalOptions(command).profile ?? "default";
+      const profileName = options.profileName ?? globals(command).profile ?? "default";
       const result = await importToken(runtime, options.server, profileName);
-      writeResult(runtime, globalOptions(command).output, result, `Authenticated profile '${profileName}'.`);
+      writeResult(runtime, mode(command), result, `Authenticated profile '${profileName}'.`);
     });
 
   auth.command("status")
     .description("show local authentication status")
     .action(async (_options, command) => {
-      const result = await authStatus(runtime, globalOptions(command).profile);
-      writeResult(runtime, globalOptions(command).output, result);
+      writeResult(runtime, mode(command), await authStatus(runtime, globals(command).profile));
     });
 
   auth.command("logout")
     .description("remove the local credential without revoking it")
     .action(async (_options, command) => {
-      const result = await logout(runtime, globalOptions(command).profile);
-      writeResult(runtime, globalOptions(command).output, result, humanSummary(result));
+      const result = await logout(runtime, globals(command).profile);
+      writeResult(runtime, mode(command), result, humanSummary(result));
     });
 
   auth.command("revoke")
     .description("revoke the current credential and remove it locally")
     .action(async (_options, command) => {
-      const result = await revoke(runtime, globalOptions(command).profile);
-      writeResult(runtime, globalOptions(command).output, result, humanSummary(result));
+      const result = await revoke(runtime, globals(command).profile);
+      writeResult(runtime, mode(command), result, humanSummary(result));
     });
 
   const profile = program.command("profile").description("manage server profiles");
   profile.command("list")
     .description("list profiles")
     .action(async (_options, command) => {
-      const result = await listProfiles(runtime);
-      writeResult(runtime, globalOptions(command).output, result);
+      writeResult(runtime, mode(command), await listProfiles(runtime));
     });
   profile.command("use")
     .description("select the active profile")
     .argument("<name>")
     .action(async (name: string, _options, command) => {
-      const result = await useProfile(runtime, name);
-      writeResult(runtime, globalOptions(command).output, result, `Active profile: ${name}`);
+      writeResult(runtime, mode(command), await useProfile(runtime, name), `Active profile: ${name}`);
     });
   profile.command("show")
     .description("show a profile without revealing its credential")
     .argument("[name]")
     .action(async (name: string | undefined, _options, command) => {
-      const result = await showProfile(runtime, name ?? globalOptions(command).profile);
-      writeResult(runtime, globalOptions(command).output, result);
+      writeResult(runtime, mode(command), await showProfile(runtime, name ?? globals(command).profile));
     });
 
-  const workflow = program.command("workflow").description("resolve merchant and buyer goals");
+  // ─── Files and skills ─────────────────────────────────────────────────────
+
+  const media = program.command("media").description("run guided media workflows");
+  media.command("upload")
+    .description("validate and upload one or more local media files")
+    .argument("<files...>")
+    .option("--folder-id <id>", "destination media folder")
+    .option("--yes", "confirm the write", false)
+    .action(async (files: string[], options: { folderId?: string; yes: boolean }, command) => {
+      if (!options.yes) throw new CliError(10, "confirmation_required", "Media upload writes to the store. Re-run with --yes after reviewing the files.");
+      const result = await uploadMediaFiles(runtime, await resolveForResource(command, "dashboard"), files, options.folderId);
+      writeResult(runtime, mode(command), result);
+    });
+
+  const skill = program.command("skill").description("install the bundled Scalius agent skills");
+  skill.command("install")
+    .description("install or update the Agent Skills suite for one harness")
+    .option("--harness <name>", `agent harness (${AGENT_HARNESSES.join("|")})`, "agents")
+    .option("--force", "replace an existing Scalius skill suite", false)
+    .action(async (options: { harness: string; force: boolean }, command) => {
+      if (!AGENT_HARNESSES.includes(options.harness as AgentHarness)) {
+        throw new CliError(2, "invalid_harness", `Harness must be one of: ${AGENT_HARNESSES.join(", ")}.`);
+      }
+      const result = await installSkill(runtime, options.harness as AgentHarness, options.force);
+      const count = Array.isArray(result.skills) ? result.skills.length : 0;
+      writeResult(runtime, mode(command), result, `${String(result.status)} ${String(count)} Scalius skills in ${String(result.root)}`);
+    });
+
+  // ─── Compatibility (0.2 commands) ─────────────────────────────────────────
+
+  program.command("setup")
+    .description("install the skills and print MCP setup commands (use init instead)")
+    .requiredOption("--harness <name>", `agent harness (${AGENT_HARNESSES.join("|")})`)
+    .option("--server <origin>", "Scalius API origin; otherwise use the selected profile")
+    .option("--force", "replace an existing Scalius skill", false)
+    .action(async (options: { harness: string; server?: string; force: boolean }, command) => {
+      if (!AGENT_HARNESSES.includes(options.harness as AgentHarness)) {
+        throw new CliError(2, "invalid_harness", `Harness must be one of: ${AGENT_HARNESSES.join(", ")}.`);
+      }
+      const existing = options.server ? undefined : await resolve(command, false).catch(() => undefined);
+      const result = await setupHarness(runtime, {
+        harness: options.harness as AgentHarness,
+        force: options.force,
+        server: options.server ?? existing?.server,
+      });
+      writeResult(runtime, mode(command), result, JSON.stringify(result, null, 2));
+    });
+
+  const workflow = program.command("workflow").description("resolve goals locally (use search and ask)");
   workflow.command("resolve")
-    .description("resolve one natural-language goal into the smallest reviewed operation plan")
+    .description("resolve one goal into the smallest reviewed operation plan")
     .argument("<request>", "merchant or buyer goal")
     .addOption(new Option("--surface <audience>", "workflow audience").choices(["dashboard", "storefront"]).default("dashboard"))
     .action(async (request: string, options: { surface: "dashboard" | "storefront" }, command) => {
-      const profile = await resolve(runtime, command, false);
-      const document = await loadOpenApi(runtime, profile);
+      const document = await loadOpenApi(runtime, await resolve(command, false));
       const result = resolveWorkflow(document, { prompt: request, surface: options.surface });
-      writeResult(runtime, globalOptions(command).output, result, JSON.stringify(result, null, 2));
+      writeResult(runtime, mode(command), result, JSON.stringify(result, null, 2));
     });
   workflow.command("read")
     .description("answer one supported store-data question through fixed reviewed reads")
     .argument("<request>", "merchant or buyer data question")
     .addOption(new Option("--surface <audience>", "workflow audience").choices(["dashboard", "storefront"]).default("dashboard"))
     .action(async (request: string, options: { surface: "dashboard" | "storefront" }, command) => {
-      const profile = await resolveForResource(runtime, command, options.surface);
-      const document = await loadOpenApi(runtime, profile);
-      const result = await readWorkflow(runtime, profile, document, {
-        prompt: request,
-        surface: options.surface,
-      });
+      const profileValue = await resolveForResource(command, options.surface);
+      const document = await loadOpenApi(runtime, profileValue);
+      const result = await readWorkflow(runtime, profileValue, document, { prompt: request, surface: options.surface });
       const human = result.kind === "result"
         ? `${result.workflowId}\n${JSON.stringify(result.outputs, null, 2)}`
-        : `${result.classification.reason} Use workflow resolve for a reviewed plan.`;
-      writeResult(runtime, globalOptions(command).output, result, human);
+        : `${result.classification.reason} Use scalius search for ranked options.`;
+      writeResult(runtime, mode(command), result, human);
     });
 
-  const operations = program.command("operations").alias("ops").description("discover and execute operations");
+  const operations = program.command("operations").alias("ops").description("low-level REST lane: files, artifacts and continuations");
   operations.command("refresh")
     .description("refresh the cached live operation contract")
     .addOption(new Option("--surface <audience>", "operation audience").choices(["dashboard", "storefront"]).default("dashboard"))
     .action(async (options: { surface: "dashboard" | "storefront" }, command) => {
-      const result = await operationsRefresh(runtime, await resolveForResource(runtime, command, options.surface));
-      writeResult(runtime, globalOptions(command).output, result, `Refreshed ${String(result.operationCount)} ${options.surface} operation(s).`);
+      const result = await operationsRefresh(runtime, await resolveForResource(command, options.surface));
+      writeResult(runtime, mode(command), result, `Refreshed ${String(result.operationCount)} ${options.surface} operation(s).`);
     });
   operations.command("search")
-    .description("search the live operation contract")
+    .description("search the live operation contract by keyword")
     .argument("[query]")
     .option("--limit <count>", "maximum results (1-100)", "20")
     .addOption(new Option("--surface <audience>", "operation audience").choices(["dashboard", "storefront"]))
@@ -254,24 +469,24 @@ export function createProgram(runtime: Runtime): Command {
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
         throw new CliError(2, "invalid_limit", "Search limit must be an integer from 1 to 100.");
       }
-      const profile = options.surface
-        ? await resolveForResource(runtime, command, options.surface)
-        : globalOptions(command).profile
-          ? await resolve(runtime, command)
-          : await resolveForResource(runtime, command, "dashboard");
-      const result = await operationsSearch(runtime, profile, query, limit);
-      writeResult(runtime, globalOptions(command).output, result, operationSearchSummary(result));
+      const profileValue = options.surface
+        ? await resolveForResource(command, options.surface)
+        : globals(command).profile
+          ? await resolve(command)
+          : await resolveForResource(command, "dashboard");
+      const result = await operationsSearch(runtime, profileValue, query, limit);
+      writeResult(runtime, mode(command), result, operationSearchSummary(result));
     });
   operations.command("describe")
-    .description("describe one executable or continuation operation")
+    .description("describe one executable or continuation operation from the contract")
     .argument("<operationId>")
     .option("--full", "include every response schema", false)
     .action(async (id: string, options: { full: boolean }, command) => {
-      const result = await operationsDescribe(runtime, await resolveForResource(runtime, command, resourceForOperationId(id)), id, options.full);
-      writeResult(runtime, globalOptions(command).output, result, `${id}\n${JSON.stringify(result, null, 2)}`);
+      const result = await operationsDescribe(runtime, await resolveForResource(command, resourceForOperationId(id)), id, options.full);
+      writeResult(runtime, mode(command), result, `${id}\n${JSON.stringify(result, null, 2)}`);
     });
   operations.command("run")
-    .description("run one reviewed executable or continuation operation")
+    .description("run one operation over REST (file uploads, artifacts, continuations)")
     .argument("<operationId>")
     .option("--input <json|@file|->", "structured path/query/body input")
     .option("--file <path|field=@path>", "stream a reviewed raw file or attach a multipart field", collectFile, [])
@@ -281,7 +496,7 @@ export function createProgram(runtime: Runtime): Command {
     .option("--overwrite", "replace an existing --save destination", false)
     .action(async (id: string, options: RunOptions, command) => {
       const input = await readInput(runtime, options.input);
-      const result = await operationsRun(runtime, await resolveForResource(runtime, command, resourceForOperationId(id)), id, {
+      const result = await operationsRun(runtime, await resolveForResource(command, resourceForOperationId(id)), id, {
         input,
         files: options.file,
         idempotencyKey: options.idempotencyKey,
@@ -289,55 +504,40 @@ export function createProgram(runtime: Runtime): Command {
         save: options.save,
         overwrite: options.overwrite,
       });
-      writeResult(runtime, globalOptions(command).output, result, operationResultSummary(result as unknown as Record<string, unknown>));
+      writeResult(runtime, mode(command), result, operationResultSummary(result as unknown as Record<string, unknown>));
     });
   operations.command("batch")
-    .description("execute a bounded sequential operation batch")
+    .description("execute a bounded sequential operation batch over REST")
     .requiredOption("--input <json|@file|->", "batch input")
     .option("--yes", "confirm local risk warnings", false)
     .action(async (options: { input: string; yes: boolean }, command) => {
       const input = await readBatchInput(runtime, options.input);
-      const result = await operationsBatch(runtime, await resolveForResource(runtime, command, resourceForBatch(input)), input, options.yes);
-      writeResult(runtime, globalOptions(command).output, result, `Completed ${String(result.count)} batch step(s).\n${JSON.stringify(result.results, null, 2)}`);
-    });
-
-  const media = program.command("media").description("run guided media workflows");
-  media.command("upload")
-    .description("validate and upload one or more local media files")
-    .argument("<files...>")
-    .option("--folder-id <id>", "destination media folder")
-    .option("--yes", "confirm the write", false)
-    .action(async (files: string[], options: { folderId?: string; yes: boolean }, command) => {
-      if (!options.yes) throw new CliError(2, "confirmation_required", "Media upload writes to the store. Re-run with --yes after reviewing the files.");
-      const result = await uploadMediaFiles(runtime, await resolveForResource(runtime, command, "dashboard"), files, options.folderId);
-      writeResult(runtime, globalOptions(command).output, result);
-    });
-
-  const skill = program.command("skill").description("install the bundled Scalius agent skill");
-  skill.command("install")
-    .description("install or update the portable Agent Skill")
-    .option("--harness <name>", `agent harness (${AGENT_HARNESSES.join("|")})`, "agents")
-    .option("--force", "replace an existing Scalius skill", false)
-    .action(async (options: { harness: string; force: boolean }, command) => {
-      if (!AGENT_HARNESSES.includes(options.harness as AgentHarness)) {
-        throw new CliError(2, "invalid_harness", `Harness must be one of: ${AGENT_HARNESSES.join(", ")}.`);
-      }
-      const result = await installSkill(runtime, options.harness as AgentHarness, options.force);
-      const count = Array.isArray(result.skills) ? result.skills.length : 0;
-      writeResult(runtime, globalOptions(command).output, result, `${String(result.status)} ${String(count)} Scalius skills in ${String(result.root)}`);
+      const result = await operationsBatch(runtime, await resolveForResource(command, resourceForBatch(input)), input, options.yes);
+      writeResult(runtime, mode(command), result, `Completed ${String(result.count)} batch step(s).\n${JSON.stringify(result.results, null, 2)}`);
     });
 
   return program;
 }
 
+function argvOutput(argv: readonly string[]): string | undefined {
+  const index = argv.lastIndexOf("--output");
+  if (index >= 0) return argv[index + 1];
+  const inline = [...argv].reverse().find((value) => value.startsWith("--output="));
+  return inline?.slice("--output=".length);
+}
+
 export async function runProgram(runtime: Runtime, argv: string[]): Promise<number> {
   const program = createProgram(runtime);
-  const outputIndex = argv.lastIndexOf("--output");
-  let mode: OutputMode = outputIndex >= 0 && argv[outputIndex + 1] === "json" ? "json" : "human";
+  let mode: OutputMode = resolveOutputMode(runtime, argvOutput(argv));
+  if ((argv.includes("--help") || argv.includes("-h")) && argv.includes("--json")) {
+    runtime.stdout.write(`${JSON.stringify(commandTree(program, argv))}\n`);
+    return 0;
+  }
   try {
     await program.parseAsync(argv, { from: "user" });
     return 0;
   } catch (error) {
+    if (error instanceof ExitSignal) return error.code;
     if (error instanceof CommanderError) {
       if (error.code === "commander.helpDisplayed" || error.code === "commander.version") return 0;
       const cliError = new CliError(2, "usage_error", error.message);
@@ -346,7 +546,7 @@ export async function runProgram(runtime: Runtime, argv: string[]): Promise<numb
     }
     const cliError = asCliError(error);
     try {
-      mode = program.opts().output === "json" ? "json" : mode;
+      mode = resolveOutputMode(runtime, (program.opts() as GlobalOptions).output ?? argvOutput(argv));
     } catch {
       // Retain the argument-derived mode.
     }

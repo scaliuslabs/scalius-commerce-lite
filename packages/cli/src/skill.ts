@@ -1,32 +1,45 @@
 import { randomUUID } from "node:crypto";
-import { cp, mkdir, rename, rm, stat } from "node:fs/promises";
+import { cp, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CliError } from "./errors.js";
 import type { Runtime } from "./types.js";
+import { packageVersion } from "./version.js";
 
-export const AGENT_HARNESSES = ["agents", "codex", "claude", "opencode", "pi"] as const;
+export const AGENT_HARNESSES = ["agents", "codex", "claude", "cursor", "opencode", "pi"] as const;
 export type AgentHarness = (typeof AGENT_HARNESSES)[number];
 
+/** The bundled suite: one router plus seven focused skills. */
 export const SCALIUS_SKILL_NAMES = [
-  "scalius-commerce",
+  "scalius",
   "scalius-insights",
   "scalius-catalog",
-  "scalius-content",
   "scalius-sales",
+  "scalius-content",
   "scalius-settings",
+  "scalius-marketing",
   "scalius-storefront",
 ] as const;
+/** Skills an older CLI installed; removed when the current suite is installed. */
+export const LEGACY_SKILL_NAMES = ["scalius-commerce"] as const;
+/** Written beside an installed suite so `doctor` can spot a stale copy. */
+export const SKILL_STAMP_FILE = ".scalius-skills.json";
+
 const MCP_PATHS = {
   dashboard: "/api/v1/mcp/dashboard",
   storefront: "/api/v1/mcp/storefront",
 } as const;
 
-function skillRoot(runtime: Runtime, harness: AgentHarness): string {
+export function bundledSkillsDirectory(): string {
+  return fileURLToPath(new URL("../skills", import.meta.url));
+}
+
+export function skillRoot(runtime: Runtime, harness: AgentHarness): string {
   switch (harness) {
     case "agents": return join(runtime.homedir(), ".agents", "skills");
     case "codex": return join(runtime.env.CODEX_HOME?.trim() || join(runtime.homedir(), ".codex"), "skills");
     case "claude": return join(runtime.homedir(), ".claude", "skills");
+    case "cursor": return join(runtime.homedir(), ".cursor", "skills");
     case "opencode": return join(runtime.homedir(), ".config", "opencode", "skills");
     case "pi": return join(runtime.homedir(), ".pi", "agent", "skills");
   }
@@ -45,11 +58,12 @@ function serverOrigin(value: string): string {
   return url.origin;
 }
 
+/** Printed remote-MCP instructions, for a harness the CLI cannot configure itself. */
 function mcpInstructions(harness: AgentHarness, server?: string): Record<string, unknown> {
   if (!server) {
     return {
       status: "server_required",
-      next: `Run scalius setup --harness ${harness} --server https://your-api-origin to configure both MCP endpoints.`,
+      next: `Run scalius init --harness ${harness} --server https://your-api-origin to connect it in one step.`,
     };
   }
   const origin = serverOrigin(server);
@@ -125,14 +139,47 @@ function mcpInstructions(harness: AgentHarness, server?: string): Record<string,
   };
 }
 
+export interface SkillStamp {
+  version: string;
+  skills: string[];
+}
+
+export async function readSkillStamp(root: string): Promise<SkillStamp | undefined> {
+  try {
+    const parsed = JSON.parse(await readFile(join(root, SKILL_STAMP_FILE), "utf8")) as SkillStamp;
+    return typeof parsed.version === "string" && Array.isArray(parsed.skills) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Removes a skill directory only when its SKILL.md names it: never a merchant's own skill. */
+async function removeOwnedSkill(root: string, name: string): Promise<void> {
+  const body = await readFile(join(root, name, "SKILL.md"), "utf8").catch(() => "");
+  if (new RegExp(`^name: ${name}$`, "m").test(body)) await rm(join(root, name), { recursive: true, force: true });
+}
+
+/** Removes an installed flat suite (current and legacy names) and its stamp. */
+export async function removeSkillSuite(root: string): Promise<void> {
+  for (const name of [...SCALIUS_SKILL_NAMES, ...LEGACY_SKILL_NAMES]) await removeOwnedSkill(root, name);
+  await rm(join(root, SKILL_STAMP_FILE), { force: true });
+}
+
 export async function installSkill(runtime: Runtime, harness: AgentHarness, force: boolean): Promise<Record<string, unknown>> {
-  const root = skillRoot(runtime, harness);
+  return { ...(await installSkillSuite(skillRoot(runtime, harness), force)), harness };
+}
+
+/** Stages and swaps the whole suite into `root`, so no stale guide stays behind. */
+export async function installSkillSuite(
+  root: string,
+  force: boolean,
+): Promise<{ status: string; root: string; skills: Array<{ name: string; path: string }> }> {
   const nonce = randomUUID();
   const entries = await Promise.all(SCALIUS_SKILL_NAMES.map(async (name) => {
     const target = join(root, name);
     return {
       name,
-      source: fileURLToPath(new URL(`../skill/${name}`, import.meta.url)),
+      source: join(bundledSkillsDirectory(), name),
       target,
       stage: join(root, `.${name}.${nonce}.stage`),
       backup: join(root, `.${name}.${nonce}.backup`),
@@ -179,11 +226,13 @@ export async function installSkill(runtime: Runtime, harness: AgentHarness, forc
     throw new CliError(8, "skill_install_failed", "Unable to replace the bundled Scalius skill suite.");
   }
   await Promise.all(backedUp.map((entry) => rm(entry.backup, { recursive: true, force: true })));
+  for (const name of LEGACY_SKILL_NAMES) await removeOwnedSkill(root, name);
+  const stamp: SkillStamp = { version: packageVersion(), skills: [...SCALIUS_SKILL_NAMES] };
+  await writeFile(join(root, SKILL_STAMP_FILE), `${JSON.stringify(stamp, null, 2)}\n`, { mode: 0o600 });
   return {
     status: existing.length > 0 ? "updated" : "installed",
     root,
     skills: entries.map((entry) => ({ name: entry.name, path: entry.target })),
-    harness,
   };
 }
 
@@ -198,6 +247,7 @@ export async function setupHarness(
     harness: options.harness,
     skills,
     mcp,
-    operatingLoop: "Try one projected workflow read for data questions; otherwise resolve the goal, describe only selected operations, execute, and verify. Load only the relevant focused skill.",
+    operatingLoop: "scalius_answer for data questions; otherwise scalius_search, scalius_describe the chosen ids, scalius_write with dryRun first and the merchant's approval for gated changes, then verify with scalius_read.",
+    next: "Prefer 'scalius init': it pairs once and registers the MCP server for you.",
   };
 }

@@ -83,8 +83,8 @@ mirror a dashboard screen, an editor section or a summary card.
 
 ## Agents
 
-MCP `operations.describe` and the CLI's `operations search` show each
-operation's tier. Default CLI listings rank stable operations first; beta
+MCP `scalius_search` and `scalius_describe` (the CLI's `scalius search` and
+`scalius describe`) show each operation's tier. Default CLI listings rank stable operations first; beta
 operations stay callable and are labelled. The MCP server's instructions and
 the OpenAPI document (`info.x-scalius-stability`) say the storefront surface is
 beta.

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "scalius",
+  "version": "0.3.0",
+  "description": "Run a Scalius Commerce store from your agent: sales, catalog, orders, discounts, content, settings and tracking, with dry runs and the merchant's approval for risky changes.",
+  "author": {
+    "name": "Scalius Labs",
+    "url": "https://github.com/scaliuslabs"
+  },
+  "homepage": "https://github.com/scaliuslabs/scalius-commerce-lite/tree/main/packages/cli#readme",
+  "repository": "https://github.com/scaliuslabs/scalius-commerce-lite",
+  "license": "AGPL-3.0-only",
+  "keywords": ["scalius", "commerce", "ecommerce", "store", "mcp"]
+}

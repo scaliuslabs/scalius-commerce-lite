@@ -187,7 +187,7 @@ function requireRecord(value: unknown, field: string): Record<string, unknown> {
   return value;
 }
 
-function serializeQuery(query: Record<string, unknown>): string {
+export function serializeQuery(query: Record<string, unknown>): string {
   const params = new URLSearchParams();
   for (const key of Object.keys(query).sort()) {
     const value = query[key];
@@ -202,7 +202,7 @@ function serializeQuery(query: Record<string, unknown>): string {
   return text ? `?${text}` : "";
 }
 
-function validateQuery(operation: IndexedOperation, query: Record<string, unknown>): void {
+export function validateQuery(operation: IndexedOperation, query: Record<string, unknown>): void {
   const declared = new Set(
     operation.pathParameters
       .filter((parameter) => parameter.in === "query" && parameter.name)
@@ -213,7 +213,7 @@ function validateQuery(operation: IndexedOperation, query: Record<string, unknow
   }
 }
 
-function buildPath(operation: IndexedOperation, input: StructuredInput): string {
+export function buildPath(operation: IndexedOperation, input: StructuredInput): string {
   const values = requireRecord(input.path, "path");
   const declared = operation.pathParameters.filter((parameter) => parameter.in === "path" && parameter.name).map((parameter) => parameter.name!);
   for (const key of Object.keys(values)) {
@@ -503,7 +503,7 @@ function validateArtifactDisposition(value: string | null, expected: AgentArtifa
   }
 }
 
-function validateArtifactResponse(
+export function validateArtifactResponse(
   response: Response,
   policy: AgentArtifactOutput,
 ): { expectedBytes?: number } {

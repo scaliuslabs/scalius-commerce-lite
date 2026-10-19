@@ -1,0 +1,16 @@
+{
+  "name": "scalius",
+  "description": "Scalius Commerce tools for agents: the scalius plugin with skills and the store MCP server.",
+  "owner": {
+    "name": "Scalius Labs",
+    "url": "https://github.com/scaliuslabs"
+  },
+  "plugins": [
+    {
+      "name": "scalius",
+      "source": "./",
+      "description": "Run a Scalius Commerce store from your agent, with dry runs and the merchant's approval for risky changes.",
+      "version": "0.3.0"
+    }
+  ]
+}
