@@ -20,6 +20,8 @@ vi.mock("../fulfilment/registry", async (importOriginal) => {
 });
 vi.mock("../digital/deliverable", () => ({
     digitalDeliverableSql: () => (seams.deliverable ? sql`1` : sql`0`),
+    // No key pool: the SKU's stock alone limits it.
+    digitalUnusedKeysSql: () => sql`NULL`,
 }));
 
 const { validateStorefrontCartItems } = await import("./cart-validation");

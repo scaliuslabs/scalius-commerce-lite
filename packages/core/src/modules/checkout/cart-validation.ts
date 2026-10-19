@@ -34,7 +34,7 @@ import {
 import { hasFulfiller } from "../fulfilment";
 import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments";
 import { giftCardLineRecipientIssue } from "../gift-cards";
-import { digitalDeliverableSql } from "../digital";
+import { digitalDeliverableSql, digitalUnusedKeysSql } from "../digital";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import { resolvePrice, type AppLinePrice, type ResolvedPriceSource } from "@scalius/shared/market-pricing";
 import { resolveCartWithAppLinePrices, type AppLinePricer } from "./app-line-prices";
@@ -259,6 +259,8 @@ export interface StorefrontCartVariantRow {
     fulfillmentKind: string;
     /** A digital SKU has something to deliver (a ready file or available keys); false for other kinds. */
     digitalDeliverable: boolean;
+    /** A digital SKU with a ready licence-key pool: its unused keys (it sells no more); null otherwise. */
+    digitalKeys?: number | null;
     /** Its active list prices in every market (`checkoutListPricesSql`); null without any. */
     listPrices?: string | null;
 }
@@ -351,7 +353,9 @@ function availableForVariant(variant: StorefrontCartVariantRow, pool: InventoryP
             : Number.POSITIVE_INFINITY;
     }
 
-    return Math.max(0, variant.stock - variant.reservedStock);
+    // Licence keys are a key-delivered SKU's stock: never sell more than are left.
+    const onHand = typeof variant.digitalKeys === "number" ? Math.min(variant.stock, variant.digitalKeys) : variant.stock;
+    return Math.max(0, onHand - variant.reservedStock);
 }
 
 function addIssue(
@@ -445,6 +449,9 @@ export function selectStorefrontCartVariantRows(
             // Digital readiness in the same read (no round trip); only digital SKUs pay for the check.
             digitalDeliverable: sql<boolean>`CASE WHEN ${productVariants.fulfillmentKind} = 'digital' THEN ${digitalDeliverableSql(productVariants.id)} ELSE 0 END`
                 .mapWith((value) => Number(value) === 1),
+            // A key-delivered SKU sells at most its unused keys (null for every other SKU).
+            digitalKeys: sql<number | null>`CASE WHEN ${productVariants.fulfillmentKind} = 'digital' THEN ${digitalUnusedKeysSql(productVariants.id)} ELSE NULL END`
+                .mapWith((value) => (value === null || value === undefined ? null : Number(value))),
             // Its list prices in every market (null without any): no extra statement.
             listPrices: checkoutListPricesSql(),
         })

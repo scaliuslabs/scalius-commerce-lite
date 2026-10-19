@@ -36,7 +36,7 @@ None of these tables is buyer-visible, so no DVC dependency applies.
 
 - A key pool is the variant's tracked stock. Import adds keys and `+n` stock in one batch. Revoke removes unused keys and `-n`. Order reservation, release and delivery move the stock as for any SKU.
 - A pool needs a live, tracked, digital SKU. A variant has at most one pool and at most 10 files.
-- No manual path changes a digital SKU's stock (`products/digital-stock-rules.ts`). A SKU turns digital only without stock, and one with a ready pool keeps tracking.
+- No manual path changes a digital SKU's stock (`products/digital-stock-rules.ts`). A SKU turns digital only without stock, leaves digital only without unused keys, and one with a ready pool keeps tracking.
 - Delivery happens after settlement, or after staff confirmation when `checkout.autoFulfilMode` is `after_confirmation` ([`fulfilment`](../fulfilment/README.md)).
 - A key is assigned at most once. When a pool has too few keys, the whole batch rolls back and nothing is delivered. A `digital_keys_exhausted` staff alert is recorded (deduped per variant per day). The 15-minute sweep retries after an import.
 - `digitalDeliverableSql` is 1 when the variant has a ready file (product-wide or its own) or a ready pool, and no ready pool is empty. Otherwise cart validation answers `FULFILMENT_UNAVAILABLE`.

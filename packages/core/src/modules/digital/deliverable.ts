@@ -10,6 +10,23 @@ import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
  * Driven by `digital_assets_variant_status_idx`, `digital_assets_product_status_idx`
  * and `digital_licence_keys_pool_idx`.
  */
+/**
+ * The unused keys of a variant that delivers licence keys (a ready pool), or
+ * NULL when it has none: checkout sells no more of it than that, whatever
+ * its stock says (its stock is its keys; an old typed-in quantity may not be).
+ * Same read, same indexes as `digitalDeliverableSql`.
+ */
+export function digitalUnusedKeysSql(variantId: SQLWrapper): SQL {
+    return sql`(CASE WHEN EXISTS (
+        SELECT 1 FROM digital_assets dga
+        WHERE dga.variant_id = ${variantId} AND dga.status = 'ready' AND dga.kind = 'licence_keys'
+    ) THEN (
+        SELECT count(*) FROM digital_licence_keys dlk
+        JOIN digital_assets dga ON dga.id = dlk.asset_id
+        WHERE dga.variant_id = ${variantId} AND dga.kind = 'licence_keys' AND dlk.status = 'available'
+    ) ELSE NULL END)`;
+}
+
 export function digitalDeliverableSql(variantId: SQLWrapper): SQL {
     return sql`(CASE WHEN (
         EXISTS (

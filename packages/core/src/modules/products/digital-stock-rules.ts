@@ -4,7 +4,9 @@
 // (editor quantity, option matrix, inventory adjust or count, scanner, CSV
 // import, purchase orders, transfers) may change it, and physical units never
 // silently become "keys": a SKU turns digital only with no stock (or exactly
-// its unused keys, when it was digital before). Files are unlimited.
+// its unused keys, when it was digital before), and keys never silently
+// become physical units: a SKU stops being digital only once it has no unused
+// keys (revoking them moves its stock through the ledger). Files are unlimited.
 //
 // Each manual path checks the rule up front for a clear, field-level error,
 // and the batches that could race a concurrent kind or stock change end with
@@ -27,6 +29,9 @@ export const DIGITAL_KIND_NEEDS_ZERO_STOCK_MESSAGE =
 export const DIGITAL_KEY_POOL_NEEDS_TRACKING_MESSAGE =
     "Keep quantity tracking on for this variant: its licence keys are its stock. Archive the key pool first to stop tracking.";
 
+export const DIGITAL_KEYS_KEEP_KIND_MESSAGE =
+    "This variant still has unused licence keys, which are its stock. Revoke them in the Digital delivery card before it stops being digital.";
+
 export const DIGITAL_STOCK_CANT_SPLIT_MESSAGE =
     "A digital variant's stock is its licence keys, so it can't be shared out across options. Revoke its unused keys in the Digital delivery card, then add options.";
 
@@ -34,6 +39,7 @@ export const DIGITAL_STOCK_CANT_SPLIT_MESSAGE =
 export const DIGITAL_STOCK_IS_KEYS_MARKER = "DIGITAL_STOCK_IS_KEYS";
 const DIGITAL_KIND_NEEDS_ZERO_STOCK_MARKER = "DIGITAL_KIND_NEEDS_ZERO_STOCK";
 const DIGITAL_KEY_POOL_NEEDS_TRACKING_MARKER = "DIGITAL_KEY_POOL_NEEDS_TRACKING";
+const DIGITAL_KEYS_KEEP_KIND_MARKER = "DIGITAL_KEYS_KEEP_KIND";
 
 export interface DigitalStockErrorDetails {
     reason: typeof DIGITAL_STOCK_IS_KEYS_REASON;
@@ -73,21 +79,28 @@ export interface DigitalSkuTransition {
  * digital SKU a quantity (a new digital SKU with stock, or a digital SKU's
  * stock changed); `becomesDigital` when a SKU turns digital (it must end with
  * no stock, or exactly its unused keys); `dropsTracking` when a digital SKU
- * stops tracking quantity (refused while it has a ready key pool).
+ * stops tracking quantity (refused while it has a ready key pool);
+ * `leavesDigital` when a digital SKU turns physical or a service (refused
+ * while it has unused keys: they are its stock, which would become typed-in
+ * units while the keys sit undelivered).
  */
 export function digitalSkuChecks(transition: DigitalSkuTransition): {
     manualQuantity: boolean;
     becomesDigital: boolean;
     dropsTracking: boolean;
+    leavesDigital: boolean;
 } {
     const { before, after } = transition;
-    if (!isDigitalKind(after.kind)) return { manualQuantity: false, becomesDigital: false, dropsTracking: false };
-    if (!before) return { manualQuantity: after.stock !== 0, becomesDigital: false, dropsTracking: false };
-    const wasDigital = isDigitalKind(before.kind);
+    const wasDigital = before !== null && isDigitalKind(before.kind);
+    if (!isDigitalKind(after.kind)) {
+        return { manualQuantity: false, becomesDigital: false, dropsTracking: false, leavesDigital: wasDigital };
+    }
+    if (!before) return { manualQuantity: after.stock !== 0, becomesDigital: false, dropsTracking: false, leavesDigital: false };
     return {
         manualQuantity: wasDigital && after.stock !== before.stock,
         becomesDigital: !wasDigital,
         dropsTracking: before.trackInventory && !after.trackInventory,
+        leavesDigital: false,
     };
 }
 
@@ -188,6 +201,7 @@ export async function planDigitalSkuWrites(
 ): Promise<BatchItem<"sqlite">[]> {
     const becomingDigital: PlannedDigitalSkuWrite[] = [];
     const losingTracking: PlannedDigitalSkuWrite[] = [];
+    const leavingDigital: PlannedDigitalSkuWrite[] = [];
     for (const write of writes) {
         const checks = digitalSkuChecks(write);
         if (checks.manualQuantity) {
@@ -195,6 +209,18 @@ export async function planDigitalSkuWrites(
         }
         if (checks.becomesDigital) becomingDigital.push(write);
         if (checks.dropsTracking) losingTracking.push(write);
+        if (checks.leavesDigital) leavingDigital.push(write);
+    }
+    if (leavingDigital.length > 0) {
+        const ids = leavingDigital.map((write) => write.variantId);
+        const keys = await readUnusedLicenceKeyCounts(db, ids);
+        const refused = leavingDigital.find((write) => (keys.get(write.variantId) ?? 0) > 0);
+        if (refused) {
+            throw digitalStockError(
+                { field: fieldOf(refused.fieldPrefix, "fulfillmentKind"), sku: refused.sku, variantId: refused.variantId },
+                DIGITAL_KEYS_KEEP_KIND_MESSAGE,
+            );
+        }
     }
     const stocked = becomingDigital.filter((write) => write.after.stock !== 0);
     if (stocked.length > 0) {
@@ -220,6 +246,7 @@ export async function planDigitalSkuWrites(
     return [
         ...buildDigitalKindChangeGuards(db, becomingDigital.map((write) => write.variantId)),
         ...buildDigitalTrackingGuards(db, losingTracking.map((write) => write.variantId)),
+        ...buildDigitalKeysKeepKindGuards(db, leavingDigital.map((write) => write.variantId)),
     ];
 }
 
@@ -277,6 +304,25 @@ export function buildDigitalTrackingGuards(db: Database, variantIds: readonly st
 }
 
 /**
+ * After the batch's writes: no SKU of `variantIds` that stopped being digital
+ * holds unused licence keys (an import racing the kind change aborts it).
+ * Place it after the kind update.
+ */
+export function buildDigitalKeysKeepKindGuards(db: Database, variantIds: readonly string[]): BatchItem<"sqlite">[] {
+    const guards: BatchItem<"sqlite">[] = [];
+    const unique = [...new Set(variantIds)];
+    for (let index = 0; index < unique.length; index += D1_ID_CHUNK_SIZE) {
+        guards.push(buildBatchGuard(db, sql`NOT EXISTS (
+            SELECT 1 FROM ${productVariants} AS dsv
+            WHERE dsv.id IN (SELECT CAST(value AS TEXT) FROM json_each(${idsJson(unique.slice(index, index + D1_ID_CHUNK_SIZE))}))
+              AND dsv.fulfillment_kind <> 'digital'
+              AND ${unusedKeysOf("dsv")} > 0
+        )`, DIGITAL_KEYS_KEEP_KIND_MARKER));
+    }
+    return guards;
+}
+
+/**
  * A manual stock write's batch guard: the SKU is not digital at commit (a
  * kind change racing the write aborts it). Place it anywhere in the batch.
  */
@@ -307,6 +353,9 @@ export function rethrowDigitalStockRuleViolation(error: unknown): void {
     }
     if (text.includes(DIGITAL_KEY_POOL_NEEDS_TRACKING_MARKER)) {
         throw digitalStockError({ field: "trackInventory" }, DIGITAL_KEY_POOL_NEEDS_TRACKING_MESSAGE);
+    }
+    if (text.includes(DIGITAL_KEYS_KEEP_KIND_MARKER)) {
+        throw digitalStockError({ field: "fulfillmentKind" }, DIGITAL_KEYS_KEEP_KIND_MESSAGE);
     }
     if (text.includes(DIGITAL_STOCK_IS_KEYS_MARKER)) throw digitalStockError();
 }

@@ -21,7 +21,7 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { formatNumber, useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductSkuImageChoice } from "~/lib/api-query-options/products";
-import { useProductKindRules } from "../product-kind-rules";
+import { isDigitalSku, useProductKindRules } from "../product-kind-rules";
 import type { DraftIssueField, DraftVariant } from "./option-matrix-editor-model";
 
 /** The message a field shows, if the current (or server's) problem is about it. */
@@ -305,7 +305,8 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
   const isUnsavedSku = variant.id.startsWith("draft_");
   const errorOf = (field: DraftIssueField) => issueFor(variant.id, field);
   // What the product kind allows: a gift card has no discount, weight or quantity tracking.
-  const { showDiscount, showWeight, showInventory, giftCard } = useProductKindRules();
+  const kindRules = useProductKindRules();
+  const { showDiscount, showWeight, showInventory, giftCard } = kindRules;
   if (readOnly) {
     const barcodeNames = { ean13: "EAN-13", upc: "UPC", isbn: "ISBN", gtin: "GTIN", code128: "Code 128", custom: t("barcodeCustom") };
     return (
@@ -373,7 +374,8 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
         </Field>
       ) : null}
     </FieldRow>
-      {showInventory ? (
+      {/* A digital SKU's tracking follows its licence keys (the quantity cell says which). */}
+      {showInventory && !isDigitalSku(kindRules, variant) ? (
         <label className="flex min-h-11 items-center gap-2 text-body md:min-h-8">
           <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} />
           {t("trackQuantity")}

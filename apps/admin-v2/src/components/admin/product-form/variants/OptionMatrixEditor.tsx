@@ -70,7 +70,7 @@ import {
   type VariantPriceRange,
   withFulfilmentMode,
 } from "./option-matrix-editor-model";
-import { constrainSkuForKind, isDigitalSku, productKindRules, useProductKindRules } from "../product-kind-rules";
+import { constrainSkuForKind, digitalSkuTracks, isDigitalSku, productKindRules, useProductKindRules } from "../product-kind-rules";
 import { DigitalStockStatus } from "../DigitalStock";
 import { digitalAssetsQueryOptions, digitalSkuStock } from "../digital-stock";
 import { useProductEditorSlots } from "../editor-slots";
@@ -192,34 +192,53 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
     () => productKindRules({ isGiftCard: giftCard, fulfillmentKind: fulfilmentMode }),
     [fulfilmentMode, giftCard],
   );
+  // A product without options that is digital: its quantity is its licence keys (or unlimited files).
+  const digitalSimple = isDigitalSku(kindRules, {});
+  // A digital SKU tracks quantity exactly when it has a licence-key pool (its keys are its
+  // stock; files are unlimited): read from the product's pools, never typed in.
+  const digitalAssets = useQuery({
+    ...digitalAssetsQueryOptions(productId ?? ""),
+    enabled: Boolean(productId) && (kindRules.fulfilmentMode === "digital" || kindRules.fulfilmentMode === "mixed"),
+  });
+  const hasKeyPool = React.useCallback((variantId: string | undefined): boolean | undefined => {
+    if (!variantId || variantId.startsWith("draft_")) return false;
+    if (!productId) return false;
+    return digitalAssets.data ? digitalSkuStock(variantId, digitalAssets.data).keys !== null : undefined;
+  }, [digitalAssets.data, productId]);
   // One constrained row per draft row and rules, so an edit re-renders only the edited row.
   // A digital SKU's stock is its licence keys: a saved one shows (and saves) its recorded stock, never a typed one.
   const constrained = React.useMemo(() => ({
     rules: kindRules,
     rows: new WeakMap<DraftVariant, DraftVariant>(),
-    savedStock: new Map(savedVariants.map((variant) => [variant.id, variant.stock])),
-  }), [kindRules, savedVariants]);
+    saved: new Map(savedVariants.map((variant) => [variant.id, variant])),
+    hasKeyPool,
+  }), [kindRules, savedVariants, hasKeyPool]);
   const shownVariants = React.useMemo(() => variants.map((variant) => {
     let shown = constrained.rows.get(variant);
     if (!shown) {
       shown = constrainSkuForKind(variant, constrained.rules, !variant.id.startsWith("draft_"));
-      const saved = constrained.savedStock.get(variant.id);
-      if (saved !== undefined && shown.stock !== saved && isDigitalSku(constrained.rules, shown)) shown = { ...shown, stock: saved };
+      const saved = constrained.saved.get(variant.id);
+      if (isDigitalSku(constrained.rules, shown)) {
+        if (saved !== undefined && shown.stock !== saved.stock) shown = { ...shown, stock: saved.stock };
+        const tracks = digitalSkuTracks(saved ?? null, constrained.hasKeyPool(variant.id));
+        if (shown.trackInventory !== tracks) shown = { ...shown, trackInventory: tracks };
+      }
       constrained.rows.set(variant, shown);
     }
     return shown;
   }), [constrained, variants]);
-  // A product without options that is digital: its quantity is its licence keys (or unlimited files).
-  const digitalSimple = isDigitalSku(kindRules, {});
   const shownSimpleSku = React.useMemo(() => {
     const shown = constrainSkuForKind(simpleSku, kindRules, Boolean(defaultSku));
-    return digitalSimple && defaultSku && shown.stock !== defaultSku.stock ? { ...shown, stock: defaultSku.stock } : shown;
-  }, [defaultSku, digitalSimple, kindRules, simpleSku]);
+    if (!digitalSimple) return shown;
+    const tracks = digitalSkuTracks(defaultSku ?? null, hasKeyPool(defaultSku?.id));
+    return {
+      ...shown,
+      trackInventory: tracks,
+      ...(defaultSku && shown.stock !== defaultSku.stock ? { stock: defaultSku.stock } : {}),
+    };
+  }, [defaultSku, digitalSimple, hasKeyPool, kindRules, simpleSku]);
   const slots = useProductEditorSlots();
-  // A licence-key pool is the SKU's stock: tracking stays on while it has one (the server refuses otherwise).
-  const digitalAssets = useQuery({ ...digitalAssetsQueryOptions(productId ?? ""), enabled: digitalSimple && Boolean(productId) });
-  const keepsTracking = digitalSimple && simpleSku.trackInventory
-    && digitalSkuStock(defaultSku?.id, digitalAssets.data ?? []).keys !== null;
+  const keepsTracking = digitalSimple && hasKeyPool(defaultSku?.id) === true;
   const savedOptionDraft = React.useMemo(() => initialOptions(savedOptions), [savedOptions]);
   const savedTopology = React.useMemo(() => optionTopologySignature(savedOptionDraft), [savedOptionDraft]);
   // Stock that must reach the new rows (the server's rule): a simple product's stock when
@@ -709,11 +728,11 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
       {/* Untracked kinds (gift cards) have no quantity to track. */}
       {kindRules.showInventory ? (
         <div className="space-y-1">
-          {readOnly ? <ReadOnlyValue label={t("trackQuantity")} value={t(simpleSku.trackInventory ? "quantityTracked" : "notTracked")} /> : (
+          {/* A digital SKU's tracking follows its licence keys: no switch to get wrong. */}
+          {digitalSimple ? null : readOnly ? <ReadOnlyValue label={t("trackQuantity")} value={t(simpleSku.trackInventory ? "quantityTracked" : "notTracked")} /> : (
           <label className="flex min-h-11 items-center gap-2 text-body md:min-h-0">
             <Checkbox
               checked={simpleSku.trackInventory}
-              disabled={keepsTracking}
               onCheckedChange={(checked) => updateSimple({ trackInventory: checked === true })}
             />
             {t("trackQuantity")}
@@ -721,7 +740,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
           )}
           {digitalSimple ? (
             <p className="text-body text-muted-foreground">
-              {d(keepsTracking ? "stockPoolKeepsTracking" : shownSimpleSku.trackInventory ? "stockTrackedHelp" : "stockUntrackedHelp")}
+              {d(keepsTracking ? "stockPoolKeepsTracking" : "stockUntrackedHelp")}
             </p>
           ) : null}
         </div>

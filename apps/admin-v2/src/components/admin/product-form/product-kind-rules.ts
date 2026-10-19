@@ -52,6 +52,18 @@ export function isDigitalSku(rules: ProductKindRules, sku: { fulfillmentKind?: s
   return rules.fulfilmentMode === "digital";
 }
 
+/**
+ * Whether a digital SKU tracks quantity: exactly when it delivers licence
+ * keys (a ready key pool), since its keys are its stock; files are
+ * unlimited, so a file-only SKU tracks none. Importing its first keys turns
+ * tracking on (the server does it with the pool). `hasKeyPool` is undefined
+ * while the pools load: a saved SKU keeps what it has, a new one tracks none.
+ */
+export function digitalSkuTracks(saved: { trackInventory: boolean } | null, hasKeyPool: boolean | undefined): boolean {
+  if (hasKeyPool !== undefined) return hasKeyPool;
+  return saved?.trackInventory ?? false;
+}
+
 type ConstrainableSku = {
   trackInventory: boolean;
   stock?: number;
