@@ -113,6 +113,8 @@ const optIn = regime === "opt_in";
   .consent-legend { font-weight: 600; margin-block-end: 0.25rem; }
   .consent-choice { display: flex; gap: 0.5rem; align-items: flex-start; }
   .consent-choice input { margin-block-start: 0.2rem; inline-size: 1rem; block-size: 1rem; accent-color: var(--primary); }
-  .consent-open { margin: 0; padding: 0.5rem 1rem 1rem; text-align: center; font-size: 0.75rem; color: var(--muted-foreground, inherit); }
+  /* No space at all until the runtime reveals the link (in flow at the page's end). */
+  .consent-open { margin: 0; text-align: center; font-size: 0.75rem; line-height: 1; }
+  .consent-open .consent-link { margin-block: 0.5rem 1rem; color: var(--muted-foreground, inherit); }
   @media (prefers-reduced-motion: no-preference) { .consent-banner { transition: opacity 0.15s ease; } }
 </style>

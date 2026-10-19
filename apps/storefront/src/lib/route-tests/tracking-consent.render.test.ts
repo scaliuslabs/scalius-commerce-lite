@@ -147,7 +147,7 @@ async function renderPage(presence: string | null): Promise<string> {
 /** The page in a browser that runs its inline scripts; every request is captured, none leaves. */
 async function browse(html: string, url: string) {
   const requests: string[] = [];
-  const window = new Window({
+  const window: Window = new Window({
     url,
     settings: {
       disableCSSFileLoading: true,
@@ -159,9 +159,9 @@ async function browse(html: string, url: string) {
             requests.push(request.url);
             return new requester.Response("", { status: 200, headers: { "Content-Type": "application/javascript" } });
           },
-          beforeSyncRequest({ request }) {
+          beforeSyncRequest({ request, window: requester }): never {
             requests.push(request.url);
-            return { status: 200, statusText: "OK", ok: true, url: request.url, redirected: false, headers: new window.Headers(), body: Buffer.from("") } as never;
+            return { status: 200, statusText: "OK", ok: true, url: request.url, redirected: false, headers: new requester.Headers(), body: Buffer.from("") } as never;
           },
         },
       },
@@ -224,11 +224,11 @@ describe("tracking consent on an EEA market page (audit spec S4 (a))", () => {
     const { window, requests } = await browse(html, "https://shop.test/en-de");
     (window.document.querySelector('[data-consent-action="reject"]') as unknown as { click(): void }).click();
     expect(window.document.cookie).toContain("scalius_consent=v1-a0-m0-s0");
-    const cookie = window.document.cookie;
+    const cookie: string = window.document.cookie;
     await window.happyDOM.close();
 
     const next = new Window({ url: "https://shop.test/en-de", settings: { disableCSSFileLoading: true, enableJavaScriptEvaluation: true, enableImageFileLoading: true } });
-    next.document.cookie = cookie.split("; ").find((part) => part.startsWith("scalius_consent="))!;
+    next.document.cookie = cookie.split("; ").find((part: string) => part.startsWith("scalius_consent="))!;
     const captured: string[] = [];
     next.happyDOM.settings.fetch.interceptor = {
       async beforeAsyncRequest({ request }) {
