@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({ mutate: vi.fn(), canChangeOrderStatus: true })
 vi.mock("~/hooks/use-order-action-permissions", () => ({
   useOrderActionPermissions: () => ({ canResolveOrderSupportRequests: true, canChangeOrderStatus: mocks.canChangeOrderStatus }),
 }));
+vi.mock("../states/store-owner", () => ({ useStoreOwnerName: () => "Rahim" }));
 vi.mock("~/lib/api-mutations/orders", () => ({
   orderErrorMessage: (error: Error) => error.message,
   useResolveOrderSupportRequest: () => ({ mutate: mocks.mutate, reset: vi.fn(), isPending: false, isError: false }),
