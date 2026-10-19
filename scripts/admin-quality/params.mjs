@@ -54,6 +54,8 @@ export const PARAM_SOURCES = {
   roleId: { url: () => `${A}/rbac/roles`, keys: ["roles"], none: "no staff roles" },
   reportId: { url: () => `${A}/reports`, keys: ["reports"], none: "no reports" },
   pluginId: { url: () => `${A}/apps`, keys: ["apps"], none: "no apps installed" },
+  // An app page section: Activity exists on every sectioned app page (an unknown section opens the overview).
+  section: { url: () => `${A}/apps`, keys: [], id: () => "activity", fixed: "activity", needs: ["pluginId"], none: "no apps installed" },
   checkoutId: { url: () => `${A}/abandoned-checkouts?limit=1`, keys: ["checkouts"], none: "the store has no abandoned checkouts" },
   event: {
     url: () => `${A}/settings/notification-channels/templates`,
