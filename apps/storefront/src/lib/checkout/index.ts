@@ -77,6 +77,7 @@ import {
   type StoredGiftCard,
 } from "./gift-cards";
 import { pagePath } from "@/lib/presence-url";
+import { checkoutLineGroups, showsOrderLineGroupHeadings } from "../order-line-groups";
 
 // COD, the card flow and a fully gift-card-paid order have their own handlers;
 // every hosted gateway shares one.
@@ -499,10 +500,28 @@ function appendOrderItems(
   parent: HTMLElement,
   quote: CheckoutTaxQuote,
 ): void {
-  const list = document.createElement("ul");
-  list.className = "space-y-3 border-b border-border pb-3";
+  // The receipt's groups: a mixed order says which lines ship and which
+  // arrive digitally ("Delivery", "Digital items"); one shipped group reads as before.
+  const groups = checkoutLineGroups(quote.items, checkoutCopy);
+  const headed = showsOrderLineGroupHeadings(groups);
+  const section = document.createElement("div");
+  section.className = "space-y-3 border-b border-border pb-3";
+  for (const group of groups) {
+    if (headed) appendTextElement(section, "p", "text-xs font-semibold text-muted-foreground", group.heading);
+    const list = document.createElement("ul");
+    list.className = "space-y-3";
+    appendOrderItemRows(list, group.items, quote);
+    section.appendChild(list);
+  }
+  parent.appendChild(section);
+}
 
-  for (const item of quote.items) {
+function appendOrderItemRows(
+  list: HTMLElement,
+  items: readonly CheckoutTaxQuote["items"][number][],
+  quote: CheckoutTaxQuote,
+): void {
+  for (const item of items) {
     const row = document.createElement("li");
     row.className = "flex items-start justify-between gap-3";
 
@@ -544,8 +563,6 @@ function appendOrderItems(
     );
     list.appendChild(row);
   }
-
-  parent.appendChild(list);
 }
 
 /** One review row (Contact / Ship to / Delivery) with a way back to change it. */

@@ -152,6 +152,14 @@ describe("cart store", () => {
     expect(getEffectiveCartShippingFee(mixed, 110)).toBe(0);
     expect(getEffectiveCartShippingFee(ordinary, -10)).toBe(0);
     expect(getEffectiveCartShippingFee(ordinary, Number.NaN)).toBe(0);
+    // A download or service marked free delivery ships nothing, so it waives nothing.
+    const withDigital = {
+      regular: { freeDelivery: false, fulfillmentKind: "physical" as const },
+      licence: { freeDelivery: true, fulfillmentKind: "digital" as const },
+      setup: { freeDelivery: true, fulfillmentKind: "service" as const },
+    };
+    expect(cartHasFreeDeliveryItem(withDigital)).toBe(false);
+    expect(getEffectiveCartShippingFee(withDigital, 110)).toBe(110);
   });
 
   it("charges nothing once the items subtotal reaches the rate's free-over threshold", async () => {

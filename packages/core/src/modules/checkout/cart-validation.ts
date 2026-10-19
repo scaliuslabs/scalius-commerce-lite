@@ -781,7 +781,9 @@ export function resolveStorefrontCartValidationFromRows(
             variant.imageId,
         );
         subtotalMinor += unitPriceMinor * item.quantity;
-        hasFreeDeliveryProduct ||= product.freeDelivery === true;
+        // Only a line that ships can waive delivery: a digital or service
+        // product marked "free delivery" must not make a mixed order's parcel free.
+        hasFreeDeliveryProduct ||= product.freeDelivery === true && fulfillmentKind === "physical" && !isGiftCard;
         validatedItems.push({
             index,
             cartKey: item.cartKey ?? null,
