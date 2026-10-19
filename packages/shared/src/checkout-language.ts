@@ -150,6 +150,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
     "Confirmation is taking longer than usual. You can safely leave this receipt and return later.",
   orderReceiptStatusUpdatedText: "Payment status updated. Refreshing your receipt…",
   orderReceiptRetryWithProviderText: "Retry payment with {provider}",
+  orderReceiptTryAgainWithProviderText: "Try again with {provider}",
+  orderReceiptChooseAnotherMethodText: "Or choose another method",
   orderReceiptRetryPaymentText: "Retry payment",
   orderReceiptOpeningPaymentText: "Opening payment…",
   orderReceiptRetryUnavailableText: "Payment retry is unavailable for this order.",
@@ -165,6 +167,10 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   orderReceiptExistingOrderCardHelpText:
     "Your existing order will be updated. This will not create another order.",
   orderReceiptPaymentIssueTitleText: "Payment not completed",
+  // The payment could not start or the provider returned a failure: nothing was charged.
+  orderReceiptPaymentFailedTitleText: "Payment didn't go through",
+  orderReceiptPaymentFailedMessageText:
+    "Order #{orderId} is saved, but its payment didn't go through. Try again, or choose another method.",
   orderReceiptPaymentIssueMessageText:
     "Order #{orderId} is saved. Choose a payment method.",
   orderReceiptPaymentPendingTitleText: "Payment pending",
@@ -885,6 +891,8 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
     "পেমেন্ট নিশ্চিত হতে স্বাভাবিকের চেয়ে বেশি সময় লাগছে। আপনি নিরাপদে এই রসিদ থেকে বের হয়ে পরে আবার দেখতে পারেন।",
   orderReceiptStatusUpdatedText: "পেমেন্টের অবস্থা হালনাগাদ হয়েছে। রসিদ রিফ্রেশ হচ্ছে…",
   orderReceiptRetryWithProviderText: "{provider} দিয়ে আবার পেমেন্ট করুন",
+  orderReceiptTryAgainWithProviderText: "{provider} দিয়ে আবার চেষ্টা করুন",
+  orderReceiptChooseAnotherMethodText: "অথবা অন্য পদ্ধতি বেছে নিন",
   orderReceiptRetryPaymentText: "আবার পেমেন্ট করুন",
   orderReceiptOpeningPaymentText: "পেমেন্ট খোলা হচ্ছে…",
   orderReceiptRetryUnavailableText: "এই অর্ডারের পেমেন্ট আবার চেষ্টা করা যাচ্ছে না।",
@@ -900,6 +908,9 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   orderReceiptExistingOrderCardHelpText:
     "আপনার বর্তমান অর্ডারটিই হালনাগাদ হবে। নতুন কোনো অর্ডার তৈরি হবে না।",
   orderReceiptPaymentIssueTitleText: "পেমেন্ট সম্পন্ন হয়নি",
+  orderReceiptPaymentFailedTitleText: "পেমেন্ট হয়নি",
+  orderReceiptPaymentFailedMessageText:
+    "অর্ডার #{orderId} সংরক্ষিত আছে, কিন্তু এর পেমেন্ট হয়নি। আবার চেষ্টা করুন, অথবা অন্য পদ্ধতি বেছে নিন।",
   orderReceiptPaymentIssueMessageText:
     "অর্ডার #{orderId} সংরক্ষিত আছে। পেমেন্ট পদ্ধতি বেছে নিন।",
   orderReceiptPaymentPendingTitleText: "পেমেন্ট অপেক্ষমাণ",
@@ -1540,6 +1551,7 @@ export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS =/* @__PURE__ */ new Set<CheckoutL
   "orderReceiptConfirmationDelayedText",
   "orderReceiptCardLoadFailedText",
   "orderReceiptPaymentIssueMessageText",
+  "orderReceiptPaymentFailedMessageText",
   "orderReceiptPaymentPendingMessageText",
   "orderReceiptConfirmedMessageText",
   "orderReceiptProcessingMessageText",

@@ -1,7 +1,7 @@
 import type { OrderReceipt } from "./api/types";
 import type { GatewayConfig } from "./api/checkout";
 import type { OrderSuccessStateKind } from "./order-success-state";
-import { GIFT_CARD_PAYMENT_METHOD, getOrderSuccessVisibleBalanceDue } from "./order-success-state";
+import { GIFT_CARD_PAYMENT_METHOD, getOrderSuccessVisibleBalanceDue, isFailedPaymentResult } from "./order-success-state";
 import { appGatewayName, getGatewayPresentation } from "./checkout/gateway-presentation";
 import { isPaymentMethodIdShape } from "./payment-method-id";
 
@@ -16,7 +16,6 @@ export type OrderSuccessRetryOption = {
   requiresCardForm: boolean;
 };
 
-const RETRYABLE_CALLBACK_RESULTS = new Set(["failed", "cancelled"]);
 const PAYMENT_BLOCKED_ORDER_STATUSES = new Set([
   "cancelled",
   "returned",
@@ -38,7 +37,7 @@ export function getOrderSuccessRetryEndpoint(paymentMethod: string | null | unde
 }
 
 export function isHostedPaymentRetryResult(result: string | null | undefined): boolean {
-  return RETRYABLE_CALLBACK_RESULTS.has(normalize(result));
+  return isFailedPaymentResult(result);
 }
 
 export function canRetryOrderSuccessPayment(

@@ -205,4 +205,41 @@ describe("pending Stripe receipt polling", () => {
     expect(BANGLA_CHECKOUT_LANGUAGE_DATA.orderReceiptStripePaymentMethodRequiredText).toContain("কার্ড");
     expect(BANGLA_CHECKOUT_LANGUAGE_DATA.orderReceiptStripeAuthenticationRequiredText).toContain("যাচাই");
   });
+
+  it("keeps a failed return quiet while the store still records it as waiting, and reloads once it settles", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    // The page says the payment failed; the store still records the order as waiting for it.
+    document.body.innerHTML = `
+      <section
+        data-order-success-state="payment_issue"
+        data-order-recorded-state="payment_pending"
+        data-order-id="order_1"
+        data-order-updated-at="2026-09-09T00:00:00.000Z"
+        data-payment-method="scalius.bangladesh:bkash"
+      ></section>
+    `;
+    window.__CHECKOUT_LANGUAGE__ = { languageData: ENGLISH_CHECKOUT_LANGUAGE_DATA } as never;
+    let settled = false;
+    const fetchMock = vi.fn(async () => response({
+      success: true,
+      data: settled
+        ? { state: "order_placed", updatedAt: "2026-09-09T00:02:00.000Z" }
+        : { state: "payment_pending", updatedAt: "2026-09-09T00:00:00.000Z" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const reload = vi.spyOn(window.location, "reload").mockImplementation(() => undefined);
+
+    new Function("ENGLISH_CHECKOUT_LANGUAGE_DATA", pollingScript())(ENGLISH_CHECKOUT_LANGUAGE_DATA);
+    document.dispatchEvent(new Event("DOMContentLoaded"));
+    await settle();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fetchMock).toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+
+    // A late provider confirmation still reaches the buyer.
+    settled = true;
+    await vi.runAllTimersAsync();
+    expect(reload).toHaveBeenCalled();
+  });
 });

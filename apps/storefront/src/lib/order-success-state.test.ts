@@ -190,6 +190,31 @@ describe("order success state", () => {
     expect(getOrderSuccessViewState(paid, ENGLISH_CHECKOUT_LANGUAGE_DATA, "failed").kind).toBe("order_updated");
   });
 
+  it.each(["failed", "cancelled"])(
+    "says a payment that didn't go through (%s) failed, with a retry, never that it is pending",
+    (result) => {
+      // The payment session could not start (a 503) or the provider returned a failure: the order waits.
+      const order = makeOrder({ paymentMethod: "scalius.bangladesh:bkash", paymentStatus: "unpaid", status: "incomplete", paidAmount: 0, orderNumber: 100501 });
+      expect(getOrderSuccessStateKind(order)).toBe("payment_pending");
+      const view = getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA, result);
+      expect(view).toMatchObject({
+        kind: "payment_issue",
+        title: "Payment didn't go through",
+        message: "Order #100501 is saved, but its payment didn't go through. Try again, or choose another method.",
+      });
+      expect(view.title).not.toBe(ENGLISH_CHECKOUT_LANGUAGE_DATA.orderReceiptPaymentPendingTitleText);
+      expect(canRetryOrderSuccessPayment(order, view.kind, result)).toBe(true);
+      // Without a failed return it is still a pending payment the page checks on.
+      expect(getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA, null).kind).toBe("payment_pending");
+      expect(getOrderSuccessViewState(order, ENGLISH_CHECKOUT_LANGUAGE_DATA, "success").kind).toBe("payment_pending");
+      // A payment the provider already settled, and cash on delivery, never read as failed.
+      const settling = makeOrder({ paymentMethod: "scalius.bangladesh:bkash", paymentStatus: "paid", status: "incomplete", paidAmount: 1200 });
+      expect(getOrderSuccessViewState(settling, ENGLISH_CHECKOUT_LANGUAGE_DATA, result).kind).toBe("payment_pending");
+      const cash = makeOrder({ paymentMethod: "cod", status: "incomplete" });
+      expect(getOrderSuccessViewState(cash, ENGLISH_CHECKOUT_LANGUAGE_DATA, result).kind).toBe("payment_pending");
+    },
+  );
+
   it("keeps failed payments actionable without treating cancelled orders as payment failures", () => {
     expect(
       getOrderSuccessStateKind(makeOrder({

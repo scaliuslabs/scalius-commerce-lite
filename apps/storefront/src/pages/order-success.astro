@@ -29,6 +29,7 @@ import {
   receiptGiftCardTenderLabel,
   getOrderSuccessNextSteps,
   isDigitalLinePreparing,
+  getOrderSuccessStateKind,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
   isOrderStatusView,
@@ -268,6 +269,8 @@ const retryEligibleGateways = checkoutConfig.gateways.filter((gateway) =>
 const retryPaymentOptions = order && orderSuccessView && receiptToken && canRetryOrderSuccessPayment(order, orderSuccessView.kind, paymentResult)
   ? getOrderSuccessRetryOptions(order, orderSuccessView.kind, paymentResult, retryEligibleGateways)
       .filter((option) => retryPaymentType !== "balance" || option.current)
+      // The method that didn't go through first ("Try again"), then the others.
+      .sort((a, b) => Number(b.current) - Number(a.current))
       .map((option) => {
         const presentation = localizeOrderReceiptGatewayPresentation(
           option.gateway,
@@ -281,10 +284,18 @@ const retryPaymentOptions = order && orderSuccessView && receiptToken && canRetr
             ? formatCheckoutLanguageText(copy.completeWithProviderText, {
                 provider: presentation.providerLabel ?? presentation.buyerLabel,
               })
-            : presentation.buyerLabel,
+            : option.current
+              ? formatCheckoutLanguageText(copy.orderReceiptTryAgainWithProviderText, {
+                  provider: presentation.providerLabel ?? presentation.buyerLabel,
+                })
+              : presentation.buyerLabel,
         };
       })
   : [];
+// "Or choose another method" goes above the first method that isn't the order's own.
+const firstOtherRetryIndex = retryPaymentOptions.some((option) => option.current)
+  ? retryPaymentOptions.findIndex((option) => !option.current)
+  : -1;
 const stripeRetryGateway = retryPaymentOptions.some((option) => option.gateway === "stripe")
   ? checkoutConfig.gateways.find((gateway) => gateway.id === "stripe")
   : null;
@@ -418,6 +429,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
     data-order-success-print={order ? "receipt" : undefined}
     data-fb-order-details={purchaseTrackingPayload ? JSON.stringify(purchaseTrackingPayload) : undefined}
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
+    data-order-recorded-state={order ? getOrderSuccessStateKind(order) : undefined}
     data-order-finalize={orderSuccessView?.shouldFinalizeClientSide ? "true" : "false"}
     data-checkout-cart-finalize={shouldClearCheckoutCart ? "true" : "false"}
     data-checkout-finalize-id={order ? currentCheckoutFinalizeMarker?.checkoutId ?? undefined : undefined}
@@ -478,12 +490,18 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       )}
       {retryPaymentOptions.length > 0 && retryPaymentType && (
         <div class="no-print mt-5 flex flex-col items-center gap-2">
-          <div class="flex flex-col justify-center gap-2 sm:flex-row">
-            {retryPaymentOptions.map((option) => (
+          <div class="flex flex-col justify-center gap-2 sm:flex-row sm:flex-wrap">
+            {retryPaymentOptions.map((option, index) => (
+              <>
+              {index === firstOtherRetryIndex && (
+                <p class="mt-2 text-center text-sm font-medium text-muted-foreground sm:basis-full" data-retry-other-methods>
+                  {copy.orderReceiptChooseAnotherMethodText}
+                </p>
+              )}
               <button
                 type="button"
                 class={`inline-flex min-h-16 items-center gap-3 rounded-xl border bg-background px-4 py-3 text-start text-sm text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60 ${option.current ? "border-primary ring-1 ring-primary" : "border-border"}`}
-                aria-label={orderSuccessView.kind === "payment_pending"
+                aria-label={orderSuccessView.kind === "payment_pending" || option.current
                   ? option.actionLabel
                   : formatCheckoutLanguageText(copy.orderReceiptRetryWithProviderText, {
                       provider: option.presentation.buyerLabel,
@@ -517,6 +535,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                   )}
                 </span>
               </button>
+              </>
             ))}
           </div>
           {stripeRetryGateway && (
@@ -1013,11 +1032,14 @@ const orderRecommendations = order && showsSuccessHero && !statusView
     if (!receipt) return;
 
     const orderId = receipt.dataset.orderId;
-    const initialState = receipt.dataset.orderSuccessState;
+    // The page may say a payment failed before the store records it (a failed
+    // return): the status read is compared with what the store had recorded.
+    const initialState = receipt.dataset.orderRecordedState || receipt.dataset.orderSuccessState;
+    const shownState = receipt.dataset.orderSuccessState;
     const initialUpdatedAt = receipt.dataset.orderUpdatedAt || null;
     const message = receipt.querySelector<HTMLElement>("[data-payment-status-message]");
     const checkNowButton = receipt.querySelector<HTMLButtonElement>("[data-payment-check-now]");
-    if (!orderId || (initialState !== "payment_pending" && initialState !== "payment_issue")) return;
+    if (!orderId || (shownState !== "payment_pending" && shownState !== "payment_issue")) return;
 
     let stopped = false;
     let suspended = false;
