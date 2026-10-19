@@ -358,6 +358,14 @@ computes its market (`orderMarketIdSql()`).
 `/api/product-feed.xml` and `/api/facebook-feed.xml` with presence URLs. The
 root `sitemap.xml` also lists the child sitemaps of each active presence.
 `robots.txt`, `llms.txt` and UCP stay at the root and serve the backup market.
+A UCP catalog request (REST or `/ucp/mcp`) is answered in the market its
+buyer context names (`apps/storefront/src/lib/ucp/context.ts`): the country
+picks the market selling there (as a shipping country does at checkout),
+else a currency picks a market selling in it, and the language one of its
+presences; the reads then run under that presence (`renderForPresence`), so
+prices, currency, translations and product URLs are the presence page's. An
+unsupported signal answers at the root with a warning; no context reads
+exactly what a root page reads.
 
 **Dashboard.** Settings → Markets lists each market with a Primary badge
 (Shopify's name for the backup market; code and API keep `is_backup`),
