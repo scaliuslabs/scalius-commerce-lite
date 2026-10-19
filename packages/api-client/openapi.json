@@ -14915,6 +14915,37 @@
                         "pages"
                       ]
                     }
+                  },
+                  "themeProblems": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "template",
+                            "page-preset"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "problem": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id",
+                        "name",
+                        "problem"
+                      ]
+                    },
+                    "description": "Templates and page presets the store's theme cannot use after upgrading them from the version they were written for; the theme editor leaves them out."
                   }
                 },
                 "required": [
@@ -14922,7 +14953,8 @@
                   "head",
                   "sections",
                   "productBlocks",
-                  "scripts"
+                  "scripts",
+                  "themeProblems"
                 ]
               },
               "admin": {

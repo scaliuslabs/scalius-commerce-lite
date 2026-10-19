@@ -145,7 +145,7 @@ function detail(overrides: Record<string, unknown> = {}) {
     cron: [],
     storage: [],
     customFields: [],
-    storefront: { proxy: false, head: false, sections: [], productBlocks: [], scripts: [] },
+    storefront: { proxy: false, head: false, sections: [], productBlocks: [], scripts: [], themeProblems: [] },
     admin: { pages: [], cards: [], actions: [], widgets: [] },
     limits: { cpuMs: 50, wallMs: 1000, subrequests: 20, invocationsPerMinute: 60, storageBytes: 10 * 1024 * 1024 },
     storageUsage: { bytes: 0, measuredAt: null },
@@ -489,6 +489,19 @@ describe("App page", () => {
     for (const href of ["mailto:help@acme.example", "https://acme.example/docs", "https://acme.example/privacy", "https://acme.example/changes"]) {
       expect(document.querySelector(`a[href="${href}"]`), href).not.toBeNull();
     }
+  });
+
+  it("reports the templates and page presets the store's theme cannot use", async () => {
+    await renderApp(detail({
+      storefront: {
+        proxy: false, head: false, sections: [], productBlocks: [], scripts: [],
+        themeProblems: [{ kind: "page-preset", id: "launch", name: "Launch page", problem: "Version 9 is older than the oldest readable version (10)." }],
+      },
+    }), VIEWER);
+    const alert = document.querySelector('[data-slot="theme-problems"]')!;
+    expect(alert.textContent).toContain("Some of this app's designs don't fit your theme");
+    expect(alert.textContent).toContain("Page preset Launch page");
+    expect(alert.textContent).toContain("Version 9 is older");
   });
 
   it("says an app without a country list serves every country and shows no empty links", async () => {

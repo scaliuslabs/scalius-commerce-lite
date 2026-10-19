@@ -75,6 +75,10 @@ export const installedAppsMessages = defineMessages({
     unavailableTitle: "This app can't run here",
     unavailable_bundled: "Its code isn't part of this store's latest update. Ask your developer to add it and update the store.",
     unavailable_sandbox: "It runs in a separate sandbox, which isn't turned on for this store.",
+    themeProblemsTitle: "Some of this app's designs don't fit your theme",
+    themeProblemsBody: "They were made for a different theme version, so they don't show in the theme editor. Ask the developer for an update.",
+    themeProblem_template: "Template {name}",
+    "themeProblem_page-preset": "Page preset {name}",
     superAdminActivates: "Only a Super Admin can activate apps.",
 
     aboutTitle: "About",
@@ -343,6 +347,10 @@ export const installedAppsMessages = defineMessages({
     unavailableTitle: "এই অ্যাপটি এখানে চলতে পারবে না",
     unavailable_bundled: "এর কোড এই স্টোরের সর্বশেষ আপডেটে নেই। আপনার ডেভেলপারকে এটি যোগ করে স্টোর আপডেট করতে বলুন।",
     unavailable_sandbox: "এটি আলাদা একটি স্যান্ডবক্সে চলে, যা এই স্টোরে চালু করা নেই।",
+    themeProblemsTitle: "এই অ্যাপের কিছু ডিজাইন আপনার থিমের সাথে মেলে না",
+    themeProblemsBody: "এগুলো থিমের অন্য একটি ভার্সনের জন্য বানানো, তাই থিম এডিটরে দেখা যায় না। ডেভেলপারের কাছে একটি আপডেট চান।",
+    themeProblem_template: "টেমপ্লেট {name}",
+    "themeProblem_page-preset": "পেজ প্রিসেট {name}",
     superAdminActivates: "শুধু একজন সুপার অ্যাডমিন অ্যাপ চালু করতে পারেন।",
 
     aboutTitle: "পরিচিতি",

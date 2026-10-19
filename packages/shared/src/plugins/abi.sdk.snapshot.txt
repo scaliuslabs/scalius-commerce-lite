@@ -1407,12 +1407,14 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
                 name: string;
                 theme: Record<string, unknown>;
                 description?: string | undefined;
+                themeVersion?: number | undefined;
             }[];
             pagePresets: {
                 id: string;
                 name: string;
                 sections: Record<string, unknown>[];
                 description?: string | undefined;
+                themeVersion?: number | undefined;
             }[];
             islands: {
                 name: string;

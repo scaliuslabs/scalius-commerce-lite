@@ -19,6 +19,7 @@ import { STOREFRONT_BLOCK_REGISTRY, STOREFRONT_BLOCK_SLOTS, storefrontBlockValue
 import { STOREFRONT_THEME_DOCUMENT_VERSION, storefrontThemeDocumentSchema, type StorefrontThemeDocument } from "./document";
 import { STOREFRONT_SECTION_REGISTRY, STOREFRONT_SECTION_TYPES, type StorefrontSection } from "./sections";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
+import { checkStorefrontAppTemplateTheme, checkStorefrontPagePresetSections, storefrontAppThemeProblems } from "./app-templates";
 import {
   STOREFRONT_THEME_DOCUMENT_UPGRADES,
   STOREFRONT_THEME_OLDEST_READABLE_VERSION,
@@ -34,8 +35,16 @@ interface Golden {
   documents: unknown[];
 }
 
-/** Every golden document file: `compat/v<n>/<name>.json`, a list of stored documents. */
-async function goldens(): Promise<Golden[]> {
+/** An app's declarations as shipped for one version (`{ templates: [theme], pagePresets: [sections] }`). */
+interface AppGolden {
+  version: number;
+  file: string;
+  templates: unknown[];
+  pagePresets: unknown[];
+}
+
+/** Every golden file: `compat/v<n>/<name>.json`, a list of stored documents or an app's declarations. */
+async function goldenFiles(): Promise<Array<{ version: number; file: string; value: unknown }>> {
   // Runtime specifiers keep Node types out of this Workers package (plugins/assets.test.ts).
   const [{ readFileSync, readdirSync }, { fileURLToPath }] = await Promise.all(
     ["node:fs", "node:url"].map((specifier) => import(/* @vite-ignore */ specifier)),
@@ -46,9 +55,20 @@ async function goldens(): Promise<Golden[]> {
   const root = fileURLToPath(new URL("./compat/", import.meta.url));
   return readdirSync(root).filter((dir) => /^v\d+$/.test(dir)).flatMap((dir) => readdirSync(`${root}${dir}`)
     .filter((file) => file.endsWith(".json"))
-    .map((file) => ({ version: Number(dir.slice(1)), file: `${dir}/${file}`, value: JSON.parse(readFileSync(`${root}${dir}/${file}`, "utf8")) as unknown }))
-    .filter((entry): entry is { version: number; file: string; value: unknown[] } => Array.isArray(entry.value))
-    .map(({ version, file, value }) => ({ version, file, documents: value })));
+    .map((file) => ({ version: Number(dir.slice(1)), file: `${dir}/${file}`, value: JSON.parse(readFileSync(`${root}${dir}/${file}`, "utf8")) as unknown })));
+}
+
+async function goldens(): Promise<Golden[]> {
+  return (await goldenFiles()).flatMap(({ version, file, value }) => Array.isArray(value) ? [{ version, file, documents: value }] : []);
+}
+
+async function appGoldens(): Promise<AppGolden[]> {
+  return (await goldenFiles()).flatMap(({ version, file, value }) => {
+    const app = value as Partial<AppGolden>;
+    return !Array.isArray(value) && Array.isArray(app.templates) && Array.isArray(app.pagePresets)
+      ? [{ version, file, templates: app.templates, pagePresets: app.pagePresets }]
+      : [];
+  });
 }
 
 function sectionsOf(document: StorefrontThemeDocument): StorefrontSection[] {
@@ -95,6 +115,21 @@ describe("the theme document's compatibility gate", () => {
     }
   });
 
+  it("reads every golden app template and page preset through the same chain", async () => {
+    const all = await appGoldens();
+    expect(all.length).toBeGreaterThan(0);
+    for (const { version, file, templates, pagePresets } of all) {
+      templates.forEach((theme, index) => {
+        const read = checkStorefrontAppTemplateTheme(theme, version);
+        expect(read.ok ? null : read.problem, `${file} template #${index}`).toBeNull();
+      });
+      pagePresets.forEach((sections, index) => {
+        const read = checkStorefrontPagePresetSections(sections, version);
+        expect(read.ok ? null : read.problem, `${file} page preset #${index}`).toBeNull();
+      });
+    }
+  });
+
   it("places every section type and every block variant in the goldens", async () => {
     const types = new Set<string>();
     const variants = new Set<string>();
@@ -131,6 +166,35 @@ describe("the theme document's compatibility gate", () => {
 
   it("matches the committed contract snapshot (accept an additive change with -u)", async () => {
     await expect(`${JSON.stringify(contract(), null, 1)}\n`).toMatchFileSnapshot("./compat.snapshot.json");
+  });
+});
+
+describe("app templates and page presets", () => {
+  const hero = { id: "hero", type: "hero", version: 1, settings: { layout: "split", slides: [] } };
+
+  it("reports what does not fit instead of hiding it", () => {
+    expect(storefrontAppThemeProblems({
+      templates: [
+        { id: "fits", name: "Fits", theme: { sections: [hero] } },
+        { id: "future", name: "Future", themeVersion: 99, theme: {} },
+        { id: "broken", name: "Broken", theme: { sections: [{ ...hero, settings: { layout: "diagonal", slides: [] } }] } },
+      ],
+      pagePresets: [
+        { id: "old", name: "Old", themeVersion: 9, sections: [hero] },
+        { id: "empty", name: "Empty", sections: [] },
+        { id: "ok", name: "Ok", sections: [hero] },
+      ],
+    })).toEqual([
+      { kind: "template", id: "future", name: "Future", problem: "Version 99 is newer than this store reads (10)." },
+      { kind: "template", id: "broken", name: "Broken", problem: expect.stringMatching(/^sections\.0\.settings\.layout: /) },
+      { kind: "page-preset", id: "old", name: "Old", problem: "Version 9 is older than the oldest readable version (10)." },
+      { kind: "page-preset", id: "empty", name: "Empty", problem: "The preset has no sections." },
+    ]);
+  });
+
+  it("returns a template's parts at the current version", () => {
+    expect(checkStorefrontAppTemplateTheme({ sections: [hero], apps: { skins: {} } }, 10)).toEqual({ ok: true, value: { sections: [hero], apps: { skins: {} } } });
+    expect(checkStorefrontPagePresetSections([hero], 10)).toEqual({ ok: true, value: [hero] });
   });
 });
 

@@ -440,6 +440,24 @@ function AppPage({ app, section }: { app: AppDetail; section: AppSection }) {
             <AlertDescription>{t("missingBody", { settings: missing.map((field) => field.label).join(", ") })}</AlertDescription>
           </Alert>
         ) : null}
+        {app.storefront.themeProblems.length > 0 ? (
+          <Alert variant="warning" data-slot="theme-problems">
+            <TriangleAlert aria-hidden="true" />
+            <AlertTitle>{t("themeProblemsTitle")}</AlertTitle>
+            <AlertDescription>
+              <p>{t("themeProblemsBody")}</p>
+              <ul className="mt-1 flex flex-col gap-1">
+                {app.storefront.themeProblems.map((entry) => (
+                  <li key={`${entry.kind}:${entry.id}`}>
+                    <span className="block font-medium">{t(`themeProblem_${entry.kind}`, { name: entry.name })}</span>
+                    {/* The developer's reason, as the platform states it. */}
+                    <span className="block text-muted-foreground" lang="en">{entry.problem}</span>
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {usesSections(app) ? (
           <div className="grid items-start gap-4 lg:grid-cols-4">
             <AppSectionNav app={app} current={section.key} />

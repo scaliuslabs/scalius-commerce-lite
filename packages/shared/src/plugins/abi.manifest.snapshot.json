@@ -7065,6 +7065,11 @@
          "minLength": 1,
          "maxLength": 500
         },
+        "themeVersion": {
+         "type": "integer",
+         "exclusiveMinimum": 0,
+         "maximum": 9007199254740991
+        },
         "theme": {
          "type": "object",
          "propertyNames": {
@@ -7101,6 +7106,11 @@
          "type": "string",
          "minLength": 1,
          "maxLength": 500
+        },
+        "themeVersion": {
+         "type": "integer",
+         "exclusiveMinimum": 0,
+         "maximum": 9007199254740991
         },
         "sections": {
          "minItems": 1,

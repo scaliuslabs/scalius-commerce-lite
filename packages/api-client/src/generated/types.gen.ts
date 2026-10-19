@@ -3395,6 +3395,15 @@ export type AppDetail = AppSummary & {
             placement: string;
             pages: Array<string>;
         }>;
+        /**
+         * Templates and page presets the store's theme cannot use after upgrading them from the version they were written for; the theme editor leaves them out.
+         */
+        themeProblems: Array<{
+            kind: 'template' | 'page-preset';
+            id: string;
+            name: string;
+            problem: string;
+        }>;
     };
     admin: {
         pages: Array<{

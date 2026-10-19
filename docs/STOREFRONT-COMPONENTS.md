@@ -42,8 +42,8 @@ The storefront runs the module in one of two loaders, with the same input and th
 | Component product block | `productBlocks: [{ type, name, placement, settings }]` (no `route`) | `blocks[type]` | `blocks.product.apps: [{ id, app: "<id>/<type>", values }]` |
 | Skin of a unit | `skins: [{ id, target, name, settings }]` (≤ 30) | `skins[id]` | `apps.skins.<target>: { app: "<id>/<skin id>", values }` |
 | Skin of a core section | `skins: [{ id, target: "section:<type>", … }]` | `skins[id]` | the core section's `skin: { app, values }` |
-| Template | `templates: [{ id, name, theme }]` | | `apps.template` (a label) |
-| Page preset | `pagePresets: [{ id, name, sections }]` | | a new landing page's sections |
+| Template | `templates: [{ id, name, themeVersion?, theme }]` | | `apps.template` (a label) |
+| Page preset | `pagePresets: [{ id, name, themeVersion?, sections }]` | | a new landing page's sections |
 | Island | `islands: [{ name }]` | `src/islands/<name>.ts` with `defineIsland` | |
 | Stylesheet | `stylesheet: true` | `src/storefront.css` | |
 | Browser hosts | `connect: ["api.example.com"]` | | |
@@ -51,6 +51,8 @@ The storefront runs the module in one of two loaders, with the same input and th
 Component sections and product blocks have no render route: they run at the edge with data supplied by the existing page batch and can show product cards, images and core embeds. A section may declare bounded public object `reads`; these add data to its input, not network access to its renderer. Private buyer pages use declarative `buyer.ui` functions rendered by core. The static `storefront.blocks` and `request.render` APIs are retired; only proxy pages (`/apps/<id>/*`) accept route-returned page HTML.
 
 A **page preset** is a ready-made landing page: when the merchant makes a new landing page (`/pages/<slug>`), the editor offers "a blank page" or the presets of the active apps, and asks for a product when a preset's sections have `product` settings, which it fills in. Noor's "Product campaign" preset builds a complete Facebook-ad page (offer, promises, features, steps, reviews, questions, order form) in one step; every section stays editable and reorderable.
+
+A template or page preset is written for one theme document version (`themeVersion`, absent: 10). The store upgrades it through the stored documents' upgrade chain (`packages/shared/src/storefront-theme.md`, Compatibility) before listing it, so an app built for an older version keeps working. One that still does not fit is left out of the theme editor and named, with the reason, on the app's page.
 
 A page may hold 24 app sections, all of them component sections.
 
