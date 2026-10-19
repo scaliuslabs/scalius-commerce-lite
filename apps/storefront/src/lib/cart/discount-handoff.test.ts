@@ -246,9 +246,11 @@ describe("cart discount checkout handoff", () => {
     await startCartPage();
     const offers = document.getElementById("discountOffers")!;
     expect(offers.classList.contains("hidden")).toBe(false);
+    expect(offers.textContent).toContain("Choose your free gift");
     expect(offers.textContent).toContain("Buy a tee, get a cap free");
-    expect(offers.textContent).toContain("Add Cap to get it free.");
-    expect(offers.querySelector("button")?.textContent).toBe("Add Cap");
+    expect(offers.textContent).toContain("Cap");
+    expect(offers.querySelector("button")?.textContent).toBe("Add");
+    expect(offers.querySelector("button")?.getAttribute("aria-label")).toBe("Add Cap");
   });
 
   it("holds native submit until a deferred Apply settles, then transfers the applied code", async () => {
