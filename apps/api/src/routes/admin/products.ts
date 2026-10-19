@@ -59,6 +59,7 @@ import { productMerchandisingSectionResponseSchemas } from "../../schemas/produc
 
 import { refreshRecommendationsAfterWrite } from "../../background/catalog";
 import { assertCanWriteCosts, presentSkuCost, presentSkuCosts, productWriteSetsCosts } from "./cost-access";
+import { assertCanWriteStock, writeSetsStock } from "./stock-access";
 import { products } from "@scalius/database/schema";
 import { appListQuerySchema, appListValuesSchema, planAppList } from "../../plugins/list-columns";
 import { matchingResultSchema, matchingSchema, requireOneSelection, type MatchingResult } from "../../schemas/bulk-matching";
@@ -594,6 +595,7 @@ app.openapi(createProductRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     assertCanWriteCosts(c, productWriteSetsCosts(data));
+    assertCanWriteStock(c, writeSetsStock(data));
     const result = await createProduct(db, data);
 
     await refreshRecommendationsAfterWrite(c, db, [result.id]);
@@ -1015,6 +1017,7 @@ app.openapi(updateProductRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     assertCanWriteCosts(c, productWriteSetsCosts(data));
+    assertCanWriteStock(c, writeSetsStock(data));
     try {
         const result = await updateProduct(db, id, data, c.get("user")?.id);
 
@@ -1143,6 +1146,7 @@ app.openapi(createVariantRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
+    assertCanWriteStock(c, writeSetsStock(data));
     try {
         const result = await createVariant(db, id, data);
         if (!result) throw new NotFoundError("Failed to create variant");
@@ -1208,6 +1212,7 @@ app.openapi(updateVariantRoute, async (c) => {
     const db = c.get("db");
     const { id, variantId } = c.req.valid("param");
     const data = c.req.valid("json");
+    assertCanWriteStock(c, writeSetsStock(data));
     const user = c.get("user");
     try {
         const result = await updateVariant(db, id, variantId, data, user?.id);
@@ -1286,7 +1291,9 @@ app.openapi(saveOptionMatrixRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const user = c.get("user");
-    const result = await saveProductOptionMatrix(db, id, c.req.valid("json"), user?.id);
+    const matrix = c.req.valid("json");
+    assertCanWriteStock(c, writeSetsStock(matrix));
+    const result = await saveProductOptionMatrix(db, id, matrix, user?.id);
 
     await refreshRecommendationsAfterWrite(c, db, [id]);
     return ok(c, result);

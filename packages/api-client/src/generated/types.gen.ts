@@ -2894,6 +2894,10 @@ export type WebhookSubscription = {
     url: string;
     topics: Array<string>;
     apiVersion: string;
+    /**
+     * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
+     */
+    customerData: Array<'name' | 'email' | 'phone' | 'address'>;
     description: string | null;
     status: 'active' | 'disabled';
     disabledReason: 'manual' | 'failing' | null;
@@ -3283,7 +3287,7 @@ export type AppDetail = AppSummary & {
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
-        name: 'read_products' | 'write_products' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places';
+        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places';
         /**
          * The highest risk among the operations the scope lets this app call.
          */
@@ -3474,7 +3478,7 @@ export type AppGrant = {
     /**
      * Access scopes: store data and actions the app may read or change.
      */
-    scopes: Array<'read_products' | 'write_products' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places'>;
+    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places'>;
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
@@ -3490,15 +3494,15 @@ export type AppGrant = {
     /**
      * Draws on the storefront with its own code: components, client islands or a stylesheet.
      */
-    storefrontCode?: true;
+    storefrontCode: boolean;
     /**
      * Hosts the app's storefront islands reach from the buyer's browser.
      */
-    storefrontConnect?: Array<string>;
+    storefrontConnect: Array<string>;
     /**
-     * The app's features that are on (apps that declare features).
+     * The app's features that are on (empty for apps that declare none).
      */
-    features?: Array<string>;
+    features: Array<string>;
 };
 
 export type AppFeature = {
@@ -3518,7 +3522,7 @@ export type AppFeature = {
          * Store access this feature adds, for its consent dialog.
          */
         scopes: Array<{
-            name: 'read_products' | 'write_products' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places';
+            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_settings' | 'write_places';
             /**
              * The highest risk among the operations the scope lets this app call.
              */
@@ -59619,6 +59623,10 @@ export type PostApiV1AdminWebhooksData = {
         url: string;
         topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'fulfillment.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card.transaction' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
         description?: string | null;
+        /**
+         * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
+         */
+        customerData?: Array<'name' | 'email' | 'phone' | 'address'>;
     };
     path?: never;
     query?: never;
@@ -59771,6 +59779,10 @@ export type PatchApiV1AdminWebhooksByIdData = {
         url?: string;
         topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'fulfillment.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card.transaction' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
         description?: string | null;
+        /**
+         * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
+         */
+        customerData?: Array<'name' | 'email' | 'phone' | 'address'>;
         status?: 'active' | 'disabled';
     };
     path: {

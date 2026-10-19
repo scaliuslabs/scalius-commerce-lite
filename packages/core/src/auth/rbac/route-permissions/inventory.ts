@@ -16,8 +16,10 @@ const LOCATION_WRITE: RoutePermission = {
 
 export const INVENTORY_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // =============================================
-  // Stock: product data (products.view reads, products.edit adjusts). Unit
-  // costs in these reads are left out without products.view_costs.
+  // Stock: product data. products.view reads it (per-location levels also
+  // with inventory.view, the read_inventory app scope), products.adjust_stock
+  // changes quantities, products.edit keeps alert levels. Unit costs in these
+  // reads are left out without products.view_costs.
   // =============================================
   "/api/v1/admin/inventory": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
@@ -39,10 +41,10 @@ export const INVENTORY_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
   "/api/v1/admin/inventory/stock-adjust": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: { permission: PERMISSIONS.PRODUCTS_ADJUST_STOCK },
   },
   "/api/v1/admin/inventory/stock-set": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: { permission: PERMISSIONS.PRODUCTS_ADJUST_STOCK },
   },
   "/api/v1/admin/inventory/default-alert-level": {
     PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
@@ -51,13 +53,13 @@ export const INVENTORY_ROUTE_PERMISSIONS: RoutePermissionMap = {
     PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
   "/api/v1/admin/inventory/*/adjust": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: { permission: PERMISSIONS.PRODUCTS_ADJUST_STOCK },
   },
   "/api/v1/admin/inventory/*/levels": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW] },
   },
   "/api/v1/admin/inventory/levels": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW] },
   },
 
   // =============================================

@@ -18,7 +18,7 @@ export const STORE_TRANSFER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   },
   // Stock writes need the same permission as the inventory screen.
   "/api/v1/admin/import/inventory": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: { permission: PERMISSIONS.PRODUCTS_ADJUST_STOCK },
   },
   "/api/v1/admin/export/products": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },

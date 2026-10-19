@@ -78,6 +78,8 @@ import { usePublishSkuCostRows, useSkuCosts, type SkuCostRow } from "../sku-cost
 import { Field, FieldRow, ReadOnlyValue } from "~/components/ui/field";
 import { barcodePatch, InventoryQuantityInput, type IncomingUnits, type IssueFor, type StockElsewhere } from "./variant-fields";
 import { VariantTable, type VariantCosts } from "./VariantTable";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { usePermissions } from "~/contexts/PermissionContext";
 
 const MAX_AXES = MAX_PRODUCT_OPTION_AXES;
 const MAX_COMBINATIONS = MAX_PRODUCT_OPTION_COMBINATIONS;
@@ -162,6 +164,8 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   const defaultSku = savedVariants.find((variant) => variant.isDefault && !variant.deletedAt);
   const [simpleSkuDraft, setSimpleSku] = React.useState<SimpleSkuDraft>(() => initialSimpleSku(defaultSku));
   const [simpleStockEdited, setSimpleStockEdited] = React.useState(false);
+  // Quantities need "Adjust stock" (products.adjust_stock); the rest of the SKU follows products.edit.
+  const canAdjustStock = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_ADJUST_STOCK);
   const [optionDraft, setOptions] = React.useState<DraftOption[]>(() => initialOptions(savedOptions));
   const [variantDraft, setVariants] = React.useState<DraftVariant[]>(() => initialVariants(savedVariants));
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
@@ -752,7 +756,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
         {shownSimpleSku.trackInventory && !digitalSimple ? (
           <Field label={quantityLabel ?? t("quantity")} error={issueFor(undefined, "stock")}>
               <InventoryQuantityInput
-                readOnly={readOnly}
+                readOnly={readOnly || !canAdjustStock}
                 ariaLabel={quantityLabel ?? t("quantity")}
                 value={simpleSku.stock - simpleElsewhere}
                 committed={simpleCommitted}

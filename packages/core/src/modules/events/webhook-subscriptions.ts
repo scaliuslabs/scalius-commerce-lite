@@ -1,6 +1,8 @@
 // Webhook subscriptions (COMMERCE-HOOKS H3): merchant endpoints that receive
 // signed event deliveries. The signing secret is generated here, shown once,
 // and stored only as AES-GCM ciphertext under CREDENTIAL_ENCRYPTION_KEY.
+// `customerData` (H5) lists the protected customer data categories an
+// endpoint's deliveries carry; the rest read null. None by default.
 
 import type { Database } from "@scalius/database/client";
 import {
@@ -15,6 +17,11 @@ import {
   type EventTopicFilter,
 } from "@scalius/shared/events";
 import { checkOutboundUrl, describeOutboundUrlIssue } from "@scalius/shared/outbound-url";
+import {
+  PROTECTED_CUSTOMER_DATA,
+  isProtectedCustomerData,
+  type ProtectedCustomerData,
+} from "@scalius/shared/plugins/protected-data";
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { SQLiteUpdateSetSource } from "drizzle-orm/sqlite-core";
 import { AppError, ConflictError, NotFoundError, ServiceUnavailableError, ValidationError } from "../../errors";
@@ -44,6 +51,8 @@ export interface WebhookSubscriptionView {
   url: string;
   topics: EventTopicFilter[];
   apiVersion: string;
+  /** The protected customer data its deliveries include (`name`, `email`, `phone`, `address`). */
+  customerData: ProtectedCustomerData[];
   description: string | null;
   status: "active" | "disabled";
   disabledReason: WebhookDisabledReason | null;
@@ -67,12 +76,31 @@ export function parseStoredTopicFilters(value: string): EventTopicFilter[] {
   }
 }
 
+/** A stored category list, catalog order; anything unreadable reads as none (fail closed). */
+export function parseStoredCustomerData(value: string | null | undefined): ProtectedCustomerData[] {
+  try {
+    const parsed = JSON.parse(value ?? "[]") as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return PROTECTED_CUSTOMER_DATA.filter((category) => parsed.includes(category));
+  } catch {
+    return [];
+  }
+}
+
+export function validateWebhookCustomerData(values: unknown): ProtectedCustomerData[] {
+  if (!Array.isArray(values) || !values.every(isProtectedCustomerData)) {
+    throw new ValidationError(`Customer data is a list of ${PROTECTED_CUSTOMER_DATA.join(", ")}.`, { field: "customerData" });
+  }
+  return PROTECTED_CUSTOMER_DATA.filter((category) => values.includes(category));
+}
+
 export function toWebhookSubscriptionView(row: WebhookSubscription): WebhookSubscriptionView {
   return {
     id: row.id,
     url: row.url,
     topics: parseStoredTopicFilters(row.topics),
     apiVersion: row.apiVersion,
+    customerData: parseStoredCustomerData(row.customerData),
     description: row.description,
     status: row.status,
     disabledReason: row.disabledReason ?? null,
@@ -180,11 +208,12 @@ async function assertUrlFree(db: Database, url: string, exceptId?: string): Prom
 
 export async function createWebhookSubscription(
   db: Database,
-  input: { url: unknown; topics: unknown; description?: unknown },
+  input: { url: unknown; topics: unknown; description?: unknown; customerData?: unknown },
   options: { actorId: string | null; encryptionKey: string | undefined },
 ): Promise<{ subscription: WebhookSubscriptionView; secret: string }> {
   const url = validateWebhookUrl(input.url);
   const topics = validateWebhookTopics(input.topics);
+  const customerData = input.customerData === undefined ? [] : validateWebhookCustomerData(input.customerData);
   const description = validateDescription(input.description);
   const count = await db
     .select({ count: sql<number>`count(*)` })
@@ -204,6 +233,7 @@ export async function createWebhookSubscription(
       url,
       topics: JSON.stringify(topics),
       apiVersion: EVENTS_API_VERSION,
+      customerData: JSON.stringify(customerData),
       description,
       secretCiphertext: await encryptSecret(secret, options.encryptionKey),
       secretHint: secretHint(secret),
@@ -247,6 +277,7 @@ export async function updateWebhookSubscription(
     url?: unknown;
     topics?: unknown;
     description?: unknown;
+    customerData?: unknown;
     status?: "active" | "disabled";
   },
 ): Promise<WebhookSubscriptionView> {
@@ -258,6 +289,7 @@ export async function updateWebhookSubscription(
   }
   if (input.topics !== undefined) values.topics = JSON.stringify(validateWebhookTopics(input.topics));
   if (input.description !== undefined) values.description = validateDescription(input.description);
+  if (input.customerData !== undefined) values.customerData = JSON.stringify(validateWebhookCustomerData(input.customerData));
   if (input.status === "disabled") {
     Object.assign(values, {
       status: "disabled" as const,

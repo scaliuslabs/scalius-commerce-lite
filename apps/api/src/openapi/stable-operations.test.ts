@@ -18,7 +18,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { effectivePluginPermissions } from "@scalius/core/modules/plugins";
-import { PLUGIN_SCOPE_NAMES, type PluginScope } from "@scalius/shared/plugins";
+import { PLUGIN_SCOPE_NAMES, PROTECTED_FIELD_KEYWORD, isProtectedDataScope, type PluginScope } from "@scalius/shared/plugins";
+import { protectedMarkerCategories } from "@scalius/shared/plugins/protected-data";
 import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS } from "../generated/agent-operations.gen";
 import { isOperationAvailableToPlugin, pluginRbacSatisfied } from "../plugins/authority";
 import type { AgentOperationManifestEntry } from "./agent-operation-manifest";
@@ -27,8 +28,27 @@ import { inputBreakingChanges, schemaBreakingChanges } from "./schema-compat";
 
 const SNAPSHOT_FILE = new URL("./stable-operations.snapshot.json", import.meta.url);
 
-/** Scopes used by bridge capabilities rather than operations (`ctx.messaging` marketing sends). */
-const BRIDGE_ONLY_SCOPES: ReadonlySet<PluginScope> = new Set(["write_marketing"]);
+/**
+ * Scopes that reach no operation by themselves: bridge capabilities
+ * (`ctx.messaging` marketing sends) and the protected customer data scopes,
+ * which reveal marked response fields of operations other scopes reach.
+ */
+const BRIDGE_ONLY_SCOPES: ReadonlySet<PluginScope> = new Set([
+  "write_marketing",
+  ...PLUGIN_SCOPE_NAMES.filter((scope) => isProtectedDataScope(scope)),
+]);
+
+/**
+ * The app's view of a schema: a field marked `x-scalius-protected` reads null
+ * without its scope, so the sealed contract says so (`nullable`).
+ */
+function appView<T>(schema: T): T {
+  if (Array.isArray(schema)) return schema.map(appView) as T;
+  if (!schema || typeof schema !== "object") return schema;
+  const node = Object.fromEntries(Object.entries(schema).map(([key, value]) => [key, appView(value)]));
+  if (PROTECTED_FIELD_KEYWORD in node && !node.$ref) node.nullable = true;
+  return node as T;
+}
 
 interface StableOperationSnapshot {
   method: string;
@@ -62,11 +82,11 @@ function currentSnapshot(): StableSnapshot {
     revision: operation.revision,
     scopes: coveringScopes(operation),
     input: operation.inputSchema,
-    output: operation.outputSchema,
+    output: appView(operation.outputSchema),
   } satisfies StableOperationSnapshot]));
   return {
     operations,
-    components: referencedComponentSchemas(stable.map((operation) => [operation.inputSchema, operation.outputSchema]), AGENT_COMPONENT_SCHEMAS),
+    components: appView(referencedComponentSchemas(stable.map((operation) => [operation.inputSchema, operation.outputSchema]), AGENT_COMPONENT_SCHEMAS)),
   };
 }
 
@@ -119,6 +139,56 @@ describe("the stable app API", () => {
     const idle = PLUGIN_SCOPE_NAMES.filter((scope) => !BRIDGE_ONLY_SCOPES.has(scope)
       && !stable.some((operation) => coveringScopes(operation).includes(scope)));
     expect(idle).toEqual([]);
+  });
+
+  it("marks every buyer contact field it returns as protected customer data", () => {
+    // Field names that carry a buyer's contact details wherever they appear,
+    // and `name` under a customer or address record.
+    const CONTACT_KEYS = new Set([
+      "customerName", "customerPhone", "customerEmail", "customerWhatsapp",
+      "shippingName", "shippingPhone", "shippingAddress", "shippingAddressLine2", "shippingCompany", "shippingDependentLocality",
+      "billingName", "billingPhone", "billingAddress", "billingAddressLine2", "billingCompany", "billingDependentLocality",
+      "email", "phone", "phoneRaw", "line1", "line2", "company", "dependentLocality", "contact", "consentContact", "latestOrderName",
+      "recipientName", "recipientPhone", "recipientAddress",
+    ]);
+    const PERSON_CONTAINERS = new Set(["customers", "customer", "customerRecord", "addresses", "address", "defaultAddress", "mergedInto", "relatedCustomer"]);
+    // The store's own contact details, not a buyer's.
+    const STORE_OWNED = new Set(["dashboard.inventory_locations.list", "dashboard.settings.business_get"]);
+    const resolve = (node: unknown): Record<string, unknown> | null => {
+      if (!node || typeof node !== "object") return null;
+      const ref = (node as { $ref?: unknown }).$ref;
+      return typeof ref === "string"
+        ? resolve((AGENT_COMPONENT_SCHEMAS as Record<string, unknown>)[ref.replace("#/components/schemas/", "")])
+        : node as Record<string, unknown>;
+    };
+    const unmarked: string[] = [];
+    const walk = (operationId: string, node: unknown, path: string[], refs: Set<string>) => {
+      const ref = node && typeof node === "object" ? (node as { $ref?: unknown }).$ref : undefined;
+      if (typeof ref === "string") {
+        if (refs.has(ref)) return;
+        refs = new Set([...refs, ref]);
+      }
+      const schema = resolve(node);
+      if (!schema) return;
+      const key = path.at(-1);
+      const parent = path.filter((segment) => segment !== "*").at(-2);
+      const contact = key !== undefined && (CONTACT_KEYS.has(key) || (key === "name" && parent !== undefined && PERSON_CONTAINERS.has(parent))
+        || (key === "name" && path.join(".") === "data" + ".name" && operationId.startsWith("dashboard.customers.")));
+      if (contact && !protectedMarkerCategories(schema[PROTECTED_FIELD_KEYWORD]) && (schema.type !== "boolean")) {
+        unmarked.push(`${operationId} ${path.join(".")}`);
+      }
+      for (const [child, value] of Object.entries((schema.properties ?? {}) as Record<string, unknown>)) walk(operationId, value, [...path, child], refs);
+      if (schema.items) walk(operationId, schema.items, [...path, "*"], refs);
+      if (schema.additionalProperties && typeof schema.additionalProperties === "object") walk(operationId, schema.additionalProperties, [...path, "*"], refs);
+      for (const variant of [...((schema.anyOf ?? []) as unknown[]), ...((schema.oneOf ?? []) as unknown[]), ...((schema.allOf ?? []) as unknown[])]) {
+        walk(operationId, variant, path, refs);
+      }
+    };
+    for (const operation of stable) {
+      if (STORE_OWNED.has(operation.operationId)) continue;
+      walk(operation.operationId, operation.outputSchema, [], new Set());
+    }
+    expect([...new Set(unmarked)]).toEqual([]);
   });
 
   it("never reaches people, credentials, webhooks or apps", () => {

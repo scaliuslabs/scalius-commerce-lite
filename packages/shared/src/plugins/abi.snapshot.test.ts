@@ -83,7 +83,10 @@ describe("the versioned plugin ABI", () => {
   });
 
   it("never moves a stable provider port back to beta (promotion is additive)", async () => {
-    const { readFileSync } = await import(/* @vite-ignore */ "node:fs") as { readFileSync(path: URL, encoding: "utf8"): string };
+    // A runtime specifier keeps Node types out of this Workers package (as in sdkDeclarations).
+    const [{ readFileSync }] = await Promise.all(["node:fs"].map((specifier) => import(/* @vite-ignore */ specifier))) as [
+      { readFileSync(path: URL, encoding: "utf8"): string },
+    ];
     let committed: { providerTiers?: Record<string, string> } = {};
     try {
       committed = JSON.parse(readFileSync(new URL("./abi.protocol.snapshot.json", import.meta.url), "utf8"));

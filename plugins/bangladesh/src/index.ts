@@ -152,6 +152,13 @@ const SMS_HOST = (index: number) => [SMS_HOSTS[index]!];
 
 type FeatureCopy = { name: string; description: string; bn: { name: string; description: string } };
 
+// The buyer data a service receives (COMMERCE-HOOKS H5): each feature asks
+// for exactly the protected customer data its provider's port carries.
+/** SMS gateways, fraud checks and bKash: the buyer's phone. */
+const BUYER_PHONE = ["read_customer_phones"] as const;
+/** Couriers (and SSLCommerz): the recipient's name, phone and street address. */
+const PARCEL_RECIPIENT = ["read_customer_names", "read_customer_phones", "read_customer_addresses"] as const;
+
 /** The pack's features: one per service, every one off until the merchant turns it on. */
 const FEATURES = {
   places: {
@@ -236,7 +243,7 @@ const feature = (id: keyof typeof FEATURES, parts: Omit<PluginFeatureInput, "id"
 export const manifest = {
   id: "scalius.bangladesh",
   name: "Bangladesh pack",
-  version: "2.0.0",
+  version: "2.1.0",
   apiVersion: PLUGIN_API_VERSION,
   description: "Everything a store in Bangladesh needs in one app, each service turned on by itself: take payments with bKash, Nagad or SSLCommerz (cards, wallets and internet banking); book, track and follow deliveries with Pathao and Steadfast; send order messages and sign-in codes through SMS.net.bd, BDBulkSMS, MIM SMS or GenNet; check a buyer's courier history with FraudBD, FraudGuard, eCourier or FraudChecker from the order page; and load the City, Thana and Area list for addresses and shipping zones.",
   author: { name: "Scalius" },
@@ -262,26 +269,29 @@ export const manifest = {
       admin: ["places"],
       cron: ["places-sync"],
     }),
-    feature("bkash", { providers: ["bkash"], allowedHosts: [BKASH_HOSTS.sandbox, BKASH_HOSTS.live] }),
+    // bKash pre-fills the wallet number from the buyer's phone.
+    feature("bkash", { providers: ["bkash"], allowedHosts: [BKASH_HOSTS.sandbox, BKASH_HOSTS.live], scopes: [...BUYER_PHONE] }),
+    // Nagad's checkout takes no buyer details.
     feature("nagad", { providers: ["nagad"], allowedHosts: NAGAD_HOSTS }),
-    feature("sslcommerz", { providers: ["sslcommerz"], allowedHosts: [SSLCOMMERZ_HOSTS.sandbox, SSLCOMMERZ_HOSTS.live] }),
+    // SSLCommerz's session requires the buyer's name, email, phone and address.
+    feature("sslcommerz", { providers: ["sslcommerz"], allowedHosts: [SSLCOMMERZ_HOSTS.sandbox, SSLCOMMERZ_HOSTS.live], scopes: [...PARCEL_RECIPIENT, "read_customer_emails"] }),
     // Refresh from Pathao writes Pathao's ids onto the places, through the place import.
     feature("pathao", {
       providers: ["pathao"],
       allowedHosts: PATHAO_HOSTS,
-      scopes: ["write_places"],
+      scopes: ["write_places", ...PARCEL_RECIPIENT],
       routes: { admin: ["refresh-pathao-places"] },
       cron: ["pathao-places"],
     }),
-    feature("steadfast", { providers: ["steadfast"], allowedHosts: STEADFAST_HOSTS }),
-    feature("smsnetbd", { providers: ["smsnetbd"], allowedHosts: SMS_HOST(0) }),
-    feature("bdbulksms", { providers: ["bdbulksms"], allowedHosts: SMS_HOST(1) }),
-    feature("mimsms", { providers: ["mimsms"], allowedHosts: SMS_HOST(2) }),
-    feature("gennet", { providers: ["gennet"], allowedHosts: SMS_HOST(3) }),
-    feature("fraudbd", { providers: ["fraudbd"], allowedHosts: FRAUD_HOSTS("fraudbd") }),
-    feature("fraudguard", { providers: ["fraudguard"], allowedHosts: FRAUD_HOSTS("fraudguard") }),
-    feature("ecourier", { providers: ["ecourier"], allowedHosts: FRAUD_HOSTS("ecourier") }),
-    feature("fraudchecker", { providers: ["fraudchecker"], allowedHosts: FRAUD_HOSTS("fraudchecker") }),
+    feature("steadfast", { providers: ["steadfast"], allowedHosts: STEADFAST_HOSTS, scopes: [...PARCEL_RECIPIENT] }),
+    feature("smsnetbd", { providers: ["smsnetbd"], allowedHosts: SMS_HOST(0), scopes: [...BUYER_PHONE] }),
+    feature("bdbulksms", { providers: ["bdbulksms"], allowedHosts: SMS_HOST(1), scopes: [...BUYER_PHONE] }),
+    feature("mimsms", { providers: ["mimsms"], allowedHosts: SMS_HOST(2), scopes: [...BUYER_PHONE] }),
+    feature("gennet", { providers: ["gennet"], allowedHosts: SMS_HOST(3), scopes: [...BUYER_PHONE] }),
+    feature("fraudbd", { providers: ["fraudbd"], allowedHosts: FRAUD_HOSTS("fraudbd"), scopes: [...BUYER_PHONE] }),
+    feature("fraudguard", { providers: ["fraudguard"], allowedHosts: FRAUD_HOSTS("fraudguard"), scopes: [...BUYER_PHONE] }),
+    feature("ecourier", { providers: ["ecourier"], allowedHosts: FRAUD_HOSTS("ecourier"), scopes: [...BUYER_PHONE] }),
+    feature("fraudchecker", { providers: ["fraudchecker"], allowedHosts: FRAUD_HOSTS("fraudchecker"), scopes: [...BUYER_PHONE] }),
   ],
   providers: {
     payment: [

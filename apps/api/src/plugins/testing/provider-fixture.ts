@@ -125,6 +125,8 @@ export const PARCEL_FIXTURE_MANIFEST = {
   apiVersion: PLUGIN_API_VERSION,
   description: "A courier provider fixture for the plugin loaders.",
   author: { name: "Acme" },
+  // A booking carries the recipient's name, phone and street (COMMERCE-HOOKS H5).
+  scopes: ["read_customer_names", "read_customer_phones", "read_customer_addresses"],
   settings: [{ key: "secret", label: "API secret", type: "secret", required: true }],
   objects: {
     bookings: { name: "Bookings", fields: [{ key: "booking", name: "Booking", type: "json" }] },

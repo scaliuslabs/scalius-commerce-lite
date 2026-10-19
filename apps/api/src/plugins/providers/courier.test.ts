@@ -168,6 +168,23 @@ describe("an app courier (bundled loader) implements the courier port", () => {
     // A booking whose answer was lost is found again, never booked blind.
     expect(await courier.findShipment!({ orderId: "ORD-TIMEOUT" }, call)).toMatchObject({ found: true });
   });
+
+  it("never sends a recipient to a courier whose app is not approved for buyers' contact details", async () => {
+    // A stored grant from before the protected customer data scopes.
+    sqlite.prepare("UPDATE plugin_installations SET grant_json = json_set(grant_json, '$.scopes', json('[]')) WHERE plugin_id = ?").run(PARCEL_FIXTURE_ID);
+    const courier = (await requestCouriers()).require(PARCEL_COURIER_ID);
+    const setup = await courier.setup({
+      id: "provider_parcel", type: PARCEL_COURIER_ID, isActive: true, credentials: "{}", config: "{}",
+      lastTestAttemptAt: null, lastTestSuccessAt: null, lastTestFailureAt: null, lastTestSuccessFingerprint: null,
+    }, CREDENTIAL_KEY);
+    const call = { settings: setup.settings, signal: new AbortController().signal, db };
+    await expect(courier.createShipment(booking("ORD-UNAPPROVED"), call)).rejects.toMatchObject({
+      category: "misconfigured", code: "provider.customer_data_not_approved",
+    });
+    // Nothing reached the app: its log has no booking attempt.
+    expect(sqlite.prepare("SELECT count(*) AS count FROM plugin_log_entries WHERE plugin_id = ? AND source = 'provider:parcel.createShipment'").get(PARCEL_FIXTURE_ID))
+      .toEqual({ count: 0 });
+  });
 });
 
 describe("app courier as a merchant's delivery provider", () => {

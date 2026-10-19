@@ -20,8 +20,10 @@ import { checkoutAttributeSchema } from "./buyer-ui";
 import { PLUGIN_BLOCK_TARGETS } from "./storefront";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN } from "./objects";
 import { PROVIDER_KINDS } from "./providers/kinds";
+import { providerRequiredScopes } from "./protected-data";
 import {
   PLUGIN_FEATURES_MAX,
+  pluginFeatureOwners,
   pluginFeatureIssues,
   pluginFeatureSchema,
   pluginFeatureTranslationSchema,
@@ -40,11 +42,25 @@ export {
   PLUGIN_SCOPES,
   PLUGIN_SCOPE_NAMES,
   isPluginScope,
+  isProtectedDataScope,
   legacyPermissionScope,
   pluginScopePermissions,
   type PluginScope,
   type PluginScopeDefinition,
 } from "./scopes";
+/** Protected customer data (in ./protected-data.ts): names, emails, phones and street addresses. */
+export {
+  PROTECTED_CUSTOMER_DATA,
+  PROTECTED_DATA_SCOPES,
+  PROTECTED_FIELD_KEYWORD,
+  PROVIDER_PROTECTED_DATA,
+  allProtectedData,
+  grantedProtectedData,
+  isProtectedCustomerData,
+  providerRequiredScopes,
+  type ProtectedCustomerData,
+  type ProtectedDataScope,
+} from "./protected-data";
 /** App features: parts a merchant turns on one at a time (in ./features.ts). */
 export {
   PLUGIN_FEATURES_MAX,
@@ -557,6 +573,21 @@ export const pluginManifestSchema = z.object({
     }
   });
   for (const issue of pluginFeatureIssues(manifest)) context.addIssue({ code: "custom", path: issue.path, message: issue.message });
+  // A provider receives the buyer data its port carries: the app asks for it
+  // (in its base scopes or the provider's feature), so consent names it.
+  const providerOwners = pluginFeatureOwners(manifest).providers;
+  manifest.providers.forEach((provider, index) => {
+    const owner = providerOwners.get(provider.id);
+    const asked = new Set<string>([...manifest.scopes, ...(manifest.features.find((feature) => feature.id === owner)?.scopes ?? [])]);
+    const missing = providerRequiredScopes(provider.kind).filter((scope) => !asked.has(scope));
+    if (missing.length > 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["providers", index],
+        message: `A ${provider.kind} provider receives buyer data: ask for ${missing.join(", ")}${owner ? ` in feature ${owner} or the base scopes` : " in scopes"}.`,
+      });
+    }
+  });
   const routes = new Set([...manifest.routes.admin, ...manifest.routes.public].map((route) => route.name));
   const adminRoutes = new Set(manifest.routes.admin.map((route) => route.name));
   const publicRoutes = new Set(manifest.routes.public.map((route) => route.name));

@@ -100,7 +100,7 @@ export const STAFF_ROUTE_PERMISSIONS: RoutePermissionMap = {
   },
   "/api/v1/admin/auth/scanner-link": {
     POST: {
-      allOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT],
+      allOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_ADJUST_STOCK],
     },
   },
   "/api/v1/admin/auth/2fa/*": {

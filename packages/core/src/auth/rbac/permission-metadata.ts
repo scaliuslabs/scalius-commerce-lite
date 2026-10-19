@@ -84,6 +84,16 @@ export const PERMISSION_METADATA: Record<
     isSensitive: false,
   },
 
+  [PERMISSIONS.PRODUCTS_ADJUST_STOCK]: {
+    name: PERMISSIONS.PRODUCTS_ADJUST_STOCK,
+    displayName: "Adjust Stock",
+    description: "Adjust, count and import on-hand quantities, and set them when saving products",
+    resource: "products",
+    action: "adjust_stock",
+    category: "Products",
+    isSensitive: false,
+  },
+
   // Inventory operations
   [PERMISSIONS.INVENTORY_VIEW]: {
     name: PERMISSIONS.INVENTORY_VIEW,

@@ -19,6 +19,7 @@ const principal = (permissions: Iterable<string>, firstParty = false): PluginPri
   actorUserId: "user_owner",
   firstParty,
   permissions: new Set(permissions),
+  protectedData: new Set(),
   riskCeiling: "write",
 });
 const writePlaces = effectivePluginPermissions({ scopes: ["write_places"] });

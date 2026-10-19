@@ -4,6 +4,7 @@
 // crosses this edge in decimal major units (the store currency) and is stored
 // in integer minor units.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { protectedField as pii } from "../../schemas/protected";
 import {
     CUSTOMER_EXPORT_MAX_ROWS,
     addTagsToCustomers,
@@ -495,12 +496,13 @@ app.openapi(membersRoute, async (c) => {
 
 // ── One customer's marketing consent ─────────────────────────────────────
 
+// A consent's address is an email or a phone (by channel): an app sees it only with both scopes.
 const consentViewSchema = z.object({
     channel: z.enum(MARKETING_CHANNELS),
     status: z.enum(MARKETING_CONSENT_STATUSES),
     state: z.enum(MARKETING_CONSENT_STATES).nullable(),
-    contact: z.string().nullable(),
-    consentContact: z.string().nullable(),
+    contact: pii(["email", "phone"], z.string().nullable()),
+    consentContact: pii(["email", "phone"], z.string().nullable()),
     source: z.enum(MARKETING_CONSENT_SOURCES).nullable(),
     consentTextVersion: z.string().nullable(),
     subscribedAt: z.string().nullable(),
@@ -519,7 +521,7 @@ const consentEventSchema = z.object({
     /** A staff member's name or a plugin id. */
     actorName: z.string().nullable(),
     note: z.string().nullable(),
-    contact: z.string(),
+    contact: pii(["email", "phone"], z.string()),
     consentTextVersion: z.string().nullable(),
     consentText: z.string().nullable(),
     createdAt: z.string(),

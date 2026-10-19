@@ -285,8 +285,9 @@ describe("admin app routes", () => {
     const places = detail.features.find((feature: Json) => feature.id === "places");
     expect(places).toMatchObject({ recommended: true, request: { scopes: [{ name: "write_places", risk: "write", sensitive: false }], allowedHosts: [], providers: [] } });
     const bkash = detail.features.find((feature: Json) => feature.id === "bkash");
+    // bKash pre-fills the wallet from the buyer's phone: it asks for that one protected field, marked sensitive.
     expect(bkash.request).toMatchObject({
-      scopes: [], allowedHosts: ["tokenized.pay.bka.sh", "tokenized.sandbox.bka.sh"],
+      scopes: [{ name: "read_customer_phones", risk: "read", sensitive: true }], allowedHosts: ["tokenized.pay.bka.sh", "tokenized.sandbox.bka.sh"],
       providers: [{ id: "scalius.bangladesh:bkash", kind: "payment", name: "bKash", icon: expect.stringContaining("/assets/provider-bkash?v=") }],
     });
     expect(detail.translations.bn.features.places.name).toBe("বাংলাদেশের এলাকা");

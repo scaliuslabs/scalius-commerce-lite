@@ -46,6 +46,7 @@ import {
   PLUGIN_FUNCTION_POINTS,
   PLUGIN_NAV_PLACEMENTS,
   PLUGIN_SCOPE_NAMES,
+  isProtectedDataScope,
   knownPluginFeatures,
   pluginFeatureOwners,
   pluginFeatureRequest,
@@ -436,7 +437,9 @@ async function scopeRows(installation: PluginInstallation, request: Pick<PluginG
     return {
       name,
       risk: (risk === "security" ? "financial" : risk) as "read" | "write" | "destructive" | "financial",
-      sensitive: [...permissions].some((permission) => (PERMISSION_METADATA as Record<string, { isSensitive?: boolean }>)[permission]?.isSensitive === true),
+      // Buyer contact data (a protected customer data scope) is always sensitive.
+      sensitive: isProtectedDataScope(name)
+        || [...permissions].some((permission) => (PERMISSION_METADATA as Record<string, { isSensitive?: boolean }>)[permission]?.isSensitive === true),
     };
   });
 }

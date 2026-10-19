@@ -278,7 +278,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
           extra={overview ? (
             <StoreAlertLevel
               level={overview.defaultLowStockThreshold ?? null}
-              canEdit={permissions.canAdjustStock}
+              canEdit={permissions.canSetAlertLevels}
               open={storeLevelOpen}
               onOpenChange={setStoreLevelOpen}
             />
@@ -293,7 +293,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
             icon={BellOff}
             title={t("noAlerts")}
             description={t("noAlertsHint")}
-            action={permissions.canAdjustStock
+            action={permissions.canSetAlertLevels
               ? <Button type="button" variant="outline" onClick={() => setStoreLevelOpen(true)}>{t("setAlertLevels")}</Button>
               : undefined}
           />

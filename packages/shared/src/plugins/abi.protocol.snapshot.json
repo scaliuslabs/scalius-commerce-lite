@@ -3819,9 +3819,6 @@
          "maxLength": 200
         }
        },
-       "required": [
-        "name"
-       ],
        "additionalProperties": false
       },
       "urls": {
@@ -9361,6 +9358,20 @@
    ],
    "staff": "products.edit"
   },
+  "read_inventory": {
+   "rbac": [
+    "inventory.view"
+   ],
+   "staff": "inventory.view"
+  },
+  "write_inventory": {
+   "rbac": [
+    "inventory.view",
+    "products.adjust_stock",
+    "inventory.manage"
+   ],
+   "staff": "products.adjust_stock"
+  },
   "read_orders": {
    "rbac": [
     "orders.view"
@@ -9399,10 +9410,29 @@
   },
   "write_marketing": {
    "rbac": [
-    "customers.view",
     "marketing.send"
    ],
    "staff": "marketing.send"
+  },
+  "read_customer_names": {
+   "rbac": [],
+   "staff": "customers.view",
+   "protects": "name"
+  },
+  "read_customer_emails": {
+   "rbac": [],
+   "staff": "customers.view",
+   "protects": "email"
+  },
+  "read_customer_phones": {
+   "rbac": [],
+   "staff": "customers.view",
+   "protects": "phone"
+  },
+  "read_customer_addresses": {
+   "rbac": [],
+   "staff": "customers.view",
+   "protects": "address"
   },
   "read_discounts": {
    "rbac": [

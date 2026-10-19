@@ -71,9 +71,15 @@ export const paymentSessionInputSchema = z.object({
   currency: providerCurrencySchema,
   /** The same amount in the provider's wire form. */
   wireAmount: providerWireAmountSchema,
+  /**
+   * The buyer as the app may see them (COMMERCE-HOOKS H5): `name`, `email`,
+   * `phone` and the street `address` are present only when the app holds
+   * `read_customer_names`, `_emails`, `_phones` or `_addresses`. `city` is
+   * the region and always sent when known.
+   */
   buyer: z.object({
-    name: z.string().max(200),
-    /** Absent for an order placed without a phone (a digital or service order outside Bangladesh); email is then present. */
+    name: z.string().max(200).optional(),
+    /** Also absent for an order placed without a phone (a digital or service order outside Bangladesh). */
     phone: z.string().max(40).optional(),
     email: z.string().max(320).optional(),
     address: z.string().max(2000).optional(),

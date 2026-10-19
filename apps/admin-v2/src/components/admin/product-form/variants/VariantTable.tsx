@@ -633,6 +633,8 @@ const VariantRow = React.memo(function VariantRow({
   const priceError = errorOf("price");
   const stockError = errorOf("stock");
   const photoError = errorOf("photo");
+  // Quantities need "Adjust stock"; the rest of the row follows products.edit.
+  const quantityReadOnly = readOnly || !usePermissions().hasPermission(PERMISSIONS.PRODUCTS_ADJUST_STOCK);
   const sale = Number.isFinite(variant.price) && !errorOf("discount") ? money.salePrice(variant.price, variant) : null;
   const change = (patch: Partial<DraftVariant>) => onChange(variant.id, patch);
   // Profit and margin of what the customer pays (after the variant's discount).
@@ -712,7 +714,7 @@ const VariantRow = React.memo(function VariantRow({
               <DigitalStockCell productId={productId} variantId={variant.id} tracked={variant.trackInventory} />
             ) : variant.trackInventory ? (
               <InventoryQuantityInput
-                readOnly={readOnly}
+                readOnly={quantityReadOnly}
                 cell="stock"
                 ariaLabel={t("quantityFor", { name })}
                 invalid={Boolean(stockError)}
@@ -798,6 +800,7 @@ const GroupRow = React.memo(function GroupRow({ readOnly, group, open, repeated,
   const kindRules = useProductKindRules();
   // Digital rows' stock is their keys or files: a group quantity never writes it.
   const tracked = group.variants.filter((variant) => variant.trackInventory && !isDigitalSku(kindRules, variant));
+  const quantityReadOnly = readOnly || !usePermissions().hasPermission(PERMISSIONS.PRODUCTS_ADJUST_STOCK);
   const allDigital = group.variants.every((variant) => isDigitalSku(kindRules, variant));
   const same = <T,>(values: T[]): T | undefined => (values.every((value) => value === values[0]) ? values[0] : undefined);
   const prices = group.variants.map((variant) => variant.price).filter(Number.isFinite);
@@ -848,7 +851,7 @@ const GroupRow = React.memo(function GroupRow({ readOnly, group, open, repeated,
           }}
         />}
         {!layout.quantity ? null : tracked.length > 0 ? (
-          readOnly ? <p className="py-2 text-body tabular-nums"><span className="sr-only">{t("quantityForGroup", { name: group.label })}: </span>{commonStock === undefined ? t("mixedValues") : formatNumber(commonStock)}</p> : <NumberInput
+          quantityReadOnly ? <p className="py-2 text-body tabular-nums"><span className="sr-only">{t("quantityForGroup", { name: group.label })}: </span>{commonStock === undefined ? t("mixedValues") : formatNumber(commonStock)}</p> : <NumberInput
             integer
             value={commonStock ?? null}
             placeholder={commonStock === undefined ? t("mixedValues") : undefined}
@@ -920,6 +923,7 @@ function BulkBar({ count, allSelected, printableIds, printingDisabled, canEditCo
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
   const { fulfilmentMode } = useProductKindRules();
+  const canAdjustStock = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_ADJUST_STOCK);
   const toggle = (next: BulkPanel) => onPanel(panel === next ? null : next);
   return (
     <div className={cn("col-span-3 col-start-2 flex min-w-0 flex-wrap items-center gap-1 py-1", layout.bulkSpan)}>
@@ -928,7 +932,7 @@ function BulkBar({ count, allSelected, printableIds, printingDisabled, canEditCo
       <Button type="button" variant={panel === "price" ? "secondary" : "outline"} size="sm" aria-pressed={panel === "price"} onClick={() => toggle("price")}>
         {t("editPrices")}
       </Button>
-      {layout.quantity && fulfilmentMode !== "digital" ? (
+      {layout.quantity && fulfilmentMode !== "digital" && canAdjustStock ? (
         <Button type="button" variant={panel === "stock" ? "secondary" : "outline"} size="sm" aria-pressed={panel === "stock"} onClick={() => toggle("stock")}>
           {t("editQuantities")}
         </Button>

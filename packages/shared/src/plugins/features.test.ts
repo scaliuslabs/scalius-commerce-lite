@@ -61,7 +61,7 @@ const PACK: PluginManifestInput = {
       admin: ["places"],
       cron: ["sync"],
     },
-    { id: "texts", name: "Texts", description: "Send texts.", providers: ["sms"], settingsGroups: ["texts"], allowedHosts: ["sms.example"] },
+    { id: "texts", name: "Texts", description: "Send texts.", scopes: ["read_customer_phones"], providers: ["sms"], settingsGroups: ["texts"], allowedHosts: ["sms.example"] },
   ],
   translations: { bn: { features: { places: { name: "এলাকা" } } } },
 };
@@ -126,7 +126,7 @@ describe("app features", () => {
     // The running manifest gives the same request for the same features.
     expect(pluginGrantKey(pluginGrantRequest(pluginManifestWithFeatures(declared, ["payments"]), ["payments"]))).toBe(pluginGrantKey(payments));
     // An app without features keeps its grant key (an empty dimension is left out of it).
-    const plain = parse({ ...PACK, features: [], translations: undefined });
+    const plain = parse({ ...PACK, scopes: ["read_orders", "read_customer_phones"], features: [], translations: undefined });
     expect(pluginGrantRequest(plain).features).toEqual([]);
     expect(pluginGrantKey(pluginGrantRequest(plain))).not.toContain("features");
   });

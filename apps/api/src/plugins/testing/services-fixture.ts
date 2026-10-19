@@ -14,6 +14,8 @@ export const SERVICES_FIXTURE_MANIFEST = {
   apiVersion: PLUGIN_API_VERSION,
   description: "Search, address, FX, push and chat providers for the provider tests.",
   author: { name: "Acme" },
+  // Address suggestions carry the buyer's street; chat sends carry the phone (COMMERCE-HOOKS H5).
+  scopes: ["read_customer_phones", "read_customer_addresses"],
   settings: [{ key: "api_key", label: "API key", type: "secret", required: true }],
   providers: {
     search: [{ id: "search", name: "Acme Search" }],

@@ -23,6 +23,7 @@ import {
 import { WEBHOOK_DELIVERY_STATUSES } from "@scalius/database/schema";
 import { EVENTS_API_VERSION, EVENT_TOPIC_FILTERS } from "@scalius/shared/events";
 import { OUTBOUND_URL_MAX_LENGTH } from "@scalius/shared/outbound-url";
+import { PROTECTED_CUSTOMER_DATA } from "@scalius/shared/plugins/protected-data";
 import { created, ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
@@ -37,11 +38,16 @@ const topicFilterSchema = z.enum(EVENT_TOPIC_FILTERS as unknown as [string, ...s
   description: "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic.",
 });
 
+const customerDataSchema = z.array(z.enum(PROTECTED_CUSTOMER_DATA)).max(PROTECTED_CUSTOMER_DATA.length).openapi({
+  description: "The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.",
+});
+
 const webhookSubscriptionSchema = z.object({
   id: z.string(),
   url: z.string(),
   topics: z.array(z.string()),
   apiVersion: z.string(),
+  customerData: customerDataSchema,
   description: z.string().nullable(),
   status: z.enum(["active", "disabled"]),
   disabledReason: z.enum(["manual", "failing"]).nullable(),
@@ -174,6 +180,7 @@ const createWebhookRoute = createRoute({
             url: urlSchema,
             topics: topicsSchema,
             description: descriptionSchema.optional(),
+            customerData: customerDataSchema.optional(),
           }),
         },
       },
@@ -251,6 +258,7 @@ const updateWebhookRoute = createRoute({
             url: urlSchema.optional(),
             topics: topicsSchema.optional(),
             description: descriptionSchema.optional(),
+            customerData: customerDataSchema.optional(),
             status: z.enum(["active", "disabled"]).optional(),
           }),
         },

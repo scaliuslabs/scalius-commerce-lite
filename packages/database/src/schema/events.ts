@@ -75,6 +75,12 @@ export const webhookSubscriptions = sqliteTable("webhook_subscriptions", {
     topics: text("topics").notNull(),
     /** The payload version deliveries use (`EVENTS_API_VERSION`). */
     apiVersion: text("api_version").notNull(),
+    /**
+     * JSON array of the protected customer data categories (`name`, `email`,
+     * `phone`, `address`) its deliveries include; the rest read null.
+     * Empty (the default): no buyer contact data leaves the store.
+     */
+    customerData: text("customer_data").notNull().default("[]"),
     description: text("description"),
     /** `enc:` AES-GCM ciphertext of the signing secret (CREDENTIAL_ENCRYPTION_KEY). */
     secretCiphertext: text("secret_ciphertext").notNull(),

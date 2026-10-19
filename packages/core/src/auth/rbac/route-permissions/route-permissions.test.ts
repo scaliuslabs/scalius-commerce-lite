@@ -128,13 +128,27 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.TEAM_MANAGE });
   });
 
-  it("requires read and edit inventory authority to pair a scanner device", () => {
+  it("requires read and adjust-stock authority to pair a scanner device", () => {
     expect(getRoutePermission(
       "/api/v1/admin/auth/scanner-link",
       "POST",
     )).toEqual({
-      allOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT],
+      allOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_ADJUST_STOCK],
     });
+  });
+
+  it("changes stock only with products.adjust_stock, never products.edit alone", () => {
+    for (const [path, method] of [
+      ["/api/v1/admin/inventory/stock-adjust", "POST"],
+      ["/api/v1/admin/inventory/stock-set", "POST"],
+      ["/api/v1/admin/inventory/sku_1/adjust", "POST"],
+      ["/api/v1/admin/import/inventory", "POST"],
+    ] as const) {
+      expect(getRoutePermission(path, method), path).toEqual({ permission: PERMISSIONS.PRODUCTS_ADJUST_STOCK });
+    }
+    // Per-location levels read with products or inventory access (the read_inventory app scope).
+    expect(getRoutePermission("/api/v1/admin/inventory/levels", "GET"))
+      .toEqual({ anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW] });
   });
 
   it("reads purchasing and transfers with inventory.view and writes them with inventory.manage", () => {

@@ -35,7 +35,7 @@ export function ImportExportHub() {
 
   const canImportProducts = hasPermission(PERMISSIONS.PRODUCTS_CREATE) || hasPermission(PERMISSIONS.PRODUCTS_EDIT);
   const canImportCustomers = hasPermission(PERMISSIONS.CUSTOMERS_CREATE) || hasPermission(PERMISSIONS.CUSTOMERS_EDIT);
-  const canImportInventory = hasPermission(PERMISSIONS.PRODUCTS_EDIT);
+  const canImportInventory = hasPermission(PERMISSIONS.PRODUCTS_ADJUST_STOCK);
   const canViewProducts = hasPermission(PERMISSIONS.PRODUCTS_VIEW);
 
   const runExport = async (kind: PagedExport) => {

@@ -4662,8 +4662,7 @@
    "revision": "none",
    "scopes": [
     "read_customers",
-    "write_customers",
-    "write_marketing"
+    "write_customers"
    ],
    "input": {
     "parameters": [
@@ -6109,8 +6108,7 @@
    "revision": "none",
    "scopes": [
     "read_customers",
-    "write_customers",
-    "write_marketing"
+    "write_customers"
    ],
    "input": {
     "parameters": [
@@ -6158,23 +6156,28 @@
           },
           "name": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "name"
           },
           "company": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "address"
           },
           "line1": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "address"
           },
           "line2": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "address"
           },
           "dependentLocality": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "address"
           },
           "locality": {
            "type": "string",
@@ -6190,11 +6193,13 @@
           },
           "phone": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "phone"
           },
           "phoneRaw": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "phone"
           },
           "city": {
            "type": "string",
@@ -6425,8 +6430,7 @@
    "revision": "none",
    "scopes": [
     "read_customers",
-    "write_customers",
-    "write_marketing"
+    "write_customers"
    ],
    "input": {
     "parameters": [
@@ -6456,15 +6460,19 @@
         "type": "string"
        },
        "name": {
-        "type": "string"
+        "type": "string",
+        "x-scalius-protected": "name",
+        "nullable": true
        },
        "email": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "email"
        },
        "phone": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "phone"
        },
        "accountClaimedAt": {
         "$ref": "#/components/schemas/NullableTimestamp"
@@ -6479,7 +6487,8 @@
        },
        "latestOrderName": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "name"
        },
        "totalOrders": {
         "type": "number"
@@ -6521,7 +6530,9 @@
           "type": "string"
          },
          "name": {
-          "type": "string"
+          "type": "string",
+          "x-scalius-protected": "name",
+          "nullable": true
          }
         },
         "required": [
@@ -6592,23 +6603,28 @@
           },
           "name": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "name"
           },
           "company": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "address"
           },
           "line1": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "address"
           },
           "line2": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "address"
           },
           "dependentLocality": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "address"
           },
           "locality": {
            "type": "string",
@@ -6624,11 +6640,13 @@
           },
           "phone": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "phone"
           },
           "phoneRaw": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "phone"
           },
           "city": {
            "type": "string",
@@ -6759,8 +6777,7 @@
    "revision": "none",
    "scopes": [
     "read_customers",
-    "write_customers",
-    "write_marketing"
+    "write_customers"
    ],
    "input": {
     "parameters": [
@@ -6950,15 +6967,19 @@
            "type": "string"
           },
           "name": {
-           "type": "string"
+           "type": "string",
+           "x-scalius-protected": "name",
+           "nullable": true
           },
           "email": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "email"
           },
           "phone": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "phone"
           },
           "defaultAddress": {
            "type": "object",
@@ -6969,15 +6990,18 @@
             },
             "line1": {
              "type": "string",
-             "nullable": true
+             "nullable": true,
+             "x-scalius-protected": "address"
             },
             "line2": {
              "type": "string",
-             "nullable": true
+             "nullable": true,
+             "x-scalius-protected": "address"
             },
             "dependentLocality": {
              "type": "string",
-             "nullable": true
+             "nullable": true,
+             "x-scalius-protected": "address"
             },
             "locality": {
              "type": "string",
@@ -7046,7 +7070,8 @@
           },
           "latestOrderName": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "name"
           },
           "totalOrders": {
            "type": "number"
@@ -7189,8 +7214,7 @@
    "revision": "none",
    "scopes": [
     "read_customers",
-    "write_customers",
-    "write_marketing"
+    "write_customers"
    ],
    "input": {
     "parameters": [
@@ -7253,11 +7277,19 @@
           },
           "contact": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": [
+            "email",
+            "phone"
+           ]
           },
           "consentContact": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": [
+            "email",
+            "phone"
+           ]
           },
           "source": {
            "type": "string",
@@ -7374,7 +7406,12 @@
            "nullable": true
           },
           "contact": {
-           "type": "string"
+           "type": "string",
+           "x-scalius-protected": [
+            "email",
+            "phone"
+           ],
+           "nullable": true
           },
           "consentTextVersion": {
            "type": "string",
@@ -7611,8 +7648,7 @@
    "revision": "none",
    "scopes": [
     "read_customers",
-    "write_customers",
-    "write_marketing"
+    "write_customers"
    ],
    "input": {
     "parameters": [
@@ -10063,6 +10099,8 @@
    "scopes": [
     "read_products",
     "write_products",
+    "read_inventory",
+    "write_inventory",
     "read_settings"
    ],
    "input": {
@@ -10223,7 +10261,7 @@
    "idempotency": "required",
    "revision": "none",
    "scopes": [
-    "write_products"
+    "write_inventory"
    ],
    "input": {
     "parameters": [
@@ -10365,7 +10403,9 @@
    "revision": "none",
    "scopes": [
     "read_products",
-    "write_products"
+    "write_products",
+    "read_inventory",
+    "write_inventory"
    ],
    "input": {
     "parameters": [
@@ -10461,7 +10501,9 @@
    "revision": "none",
    "scopes": [
     "read_products",
-    "write_products"
+    "write_products",
+    "read_inventory",
+    "write_inventory"
    ],
    "input": {
     "parameters": [
@@ -10566,7 +10608,7 @@
    "idempotency": "required",
    "revision": "none",
    "scopes": [
-    "write_products"
+    "write_inventory"
    ],
    "input": {
     "parameters": [
@@ -12835,20 +12877,25 @@
         "type": "string"
        },
        "customerName": {
-        "type": "string"
+        "type": "string",
+        "x-scalius-protected": "name",
+        "nullable": true
        },
        "customerPhone": {
         "type": "string",
         "nullable": true,
-        "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
+        "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).",
+        "x-scalius-protected": "phone"
        },
        "customerEmail": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "email"
        },
        "customerWhatsapp": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "phone"
        },
        "customerId": {
         "type": "string",
@@ -12862,11 +12909,14 @@
           "type": "string"
          },
          "name": {
-          "type": "string"
+          "type": "string",
+          "x-scalius-protected": "name",
+          "nullable": true
          },
          "phone": {
           "type": "string",
-          "nullable": true
+          "nullable": true,
+          "x-scalius-protected": "phone"
          },
          "kind": {
           "type": "string",
@@ -13189,11 +13239,13 @@
        },
        "shippingAddress": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "address"
        },
        "shippingAddressLine2": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "address"
        },
        "shippingCountryCode": {
         "type": "string",
@@ -13201,7 +13253,8 @@
        },
        "shippingDependentLocality": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "address"
        },
        "shippingLocality": {
         "type": "string",
@@ -13217,15 +13270,18 @@
        },
        "shippingCompany": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "address"
        },
        "shippingName": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "name"
        },
        "shippingPhone": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "phone"
        },
        "city": {
         "type": "string",
@@ -13261,19 +13317,23 @@
        "billingName": {
         "type": "string",
         "nullable": true,
-        "description": "Null: the order contact's name."
+        "description": "Null: the order contact's name.",
+        "x-scalius-protected": "name"
        },
        "billingCompany": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "address"
        },
        "billingAddress": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "address"
        },
        "billingAddressLine2": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "address"
        },
        "billingCountryCode": {
         "type": "string",
@@ -13282,7 +13342,8 @@
        },
        "billingDependentLocality": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "address"
        },
        "billingLocality": {
         "type": "string",
@@ -13298,7 +13359,8 @@
        },
        "billingPhone": {
         "type": "string",
-        "nullable": true
+        "nullable": true,
+        "x-scalius-protected": "phone"
        },
        "billingValidationSkipped": {
         "type": "boolean",
@@ -15005,16 +15067,20 @@
            "type": "string"
           },
           "customerName": {
-           "type": "string"
+           "type": "string",
+           "x-scalius-protected": "name",
+           "nullable": true
           },
           "customerPhone": {
            "type": "string",
            "nullable": true,
-           "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
+           "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).",
+           "x-scalius-protected": "phone"
           },
           "customerEmail": {
            "type": "string",
-           "nullable": true
+           "nullable": true,
+           "x-scalius-protected": "email"
           },
           "customerId": {
            "type": "string",

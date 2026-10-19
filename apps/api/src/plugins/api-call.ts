@@ -18,6 +18,7 @@ import { writeAgentAuditEvent } from "../agent-access/audit";
 import { resolveAgentOperationById } from "../agent-access/direct-operation";
 import type { PluginPrincipal } from "../agent-access/types";
 import { authorizePluginOperation, pluginTierAllows, pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
+import { redactOperationResponse } from "./protected-response";
 
 const OPERATION_ID = /^(?:dashboard(\.[a-z][a-z0-9_]*){2,}|objects\.(?:types\.(?:list|get|create|update|delete)|list|get|upsert|delete))$/;
 
@@ -138,7 +139,9 @@ export async function callPluginOperation(options: {
       env: options.env,
       ctx: options.ctx,
     });
-    return unwrap(result.status, result.ok, result.data);
+    // Buyer contact fields the grant does not reveal read as null (H5).
+    const body = result.ok ? redactOperationResponse(operation, result.data, principal.protectedData) : result.data;
+    return unwrap(result.status, result.ok, body);
   } catch (error) {
     if (error instanceof AgentDispatchError) {
       if (error.code === "operation_forbidden" && !pluginTierAllows(principal.firstParty, operation.stability)) {

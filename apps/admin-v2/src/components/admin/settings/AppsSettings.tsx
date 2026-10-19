@@ -908,7 +908,7 @@ function ScannerCardBody() {
 
 export function ScannerCard() {
   const { hasAllPermissions } = usePermissions();
-  return hasAllPermissions([ADMIN_PERMISSIONS.PRODUCTS_VIEW, ADMIN_PERMISSIONS.PRODUCTS_EDIT])
+  return hasAllPermissions([ADMIN_PERMISSIONS.PRODUCTS_VIEW, ADMIN_PERMISSIONS.PRODUCTS_ADJUST_STOCK])
     ? <ScannerCardBody />
     : null;
 }

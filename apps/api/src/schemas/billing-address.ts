@@ -3,6 +3,7 @@
 // sent in the body only, never in a URL.
 import { z } from "@hono/zod-openapi";
 import { ADDRESS_FIELD_MAX_LENGTH } from "@scalius/shared/address";
+import { protectedField as pii } from "./protected";
 
 const text = (max: number) => z.string().trim().max(max).nullable().optional();
 
@@ -31,15 +32,15 @@ export const billingAddressBodyShape = {
 /** The billing snapshot an order read returns. */
 export const orderBillingAddressShape = {
   billingSameAsShipping: z.boolean().openapi({ description: "The shipping address is the billing address; the billing fields are then null." }),
-  billingName: z.string().nullable().openapi({ description: "Null: the order contact's name." }),
-  billingCompany: z.string().nullable(),
-  billingAddress: z.string().nullable(),
-  billingAddressLine2: z.string().nullable(),
+  billingName: pii("name", z.string().nullable().openapi({ description: "Null: the order contact's name." })),
+  billingCompany: pii("address", z.string().nullable()),
+  billingAddress: pii("address", z.string().nullable()),
+  billingAddressLine2: pii("address", z.string().nullable()),
   billingCountryCode: z.string().nullable().openapi({ description: "Null with `billingSameAsShipping` false: no billing address (orders placed before billing addresses, pickup orders not asked for one)." }),
-  billingDependentLocality: z.string().nullable(),
+  billingDependentLocality: pii("address", z.string().nullable()),
   billingLocality: z.string().nullable(),
   billingAdminArea: z.string().nullable(),
   billingPostalCode: z.string().nullable(),
-  billingPhone: z.string().nullable(),
+  billingPhone: pii("phone", z.string().nullable()),
   billingValidationSkipped: z.boolean().openapi({ description: "Staff kept a billing address that breaks its country's rules." }),
 } as const;
