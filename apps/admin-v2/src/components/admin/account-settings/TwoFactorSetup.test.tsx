@@ -9,7 +9,7 @@ import type { User } from "./ProfileHeader";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const api = vi.hoisted(() => ({ challenge: vi.fn(), method: vi.fn() }));
+const api = vi.hoisted(() => ({ challenge: vi.fn(), method: vi.fn(), disable: vi.fn() }));
 const auth = vi.hoisted(() => ({ enable: vi.fn(), sendOtp: vi.fn() }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -22,6 +22,7 @@ vi.mock("~/lib/auth-client", () => ({ authClient: { twoFactor: auth } }));
 vi.mock("@scalius/api-client/sdk", () => ({
   postApiV1AdminAuth2FaMethodChallenge: api.challenge,
   postApiV1AdminAuth2FaMethod: api.method,
+  postApiV1AdminAuth2FaDisable: api.disable,
 }));
 vi.mock("qrcode", () => ({ toDataURL: async () => "data:image/png;base64,AAAA" }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -121,12 +122,54 @@ describe("TwoFactorSetup", () => {
   it("never shows raw server text when the server fails", async () => {
     api.challenge.mockRejectedValue(new AdminApiResponseError("API error: 502", 502));
     act(() => root.render(<TwoFactorSetup user={user} />));
-    act(() => button("Change method").click());
-    act(() => button("Continue").click());
+    act(() => button("Use email codes").click());
     type("#two-step-password", "account-password");
     await submit();
     const alert = host.querySelector('[role="alert"]')?.textContent;
     expect(alert).toBe("Something went wrong on our side. Try again in a moment.");
     expect(host.textContent).not.toContain("502");
+  });
+
+  it("makes the authenticator the method in one click from email codes, and says what changes", async () => {
+    api.challenge.mockResolvedValue({ challengeId: "tfmc_2", totpUri: "otpauth://totp/Store:owner?secret=JBSWY3DPEHPK3PXP&issuer=Store", expiresAt: "" });
+    api.method.mockResolvedValue({ backupCodes: ["code-one"] });
+    act(() => root.render(<TwoFactorSetup user={{ ...user, twoFactorMethod: "email" }} />));
+    // Both ways are rows: email is in use, the app is one click away.
+    expect(host.querySelector('[data-method="email"]')?.textContent).toContain("In use");
+    act(() => button("Use authenticator app").click());
+    expect(host.textContent).toContain("Sign-in asks for the app's code from then on.");
+    type("#two-step-password", "account-password");
+    await submit();
+    expect(api.challenge).toHaveBeenCalledWith({ body: { method: "totp", password: "account-password" } });
+    act(() => button("Continue").click());
+    type("#two-step-code", "123456");
+    await submit();
+    expect(api.method).toHaveBeenCalledWith({ body: { method: "totp", challengeId: "tfmc_2", code: "123456" } });
+    act(() => button("Done").click());
+    expect(host.querySelector('[data-method="totp"]')?.textContent).toContain("In use");
+    expect(button("Get new recovery codes")).toBeDefined();
+  });
+
+  it("turns off with the password and a current code", async () => {
+    auth.sendOtp.mockResolvedValue({});
+    api.disable.mockResolvedValue({ message: "ok" });
+    act(() => root.render(<TwoFactorSetup user={{ ...user, twoFactorMethod: "email" }} />));
+    act(() => button("Turn off").click());
+    await flush();
+    // An emailed code is on its way; the step asks for it with the password.
+    expect(auth.sendOtp).toHaveBeenCalledTimes(1);
+    expect(host.textContent).toContain("Signing in will need only your password.");
+    type("#two-step-password", "account-password");
+    type("#two-step-code", "654321");
+    await submit();
+    expect(api.disable).toHaveBeenCalledWith({ body: { password: "account-password", code: "654321" } });
+    expect(host.textContent).toContain("Off");
+    expect(button("Turn on")).toBeDefined();
+  });
+
+  it("keeps it on for invited staff and says why", () => {
+    act(() => root.render(<TwoFactorSetup user={user} required />));
+    expect(button("Turn off")).toBeUndefined();
+    expect(host.textContent).toContain("Your store requires two-step verification for staff it invited");
   });
 });

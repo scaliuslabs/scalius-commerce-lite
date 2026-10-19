@@ -1614,6 +1614,8 @@ describe("admin auth management 2FA method changes", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(verifyTwoFactorOTP).toHaveBeenCalledTimes(1);
     expect(db.__updateSets).toEqual([
+      // The authenticator key stops signing in once email codes replace it.
+      expect.objectContaining({ verified: false }),
       expect.objectContaining({
         twoFactorEnabled: true,
         twoFactorMethod: "email",

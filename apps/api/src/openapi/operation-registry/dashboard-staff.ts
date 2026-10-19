@@ -31,6 +31,12 @@ export const DASHBOARD_STAFF_OPERATIONS = {
     limits: { request: 16_384, response: 16_384 },
   },
   "dashboard.account.two_factor.get": { limits: { response: 16_384 } },
+  "dashboard.account.two_factor.disable": {
+    exposure: "device",
+    risk: "security",
+    limits: { response: 16_384 },
+    sensitive: true,
+  },
   "dashboard.account.two_factor.method_challenge": {
     exposure: "device",
     risk: "security",

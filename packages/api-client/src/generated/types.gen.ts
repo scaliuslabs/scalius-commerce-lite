@@ -55092,6 +55092,59 @@ export type PostApiV1AdminAuth2FaMethodResponses = {
 
 export type PostApiV1AdminAuth2FaMethodResponse = PostApiV1AdminAuth2FaMethodResponses[keyof PostApiV1AdminAuth2FaMethodResponses];
 
+export type PostApiV1AdminAuth2FaDisableData = {
+    body?: {
+        password: string;
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/auth/2fa/disable';
+};
+
+export type PostApiV1AdminAuth2FaDisableErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminAuth2FaDisableError = PostApiV1AdminAuth2FaDisableErrors[keyof PostApiV1AdminAuth2FaDisableErrors];
+
+export type PostApiV1AdminAuth2FaDisableResponses = {
+    /**
+     * Two-step verification turned off
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminAuth2FaDisableResponse = PostApiV1AdminAuth2FaDisableResponses[keyof PostApiV1AdminAuth2FaDisableResponses];
+
 export type PostApiV1AdminAuth2FaVerifyData = {
     body?: {
         code: string;
@@ -55369,6 +55422,7 @@ export type GetApiV1AdminAuthAccountSecurityResponses = {
         data: {
             twoFactorMethod: string | null;
             isSuperAdmin: boolean;
+            twoFactorRequired: boolean;
         };
     };
 };

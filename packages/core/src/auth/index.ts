@@ -50,7 +50,7 @@ export type {
   ConsumedScannerTokenClaim,
   ScannerTokenCleanupResult,
 } from "./scanner-token-claims";
-export { sendStaffPasswordChangedEmail } from "./staff-emails";
+export { sendStaffPasswordChangedEmail, sendStaffTwoStepOffEmail } from "./staff-emails";
 export {
   buildTotpUri,
   createPendingEmailMethodChallenge,

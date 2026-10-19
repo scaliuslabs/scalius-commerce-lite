@@ -47,7 +47,7 @@ function AccountPage() {
           <SaveErrorBanner />
           <ProfileHeader user={accountUser} />
           <ChangePasswordForm />
-          <TwoFactorSetup user={accountUser} />
+          <TwoFactorSetup user={accountUser} required={security.twoFactorRequired} />
           <ThisDeviceNotifications />
           <AccountSessions />
         </div>
