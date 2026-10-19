@@ -346,31 +346,31 @@ export function materializeVariants(
 }
 
 /**
- * New (unsaved) variants keep following the product title and price until the
- * merchant edits their SKU or price. Saved variants never change here.
+ * New (unsaved) variants keep following the product title in their SKU until
+ * the merchant edits it. Saved variants never change here.
+ *
+ * Prices never follow: the product price seeds a variant only when the row is
+ * created (`materializeVariants`). Once variants exist they carry the prices and
+ * the product price is derived from the cheapest one, so following it would feed
+ * one row's keystrokes into its siblings (typing 1234 in A set B and C to 1).
+ * Changing several rows is an explicit bulk or group edit.
  */
 export function followProductDefaults(
   options: DraftOption[],
   variants: DraftVariant[],
-  previous: { name: string; price: number },
-  next: { name: string; price: number },
+  previousName: string,
+  nextName: string,
 ): DraftVariant[] {
   // Saved variants never follow the title: typing it must not touch them (the
   // same array back means React skips the variant table altogether).
-  if (!variants.some((variant) => variant.id.startsWith("draft_"))) return variants;
+  if (previousName === nextName || !variants.some((variant) => variant.id.startsWith("draft_"))) return variants;
   const valueLabel = optionValueLabels(options);
   const indexByKey = new Map(optionCombinations(options).map((ids, index) => [combinationKey(ids), index]));
   return variants.map((variant) => {
     if (!variant.id.startsWith("draft_")) return variant;
     const index = indexByKey.get(combinationKey(variant.selectedOptionValueIds)) ?? 0;
-    const followsSku = variant.sku === generatedSku(previous.name, valueLabel, variant.selectedOptionValueIds, index);
-    const followsPrice = variant.price === previous.price;
-    if (!followsSku && !followsPrice) return variant;
-    return {
-      ...variant,
-      ...(followsSku ? { sku: generatedSku(next.name, valueLabel, variant.selectedOptionValueIds, index) } : {}),
-      ...(followsPrice ? { price: next.price } : {}),
-    };
+    if (variant.sku !== generatedSku(previousName, valueLabel, variant.selectedOptionValueIds, index)) return variant;
+    return { ...variant, sku: generatedSku(nextName, valueLabel, variant.selectedOptionValueIds, index) };
   });
 }
 

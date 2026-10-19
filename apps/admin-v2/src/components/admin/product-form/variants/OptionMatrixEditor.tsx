@@ -466,15 +466,17 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
     if (!readOnly && combinationsPending && validShape && combinationCount <= MAX_COMBINATIONS) applyOptions();
   }, [readOnly, applyOptions, combinationCount, combinationsPending, validShape]);
 
-  // Unsaved variants follow the title and price until the merchant edits them.
-  const productDefaults = React.useRef({ name: productName, price: productPrice });
+  // Unsaved variants' SKUs follow the title until the merchant edits them. Their prices
+  // do not follow the product price: with variants it is derived from them (the cheapest),
+  // so following it would copy one row's typing into the others.
+  const followedName = React.useRef(productName);
   React.useEffect(() => {
     if (readOnly) return;
-    const previous = productDefaults.current;
-    if (previous.name === productName && previous.price === productPrice) return;
-    productDefaults.current = { name: productName, price: productPrice };
-    setVariants((current) => followProductDefaults(options, current, previous, { name: productName, price: productPrice }));
-  }, [readOnly, options, productName, productPrice]);
+    const previousName = followedName.current;
+    if (previousName === productName) return;
+    followedName.current = productName;
+    setVariants((current) => followProductDefaults(options, current, previousName, productName));
+  }, [readOnly, options, productName]);
 
   // One pass for one row or many (bulk and group edits); untouched rows keep their identity,
   // so only the edited rows of the table re-render.

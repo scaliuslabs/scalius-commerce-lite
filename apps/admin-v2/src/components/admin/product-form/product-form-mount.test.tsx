@@ -34,6 +34,9 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { translate } from "~/i18n";
+import { productMessages } from "~/i18n/products";
+import { resourceMessages } from "~/i18n/resource";
 import { ProductForm } from "~/components/admin/ProductForm";
 import { useSaveScope } from "~/components/admin/shared/SaveBar";
 import { problemLine, productFieldLabel } from "~/components/admin/product-form/utils";
@@ -95,7 +98,7 @@ interface Probe {
 }
 
 /** The page's wiring as the Add and Edit routes do it: the editor reports its draft up and the page stores it. */
-function Page({ edit, probe, saved = savedValues }: { edit: boolean; probe: Probe; saved?: typeof savedValues }) {
+function Page({ edit, probe, saved = savedValues, fresh = newValues }: { edit: boolean; probe: Probe; saved?: typeof savedValues; fresh?: typeof newValues }) {
   const costs = useSkuCostDraft();
   const matrixRef = useRef<OptionMatrixEditorHandle>(null);
   const [createComposition, setCreateComposition] = useState<ProductCreateComposition | null>(null);
@@ -105,7 +108,7 @@ function Page({ edit, probe, saved = savedValues }: { edit: boolean; probe: Prob
     <SkuCostProvider store={costs}>
       <ProductForm
         categories={[]}
-        defaultValues={edit ? saved : newValues}
+        defaultValues={edit ? saved : fresh}
         isEdit={edit}
         aggregateRevision={edit ? 1 : undefined}
         matrixRef={matrixRef}
@@ -149,11 +152,11 @@ function Reader({ probe }: { probe: Probe }) {
   return null;
 }
 
-async function mount(edit: boolean, saved?: typeof savedValues, readOnly = false): Promise<Probe> {
+async function mount(edit: boolean, saved?: typeof savedValues, readOnly = false, fresh?: typeof newValues): Promise<Probe> {
   const probe: Probe = { renders: 0, dirty: false, form: null };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
-    root.render(<StrictMode><QueryClientProvider client={queryClient}><PermissionProvider isSuperAdmin={!readOnly} permissions={readOnly ? [PERMISSIONS.PRODUCTS_VIEW] : undefined}><Page edit={edit} probe={probe} saved={saved} /></PermissionProvider></QueryClientProvider></StrictMode>);
+    root.render(<StrictMode><QueryClientProvider client={queryClient}><PermissionProvider isSuperAdmin={!readOnly} permissions={readOnly ? [PERMISSIONS.PRODUCTS_VIEW] : undefined}><Page edit={edit} probe={probe} saved={saved} fresh={fresh} /></PermissionProvider></QueryClientProvider></StrictMode>);
   });
   await new Promise((resolve) => setTimeout(resolve, 300));
   await act(async () => {});
@@ -270,5 +273,61 @@ describe("problem lines in the save banner", () => {
 
   it("name a field the merchant sees by its label, not a placeholder", () => {
     expect(productFieldLabel("compareAtProblem")).toBe("Compare-at price");
+  });
+});
+
+describe("variant prices on a new product", () => {
+  const p = (key: string, values?: Record<string, string | number>) => translate(productMessages, key as never, values as never);
+  const input = (label: string) => container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+  const settle = async () => {
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+  };
+  const type = async (element: HTMLInputElement, value: string) => {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(element, value);
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+  };
+  const priceOf = (name: string) => input(p("priceFor", { name })).value.replace(/\D/g, "");
+
+  /** Base price 1000, then one option "Amount" with A, B and C: the QA run's gift card. */
+  async function giftCardWithAmounts() {
+    await mount(false, undefined, false, { ...newValues, name: "Gift card", price: 1000 } as never);
+    const add = [...container.querySelectorAll("button")].find((button) => button.textContent?.includes(p("addOptions")))!;
+    await act(async () => add.click());
+    await type(input(p("optionName", { number: 1 })), "Amount");
+    const composer = input(p("addValueFor", { name: "Amount" }));
+    await type(composer, "A, B, C");
+    await act(async () => { composer.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); });
+    await settle();
+  }
+
+  it("typing one variant's price key by key never changes the others", async () => {
+    await giftCardWithAmounts();
+    expect([priceOf("A"), priceOf("B"), priceOf("C")]).toEqual(["1000", "1000", "1000"]);
+
+    // Select all in A, then 1, 12, 123, 1234: B and C became 1 after the second key.
+    for (const typed of ["1", "12", "123", "1234"]) await type(input(p("priceFor", { name: "A" })), typed);
+    expect([priceOf("A"), priceOf("B"), priceOf("C")]).toEqual(["1234", "1000", "1000"]);
+
+    // 500 in A, then 1200 in B: each row keeps its own price.
+    for (const typed of ["5", "50", "500"]) await type(input(p("priceFor", { name: "A" })), typed);
+    for (const typed of ["1", "12", "120", "1200"]) await type(input(p("priceFor", { name: "B" })), typed);
+    expect([priceOf("A"), priceOf("B"), priceOf("C")]).toEqual(["500", "1200", "1000"]);
+  });
+
+  it("Edit prices changes the selected rows only, even when it lowers the cheapest price", async () => {
+    await giftCardWithAmounts();
+    const select = container.querySelector<HTMLButtonElement>(`button[role="checkbox"][aria-label="${translate(resourceMessages, "select", { name: "A" })}"]`)!;
+    await act(async () => select.click());
+    const edit = [...container.querySelectorAll("button")].find((button) => button.textContent === p("editPrices"))!;
+    await act(async () => edit.click());
+    const panel = container.querySelector<HTMLElement>(`[role="group"][aria-label="${p("newPriceFor", { count: 1 })}"]`)!;
+    for (const typed of ["5", "50", "500"]) await type(panel.querySelector("input")!, typed);
+    const apply = [...panel.querySelectorAll("button")].find((button) => button.textContent === p("apply"))!;
+    await act(async () => apply.click());
+    await settle();
+    expect([priceOf("A"), priceOf("B"), priceOf("C")]).toEqual(["500", "1000", "1000"]);
   });
 });
