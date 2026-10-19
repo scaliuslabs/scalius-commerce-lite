@@ -1,0 +1,389 @@
+{
+  "$comment": "Task recipes for the skills. scripts/generate-recipes.mjs renders them with facts read from the operation manifest (risk, revision, required inputs) and the workflow catalog, and fails when a referenced operation or route disappears. A variant with `requires` renders only when the store's API exposes all of those operations; the next variant is the fallback.",
+  "skills": {
+    "scalius-insights": {
+      "title": "Insights recipes",
+      "routes": ["dashboard.sales-today", "dashboard.daily-operations-snapshot", "dashboard.thirty-day-booked-operations-brief", "dashboard.sales-analytics", "dashboard.low-stock", "dashboard.product-counts", "dashboard.customer-history", "dashboard.report-export", "dashboard.order-export", "dashboard.fraud-check"],
+      "recipes": [
+        {
+          "title": "How much did we sell today, and how many orders are unfulfilled?",
+          "steps": [
+            ["answer", "How much did we sell today?"],
+            ["read", "dashboard.orders.list", "query {view:\"unfulfilled\", limit:1}: the count is meta.total"]
+          ]
+        },
+        {
+          "title": "Which 5 products have the lowest stock?",
+          "steps": [
+            ["read", "dashboard.inventory.list", "query {section:\"variants\", sort:\"available\", order:\"asc\", limit:5}"]
+          ],
+          "note": "Rows are SKUs; name the product and option. Out-of-stock alerts: dashboard.inventory_alerts.list."
+        },
+        {
+          "title": "What is left to set up before launch?",
+          "variants": [
+            {
+              "requires": ["dashboard.setup.checklist"],
+              "steps": [["read", "dashboard.setup.checklist"]]
+            },
+            {
+              "steps": [
+                ["resource", "scalius://store", "notSetUp lists the gaps"],
+                ["read", "dashboard.settings.store_setup_get"],
+                ["read", "dashboard.checkout.readiness_get", "issues[] block checkout"]
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Export last month's orders as CSV",
+          "steps": [
+            ["cli", "scalius export orders --since <first day> --until <last day> --out orders.csv"],
+            ["read", "dashboard.orders.export", "MCP: query {startDate, endDate}; returns a one-use file link"]
+          ],
+          "note": "Dates are YYYY-MM-DD in the store's time zone (scalius://store timeZone)."
+        }
+      ]
+    },
+    "scalius-catalog": {
+      "title": "Catalog recipes",
+      "routes": ["dashboard.complex-product-create", "dashboard.product-section-update", "dashboard.category-publish", "dashboard.collection-create", "dashboard.media-upload", "dashboard.inventory-cycle-count", "dashboard.inventory-relative-adjustment", "dashboard.inventory-transfer", "dashboard.purchase-order-receive", "dashboard.barcode-labels"],
+      "recipes": [
+        {
+          "title": "Create a simple product \"Cotton Panjabi\", 1,500, 20 in stock, published",
+          "steps": [
+            ["read", "dashboard.settings.currency_get", "prices use this currency"],
+            ["read", "dashboard.categories.form_options", "pick categoryId; ask if none fits"],
+            ["write", "dashboard.products.create", "isActive:true, price:1500, defaultSku {stock:20}, media:[] or committed images"],
+            ["verify", "dashboard.products.get_section", "section base"]
+          ],
+          "note": "A simple product has exactly one hidden SKU: stock goes on defaultSku, never on the product."
+        },
+        {
+          "title": "Create a t-shirt in S/M/L x red/blue, 800 each, 10 of each",
+          "steps": [
+            ["search", "create an optioned product"],
+            ["resource", "scalius://workflows/catalog.optioned-product.v1", "matrix rules"],
+            ["write", "dashboard.products.create", "optionMatrix: 2 axes, all 6 SKUs, price 800, stock 10"],
+            ["verify", "dashboard.products.get_section", "section variants"]
+          ],
+          "note": "Every SKU picks one value of every axis, in axis order; send the whole matrix in one create."
+        },
+        {
+          "title": "Upload 3 local photos as the product gallery",
+          "steps": [
+            ["cli", "scalius media upload a.jpg b.jpg c.jpg --yes", "returns media ids"],
+            ["read", "dashboard.products.get_section", "section media: current gallery and revision"],
+            ["write", "dashboard.products.update_section", "section media with the new mediaIds"]
+          ],
+          "note": "Without a shell, import public HTTPS images with dashboard.media.import_url."
+        },
+        {
+          "title": "Raise every Shoes price by 5% (show me first)",
+          "variants": [
+            {
+              "requires": ["dashboard.resources.variants.bulk_set_prices"],
+              "steps": [
+                ["read", "dashboard.categories.form_options", "the Shoes categoryId"],
+                ["cli", "scalius bulk prices --filter '{\"categoryId\":\"<id>\"}' --set '<from describe>' --dry-run", "before/after table"],
+                ["write", "dashboard.resources.variants.bulk_set_prices", "after the merchant approves the preview"]
+              ]
+            },
+            {
+              "steps": [
+                ["read", "dashboard.products.list_summaries", "query {category:<id>}: every page"],
+                ["read", "dashboard.product_variants.list", "each product's SKU prices"],
+                ["write", "dashboard.product_variants.update", "price x 1.05, rounded; batch up to 20 per call, dry run first"]
+              ],
+              "note": "Show the merchant the before/after list and get approval before the first write."
+            }
+          ]
+        },
+        {
+          "title": "Change the SEO title and description of Cotton Panjabi",
+          "steps": [
+            ["read", "dashboard.products.list_summaries", "query {search:\"Cotton Panjabi\"}"],
+            ["read", "dashboard.products.get_section", "section text: current text and aggregateRevision"],
+            ["write", "dashboard.products.update_section", "section text, field metaTitle then metaDescription: replace the whole value"]
+          ]
+        },
+        {
+          "title": "Move 10 units of TS-RED-M from Dhaka to Chittagong",
+          "steps": [
+            ["read", "dashboard.inventory_locations.list"],
+            ["read", "dashboard.resources.variants.lookup", "the SKU id and stock by location"],
+            ["write", "dashboard.inventory_transfers.create", "lines [{variantId, quantity:10}]"],
+            ["write", "dashboard.inventory_transfers.ship"],
+            ["write", "dashboard.inventory_transfers.receive", "when the units arrive"],
+            ["verify", "dashboard.inventory_transfers.get"]
+          ]
+        }
+      ]
+    },
+    "scalius-sales": {
+      "title": "Sales recipes",
+      "routes": ["dashboard.order-fulfill", "dashboard.order-provider-shipment", "dashboard.order-refund", "dashboard.order-return", "dashboard.invoice-issue", "dashboard.discount-lifecycle", "dashboard.discount-toggle", "dashboard.customer-history"],
+      "recipes": [
+        {
+          "title": "Create code EID10: 10% off Fri-Sun, 2,000 minimum",
+          "steps": [
+            ["read", "dashboard.settings.currency_get"],
+            ["write", "dashboard.discounts.create", "method code, codes [EID10], effects percentage_off basisPoints 1000, conditions minimum_merchandise_subtotal amountMinor, startsAt/endsAtEpochSeconds, timezone"],
+            ["read", "dashboard.discounts.preview", "check a sample cart"],
+            ["write", "dashboard.discounts.activate"],
+            ["verify", "dashboard.discounts.get"]
+          ],
+          "note": "Discount money is minor units (2,000 BDT = 200000)."
+        },
+        {
+          "title": "Fulfil order #1042 and book it with Pathao",
+          "steps": [
+            ["read", "dashboard.orders.list", "query {search:\"1042\"}"],
+            ["read", "dashboard.delivery_providers.list", "the Pathao providerId"],
+            ["write", "dashboard.orders.create_shipment", "books the courier"],
+            ["verify", "dashboard.orders.shipments"]
+          ],
+          "note": "Own rider or counter pickup instead: dashboard.orders.fulfillment_create."
+        },
+        {
+          "title": "Refund 500 on order #1042",
+          "steps": [
+            ["read", "dashboard.orders.list", "query {search:\"1042\"}"],
+            ["read", "dashboard.orders.payments", "what was paid and is refundable"],
+            ["write", "dashboard.orders.refund", "amount 500 (major units), reason"],
+            ["verify", "dashboard.orders.payments"]
+          ]
+        },
+        {
+          "title": "Cancel order #1043 and put the stock back",
+          "steps": [
+            ["read", "dashboard.orders.get", "status and version"],
+            ["write", "dashboard.orders.update_status", "status cancelled, reason, expectedVersion"],
+            ["verify", "dashboard.orders.get"]
+          ],
+          "note": "Cancelling releases the order's reserved stock. A paid order also needs dashboard.orders.refund."
+        },
+        {
+          "title": "Accept a return of one item on order #1040",
+          "steps": [
+            ["read", "dashboard.orders.get", "line ids and version"],
+            ["write", "dashboard.orders.return_create", "one line, reason"],
+            ["write", "dashboard.orders.return_approve"],
+            ["write", "dashboard.orders.return_receive", "puts the unit back in stock"],
+            ["verify", "dashboard.orders.return_get"]
+          ]
+        },
+        {
+          "title": "Create a cash-on-delivery order for Rahim with two panjabis",
+          "steps": [
+            ["read", "dashboard.resources.customers.list", "find Rahim; ask if several match"],
+            ["read", "dashboard.products.list_summaries", "query {search:\"panjabi\"}: the SKU ids"],
+            ["read", "dashboard.shipping_methods.list", "delivery fee for the address"],
+            ["write", "dashboard.resources.orders.create", "customerId, items qty 2, shippingMinor, paymentMethod cod"],
+            ["verify", "dashboard.resources.orders.get"]
+          ],
+          "note": "This stable operation takes minor units (60 BDT = 6000)."
+        },
+        {
+          "title": "Tag every customer with more than 3 orders as VIP",
+          "variants": [
+            {
+              "requires": ["dashboard.resources.customers.bulk_tag"],
+              "steps": [["cli", "scalius bulk tags --filter '<orders > 3, from describe>' --set '{\"add\":[\"VIP\"]}' --dry-run"]]
+            },
+            {
+              "steps": [
+                ["read", "dashboard.customers.segments_preview", "condition: order count > 3"],
+                ["write", "dashboard.customers.segments_create"],
+                ["write", "dashboard.customers.tags_bulk_update", "matching {filter {segmentId}}, add [VIP]; repeat with matching.cursor"],
+                ["verify", "dashboard.customers.list", "query {tag:\"VIP\"}"]
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Approve pending reviews and reply to the 1-star one",
+          "variants": [
+            {
+              "requires": ["dashboard.reviews.list", "dashboard.reviews.moderate", "dashboard.reviews.reply"],
+              "steps": [
+                ["read", "dashboard.reviews.list", "pending first"],
+                ["write", "dashboard.reviews.moderate"],
+                ["write", "dashboard.reviews.reply", "draft the reply; the merchant approves the words"]
+              ]
+            },
+            {
+              "steps": [],
+              "note": "Review moderation is staff-only on this store's API: tell the merchant it is in Dashboard > Reviews; do not work around it."
+            }
+          ]
+        },
+        {
+          "title": "Reply to the newest customer message",
+          "variants": [
+            {
+              "requires": ["dashboard.conversations.list", "dashboard.conversations.post"],
+              "steps": [
+                ["read", "dashboard.conversations.list", "newest first"],
+                ["write", "dashboard.conversations.post", "the merchant approves the words"]
+              ]
+            },
+            {
+              "steps": [],
+              "note": "The inbox is not open to agents on this store's API (buyer messages are private): say so and stop."
+            }
+          ]
+        },
+        {
+          "title": "Issue a 1,000 gift card to Rahim",
+          "variants": [
+            {
+              "requires": ["dashboard.gift_cards.create"],
+              "steps": [
+                ["read", "dashboard.resources.customers.list", "find Rahim"],
+                ["write", "dashboard.gift_cards.create", "value and customer"],
+                ["verify", "dashboard.gift_cards.get"]
+              ]
+            },
+            {
+              "steps": [["read", "dashboard.gift_cards.summary"]],
+              "note": "Issuing stored value is staff-only on this store's API: say so; reads work."
+            }
+          ]
+        }
+      ]
+    },
+    "scalius-content": {
+      "title": "Content recipes",
+      "routes": ["dashboard.page-publish", "dashboard.navigation-publish", "dashboard.storefront-look", "dashboard.theme-publish", "dashboard.theme-history", "dashboard.draft-landing-page", "dashboard.campaign-content-supported-setup", "dashboard.business-seo-settings", "dashboard.storefront-origin"],
+      "recipes": [
+        {
+          "title": "Create collection \"Eid Picks\" with 6 products and add it to the main menu",
+          "steps": [
+            ["read", "dashboard.collections.form_options", "the 6 product ids"],
+            ["write", "dashboard.collections.create", "isActive, presentation, config with the products"],
+            ["read", "dashboard.navigation.menus_list", "the main menu and its revision"],
+            ["write", "dashboard.navigation.items_create", "labelMode resource, target the collection"],
+            ["write", "dashboard.navigation.menus_publish"],
+            ["verify", "storefront.navigation.get", "needs a storefront connection; else dashboard.navigation.items_list"]
+          ]
+        },
+        {
+          "title": "Change the homepage hero headline and publish the theme",
+          "steps": [
+            ["read", "dashboard.theme.workspace_get", "draft and live revisions"],
+            ["read", "dashboard.theme.document_get", "the whole draft document"],
+            ["write", "dashboard.theme.draft_save", "the whole document with only the headline changed"],
+            ["write", "dashboard.theme.publish", "after the merchant sees the preview"],
+            ["verify", "dashboard.theme.workspace_get"]
+          ]
+        },
+        {
+          "title": "Write and publish an About Us page and link it in the footer",
+          "steps": [
+            ["write", "dashboard.content.create", "contentType page, isPublished true, the merchant's words"],
+            ["read", "dashboard.navigation.placements_list", "which menu is the footer"],
+            ["write", "dashboard.navigation.items_create", "labelMode resource, target the page"],
+            ["write", "dashboard.navigation.menus_publish"],
+            ["verify", "dashboard.content.get"]
+          ]
+        }
+      ]
+    },
+    "scalius-settings": {
+      "title": "Settings recipes",
+      "routes": ["dashboard.checkout-readiness", "dashboard.payment-methods", "dashboard.stripe-settings", "dashboard.shipping-method", "dashboard.delivery-provider", "dashboard.delivery-location-import", "dashboard.tax-configuration", "dashboard.team-invite", "dashboard.store-setup", "dashboard.store-defaults", "dashboard.market-currency", "dashboard.checkout-flow-replace", "dashboard.guest-checkout-conditional-enable", "dashboard.bangladesh-checkout-supported-setup", "dashboard.notification-rules", "dashboard.webhooks-manage", "dashboard.apps-install", "dashboard.apps-manage", "dashboard.agent-grant-narrow", "dashboard.account-sessions", "dashboard.store-migration"],
+      "recipes": [
+        {
+          "title": "Is checkout ready to take orders, and what is blocking it?",
+          "steps": [
+            ["read", "dashboard.checkout.readiness_get", "status and issues"],
+            ["read", "dashboard.payments.methods_get", "only when an issue names payments"],
+            ["read", "dashboard.shipping_methods.list", "only when an issue names delivery"]
+          ]
+        },
+        {
+          "title": "Enable cash on delivery for Bangladesh only",
+          "steps": [
+            ["read", "dashboard.payments.methods_get", "enabled methods and revision"],
+            ["write", "dashboard.payments.methods_update", "all enabled methods plus cod, defaultMethod, expectedRevision"],
+            ["verify", "dashboard.checkout.readiness_get"]
+          ],
+          "note": "COD is Bangladesh-only by its own country rule; nothing else to restrict."
+        },
+        {
+          "title": "Delivery 60 inside Dhaka, 120 outside",
+          "steps": [
+            ["read", "dashboard.shipping_methods.list", "existing zones"],
+            ["read", "dashboard.delivery_locations.list", "the Dhaka city place id"],
+            ["write", "dashboard.shipping_zones.create", "Inside Dhaka: locationIds [Dhaka], rate fee 60"],
+            ["write", "dashboard.shipping_zones.create", "Outside Dhaka: regions [{countryCode:BD}], rate fee 120"],
+            ["verify", "dashboard.shipping_methods.list"]
+          ],
+          "note": "A place zone beats the country zone; no zone means no delivery."
+        },
+        {
+          "title": "Charge 5% VAT on Bangladesh orders",
+          "steps": [
+            ["read", "dashboard.taxes.settings_get", "prices include tax or not (per market)"],
+            ["write", "dashboard.taxes.regions_create", "countryCode BD"],
+            ["read", "dashboard.taxes.classes_list", "the standard class"],
+            ["write", "dashboard.taxes.rates_create", "name VAT, rateBps 500"],
+            ["verify", "dashboard.taxes.preview", "a sample BD order"]
+          ]
+        },
+        {
+          "title": "Invite a staff member who can only manage orders",
+          "steps": [
+            ["read", "dashboard.team.roles.list", "a role with only order permissions"],
+            ["write", "dashboard.team.roles.create", "only if no role fits"],
+            ["write", "dashboard.team.users.invite", "name, email, roleId"],
+            ["verify", "dashboard.team.users.list"]
+          ]
+        }
+      ]
+    },
+    "scalius-marketing": {
+      "title": "Marketing recipes",
+      "routes": ["dashboard.analytics-provider", "dashboard.meta-capi", "dashboard.business-seo-settings"],
+      "recipes": [
+        {
+          "title": "Connect Meta Pixel and the Conversions API with a test code, and confirm events arrive",
+          "steps": [
+            ["write", "dashboard.analytics.create", "type facebook_pixel, the Pixel ID, location head"],
+            ["write", "dashboard.analytics.set_active"],
+            ["read", "dashboard.meta_conversions.get", "revision"],
+            ["write", "dashboard.meta_conversions.update", "pixelId, accessToken, testEventCode, isEnabled"],
+            ["verify", "dashboard.meta_conversions.logs_list", "events after a storefront visit"],
+            ["verify", "dashboard.analytics.health"]
+          ],
+          "note": "The access token is a secret: the merchant pastes it; never echo it back."
+        },
+        {
+          "title": "Add GA4 with consent mode for EU visitors",
+          "steps": [
+            ["write", "dashboard.analytics.create", "type google_analytics, the G- measurement ID"],
+            ["write", "dashboard.analytics.set_active"],
+            ["verify", "dashboard.analytics.health"],
+            ["search", "tracking consent"]
+          ],
+          "note": "Use the store's consent setting if search finds one; if not, tell the merchant no consent banner exists yet. Never hand-write consent code."
+        }
+      ]
+    },
+    "scalius-storefront": {
+      "title": "Storefront recipes",
+      "routes": ["storefront.product-research", "storefront.category-filter", "storefront.cart-edit", "storefront.checkout-options", "storefront.checkout-journey", "storefront.delivery-search", "storefront.hosted-payment", "storefront.payment-recovery", "storefront.customer-login", "storefront.customer-profile", "storefront.order-support", "storefront.content-discovery", "storefront.navigation-tree", "storefront.homepage-layout", "storefront.close-context"],
+      "recipes": [
+        {
+          "title": "Check what a buyer sees for a product",
+          "steps": [
+            ["read", "storefront.search.predict", "the product slug"],
+            ["read", "storefront.products.get_section", "prices, availability band, images"]
+          ],
+          "note": "Availability is a band, never an exact count."
+        }
+      ]
+    }
+  }
+}

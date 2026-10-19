@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CUSTOMER_TAGS_PER_CUSTOMER_MAX } from "@scalius/shared/customer-marketing";
+import { CUSTOMER_TAG_MAX_LENGTH, CUSTOMER_TAGS_PER_CUSTOMER_MAX } from "@scalius/shared/customer-marketing";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { useSaveBar } from "~/components/admin/shared/SaveBar";
@@ -22,6 +22,8 @@ export function CustomerTagsCard({ customerId, tags: loaded, canEdit }: { custom
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState<string[]>(() => [...loaded]);
   const [tags, setTags] = useState<string[]>(() => [...loaded]);
+  /** Text left in the field: one too long to be a tag stays there, so Save waits for it. */
+  const [pendingText, setPendingText] = useState(false);
   const dirty = canEdit && !sameTags(tags, saved);
 
   // A fresh read replaces the tags only while there are no edits.
@@ -36,7 +38,7 @@ export function CustomerTagsCard({ customerId, tags: loaded, canEdit }: { custom
   useSaveBar({
     label: t("tags"),
     dirty,
-    invalid: !canEdit,
+    invalid: !canEdit || pendingText,
     save: async () => {
       const result = await saveCustomerTags(customerId, tags);
       setSaved(result.tags);
@@ -57,11 +59,12 @@ export function CustomerTagsCard({ customerId, tags: loaded, canEdit }: { custom
       </CardHeader>
       <CardContent>
         {canEdit ? (
-          <Field id="customer-tags" label={t("addTag")} hideLabel help={t("tagsHelp")}>
+          <Field id="customer-tags" label={t("addTag")} hideLabel help={t("tagsHelp", { count: CUSTOMER_TAG_MAX_LENGTH })}>
             <TagInput
               id="customer-tags"
               value={tags}
               onChange={setTags}
+              onPendingTextChange={setPendingText}
               max={CUSTOMER_TAGS_PER_CUSTOMER_MAX}
               aria-describedby="customer-tags-help"
             />

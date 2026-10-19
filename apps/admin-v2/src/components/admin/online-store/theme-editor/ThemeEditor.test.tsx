@@ -9,6 +9,7 @@ import {
   DEFAULT_STOREFRONT_THEME,
   storeShapeFromFacts,
   storefrontSectionDefault,
+  storefrontThemeDocumentSchema,
   type StorefrontSection,
   type StorefrontSectionType,
   type StorefrontThemeDocument,
@@ -38,7 +39,7 @@ const frame = vi.hoisted(() => ({
   field: null as ThemePreviewField | null,
   rects: {} as Record<string, readonly [number, number, number, number]>,
 }));
-const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
+const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }));
 const navigation = vi.hoisted(() => ({ blocker: vi.fn((_options: { enableBeforeUnload?: boolean }) => ({ status: "idle" })) }));
 
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
@@ -400,6 +401,64 @@ describe("theme editor: live preview and saving", () => {
     expect(saved.find((each) => each.id === "story")!.settings).toMatchObject({ heading: "Our honey story" });
     await vi.waitFor(() => expect(status()).toBe("held"));
     expect(container.querySelector("[data-save-status]")!.textContent).toContain("1 setting to fix");
+  });
+
+  it("names a setting to fix in the publish summary instead of 'No changes', and takes the cursor to it", async () => {
+    render();
+    act(() => row("faq").click());
+    await ready("#theme-section-faq-heading");
+    type(field("theme-section-faq-heading"), "x".repeat(200));
+    await vi.waitFor(() => expect(status()).toBe("held"));
+    act(() => row("rail").click());
+    act(() => button("Publish").click());
+    await ready("[data-publish-dialog]");
+    const dialog = document.querySelector("[data-publish-dialog]")!;
+    expect(dialog.querySelector("[data-publish-held]")?.textContent).toContain("1 setting needs fixing before your edit can be saved or published");
+    expect(dialog.textContent).not.toContain("No changes.");
+    // The held edit would not go live: publishing waits for it.
+    const publish = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((each) => each.textContent === "Publish")!;
+    expect(publish.disabled).toBe(true);
+    act(() => [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((each) => each.textContent === "Fix it")!.click());
+    await ready("#theme-section-faq-heading");
+    await vi.waitFor(() => expect(document.activeElement).toBe(field("theme-section-faq-heading")));
+    expect(document.querySelector("[data-publish-dialog]")).toBeNull();
+  });
+
+  it("keeps an edit that cannot be saved yet across a reload of the editor", async () => {
+    render();
+    act(() => row("faq").click());
+    await ready("#theme-section-faq-heading");
+    type(field("theme-section-faq-heading"), "x".repeat(200));
+    await vi.waitFor(() => expect(status()).toBe("held"));
+    await vi.waitFor(() => expect(window.localStorage.getItem("scalius.theme-editor.held-edits")).toContain("x".repeat(200)));
+
+    // The editor opens again on the same draft revision: the held edit is back, still to fix.
+    act(() => root.unmount());
+    root = createRoot(container);
+    render();
+    await vi.waitFor(() => expect(status()).toBe("held"));
+    expect(toasts.info).toHaveBeenCalledWith("Edits that weren't saved yet are back. Fix the setting to save them.");
+    act(() => row("faq").click());
+    await ready("#theme-section-faq-heading");
+    expect(field("theme-section-faq-heading").value).toBe("x".repeat(200));
+    // Fixed, it saves, and the kept copy goes.
+    type(field("theme-section-faq-heading"), "Delivery questions");
+    await autosaved();
+    expect(lastSaved().theme.pages.home.find((each) => each.id === "faq")!.settings).toMatchObject({ heading: "Delivery questions" });
+    await vi.waitFor(() => expect(window.localStorage.getItem("scalius.theme-editor.held-edits")).toBeNull());
+  });
+
+  it("calls a draft that matches what is live 'Live' whatever its key order (a discarded draft of a store that never published)", async () => {
+    // The built-in default as an unpublished store reads it, and the same document as a saved draft reads back.
+    const readBack = JSON.parse(JSON.stringify(storefrontThemeDocumentSchema.parse(DEFAULT_STOREFRONT_THEME))) as StorefrontThemeDocument;
+    expect(JSON.stringify(readBack)).not.toBe(JSON.stringify(DEFAULT_STOREFRONT_THEME));
+    render(readBack, { published: DEFAULT_STOREFRONT_THEME });
+    await settle();
+    expect(status()).toBe("saved");
+    expect(container.querySelector("[data-save-status]")!.textContent).toContain("No changes");
+    expect(container.textContent).toContain("Live");
+    expect(container.textContent).not.toContain("Draft saved");
+    expect(api.draft).not.toHaveBeenCalled();
   });
 
   it("opens the tab and group of a theme setting to fix, and puts the cursor in the field", async () => {

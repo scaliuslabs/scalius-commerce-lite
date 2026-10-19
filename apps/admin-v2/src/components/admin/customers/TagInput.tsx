@@ -1,7 +1,7 @@
 import { useImperativeHandle, useState, type KeyboardEvent, type Ref } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
-import { CUSTOMER_TAG_MAX_LENGTH } from "@scalius/shared/customer-marketing";
+import { CUSTOMER_TAG_MAX_LENGTH, normalizeCustomerTag } from "@scalius/shared/customer-marketing";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useDebounce } from "~/hooks/use-debounce";
@@ -14,8 +14,12 @@ import { addTypedTags } from "./tag-input";
 const SUGGESTIONS = 8;
 
 export interface TagInputHandle {
-  /** Turns text still in the field into tags now and returns the whole list (a dialog's Apply calls it). */
-  flush: () => string[];
+  /**
+   * Turns text still in the field into tags now and returns the whole list (a
+   * dialog's Apply calls it); `rejected` when some of it can't be a tag (too
+   * long), which then stays in the field with its reason.
+   */
+  flush: () => { tags: string[]; rejected: boolean };
 }
 
 interface TagInputProps {
@@ -37,7 +41,9 @@ interface TagInputProps {
 /**
  * Customer tags as chips: type a tag and press Enter or a comma (or paste
  * "vip, wholesale"); Backspace in the empty field removes the last one. Tags
- * are normalised as stored (lower-case, single spaces), at most 40 characters.
+ * are normalised as stored (lower-case, single spaces), at most 40 characters,
+ * and the field says so while typing: how a tag will be saved, and a tag that
+ * is too long stays in the field with its length instead of being dropped.
  */
 export function TagInput({
   id,
@@ -70,10 +76,10 @@ export function TagInput({
     .slice(0, SUGGESTIONS);
   const full = value.length >= max;
 
-  const commit = (typed: string): string[] => {
+  const commit = (typed: string): { tags: string[]; rejected: boolean } => {
     if (!typed.trim()) {
       setText("");
-      return [...value];
+      return { tags: [...value], rejected: false };
     }
     const result = addTypedTags(value, typed, max);
     if (result.tags.length !== value.length) onChange(result.tags);
@@ -82,8 +88,9 @@ export function TagInput({
         ? t("tagTooLong", { count: CUSTOMER_TAG_MAX_LENGTH })
         : result.overflow ? t("tagLimit", { count: max }) : null,
     );
-    setText("");
-    return result.tags;
+    // A tag too long to save stays in the field to shorten, never silently dropped.
+    setText(result.invalid.join(", "));
+    return { tags: result.tags, rejected: result.invalid.length > 0 };
   };
   useImperativeHandle(handle, () => ({ flush: () => commit(text) }));
 
@@ -98,7 +105,15 @@ export function TagInput({
     }
   };
 
-  const describedBy = [aria["aria-describedby"], problem ? `${id}-problem` : null].filter(Boolean).join(" ") || undefined;
+  // What the typed text becomes, said before it is added: too long (with its length), or saved as its lower-case form.
+  const typed = text.includes(",") ? "" : text.trim();
+  const typedLength = [...typed.normalize("NFC")].length;
+  const typedTag = typed ? normalizeCustomerTag(typed) : null;
+  const note = problem ? null
+    : typed && typedTag === null ? { tone: "error" as const, text: t("tagTooLongNow", { length: typedLength, count: CUSTOMER_TAG_MAX_LENGTH }) }
+      : typedTag && typedTag !== typed ? { tone: "help" as const, text: t("tagSavedAs", { tag: typedTag }) }
+        : null;
+  const describedBy = [aria["aria-describedby"], problem ? `${id}-problem` : null, note ? `${id}-note` : null].filter(Boolean).join(" ") || undefined;
 
   return (
     <div className="space-y-2">
@@ -132,7 +147,7 @@ export function TagInput({
         autoComplete="off"
         enterKeyHint="enter"
         aria-describedby={describedBy}
-        aria-invalid={Boolean(problem) || aria["aria-invalid"] || undefined}
+        aria-invalid={Boolean(problem) || note?.tone === "error" || aria["aria-invalid"] || undefined}
         onFocus={() => setEngaged(true)}
         onChange={(event) => {
           const next = event.target.value;
@@ -154,6 +169,8 @@ export function TagInput({
       />
       {problem ? (
         <p id={`${id}-problem`} role="alert" className="text-body text-destructive">{problem}</p>
+      ) : note ? (
+        <p id={`${id}-note`} aria-live="polite" className={note.tone === "error" ? "text-body text-destructive" : "text-body text-muted-foreground"}>{note.text}</p>
       ) : null}
       {suggest && offered.length > 0 && !full && !disabled ? (
         <ul className="flex flex-wrap gap-1.5" aria-label={t("suggestedTags")}>

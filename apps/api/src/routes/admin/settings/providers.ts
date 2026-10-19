@@ -24,6 +24,8 @@ import { ok } from "../../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../../schemas/responses";
 import { readAppProviderSettings, requestProviderRuntime } from "../../../plugins/providers/runtime";
 import { pluginAssetUrl, providerIconUrl } from "../../../plugins/listing";
+import { providerConnectionSchema } from "../../../schemas/app-settings";
+import { providerConnections, recordProviderConnectionTest } from "../../../plugins/provider-connection";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -50,6 +52,7 @@ const appProviderSchema = z.object({
     blockedReason: z.string().optional(),
   }),
   environment: z.enum(["test", "live", "unknown"]),
+  connection: providerConnectionSchema,
 });
 
 /** Every installed app's providers of a port, the installations in plugin id order. */
@@ -84,9 +87,13 @@ app.openapi(listRoute, async (c) => {
   }
   const runtime = requestProviderRuntime(c);
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-  const providers = await Promise.all(appProvidersOf(await listPluginInstallations(c.get("db")), kind)
+  const db = c.get("db");
+  const providers = await Promise.all(appProvidersOf(await listPluginInstallations(db), kind)
     .map(async ({ installation, declaration }) => {
-      const settings = await readAppProviderSettings(runtime, installation, declaration, encryptionKey);
+      const [settings, connections] = await Promise.all([
+        readAppProviderSettings(runtime, installation, declaration, encryptionKey),
+        providerConnections(db, installation, [declaration]),
+      ]);
       const operations = declaredProviderOperations(declaration);
       const configured = settings.missingFields.length === 0 && settings.credentialErrors.length === 0;
       return {
@@ -108,6 +115,7 @@ app.openapi(listRoute, async (c) => {
           ...(settings.blockedReason ? { blockedReason: settings.blockedReason } : {}),
         },
         environment: settings.environment,
+        connection: connections.get(qualifiedProviderId(installation.pluginId, declaration.id))!,
       };
     }));
   return ok(c, { providers });
@@ -153,11 +161,13 @@ app.openapi(testRoute, async (c) => {
   try {
     const host = await runtime.host();
     const result = await host.invokeProvider(installation, declaration.kind, declaration.id, "testConnection", {});
+    await recordProviderConnectionTest(c.get("db"), installation, declaration, result);
     return ok(c, { ok: result.ok, message: result.message });
   } catch (error) {
     const failure = providerErrorOf(error);
     if (!failure) throw error;
     // The host masks provider messages: they are merchant-safe.
+    await recordProviderConnectionTest(c.get("db"), installation, declaration, { ok: false, message: failure.message });
     return ok(c, { ok: false, message: failure.message });
   }
 });

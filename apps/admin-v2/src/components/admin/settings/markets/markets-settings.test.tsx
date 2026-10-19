@@ -63,7 +63,7 @@ const backup = {
 const dailyRates = {
   id: "acme.rates:daily", kind: "fx", pluginId: "acme.rates", appName: "Acme rates", appIcon: null, icon: null, name: "Daily rates",
   operations: ["rates"], canTestConnection: false,
-  readiness: { configured: true, enabled: true, usable: true, missingFields: [], credentialErrors: [] }, environment: "unknown",
+  readiness: { configured: true, enabled: true, usable: true, missingFields: [], credentialErrors: [] }, environment: "unknown", connection: { status: "none", testedAt: null, message: null },
 };
 const india = {
   ...backup, id: "mkt_in", handle: "india", name: "India", status: "draft" as const, isBackup: false, revision: 1,

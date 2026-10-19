@@ -18,6 +18,7 @@ vi.mock("./backend", () => ({ loadAgentAccessBackend: vi.fn(async () => ({ resol
 vi.mock("./mcp/operations", () => ({
   getAuthorizedOperation: vi.fn(async (id: string) => state.operations.find((operation) => operation.operationId === id) ?? null),
   listAuthorizedOperations: vi.fn(async () => state.operations), summarizeOperation: vi.fn((operation: AgentOperationManifestEntry) => operation), describeOperation: vi.fn((operation: AgentOperationManifestEntry) => operation),
+  isMcpOperationExposure: vi.fn(() => true),
 }));
 vi.mock("./direct-operation", () => ({ resolveDirectAgentOperation: (method: string, path: string) => state.operations.find((operation) => operation.method === method && operation.pathTemplate === path) ?? null }));
 
@@ -94,8 +95,14 @@ describe("theme operations through real MCP dispatch and D1", () => {
   afterAll(() => process.stdout.write(`Theme MCP measured bytes ${JSON.stringify(measured)}\n`));
 
   async function call(mode: "read" | "write", operationId: string, input: unknown = {}) {
-    const handler = Reflect.get(server, "_registeredTools")[`operations.${mode}`].handler;
-    const result = await handler({ operationId, input });
+    const handler = Reflect.get(server, "_registeredTools")[`scalius_${mode}`].handler;
+    // Reads take the whole 64 KiB budget here: these pages are measured against the hard ceiling.
+    const args = mode === "read" ? { operationId, input, maxBytes: 65_536 } : { operationId, input };
+    let result = await handler(args);
+    // A destructive write (discard) runs only with the confirmation it answers first.
+    if (result.structuredContent?.error?.code === "confirmation_required") {
+      result = await handler({ ...args, confirmToken: result.structuredContent.confirmation.confirmToken });
+    }
     expect(result, operationId).not.toHaveProperty("isError");
     expect(result.structuredContent, operationId).toMatchObject({ ok: true });
     const size = bytes(result.structuredContent);
@@ -105,23 +112,23 @@ describe("theme operations through real MCP dispatch and D1", () => {
       expect(size, operationId).toBeLessThan(operationId === "dashboard.theme.workspace_get" ? 16_384 : 4096);
       measured.maxReceiptBytes = Math.max(measured.maxReceiptBytes, size);
     }
-    return result.structuredContent.result;
+    return result.structuredContent;
   }
 
   it("drafts a large Bangla landing page with a small receipt and verifies it by rereading the workspace", async () => {
     const before = await call("read", "dashboard.theme.workspace_get");
-    expect(before.data.data).toMatchObject({ published: { revision: 20 }, draft: { revision: 1, basePublishedRevision: 20 }, landingPages: [] });
+    expect(before.data).toMatchObject({ published: { revision: 20 }, draft: { revision: 1, basePublishedRevision: 20 }, landingPages: [] });
     const saved = await call("write", "dashboard.theme.page_draft_update", { body: { page: "landing", slug: "eid", value: largePage(), expectedDraftRevision: 1, basePublishedRevision: 20 } });
-    expect(saved.data.data).toMatchObject({ revision: 2, basePublishedRevision: 20 });
+    expect(saved.data).toMatchObject({ revision: 2, basePublishedRevision: 20 });
     expect(saved).not.toHaveProperty("artifact");
     expect(objects.size).toBe(0);
     const after = await call("read", "dashboard.theme.workspace_get");
-    expect(after.data.data).toMatchObject({
+    expect(after.data).toMatchObject({
       published: { revision: 20 }, draft: { revision: 2 }, draftDiffersFromLive: true,
       landingPages: [{ slug: "eid", title: "ঈদ প্রচারণা", sections: 7 }],
     });
     // A stale revision conflicts instead of overwriting.
-    const handler = Reflect.get(server, "_registeredTools")["operations.write"].handler;
+    const handler = Reflect.get(server, "_registeredTools")["scalius_write"].handler;
     const stale = await handler({ operationId: "dashboard.theme.page_draft_update", input: { body: { page: "landing", slug: "eid", value: null, expectedDraftRevision: 1, basePublishedRevision: 20 } } });
     expect(JSON.stringify(stale)).toContain("409");
   });
@@ -131,7 +138,7 @@ describe("theme operations through real MCP dispatch and D1", () => {
     let beforeRevision: number | undefined;
     do {
       const result = await call("read", "dashboard.theme.versions_list", { query: beforeRevision ? { beforeRevision } : {} });
-      const page = result.data.data;
+      const page = result.data;
       expect(page.versions).toHaveLength(5);
       expect(page.versions[0]).not.toHaveProperty("theme");
       expect(page.versions[0].publishedByName).toHaveLength(200);
@@ -141,14 +148,14 @@ describe("theme operations through real MCP dispatch and D1", () => {
     expect(revisions).toEqual(Array.from({ length: 20 }, (_, index) => 20 - index));
     await call("write", "dashboard.theme.version_restore", { body: { sourceRevision: 1, expectedDraftRevision: 1, basePublishedRevision: 20 } });
     const workspace = await call("read", "dashboard.theme.workspace_get");
-    expect(workspace.data.data).toMatchObject({ published: { revision: 20 }, draft: { revision: 2, basePublishedRevision: 20 } });
-    expect(workspace.data.data.draft).not.toHaveProperty("theme");
+    expect(workspace.data).toMatchObject({ published: { revision: 20 }, draft: { revision: 2, basePublishedRevision: 20 } });
+    expect(workspace.data.draft).not.toHaveProperty("theme");
     const theme = JSON.parse((sqlite.prepare("SELECT theme FROM theme_settings_drafts").get() as { theme: string }).theme);
     await call("write", "dashboard.theme.draft_save", { body: { theme, expectedDraftRevision: 2, basePublishedRevision: 20 } });
     const published = await call("write", "dashboard.theme.publish", { body: { expectedPublishedRevision: 20, expectedDraftRevision: 3, note: "বাংলা".repeat(100) } });
-    expect(published.data.data).toMatchObject({ published: { revision: 21 }, draft: { revision: 4, basePublishedRevision: 21 } });
+    expect(published.data).toMatchObject({ published: { revision: 21 }, draft: { revision: 4, basePublishedRevision: 21 } });
     const discarded = await call("write", "dashboard.theme.draft_discard", { body: { expectedDraftRevision: 4, basePublishedRevision: 21 } });
-    expect(discarded.data.data).toMatchObject({ published: { revision: 21 }, draft: { revision: 5 } });
+    expect(discarded.data).toMatchObject({ published: { revision: 21 }, draft: { revision: 5 } });
     expect(objects.size).toBe(0);
   });
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scalius"
+  short_description: "Connect a Scalius store and run store work safely"
+  default_prompt: "Use $scalius to connect my Scalius store and route this request to the right skill."

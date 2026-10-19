@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { Link, useRouteContext, useRouter } from "@tanstack/react-router";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "~/lib/toast";
@@ -75,6 +75,18 @@ export function useAccessRefresh() {
     ]);
     await refreshAdminRouteContext(router);
   };
+}
+
+/**
+ * An invitation gives the person their role at once (they count as its staff
+ * while the invite is pending), so the staff list and the roles' counts both
+ * read again: refreshing only the list left a role at "0 staff".
+ */
+export function afterStaffInvited(queryClient: QueryClient) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.rbac.all }),
+  ]);
 }
 
 export function failure(error: unknown, t: UsersMessages, fallback: string, conflict?: string): string {
@@ -213,7 +225,7 @@ function AddStaffForm() {
           body: { name: draft.name.trim(), email: draft.email.trim(), roleId: draft.roleId },
         }));
         if (result.emailFailed) toast.warning(t("inviteNotSent"));
-        await queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers.all });
+        await afterStaffInvited(queryClient);
       } catch (error) {
         // The banner shows the reason; name the known conflicts in plain words.
         throw saveFailure(error, t, common("saveFailed"), t("emailTaken"));

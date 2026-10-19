@@ -17,16 +17,20 @@ import { themeEditorMessages } from "~/i18n/theme-editor";
 import { useChangeText } from "./ThemeHistory";
 import { Field } from "~/components/ui/field";
 
-export function PublishDialog({ open, onOpenChange, live, draft, unopenedAi, sectionName, publishing, onOpenSection, onPublish }: {
+export function PublishDialog({ open, onOpenChange, live, draft, held, unopenedAi, sectionName, publishing, onOpenSection, onShowProblem, onPublish }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   live: StorefrontThemeDocument;
   /** What goes live: the editor's saved (or about to be saved) document. */
   draft: StorefrontThemeDocument;
+  /** Settings to fix: their edits cannot be saved, so they would not go live. */
+  held: number;
   unopenedAi: readonly StorefrontSection[];
   sectionName: (section: StorefrontSection) => string;
   publishing: boolean;
   onOpenSection: (id: string) => void;
+  /** Closes the dialog and puts the cursor in the first setting to fix. */
+  onShowProblem: () => void;
   onPublish: (note: string) => void;
 }) {
   const t = useMessages(themeEditorMessages);
@@ -61,7 +65,15 @@ export function PublishDialog({ open, onOpenChange, live, draft, unopenedAi, sec
               </AlertDescription>
             </Alert>
           ) : null}
-          {changes.length === 0 ? <p className="text-body text-muted-foreground">{t("noChanges")}</p> : null}
+          {held > 0 ? (
+            <Alert variant="warning" data-publish-held>
+              <TriangleAlert aria-hidden="true" />
+              <AlertDescription>
+                <p>{held === 1 ? t("publishHeldOne") : t("publishHeld", { count: held })}</p>
+                <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={onShowProblem}>{t("publishFix")}</Button></span>
+              </AlertDescription>
+            </Alert>
+          ) : changes.length === 0 ? <p className="text-body text-muted-foreground">{t("noChanges")}</p> : null}
           {pages.length > 0 ? (
             <section className="space-y-1">
               <h3 className="text-heading-sm">{t("publishPages")}</h3>
@@ -88,7 +100,8 @@ export function PublishDialog({ open, onOpenChange, live, draft, unopenedAi, sec
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
-          <Button type="button" loading={publishing} disabled={changes.length === 0} onClick={() => onPublish(note.trim())}>{t("publish")}</Button>
+          {/* A held edit would not go live: publishing waits until it is fixed. */}
+          <Button type="button" loading={publishing} disabled={changes.length === 0 || held > 0} onClick={() => onPublish(note.trim())}>{t("publish")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

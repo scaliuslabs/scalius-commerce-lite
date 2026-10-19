@@ -80,8 +80,12 @@ describe("the Bangladesh pack's SSLCommerz declaration", () => {
       returnCorrelationField: "tran_id",
     })]);
     expect(manifest.features.find((entry) => entry.id === "sslcommerz")).toMatchObject({ providers: ["sslcommerz"], allowedHosts: ["sandbox.sslcommerz.com", "securepay.sslcommerz.com"] });
-    // No default: activation moves a store's old sandbox/live choice into an unset setting.
-    expect(manifest.settings.find((field) => field.key === "sslcommerz_environment")).not.toHaveProperty("default");
+    // Every payment provider starts on its test system; live is the merchant's own switch.
+    expect(manifest.settings.find((field) => field.key === "sslcommerz_environment")).toHaveProperty("default", "sandbox");
+    expect(manifest.settings.filter((field) => /_environment$/u.test(field.key)).map((field) => [field.key, (field as { default?: unknown }).default]))
+      .toEqual([["sslcommerz_environment", "sandbox"], ["bkash_environment", "sandbox"], ["nagad_environment", "sandbox"]]);
+    // Pathao's API address starts on its sandbox too.
+    expect(manifest.settings.find((field) => field.key === "pathao_base_url")).toHaveProperty("default", "https://courier-api-sandbox.pathao.com");
   });
 });
 

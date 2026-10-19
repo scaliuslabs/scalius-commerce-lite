@@ -1,4 +1,0 @@
-interface:
-  display_name: "Scalius Commerce"
-  short_description: "Connect Scalius tools and route store work"
-  default_prompt: "Use $scalius-commerce to connect Scalius and route this request to the right focused skill."

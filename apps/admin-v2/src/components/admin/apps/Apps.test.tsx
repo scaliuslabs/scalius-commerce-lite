@@ -25,6 +25,7 @@ const sdk = vi.hoisted(() => ({
   postApiV1AdminAppsByIdStop: vi.fn(),
   postApiV1AdminAppsByIdFeaturesByFeatureIdEnable: vi.fn(),
   postApiV1AdminAppsByIdFeaturesByFeatureIdDisable: vi.fn(),
+  postApiV1AdminSettingsProvidersByIdTest: vi.fn(),
 }));
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }));
 const navigate = vi.hoisted(() => vi.fn(() => Promise.resolve()));
@@ -717,6 +718,19 @@ describe("App page", () => {
     expect(text()).toContain("Enter a whole number.");
   });
 
+  it("offers no turn off or uninstall for a bundled app that never ran", async () => {
+    await renderApp(detail({ status: "installed", runtime: "bundled", activatedAt: null }), MANAGER, true);
+    expect(hasButton("Uninstall")).toBe(false);
+    expect(hasButton("Deactivate")).toBe(false);
+
+    // Once it has run, uninstalling can delete its data: offered.
+    act(() => root.unmount());
+    queryClient.clear();
+    root = createRoot(host);
+    await renderApp(detail({ status: "disabled", runtime: "bundled", activatedAt: "2026-10-01T09:00:00.000Z" }), MANAGER, true);
+    expect(hasButton("Uninstall")).toBe(true);
+  });
+
   it("uninstalls keeping the data unless the merchant chooses to delete it", async () => {
     sdk.postApiV1AdminAppsByIdUninstall.mockImplementation(() => ok({ id: "acme.loyalty", uninstalled: true, keepData: false, hookError: null }));
     await renderApp(detail({ status: "active", activatedAt: "2026-10-01T09:00:00.000Z" }), MANAGER);
@@ -1008,10 +1022,86 @@ describe("App page: sections", () => {
     expect(input("bkash_app_key").type).toBe("password");
     expect(input("bkash_username").value).toBe("shop");
     expect(text()).toContain("Needs setup");
-    expect(document.querySelector('a[href="/admin/settings/payments"]')?.textContent).toBe("Choose it in Settings → Payments");
+    // Turning it on offers it at checkout: no second switch to send the merchant to.
+    expect(document.querySelector('a[href="/admin/settings/payments"]')).toBeNull();
     await type(input("bkash_username"), "my-shop");
     const sent = await saveSettings();
     expect(sent.body.values).toEqual({ bkash_username: "my-shop" });
+  });
+
+  it("calls a payment ready only while checkout offers it, and an SMS service only while it sends", async () => {
+    const bkashOn = feature({ enabled: true, grantKey: null, settings: ["bkash_username"] });
+    const settings = {
+      fields: [field({ key: "bkash_username", label: "Username", type: "text", group: "bkash" })],
+      values: { bkash_username: "shop" },
+      secrets: {},
+      missing: [],
+      sections: [],
+    };
+    const bkash = { id: "acme.loyalty:bkash", providerId: "bkash", kind: "payment", name: "bKash", icon: null, settings: ["bkash_username"], own: true, required: ["bkash_username"] };
+    const render = async (use: string, kind = "payment") => {
+      act(() => root.unmount());
+      queryClient.clear();
+      root = createRoot(host);
+      await renderApp(detail({ status: "active", features: [bkashOn, placesFeature()], settings, providers: [{ ...bkash, kind, use }] }), MANAGER, true, "bkash");
+    };
+
+    await render("offered");
+    expect(text()).toContain("Ready");
+    expect(document.querySelector('a[href="/admin/settings/payments"]')).toBeNull();
+
+    await render("hidden");
+    expect(text()).toContain("Hidden at checkout");
+    expect(text()).not.toContain("Ready");
+    expect(text()).toContain("it is hidden in Settings → Payments");
+    expect(document.querySelector('a[href="/admin/settings/payments"]')?.textContent).toBe("Show it at checkout in Settings → Payments");
+
+    await render("currency");
+    expect(text()).toContain("Not offered at checkout");
+    expect(text()).toContain("can't take payments in your store's currency");
+
+    // An SMS provider set up while notifications send through another one.
+    await render("not_chosen", "sms");
+    expect(text()).toContain("Not used for sending");
+    expect(document.querySelector('a[href="/admin/settings/notifications"]')?.textContent).toBe("Choose it in Settings → Notifications");
+    await render("chosen", "sms");
+    expect(text()).toContain("Ready");
+    expect(document.querySelector('a[href="/admin/settings/notifications"]')).toBeNull();
+  });
+
+  it("calls a provider with a connection test ready only after a test passed, and tests only when asked", async () => {
+    const bkashOn = feature({ enabled: true, grantKey: null, settings: ["bkash_username"] });
+    const settings = {
+      fields: [field({ key: "bkash_username", label: "Username", type: "text", group: "bkash" })],
+      values: { bkash_username: "shop" },
+      secrets: {},
+      missing: [],
+      sections: [],
+    };
+    const bkash = { id: "acme.loyalty:bkash", providerId: "bkash", kind: "payment", name: "bKash", icon: null, settings: ["bkash_username"], own: true, required: ["bkash_username"], use: "offered" };
+    const withConnection = (connection: Record<string, unknown>) =>
+      detail({ status: "active", features: [bkashOn, placesFeature()], settings, providers: [{ ...bkash, connection }] });
+    sdk.postApiV1AdminSettingsProvidersByIdTest.mockImplementation(() => ok({ ok: false, message: "bKash refused the app key." }));
+    await renderApp(withConnection({ status: "untested", testedAt: null, message: null }), MANAGER, true, "bkash");
+    expect(text()).toContain("Set up (not tested)");
+    expect(text()).not.toContain("Ready");
+    // Loading the page never calls the provider.
+    expect(sdk.postApiV1AdminSettingsProvidersByIdTest).not.toHaveBeenCalled();
+
+    // Testing reads the page again: the stored outcome is the status.
+    sdk.getApiV1AdminAppsById.mockImplementation(() => ok({ app: withConnection({ status: "failed", testedAt: "2026-10-19T08:00:00.000Z", message: "bKash refused the app key." }) }));
+    await click(button("Test connection"));
+    expect(sdk.postApiV1AdminSettingsProvidersByIdTest).toHaveBeenCalledWith({ path: { id: "acme.loyalty:bkash" } });
+    await vi.waitFor(() => expect(text()).toContain("Connection failed"));
+    expect(text()).toContain("bKash refused the app key.");
+    expect(button("Test again")).toBeTruthy();
+
+    act(() => root.unmount());
+    queryClient.clear();
+    root = createRoot(host);
+    await renderApp(withConnection({ status: "passed", testedAt: "2026-10-19T08:00:00.000Z", message: null }), MANAGER, true, "bkash");
+    expect(text()).toContain("Ready");
+    expect(text()).toContain("Connection test passed");
   });
 
   it("says a feature's job failed, with when and why, on its page", async () => {

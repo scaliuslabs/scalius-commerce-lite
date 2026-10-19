@@ -16,6 +16,10 @@ export function createTestRuntime(options: {
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   openUrl?: (url: string) => Promise<unknown>;
+  /** stdout is a terminal (human output) unless false: pipe-mode tests pass false. */
+  tty?: boolean;
+  run?: Runtime["run"];
+  entryScript?: string;
 }): TestRuntime {
   const stdinStream = new PassThrough();
   const stdin = stdinStream as Runtime["stdin"];
@@ -24,6 +28,7 @@ export function createTestRuntime(options: {
   else stdinStream.end();
   const stdout = new PassThrough() as Runtime["stdout"];
   const stderr = new PassThrough() as Runtime["stderr"];
+  stdout.isTTY = options.tty ?? true;
   let stdoutBuffer = "";
   let stderrBuffer = "";
   stdout.on("data", (chunk) => { stdoutBuffer += chunk.toString(); });
@@ -46,6 +51,8 @@ export function createTestRuntime(options: {
     stdin,
     stdout,
     stderr,
+    ...(options.run ? { run: options.run } : {}),
+    ...(options.entryScript ? { entryScript: options.entryScript } : {}),
     openedUrls,
     sleeps,
     stdoutText: () => stdoutBuffer,

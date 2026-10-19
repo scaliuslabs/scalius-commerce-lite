@@ -62,7 +62,7 @@ import {
   type FunctionReadKey,
 } from "@scalius/shared/plugins";
 import { PROVIDER_KINDS, qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
-import { appSettingField, appSettingFieldSchema, appSettingValueSchema } from "../../schemas/app-settings";
+import { appSettingField, appSettingFieldSchema, appSettingValueSchema, providerConnectionSchema } from "../../schemas/app-settings";
 import { ConflictError, ForbiddenError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -81,6 +81,9 @@ import {
   providerIconUrl,
 } from "../../plugins/listing";
 import { syncBundledPlugin, syncBundledPlugins } from "../../plugins/bundled-sync";
+import { chooseReadySmsProvider, offerTurnedOnPaymentProviders, providerUse } from "../../plugins/provider-adoption";
+import { providerConnections } from "../../plugins/provider-connection";
+import { requestProviderRuntime } from "../../plugins/providers/runtime";
 
 import { isPluginSandboxAvailable } from "../../plugins/loaders/sandbox-availability";
 import { planLimits } from "@scalius/shared/plan-limits";
@@ -293,6 +296,10 @@ const appDetailSchema = appSummarySchema.extend({
     settings: z.array(z.string()).openapi({ description: "The setting keys shown with the provider where it is set up." }),
     own: z.boolean().openapi({ description: "Whether the provider has fields of its own (otherwise it uses the app's general settings)." }),
     required: z.array(z.string()).openapi({ description: "The keys its readiness needs set: its declared settings, else the app's required ones." }),
+    connection: providerConnectionSchema,
+    use: z.enum(["offered", "hidden", "currency", "chosen", "not_chosen"]).nullable().openapi({
+      description: "Whether the store uses it: a payment method checkout lists (offered), one hidden in Settings, Payments (hidden) or one that cannot charge the store currency (currency); the notification SMS service (chosen) or another one (not_chosen). Null for other kinds.",
+    }),
   })).openapi({ description: "The providers the app offers, each set up on its capability's settings page." }),
   routes: z.object({ admin: z.array(routeSchema), public: z.array(routeSchema), webhooks: z.array(z.string()) }),
   cron: z.array(z.object({
@@ -511,7 +518,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
   const request = pluginGrantRequest(installation.declaredManifest, installation.features);
   const described = describePluginSettings(installation);
   const caps = planLimits().plugins;
-  const [approver, lastRuns, scopes, registrySettings, features] = await Promise.all([
+  const [approver, lastRuns, scopes, registrySettings, features, uses, connections] = await Promise.all([
     installation.activatedBy
       ? db.select({ id: userTable.id, name: userTable.name }).from(userTable).where(eq(userTable.id, installation.activatedBy)).get()
       : Promise.resolve(undefined),
@@ -519,6 +526,8 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     scopeRows(installation, request),
     installation.signerKeyId ? pluginRegistrySettingsDocument.read(db) : Promise.resolve({ registries: [], trustedKeys: [] }),
     featureRows(installation),
+    providerUse(db, installation),
+    providerConnections(db, installation, manifest.providers),
   ]);
   const available = runtimeAvailable(c, installation);
   return {
@@ -545,6 +554,8 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
       settings: providerSettingKeys(manifest, provider.id),
       own: providerOwnSettingKeys(manifest, provider.id).length > 0,
       required: provider.settings ? [...provider.settings] : manifest.settings.filter((field) => field.required).map((field) => field.key),
+      connection: connections.get(qualifiedProviderId(installation.pluginId, provider.id))!,
+      use: uses.get(qualifiedProviderId(installation.pluginId, provider.id)) ?? null,
     })),
     routes: {
       admin: manifest.routes.admin.map((route) => ({ name: route.name, methods: [...route.methods] })),
@@ -622,6 +633,22 @@ function deliveryResponse(view: PluginEventDeliveryView) {
     deliveredAt: isoOrNull(view.deliveredAt),
     createdAt: iso(view.createdAt),
   };
+}
+
+/**
+ * After features turn on or an app's keys are saved: its payment providers
+ * join checkout and a ready SMS provider becomes the SMS service when none is
+ * chosen (`provider-adoption.ts`). The merchant's change is already saved, so
+ * a failure here only leaves the service unused, which its status then says.
+ */
+async function putServicesToUse(c: Context<{ Bindings: Env }>, installation: PluginInstallation, turnedOn: readonly string[]) {
+  const db = c.get("db");
+  try {
+    if (turnedOn.length > 0) await offerTurnedOnPaymentProviders(db, installation, turnedOn);
+    await chooseReadySmsProvider(db, requestProviderRuntime(c), installation, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>));
+  } catch (error) {
+    console.warn(`[Apps] ${installation.pluginId}: its services could not be put to use (${error instanceof Error ? error.name : "error"}).`);
+  }
 }
 
 function lifecycleContext(c: Context<{ Bindings: Env }>) {
@@ -976,6 +1003,7 @@ app.openapi(activateRoute, async (c) => {
     expectedRevision: body.expectedRevision,
     expectedGrantKey: body.grantKey,
   });
+  await putServicesToUse(c, result.installation, result.installation.features.filter((feature) => !current.features.includes(feature)));
   return ok(c, { app: await detail(c, result.installation), hookError: result.hookError });
 });
 
@@ -1084,6 +1112,7 @@ app.openapi(featureEnableRoute, async (c) => {
     expectedGrantKey: body.grantKey,
     actorUserId: actor.id,
   });
+  if (result.changed) await putServicesToUse(c, result.installation, [featureId]);
   return ok(c, { app: await detail(c, result.installation), changed: result.changed, hookError: result.hookError });
 });
 
@@ -1151,6 +1180,7 @@ app.openapi(settingsRoute, async (c) => {
     expectedRevision: body.expectedRevision,
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
+  await putServicesToUse(c, installation, []);
   return ok(c, { app: await detail(c, installation) });
 });
 

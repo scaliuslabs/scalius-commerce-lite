@@ -6,6 +6,7 @@
 import type { CsvTable } from "./values";
 import {
   ColumnIndex,
+  importNumberProblem,
   isScientificNotation,
   parseImportBoolean,
   parseImportDecimal,
@@ -224,10 +225,11 @@ export function mapShopifyProducts(table: CsvTable, options: ProductMappingOptio
       const sku = at("Variant SKU");
       const barcode = at("Variant Barcode");
       const problems: Array<[string, string, string]> = [];
-      if (!price.ok || price.value === null) problems.push(["price_invalid", "Variant Price", `Price "${at("Variant Price")}" is not a number.`]);
-      if (!compareAt.ok) problems.push(["compare_at_invalid", "Variant Compare At Price", `Compare-at price "${at("Variant Compare At Price")}" is not a number.`]);
-      if (!cost.ok || (cost.value !== null && cost.value < 0)) problems.push(["cost_invalid", "Cost per item", `Cost per item "${at("Cost per item")}" is not a number.`]);
-      if (!grams.ok) problems.push(["weight_invalid", "Variant Grams", `Weight "${at("Variant Grams")}" is not a number.`]);
+      if (!price.ok) problems.push(["price_invalid", "Variant Price", importNumberProblem("Price", at("Variant Price"), price)]);
+      else if (price.value === null) problems.push(["price_invalid", "Variant Price", "This variant has no price."]);
+      if (!compareAt.ok) problems.push(["compare_at_invalid", "Variant Compare At Price", importNumberProblem("Compare-at price", at("Variant Compare At Price"), compareAt)]);
+      if (!cost.ok) problems.push(["cost_invalid", "Cost per item", importNumberProblem("Cost per item", at("Cost per item"), cost)]);
+      if (!grams.ok) problems.push(["weight_invalid", "Variant Grams", importNumberProblem("Weight", at("Variant Grams"), grams)]);
       if (!quantity.ok) problems.push(["quantity_invalid", "Variant Inventory Qty", `Quantity "${at("Variant Inventory Qty")}" is not a whole number.`]);
       if (quantity.ok && quantity.value !== null && quantity.value < 0) problems.push(["quantity_negative", "Variant Inventory Qty", "Negative quantities can't be imported; set 0 and adjust stock later."]);
       if (sku && (sku.length < SKU_MIN || sku.length > SKU_MAX)) problems.push(["sku_length", "Variant SKU", `SKU "${sku}" must be ${SKU_MIN} to ${SKU_MAX} characters.`]);

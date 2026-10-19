@@ -145,7 +145,7 @@ Code: `components/ui/field.tsx` (F1). The reference is the expanded variant row.
 
 ### Page patterns
 
-- `PageHeader` (`components/admin/resource/PageHeader.tsx`, slot `page-header`) holds an optional back link, a `text-heading-lg` title (`page-title`) that wraps and never truncates, `status` badges and the `presence` slot on the title line, one `meta` line under it, then (`page-actions`) secondary `actions` (two buttons at most, the rest in a "More actions" menu) and the one `primaryAction` last. The presence slot is a 28px box on the 36px title line and renders nothing when empty, so people arriving never move the page.
+- `PageHeader` (`components/admin/resource/PageHeader.tsx`, slot `page-header`) holds an optional back link, a `text-heading-lg` title (`page-title`) that wraps and never truncates, `status` badges and the `presence` slot on the title line, one `meta` line under it, then (`page-actions`) secondary `actions` (two buttons at most, the rest in a "More actions" menu) and the one `primaryAction` last. The presence slot is a 28px box on the 36px title line and renders nothing when empty, so people arriving never move the page. Phones reserve no box (a long title fills the line, and a reserved box would wrap onto a line of its own).
 - `Page width="index|detail|form|settings|task"` (`resource/Page.tsx`) sets the page column (S8): lists `max-w-7xl`, a record's detail or form page `max-w-5xl`, settings `max-w-3xl`, one-card tasks `max-w-2xl`.
 - An empty state is one card with a short title ("No orders match these filters"), one sentence and one primary action. Filtered empties offer "Clear filters".
 - Help text is `text-body text-muted-foreground`. Error text is `text-body text-destructive`.

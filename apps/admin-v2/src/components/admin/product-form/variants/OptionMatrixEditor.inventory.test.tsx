@@ -129,6 +129,41 @@ describe("OptionMatrixEditor inventory for products without options", () => {
     expect(onDraftChange).toHaveBeenLastCalledWith({ defaultSku: { trackInventory: false, stock: 0 } });
   });
 
+  it("says quietly that an active product with 0 in stock shows as Sold out", async () => {
+    const note = translate(productMessages, "soldOutWhenActive");
+    await render(<OptionMatrixEditor requirePositivePrice productName="Mug" productPrice={250} images={[]} />);
+    expect(host.textContent).toContain(note);
+    await act(async () => {
+      setInput(quantityInput()!, "3");
+      quantityInput()!.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    expect(host.textContent).not.toContain(note);
+
+    // A draft product is not offered, so it says nothing.
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render(<OptionMatrixEditor productName="Mug" productPrice={250} images={[]} />);
+    expect(host.textContent).not.toContain(note);
+
+    // With variants: only when every one of them has nothing in stock.
+    const allNote = translate(productMessages, "soldOutWhenActiveVariants");
+    const sizeOption = {
+      id: "popt_size", name: "Size", position: 0, standardMapping: "size" as const,
+      values: [{ id: "pval_s", value: "S", position: 0 }, { id: "pval_m", value: "M", position: 1 }],
+    };
+    const sized = (id: string, valueId: string, value: string, stock: number): ProductVariant => ({
+      ...defaultSku, id, isDefault: false, trackInventory: true, stock, optionCombinationKey: valueId, sku: `MUG-${value}`, barcode: null,
+      selectedOptions: [{ optionDefinitionId: "popt_size", optionValueId: valueId, name: "Size", value, position: 0, valuePosition: 0, standardMapping: "size" }],
+    });
+    for (const [stocks, shown] of [[[0, 0], true], [[0, 4], false]] as const) {
+      act(() => root.unmount());
+      root = createRoot(host);
+      await render(<OptionMatrixEditor requirePositivePrice productId="prod_1" productName="Mug" productPrice={250} options={[sizeOption]}
+        variants={[sized("var_s", "pval_s", "S", stocks[0]), sized("var_m", "pval_m", "M", stocks[1])]} images={[]} aggregateRevision={3} />);
+      expect(host.textContent?.includes(allNote)).toBe(shown);
+    }
+  });
+
   it("keeps an existing untracked SKU as it is and only sends quantity the merchant edited", async () => {
     const ref = React.createRef<OptionMatrixEditorHandle>();
     const onDirtyChange = vi.fn();

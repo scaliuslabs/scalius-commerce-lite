@@ -28,7 +28,8 @@ vi.mock("../../../../packages/core/src/modules/inventory/inventory-transitions",
 }));
 
 const PACK = "scalius.bangladesh";
-const BASE = { pathao: "https://api-hermes.pathao.com", steadfast: "https://portal.packzy.com/api/v1" } as const;
+// The pack starts Pathao on its sandbox address (the merchant switches to live).
+const BASE = { pathao: "https://courier-api-sandbox.pathao.com", steadfast: "https://portal.packzy.com/api/v1" } as const;
 
 type Outcome = "network" | "invalid-json" | "http-502" | "missing-id" | "http-408" | "http-409" | "http-429" | "rejected" | "success";
 

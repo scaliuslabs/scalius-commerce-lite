@@ -1,21 +1,27 @@
 import {
   InMemoryTransport,
   LATEST_PROTOCOL_VERSION,
+  createMcpHandler,
   type JSONRPCMessage,
 } from "@modelcontextprotocol/server";
 import { describe, expect, it } from "vitest";
+import { AGENT_PROMPTS, AGENT_PROMPT_MAX_BYTES } from "./prompts";
 import {
   AGENT_MCP_INSTRUCTIONS,
+  AGENT_MCP_PROTOCOL_VERSIONS,
+  buildAgentInstructions,
   createAgentMcpServer,
   formatAgentBrowserHandoffResult,
-  formatAgentToolResult,
 } from "./server";
+import { storeContextLine } from "./context";
 
 interface JsonRpcResponse {
   id: number;
   result?: unknown;
   error?: unknown;
 }
+
+const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
 async function connectInMemory(server: ReturnType<typeof createAgentMcpServer>) {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -30,26 +36,19 @@ async function connectInMemory(server: ReturnType<typeof createAgentMcpServer>) 
   const request = async (method: string, params: Record<string, unknown> = {}) => {
     requestId += 1;
     const response = new Promise<JsonRpcResponse>((resolve) => pending.set(requestId, resolve));
-    await clientTransport.send({
-      jsonrpc: "2.0",
-      id: requestId,
-      method,
-      params,
-    } as JSONRPCMessage);
+    await clientTransport.send({ jsonrpc: "2.0", id: requestId, method, params } as JSONRPCMessage);
     const resolved = await response;
     pending.delete(requestId);
     return resolved;
   };
-  await request("initialize", {
+  const initialized = await request("initialize", {
     protocolVersion: LATEST_PROTOCOL_VERSION,
     capabilities: {},
     clientInfo: { name: "mcp-registration-test", version: "1.0.0" },
   });
-  await clientTransport.send({
-    jsonrpc: "2.0",
-    method: "notifications/initialized",
-  } as JSONRPCMessage);
+  await clientTransport.send({ jsonrpc: "2.0", method: "notifications/initialized" } as JSONRPCMessage);
   return {
+    initialized,
     request,
     close: async () => {
       await clientTransport.close();
@@ -58,201 +57,159 @@ async function connectInMemory(server: ReturnType<typeof createAgentMcpServer>) 
   };
 }
 
+function server(surface: "dashboard" | "storefront") {
+  return createAgentMcpServer({ surface, env: {} as Env, ctx: {} as ExecutionContext });
+}
+
 describe("MCP server construction", () => {
-  it("publishes one concise cross-tool operating loop", () => {
-    expect(AGENT_MCP_INSTRUCTIONS).toContain("workflows.resolve");
-    expect(AGENT_MCP_INSTRUCTIONS).toContain("workflows.read");
-    expect(AGENT_MCP_INSTRUCTIONS.toLowerCase()).toContain("describe");
-    expect(AGENT_MCP_INSTRUCTIONS).toContain("operations.read");
-    expect(AGENT_MCP_INSTRUCTIONS).toContain("operations.write");
-    expect(AGENT_MCP_INSTRUCTIONS).toContain("never arbitrary code, HTTP, or SQL");
-    // Each operation's tier is in operations.describe; beta ones stay callable.
-    expect(AGENT_MCP_INSTRUCTIONS).toContain("Prefer stable ops.");
-    expect(AGENT_MCP_INSTRUCTIONS.length).toBeLessThan(360);
-  });
-
-  it("constructs the resolver and split generic operation tools without module-init schema errors", () => {
-    const server = createAgentMcpServer({
-      surface: "dashboard",
-      env: {} as Env,
-      ctx: {} as ExecutionContext,
-    });
-    expect(server.toolInputSchemaJson("workflows.resolve")).toBeDefined();
-    expect(server.toolInputSchemaJson("workflows.read")).toBeDefined();
-    expect(server.toolInputSchemaJson("operations.describe")).toBeDefined();
-    expect(server.toolInputSchemaJson("operations.read")).toBeDefined();
-    expect(server.toolInputSchemaJson("operations.write")).toBeDefined();
-    for (const name of ["operations.read_batch", "operations.write_batch"]) {
-      const batchSchema = server.toolInputSchemaJson(name);
-      expect(batchSchema).toBeDefined();
-      expect(JSON.stringify(batchSchema)).toContain('"$step"');
-      expect(JSON.stringify(batchSchema)).toContain('"pointer"');
+  it("publishes one concise operating loop naming every tool", () => {
+    for (const tool of ["scalius_search", "scalius_describe", "scalius_read", "scalius_write", "scalius_answer"]) {
+      expect(AGENT_MCP_INSTRUCTIONS).toContain(tool);
     }
-    expect(server.toolInputSchemaJson("operations.execute")).toBeUndefined();
-    expect(server.toolInputSchemaJson("operations.batch")).toBeUndefined();
-    expect(server.toolInputSchemaJson("operations.search")).toBeUndefined();
-    expect(server.toolInputSchemaJson("http.request")).toBeUndefined();
+    expect(AGENT_MCP_INSTRUCTIONS).toContain("dryRun:true");
+    expect(AGENT_MCP_INSTRUCTIONS).toContain("confirmToken");
+    expect(bytes(AGENT_MCP_INSTRUCTIONS)).toBeLessThan(500);
   });
 
-  it("advertises truthful split-tool annotations and bounded output schemas in memory", async () => {
-    const server = createAgentMcpServer({
-      surface: "dashboard",
-      env: {} as Env,
-      ctx: {} as ExecutionContext,
+  it("adds the live store line and stays within 600 bytes", () => {
+    const line = storeContextLine({
+      name: "Dhaka Panjabi House",
+      currency: "BDT",
+      timeZone: "Asia/Dhaka",
+      markets: [{ name: "Bangladesh", currency: "BDT", backup: true }, { name: "India", currency: "INR" }],
+      checkout: "incomplete",
+      notSetUp: ["No active shipping method", "No payment method is enabled"],
     });
-    const connection = await connectInMemory(server);
+    expect(line).toBe("Store: Dhaka Panjabi House · BDT · Asia/Dhaka · markets: Bangladesh (BDT), India (INR) · checkout incomplete · not set up: No active shipping method; No payment method is enabled.");
+    const instructions = buildAgentInstructions(line);
+    expect(instructions.startsWith(AGENT_MCP_INSTRUCTIONS)).toBe(true);
+    expect(new TextEncoder().encode(instructions).byteLength).toBeLessThanOrEqual(600);
+    const long = buildAgentInstructions(`Store: ${"বাংলা ".repeat(200)}`);
+    expect(new TextEncoder().encode(long).byteLength).toBeLessThanOrEqual(600);
+    expect(long.endsWith("...")).toBe(true);
+    expect(buildAgentInstructions("")).toBe(AGENT_MCP_INSTRUCTIONS);
+  });
+
+  it("lists the five merged snake_case tools in at most 6,144 bytes on both audiences", async () => {
+    const measured: Record<string, number> = {};
+    for (const surface of ["dashboard", "storefront"] as const) {
+      const connection = await connectInMemory(server(surface));
+      try {
+        const response = await connection.request("tools/list");
+        expect(response.error).toBeUndefined();
+        const tools = (response.result as { tools: Array<{ name: string; annotations?: Record<string, boolean>; outputSchema?: unknown }> }).tools;
+        expect(tools.map((tool) => tool.name)).toEqual([
+          "scalius_search",
+          "scalius_describe",
+          "scalius_answer",
+          "scalius_read",
+          "scalius_write",
+        ]);
+        for (const tool of tools) expect(tool.name).toMatch(/^[a-z_]+$/);
+        for (const name of ["scalius_search", "scalius_describe", "scalius_answer", "scalius_read"]) {
+          expect(tools.find((tool) => tool.name === name)?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+        }
+        expect(tools.find((tool) => tool.name === "scalius_write")?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+        const outputSchemas = new Set(tools.map((tool) => JSON.stringify(tool.outputSchema)));
+        expect(outputSchemas.size).toBe(1);
+        expect(bytes(tools[0]!.outputSchema)).toBeLessThanOrEqual(300);
+        measured[surface] = bytes(response.result);
+        expect(measured[surface]).toBeLessThanOrEqual(6_144);
+      } finally {
+        await connection.close();
+      }
+    }
+    process.stdout.write(`MCP tools/list bytes ${JSON.stringify(measured)}\n`);
+  });
+
+  it("removes every old dotted tool name without an alias", () => {
+    const dashboard = server("dashboard");
+    for (const name of [
+      "workflows.resolve", "workflows.read", "operations.describe", "operations.read",
+      "operations.read_batch", "operations.write", "operations.write_batch", "operations.execute",
+      "operations.search", "http.request", "scalius_run",
+    ]) {
+      expect(dashboard.toolInputSchemaJson(name)).toBeUndefined();
+    }
+  });
+
+  it("negotiates 2025-11-25 for a 2025 client and serves 2026-07-28 with cache hints", async () => {
+    expect(AGENT_MCP_PROTOCOL_VERSIONS[0]).toBe("2026-07-28");
+    expect(AGENT_MCP_PROTOCOL_VERSIONS).toEqual(expect.arrayContaining(["2025-11-25", "2025-06-18", "2025-03-26"]));
+    const connection = await connectInMemory(server("dashboard"));
     try {
-      const response = await connection.request("tools/list");
-      expect(response.error).toBeUndefined();
-      const tools = (response.result as { tools: Array<{
-        name: string;
-        annotations?: Record<string, boolean>;
-        outputSchema?: Record<string, unknown>;
-      }> }).tools;
-      expect(tools.map((tool) => tool.name)).toEqual([
-        "workflows.resolve",
-        "workflows.read",
-        "operations.describe",
-        "operations.read",
-        "operations.read_batch",
-        "operations.write",
-        "operations.write_batch",
-      ]);
-      expect(tools.map((tool) => tool.name)).not.toContain("operations.execute");
-      expect(tools.map((tool) => tool.name)).not.toContain("operations.batch");
-      for (const name of ["workflows.resolve", "workflows.read", "operations.describe"]) {
-        expect(tools.find((tool) => tool.name === name)?.annotations).toMatchObject({
-          readOnlyHint: true,
-          destructiveHint: false,
-          idempotentHint: true,
-        });
-      }
-      for (const name of ["operations.read", "operations.read_batch"]) {
-        expect(tools.find((tool) => tool.name === name)?.annotations).toMatchObject({
-          readOnlyHint: true,
-          destructiveHint: false,
-          idempotentHint: false,
-        });
-      }
-      for (const name of ["operations.write", "operations.write_batch"]) {
-        expect(tools.find((tool) => tool.name === name)?.annotations).toMatchObject({
-          readOnlyHint: false,
-          destructiveHint: true,
-          idempotentHint: false,
-        });
-      }
-      for (const tool of tools.filter((candidate) => candidate.name !== "workflows.read")) {
-        expect(tool.outputSchema).toMatchObject({
-          type: "object",
-          properties: {
-            results: { maxItems: 20 },
-            summary: { maxLength: 240 },
-          },
-        });
-        expect(tool.outputSchema?.properties).not.toHaveProperty("operations");
-        expect(tool.outputSchema?.properties).not.toHaveProperty("count");
-      }
-      const workflowReadSchema = tools.find((tool) => tool.name === "workflows.read")?.outputSchema;
-      expect(workflowReadSchema).toMatchObject({
-        type: "object",
-        properties: { result: {} },
+      expect(connection.initialized.result).toMatchObject({
+        protocolVersion: "2025-11-25",
+        capabilities: { tools: {}, resources: {}, prompts: {} },
+        instructions: AGENT_MCP_INSTRUCTIONS,
       });
-      expect(JSON.stringify(workflowReadSchema)).toContain("workflow_read_unavailable");
-      expect(JSON.stringify(workflowReadSchema)).toContain('"maxItems":100');
-      expect(JSON.stringify(workflowReadSchema)).toContain('"maxItems":6');
-      expect(JSON.stringify(workflowReadSchema)).toContain('"maxLength":300');
     } finally {
       await connection.close();
     }
-  });
 
-  it("places a one-time secret in structured content exactly once", () => {
-    const token = "scl_pat_one_time_only";
-    const formatted = formatAgentToolResult({
-      ok: true,
-      result: {
-        operationId: "dashboard.agent_access.tokens.create",
-        status: 201,
-        ok: true,
-        requestId: "request-1",
-        contentType: "application/json",
-        data: { token },
-        oneTimeSecret: true,
-      },
-    });
-    expect(formatted.content[0]?.text).toBe(
-      "One-time secret returned in structured content",
-    );
-    expect(formatted.content[0]?.text).not.toContain(token);
-    expect(JSON.stringify(formatted.structuredContent).match(new RegExp(token, "g")))
-      .toHaveLength(1);
-  });
-
-  it("returns artifact metadata as a resource link without embedding bytes", () => {
-    const formatted = formatAgentToolResult({
-      ok: true,
-      result: {
-        operationId: "dashboard.orders.export",
-        status: 200,
-        ok: true,
-        requestId: "request-2",
-        contentType: "text/csv",
-        data: null,
-        artifact: {
-          artifactId: "aah_0123456789abcdefghij",
-          uri: "https://api.example.test/api/v1/mcp/dashboard/artifacts/aah_0123456789abcdefghij",
-          filename: "orders.csv",
-          mediaType: "text/csv",
-          sizeBytes: 2048,
-          sha256: "a".repeat(64),
-          expiresInSeconds: 300,
+    const handler = createMcpHandler(() => server("dashboard"));
+    const envelope = {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {},
+    };
+    const modern = async (method: string) => {
+      const response = await handler.fetch(new Request("https://api.example.test/api/v1/mcp/dashboard", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          "MCP-Protocol-Version": "2026-07-28",
+          "Mcp-Method": method,
         },
-      },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: { _meta: envelope } }),
+      }));
+      expect(response.status).toBe(200);
+      return (await response.json() as { result: Record<string, unknown> }).result;
+    };
+    expect(await modern("server/discover")).toMatchObject({
+      supportedVersions: ["2026-07-28"],
+      capabilities: { tools: {}, resources: {}, prompts: {} },
+      instructions: AGENT_MCP_INSTRUCTIONS,
+      ttlMs: 300_000,
+      cacheScope: "private",
     });
-    expect(formatted.content).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        type: "resource_link",
-        uri: "https://api.example.test/api/v1/mcp/dashboard/artifacts/aah_0123456789abcdefghij",
-        mimeType: "text/csv",
-        size: 2048,
-      }),
-    ]));
-    expect(JSON.stringify(formatted)).not.toContain("base64");
-    expect(JSON.stringify(formatted)).not.toContain("Authorization");
+    const tools = await modern("tools/list");
+    expect(tools).toMatchObject({ ttlMs: 3_600_000, cacheScope: "private" });
+    expect((tools.tools as unknown[]).length).toBe(5);
+    expect(bytes(tools)).toBeLessThanOrEqual(6_144);
   });
 
-  it("fails closed without returning sensitive continuation fields", () => {
-    const code = `tpc_${"b".repeat(48)}`;
-    const formatted = formatAgentToolResult({
-      ok: true,
-      result: {
-        operationId: "dashboard.theme.preview_session_create",
-        status: 200,
-        ok: true,
-        requestId: "request-3",
-        contentType: "application/json",
-        sensitiveContinuation: true,
-        data: {
-          success: true,
-          data: {
-            continuation: {
-              url: "https://storefront.example.test/theme-preview/continue",
-              method: "POST",
-              fields: { continuationCode: code, path: "/", device: "full" },
-            },
-          },
-        },
-      },
-    });
-    expect(formatted.isError).toBe(true);
-    expect(JSON.stringify(formatted)).not.toContain(code);
-    expect(formatted.structuredContent).toEqual({
-      ok: false,
-      error: {
-        code: "sensitive_continuation_not_supported",
-        message: expect.stringContaining("Scalius CLI"),
-      },
-    });
+  it("offers the store, operation, workflow and recipe resources and the merchant prompts", async () => {
+    const connection = await connectInMemory(server("dashboard"));
+    try {
+      const resources = await connection.request("resources/list");
+      expect((resources.result as { resources: Array<{ uri: string }> }).resources.map((resource) => resource.uri))
+        .toEqual(["scalius://store", "scalius://skills/recipes"]);
+      const templates = await connection.request("resources/templates/list");
+      expect((templates.result as { resourceTemplates: Array<{ uriTemplate: string }> }).resourceTemplates.map((template) => template.uriTemplate))
+        .toEqual(["scalius://ops/{operationId}", "scalius://workflows/{id}"]);
+      const prompts = await connection.request("prompts/list");
+      expect((prompts.result as { prompts: Array<{ name: string }> }).prompts.map((prompt) => prompt.name)).toEqual([
+        "daily_brief", "launch_product", "run_sale", "fulfil_backlog", "checkout_health", "tracking_health",
+      ]);
+      const prompt = await connection.request("prompts/get", { name: "launch_product", arguments: { name: "Cotton Panjabi", price: "1500" } });
+      const text = (prompt.result as { messages: Array<{ content: { text: string } }> }).messages[0]!.content.text;
+      expect(text).toContain("Cotton Panjabi");
+      expect(text).toContain("dryRun:true");
+    } finally {
+      await connection.close();
+    }
+    for (const prompt of AGENT_PROMPTS) {
+      expect(new TextEncoder().encode(prompt.body({ name: "x".repeat(100), price: "1", options: "Size: S,M,L", percent: "10", scope: "all", dates: "Fri to Sun" })).byteLength)
+        .toBeLessThanOrEqual(AGENT_PROMPT_MAX_BYTES);
+    }
+    const storefront = await connectInMemory(server("storefront"));
+    try {
+      const prompts = await storefront.request("prompts/list");
+      expect(prompts.error ?? (prompts.result as { prompts: unknown[] }).prompts).toBeDefined();
+    } finally {
+      await storefront.close();
+    }
   });
 
   it("returns only a non-secret authenticated browser resource link", () => {
@@ -269,13 +226,5 @@ describe("MCP server construction", () => {
     ]));
     expect(JSON.stringify(formatted)).not.toContain("continuationCode");
     expect(JSON.stringify(formatted)).not.toContain("fields");
-  });
-
-  it("does not duplicate a large structured result into compatibility text", () => {
-    const value = { ok: true, operation: { schema: "x".repeat(5_000) } };
-    const formatted = formatAgentToolResult(value);
-    expect(formatted.content[0]?.text).toMatch(/^Structured result returned \(\d+ UTF-8 bytes\)$/);
-    expect(formatted.content[0]?.text).not.toContain("xxxx");
-    expect(formatted.structuredContent).toEqual(value);
   });
 });

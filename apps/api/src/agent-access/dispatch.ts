@@ -36,7 +36,14 @@ export interface AgentOperationResult {
   redacted?: true;
   oneTimeSecret?: true;
   sensitiveContinuation?: true;
+  /** The route's `Retry-After`, when it sent one (429/503). */
+  retryAfterMs?: number;
+  /** The route answered from its idempotency record (`Idempotent-Replayed`). */
+  replayed?: true;
 }
+
+/** How a destructive or financial agent call was confirmed (audit metadata only). */
+export type AgentConfirmation = "token" | "elicitation";
 
 export interface AgentRequiredClientActionResult {
   operationId: string;
@@ -57,6 +64,15 @@ export interface DispatchAgentOperationOptions {
   principal: AgentPrincipal;
   env: Env;
   ctx: ExecutionContext;
+  /** Recorded on the audit row when the call passed a confirmation step. */
+  confirmedBy?: AgentConfirmation;
+  /**
+   * A native dry run: the route receives `dryRun: true` (in the JSON body, or
+   * the query for body-less methods) and must validate, price and check its
+   * guards without writing. Only for operations whose registry entry declares
+   * native dry-run support.
+   */
+  dryRun?: "native";
 }
 
 export class AgentDispatchError extends Error {
@@ -578,6 +594,30 @@ export interface DispatchOperationOptions<P extends OperationPrincipal> {
   principal: P;
   env: Env;
   ctx: ExecutionContext;
+  confirmedBy?: AgentConfirmation;
+  dryRun?: "native";
+}
+
+/** The input a native dry run sends: `dryRun: true` in the JSON body, or the query for GET/DELETE-style calls. */
+export function withNativeDryRun(
+  operation: AgentOperationManifestEntry,
+  input: AgentOperationInput,
+): AgentOperationInput {
+  const method = operation.method.toUpperCase();
+  const bodyless = method === "GET" || method === "HEAD" || method === "DELETE";
+  if (bodyless || (input.body !== undefined && (typeof input.body !== "object" || input.body === null || Array.isArray(input.body)))) {
+    return { ...input, query: { ...(input.query ?? {}), dryRun: true } };
+  }
+  return { ...input, body: { ...((input.body as Record<string, unknown> | undefined) ?? {}), dryRun: true } };
+}
+
+function retryAfterMs(response: Response): number | undefined {
+  const header = response.headers.get("Retry-After");
+  if (!header) return undefined;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(Math.ceil(seconds * 1000), 3_600_000);
+  const date = Date.parse(header);
+  return Number.isFinite(date) ? Math.max(0, Math.min(date - Date.now(), 3_600_000)) : undefined;
 }
 
 function agentDispatchAuthority(backend: Awaited<ReturnType<typeof loadAgentAccessBackend>>): OperationDispatchAuthority<AgentPrincipal> {
@@ -619,7 +659,8 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
   authority: OperationDispatchAuthority<P>,
   options: DispatchOperationOptions<P>,
 ): Promise<AgentOperationResult> {
-  const { operation, input, env, ctx } = options;
+  const { operation, env, ctx } = options;
+  const input = options.dryRun === "native" ? withNativeDryRun(operation, options.input) : options.input;
   const startedAt = Date.now();
   const requestId = crypto.randomUUID();
   let principal = options.principal;
@@ -712,6 +753,7 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
       response,
       clampAgentResultBytes(operation.maxResponseBytes, operation.operationId),
     );
+    const wait = response.ok ? undefined : retryAfterMs(response);
 
     return {
       operationId: operation.operationId,
@@ -719,6 +761,8 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
       ok: response.ok,
       requestId,
       contentType,
+      ...(wait !== undefined ? { retryAfterMs: wait } : {}),
+      ...(response.headers.get("Idempotent-Replayed") === "true" ? { replayed: true as const } : {}),
       ...(operation.exposure === "continuation" && operation.sensitiveOutput
         ? shapeSensitiveContinuation(operation, response.ok, text, contentType, env)
         : shapeAgentOperationOutput(operation, response.ok, text, contentType)),
@@ -747,7 +791,11 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
         durationMs: Date.now() - startedAt,
         requestId,
         idempotencyKeyHashPrefix: await hashIdempotencyPrefix(input.idempotencyKey),
-        metadata: { transport: operation.transport },
+        metadata: {
+          transport: operation.transport,
+          ...(options.confirmedBy ? { confirmedBy: options.confirmedBy } : {}),
+          ...(options.dryRun ? { dryRun: true } : {}),
+        },
       }, env);
     } catch {
       // Never turn an already-committed domain operation into an apparent

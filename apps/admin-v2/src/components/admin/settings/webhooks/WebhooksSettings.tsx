@@ -35,6 +35,7 @@ import {
 } from "~/lib/api-query-options/webhooks";
 import { SettingsLoadFailure } from "../SettingsLoadFailure";
 import { SettingsCard, SettingsCardLoading } from "../SettingsPage";
+import { DeliveryError } from "./DeliveryError";
 import { WebhookDeliveriesSheet } from "./WebhookDeliveriesSheet";
 import { WebhookFormDialog } from "./WebhookFormDialog";
 import { WebhookSecretDialog } from "./WebhookSecretDialog";
@@ -94,7 +95,7 @@ function TestLine({ result }: { result: TestResult | undefined }) {
       <p className={ok ? "text-success" : "text-destructive"}>
         {t(ok ? "testDelivered" : "testFailedResult")} · {facts.join(" · ")}
       </p>
-      {!ok && delivery.error ? <p className="break-words text-muted-foreground">{delivery.error}</p> : null}
+      {!ok && delivery.error ? <DeliveryError error={delivery.error} /> : null}
     </div>
   );
 }

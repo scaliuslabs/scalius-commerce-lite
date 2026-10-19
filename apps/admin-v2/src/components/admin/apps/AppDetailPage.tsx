@@ -34,7 +34,7 @@ import { AppFeatures, HealthBadge } from "./AppFeatures";
 import { AppFeatureSection } from "./AppFeatureSection";
 import { AppSectionNav } from "./AppSectionNav";
 import { appSectionNav, appSectionPath, resolveAppSection, usesSections, type AppSection } from "./app-sections";
-import { serviceSettingKeys } from "./app-services";
+import { SERVICE_HEALTH, serviceSettingKeys } from "./app-services";
 import { appFeaturesMessages } from "~/i18n/app-features";
 import { checkoutFunctions, isKnownFunctionPoint } from "./app-functions";
 import { AppActivity } from "./AppActivity";
@@ -167,6 +167,9 @@ function TurnOffCard({ app, onDialog }: { app: AppDetail; onDialog: (name: Dialo
   const t = useMessages(installedAppsMessages);
   const active = app.status === "active";
   const row = "flex flex-col items-start gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between";
+  // An app compiled into this deployment that never ran has nothing to turn off, and
+  // uninstalling it only lists it again as installed: no card to offer either.
+  if (!active && app.runtime === "bundled" && app.activatedAt === null) return null;
   return (
     <Card>
       <CardHeader>
@@ -205,9 +208,8 @@ function TurnOffCard({ app, onDialog }: { app: AppDetail; onDialog: (name: Dialo
 
 type FeatureSection = Extract<AppSection, { kind: "feature" }>;
 
-/** How urgent a running service's state is: not working, then needs setup, then the rest. */
-const HEALTH_RANK = { error: 0, setup: 1, ready: 2 } as const;
-const healthRank = (section: FeatureSection) => (section.health ? HEALTH_RANK[section.health.status] : 2);
+/** How urgent a running service's state is (`SERVICE_HEALTH`): not working, needs setup, set up but unused, ready. */
+const healthRank = (section: FeatureSection) => (section.health ? SERVICE_HEALTH[section.health.status].rank : SERVICE_HEALTH.ready.rank);
 
 /** One service as a link to its own page, with how it is doing (or that it is off). */
 function ServiceRow({ app, section }: { app: AppDetail; section: FeatureSection }) {
@@ -249,7 +251,7 @@ function ServicesSummary({ app }: { app: AppDetail }) {
     .sort((a, b) => healthRank(a.section) - healthRank(b.section) || a.index - b.index)
     .map(({ section }) => section);
   const off = features.filter((section) => !section.feature.enabled);
-  const problems = on.filter((section) => healthRank(section) < 2).length;
+  const problems = on.filter((section) => healthRank(section) < SERVICE_HEALTH.ready.rank).length;
   const summary = on.length === 0 ? t("servicesNoneOn")
     : problems > 0 ? t("servicesProblems", { count: problems })
       : t("servicesWorking");

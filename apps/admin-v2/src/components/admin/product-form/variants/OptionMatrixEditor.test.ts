@@ -299,17 +299,20 @@ describe("option matrix editor model", () => {
     expect(withGuessedOptionType(blank, { ...blank, name: "size" }, [blank, sizeTaken]).standardMapping).toBe("none");
   });
 
-  it("keeps new variants on the product title and price until the merchant edits them", () => {
+  it("keeps new variants' SKUs on the product title until the merchant edits them", () => {
     const options = [option("size", "Size", [["s", "S"], ["m", "M"]])];
-    const [small, medium] = materializeVariants(options, [], "", 0, 0);
+    const [small, medium] = materializeVariants(options, [], "", 1000, 0);
     expect(small!.sku).toBe("SKU-1");
+    expect(small!.price).toBe(1000);
 
     const edited = { ...medium!, sku: "MY-OWN", price: 99 };
     const saved = { ...small!, id: "var_saved" };
-    const followed = followProductDefaults(options, [small!, edited, saved], { name: "", price: 0 }, { name: "Polo", price: 500 });
-    expect(followed[0]).toMatchObject({ sku: "POLO-S", price: 500 });
+    const followed = followProductDefaults(options, [small!, edited, saved], "", "Polo");
+    expect(followed[0]).toMatchObject({ sku: "POLO-S", price: 1000 });
     expect(followed[1]).toMatchObject({ sku: "MY-OWN", price: 99 });
     expect(followed[2]).toBe(saved);
+    // The same title is no change: the same array back.
+    expect(followProductDefaults(options, followed, "Polo", "Polo")).toBe(followed);
   });
 });
 

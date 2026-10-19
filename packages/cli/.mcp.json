@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "scalius": {
+      "command": "npx",
+      "args": ["-y", "scalius@0.3.0", "mcp"]
+    }
+  }
+}
