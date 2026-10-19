@@ -2,7 +2,7 @@
 
 The SDK for Scalius apps (plugins), for plugin authors. An app declares what it may do (the manifest) and writes the handlers the platform calls. Workspace imports use source; the package build emits portable JavaScript and declarations for publishing.
 
-Real apps in `plugins/`: `bangladesh` (bKash, Nagad and SSLCommerz payments, SMS, fraud, couriers and place seeding, one feature per service) and `noor` (a theme of skins). Worked examples that no store bundles are test fixtures in `apps/api/src/plugins/testing/apps/`: `hello` (events, routes, cron, Objects, admin pages), `bulk-discount` (checkout functions), `loyalty` (atomic Objects and order commits), `wishlist` (storefront blocks), `order-tagger` (timeline entries) and `notes` (declarative checkout and account Buyer UI). The versioned contract is `packages/shared/src/plugins`, the host is `apps/api/src/plugins`, and installed-app state is `packages/core/src/modules/plugins`.
+Real apps in `plugins/`: `bangladesh` (bKash, Nagad and SSLCommerz payments, SMS, fraud, couriers and place seeding, one feature per service) and `noor` (a theme of skins). Worked examples that no store bundles are test fixtures in `apps/api/src/plugins/testing/apps/`: `hello` (events, routes, cron, Objects, admin pages), `bulk-discount` (checkout functions), `loyalty` (atomic Objects and order commits), `wholesale` (declared reads: a company price list by one hop, per-SKU minimums, custom fields, a quote spent with the order), `risk-guard` (order risk as an `order.created` handler with `ctx.orders`), `wishlist` (storefront blocks), `order-tagger` (timeline entries) and `notes` (declarative checkout and account Buyer UI). The versioned contract is `packages/shared/src/plugins`, the host is `apps/api/src/plugins`, and installed-app state is `packages/core/src/modules/plugins`.
 
 ## Extension points
 
@@ -14,6 +14,7 @@ Real apps in `plugins/`: `bangladesh` (bKash, Nagad and SSLCommerz payments, SMS
 | Admin routes, pages, cards, actions, widgets | `routes.admin`, `admin.*` | `routes.admin[name]` with `ui.*` |
 | Admin list columns and filters | `admin.listColumns` | object records or your custom fields (no code) |
 | Order timeline entries | `timeline` | `ctx.timeline.add(…)` |
+| Order risk and holds (after commit) | `events: ["order.created"]`, `write_orders` | `ctx.orders.assessRisk(…)`, `ctx.orders.hold(…)` |
 | Objects and custom fields | `objects`, `customFields` | `ctx.objects`, `ctx.customFields` |
 | Buyer UI | `functions: [{ point: "buyer.ui", targets }]`, `checkout.attributes` | a pure function returning `{ ui }` |
 | Storefront components: sections, product blocks, skins (header, footer, product card, product page, listing, core sections), templates | `storefront.sections`, `productBlocks`, `skins`, `templates` | `defineStorefront` in `src/storefront.tsx` (`@scalius/plugin-sdk/storefront`) |
@@ -83,7 +84,8 @@ pnpm run deploy                 # compile the app into the API Worker
 
 - `create <vendor.name>` scaffolds an app with an event, a checkout function, a storefront section, an admin page, a data update and a test. `validate [path]` checks the manifest, compatibility, handlers, permissions, images and bundle size, one line each.
 - `keygen <dir>` makes an Ed25519 signing key (keep it out of every repository). `pack <path> [--key <pem>] [--developer <name>]` writes `dist/` and, with a key, `signature.json` and the upload ZIP. `index <dist>... --out <dir> --name <name>` builds or extends a static registry. `add <vendor.name> --registry <index URL>` installs a signed release into the fork; `trust <name> <public key>` adds a developer key to the lockfile's `trustedKeys`.
-- The harness also runs data updates (`runMigration(version)`, `runMigrations()`) and whole events (`deliver`); `@scalius/plugin-sdk/fixtures` builds typed events, checkout inputs and admin requests.
+- The harness also runs data updates (`runMigration(version)`, `runMigrations()`) and whole events (`deliver`); `@scalius/plugin-sdk/fixtures` builds typed events, checkout inputs, read records and admin requests.
+- `harness.fn(point, input)` is as strict as checkout: it is typed by point, parses the input with the point's schema (a mismatch throws) and checks the answer the way the host does. An invalid answer returns `ok: false` with `function.invalid_output`, which production skips (or, with `onError: "block"`, stops checkout on). Pass `reads` as the host would resolve them. `ctx.messaging` and `ctx.orders` refuse without the scopes the host requires.
 - `build [plugin id ...]` packs the listed apps (all by default) again. `list` shows each bundled app and whether it is current. `remove <plugin id>` stops bundling one.
 - `sandbox <on|off>` records whether deploys bind the Worker Loader.
 - `preview <path> [--out <html>]` packs the app and writes a static preview using SDK fixtures and the real sanitizer. `dev <path>` watches, repacks and refreshes that preview. Core embeds appear as placeholders; this checks component markup and styles, not checkout actions or browser island behavior. Verify the composed journey in a local store before release.
@@ -112,7 +114,7 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 - Buyer contact data is its own tier: `read_customer_names`, `read_customer_emails`, `read_customer_phones` and `read_customer_addresses` (street lines, company, neighbourhood; the city, area and country are always visible). Without one, the matching fields of `ctx.api` responses read `null` (they are marked `x-scalius-protected` in the contract) and provider inputs leave them out. Ask only for what you use: a courier provider must declare names, phones and addresses, an SMS gateway or fraud check phones, an email provider emails, a chat provider phones, an address provider addresses (the manifest is refused otherwise); a payment provider receives in `buyer` only the fields its scopes reveal.
 - `allowedHosts` (20): hosts `ctx.http` may reach, exact or `*.example.com`. `host:port` names one non-default port. No IP literals or localhost. Empty means no network.
 - `events` (40): topics, `<resource>.*` or `*`.
-- `functions`: one per declared point, `{ point, priority, onError, snapshot }`; `buyer.ui` also declares `targets`.
+- `functions`: one per declared point, `{ point, priority, onError, reads }`; `buyer.ui` also declares `targets`.
 - `timeline` (10): `{ kind, title }`, the kinds of order timeline entries the app writes.
 - `objects` (20): named typed entities in the app's namespace (`<plugin id>.<type>`). Each declares fields, optional indexes/uniqueness, display/handle, staff access, public visibility and events. Types sync on activation and update.
 - `providers` (24 in all): provider declarations, grouped by port. A regional pack (`plugins/bangladesh`) bundles a country's integrations in one app.
@@ -206,6 +208,7 @@ Definition keys match the manifest. The host rejects an undeclared handler, and 
 - `customFields` (`get`, `set`): values of the app's declared fields on one resource. The approved grant must cover the owner type.
 - `messaging`: `email`, `sms` and `pushCustomer` through the store's providers (need `read_customers`), and `notifyStaff` (Firebase devices and Web Push browsers). `pushCustomer({ customerId, title, body?, url?, tag? })` reaches the browsers the buyer subscribed on the account page (or the store's push app); `url` is a store path. With `marketing: true` (needs `write_marketing`) and a `customerId`, only a subscribed customer gets an email or SMS, with the unsubscribe footer. 60 messages a minute.
 - `timeline.add({ orderId, kind, message, fields?, idempotencyKey? })`: a line on the order timeline with your app's name (needs `write_orders` and a declared kind). `message` is plain text (500 characters), `fields` at most 10. The same `idempotencyKey` adds it once.
+- `orders`: actions on a placed order, for event handlers. `riskHistory(orderId)` (needs `read_orders`) gives the buyer's earlier orders as counts `{ orders, cancelled, returnedToSender }`. `assessRisk({ orderId, level, reasons })` (needs `write_orders`) records your advice on the order's customer card (`low | medium | high`, up to five reasons of 200 characters). `hold({ orderId, reason })` (needs `write_orders`) holds the order for staff review: it is not shipped, handed over or moved on until staff release it; cancelling stays possible and nothing is cancelled automatically. Each is once per order and app, so a redelivered event changes nothing.
 - `log`: `debug`, `info`, `warn`, `error`. The platform keeps the newest 500 lines per app and masks secrets, e-mail addresses and phone numbers.
 - `objects`, `kv`: see Objects and private cache.
 
@@ -232,17 +235,35 @@ await ctx.objects.balances.put(customerId, next, { expectedRevision: current?.re
 
 ## Checkout functions
 
-A function is pure: `(input, settings) => output`, with no I/O. The host stops it after the smaller of `limits.wallMs` and 1.5 s, validates the output and merges it (schemas: `@scalius/shared/plugins/functions`). Points, in checkout order: `cart.transform`, `cart.line_prices`, `cart.validate`, `checkout.discounts`, `checkout.shipping_rates`, `checkout.payment_methods`, then `order.risk` after the commit. They run for the online store and buyer agents; staff orders run all but `cart.transform` and `cart.line_prices` (staff set lines and prices). `cart.customer.tags` lists the signed-in customer's tags. `cart.market` is `{ id, country }`: the market the order is placed in and the country that chose it (null before an address is known). `cart.attributes` holds accepted values of the active apps' declared checkout attributes by `<app id>.<key>`.
+A function is pure: `(input, settings) => output`, with no I/O. The host stops it after the smaller of `limits.wallMs` and 1.5 s, validates the output and merges it (schemas: `@scalius/shared/plugins/functions`). Points, in checkout order: `cart.transform`, `cart.line_prices`, `cart.validate`, `checkout.discounts`, `checkout.shipping_rates`, `checkout.payment_methods`. They run for the online store and buyer agents; staff orders run all but `cart.transform` and `cart.line_prices` (staff set lines and prices). `cart.customer.tags` lists the signed-in customer's tags. `cart.market` is `{ id, country }`: the market the order is placed in and the country that chose it (null before an address is known). `cart.attributes` holds accepted values of the active apps' declared checkout attributes by `<app id>.<key>`.
+
+Which seam: a decision inside a request is a function; a provider of a capability is a port (`providers`); a reaction after the order commits is an event handler. Order risk is the last kind: handle `order.created` and call `ctx.orders`.
 
 - **`cart.transform`** answers `{ operations: [{ expand: { lineId, title?, components: [{ variantId, quantity }] } } | { merge: { lineIds, title } }] }`. A bundle's components become real order lines (stock, tax and refunds per SKU); the buyer sees one line at their summed price. Lines with buyer inputs, gift cards and carts above 99 lines are never changed.
-- **`cart.line_prices`** answers `{ prices: [{ lineId, unitPriceMinor }] }` for B2B, tiered or member prices (with `snapshot`). It prices a line only when no price list does: sale > segment > market list > your price > FX > base. The first app by priority wins a line.
+- **`cart.line_prices`** answers `{ prices: [{ lineId, unitPriceMinor }], adjustments: [{ lineId, amountMinor, title }] }` (both optional).
+  - `prices` are B2B, tiered or member prices. A price applies only when no price list does: sale > segment > market list > your price > FX > base. The first app by priority wins a line.
+  - `adjustments` are add-ons to each unit (an engraving's letters, a gift wrap), applied after that whole precedence, so discounted, sale and price-listed lines take them too. Every app's add-ons apply, at most five per line, each in the cart currency and rounded half-up to the market's price increment. Gift cards and bundle lines take none. The buyer sees each as "Add-on: <title> (+price)" in the cart, checkout, receipt and emails. Tax, discounts, totals and refunds include it.
+- **Declared reads** (every point, `buyer.ui` too). A function reads the app's own data through the manifest, never through I/O. Up to four reads per function:
+
+  ```ts
+  { point: "cart.validate", onError: "block", reads: [
+    { as: "member",  object: "members",   key: "customer" },                    // record id = the buyer's id
+    { as: "company", object: "companies", key: { from: "member.company_id" } },   // one hop from a single-key read
+    { as: "moq",     object: "moq",       key: "line.variantId", max: 50 },       // one record per cart SKU
+    { as: "fields",  customFields: ["product:min_qty"], max: 48 },                // your own fields on the cart's products
+  ] }
+  ```
+
+  - Keys: `customer`, `line.variantId`, `line.productId`, `attribute.<key>` (the buyer's value of one of your checkout attributes), or `{ from: "<as>.<field>" }`, the id held in a `single_line_text` or `object_reference` field of an earlier single-key read. A custom-field read names fields of one owner type (`product`, `variant` or `customer`) and is keyed by it.
+  - `input.reads[as]` is `{ revision, data } | null` for a single key and `Record<key, { revision, data }>` (records that exist) per line; `readOne(reads, as)` and `readMany(reads, as)` read them typed. Custom-field records have revision 0. Data is in the SDK's wire form, as `ctx.objects` reads it.
+  - Bounds: at most 100 keys asked per function (a single key counts one; a per-line read its distinct SKUs or products, at most its `max`) and 256 KiB of resolved JSON. A function over a bound does not run, which `onError` treats as a failure.
+  - Cost: the reads ride the checkout's own read batch (one statement per object type, hop and custom-field group), so they add statements but never a round trip or wave.
 
 - **Failure policy.** A function that throws, times out or answers invalidly is left out (`onError: "skip"`). Only `cart.transform`, `cart.line_prices`, `cart.validate` and `checkout.payment_methods` may use `onError: "block"`. Checkout then stops with the store's buyer-safe text (Settings > Checkout, "Apps at checkout").
-- **Snapshot and commit** (`checkout.discounts`). Declare `snapshot: { object }`. The signed-in buyer's record in that object type (record id = customer id) arrives as `input.snapshot` (`{ revision, data } | null`).
-  - The answer may carry `commit: { record }`, the next version of that record. The platform writes it in the order's own commit batch, at the revision you saw, and only when one of your discounts applied.
+- **Commit** (`checkout.discounts`). The answer may carry `commit: [{ as, record }]`: the next version of records this function read (single-key object reads whose key resolved to an id; a missing record is created). The platform writes them in the order's own commit batch, each at the revision you saw, and only when one of your discounts applied.
   - If the record changed meanwhile, the order fails with `APP_OFFER_CHANGED` and the buyer reviews it.
   - Size the discount against `cart.lines[].lineTotalMinor`. The test app `apps/api/src/plugins/testing/apps/loyalty` is a worked example.
-- **Holds** (`order.risk`). The point runs after the order commits. Answer `{ level, reasons, hold: true }` to put the order on hold (one `order_holds` row per order and app). Staff release the hold before the order ships or moves on. Staff can still cancel it. The platform never cancels on its own.
+- **Holds** are not a function: handle `order.created` and call `ctx.orders.hold` (see `ctx`). The test app `apps/api/src/plugins/testing/apps/risk-guard` is a worked example.
 
 ## Routes and storefront surfaces
 
@@ -264,7 +285,7 @@ Declare `functions: [{ point: "buyer.ui", targets: ["purchase.checkout.contact.r
 
 A field names a key in `checkout.attributes`; core owns the input, validation and storage. Buttons may add a line, set an attribute, apply a code or call a declared app route. Images use store media or this app's sealed public files; links use same-store paths. No app HTML or JavaScript reaches private buyer pages.
 
-The input includes the target, language, locale, currency, relevant cart/order/customer ids, accepted attributes, and an optional declared object snapshot. UI travels with cart validation, tax quote, receipt and account responses. Attributes enter the quote fingerprint and existing order insert, never URLs or events. See the `notes` and `loyalty` fixtures for working examples.
+The input includes the target, language, locale, currency, relevant cart/order/customer ids, accepted attributes, and the function's declared reads (keyed by the buyer, the cart's or order's lines, or an attribute). UI travels with cart validation, tax quote, receipt and account responses. Attributes enter the quote fingerprint and existing order insert, never URLs or events. See the `notes` and `loyalty` fixtures for working examples.
 
 ## Storefront components
 
@@ -334,7 +355,7 @@ Declare `{ id, name, countries?, trackingUrl?, locations?, icon?, settings?, ope
 ### SMS, email and fraud
 
 - **SMS and email.** Implement `send`. Never send twice for one idempotency key (`clientReference` for SMS, `idempotencyKey` for email). Answer `{ success, providerRef?, rawStatus?, retryable? }`. Set `retryable: false` for errors a retry cannot fix.
-- **Fraud.** Implement `check({ phone, orderId? })`. The merchant reads the answer on the order page as advice. It never blocks automatically. An app that must stop fulfilment answers `order.risk` with `hold: true`.
+- **Fraud.** Implement `check({ phone, orderId? })`. The merchant reads the answer on the order page as advice. It never blocks automatically. An app that must stop fulfilment handles `order.created` and calls `ctx.orders.hold`.
 
 ### Service ports
 

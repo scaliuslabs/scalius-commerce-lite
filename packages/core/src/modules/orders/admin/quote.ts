@@ -49,7 +49,6 @@ import {
   variantOptionLabelSql,
 } from "../../products";
 import { resolveActiveDeliveryLocationNames } from "../../delivery";
-import type { FunctionCart } from "@scalius/shared/plugins";
 import type {
     AppliedAppDiscount,
     ManualOrderAppFunctions,
@@ -231,8 +230,6 @@ export interface PreparedManualOrderQuote {
     manualDiscountMinor: number;
     /** App discounts the order carries (after the staff discount). */
     appDiscounts: AppliedAppDiscount[];
-    /** The cart apps saw; null when no app implements a cart point. */
-    appCart: FunctionCart | null;
 }
 
 export interface ManualOrderQuoteOptions {
@@ -258,7 +255,6 @@ function withoutApps(input: ManualOrderAppInput): ManualOrderAppOutcome {
         deliveryMethod: input.deliveryMethod,
         appDiscounts: [],
         discountAllocation: undefined,
-        appCart: null,
     };
 }
 
@@ -568,7 +564,6 @@ export async function prepareManualOrderQuote(
             : deliveryMethod,
         manualDiscountMinor: money.discountAmountMinor,
         appDiscounts: appPricing.appDiscounts,
-        appCart: appPricing.appCart,
     };
 }
 

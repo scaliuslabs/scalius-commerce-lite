@@ -17,8 +17,10 @@
 
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
 import type {
+  FunctionReadRecord,
+  FunctionReads,
+  PluginFunctionAnswer,
   PluginFunctionInput,
-  PluginFunctionOutput,
   PluginFunctionPoint,
   PluginManifestInput,
   PluginSettingValue,
@@ -90,7 +92,25 @@ export type PluginEventHandler<T extends EventTopic = EventTopic> = (event: Plug
 export type PluginFunctionHandler<P extends PluginFunctionPoint> = (
   input: PluginFunctionInput<P>,
   settings: Readonly<Record<string, PluginSettingValue>>,
-) => PluginFunctionOutput<P> | Promise<PluginFunctionOutput<P>>;
+) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
+
+export type { FunctionReadRecord, FunctionReads };
+
+/** A single-key read (`customer`, `attribute.<key>`, a hop) from `input.reads`: the record, or null. */
+export function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): { revision: number; data: T } | null {
+  const value = reads?.[as];
+  return value && typeof value === "object" && "data" in value && "revision" in value && typeof value.revision === "number"
+    ? value as { revision: number; data: T }
+    : null;
+}
+
+/** A per-line read (`line.variantId`, `line.productId`) from `input.reads`: the records that exist, by key. */
+export function readMany<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): Record<string, { revision: number; data: T }> {
+  const value = reads?.[as];
+  return value && typeof value === "object" && !("data" in value && "revision" in value && typeof value.revision === "number")
+    ? value as Record<string, { revision: number; data: T }>
+    : {};
+}
 
 export type PluginRouteHandler = (request: PluginRouteRequest, ctx: PluginContext) => Promise<PluginRouteResponse> | PluginRouteResponse;
 /**

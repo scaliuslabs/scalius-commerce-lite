@@ -181,7 +181,7 @@ export async function listOrderAppFacts(db: Database, orderId: string) {
 }
 
 /**
- * The buyer's earlier orders, counts only (the `order.risk` history): orders
+ * The buyer's earlier orders, counts only (`ctx.orders.riskHistory`): orders
  * filed under the same customer record (a guest's phone record) or the same
  * account. Orders that never became sales (incomplete online payments) are
  * left out; a returned order counts as returned to sender.

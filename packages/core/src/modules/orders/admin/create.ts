@@ -43,15 +43,10 @@ import { orderMarketIdSql } from "../../markets";
 import { orderShippingAddressColumns, orderShippingAddressInsertColumns, resolveOrderAddress } from "../shipping-address";
 import { orderBillingAddressColumns, orderBillingAddressInsertColumns, resolveStaffBillingAddress } from "../billing-address";
 import type { SQLiteBatchItem } from "./shared";
-import type { FunctionCart } from "@scalius/shared/plugins";
 import type { AppliedAppDiscount, ManualOrderAppFunctions } from "@scalius/shared/checkout-app-facts";
 import { buildAppDiscountFactInserts } from "../../order-kernel";
-import { manualOrderAppLines } from "./app-lines";
 
-/**
- * What the API needs after a manual order commits, for the apps' advisory
- * `order.risk` (run in waitUntil). Absent on a replay: risk runs once.
- */
+/** What this request committed (absent on a replay). */
 export interface ManualOrderCommitted {
     orderId: string;
     /** The guest record the order is filed under (by phone). */
@@ -59,8 +54,6 @@ export interface ManualOrderCommitted {
     paymentMethod: string;
     totalAmountMinor: number;
     appDiscounts: AppliedAppDiscount[];
-    /** The cart apps saw while pricing, or built now (after the commit) when none ran. */
-    appCart(): Promise<FunctionCart>;
 }
 
 export interface CreateManualOrderResult {
@@ -149,7 +142,6 @@ export async function createManualOrder(
             deliveryMethod: shippingMethod,
             manualDiscountMinor,
             appDiscounts,
-            appCart,
             currency,
         } = manualQuote;
         if (requiresShipping && !data.shippingAddress?.trim()) {
@@ -230,7 +222,6 @@ export async function createManualOrder(
             shippingMethod,
             manualDiscountMinor,
             appDiscounts,
-            appCart,
             currency,
             salesChannelId,
         };
@@ -258,7 +249,6 @@ export async function createManualOrder(
         shippingMethod,
         manualDiscountMinor,
         appDiscounts,
-        appCart,
         currency,
         salesChannelId,
     } = prepared;
@@ -510,18 +500,6 @@ export async function createManualOrder(
             paymentMethod: PaymentMethod.COD,
             totalAmountMinor: taxQuote.totalMinor,
             appDiscounts,
-            appCart: () => {
-                if (appCart) return Promise.resolve(appCart);
-                if (!options.apps) return Promise.reject(new Error("No app functions were given for this order."));
-                return options.apps.orderCart({
-                    currency: { code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor },
-                    lines: manualOrderAppLines(trackedItems, allocationLineIds),
-                    requiresShipping,
-                    shippingCountryCode: shippingAddress?.countryCode ?? null,
-                    locationNames: { cityName, zoneName },
-                    manualDiscountMinor,
-                });
-            },
         },
     };
 }

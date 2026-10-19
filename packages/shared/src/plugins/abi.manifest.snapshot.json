@@ -204,7 +204,7 @@
    },
    "functions": {
     "default": [],
-    "maxItems": 8,
+    "maxItems": 7,
     "type": "array",
     "items": {
      "type": "object",
@@ -218,7 +218,6 @@
         "checkout.discounts",
         "checkout.shipping_rates",
         "checkout.payment_methods",
-        "order.risk",
         "buyer.ui"
        ]
       },
@@ -255,18 +254,124 @@
         "block"
        ]
       },
-      "snapshot": {
-       "type": "object",
-       "properties": {
-        "object": {
-         "type": "string",
-         "pattern": "^[a-z][a-z0-9_]{1,47}$"
-        }
-       },
-       "required": [
-        "object"
-       ],
-       "additionalProperties": false
+      "reads": {
+       "default": [],
+       "maxItems": 4,
+       "type": "array",
+       "items": {
+        "anyOf": [
+         {
+          "type": "object",
+          "properties": {
+           "as": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}$"
+           },
+           "object": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,47}$"
+           },
+           "key": {
+            "anyOf": [
+             {
+              "type": "string",
+              "enum": [
+               "customer",
+               "line.variantId",
+               "line.productId"
+              ]
+             },
+             {
+              "type": "string",
+              "pattern": "^attribute\\.[a-z][a-z0-9_-]{0,47}$"
+             },
+             {
+              "type": "object",
+              "properties": {
+               "from": {
+                "type": "string",
+                "pattern": "^([a-z][a-z0-9_]{0,31})\\.([a-z][a-z0-9_]{0,63})$"
+               }
+              },
+              "required": [
+               "from"
+              ],
+              "additionalProperties": false
+             }
+            ]
+           },
+           "max": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+           }
+          },
+          "required": [
+           "as",
+           "object",
+           "key"
+          ],
+          "additionalProperties": false
+         },
+         {
+          "type": "object",
+          "properties": {
+           "as": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}$"
+           },
+           "customFields": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+             "type": "string",
+             "pattern": "^(product|variant|customer):([a-z][a-z0-9_]{0,63})$"
+            }
+           },
+           "key": {
+            "anyOf": [
+             {
+              "type": "string",
+              "enum": [
+               "customer",
+               "line.variantId",
+               "line.productId"
+              ]
+             },
+             {
+              "type": "string",
+              "pattern": "^attribute\\.[a-z][a-z0-9_-]{0,47}$"
+             },
+             {
+              "type": "object",
+              "properties": {
+               "from": {
+                "type": "string",
+                "pattern": "^([a-z][a-z0-9_]{0,31})\\.([a-z][a-z0-9_]{0,63})$"
+               }
+              },
+              "required": [
+               "from"
+              ],
+              "additionalProperties": false
+             }
+            ]
+           },
+           "max": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+           }
+          },
+          "required": [
+           "as",
+           "customFields"
+          ],
+          "additionalProperties": false
+         }
+        ]
+       }
       }
      },
      "required": [

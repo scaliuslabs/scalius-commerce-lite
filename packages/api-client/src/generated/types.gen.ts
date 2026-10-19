@@ -3257,10 +3257,10 @@ export type AppSummary = {
         total: number;
     };
     /**
-     * The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk).
+     * The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods, buyer UI).
      */
     functions: Array<{
-        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods' | 'order.risk' | 'buyer.ui';
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods' | 'buyer.ui';
         /**
          * Lower runs first among apps at the same point.
          */
@@ -3270,9 +3270,23 @@ export type AppSummary = {
          */
         onError: 'skip' | 'block';
         /**
-         * checkout.discounts and cart.line_prices: the app reads the signed-in buyer's record in this object type (checkout.discounts also updates it with each order).
+         * The app's data the function reads at checkout (checkout.discounts may also update those records with the order).
          */
-        snapshotObject: string | null;
+        reads: Array<{
+            as: string;
+            /**
+             * The app's object type read; null for a custom-field read.
+             */
+            object: string | null;
+            /**
+             * The app's own custom fields read (`<owner>:<key>`); empty for an object read.
+             */
+            customFields: Array<string>;
+            /**
+             * What the read is keyed by: customer, line.variantId, line.productId, attribute.<key>, or from:<read>.<field>.
+             */
+            key: string;
+        }>;
     }>;
 };
 
@@ -18695,6 +18709,15 @@ export type PostApiV1OrdersCartValidationResponses = {
                     price: number;
                     priceMinor: number;
                 }>;
+                adjustments: Array<{
+                    key: string;
+                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    label: string;
+                    value: string;
+                    displayValue: string;
+                    price: number;
+                    priceMinor: number;
+                }>;
                 propertiesHash: string;
                 /**
                  * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
@@ -19153,6 +19176,15 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     priceMinor: number;
                 }>;
                 propertiesPriceMinor: number;
+                adjustments: Array<{
+                    key: string;
+                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    label: string;
+                    value: string;
+                    displayValue: string;
+                    price: number;
+                    priceMinor: number;
+                }>;
                 propertiesHash: string;
             }>;
         };

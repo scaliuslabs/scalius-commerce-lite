@@ -32,15 +32,12 @@
 // - `checkout.payment_methods`: manual orders are cash on delivery, the one
 //   method apps see. An app that hides it refuses the quote and the order
 //   (`payment_method_unavailable`), as checkout refuses a hidden method.
-// - `order.risk`: after the order commits (the API runs it in waitUntil),
-//   never on a replay; `orderCart` gives the cart then.
 //
 // With no active app implementing a cart point there is no read and no call.
 
 import type { Database } from "@scalius/database/client";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import type {
-    ManualOrderAppCartInput,
     ManualOrderAppFunctions,
     ManualOrderAppInput,
     ManualOrderAppLine,
@@ -75,7 +72,6 @@ export const MANUAL_ORDER_PAYMENT_METHOD = "cod";
 export function createManualOrderAppFunctions(db: Database, apps: CheckoutAppFunctions): ManualOrderAppFunctions {
     return {
         price: (input) => applyManualOrderAppFunctions(db, apps, input),
-        orderCart: (input) => buildManualOrderAppCart(db, input),
     };
 }
 
@@ -115,13 +111,14 @@ function destinationOf(input: CartSource) {
         : null;
 }
 
-function loadCartFacts(db: Database, input: CartSource) {
+function loadCartFacts(db: Database, input: CartSource, apps?: CheckoutAppFunctions) {
     return loadAppFunctionCartFacts(db, {
         productIds: input.lines.map((line) => line.productId),
         variantIds: input.lines.map((line) => line.variantId),
         // A staff order belongs to no signed-in account: apps see a guest, as at a guest checkout.
         customerId: null,
         marketCountry: appCartMarketCountry(destinationOf(input)),
+        ...(apps ? { apps, points: PRICING_POINTS } : {}),
     });
 }
 
@@ -148,18 +145,6 @@ function cartOf(
         destination: destinationOf(input),
         discountCodes: [],
     });
-}
-
-/**
- * The cart `order.risk` sees after a manual order committed (no read before
- * then when no cart point ran).
- */
-export async function buildManualOrderAppCart(
-    db: Database,
-    input: ManualOrderAppCartInput,
-): Promise<FunctionCart> {
-    const allocation = manualDiscountAllocation(input.lines, input.manualDiscountMinor);
-    return cartOf(input, await loadCartFacts(db, input), new Map(allocation.lines.map((line) => [line.lineId, line.amountMinor])));
 }
 
 /** The rates the store offers for the order's address, the chosen one at the order's charge. */
@@ -213,7 +198,6 @@ export async function applyManualOrderAppFunctions(
         deliveryMethod: input.deliveryMethod,
         appDiscounts: [],
         discountAllocation: undefined,
-        appCart: null,
     };
     if (!wantsAppCart(apps, PRICING_POINTS) || input.lines.length === 0) return none;
 
@@ -222,7 +206,7 @@ export async function applyManualOrderAppFunctions(
     const chosenMethod = input.deliveryMethod;
     const wantsRates = apps.points.has("checkout.shipping_rates") && chosenMethod !== null;
     const [facts, rateOptions] = await Promise.all([
-        loadCartFacts(db, input),
+        loadCartFacts(db, input, apps),
         wantsRates ? listRateOptions(db, input, chosenMethod) : Promise.resolve([] as CheckoutRateOption[]),
     ]);
     let cart: FunctionCart;
@@ -320,6 +304,5 @@ export async function applyManualOrderAppFunctions(
         deliveryMethod,
         appDiscounts,
         discountAllocation: appDiscounts.length > 0 ? combineDiscountAllocations(manual, appDiscounts) : undefined,
-        appCart: cart,
     };
 }

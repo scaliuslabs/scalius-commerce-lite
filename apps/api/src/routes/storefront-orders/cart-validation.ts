@@ -173,6 +173,12 @@ const cartValidationRoute = createRoute({
               propertiesPriceMinor: z.number().int(),
               /** The buyer inputs as the order will keep them (labels frozen). */
               properties: z.array(orderLinePropertySchema),
+              /**
+               * Apps' add-ons to each unit (`cart.line_prices` adjustments, in
+               * `unitPrice`), shown as line components ("Add-on: …"). Never
+               * buyer inputs: the cart does not send them back.
+               */
+              adjustments: z.array(orderLinePropertySchema),
               /** Canonical inputs hash for the cart line key (`line:v3:…:p:<hash>`); "none" without inputs. */
               propertiesHash: z.string(),
               fulfillmentKind: fulfillmentKindSchema,

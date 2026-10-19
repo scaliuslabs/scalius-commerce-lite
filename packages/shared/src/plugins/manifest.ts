@@ -19,6 +19,7 @@ import { pluginProvidersSchema } from "./providers/descriptors";
 import { checkoutAttributeSchema } from "./buyer-ui";
 import { PLUGIN_BLOCK_TARGETS } from "./storefront";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN } from "./objects";
+import { FUNCTION_READS_MAX, functionReadDeclarationSchema, functionReadIssues } from "./function-reads";
 import { PROVIDER_KINDS } from "./providers/kinds";
 import { providerRequiredScopes } from "./protected-data";
 import {
@@ -87,7 +88,6 @@ export const PLUGIN_FUNCTION_POINTS = [
   "checkout.discounts",
   "checkout.shipping_rates",
   "checkout.payment_methods",
-  "order.risk",
   "buyer.ui",
 ] as const;
 export type PluginFunctionPoint = (typeof PLUGIN_FUNCTION_POINTS)[number];
@@ -104,9 +104,6 @@ export const PLUGIN_BLOCKING_FUNCTION_POINTS = [
   "cart.validate",
   "checkout.payment_methods",
 ] as const satisfies readonly PluginFunctionPoint[];
-
-/** Points whose function may read the signed-in buyer's record (`snapshot`); only checkout.discounts may commit it. */
-export const PLUGIN_SNAPSHOT_FUNCTION_POINTS = ["cart.line_prices", "checkout.discounts", "buyer.ui"] as const satisfies readonly PluginFunctionPoint[];
 
 /** Provider ports a plugin can fill: the same ports the platform's own adapters implement (providers.ts). */
 export const PLUGIN_PROVIDER_KINDS = PROVIDER_KINDS;
@@ -493,14 +490,16 @@ export const pluginManifestSchema = z.object({
      */
     onError: z.enum(["skip", "block"]).default("skip"),
     /**
-     * checkout.discounts and cart.line_prices: the signed-in buyer's record
-     * in this collection (record id = customer id) is passed in as
-     * `snapshot` (a B2B contract, a subscription, a points balance). A
-     * checkout.discounts answer may `commit` a new version of it, written
-     * with the order in the same atomic batch at the revision the function
-     * saw (a spent balance can never be spent twice).
+     * The app's own data the function needs (function-reads.ts): records of
+     * its declared objects keyed by the buyer, a cart line's SKU or product,
+     * a checkout attribute or one hop, and its own custom fields. The host
+     * resolves them in the checkout read it already runs and passes them as
+     * `input.reads`; a checkout.discounts answer may `commit` new versions of
+     * single-key object reads, written with the order in the same atomic
+     * batch at the revision the function saw (a spent balance can never be
+     * spent twice).
      */
-    snapshot: z.object({ object: z.string().regex(OBJECT_TYPE_PATTERN) }).strict().optional(),
+    reads: z.array(functionReadDeclarationSchema).max(FUNCTION_READS_MAX).default([]),
   }).strict()).max(PLUGIN_FUNCTION_POINTS.length).default([]),
   /**
    * Providers the app implements, grouped by port (providers/descriptors.ts).
@@ -727,12 +726,12 @@ export const pluginManifestSchema = z.object({
     if (fn.onError === "block" && !(PLUGIN_BLOCKING_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
       context.addIssue({ code: "custom", path: ["functions", index, "onError"], message: `Only ${PLUGIN_BLOCKING_FUNCTION_POINTS.join(", ")} may block checkout.` });
     }
-    if (fn.snapshot && !(PLUGIN_SNAPSHOT_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
-      context.addIssue({ code: "custom", path: ["functions", index, "snapshot"], message: `Only ${PLUGIN_SNAPSHOT_FUNCTION_POINTS.join(" and ")} read a snapshot.` });
-    }
-    if (fn.snapshot && !collections.has(fn.snapshot.object)) {
-      context.addIssue({ code: "custom", path: ["functions", index, "snapshot", "object"], message: `Object type ${fn.snapshot.object} is not declared.` });
-    }
+    for (const issue of functionReadIssues(fn.reads, {
+      id: manifest.id,
+      objects: manifest.objects,
+      customFields: manifest.customFields,
+      attributes: (manifest.checkout?.attributes ?? []).map((attribute) => attribute.key),
+    })) context.addIssue({ code: "custom", path: ["functions", index, "reads", ...issue.path], message: issue.message });
   });
   unique(manifest.providers.map((provider) => provider.id), ["providers"], "Provider ids");
   const settingKeys = new Set(manifest.settings.map((field) => field.key));

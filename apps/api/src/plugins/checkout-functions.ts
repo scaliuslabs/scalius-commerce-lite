@@ -14,6 +14,7 @@ import {
 } from "@scalius/core/modules/plugins";
 import {
   CHECKOUT_APP_UNAVAILABLE_REASON,
+  createAppReadsCache,
   readCheckoutCopy,
   type CheckoutAppFunctionResult,
   type CheckoutAppFunctions,
@@ -22,7 +23,7 @@ import { ValidationError } from "@scalius/core/errors";
 import { PLUGIN_FUNCTION_POINTS, type PluginFunctionInput, type PluginFunctionPoint } from "@scalius/shared/plugins";
 import type { PluginHost, PluginHostOptions } from "./host";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
-import { PluginFunctionsBlockedError, runPluginFunctions } from "./functions";
+import { functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions } from "./functions";
 
 export interface CheckoutAppFunctionsOptions {
   env: Env;
@@ -59,7 +60,8 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
 
   const ctx = contextOf(options.ctx);
   const memo = new Map<string, Promise<unknown[]>>();
-  const snapshots = new Map<string, Promise<{ revision: number; data: Record<string, unknown> } | null>>();
+  // Declared reads, one cache per request: facts batches fill it, calls read from it.
+  const reads = createAppReadsCache(options.db);
   let host: Promise<PluginHost> | null = null;
   const sharedHost = () => {
     host ??= import("./host").then(({ PluginHost }) => new PluginHost({
@@ -74,6 +76,10 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
   const runtime: CheckoutAppFunctions = {
     points,
     attributes,
+    reads,
+    readRequests(wanted) {
+      return wanted.flatMap((point) => functionReadRequests(registrations.filter((registration) => registration.name === point), point));
+    },
     async buyerUi(input) {
       if (!points.has("buyer.ui")) return [];
       const blocks = [];
@@ -89,7 +95,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
       }
       try { return await prepareBuyerUiBlocks(options.db, blocks.slice(0, 12), registrations, options.env.CDN_DOMAIN_URL); } catch { return []; }
     },
-    run<P extends PluginFunctionPoint>(point: P, input: PluginFunctionInput<P>): Promise<Array<CheckoutAppFunctionResult<P>>> {
+    run<P extends PluginFunctionPoint>(point: P, input: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>> {
       if (!points.has(point)) return Promise.resolve([]);
       const key = `${point}\u0000${JSON.stringify(input)}`;
       let pending = memo.get(key) as Promise<Array<CheckoutAppFunctionResult<P>>> | undefined;
@@ -100,7 +106,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
         const blocking = forPoint.some((registration) => registration.installation.grant?.blockingFunctions.includes(point)
           && registration.installation.manifest.functions.some((fn) => fn.point === point && fn.onError === "block"));
         pending = sharedHost()
-          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, snapshots }))
+          .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared, reads }))
           .then((results) => results.map((result) => ({ ...result, appName: names.get(result.pluginId) ?? result.pluginId })))
           .catch(async (error: unknown) => {
             // An app the store made blocking could not answer: checkout stops, with the store's words.

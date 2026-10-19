@@ -12,7 +12,7 @@ import hello from "./index";
 const cart = (subtotalMinor: number) => ({
   currency: "BDT",
   decimalPlaces: 2,
-  channel: "online_store",
+  channel: "online_store" as const,
   lines: [],
   subtotalMinor,
   customer: null,

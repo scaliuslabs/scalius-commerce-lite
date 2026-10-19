@@ -251,6 +251,22 @@ export interface PluginTimeline {
         id: string;
     }>;
 }
+export interface PluginOrders {
+    hold(input: {
+        orderId: string;
+        reason: string;
+    }): Promise<void>;
+    assessRisk(input: {
+        orderId: string;
+        level: "low" | "medium" | "high";
+        reasons: string[];
+    }): Promise<void>;
+    riskHistory(orderId: string): Promise<{
+        orders: number;
+        cancelled: number;
+        returnedToSender: number;
+    }>;
+}
 export interface PluginLogger {
     debug(message: string, fields?: Record<string, unknown>): void;
     info(message: string, fields?: Record<string, unknown>): void;
@@ -272,6 +288,7 @@ export interface PluginContext {
     customFields: PluginCustomFields;
     messaging: PluginMessaging;
     timeline: PluginTimeline;
+    orders: PluginOrders;
     log: PluginLogger;
 }
 export interface PluginEvent<T extends EventTopic = EventTopic> {
@@ -305,28 +322,33 @@ export interface PluginRouteResponse {
 
 // packages/plugin-sdk/src/fixtures.d.ts
 import type { EventTopic } from "@scalius/shared/events";
-import type { FunctionCart, PluginFunctionInput } from "@scalius/shared/plugins";
+import type { FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
 import type { PluginEvent, PluginRouteRequest } from "./context";
 declare function event<T extends EventTopic>(topic: T, overrides?: Partial<PluginEvent<T>>): PluginEvent<T>;
 declare function cartLine(overrides?: Partial<FunctionCart["lines"][number]>): FunctionCart["lines"][number];
 declare function cart(overrides?: Partial<FunctionCart>): FunctionCart;
 declare function checkoutDiscountsInput(overrides?: {
     cart?: Partial<FunctionCart>;
-    snapshot?: PluginFunctionInput<"checkout.discounts">["snapshot"];
+    reads?: FunctionReads;
 }): PluginFunctionInput<"checkout.discounts">;
+declare function readRecord<T extends Record<string, unknown>>(data: T, revision?: number): {
+    revision: number;
+    data: T;
+};
 declare function adminRouteRequest(overrides?: Partial<PluginRouteRequest>): PluginRouteRequest;
 export declare const fixtures: {
     event: typeof event;
     cartLine: typeof cartLine;
     cart: typeof cart;
     checkoutDiscountsInput: typeof checkoutDiscountsInput;
+    readRecord: typeof readRecord;
     adminRouteRequest: typeof adminRouteRequest;
 };
 export {};
 
 // packages/plugin-sdk/src/index.d.ts
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
-import type { PluginFunctionInput, PluginFunctionOutput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
+import type { FunctionReadRecord, FunctionReads, PluginFunctionAnswer, PluginFunctionInput, PluginFunctionPoint, PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
 import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
 import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
 export type * from "./context";
@@ -336,7 +358,16 @@ export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInp
 export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiTarget, } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 export type PluginEventHandler<T extends EventTopic = EventTopic> = (event: PluginEvent<T>, ctx: PluginContext) => Promise<void> | void;
-export type PluginFunctionHandler<P extends PluginFunctionPoint> = (input: PluginFunctionInput<P>, settings: Readonly<Record<string, PluginSettingValue>>) => PluginFunctionOutput<P> | Promise<PluginFunctionOutput<P>>;
+export type PluginFunctionHandler<P extends PluginFunctionPoint> = (input: PluginFunctionInput<P>, settings: Readonly<Record<string, PluginSettingValue>>) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
+export type { FunctionReadRecord, FunctionReads };
+export declare function readOne<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): {
+    revision: number;
+    data: T;
+} | null;
+export declare function readMany<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): Record<string, {
+    revision: number;
+    data: T;
+}>;
 export type PluginRouteHandler = (request: PluginRouteRequest, ctx: PluginContext) => Promise<PluginRouteResponse> | PluginRouteResponse;
 export type PluginCronHandler = (ctx: PluginContext, run: {
     name: string;
@@ -530,6 +561,13 @@ export interface PluginRuntimeBridge {
     }>;
     timelineAdd?(input: unknown): Promise<{
         id: string;
+    }>;
+    ordersHold?(input: unknown): Promise<void>;
+    ordersAssessRisk?(input: unknown): Promise<void>;
+    ordersRiskHistory?(orderId: unknown): Promise<{
+        orders: number;
+        cancelled: number;
+        returnedToSender: number;
     }>;
 }
 export declare class PluginPlatformError extends Error {
@@ -773,7 +811,7 @@ export declare function renderFooter(module: StorefrontModule, component: string
 export declare function renderProductCard(module: StorefrontModule, component: string, settings?: StorefrontResolvedSettings, product?: Partial<StorefrontProductCard>, options?: RenderOptions): string;
 
 // packages/plugin-sdk/src/testing.d.ts
-import { type PluginSettingValue } from "@scalius/shared/plugins";
+import { type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFunctionPoint, type PluginSettingValue } from "@scalius/shared/plugins";
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
 import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
@@ -785,6 +823,11 @@ export interface PluginTestHarnessOptions {
     features?: string[];
     store?: Partial<PluginStoreInfo>;
     api?: (operationId: string, input: PluginApiCallInput | undefined) => PluginApiResult | Promise<PluginApiResult>;
+    riskHistory?: (orderId: string) => {
+        orders: number;
+        cancelled: number;
+        returnedToSender: number;
+    };
     fetch?: (url: string, init: unknown) => {
         status: number;
         headers?: Record<string, string>;
@@ -795,6 +838,9 @@ export interface PluginTestHarnessOptions {
         body: string;
     }>;
 }
+export type PluginFunctionTestResult<P extends PluginFunctionPoint> = Omit<PluginInvocationResult, "value"> & {
+    value: PluginFunctionOutput<P> | null;
+};
 export declare function createPluginTestHarness(module: unknown, options?: PluginTestHarnessOptions): {
     manifest: {
         id: string;
@@ -813,13 +859,25 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         allowedHosts: string[];
         events: import("@scalius/shared/events").EventTopicFilter[];
         functions: {
-            point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods" | "order.risk" | "buyer.ui";
+            point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods" | "buyer.ui";
             priority: number;
             onError: "skip" | "block";
-            targets?: ("purchase.checkout.contact.render-after" | "purchase.checkout.shipping-option-list.render-after" | "purchase.checkout.cart-line-list.render-after" | "purchase.checkout.payment-method-list.render-after" | "purchase.checkout.actions.render-before" | "purchase.thank-you.customer-information.render-after" | "customer-account.order-status.block.render" | "customer-account.order-index.block.render" | "customer-account.profile.block.render")[] | undefined;
-            snapshot?: {
+            reads: ({
+                as: string;
                 object: string;
-            } | undefined;
+                key: string | {
+                    from: string;
+                };
+                max?: number | undefined;
+            } | {
+                as: string;
+                customFields: string[];
+                key?: string | {
+                    from: string;
+                } | undefined;
+                max?: number | undefined;
+            })[];
+            targets?: ("purchase.checkout.contact.render-after" | "purchase.checkout.shipping-option-list.render-after" | "purchase.checkout.cart-line-list.render-after" | "purchase.checkout.payment-method-list.render-after" | "purchase.checkout.actions.render-before" | "purchase.thank-you.customer-information.render-after" | "customer-account.order-status.block.render" | "customer-account.order-index.block.render" | "customer-account.profile.block.render")[] | undefined;
         }[];
         providers: import("@scalius/shared/plugins/providers").PluginProviderDeclaration[];
         routes: {
@@ -1945,6 +2003,8 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         notices: unknown[];
         pushes: unknown[];
         timeline: unknown[];
+        holds: unknown[];
+        risks: unknown[];
     };
     event: (topic: EventTopic, resource: {
         type: string;
@@ -1954,7 +2014,7 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
         occurredAt?: string;
     }) => Promise<PluginInvocationResult>;
     deliver: (event: PluginEvent) => Promise<PluginInvocationResult>;
-    fn: (point: string, input: unknown) => Promise<PluginInvocationResult>;
+    fn: <P extends PluginFunctionPoint>(point: P, input: PluginFunctionInputDraft<P>) => Promise<PluginFunctionTestResult<P>>;
     runMigration: (version: number) => Promise<PluginInvocationResult>;
     runMigrations: (options?: {
         from?: number;

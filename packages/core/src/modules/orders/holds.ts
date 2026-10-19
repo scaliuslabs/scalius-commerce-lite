@@ -1,5 +1,5 @@
-// Order holds: an app's `order.risk` answer with `hold: true` puts the order
-// on hold for staff review (one hold per order and app; a retried run adds
+// Order holds: an app's `ctx.orders.hold` (an event handler's reaction after
+// the order committed) puts the order on hold for staff review (one hold per order and app; a retried run adds
 // nothing). While any hold is open the order cannot be shipped or moved on;
 // staff may still cancel it. Staff release a hold, which is kept with who
 // released it and when. Holds are never placed or released by buyers, and

@@ -1,7 +1,9 @@
 import {
   cartStore,
+  normalizeCartLineAdjustments,
   rekeyCartLine,
   updateCartItemsByKeyAtomically,
+  type CartLineAdjustment,
   type CartLineItemUpdate,
   type CartLineProperty,
 } from "../../store/cart";
@@ -17,6 +19,12 @@ function serverProperties(item: CartValidationItem): CartLineProperty[] | undefi
     displayValue,
     priceMinor,
   }));
+}
+
+function sameAdjustments(current: CartLineAdjustment[] | undefined, next: CartLineAdjustment[]): boolean {
+  const left = current ?? [];
+  return left.length === next.length && left.every((entry, index) =>
+    entry.label === next[index]!.label && entry.displayValue === next[index]!.displayValue && entry.priceMinor === next[index]!.priceMinor);
 }
 
 function sameDisplay(
@@ -37,7 +45,8 @@ function sameDisplay(
 
 /**
  * Applies what the server said about each line: its image, free-delivery
- * flag, fulfilment kind and the labels of its buyer inputs. When the server
+ * flag, fulfilment kind, the labels of its buyer inputs and the apps'
+ * add-ons priced into it (display only). When the server
  * resolved the inputs to a different canonical hash (its word is final), the
  * line moves to that key. Prices and quantities are never changed here; the
  * buyer repairs those through the line's issue.
@@ -73,12 +82,15 @@ export function reconcileValidatedCartSnapshot(
       properties !== undefined &&
       properties.length === (currentItem.properties?.length ?? 0) &&
       !sameDisplay(currentItem.properties, properties);
+    const adjustments = normalizeCartLineAdjustments(validatedItem.adjustments);
+    const adjustmentsChanged = !sameAdjustments(currentItem.adjustments, adjustments);
     if (
       currentItem.freeDelivery !== validatedItem.freeDelivery ||
       currentItem.image !== nextImage ||
       currentItem.imageMediaId !== nextImageMediaId ||
       currentItem.fulfillmentKind !== nextKind ||
-      displayChanged
+      displayChanged ||
+      adjustmentsChanged
     ) {
       updates.push({
         lineKey: key,
@@ -88,6 +100,7 @@ export function reconcileValidatedCartSnapshot(
           imageMediaId: nextImageMediaId,
           ...(nextKind ? { fulfillmentKind: nextKind } : {}),
           ...(displayChanged ? { properties } : {}),
+          ...(adjustmentsChanged ? { adjustments } : {}),
         },
       });
     }

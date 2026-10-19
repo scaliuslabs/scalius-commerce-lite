@@ -11,11 +11,13 @@
 // The order a checkout asks them in: cart.transform (the lines), then
 // cart.line_prices (their unit prices), then cart.validate,
 // checkout.discounts and checkout.shipping_rates together, then
-// checkout.payment_methods; order.risk after the order commits.
+// checkout.payment_methods. A reaction after the order commits is an event
+// handler (`ctx.orders.hold`, `ctx.orders.assessRisk`), not a function.
 // Part of the versioned plugin API.
 
 import { z } from "zod";
 import { buyerUiOutputSchema, checkoutAttributesSchema } from "./buyer-ui";
+import { FUNCTION_READ_AS_PATTERN, FUNCTION_READS_MAX, functionReadsSchema } from "./function-reads";
 import { PLUGIN_BLOCK_TARGETS } from "./storefront";
 import type { PluginFunctionPoint } from "./manifest";
 
@@ -89,17 +91,17 @@ export const cartValidateOutputSchema = z.object({
   errors: z.array(z.object({ code, message, lineId: id.optional() }).strict()).max(20),
 }).strict();
 
-// ── checkout.discounts ────────────────────────────────────────────────────
+// ── Declared reads ────────────────────────────────────────────────────────
 
 /**
- * The signed-in buyer's record in the collection the function declares
- * (`snapshot` in the manifest), with its revision; null for a guest or when
- * the buyer has none yet. Only apps that declare a snapshot receive it.
+ * The function's declared reads (`reads` in the manifest, function-reads.ts),
+ * resolved by the host: by `as`, `{ revision, data } | null` for a
+ * single-key read, `Record<key, { revision, data }>` for a per-line read.
+ * Empty when the function declares none.
  */
-export const functionSnapshotSchema = z.object({
-  revision: z.number().int().min(1),
-  data: z.record(z.string(), z.unknown()),
-}).strict().nullable();
+const reads = functionReadsSchema.default({});
+
+// ── checkout.discounts ────────────────────────────────────────────────────
 
 export const checkoutDiscountsOutputSchema = z.object({
   discounts: z.array(z.object({
@@ -119,12 +121,16 @@ export const checkoutDiscountsOutputSchema = z.object({
     maxAmountMinor: minor.positive().optional(),
   }).strict()).max(10),
   /**
-   * The snapshot record's next version, committed with the order (same
-   * batch, at the snapshot's revision) only when one of these discounts
-   * applies; a concurrent change aborts the order instead. Needs a declared
-   * snapshot and a signed-in buyer.
+   * New versions of records this function read (`as`: a single-key object
+   * read), committed with the order (same batch, each at the revision the
+   * function saw) only when one of these discounts applies; a concurrent
+   * change aborts the order instead. A read whose key resolved to no id (a
+   * guest's `customer` read, an empty attribute or hop) cannot be committed.
    */
-  commit: z.object({ record: z.record(z.string(), z.unknown()) }).strict().optional(),
+  commit: z.array(z.object({
+    as: z.string().regex(FUNCTION_READ_AS_PATTERN),
+    record: z.record(z.string(), z.unknown()),
+  }).strict()).max(FUNCTION_READS_MAX).optional(),
 }).strict();
 
 // ── checkout.shipping_rates ───────────────────────────────────────────────
@@ -153,32 +159,6 @@ export const checkoutPaymentMethodsOutputSchema = z.object({
     z.object({ op: z.literal("rename"), methodId: id, name: label }).strict(),
     z.object({ op: z.literal("reorder"), methodIds: z.array(id).min(1).max(20) }).strict(),
   ])).max(40),
-}).strict();
-
-// ── order.risk ────────────────────────────────────────────────────────────
-
-export const orderRiskInputSchema = z.object({
-  orderId: id,
-  cart: functionCartSchema,
-  totalMinor: nonNegativeMinor,
-  paymentMethod: z.string().max(64),
-  /** Prior orders by the same verified phone or account (counts only). */
-  history: z.object({
-    orders: z.number().int().min(0),
-    cancelled: z.number().int().min(0),
-    returnedToSender: z.number().int().min(0),
-  }).strict(),
-}).strict();
-
-/**
- * Shown to the merchant on the order. `hold: true` also puts the order on
- * hold for staff review: it cannot be shipped or advanced until staff
- * release it. Nothing is ever cancelled automatically.
- */
-export const orderRiskOutputSchema = z.object({
-  level: z.enum(["low", "medium", "high"]),
-  reasons: z.array(message).max(5),
-  hold: z.boolean().default(false),
 }).strict();
 
 // ── cart.transform ────────────────────────────────────────────────────────
@@ -234,17 +214,41 @@ export const functionLinePriceFactsSchema = z.object({
   bundle: z.object({ id, title: z.string().max(300) }).strict().nullable(),
 }).strict();
 
+/** App add-ons one line takes, from every app together; later ones are skipped and logged. */
+export const LINE_ADJUSTMENTS_PER_LINE_MAX = 5;
+/** The largest add-on to one unit, in minor units. */
+export const LINE_ADJUSTMENT_MAX_MINOR = 1_000_000_000_000;
+
 /**
- * Unit prices in the cart currency's minor units, before buyer-input
- * surcharges (they are added on top). The platform rounds each half-up to
- * the market's price increment. Several apps: the first in priority order
- * that prices a line wins. A line not named keeps its price.
+ * `prices`: unit prices in the cart currency's minor units, before
+ * buyer-input surcharges (they are added on top), only for lines priced at
+ * `fx` or `base`. Several apps: the first in priority order that prices a
+ * line wins. A line not named keeps its price.
+ *
+ * `adjustments`: add-ons to each unit of a line (an engraving's letters, a
+ * gift wrap), applied after the whole price precedence, so sale, segment
+ * and price-list lines take them too. Every app's add-ons apply, in priority
+ * order, at most LINE_ADJUSTMENTS_PER_LINE_MAX per line. Not on gift cards or
+ * bundle lines. The buyer sees each as a line component ("Add-on: <title>")
+ * in the cart, checkout, receipt and emails; tax, discounts, totals and
+ * refunds include it as part of the unit price.
+ *
+ * Every amount is in the cart currency (the presentment currency of the
+ * market) and is rounded half-up to the market's price increment; one that
+ * rounds to nothing is skipped.
  */
 export const cartLinePricesOutputSchema = z.object({
   prices: z.array(z.object({
     lineId: id,
     unitPriceMinor: minor.positive(),
-  }).strict()).max(250),
+  }).strict()).max(250).default([]),
+  adjustments: z.array(z.object({
+    lineId: id,
+    /** Added to each unit of the line. */
+    amountMinor: minor.positive().max(LINE_ADJUSTMENT_MAX_MINOR),
+    /** What the buyer sees on the line ("Engraving, 6 letters"). */
+    title: label,
+  }).strict()).max(250).default([]),
 }).strict();
 
 // ── Registry ──────────────────────────────────────────────────────────────
@@ -253,45 +257,69 @@ export const buyerUiInputSchema = z.object({
   target: z.enum(PLUGIN_BLOCK_TARGETS), language: z.string().min(1).max(35), locale: z.string().min(1).max(35), currency: z.string().length(3),
   cart: functionCartSchema.nullable(), attributes: checkoutAttributesSchema,
   order: z.object({ orderId: id, status: z.string().max(64), paymentStatus: z.string().max(64), lines: z.array(z.object({ productId: id, variantId: id, quantity: z.number().int().min(1) }).strict()).max(250) }).strict().nullable(),
-  customer: z.object({ id }).strict().nullable(), snapshot: functionSnapshotSchema.optional(),
+  customer: z.object({ id }).strict().nullable(), reads,
 }).strict();
 export type BuyerUiInput = z.infer<typeof buyerUiInputSchema>;
 
 export const PLUGIN_FUNCTION_SCHEMAS = {
   "buyer.ui": { input: buyerUiInputSchema, output: buyerUiOutputSchema },
   "cart.transform": {
-    input: z.object({ cart: functionCartSchema }).strict(),
+    input: z.object({ cart: functionCartSchema, reads }).strict(),
     output: cartTransformOutputSchema,
   },
   "cart.line_prices": {
     input: z.object({
       cart: functionCartSchema,
       lines: z.array(functionLinePriceFactsSchema).max(250),
-      snapshot: functionSnapshotSchema.optional(),
+      reads,
     }).strict(),
     output: cartLinePricesOutputSchema,
   },
   "cart.validate": {
-    input: z.object({ cart: functionCartSchema }).strict(),
+    input: z.object({ cart: functionCartSchema, reads }).strict(),
     output: cartValidateOutputSchema,
   },
   "checkout.discounts": {
-    input: z.object({ cart: functionCartSchema, snapshot: functionSnapshotSchema.optional() }).strict(),
+    input: z.object({ cart: functionCartSchema, reads }).strict(),
     output: checkoutDiscountsOutputSchema,
   },
   "checkout.shipping_rates": {
-    input: z.object({ cart: functionCartSchema, rates: z.array(functionShippingRateSchema).max(50) }).strict(),
+    input: z.object({ cart: functionCartSchema, rates: z.array(functionShippingRateSchema).max(50), reads }).strict(),
     output: checkoutShippingRatesOutputSchema,
   },
   "checkout.payment_methods": {
-    input: z.object({ cart: functionCartSchema, methods: z.array(z.object({ methodId: id, name: label }).strict()).max(20) }).strict(),
+    input: z.object({ cart: functionCartSchema, methods: z.array(z.object({ methodId: id, name: label }).strict()).max(20), reads }).strict(),
     output: checkoutPaymentMethodsOutputSchema,
-  },
-  "order.risk": {
-    input: orderRiskInputSchema,
-    output: orderRiskOutputSchema,
   },
 } as const satisfies Record<PluginFunctionPoint, { input: z.ZodType; output: z.ZodType }>;
 
+/** What a function receives (defaults applied). */
 export type PluginFunctionInput<P extends PluginFunctionPoint> = z.infer<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["input"]>;
+/** An input as a caller may write it (defaults left out): what the test harness takes. */
+export type PluginFunctionInputDraft<P extends PluginFunctionPoint> = z.input<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["input"]>;
+/** An answer as the platform reads it (defaults applied). */
 export type PluginFunctionOutput<P extends PluginFunctionPoint> = z.infer<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["output"]>;
+/** An answer as a function writes it (defaults may be left out). */
+export type PluginFunctionAnswer<P extends PluginFunctionPoint> = z.input<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["output"]>;
+
+/** The refusal code of an answer that fails its point's schema; the host skips the app (or blocks, `onError`). */
+export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function.invalid_output";
+
+/**
+ * A function's answer checked the way the host checks it: the parsed output,
+ * or `function.invalid_output` with the first issue's path. The host and the
+ * SDK test harness both use this, so a test sees what production does.
+ */
+export function checkPluginFunctionOutput<P extends PluginFunctionPoint>(
+  point: P,
+  value: unknown,
+): { ok: true; value: PluginFunctionOutput<P> } | { ok: false; code: typeof PLUGIN_FUNCTION_INVALID_OUTPUT; message: string } {
+  const parsed = PLUGIN_FUNCTION_SCHEMAS[point].output.safeParse(value);
+  if (parsed.success) return { ok: true, value: parsed.data as PluginFunctionOutput<P> };
+  const issue = parsed.error.issues[0];
+  return {
+    ok: false,
+    code: PLUGIN_FUNCTION_INVALID_OUTPUT,
+    message: `Invalid ${point} output${issue ? ` at ${issue.path.join(".") || "(root)"}: ${issue.message}` : ""}.`,
+  };
+}

@@ -190,6 +190,31 @@ export interface PluginTimeline {
   }): Promise<{ id: string }>;
 }
 
+/**
+ * Actions on a placed order, for event handlers (a reaction after commit,
+ * never a checkout decision): an `order.created` handler that finds the
+ * order risky holds it for review. `hold` and `assessRisk` need the
+ * write_orders scope, `riskHistory` read_orders. Each is idempotent per
+ * order and app, so a redelivered event changes nothing.
+ */
+export interface PluginOrders {
+  /**
+   * Puts the order on hold for staff review: it is not shipped, handed over
+   * or moved on until staff release it (cancelling stays possible). One hold
+   * per order and app; a hold staff released is not placed again. Nothing is
+   * ever cancelled automatically. `reason` (plain text, 500 characters) is
+   * shown to staff: never put buyer contact data in it.
+   */
+  hold(input: { orderId: string; reason: string }): Promise<void>;
+  /**
+   * Advice staff see on the order's customer card: a level and up to five
+   * reasons (200 characters each). One per order and app: the first stands.
+   */
+  assessRisk(input: { orderId: string; level: "low" | "medium" | "high"; reasons: string[] }): Promise<void>;
+  /** The buyer's earlier orders, counts only: the same customer record or account, incomplete payments left out. */
+  riskHistory(orderId: string): Promise<{ orders: number; cancelled: number; returnedToSender: number }>;
+}
+
 export interface PluginLogger {
   debug(message: string, fields?: Record<string, unknown>): void;
   info(message: string, fields?: Record<string, unknown>): void;
@@ -215,6 +240,7 @@ export interface PluginContext {
   customFields: PluginCustomFields;
   messaging: PluginMessaging;
   timeline: PluginTimeline;
+  orders: PluginOrders;
   log: PluginLogger;
 }
 

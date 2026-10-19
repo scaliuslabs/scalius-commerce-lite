@@ -90,6 +90,10 @@ export interface PluginRuntimeBridge {
   messagingPush?(input: unknown): Promise<{ delivered: boolean }>;
   /** Optional on older hosts: an app built for this SDK on an older platform gets a clear refusal. */
   timelineAdd?(input: unknown): Promise<{ id: string }>;
+  /** Optional on older hosts (`ctx.orders`): a clear refusal. */
+  ordersHold?(input: unknown): Promise<void>;
+  ordersAssessRisk?(input: unknown): Promise<void>;
+  ordersRiskHistory?(orderId: unknown): Promise<{ orders: number; cancelled: number; returnedToSender: number }>;
 }
 
 const MAX_LOGS = 100;
@@ -272,6 +276,20 @@ function createContext(seed: PluginContextSeed, bridge: PluginRuntimeBridge, log
       add: (input: unknown) => call(() => {
         if (!bridge.timelineAdd) throw new Error("[timeline.not_allowed] This platform does not take order timeline entries yet.");
         return bridge.timelineAdd(input);
+      }),
+    }),
+    orders: Object.freeze({
+      hold: (input: unknown) => call(() => {
+        if (!bridge.ordersHold) throw new Error("[orders.unavailable] This platform does not take order holds from apps yet.");
+        return bridge.ordersHold(input);
+      }),
+      assessRisk: (input: unknown) => call(() => {
+        if (!bridge.ordersAssessRisk) throw new Error("[orders.unavailable] This platform does not take order risk advice from apps yet.");
+        return bridge.ordersAssessRisk(input);
+      }),
+      riskHistory: (orderId: unknown) => call(() => {
+        if (!bridge.ordersRiskHistory) throw new Error("[orders.unavailable] This platform does not give order history to apps yet.");
+        return bridge.ordersRiskHistory(orderId);
       }),
     }),
     log: Object.freeze({ debug: log("debug"), info: log("info"), warn: log("warn"), error: log("error") }),

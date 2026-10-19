@@ -1,7 +1,7 @@
 // The fraud port: a courier-history or risk lookup for a buyer's phone. It
 // is the merchant's tool on the order page (advice, never automatic
-// blocking); an app that must stop fulfilment for review answers the
-// `order.risk` function with `action: "hold"` instead.
+// blocking); an app that must stop fulfilment for review handles
+// `order.created` and calls `ctx.orders.hold` instead.
 
 import { z } from "zod";
 import { providerRefSchema } from "./common";

@@ -14815,7 +14815,6 @@
                     "checkout.discounts",
                     "checkout.shipping_rates",
                     "checkout.payment_methods",
-                    "order.risk",
                     "buyer.ui"
                   ]
                 },
@@ -14831,20 +14830,49 @@
                   ],
                   "description": "block: the app pauses checkout when it cannot answer (needs approval)."
                 },
-                "snapshotObject": {
-                  "type": "string",
-                  "nullable": true,
-                  "description": "checkout.discounts and cart.line_prices: the app reads the signed-in buyer's record in this object type (checkout.discounts also updates it with each order)."
+                "reads": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "as": {
+                        "type": "string"
+                      },
+                      "object": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "The app's object type read; null for a custom-field read."
+                      },
+                      "customFields": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "The app's own custom fields read (`<owner>:<key>`); empty for an object read."
+                      },
+                      "key": {
+                        "type": "string",
+                        "description": "What the read is keyed by: customer, line.variantId, line.productId, attribute.<key>, or from:<read>.<field>."
+                      }
+                    },
+                    "required": [
+                      "as",
+                      "object",
+                      "customFields",
+                      "key"
+                    ]
+                  },
+                  "description": "The app's data the function reads at checkout (checkout.discounts may also update those records with the order)."
                 }
               },
               "required": [
                 "point",
                 "priority",
                 "onError",
-                "snapshotObject"
+                "reads"
               ]
             },
-            "description": "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)."
+            "description": "The checkout function points the app implements (cart rules, prices, discounts, delivery options, payment methods, buyer UI)."
           }
         },
         "required": [
@@ -67075,6 +67103,50 @@
                                   ]
                                 }
                               },
+                              "adjustments": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text",
+                                        "textarea",
+                                        "select",
+                                        "checkbox"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "displayValue": {
+                                      "type": "string"
+                                    },
+                                    "price": {
+                                      "type": "number"
+                                    },
+                                    "priceMinor": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "type",
+                                    "label",
+                                    "value",
+                                    "displayValue",
+                                    "price",
+                                    "priceMinor"
+                                  ]
+                                }
+                              },
                               "propertiesHash": {
                                 "type": "string"
                               },
@@ -67134,6 +67206,7 @@
                               "propertiesPrice",
                               "propertiesPriceMinor",
                               "properties",
+                              "adjustments",
                               "propertiesHash",
                               "fulfillmentKind",
                               "fulfillmentType",
@@ -68797,6 +68870,50 @@
                               "propertiesPriceMinor": {
                                 "type": "integer"
                               },
+                              "adjustments": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text",
+                                        "textarea",
+                                        "select",
+                                        "checkbox"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "displayValue": {
+                                      "type": "string"
+                                    },
+                                    "price": {
+                                      "type": "number"
+                                    },
+                                    "priceMinor": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "type",
+                                    "label",
+                                    "value",
+                                    "displayValue",
+                                    "price",
+                                    "priceMinor"
+                                  ]
+                                }
+                              },
                               "propertiesHash": {
                                 "type": "string"
                               }
@@ -68811,6 +68928,7 @@
                               "fulfillmentType",
                               "properties",
                               "propertiesPriceMinor",
+                              "adjustments",
                               "propertiesHash"
                             ]
                           }

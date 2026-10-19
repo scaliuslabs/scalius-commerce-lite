@@ -14,6 +14,7 @@ import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 import { renderEmptyCartState } from "./empty-state";
 import { renderCartIssueAction } from "./issue-action";
 import { reconcileValidatedCartSnapshot } from "./validation-reconciliation";
+import { cartLinePropertyText } from "./line-properties-view";
 import {
   getBulkCartRepairActionCounts,
   renderBulkCartRepairActions,
@@ -352,6 +353,27 @@ describe("reconcileValidatedCartSnapshot", () => {
     expect(state.totalItems).toBe(2);
     expect(state.totalAmount).toBe(300);
     expect(state.discountCodes).toEqual(["SAVE"]);
+  });
+
+  it("shows the apps' add-ons the server priced in as display-only line components, and clears them", () => {
+    cartStore.set({
+      items: {
+        [validatedLineKey]: { id: "prod_1", name: "Cotton Panjabi", price: 350, quantity: 2, variantId: "variant_1", freeDelivery: false },
+      },
+      totalItems: 2,
+      totalAmount: 700,
+      discountCodes: [],
+    });
+    const engraving = { key: "_adjustment", type: "text" as const, label: "Add-on", value: "Engraving, 6 letters", displayValue: "Engraving, 6 letters", price: 200, priceMinor: 20_000 };
+    expect(reconcileValidatedCartSnapshot(validationResult(false, { unitPrice: 350, adjustments: [engraving] }))).toBe(true);
+    const line = cartStore.get().items[validatedLineKey]!;
+    expect(line.adjustments).toEqual([{ label: "Add-on", displayValue: "Engraving, 6 letters", priceMinor: 20_000 }]);
+    // Never identity: no inputs, the same key, nothing checkout would send back.
+    expect(line.properties).toBeUndefined();
+    expect(cartLinePropertyText(line.adjustments![0]!, "+{price}", "BDT")).toMatch(/^Add-on: Engraving, 6 letters \(\+.*200/);
+    expect(reconcileValidatedCartSnapshot(validationResult(false, { unitPrice: 350, adjustments: [engraving] }))).toBe(false);
+    expect(reconcileValidatedCartSnapshot(validationResult(false, { unitPrice: 150, adjustments: [] }))).toBe(true);
+    expect(cartStore.get().items[validatedLineKey]!.adjustments).toBeUndefined();
   });
 
   it("replaces an untrusted cart image with the authoritative resolved image snapshot", () => {

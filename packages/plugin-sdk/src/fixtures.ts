@@ -7,7 +7,7 @@
 //   harness.route("admin", "overview", fixtures.adminRouteRequest({ query: { cursor: "abc" } }));
 
 import type { EventTopic } from "@scalius/shared/events";
-import type { FunctionCart, PluginFunctionInput } from "@scalius/shared/plugins";
+import type { FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
 import type { PluginEvent, PluginRouteRequest } from "./context";
 
 let eventCounter = 0;
@@ -64,12 +64,14 @@ function cart(overrides: Partial<FunctionCart> = {}): FunctionCart {
   };
 }
 
-/** The input of the `checkout.discounts` function: a cart (see `cart`) and, optionally, the buyer's snapshot. */
-function checkoutDiscountsInput(overrides: { cart?: Partial<FunctionCart>; snapshot?: PluginFunctionInput<"checkout.discounts">["snapshot"] } = {}): PluginFunctionInput<"checkout.discounts"> {
-  return {
-    cart: cart(overrides.cart),
-    ...(overrides.snapshot === undefined ? {} : { snapshot: overrides.snapshot }),
-  };
+/** The input of the `checkout.discounts` function: a cart (see `cart`) and the function's declared reads (none by default). */
+function checkoutDiscountsInput(overrides: { cart?: Partial<FunctionCart>; reads?: FunctionReads } = {}): PluginFunctionInput<"checkout.discounts"> {
+  return { cart: cart(overrides.cart), reads: overrides.reads ?? {} };
+}
+
+/** One read record, as `input.reads` carries it (`{ revision, data }`). */
+function readRecord<T extends Record<string, unknown>>(data: T, revision = 1): { revision: number; data: T } {
+  return { revision, data };
 }
 
 /** A dashboard request to an admin route: a GET by a staff member, with no query or body. */
@@ -86,4 +88,4 @@ function adminRouteRequest(overrides: Partial<PluginRouteRequest> = {}): PluginR
   };
 }
 
-export const fixtures = { event, cartLine, cart, checkoutDiscountsInput, adminRouteRequest };
+export const fixtures = { event, cartLine, cart, checkoutDiscountsInput, readRecord, adminRouteRequest };

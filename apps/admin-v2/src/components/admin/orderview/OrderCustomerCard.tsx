@@ -39,7 +39,7 @@ function HoldReleased({ hold }: { hold: OrderHold }) {
 }
 
 /**
- * Apps' risk checks of the order (`order.risk`), as advice: the level is a
+ * Apps' risk checks of the order (`ctx.orders.assessRisk`), as advice: the level is a
  * word on the badge, not only its colour, and nothing here acts on the order.
  * A hold an app placed and staff released shows under that app's check (an
  * open one is the page's hold notice). Part of the order read, so everyone

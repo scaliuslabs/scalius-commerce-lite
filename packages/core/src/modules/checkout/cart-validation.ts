@@ -144,6 +144,14 @@ export interface StorefrontCartValidatedItem {
     propertiesPriceMinor: number;
     /** Labelled snapshot entries frozen on the order line. */
     properties: ResolvedLineProperty[];
+    /**
+     * Apps' add-ons to each unit (`cart.line_prices` adjustments), in
+     * `unitPriceMinor`; frozen on the order line after its buyer inputs.
+     * Never buyer inputs: no identity, never sent back. Absent: none.
+     */
+    adjustments?: ResolvedLineProperty[];
+    /** Their sum per unit (0 or absent: none). */
+    adjustmentsMinor?: number;
     /** Identity form for the cart line key and the quote fingerprint. */
     canonicalProperties: CanonicalLineProperty[];
     fulfillmentKind: FulfillmentKind;
@@ -483,6 +491,8 @@ export function resolveStorefrontCartValidationFromRows(
         priceScope?: CheckoutPriceScope | null;
         /** `cart.line_prices` answers by line index (app-line-prices.ts). */
         appPrices?: ReadonlyMap<number, AppLinePrice>;
+        /** `cart.line_prices` add-ons by line index, already rounded and bounded. */
+        appAdjustments?: ReadonlyMap<number, ResolvedLineProperty[]>;
         /**
          * Skip the submitted-price check: the first pass of an app-priced
          * cart, whose final prices are not known yet (never a final answer).
@@ -767,7 +777,10 @@ export function resolveStorefrontCartValidationFromRows(
             appPrice,
         );
         const propertiesPriceMinor = resolvedProperties.propertiesPriceMinor;
-        const unitPriceMinor = baseUnitPriceMinor + propertiesPriceMinor;
+        // App add-ons apply after the whole precedence, to whatever priced the line.
+        const adjustments = isGiftCard || item.bundle ? [] : options.appAdjustments?.get(index) ?? [];
+        const adjustmentsMinor = adjustments.reduce((total, adjustment) => total + adjustment.priceMinor, 0);
+        const unitPriceMinor = baseUnitPriceMinor + propertiesPriceMinor + adjustmentsMinor;
         const submittedPriceMinor = typeof item.price === "number"
             ? Number.isFinite(item.price) && item.price >= 0 ? toMinor(item.price, decimalPlaces) : -1
             : undefined;
@@ -817,6 +830,7 @@ export function resolveStorefrontCartValidationFromRows(
             sourceIndex: item.sourceIndex ?? index,
             propertiesPriceMinor,
             properties: resolvedProperties.properties,
+            ...(adjustments.length > 0 ? { adjustments, adjustmentsMinor } : {}),
             canonicalProperties: resolvedProperties.canonical,
             fulfillmentKind,
             isGiftCard,
@@ -1060,6 +1074,10 @@ export function presentStorefrontCartValidation(
             properties: item.properties.map((property) => ({
                 ...property,
                 price: fromMinor(property.priceMinor, decimalPlaces),
+            })),
+            adjustments: (item.adjustments ?? []).map((adjustment) => ({
+                ...adjustment,
+                price: fromMinor(adjustment.priceMinor, decimalPlaces),
             })),
             propertiesHash: propertiesHashes[position]
                 ?? (canonicalProperties.length === 0 ? NO_PROPERTIES_HASH : ""),

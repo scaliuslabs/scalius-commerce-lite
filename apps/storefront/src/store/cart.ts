@@ -38,6 +38,18 @@ export type CartLineProperty = {
   priceMinor: number;
 };
 
+/**
+ * An app's add-on to a line ("Add-on: Engraving, 6 letters (+৳300)"), as the
+ * last cart check priced it. Display only: it is in `price` already, has no
+ * identity and is never sent to checkout (the server adds it again).
+ */
+export type CartLineAdjustment = {
+  label: string;
+  displayValue: string;
+  /** Per unit, in minor units. */
+  priceMinor: number;
+};
+
 export type CartItem = {
   id: string;
   slug?: string;
@@ -55,6 +67,8 @@ export type CartItem = {
   properties?: CartLineProperty[];
   /** `linePropertiesHash` of `properties`; "none" without inputs. Part of the line key. */
   propertiesHash?: string;
+  /** Apps' add-ons from the last cart check (display only, never identity). */
+  adjustments?: CartLineAdjustment[];
   /** What the SKU is. Unknown (older lines) is treated as physical: it needs delivery. */
   fulfillmentKind?: FulfillmentKind;
 };
@@ -114,6 +128,8 @@ export type CartLineRefresh = Partial<
 > & {
   /** Display labels and surcharges of the same inputs (keys and values must not change). */
   properties?: CartLineProperty[];
+  /** The apps' add-ons the server priced in (an empty list clears them). */
+  adjustments?: CartLineAdjustment[];
 };
 
 export type CartLineItemUpdate = {
@@ -309,6 +325,23 @@ export function normalizeCartLineProperties(
   return properties;
 }
 
+const MAX_LINE_ADJUSTMENTS = 5;
+
+/** Add-ons from a server answer or a stored cart: display only, so bad entries are dropped, never the line. */
+export function normalizeCartLineAdjustments(value: unknown): CartLineAdjustment[] {
+  if (!Array.isArray(value)) return [];
+  const adjustments: CartLineAdjustment[] = [];
+  for (const entry of value.slice(0, MAX_LINE_ADJUSTMENTS)) {
+    if (!isRecord(entry)) continue;
+    const label = boundedText(entry.label, MAX_PROPERTY_LABEL_LENGTH);
+    const displayValue = boundedText(entry.displayValue, MAX_PROPERTY_DISPLAY_LENGTH);
+    const priceMinor = toNumber(entry.priceMinor);
+    if (!label || !displayValue || !Number.isSafeInteger(priceMinor) || priceMinor <= 0) continue;
+    adjustments.push({ label, displayValue, priceMinor });
+  }
+  return adjustments;
+}
+
 /** The identity part of a line's inputs, as checkout sends them. */
 export function cartLinePropertyInputs(
   item: Pick<CartItem, "properties">,
@@ -325,6 +358,11 @@ export function cartLinePropertiesHash(
 
 function isPropertiesHash(value: unknown): value is string {
   return value === NO_PROPERTIES_HASH || (typeof value === "string" && PROPERTIES_HASH_PATTERN.test(value));
+}
+
+function adjustmentsOf(value: unknown): { adjustments?: CartLineAdjustment[] } {
+  const adjustments = normalizeCartLineAdjustments(value);
+  return adjustments.length > 0 ? { adjustments } : {};
 }
 
 function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
@@ -376,6 +414,7 @@ function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
       typeof value.freeDelivery === "boolean" ? value.freeDelivery : undefined,
     ...(properties.length > 0 ? { properties } : {}),
     propertiesHash,
+    ...(adjustmentsOf(value.adjustments)),
     ...(isFulfillmentKind(value.fulfillmentKind) ? { fulfillmentKind: value.fulfillmentKind } : {}),
   };
 }
@@ -819,6 +858,7 @@ export function updateCartItemsByKeyAtomically(
       if (!sameIdentity) return false;
       properties = next.length > 0 ? next : undefined;
     }
+    const adjustments = updates.adjustments !== undefined ? normalizeCartLineAdjustments(updates.adjustments) : existingItem.adjustments ?? [];
     const refreshed = { ...existingItem, ...updates, properties, quantity };
     const refreshedItem: Omit<CartItem, "quantity"> = {
       id: refreshed.id,
@@ -834,6 +874,7 @@ export function updateCartItemsByKeyAtomically(
         : {}),
       ...(properties ? { properties } : {}),
       propertiesHash: existingItem.propertiesHash ?? NO_PROPERTIES_HASH,
+      ...(adjustments.length > 0 ? { adjustments } : {}),
       ...(isFulfillmentKind(refreshed.fulfillmentKind)
         ? { fulfillmentKind: refreshed.fulfillmentKind }
         : {}),

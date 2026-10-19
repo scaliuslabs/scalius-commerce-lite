@@ -45,7 +45,6 @@ import { paymentProvidersFromRegistrations } from "../../plugins/providers/payme
 import { requestProviderRuntime } from "../../plugins/providers/runtime";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { commitTaxDocument } from "@scalius/core/modules/tax";
-import { runOrderRiskChecks } from "../../plugins/order-risk";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 import { AppError, ValidationError, RateLimitError } from "../../utils/api-error";
@@ -741,18 +740,6 @@ app.openapi(createOrderRoute, async (c) => {
       result.commitPayload.orderData.paymentStatus === PaymentStatus.PAID
         ? autoFulfilAfterResponse(c, db, result.orderId, "checkout-commit")
         : null,
-      // Apps' advisory risk checks: after the commit, never on the buyer's path.
-      !apps.points.has("order.risk") || committed.alreadyCommitted
-        ? null
-        : runOrderRiskChecks({
-          db,
-          apps,
-          prepared: result,
-          discountCodes: data.discountCodes,
-          customerId: committed.customerId,
-          accountOwnerCustomerId: committed.accountOwnerCustomerId,
-          channel: "online_store",
-        }),
       // The buyer's marketing consent: recorded after the commit, never able to fail the order.
       data.marketingConsent && committed.customerId && !committed.alreadyCommitted
         ? recordCheckoutMarketingConsent(db, {

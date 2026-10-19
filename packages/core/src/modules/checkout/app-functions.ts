@@ -47,6 +47,7 @@ import { collectionMembershipForConfig } from "../collections";
 import { orderMarketIdSql } from "../markets";
 import { allocateMinorAmount, type TaxDiscountAllocationInput } from "../tax";
 import type { AppDiscountTarget, AppliedAppDiscount, AppObjectCommit, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
+import { planAppFunctionReads, type AppFunctionReadRequest, type AppReadsCache } from "./app-reads";
 export type { AppDiscountTarget, AppliedAppDiscount, AppObjectCommit, CheckoutRateOption };
 
 // ── The runner checkout is given ────────────────────────────────────────────
@@ -60,8 +61,8 @@ export interface CheckoutAppFunctionResult<P extends PluginFunctionPoint> {
   appName: string;
   priority: number;
   output: PluginFunctionOutput<P>;
-  /** checkout.discounts: the snapshot write the answer commits with the order, checked by the platform. */
-  commit?: AppObjectCommit;
+  /** checkout.discounts: the writes of read records the answer commits with the order, checked by the platform. */
+  commits?: AppObjectCommit[];
 }
 
 /**
@@ -76,7 +77,12 @@ export interface CheckoutAppFunctions {
   readonly points: ReadonlySet<PluginFunctionPoint>;
   readonly attributes?: ReadonlyArray<{ appId: string; fields: CheckoutAttribute[] }>;
   buyerUi?(input: Partial<Omit<BuyerUiInput, "target">> & { targets: readonly PluginBlockTarget[]; currency: string }): Promise<BuyerUiBlock[]>;
-  run<P extends PluginFunctionPoint>(point: P, input: PluginFunctionInput<P>): Promise<Array<CheckoutAppFunctionResult<P>>>;
+  /** `reads` is the platform's: each app gets its own declared reads. */
+  run<P extends PluginFunctionPoint>(point: P, input: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>>;
+  /** The declared reads of the apps at these points (none: no read). */
+  readRequests?(points: readonly PluginFunctionPoint[]): AppFunctionReadRequest[];
+  /** The request's resolved reads: a facts batch remembers what it read, `run` takes them from here. */
+  readonly reads?: AppReadsCache;
   /** A valid-looking output checkout could not use (an unknown line or rate): logged for the merchant. */
   report(pluginId: string, point: PluginFunctionPoint, message: string): void;
 }
@@ -93,7 +99,6 @@ const CART_POINTS: readonly PluginFunctionPoint[] = [
   "checkout.discounts",
   "checkout.shipping_rates",
   "checkout.payment_methods",
-  "order.risk",
   "buyer.ui",
 ];
 
@@ -146,6 +151,10 @@ function idList(column: AnyColumn, ids: readonly string[]): SQL {
  * product's category (with its ancestors), collections and brand, each SKU,
  * and the signed-in customer's tags, order count and spend, and the market
  * of the order's country. Called only when an active app implements a point.
+ *
+ * With `apps` and `points`, the same batch carries the declared reads of the
+ * apps at those points (app-reads.ts): more statements, never another wave.
+ * They are remembered in `apps.reads` for the calls that follow.
  */
 export async function loadAppFunctionCartFacts(
   db: Database,
@@ -155,6 +164,11 @@ export async function loadAppFunctionCartFacts(
     customerId?: string | null;
     /** `appCartMarketCountry()` of the cart: names its market (null: the backup market). */
     marketCountry: string | null;
+    /** The apps whose declared reads at `points` ride this batch. */
+    apps?: Pick<CheckoutAppFunctions, "readRequests" | "reads"> | undefined;
+    points?: readonly PluginFunctionPoint[];
+    /** The validated checkout attributes the cart will carry (`attribute.<key>` reads). */
+    attributes?: Record<string, string>;
   },
 ): Promise<AppFunctionCartFacts> {
   const productIds = [...new Set(input.productIds)];
@@ -188,8 +202,14 @@ export async function loadAppFunctionCartFacts(
     // The order's market, in the same batch: one more statement, no more waves.
     db.select({ id: orderMarketIdSql(input.marketCountry) }).from(sql`(SELECT 1) AS order_market_scope`),
   ];
+  const cache = input.apps?.reads;
+  const reads = cache && input.apps?.readRequests && input.points?.length
+    ? planAppFunctionReads(input.apps.readRequests(input.points), { customerId, variantIds, productIds, attributes: input.attributes ?? {} })
+    : null;
+  const readStatements = reads?.statements(db) ?? [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle batch tuple typing
-  const [productRows, ancestorRows, collectionRows, variantRows, customerRows, marketRows] = await db.batch(statements as any) as [
+  const batched = await db.batch([...statements, ...readStatements] as any) as unknown[][];
+  const [productRows, ancestorRows, collectionRows, variantRows, customerRows, marketRows] = batched as [
     Array<{ id: string; categoryId: string | null; brandId: string | null }>,
     Array<{ productId: string; ancestorId: string; depth: number }>,
     Array<{ id: string; config: unknown }>,
@@ -234,6 +254,8 @@ export async function loadAppFunctionCartFacts(
       totalSpentMinor: Math.max(0, Number(customer.totalSpentMinor) || 0),
     };
   }
+  // A buyer the batch did not find is a guest to the cart: those reads are not kept (a call reads them as a guest's).
+  if (reads && cache && (!customerId || facts.customer)) cache.remember(reads.resolve(batched.slice(statements.length)));
   return facts;
 }
 
@@ -364,7 +386,7 @@ export interface AppDiscountLineInput {
 
 export interface AppDiscountResolution {
   applied: AppliedAppDiscount[];
-  /** The snapshot writes of apps whose discounts applied: committed with the order, or the order fails. */
+  /** The record writes (read, then committed) of apps whose discounts applied: committed with the order, or the order fails. */
   commits: AppObjectCommit[];
   /** Codes an app discount answered to: not "not found" any more. */
   claimedCodes: string[];
@@ -474,7 +496,7 @@ export function resolveAppDiscounts(input: {
   const appliedApps = new Set(applied.map((discount) => discount.pluginId));
   return {
     applied,
-    commits: input.results.flatMap((result) => (result.commit && appliedApps.has(result.pluginId) ? [result.commit] : [])),
+    commits: input.results.flatMap((result) => (result.commits && appliedApps.has(result.pluginId) ? result.commits : [])),
     claimedCodes: [...claimed],
     merchandiseMinor: applied.reduce((total, discount) => total + discount.amountMinor, 0),
     shippingMinor: applied.reduce((total, discount) => total + discount.shippingAmountMinor, 0),

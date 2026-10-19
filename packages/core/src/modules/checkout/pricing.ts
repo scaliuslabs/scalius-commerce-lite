@@ -25,7 +25,7 @@ import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
 import { DELIVERY_RATE_UNAVAILABLE_REASON, deliveryRateInCurrency, destinationCountry, listDeliveryRatesForDestination, type DeliveryRateRow } from "../delivery";
 import { BUILT_IN_PAYMENT_PROVIDERS, COD_LABEL, type PaymentProviders } from "../payments";
 import { GIFT_CARD_PAYMENT_METHOD } from "../gift-cards";
-import type { StorefrontOrderCommitPayload, StorefrontOrderShippingMethodSnapshot } from "../orders";
+import type { StorefrontOrderShippingMethodSnapshot } from "../orders";
 import { resolveBundlePromotionInterplay, type BundlePromotionInterplay } from "./bundle-discounts";
 import type { StorefrontCartValidationResult } from "./cart-validation";
 import {
@@ -271,6 +271,10 @@ export async function priceStorefrontCheckout(
         customerId: input.customerId,
         // An order that ships nothing is placed in its billing country, where it is taxed.
         marketCountry: appCartMarketCountry(appDestination, input.billing?.countryCode),
+        // The apps' declared reads for every point this cart is asked at ride the same batch.
+        apps,
+        points: ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", "buyer.ui"],
+        attributes: input.attributes,
       }),
       wantsRates ? listRateOptions(db, input) : Promise.resolve([] as CheckoutRateOption[]),
     ]);
@@ -477,6 +481,9 @@ export async function checkStorefrontCartRules(
     variantIds: cartValidation.items.map((item) => item.variantId),
     customerId: input.customerId,
     marketCountry: appCartMarketCountry(destination),
+    apps,
+    points: ["cart.validate", "buyer.ui"],
+    attributes: input.attributes,
   });
   const cart = safeAppCart(() => buildAppFunctionCart({
     currency: input.currency,
@@ -532,6 +539,8 @@ export async function previewStorefrontAppDiscounts(
     variantIds: input.lines.map((line) => line.variantId),
     // A preview knows no address: the backup market.
     marketCountry: null,
+    apps,
+    points: ["checkout.discounts"],
   });
   const platformLines = new Map((input.platformAllocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
   const cart = safeAppCart(() => buildAppFunctionCart({
@@ -611,70 +620,6 @@ export async function assertStorefrontAppPaymentMethod(
       { reason: PAYMENT_METHOD_UNAVAILABLE_REASON },
     );
   }
-}
-
-function parseLineInputs(serialized: string | null | undefined): Array<{ key: string; value: string }> {
-  if (!serialized) return [];
-  try {
-    const parsed: unknown = JSON.parse(serialized);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((entry: unknown) => {
-      if (!entry || typeof entry !== "object") return [];
-      const { key, value } = entry as { key?: unknown; value?: unknown };
-      return typeof key === "string" && typeof value === "string" ? [{ key, value }] : [];
-    });
-  } catch {
-    return [];
-  }
-}
-
-/**
- * The app cart of a prepared order, for apps that only look at placed orders
- * (`order.risk`), built after the order committed so the buyer never waits
- * for it. Line totals are after the platform's discounts, before the apps'.
- */
-export async function buildAppCartFromOrderPayload(
-  db: Database,
-  input: {
-    payload: Pick<StorefrontOrderCommitPayload, "items" | "orderData" | "taxQuote">;
-    appDiscounts: readonly AppliedAppDiscount[];
-    discountCodes: readonly string[];
-    customerId: string | null;
-    channel: FunctionCart["channel"];
-  },
-): Promise<FunctionCart> {
-  const appPart = new Map<string, number>();
-  for (const discount of input.appDiscounts) {
-    for (const line of discount.lines) appPart.set(line.lineId, (appPart.get(line.lineId) ?? 0) + line.amountMinor);
-  }
-  const { items, orderData } = input.payload;
-  const destination = orderData.requiresShipping === false
-    ? null
-    : { country: orderData.shippingCountryCode, city: orderData.cityName ?? orderData.shippingLocality, zone: orderData.zoneName };
-  const facts = await loadAppFunctionCartFacts(db, {
-    productIds: items.map((item) => item.productId),
-    variantIds: items.map((item) => item.variantId),
-    customerId: input.customerId,
-    // The market the order was placed in (commit.ts): shipping country, else billing when taxed there.
-    marketCountry: appCartMarketCountry(destination, input.payload.taxQuote.jurisdiction?.addressSource === "billing" ? orderData.billingCountryCode : null),
-  });
-  return buildAppFunctionCart({
-    currency: { code: orderData.currencyCode, decimalPlaces: orderData.currencyDecimalPlaces },
-    channel: input.channel,
-    lines: items.map((item) => ({
-      lineId: item.taxAllocationLineId,
-      productId: item.productId,
-      variantId: item.variantId,
-      title: item.variantLabel ? `${item.productName ?? ""} (${item.variantLabel})` : item.productName ?? "",
-      quantity: item.quantity,
-      unitPriceMinor: item.unitPriceMinor,
-      discountMinor: Math.max(0, item.discountAmountMinor - (appPart.get(item.taxAllocationLineId) ?? 0)),
-      properties: parseLineInputs(item.properties),
-    })),
-    facts,
-    destination,
-    discountCodes: input.discountCodes,
-  });
 }
 
 /**

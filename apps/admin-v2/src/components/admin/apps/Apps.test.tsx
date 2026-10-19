@@ -551,20 +551,20 @@ describe("App page", () => {
       detail({
         request: grant({ functions: ["cart.validate", "checkout.discounts"], blockingFunctions: ["cart.validate"] }),
         functions: [
-          { point: "cart.validate", priority: 5, onError: "block", snapshotObject: null },
-          { point: "checkout.discounts", priority: 10, onError: "skip", snapshotObject: "balances" },
+          { point: "cart.validate", priority: 5, onError: "block", reads: [] },
+          { point: "checkout.discounts", priority: 10, onError: "skip", reads: [{ as: "balance", object: "balances", customFields: [], key: "customer" }] },
         ],
       }),
       VIEWER,
     );
     expect(text()).toContain("Can pause checkout when it can't answer: Check carts");
-    expect(text()).toContain("Reads and updates each signed-in buyer's \"balances\" record with their order");
+    expect(text()).toContain("Reads its \"balances\" records at checkout and may update them with the order");
   });
 
   it("explains buyer UI access in the consent list and function list", async () => {
     await renderApp(detail({
       request: grant({ functions: ["buyer.ui"] }),
-      functions: [{ point: "buyer.ui", priority: 10, onError: "skip", snapshotObject: null }],
+      functions: [{ point: "buyer.ui", priority: 10, onError: "skip", reads: [] }],
     }), VIEWER);
     expect(text()).toContain("Shows content and asks buyers questions in the cart, checkout and account");
     expect(text()).toContain("Shows content and questions to buyers");
@@ -574,9 +574,8 @@ describe("App page", () => {
     await renderApp(
       detail({
         functions: [
-          { point: "order.risk", priority: 20 },
-          { point: "cart.validate", priority: 5 },
-          { point: "checkout.discounts", priority: 10 },
+          { point: "cart.validate", priority: 5, reads: [] },
+          { point: "checkout.discounts", priority: 10, reads: [] },
         ],
       }),
       VIEWER,
@@ -589,7 +588,6 @@ describe("App page", () => {
     expect(rows).toEqual([
       "Checks carts before checkoutPriority 5",
       "Adds discounts at checkoutPriority 10",
-      "Rates new orders' risk (advice only)Priority 20",
     ]);
   });
 
@@ -818,7 +816,7 @@ describe("App page", () => {
 
   it("names checkout functions in Bangla", async () => {
     setLocale("bn");
-    await renderApp(detail({ functions: [{ point: "checkout.shipping_rates", priority: 3 }] }), VIEWER);
+    await renderApp(detail({ functions: [{ point: "checkout.shipping_rates", priority: 3, reads: [] }] }), VIEWER);
     expect(text()).toContain("চেকআউট ফাংশন");
     expect(text()).toContain("ডেলিভারি অপশন বদলায়");
     expect(text()).toContain("প্রায়োরিটি ৩");

@@ -38,6 +38,9 @@ const BRIDGE_METHODS = [
   "messagingNotifyStaff",
   "messagingPush",
   "timelineAdd",
+  "ordersHold",
+  "ordersAssessRisk",
+  "ordersRiskHistory",
 ] as const satisfies ReadonlyArray<keyof PluginBridgeApi>;
 
 /** The in-process adapter: the host class behind an RPC-shaped, copy-in/copy-out facade. */

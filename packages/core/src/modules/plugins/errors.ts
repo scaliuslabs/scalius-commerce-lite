@@ -58,6 +58,10 @@ export type PluginErrorCode =
   | "timeline.undeclared"
   | "timeline.invalid"
   | "timeline.not_found"
+  /** Order actions from event handlers (`ctx.orders`). */
+  | "orders.not_allowed"
+  | "orders.invalid"
+  | "orders.not_found"
   /** Rendering storefront output: only the app's settings and the section's declared collections are readable. */
   | "rate_limited"
   /** Quotas (docs/platform/PLUGINS.md, "Quotas"): over the plan's storage size or calls per run. */
@@ -105,6 +109,9 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "timeline.undeclared": 403,
   "timeline.invalid": 422,
   "timeline.not_found": 404,
+  "orders.not_allowed": 403,
+  "orders.invalid": 422,
+  "orders.not_found": 404,
   rate_limited: 429,
   "quota.storage": 507,
   "quota.subrequests": 429,

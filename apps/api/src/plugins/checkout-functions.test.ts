@@ -47,7 +47,6 @@ import { BUNDLED_PLUGINS } from "./bundled.gen";
 import { BundledLoader } from "./loaders/bundled";
 import type { PluginLoader } from "./loaders/types";
 import { createCheckoutAppFunctions } from "./checkout-functions";
-import { runOrderRiskChecks } from "./order-risk";
 import { PLUGIN_TEST_CREDENTIAL_KEY, pluginTestCtx, pluginTestEnv } from "./testing/fixtures";
 import { manifest as bulkManifest } from "./testing/apps/bulk-discount/src/index";
 
@@ -384,33 +383,6 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
     await expect(assertStorefrontAppPaymentMethod(runner, reviewed.appCart, "stripe", ["cod", "stripe"])).resolves.toBeUndefined();
     // Gift cards are tender: never hidden.
     await expect(assertStorefrontAppPaymentMethod(runner, reviewed.appCart, "gift_card", ["cod", "stripe"])).resolves.toBeUndefined();
-  });
-
-  it("order.risk runs after the commit, records advice the merchant sees, and a retried run adds nothing", async () => {
-    await installTestApp("acme.risk", [{ point: "order.risk" }]);
-    answers["acme.risk"] = (_point, payload) => {
-      expect(payload).toMatchObject({ totalMinor: 56_000, paymentMethod: "cod", history: { orders: 1, cancelled: 1, returnedToSender: 0 } });
-      return ok({ level: "high", reasons: ["One earlier order was cancelled."] });
-    };
-    const runner = await apps();
-    // An earlier cancelled order by the same buyer.
-    const earlier = await place(input([line("p_tea", "v_tea", 1, 500)]), runner);
-    sqlite.exec(`UPDATE orders SET status = 'cancelled' WHERE id = '${earlier.result.orderId}'`);
-    // Risk is async: placement never asked the risk app.
-    expect(fakeCalls.filter((call) => call.point === "order.risk")).toEqual([]);
-
-    const { result, committed } = await place(input([line("p_tea", "v_tea", 1, 500)]), runner);
-    const check = () => runOrderRiskChecks({
-      db, apps: runner, prepared: result, discountCodes: [], customerId: committed.customerId,
-      accountOwnerCustomerId: committed.accountOwnerCustomerId, channel: "online_store",
-    });
-    await check();
-    await check();
-    expect(one("SELECT count(*) AS n FROM order_events WHERE order_id = ? AND kind = 'app_risk'", result.orderId)).toEqual({ n: 1 });
-    const detail = await getOrderDetails(db, result.orderId);
-    expect(detail?.appRiskChecks).toEqual([{ appId: "acme.risk", appName: "acme.risk app", level: "high", reasons: ["One earlier order was cancelled."], checkedAt: expect.any(Date) }]);
-    // Advice only: the order is untouched.
-    expect(one("SELECT status FROM orders WHERE id = ?", result.orderId)).toEqual({ status: "pending" });
   });
 
   it("an app whose approved grant lacks the point never runs there", async () => {

@@ -11,12 +11,15 @@
 // `PluginFunctionsBlockedError` (checkout then refuses with the store's
 // buyer-safe message).
 //
-// Snapshots (checkout.discounts and cart.line_prices with `snapshot`): the
-// signed-in buyer's record in the declared object is read and passed in
-// with its revision; a checkout.discounts answer's `commit` becomes a
-// checked `AppObjectCommit` the order commit writes at that revision. A commit the platform cannot take
-// (no snapshot, a guest, an oversized record) invalidates the whole answer:
-// a discount must never apply without the write that pays for it.
+// Declared reads (manifest `reads`, core checkout/app-reads.ts): each app
+// gets its own as `input.reads`, from the request's reads cache (filled by
+// the checkout facts batch) or read now in one batch for every app at the
+// point. Reads over their bounds count as a failed answer. A
+// checkout.discounts answer's `commit` entries become checked
+// `AppObjectCommit`s the order commit writes at the revisions read. A commit
+// the platform cannot take (an undeclared or per-line read, a key with no id,
+// an invalid record) invalidates the whole answer: a discount must never
+// apply without the write that pays for it.
 
 import type { Database } from "@scalius/database/client";
 import { getDb } from "@scalius/database/client";
@@ -25,11 +28,18 @@ import {
   PluginError,
   type RegisteredPlugin,
 } from "@scalius/core/modules/plugins";
-import { getObjectRecordVersion, prepareAppObjectCommit, ObjectError } from "@scalius/core/modules/objects";
+import { prepareAppObjectCommit, ObjectError } from "@scalius/core/modules/objects";
+import {
+  appReadContextOfInput,
+  createAppReadsCache,
+  NO_APP_FUNCTION_READS,
+  type AppFunctionReadRequest,
+  type AppFunctionReadResult,
+  type AppReadsCache,
+} from "@scalius/core/modules/checkout";
 import type { AppObjectCommit } from "@scalius/shared/checkout-app-facts";
 import {
   PLUGIN_FUNCTION_SCHEMAS,
-  PLUGIN_SNAPSHOT_FUNCTION_POINTS,
   type PluginFunctionInput,
   type PluginFunctionOutput,
   type PluginFunctionPoint,
@@ -40,8 +50,8 @@ export interface PluginFunctionResult<P extends PluginFunctionPoint> {
   pluginId: string;
   priority: number;
   output: PluginFunctionOutput<P>;
-  /** checkout.discounts: the snapshot write this answer commits with the order. */
-  commit?: AppObjectCommit;
+  /** checkout.discounts: the writes of read records this answer commits with the order. */
+  commits?: AppObjectCommit[];
 }
 
 /** An app registered with `onError: "block"` could not answer: checkout must stop. */
@@ -55,6 +65,16 @@ export class PluginFunctionsBlockedError extends Error {
 /** Plugins asked at once; each is CPU-bound and wall-limited, so a few in flight bound latency. */
 const CONCURRENCY = 4;
 
+/** The declared reads of these registrations at `point`. */
+export function functionReadRequests(registered: readonly RegisteredPlugin[], point: PluginFunctionPoint): AppFunctionReadRequest[] {
+  return registered.flatMap(({ installation }) => {
+    const declaration = installation.manifest.functions.find((fn) => fn.point === point);
+    return declaration?.reads?.length
+      ? [{ pluginId: installation.pluginId, point, reads: declaration.reads, objects: installation.manifest.objects }]
+      : [];
+  });
+}
+
 /**
  * Runs `point` for every active implementing plugin and returns the valid
  * outputs, ordered by priority then plugin id. A plugin that throws, times
@@ -65,7 +85,7 @@ const CONCURRENCY = 4;
  */
 export async function runPluginFunctions<P extends PluginFunctionPoint>(
   point: P,
-  input: PluginFunctionInput<P>,
+  input: Omit<PluginFunctionInput<P>, "reads">,
   env: Env,
   ctx: ExecutionContext,
   options: {
@@ -75,7 +95,8 @@ export async function runPluginFunctions<P extends PluginFunctionPoint>(
     registered?: readonly RegisteredPlugin[];
     /** A host shared by the request's calls (one settings read per plugin). */
     host?: PluginHost;
-    snapshots?: Map<string, Promise<SnapshotRead["value"]>>;
+    /** The request's resolved reads (absent: read here, in one batch). */
+    reads?: AppReadsCache;
   } = {},
 ): Promise<Array<PluginFunctionResult<P>>> {
   const db = options.db ?? getDb(env);
@@ -91,6 +112,9 @@ export async function runPluginFunctions<P extends PluginFunctionPoint>(
     const { PluginHost } = await import("./host");
     return new PluginHost({ env, ctx, db, ...(options.loaderFor ? { loaderFor: options.loaderFor } : {}) });
   })();
+  const requests = functionReadRequests(registered, point);
+  const readsCache = requests.length > 0 ? options.reads ?? createAppReadsCache(db) : null;
+  const readContext = appReadContextOfInput(checked.data);
   const results: Array<PluginFunctionResult<P> | null> = new Array(registered.length).fill(null);
   const blocked: string[] = [];
   let next = 0;
@@ -100,7 +124,11 @@ export async function runPluginFunctions<P extends PluginFunctionPoint>(
       next += 1;
       const { installation, priority } = registered[index]!;
       const declaration = installation.manifest.functions.find((fn) => fn.point === point);
-      let scopedInput = checked.data;
+      const fail = () => {
+        // Only an approved grant lets an app pause checkout.
+        if (declaration?.onError === "block" && installation.grant?.blockingFunctions.includes(point)) blocked.push(installation.pluginId);
+      };
+      let scopedInput = checked.data as Record<string, unknown>;
       if (point === "buyer.ui") {
         const buyer = checked.data as PluginFunctionInput<"buyer.ui">;
         if (!declaration?.targets?.includes(buyer.target)) continue;
@@ -108,21 +136,25 @@ export async function runPluginFunctions<P extends PluginFunctionPoint>(
         const own = Object.fromEntries(Object.entries(buyer.attributes).filter(([key]) => key.startsWith(prefix)));
         scopedInput = { ...buyer, attributes: Object.fromEntries(Object.entries(own).map(([key, value]) => [key.slice(prefix.length), value])), cart: buyer.cart ? { ...buyer.cart, attributes: own } : null };
       }
-      const snapshot = (PLUGIN_SNAPSHOT_FUNCTION_POINTS as readonly string[]).includes(point)
-        ? await readSnapshot(db, installation, declaration?.snapshot, scopedInput, options.snapshots)
-        : undefined;
-      const outcome = await host.invokeFunction(installation, point, snapshot ? { ...scopedInput, snapshot: snapshot.value } : scopedInput);
+      const read: AppFunctionReadResult = readsCache && declaration?.reads?.length
+        ? await readsCache.get(requests, readContext, installation.pluginId, point)
+        : NO_APP_FUNCTION_READS;
+      if (!read.ok) {
+        await host.incident(installation, `function:${point}`, `${read.reason} The function did not run.`);
+        fail();
+        continue;
+      }
+      const outcome = await host.invokeFunction(installation, point, { ...scopedInput, reads: read.reads });
       if (!outcome.ok || !outcome.value) {
-        // Only an approved grant lets an app pause checkout.
-        if (declaration?.onError === "block" && installation.grant?.blockingFunctions.includes(point)) blocked.push(installation.pluginId);
+        fail();
         continue;
       }
       const result: PluginFunctionResult<P> = { pluginId: installation.pluginId, priority, output: outcome.value };
-      const commit = (outcome.value as { commit?: { record: unknown } }).commit;
-      if (commit) {
-        const prepared = await prepareCommit(host, installation, snapshot, commit.record, checked.data);
+      const commit = (outcome.value as { commit?: Array<{ as: string; record: unknown }> }).commit;
+      if (commit?.length) {
+        const prepared = await prepareCommits(host, installation, point, read, commit);
         if (!prepared) continue;
-        result.commit = prepared;
+        result.commits = prepared;
       }
       results[index] = result;
     }
@@ -132,62 +164,41 @@ export async function runPluginFunctions<P extends PluginFunctionPoint>(
   return results.filter((result): result is PluginFunctionResult<P> => result !== null);
 }
 
-interface SnapshotRead {
-  object: string;
-  customerId: string;
-  value: { revision: number; data: Record<string, unknown> } | null;
-}
-
-/** The signed-in buyer's record in the declared object; none for a guest or an app without a snapshot. */
-async function readSnapshot(
-  db: Database,
-  installation: RegisteredPlugin["installation"],
-  snapshot: { object: string } | undefined,
-  input: unknown,
-  snapshots?: Map<string, Promise<SnapshotRead["value"]>>,
-): Promise<SnapshotRead | undefined> {
-  if (!snapshot) return undefined;
-  const buyer = input as { cart?: { customer?: { id?: string } | null }; customer?: { id?: string } | null };
-  const customerId = buyer.cart?.customer?.id ?? buyer.customer?.id;
-  if (!customerId) return { object: snapshot.object, customerId: "", value: null };
-  const key = `${installation.pluginId}\0${snapshot.object}\0${customerId}`;
-  let record = snapshots?.get(key);
-  if (!record) {
-    record = getObjectRecordVersion(db, installation.pluginId, snapshot.object, customerId);
-    snapshots?.set(key, record);
-  }
-  return { object: snapshot.object, customerId, value: await record };
-}
-
-/** The answer's commit as the order will write it, or null (logged) when the platform cannot take it. */
-async function prepareCommit(
+/** The answer's commits as the order will write them, or null (logged) when the platform cannot take one. */
+async function prepareCommits(
   host: PluginHost,
   installation: RegisteredPlugin["installation"],
-  snapshot: SnapshotRead | undefined,
-  record: unknown,
-  input: unknown,
-): Promise<AppObjectCommit | null> {
+  point: PluginFunctionPoint,
+  read: Extract<AppFunctionReadResult, { ok: true }>,
+  commits: ReadonlyArray<{ as: string; record: unknown }>,
+): Promise<AppObjectCommit[] | null> {
   const refuse = async (reason: string) => {
-    await host.incident(installation, "function:checkout.discounts", `${reason} The answer was skipped.`);
+    await host.incident(installation, `function:${point}`, `${reason} The answer was skipped.`);
     return null;
   };
-  if (!snapshot) return refuse("A commit needs a snapshot declared on checkout.discounts.");
-  if (!snapshot.customerId) return refuse("A commit needs a signed-in buyer.");
-  const declaration = installation.manifest.objects[snapshot.object];
-  if (!declaration) return refuse(`Storage object ${snapshot.object} is not declared.`);
-  const cart = (input as { cart?: { currency: string; decimalPlaces: number } }).cart;
-  try {
-    return prepareAppObjectCommit({
-      pluginId: installation.pluginId,
-      object: snapshot.object,
-      declaration,
-      id: snapshot.customerId,
-      expectedRevision: snapshot.value?.revision ?? null,
-      record,
-      ...(cart ? { context: { currencyCode: cart.currency, decimalPlaces: cart.decimalPlaces } } : {}),
-    });
-  } catch (error) {
-    if (error instanceof PluginError || error instanceof ObjectError) return refuse(`The commit record was refused: ${error.message}`);
-    throw error;
+  const prepared: AppObjectCommit[] = [];
+  const seen = new Set<string>();
+  for (const commit of commits) {
+    if (seen.has(commit.as)) return refuse(`The answer commits ${commit.as} twice.`);
+    seen.add(commit.as);
+    const target = read.targets[commit.as];
+    if (!target) return refuse(`A commit names ${commit.as}, which is not a single-key object read of this function with a record id (a guest's customer read, an empty attribute or hop, a per-line or custom-field read).`);
+    const declaration = installation.manifest.objects[target.object];
+    if (!declaration) return refuse(`Storage object ${target.object} is not declared.`);
+    try {
+      prepared.push(prepareAppObjectCommit({
+        pluginId: installation.pluginId,
+        object: target.object,
+        declaration,
+        id: target.id,
+        expectedRevision: target.revision,
+        record: commit.record,
+        context: target.context,
+      }));
+    } catch (error) {
+      if (error instanceof PluginError || error instanceof ObjectError) return refuse(`The commit record for ${commit.as} was refused: ${error.message}`);
+      throw error;
+    }
   }
+  return prepared;
 }

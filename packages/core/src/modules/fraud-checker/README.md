@@ -2,7 +2,7 @@
 
 The `fraud-checker` domain looks up a buyer's courier delivery history by phone number through the fraud port. It is a manual tool on the dashboard order page: it advises the merchant and never blocks checkout or an order. It is for contributors who change the lookup or the saved checkers.
 
-No checkout, order or payment code calls this domain. An installed app that must hold an order answers the `order.risk` function instead (`apps/api/src/plugins/order-risk.ts`).
+No checkout, order or payment code calls this domain. An installed app that must hold an order handles `order.created` and calls `ctx.orders.hold` instead (`apps/api/src/plugins/bridge.ts`).
 
 ## Entries and layer
 

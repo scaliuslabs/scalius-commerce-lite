@@ -417,9 +417,9 @@ export async function deleteObjectRecord(
 // ── Commits with an order ────────────────────────────────────────────────
 
 /**
- * An app's snapshot write, checked and indexed now so the order commit only
- * has to write it (checkout.discounts `commit`). Throws the storage refusal
- * for a record that is too large or not indexable.
+ * An app's write of a record its function read, checked and indexed now so
+ * the order commit only has to write it (checkout.discounts `commit`).
+ * Throws the storage refusal for a record that is too large or not indexable.
  */
 export function prepareAppObjectCommit(input: {
   pluginId: string;
@@ -450,7 +450,7 @@ export function prepareAppObjectCommit(input: {
 const APP_OBJECT_COMMIT_CONFLICT = "APP_OBJECT_COMMIT_CONFLICT";
 
 /**
- * The statements of app snapshot writes for a caller's own atomic batch
+ * The statements of app record commits for a caller's own atomic batch
  * (the order commit): guards first (each record still at the revision its
  * function saw), then the writes. A failed guard aborts the whole batch;
  * `isAppObjectCommitConflict` recognizes it.
@@ -503,7 +503,7 @@ export function appObjectCommitStatements(db: Database, commits: readonly AppObj
   return { guards, writes };
 }
 
-/** An app snapshot write lost its race (its record changed) or broke the object's unique index. */
+/** An app record commit lost its race (its record changed) or broke the object's unique index. */
 export function isAppObjectCommitConflict(error: unknown): boolean {
   for (let current: unknown = error, hops = 0; current && hops < 5; hops += 1) {
     const message = current instanceof Error ? current.message : String(current);
