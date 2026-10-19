@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { CUSTOMER_TAGS_PER_REQUEST_MAX } from "@scalius/shared/customer-marketing";
+import { CUSTOMER_TAG_MAX_LENGTH, CUSTOMER_TAGS_PER_REQUEST_MAX } from "@scalius/shared/customer-marketing";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -82,9 +82,10 @@ export function CustomerBulkActions({
     if (!change.isPending) setMode(null);
   };
   const apply = () => {
-    // Text still in the field counts: it becomes a tag first.
-    const chosen = input.current?.flush() ?? tags;
-    if (!mode || chosen.length === 0) return;
+    // Text still in the field counts: it becomes a tag first, and one too long to be a tag waits to be shortened.
+    const flushed = input.current?.flush() ?? { tags, rejected: false };
+    const chosen = flushed.tags;
+    if (!mode || flushed.rejected || chosen.length === 0) return;
     change.mutate(
       { variables: { mode, tags: chosen }, success: b(mode === "add" ? "tagsAdded" : "tagsRemoved") },
       {
@@ -115,7 +116,7 @@ export function CustomerBulkActions({
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{b("bulkTagsHelp", { count: CUSTOMER_TAGS_PER_REQUEST_MAX })}</DialogDescription>
           </DialogHeader>
-          <Field id="customer-bulk-tags" label={t("tags")} help={t("tagsHelp")}>
+          <Field id="customer-bulk-tags" label={t("tags")} help={t("tagsHelp", { count: CUSTOMER_TAG_MAX_LENGTH })}>
             <TagInput
               id="customer-bulk-tags"
               value={tags}
