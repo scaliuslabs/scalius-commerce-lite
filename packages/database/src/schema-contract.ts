@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 164,
-  name: "0164_event_topic_names",
+  version: 165,
+  name: "0165_app_resource_owners",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -601,6 +601,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 164,
     name: "0164_event_topic_names",
     sourceSha256: "2709737a3472838342592daacac40d85545652c7513b538716b3a73d17f5149e",
+  },
+  {
+    version: 165,
+    name: "0165_app_resource_owners",
+    sourceSha256: "edb157b0afaef9bf112a064ee0cad556e4c6207149fa2f98a0bc25d9bacbc15c",
   },
 ] as const;
 

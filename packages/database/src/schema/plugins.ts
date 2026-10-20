@@ -259,3 +259,30 @@ export type PluginKvRow = InferSelectModel<typeof pluginKv>;
 export type PluginLogRow = InferSelectModel<typeof pluginLogEntries>;
 export type PluginEventDeliveryRow = InferSelectModel<typeof pluginEventDeliveries>;
 export type PluginCronRunRow = InferSelectModel<typeof pluginCronRuns>;
+
+/** What an app may create and later permanently delete itself (`app_resource_owners`). */
+export const APP_OWNED_RESOURCE_TYPES = ["product", "category", "brand", "collection", "media"] as const;
+export type AppOwnedResourceType = (typeof APP_OWNED_RESOURCE_TYPES)[number];
+
+/**
+ * The app that created a catalogue resource (migration 0165): written by the
+ * platform when an app's create operation succeeds (`ctx.api.call`), never by
+ * the app. It is the one authority for
+ * `dashboard.resources.app_content.delete`: an app permanently deletes only
+ * what it created, and only from the trash. A missing row (a staff-made
+ * resource, or a create whose record write failed) means "not the app's".
+ * Uninstalling an app deletes its rows. Private operational state: no public
+ * read touches it.
+ */
+export const appResourceOwners = sqliteTable("app_resource_owners", {
+    resourceType: text("resource_type", { enum: APP_OWNED_RESOURCE_TYPES }).notNull(),
+    resourceId: text("resource_id").notNull(),
+    pluginId: text("plugin_id").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    primaryKey({ columns: [table.resourceType, table.resourceId] }),
+    index("app_resource_owners_plugin_idx").on(table.pluginId),
+    check("app_resource_owners_type_check", sql`${table.resourceType} IN ('product', 'category', 'brand', 'collection', 'media')`),
+    check("app_resource_owners_plugin_shape", pluginIdShape(table.pluginId)),
+]);
+export type AppResourceOwner = InferSelectModel<typeof appResourceOwners>;

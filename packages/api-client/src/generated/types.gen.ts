@@ -24048,6 +24048,79 @@ export type PostApiV1AdminResourcesGiftCardsByIdAdjustResponses = {
 
 export type PostApiV1AdminResourcesGiftCardsByIdAdjustResponse = PostApiV1AdminResourcesGiftCardsByIdAdjustResponses[keyof PostApiV1AdminResourcesGiftCardsByIdAdjustResponses];
 
+export type PostApiV1AdminResourcesAppContentDeleteData = {
+    body: {
+        items: Array<{
+            type: 'product' | 'category' | 'brand' | 'collection' | 'media';
+            id: string;
+            /**
+             * The revision you read: a product's `aggregateRevision`, a category's or brand's `revision`, a file's `version`; a collection may leave it out. Required for every type but collections.
+             */
+            expectedRevision?: number;
+        }>;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/app-content/delete';
+};
+
+export type PostApiV1AdminResourcesAppContentDeleteErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesAppContentDeleteError = PostApiV1AdminResourcesAppContentDeleteErrors[keyof PostApiV1AdminResourcesAppContentDeleteErrors];
+
+export type PostApiV1AdminResourcesAppContentDeleteResponses = {
+    /**
+     * One outcome per item, in order
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                type: 'product' | 'category' | 'brand' | 'collection' | 'media';
+                id: string;
+                /**
+                 * `deleted`; `not_found` (already gone); `not_owned` (the app did not create it); `not_in_trash` (trash it first); `conflict` (it changed since `expectedRevision`); `blocked` (inventory history, orders or a place still shows it: it stays in the trash); `forbidden` (the grant does not cover the type).
+                 */
+                outcome: 'deleted' | 'not_found' | 'not_owned' | 'not_in_trash' | 'conflict' | 'blocked' | 'forbidden';
+                message: string | null;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesAppContentDeleteResponse = PostApiV1AdminResourcesAppContentDeleteResponses[keyof PostApiV1AdminResourcesAppContentDeleteResponses];
+
 export type GetApiV1AdminResourcesWebhookSubscriptionsData = {
     body?: never;
     path?: never;

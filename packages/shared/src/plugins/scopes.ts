@@ -61,7 +61,9 @@ export const PLUGIN_SCOPES = {
   /**
    * Create, edit, trash and restore products, variants, collections,
    * categories, brands and attributes; set product custom fields. Never
-   * changes stock (`write_inventory`) and never deletes permanently.
+   * changes stock (`write_inventory`). Permanently deletes only trashed
+   * products, categories, brands and collections the app itself created
+   * (`dashboard.resources.app_content.delete`), never the store's own.
    */
   write_products: {
     rbac: [
@@ -125,7 +127,7 @@ export const PLUGIN_SCOPES = {
   write_objects: { rbac: [...OBJECTS_READ, "objects.edit"], staff: "objects.edit" },
   /** Files in the media library. */
   read_files: { rbac: ["media.view"], staff: "media.view" },
-  /** Import files from an HTTPS address, rename, move and trash them. */
+  /** Import files from an HTTPS address, rename, move and trash them; permanently delete trashed files the app itself imported. */
   write_files: { rbac: ["media.view", "media.upload", "media.delete", "media.manage_folders"], staff: "media.upload" },
   /** Gift cards: balances, transactions, owners and recipients (the code stays masked; recipient contacts need the protected data scopes). */
   read_gift_cards: { rbac: ["gift_cards.view"], staff: "gift_cards.view" },

@@ -22,6 +22,7 @@ import { conflictResponse, errorResponses, namedSharedSchema, successEnvelope } 
 import { readProductRepresentations } from "../../events/representations";
 import { refreshRecommendationsAfterWrite } from "../../background/catalog";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
+import { registerAppContentRoutes } from "./resources-app-content";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -248,5 +249,7 @@ app.openapi(createRoute({
   if (!product) throw new NotFoundError("Product not found");
   return ok(c, { product });
 });
+
+registerAppContentRoutes(app);
 
 export { app as adminResourceProductRoutes };

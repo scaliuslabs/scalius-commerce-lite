@@ -290,6 +290,10 @@ describe("the stable app API", () => {
       // Bulk runs of tags and publications: neither has a revision to compare.
       "dashboard.resources.customers.bulk_tag",
       "dashboard.resources.products.bulk_publish",
+      // Permanent delete of an app's own trashed items: only trashed items
+      // it created qualify, and a gone item reads not_found, so a repeat is
+      // harmless; a restore in between makes the item not_in_trash.
+      "dashboard.resources.app_content.delete",
     ]);
     const creates = /\.(create|import_url|comment_add)$/u;
     const unguarded = stable
