@@ -37,6 +37,7 @@ describe("cache dependency write amplification", () => {
             CREATE TRIGGER amp_dep_ins AFTER INSERT ON cache_dep BEGIN INSERT INTO amp VALUES ('dep', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
             CREATE TRIGGER amp_dep_upd AFTER UPDATE ON cache_dep BEGIN INSERT INTO amp VALUES ('dep', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
             CREATE TRIGGER amp_clock AFTER UPDATE ON cache_clock BEGIN INSERT INTO amp VALUES ('clock', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
+            CREATE TRIGGER amp_state AFTER UPDATE ON product_buyer_state BEGIN INSERT INTO amp VALUES ('state', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;
         `);
         await rebuildCatalogProjections(db);
         // Saved long ago: a write's own lastmod always moves.
@@ -53,7 +54,7 @@ describe("cache dependency write amplification", () => {
             .map((row) => [row.k, row.n]));
         const keys = (sqlite.prepare("SELECT dep FROM cache_dep WHERE seq > ? ORDER BY dep").all(seq) as Array<{ dep: string }>)
             .map((row) => row.dep);
-        const result = { keys, depWrites: counts.dep ?? 0, clockWrites: counts.clock ?? 0, ms };
+        const result = { keys, depWrites: counts.dep ?? 0, clockWrites: counts.clock ?? 0, stateWrites: counts.state ?? 0, ms };
         if (process.env.CACHE_DEP_AMPLIFICATION_REPORT) {
             console.log(`[cache-dep amplification] ${expect.getState().currentTestName}: ${JSON.stringify({ ...result, keys: result.keys.length, ms: Math.round(ms) })}`);
         }
@@ -115,7 +116,8 @@ describe("cache dependency write amplification", () => {
 
     it("a refresh with no change (a save of unchanged facts) and a rebuild with no drift write nothing", async () => {
         const refresh = await measure(() => safeBatch(db, catalogProjectionRefreshStatements(db, claims().map((claim) => claim.id)) as never));
-        expect(refresh).toMatchObject({ keys: [], depWrites: 0, clockWrites: 0 });
+        // No buyer-state row is rewritten either: D1 bills a row write even when nothing changed.
+        expect(refresh).toMatchObject({ keys: [], depWrites: 0, clockWrites: 0, stateWrites: 0 });
         const rebuild = await measure(() => rebuildCatalogProjections(db));
         expect(rebuild).toMatchObject({ keys: [], depWrites: 0 });
         // Only the coarse flag's own set and reset touch the clock row.
