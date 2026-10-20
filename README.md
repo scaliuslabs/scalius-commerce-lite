@@ -110,6 +110,8 @@ Run every command from the repository root.
 | `pnpm typecheck` | One TypeScript 7 `tsc --build` over every project (project references), then `astro check` for the storefront |
 | `pnpm lint` | Oxlint with type-aware rules over the repository (`.oxlintrc.json`), then ESLint for `.astro` files and the dashboard design rules |
 | `pnpm test` | Vitest for the whole repository ([tests/README.md](tests/README.md)) |
+| `pnpm test:affected [--base <ref>] [--list]` | Only the tests a change can break: Vitest's `--changed` selection plus path rules for migrations, the DVC registry and triggers, the plugin ABI and the generated contracts (`scripts/test-affected.mjs`) |
+| `node scripts/regen-after-merge.mjs [--check]` | Rebuild every generated file after a merge or rebase, then commit the result; run it once with `--install` to enable the keep-one-side merge driver for generated files (`.gitattributes`) |
 | `pnpm check:env` | Fail on Wrangler `vars`, bindings outside the allowed set, and a missing `CF_VERSION_METADATA` |
 | `pnpm generate:sdk` | Regenerate the agent operation manifest and `@scalius/api-client`; commit the output |
 | `pnpm build` | Build every workspace |

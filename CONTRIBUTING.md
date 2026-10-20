@@ -46,6 +46,8 @@ pnpm check:build-canaries
 
 CI also runs `pnpm audit --audit-level moderate` and fails when the working tree is dirty after these steps.
 
+Generated files (listed in `.gitattributes`) merge themselves: run `node scripts/regen-after-merge.mjs --install` once per clone, and after a merge or rebase run `node scripts/regen-after-merge.mjs` and commit what it rebuilds. While you work, `pnpm test:affected` runs only the tests your change can break.
+
 Never commit secrets, `.dev.vars`, `.env*` files, or real buyer data.
 
 ## License
