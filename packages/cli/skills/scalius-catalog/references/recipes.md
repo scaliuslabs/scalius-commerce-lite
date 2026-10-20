@@ -29,6 +29,7 @@ Note: Without a shell, import public HTTPS images with dashboard.media.import_ur
 1. read   dashboard.categories.form_options: the Shoes categoryId
 2. cli    scalius bulk prices --filter 'category=<id>' --percent 5 --dry-run: before/after table (first 50 SKUs) and failures
 3. cli    scalius bulk prices --filter 'category=<id>' --percent 5 --wait --yes: after the merchant approves the preview; --wait follows a run over 250 SKUs
+Note: For a fixed price use --set <amount> or --amount <amount> in the store currency (--set 1500 is 1,500.00 BDT); --minor takes minor units.
 
 ## Change the SEO title and description of Cotton Panjabi
 1. read   dashboard.products.list_summaries: query {search:"Cotton Panjabi"}

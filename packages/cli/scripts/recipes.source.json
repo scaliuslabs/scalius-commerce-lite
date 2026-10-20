@@ -87,7 +87,8 @@
                 ["read", "dashboard.categories.form_options", "the Shoes categoryId"],
                 ["cli", "scalius bulk prices --filter 'category=<id>' --percent 5 --dry-run", "before/after table (first 50 SKUs) and failures"],
                 ["cli", "scalius bulk prices --filter 'category=<id>' --percent 5 --wait --yes", "after the merchant approves the preview; --wait follows a run over 250 SKUs"]
-              ]
+              ],
+              "note": "For a fixed price use --set <amount> or --amount <amount> in the store currency (--set 1500 is 1,500.00 BDT); --minor takes minor units."
             },
             {
               "steps": [
@@ -213,11 +214,12 @@
                 ["read", "dashboard.reviews.list", "pending first"],
                 ["write", "dashboard.reviews.moderate"],
                 ["write", "dashboard.reviews.reply", "draft the reply; the merchant approves the words"]
-              ]
+              ],
+              "note": "Needs a Custom grant with the review_moderation scope (a preset grant is refused). To create one, a Super Admin runs dashboard.agent_access.tokens.create with {preset:\"custom\", resource:\"dashboard\", riskCeiling:\"write\", permissions:[\"reviews.view\",\"reviews.moderate\"]} and then scalius auth token import with the new key."
             },
             {
               "steps": [],
-              "note": "Review moderation is staff-only on this store's API: tell the merchant it is in Dashboard > Reviews; do not work around it."
+              "note": "This connection lacks the review_moderation scope (reviews are never in a preset grant). Tell the merchant to create a Custom grant with the review_moderation scope: dashboard.agent_access.tokens.create with {preset:\"custom\", resource:\"dashboard\", riskCeiling:\"write\", permissions:[\"reviews.view\",\"reviews.moderate\"]}, then scalius auth token import. Until then reviews stay in Dashboard > Reviews; do not work around it."
             }
           ]
         },
@@ -229,11 +231,12 @@
               "steps": [
                 ["read", "dashboard.conversations.list", "newest first"],
                 ["write", "dashboard.conversations.post", "the merchant approves the words"]
-              ]
+              ],
+              "note": "Needs a Custom grant with the customer_conversations scope (a preset grant is refused). To create one, a Super Admin runs dashboard.agent_access.tokens.create with {preset:\"custom\", resource:\"dashboard\", riskCeiling:\"write\", permissions:[\"conversations.view\",\"conversations.reply\"]} and then scalius auth token import with the new key."
             },
             {
               "steps": [],
-              "note": "The inbox is not open to agents on this store's API (buyer messages are private): say so and stop."
+              "note": "This connection lacks the customer_conversations scope (buyer messages are never in a preset grant). Tell the merchant to create a Custom grant with the customer_conversations scope: dashboard.agent_access.tokens.create with {preset:\"custom\", resource:\"dashboard\", riskCeiling:\"write\", permissions:[\"conversations.view\",\"conversations.reply\"]}, then scalius auth token import. Until then the inbox stays in Dashboard > Inbox; do not work around it."
             }
           ]
         },
