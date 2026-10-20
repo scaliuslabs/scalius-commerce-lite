@@ -813,9 +813,16 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
             HAVING option_row.facet_key IS NOT NULL`;
     // Only values that can be shown (every count tie within the value cap, a
     // selected value, every value of a number attribute for its range) read
-    // their label, order, number and sample SKU, from the value's first public row.
+    // their label, order, number and sample SKU, from the value's first row in
+    // the scope (every counted value has one). A row of a product outside the
+    // scope advances only its own scopes' `lf:` keys, never this listing's,
+    // so it cannot be the sample (the public set is the shop-all scope).
     // Point lookups by primary key only: no planner can turn them into a walk
     // over every facet row.
+    const sampleInScope = input.allPublic
+        ? sql`EXISTS (SELECT 1 FROM product_buyer_state AS first_buyer
+                        WHERE first_buyer.product_id = first_row.product_id AND first_buyer.is_public = 1)`
+        : sql`first_row.product_id IN (SELECT facet_scope.product_id FROM facet_scope)`;
     const sampleColumn = (column: string) => sql.raw(`(SELECT sample_row.${column} FROM product_facet_values AS sample_row
                 WHERE sample_row.owner_id = shown.sample_owner AND sample_row.facet_key = shown.facet_id)`);
     const shownValues = sql`
@@ -825,9 +832,8 @@ function catalogFacetCountRows(db: Database, input: CatalogFacetCountInput, summ
             FROM (
                 SELECT counted.facet_kind, counted.facet_id, counted.value_key, counted.value_count, (
                     SELECT first_row.owner_id FROM product_facet_values AS first_row
-                    INNER JOIN product_buyer_state AS first_buyer
-                        ON first_buyer.product_id = first_row.product_id AND first_buyer.is_public = 1
                     WHERE first_row.facet_key = counted.facet_id AND first_row.value_key = counted.value_key
+                      AND ${sampleInScope}
                     ORDER BY first_row.product_id, first_row.owner_id LIMIT 1
                 ) AS sample_owner
                 FROM (

@@ -44,6 +44,7 @@ import {
     type ResolvedProduct,
 } from "./cards";
 import { declareProductCards, declareRequestedProducts } from "./declare-deps";
+import { buyerState, publicBuyerStateCondition } from "./buyer-state";
 import {
     translationScopeOf,
     NAME_FIELDS,
@@ -504,10 +505,22 @@ export function planCollectionProducts(
     const pinnedList = productIdsArr.length > 0
         ? productList(idSetCondition(productIdsArr), publicCollectionProductConditions(idSetCondition(productIdsArr)))
         : null;
-    const categoryLists = categoryProductLimits.map(({ categoryId, maxProducts }) => productList(eq(products.categoryId, categoryId), [
-        ...publicCollectionProductConditions(eq(products.categoryId, categoryId)),
-        publishedCategoryIdExists(products.categoryId),
-    ], { limit: maxProducts }));
+    // A dynamic collection's category: its newest public products from the
+    // buyer-state projection, the rows `lm:cat:<id>` tracks (as the home
+    // category lists read them). Live public eligibility here let a direct
+    // SQL write that leaves the projection as it was bring in a product the
+    // list declared no key of. The window's members are declared whether a
+    // card shows or not (`windowIdsByCategoryId`): a member without a live
+    // buyer SKU has no pricing row and shows nothing until its SKUs change.
+    const categoryLists = categoryProductLimits.map(({ categoryId, maxProducts }) => {
+        const window = db.select({ id: buyerState.productId }).from(buyerState).where(and(
+            publicBuyerStateCondition(),
+            eq(buyerState.categoryId, categoryId),
+            publishedCategoryIdExists(buyerState.categoryId),
+        )).orderBy(desc(buyerState.productCreatedAt), asc(buyerState.productId)).limit(maxProducts);
+        const members = inArray(products.id, window);
+        return productList(members, [members], { limit: maxProducts });
+    });
     const featuredList = featuredIdsArr.length > 0
         ? productList(idSetCondition(featuredIdsArr), publicCollectionProductConditions(idSetCondition(featuredIdsArr)))
         : null;
@@ -530,6 +543,9 @@ export function planCollectionProducts(
             const mediaRows = mediaSlots.flatMap((slot) => results[slot] as ProductMediaProjectionRow[]);
             const allRows = [...rowsOf(pinnedList), ...categoryLists.flatMap(rowsOf), ...rowsOf(featuredList)];
             const mediaByProduct = resolveProductMediaProjectionRows(mediaRows);
+            // Every media row read is resolved (a storage key that stops
+            // being valid fails the read), shown or not: its card keys.
+            declareProductCards(mediaByProduct.keys(), mediaByProduct);
             const resolvedProductsById = resolveProductCards(
                 allRows,
                 mediaByProduct,
@@ -549,8 +565,14 @@ export function planCollectionProducts(
                 if (resolved) specificProductsById.set(prod.id, resolved);
             }
 
+            // Every member of a category's window has one `product` fact row
+            // (the fact statement reads the window's ids), shown or not.
+            const windowIdsByCategoryId = new Map<string, string[]>();
             const categoryProductsByCategoryId = new Map<string, ResolvedProduct[]>();
             categoryProductLimits.forEach(({ categoryId }, index) => {
+                windowIdsByCategoryId.set(categoryId, (results[factSlots[categoryLists[index]!]!] as ProductCardFactRow[])
+                    .filter((fact) => fact.kind === "product")
+                    .map((fact) => fact.productId));
                 const resolvedProducts = rowsOf(categoryLists[index]!)
                     .filter((prod) => prod.id && prod.categoryId === categoryId)
                     .flatMap((prod) => {
@@ -621,6 +643,9 @@ export function planCollectionProducts(
                     productIds: collectionProducts.map((product) => product.id),
                     limit: maxProducts,
                 });
+                if (productIds.length === 0) {
+                    for (const categoryId of categoryIds) declareRequestedProducts(windowIdsByCategoryId.get(categoryId) ?? []);
+                }
 
                 resolvedByKey.set(request.key, { products: collectionProducts, categories: collectionCategories, featuredProduct });
             }

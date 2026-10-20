@@ -297,7 +297,8 @@ describe("catalogue-scale query plans", () => {
     });
 
     it("scopes every homepage collection statement to its own products", async () => {
-        const { db, plans } = setup();
+        const { db, queries, plans } = setup();
+        await project(db, queries);
         const resolved = await resolveCollectionProductsBatch(db, [
             { id: "col_manual", config: { source: "manual", productIds: ["prod_c"], categoryIds: [], maxProducts: 8 } },
             { id: "col_dynamic", config: { source: "dynamic", productIds: [], categoryIds: ["cat_laptop"], maxProducts: 8 } },
@@ -308,6 +309,13 @@ describe("catalogue-scale query plans", () => {
         const pricingPlans = plans(joinsPricing);
         expect(pricingPlans.length).toBe(2);
         for (const plan of pricingPlans) expect(plan).not.toMatch(/SCAN buyer_pricing_sku/);
+        // The dynamic list's window is the buyer state's category-newest index walk.
+        const windowPlans = plans(readsBuyerState);
+        expect(windowPlans.length).toBeGreaterThan(0);
+        for (const plan of windowPlans) {
+            expect(plan).not.toMatch(/SCAN (products|product_buyer_state)\b/);
+            expect(plan).not.toContain("buyer_active_sku");
+        }
     });
 
     it("prices only the page in admin lists and id lookups", async () => {
@@ -335,6 +343,10 @@ describe("catalogue-scale query plans", () => {
             expect(plan).not.toMatch(/products_fts VIRTUAL TABLE INDEX 0:=/);
             expect(plan).not.toMatch(/SCAN buyer_pricing_sku/);
         }
+        // Predictive search reads its hits' buyer state by key: no SKU ranking, no live eligibility.
+        const [predictivePlan] = rankedPlans.filter((plan) => !plan.includes("listing_page"));
+        expect(predictivePlan).toBeDefined();
+        expectBuyerStateListing(predictivePlan!);
     });
 
     it("pages the feed by the stored created_at index and prices only the page", async () => {

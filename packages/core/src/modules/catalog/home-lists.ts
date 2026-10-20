@@ -252,6 +252,9 @@ export function planHomeProductLists(
             return slots.map(({ key, rows, media, facts, members }) => {
                 const productRows = results[offset + rows] as RawProduct[];
                 const mediaByProduct = resolveProductMediaProjectionRows(results[offset + media] as ProductMediaProjectionRow[]);
+                // Every media row read is resolved (a storage key that stops
+                // being valid fails the read), shown or not: its card keys.
+                declareProductCards(mediaByProduct.keys(), mediaByProduct);
                 const cards = resolveProductCards(
                     productRows,
                     mediaByProduct,

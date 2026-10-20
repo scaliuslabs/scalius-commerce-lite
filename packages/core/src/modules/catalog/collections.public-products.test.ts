@@ -1,5 +1,6 @@
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
+import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { resolveCollectionProductsBatch } from "./collections";
 
 describe("public collection product resolution", () => {
@@ -15,6 +16,7 @@ describe("public collection product resolution", () => {
                 ('v_visible', 'p_visible', 'VIS-1', 1000, 0, 0, 1, 0),
                 ('v_inactive', 'p_inactive', 'INA-1', 1000, 0, 0, 1, 0);
         `);
+        await rebuildCatalogProjections(db);
         const allProducts = ["p_visible", "p_no_sku", "p_inactive"];
 
         const resolved = await resolveCollectionProductsBatch(db, [

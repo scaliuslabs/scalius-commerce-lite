@@ -14,18 +14,17 @@ import {
 import { declareNoProductRow, declareRequestedProducts, deps } from "./declare-deps";
 import type { Database } from "@scalius/database/client";
 import { products, categories, pages } from "@scalius/database/schema";
-import { eq, sql, and, or, type SQL } from "drizzle-orm";
+import { desc, eq, sql, and, or, type SQL } from "drizzle-orm";
 import {
   sanitizeFtsQuery,
   searchMatch,
   searchRank,
 } from "../../search";
 import {
-  buildBuyerCatalogPricingProjection,
   buyerCatalogHasSkuInPriceRange,
-  publicProductBaseConditions,
   quickAddEligibleSql,
 } from "../products";
+import { buyerState, publicBuyerStateCondition } from "./buyer-state";
 import { publicCategoryConditions } from "../categories";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { marketPriceContextOf, priceProductCards, type MarketPricing } from "../price-lists";
@@ -132,20 +131,24 @@ async function runSearch(
   deps.anyCategory();
   if (searchPages) deps.anyPage();
   try {
-    // Build Product Query
-    // Set conditions (search hits, category) also scope the pricing projection.
-    const setConditions: SQL[] = [];
+    // Build Product Query. The public set, the category filter and every
+    // hit's price and availability are the stored buyer state's, as on a
+    // listing, so `lm:all` and the hits' own `p:` keys cover exactly the rows
+    // read. Public eligibility evaluated live (is_active, deleted_at, the
+    // SKU topology) let a direct SQL write that leaves the buyer state as it
+    // was bring in a product the answer had declared no key of.
+    const productConditions: SQL[] = [publicBuyerStateCondition({ drivenByIdSet: true })];
     const ranked = options?.productIds ? JSON.stringify(options.productIds.slice(0, 50)) : null;
     if (ranked) {
       declareRequestedProducts(options!.productIds!.slice(0, 50));
-      setConditions.push(sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ranked}))`);
+      productConditions.push(sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ranked}))`);
     } else if (hasValidQuery) {
       const cond = or(searchMatch(db, "products", query), productCategoryNameMatch(db, query));
-      if (cond) setConditions.push(cond);
+      if (cond) productConditions.push(cond);
     }
     if (options?.categoryId) {
-      setConditions.push(
-        eq(products.categoryId, options.categoryId),
+      productConditions.push(
+        eq(buyerState.categoryId, options.categoryId),
         sql`EXISTS (
           SELECT 1 FROM ${categories}
           WHERE ${categories.id} = ${options.categoryId}
@@ -153,13 +156,14 @@ async function runSearch(
         )`,
       );
     }
-    const productConditions: SQL[] = [...publicProductBaseConditions(), ...setConditions];
     if (
       typeof options?.minPrice === "number" ||
       typeof options?.maxPrice === "number"
     ) {
-      // Any live SKU's price can move a product across the bounds.
+      // Any live SKU's price, and the product discount it falls back to
+      // (`lo:price`), can move a product across the bounds, as on a listing.
       deps.table("product_variants");
+      deps.listOrder("price", "all");
       // A market prices its bounds in the market first (FX).
       const bounds = priceFilterBoundsMinor(
         { minPrice: options?.minPrice, maxPrice: options?.maxPrice },
@@ -169,11 +173,6 @@ async function runSearch(
         buyerCatalogHasSkuInPriceRange(bounds.minPriceMinor, bounds.maxPriceMinor),
       );
     }
-    // Scoped to the search hits (and category) so the projection ranks only
-    // their SKUs, not every SKU in the store.
-    const buyerPricing = buildBuyerCatalogPricingProjection(db, {
-      productScope: setConditions.length > 0 ? and(...setConditions) : undefined,
-    });
 
     const productQuery = db
       .select({
@@ -183,12 +182,16 @@ async function runSearch(
         // looks up category IDs instead of products.
         id: sql<string>`${products.id}`.as("search_product_id"),
         name: sql<string>`${products.name}`.as("search_product_name"),
-        basePriceMinor: buyerPricing.basePriceMinor,
-        effectivePriceMinor: buyerPricing.effectivePriceMinor,
-        maxBuyerPriceMinor: buyerPricing.maxBuyerPriceMinor,
-        availableForSale: buyerPricing.availableForSale,
-        quickAddEligible: quickAddEligibleSql(buyerPricing).as("search_quick_add_eligible"),
-        hasVariants: buyerPricing.hasCustomerOptions,
+        basePriceMinor: sql<number>`${buyerState.baseMinor}`.as("search_base_minor"),
+        effectivePriceMinor: sql<number>`${buyerState.fromMinor}`.as("search_from_minor"),
+        maxBuyerPriceMinor: sql<number>`${buyerState.toMinor}`.as("search_to_minor"),
+        availableForSale: sql<number>`${buyerState.availableForSale}`.as("search_available_for_sale"),
+        quickAddEligible: quickAddEligibleSql({
+          availableForSale: buyerState.availableForSale,
+          hasCustomerOptions: buyerState.hasCustomerOptions,
+          effectivePriceMinor: buyerState.fromMinor,
+        }).as("search_quick_add_eligible"),
+        hasVariants: sql<number>`${buyerState.hasCustomerOptions}`.as("search_has_customer_options"),
         slug: sql<string>`${products.slug}`.as("search_product_slug"),
         categoryId: sql<string | null>`${categories.id}`.as("search_category_id"),
         categoryName: sql<string | null>`${categories.name}`.as("search_category_name"),
@@ -200,7 +203,7 @@ async function runSearch(
         storeCurrencyCode: storeCurrencyCodeSql().as("search_store_currency_code"),
       })
       .from(products)
-      .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+      .innerJoin(buyerState, eq(buyerState.productId, products.id))
       .leftJoin(categories, and(
         eq(products.categoryId, categories.id),
         ...publicCategoryConditions(),
@@ -212,7 +215,9 @@ async function runSearch(
       .where(and(...productConditions))
       .orderBy(...(ranked
         ? [sql`(SELECT CAST(ranked_id.key AS INTEGER) FROM json_each(${ranked}) AS ranked_id WHERE CAST(ranked_id.value AS TEXT) = ${products.id})`]
-        : hasValidQuery ? productSearchRelevanceOrder(db, query) : [products.name]))
+        : hasValidQuery ? productSearchRelevanceOrder(db, query) : [products.name]),
+        // Equal ranks read newest first, then by id, as on a listing.
+        desc(buyerState.productCreatedAt), buyerState.productId)
       .limit(limit);
 
     // Build Pages Query
