@@ -1015,6 +1015,7 @@ export {};
 // packages/plugin-sdk/src/testing-contract.gen.d.ts
 import type { StableContract } from "./testing-contract";
 export declare const STABLE_CONTRACT: StableContract;
+export declare const NON_STABLE_OPERATION_IDS: readonly string[];
 
 // packages/plugin-sdk/src/testing.d.ts
 import { type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFunctionPoint, type PluginSettingValue } from "@scalius/shared/plugins";
