@@ -17,7 +17,7 @@ import { execFileSync, spawn } from "child_process";
 import { readFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
-import { devOrigins } from "./dev-ports.mjs";
+import { DEV_PORT_ENV, devOrigins, readDevPorts, syncLocalPlatform } from "./dev-ports.mjs";
 import {
   assertLocalUrl,
   assertPassword,
@@ -38,6 +38,22 @@ const validCommands = new Set(["create", "reset", "status", "help"]);
 const positionalCommand = args[0] && !args[0].startsWith("--") ? args[0] : undefined;
 const command = positionalCommand || "create";
 const options = parseOptions(positionalCommand ? args.slice(1) : args);
+
+// The stack's ports (`--api-port` ... or the SCALIUS_DEV_*_PORT variables, as scripts/dev.sh takes
+// them) are the one source of every origin below and of the Platform settings written to the store.
+for (const [name, key] of [["api-port", "api"], ["storefront-port", "storefront"], ["admin-port", "admin"]]) {
+  if (options[name] === true) {
+    console.error(`Option --${name} requires a value.`);
+    process.exit(1);
+  }
+  if (options[name]) process.env[DEV_PORT_ENV[key]] = String(options[name]);
+}
+try {
+  readDevPorts();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
 
 const defaults = {
   apiBaseUrl: process.env.LOCAL_API_BASE_URL || devOrigins().apiUrl,
@@ -138,6 +154,9 @@ Options:
   --time-zone <zone>    IANA time zone (default: Asia/Dhaka for BD, else this machine's)
   --currency <code>     Currency (default: the country's)
   --api <url>           Local API origin (default: ${defaults.apiBaseUrl})
+  --api-port <n>, --storefront-port <n>, --admin-port <n>
+                        This stack's ports (or SCALIUS_DEV_{API,STOREFRONT,ADMIN}_PORT); the
+                        printed dashboard URL and the store's saved web addresses follow them
   --state <path>        Wrangler local state path; relative paths resolve from repo root
   --no-start            Require API to already be running
   --skip-migrations     Do not apply local D1 migrations before starting/resetting
@@ -268,6 +287,14 @@ async function createAdmin({ allowExisting }) {
     password: config.password,
     store: storeSetup(),
   });
+
+  // The API stores its built-in local origins (4322/4323) for a new store; point them at this stack.
+  try {
+    const { origins } = await syncLocalPlatform({ state: config.wranglerState });
+    console.log(`Local web addresses: storefront ${origins.storefrontUrl}, dashboard ${origins.dashboardUrl}.`);
+  } catch (error) {
+    console.warn(`Could not point the store's web addresses at this stack (${error instanceof Error ? error.message.split("\n")[0] : String(error)}); run node scripts/dev-ports.mjs sync-platform.`);
+  }
 
   console.log("\nLocal admin ready:");
   console.log(`  Admin URL: ${devOrigins().dashboardUrl}/admin`);

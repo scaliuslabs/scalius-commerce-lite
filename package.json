@@ -69,8 +69,8 @@
     "lint": "pnpm lint:oxlint && pnpm lint:eslint",
     "lint:oxlint": "oxlint",
     "lint:eslint": "node scripts/turbo-run.mjs lint --filter=@scalius/admin-v2 --filter=@scalius/storefront",
-    "test": "vitest run --passWithNoTests",
-    "test:ci": "vitest run --passWithNoTests --exclude packages/database/__tests__/export-turso-portable.test.ts --exclude packages/database/__tests__/prepare-live-checkout-target.test.ts --exclude packages/database/__tests__/turso-upload-bundle.test.ts && vitest run --passWithNoTests --maxWorkers=1 packages/database/__tests__/export-turso-portable.test.ts packages/database/__tests__/prepare-live-checkout-target.test.ts packages/database/__tests__/turso-upload-bundle.test.ts",
+    "test": "node scripts/test-runner.mjs",
+    "test:ci": "node scripts/test-runner.mjs",
     "test:watch": "vitest"
   },
   "devDependencies": {

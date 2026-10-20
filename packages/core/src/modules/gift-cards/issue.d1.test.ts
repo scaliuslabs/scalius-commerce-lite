@@ -275,7 +275,9 @@ describe("gift-card issue, lookup and buyer surfaces", () => {
         expect((await listGiftCardsForStaff(db, { q: "Rahim" })).items).toHaveLength(1);
 
         const detail = await getGiftCardForStaff(db, issued.giftCardId);
-        expect(detail.transactions.map((transaction) => [transaction.kind, transaction.amountMinor, transaction.actorName]))
+        // The reader orders newest first by (createdAt, id); the issue and the adjustment can share a
+        // millisecond and ids are random, so a tie has no causal order. Compare the rows, not their tie order.
+        expect(detail.transactions.map((transaction) => [transaction.kind, transaction.amountMinor, transaction.actorName]).sort())
             .toEqual([["adjust", -15_000, "Nadia"], ["issue", 40_000, "Nadia"]]);
 
         const disabled = await updateGiftCardForStaff(db, { giftCardId: issued.giftCardId, version: detail.giftCard.version, status: "disabled" });

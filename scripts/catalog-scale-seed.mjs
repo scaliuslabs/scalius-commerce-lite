@@ -68,9 +68,11 @@
 import { DatabaseSync } from "node:sqlite";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync, unlinkSync } from "node:fs";
+import { createRequire } from "node:module";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { verify } from "./catalog-scale-verify.mjs";
 import { DAY, buildClock, convertMinor, createCustomerPicker, createRng, invertRate, padName, pad, paymentLedgerState, pickLifecycle, popularIndex, priceOrder, resolveProfile, sampleTime } from "./catalog-scale-shapes.mjs";
 
@@ -332,10 +334,14 @@ const RETURN_REASONS = ["Item arrived damaged", "Wrong item received", "Changed 
 
 // ---------------------------------------------------------------- statements
 const insert = (sql) => db.prepare(sql);
+/** A 96x96 neutral WebP (86 bytes): the body of every seeded media object. */
+const PLACEHOLDER_IMAGE = Buffer.from("UklGRk4AAABXRUJQVlA4IEIAAACwBACdASpgAGAAPu12uFYppyUjoOgBMB2JaQAAB3erzmXuNPrnZPPBKt5ZQKNAAP7viMrxw3vH8wBUzS14oAAAAAA=", "base64");
 const insCategory = insert(`INSERT INTO categories (id, name, slug, description, meta_title, meta_description, status, revision, no_index, exclude_from_sitemap, created_at, updated_at, deleted_at, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`);
 const insAttribute = insert(`INSERT INTO product_attributes (id, name, slug, filterable, options, created_at, updated_at, key_spec) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
 const insBrand = insert(`INSERT INTO brands (id, name, slug, status, sort_order, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-const insMedia = insert(`INSERT INTO media (id, filename, kind, object_key, size, mime_type, alt_text, width, height, variant_width, status, created_at, updated_at) VALUES (?, ?, 'image', ?, ?, 'image/webp', ?, 1600, 1600, 1600, 'ready', ?, ?)`);
+// The seeded media rows point at real (placeholder) objects in the local R2 state, so every image
+// answers 200: the original only (`variant_width` NULL means no pre-generated renditions).
+const insMedia = insert(`INSERT INTO media (id, filename, kind, object_key, size, mime_type, alt_text, width, height, variant_width, status, created_at, updated_at) VALUES (?, ?, 'image', ?, ?, 'image/webp', ?, 96, 96, NULL, 'ready', ?, ?)`);
 const insProduct = insert(`INSERT INTO products (id, name, description, price_minor, category_id, slug, meta_title, meta_description, no_index, exclude_from_sitemap, product_condition, is_active, discount_bps, discount_type, discount_amount_minor, free_delivery, created_at, updated_at, deleted_at, brand_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'percentage', 0, ?, ?, ?, ?, ?)`);
 // A product inserted is published to every sales channel (0122); some leave the feeds and AI agents.
 const unpublishFromFeeds = insert(`UPDATE product_channel_publications SET unpublished_at = unixepoch() WHERE product_id = ? AND channel_id <> 'sc_online_store'`);
@@ -350,6 +356,8 @@ const insCollection = insert(`INSERT INTO collections (id, name, description, pr
 // written by the orders_seed_customer_address trigger from the first shipping order.
 const insCustomer = insert(`INSERT INTO customers (id, name, email, phone, total_orders, last_order_at, origin, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 const insOrder = insert(`INSERT INTO orders (id, order_number, customer_name, customer_phone, customer_email, shipping_address, city, zone, city_name, zone_name, status, payment_method, payment_status, fulfillment_status, customer_id, currency_code, currency_decimal_places, subtotal_amount_minor, shipping_amount_minor, total_amount_minor, paid_amount_minor, balance_due_minor, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'BDT', 2, ?, ?, ?, ?, ?, ?, ?)`);
+const insShipFulfillment = insert(`INSERT INTO order_fulfillments (id, order_id, kind, status, request_key, actor_type, actor_id, created_at, location_id) VALUES (?, ?, 'ship', 'active', 'seed-0', 'system', NULL, ?, 'loc_default')`);
+const insShipFulfillmentLine = insert(`INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity, created_at) VALUES (?, ?, ?, ?, ?, ?)`);
 const insOrderItem = insert(`INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name, variant_label, inventory_tracked, unit_price_minor, line_subtotal_minor, taxable_amount_minor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`);
 
 // The huge seed writes millions of rows whose domain events would only flood
@@ -540,7 +548,8 @@ function seedProduct(index) {
   const productMediaIds = [];
   for (let m = 0; m < imageCount; m += 1) {
     const mediaId = `med_scale_${pad(index, 6)}_${m}`;
-    insMedia.run(mediaId, `${slugify(name).slice(0, 60)}-${m}.webp`, `media/${mediaId}.webp`, int(20000, 400000), `${name} image ${m + 1}`, createdAt, createdAt);
+    int(20000, 400000); // the draw the seed always made (the size is now the placeholder's)
+    insMedia.run(mediaId, `${slugify(name).slice(0, 60)}-${m}.webp`, `media/${mediaId}.webp`, PLACEHOLDER_IMAGE.length, `${name} image ${m + 1}`, createdAt, createdAt);
     const pmedId = `pmed_scale_${pad(index, 6)}_${m}`;
     insProductMedia.run(pmedId, id, mediaId, m === 0 ? name.slice(0, 500) : null, m === 0 ? 1 : 0, m, createdAt, createdAt);
     productMediaIds.push(pmedId);
@@ -1254,7 +1263,9 @@ tx(() => {
 log(`customers: ${CUSTOMERS}`);
 
 const STATUSES = ["pending", "processing", "confirmed", "shipped", "delivered", "completed", "completed", "completed", "cancelled", "returned"];
+const SHIPPED_STATUSES = new Set(["shipped", "delivered", "completed", "returned"]);
 let orderItems = 0;
+let fulfilledLines = 0;
 for (let start = 0; start < ORDERS; start += 5000) {
   tx(() => {
     for (let index = start; index < Math.min(ORDERS, start + 5000); index += 1) {
@@ -1268,15 +1279,29 @@ for (let start = 0; start < ORDERS; start += 5000) {
       const total = subtotal + shipping;
       const paid = status === "completed" || status === "delivered" ? total : 0;
       const id = `ord_scale_${pad(index, 6)}`;
+      // Orders that left the warehouse carry a real shipping fulfilment (so a return can be recorded
+      // against them); one in five multi-line shipped orders is only partly fulfilled.
+      const shipped = SHIPPED_STATUSES.has(status);
+      const fulfilment = !shipped ? "none" : status === "shipped" && lines.length > 1 && chance(0.2) ? "partial" : "complete";
       insOrder.run(id, 100000 + index, customer.name, customer.phone, null, `House ${int(1, 200)}, ${customer.city}`,
         customer.city, "zone", customer.city, "Zone", status, chance(0.8) ? "cod" : "sslcommerz",
-        paid ? "paid" : "unpaid", status === "completed" || status === "delivered" ? "complete" : "pending", customer.id,
+        paid ? "paid" : "unpaid", fulfilment === "none" ? "pending" : fulfilment, customer.id,
         subtotal, shipping, total, paid, total - paid, createdAt, createdAt + int(0, 10) * DAY);
       lines.forEach((line, lineIndex) => {
         insOrderItem.run(`oi_scale_${pad(index, 6)}_${lineIndex}`, id, line.product_id, line.id, quantities[lineIndex],
           line.sku, null, line.price_minor, line.price_minor * quantities[lineIndex], line.price_minor * quantities[lineIndex], createdAt);
         orderItems += 1;
       });
+      if (fulfilment !== "none") {
+        const shippedAt = createdAt + int(1, 3) * DAY;
+        const fulfillmentId = `ful_scale_${pad(index, 6)}`;
+        insShipFulfillment.run(fulfillmentId, id, shippedAt);
+        lines.forEach((_line, lineIndex) => {
+          if (fulfilment === "partial" && lineIndex > 0) return;
+          insShipFulfillmentLine.run(`fln_scale_${pad(index, 6)}_${lineIndex}`, fulfillmentId, id, `oi_scale_${pad(index, 6)}_${lineIndex}`, quantities[lineIndex], shippedAt);
+          fulfilledLines += 1;
+        });
+      }
     }
   });
 }
@@ -1286,7 +1311,7 @@ db.exec(`UPDATE customers SET total_orders = (SELECT count(*) FROM orders WHERE 
 db.exec(`UPDATE orders SET shop_currency = currency_code, subtotal_shop_minor = subtotal_amount_minor,
   shipping_shop_minor = shipping_amount_minor, discount_shop_minor = discount_amount_minor,
   tax_shop_minor = tax_amount_minor, total_shop_minor = total_amount_minor`);
-log(`orders: ${ORDERS} (items ${orderItems})`);
+log(`orders: ${ORDERS} (items ${orderItems}, fulfilled lines ${fulfilledLines})`);
 
 }
 
@@ -1323,6 +1348,37 @@ if (HUGE) {
   // triggers back so every later write publishes normally.
   db.exec("DELETE FROM event_outbox");
   log(`restored ${restoreTriggers()} event-outbox triggers; event_outbox emptied`);
+}
+
+// ------------------------------------------------------------ media objects
+// Wrangler's local platform proxy opens the bucket in the on-disk format `wrangler dev --persist-to`
+// reads, so the seeded rows' files exist. `--no-media-files` skips it (rows only, files 404).
+if (!flag("--no-media-files")) {
+  const bucketName = /"bucket_name":\s*"([^"]+)"/.exec(readFileSync(join(root, "apps", "api", "wrangler.local.jsonc"), "utf8"))?.[1];
+  if (!bucketName) throw new Error("Could not read the media bucket name from apps/api/wrangler.local.jsonc.");
+  const wranglerEntry = createRequire(join(root, "apps", "api", "package.json")).resolve("wrangler");
+  const { getPlatformProxy } = await import(pathToFileURL(wranglerEntry).href);
+  const objectKeys = db.prepare("SELECT object_key FROM media WHERE status = 'ready'").all().map((row) => row.object_key);
+  const configDir = mkdtempSync(join(tmpdir(), "scalius-seed-media-"));
+  const configPath = join(configDir, "wrangler.json");
+  writeFileSync(configPath, JSON.stringify({ name: "seed-media", compatibility_date: "2025-01-01", r2_buckets: [{ binding: "MEDIA", bucket_name: bucketName }] }));
+  const proxy = await getPlatformProxy({ configPath, persist: { path: join(resolvedState, "v3") } });
+  try {
+    const bucket = proxy.env.MEDIA;
+    let written = 0;
+    for (let start = 0; start < objectKeys.length; start += 50) {
+      await Promise.all(objectKeys.slice(start, start + 50).map(async (key) => {
+        if (await bucket.head(key)) return;
+        await bucket.put(key, PLACEHOLDER_IMAGE, { httpMetadata: { contentType: "image/webp" } });
+        written += 1;
+      }));
+      if ((start / 50) % 200 === 199) log(`media objects: ${written}/${objectKeys.length}`);
+    }
+    log(`media objects: ${written} written to bucket ${bucketName}`);
+  } finally {
+    await proxy.dispose();
+    rmSync(configDir, { recursive: true, force: true });
+  }
 }
 
 // No ANALYZE: a migrated D1 has no sqlite_stat1, so plans here match production.

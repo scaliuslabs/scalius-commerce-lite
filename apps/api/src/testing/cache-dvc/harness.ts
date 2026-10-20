@@ -1134,9 +1134,12 @@ export class DvcHarness {
           return () => this.mutator.update(table, column);
         }),
         ...ops
-          .filter((op) => !(op in STRUCTURAL_OP_GAPS) && !op.endsWith(":update"))
+          .filter((op) => !(op in STRUCTURAL_OP_GAPS))
           .map((op) => {
             const [table, kind] = op.split(":") as [string, string];
+            // An update gap is a table the column pass cannot reach (every column is identity,
+            // a pure association): ask for the table's update directly.
+            if (kind === "update") return () => this.mutator.update(table);
             return () => (kind === "insert" ? this.mutator.insert(table) : this.mutator.delete(table));
           }),
       ];
