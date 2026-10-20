@@ -25,7 +25,9 @@
 // answer without calling the handler again, as the platform does.
 
 import type { PluginApiCallInput, PluginApiResult } from "./context";
-import { STABLE_CONTRACT } from "./testing-contract.gen";
+import { NON_STABLE_OPERATION_IDS, STABLE_CONTRACT } from "./testing-contract.gen";
+
+const NON_STABLE_OPERATIONS = new Set(NON_STABLE_OPERATION_IDS);
 
 /** JSON Schema (the OpenAPI 3.0 subset the contract uses). */
 export type ContractSchema = Record<string, unknown>;
@@ -309,9 +311,12 @@ export function createContractApi(options: ContractApiOptions = {}): ContractApi
       return refusal(404, "api.unknown_operation", "Plugins call dashboard or objects operations by their reviewed id.");
     }
     const operation = contract.operations[operationId];
-    if (!operation) return refusal(404, "api.unknown_operation", `Unknown operation ${operationId}: it is not part of the stable app API.`);
+    const exists = Boolean(operation) || NON_STABLE_OPERATIONS.has(operationId);
+    if (!exists) return refusal(404, "api.unknown_operation", `Unknown operation ${operationId}: it is not part of the stable app API.`);
     const input = normalize(rawInput);
     if (typeof input === "string") return refusal(400, "api.invalid_input", input);
+    // As the host: an operation that exists but is beta or internal is refused, not unknown.
+    if (!operation) return refusal(403, "api.operation_not_stable", `${operationId} is not part of the stable app API.`);
     if (granted && !operation.scopes.some((scope) => granted.includes(scope))) {
       return refusal(403, "api.operation_forbidden", `Operation is not authorized: ${operationId} needs one of ${operation.scopes.join(", ") || "(no app scope)"}.`);
     }

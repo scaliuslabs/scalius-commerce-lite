@@ -1186,6 +1186,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   import {
     applyCheckoutContactNeeds,
     checkoutContactNeeds,
+    offersDeferredPayment,
     readCheckoutPhoneNeed,
   } from "@/lib/checkout/contact-need";
   import type { CheckoutConfig } from "@/lib/checkout/types";
@@ -1362,6 +1363,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       identity,
       lines: Object.values(cartStore.get().items),
       cashEnabled: (contactConfig?.gateways ?? []).some((gateway) => gateway.flow === "cod"),
+      // A pay-later method always needs a phone (the server refuses it without one).
+      deferredEnabled: offersDeferredPayment(contactConfig?.gateways ?? []),
       partialPaymentEnabled: contactConfig?.partialPaymentEnabled === true,
       // A cart that ships is placed where it goes; the rule then needs a phone anyway.
       countryCode: readCheckoutDeliveryMode() === "none" ? orderCountry : null,

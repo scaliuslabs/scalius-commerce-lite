@@ -24,13 +24,17 @@ const CLOSED_ORDER_STATUSES = ["cancelled", "refunded", "returned"] as const;
 
 /**
  * Overdue invoices: deferred orders past their due date with money still
- * due, live and not closed. Leads with the partial index
- * `orders_payment_due_idx` (migration 0161). `nowSeconds` defaults to the
- * statement's own clock.
+ * due, live and not closed. Read from the partial index
+ * `orders_payment_due_idx` (migration 0163): the `deleted_at IS NULL`
+ * equality leads it, the due date is its range, and the condition repeats
+ * the index's own WHERE (`payment_due_at IS NOT NULL AND balance_due_minor > 0`)
+ * term for term, which SQLite needs before it may use a partial index.
+ * `nowSeconds` defaults to the statement's own clock.
  */
 export function overdueOrderCondition(nowSeconds?: number): SQL {
     const now = nowSeconds === undefined ? sql`unixepoch()` : sql`${Math.floor(nowSeconds)}`;
-    return sql`(${orders.paymentDueAt} IS NOT NULL AND ${orders.deletedAt} IS NULL AND ${orders.balanceDueMinor} > 0
+    return sql`(${orders.deletedAt} IS NULL
+        AND ${orders.paymentDueAt} IS NOT NULL AND ${orders.balanceDueMinor} > 0
         AND ${orders.paymentDueAt} <= ${now}
         AND ${orders.status} NOT IN (${sql.join(CLOSED_ORDER_STATUSES.map((status) => sql`${status}`), sql`, `)}))`;
 }

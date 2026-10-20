@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 162,
-  name: "0162_app_webhook_subscriptions",
+  version: 163,
+  name: "0163_payment_due_live_index",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -591,6 +591,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 162,
     name: "0162_app_webhook_subscriptions",
     sourceSha256: "20cd4a55be96f3933649d106b6439506723616fa79198ab97b8876268ddba373",
+  },
+  {
+    version: 163,
+    name: "0163_payment_due_live_index",
+    sourceSha256: "0d86bdc0dc918c072882cff7575ef0fb887906812b2fdc13af2ddfa9db942e71",
   },
 ] as const;
 

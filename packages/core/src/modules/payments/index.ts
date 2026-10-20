@@ -43,7 +43,7 @@ export type {
 } from "./gateway-settings";
 
 export { recordCODCollection, recordCODFailure, markCODReturned } from "./cod";
-export { recordOrderPayment, type RecordOrderPaymentInput, type RecordOrderPaymentResult } from "./recorded-payment";
+export { recordOrderPayment, type RecordedPaymentLine, type RecordOrderPaymentInput, type RecordOrderPaymentResult } from "./recorded-payment";
 
 // --- Payment processing ---
 export { processPaymentConfirmed, processPaymentFailed, type PaymentFailureEvent } from "./process-payment";

@@ -7,8 +7,9 @@
 //
 // Idempotent: the caller's request key names the payment row, so a retry
 // returns the first result and a different payment under the same key is
-// refused.
-import { and, eq, sql } from "drizzle-orm";
+// refused. The caller's timeline line (`timelineLine`) commits in the same
+// batch, so a payment has its line exactly once, whatever is retried or lost.
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
   orders,
@@ -42,6 +43,21 @@ export interface RecordOrderPaymentInput {
   requestKey: string;
   /** The order version the caller saw; a different one is refused (409) and nothing is recorded. */
   expectedVersion?: number;
+  /**
+   * The order timeline's line for this payment, written in the payment's own
+   * batch (the orders module builds it: `buildOrderEventInsert`, keyed by the
+   * payment id). `landed` holds once the payment and the order's new paid
+   * amount are written. Not called on a replay: the first write committed it.
+   * The statement comes back wrapped: a query builder is a thenable, so a
+   * promise resolved with it bare would run it on its own.
+   */
+  timelineLine?: (payment: RecordedPaymentLine) => Promise<{ statement: unknown }>;
+}
+
+export interface RecordedPaymentLine {
+  paymentId: string;
+  currency: { code: string; decimalPlaces: number };
+  landed: SQL;
 }
 
 export interface RecordOrderPaymentResult {
@@ -165,6 +181,19 @@ export async function recordOrderPayment(
   });
   const nextVersion = order.version + 1;
   const paymentType = order.paidAmountMinor === 0 && next.balanceDueMinor === 0 ? "full" : "balance";
+  // Holds only if this batch claimed the order: its own payment row exists
+  // and the order moved to exactly this payment's state.
+  const landed = sql`EXISTS (
+      SELECT 1 FROM ${orders}
+      WHERE ${orders.id} = ${order.id}
+        AND EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId})
+        AND ${orders.version} = ${nextVersion}
+        AND ${orders.paidAmountMinor} = ${next.paidAmountMinor}
+        AND ${orders.balanceDueMinor} = ${next.balanceDueMinor}
+    )`;
+  const timelineLine = input.timelineLine
+    ? (await input.timelineLine({ paymentId, currency, landed })).statement
+    : undefined;
 
   const settlement = presentedSettlement(input.amountMinor, currency.code);
   const orderUnchanged = and(
@@ -211,15 +240,8 @@ export async function recordOrderPayment(
       orderUnchanged,
       sql`EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId} AND ${orderPayments.amountMinor} = ${input.amountMinor})`,
     )) as unknown as SQLiteBatchItem,
-    // This payment's row exists only if this batch claimed the order (above).
-    buildBatchGuard(db, sql`EXISTS (
-      SELECT 1 FROM ${orders}
-      WHERE ${orders.id} = ${order.id}
-        AND EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId})
-        AND ${orders.version} = ${nextVersion}
-        AND ${orders.paidAmountMinor} = ${next.paidAmountMinor}
-        AND ${orders.balanceDueMinor} = ${next.balanceDueMinor}
-    )`, RECORDED_PAYMENT_BATCH_GUARD) as SQLiteBatchItem,
+    ...(timelineLine ? [timelineLine as SQLiteBatchItem] : []),
+    buildBatchGuard(db, landed, RECORDED_PAYMENT_BATCH_GUARD) as SQLiteBatchItem,
   ];
 
   try {

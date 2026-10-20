@@ -28,7 +28,10 @@ describe("createContractApi", () => {
   });
 
   it("refuses an operation outside the stable app API", async () => {
-    expect(await api()("dashboard.apps.stop", undefined)).toMatchObject({ ok: false, status: 404, error: { code: "api.unknown_operation" } });
+    // As the host (apps/api/src/plugins/api-call.ts): a beta or internal operation exists, so it is refused, not unknown.
+    expect(await api()("dashboard.orders.list", undefined)).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_not_stable" } });
+    expect(await api()("dashboard.apps.stop", undefined)).toMatchObject({ ok: false, status: 403, error: { code: "api.operation_not_stable" } });
+    expect(await api()("dashboard.apps.nonexistent", undefined)).toMatchObject({ ok: false, status: 404, error: { code: "api.unknown_operation" } });
     expect(await api()("Brands.Get", undefined)).toMatchObject({ status: 404, error: { code: "api.unknown_operation" } });
     expect(() => createContractApi({ handlers: { "dashboard.brands.fetch": () => null } })).toThrow(/not a stable app API operation/);
   });

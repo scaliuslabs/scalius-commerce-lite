@@ -8,7 +8,7 @@
 
 import type { PluginManifestInput, PluginSettingValue } from "@scalius/shared/plugins";
 import type { StorefrontImage, StorefrontProductCard, StorefrontResolvedSettings } from "@scalius/shared/plugins/storefront-protocol";
-import type { PluginContext, PluginObjectCollection, PluginObjects } from "./context";
+import type { PluginContext, PluginMoney, PluginObjectCollection, PluginObjects } from "./context";
 
 type Manifest = PluginManifestInput;
 
@@ -23,13 +23,13 @@ type IsLiteral<K> = K extends string ? (string extends K ? false : true) : false
 
 // ── Objects ──────────────────────────────────────────────────────────────
 
-/** A record field's value as `ctx.objects` reads and writes it. */
+/** A record field's value as `ctx.objects` reads and writes it (money as `PluginMoney`, integer minor units). */
 export type ObjectFieldValue<Type> =
   Type extends `list.${infer Item}` ? Array<ObjectFieldValue<Item>>
     : Type extends "integer" | "decimal" ? number
       : Type extends "boolean" ? boolean
         : Type extends "json" ? unknown
-          : Type extends "money" ? number | string
+          : Type extends "money" ? PluginMoney
             : Type extends string ? string
               : unknown;
 
